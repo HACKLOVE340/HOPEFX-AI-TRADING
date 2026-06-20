@@ -2942,8 +2942,26 @@ async def init_mcc(s: Any) -> Any | None:
         return None
 
 
+def _skip_prod_only_subsystem(component: str, enable_var: str) -> bool:
+    """True when a production-only background subsystem should be skipped.
+
+    The security brain, self-healer and auto-rollback run heavy scan/rollback
+    loops that misbehave in local dev: OTel route 500s, and AutoRollback even
+    git-reverts code + restarts when the (always-degraded) dev readiness probe
+    or code-scan trips. They are skipped outside production; set
+    ``<enable_var>=true`` to force them on.
+    """
+    env = os.getenv("APP_ENV", "development").lower()
+    if env == "production" or os.getenv(enable_var, "").lower() == "true":
+        return False
+    logger.info("%s disabled in %s mode (set %s=true to force on)", component, env, enable_var)
+    return True
+
+
 async def init_security_brain(s: Any, app: Any) -> Any | None:
     """Mount HOPEFXBrain router (/api/security/*) and start the 24/7 monitor loop."""
+    if _skip_prod_only_subsystem("HOPEFXBrain", "SECURITY_BRAIN_ENABLED"):
+        return None
     try:
         from security.global_fortress import start_brain as _start_brain
 
@@ -2958,6 +2976,8 @@ async def init_security_brain(s: Any, app: Any) -> Any | None:
 
 async def init_self_healer(s: Any, app: Any) -> Any | None:
     """Mount SelfHealer router (/api/security/heal/*) and start the integrity scan loop."""
+    if _skip_prod_only_subsystem("SelfHealer", "SELF_HEALER_ENABLED"):
+        return None
     try:
         from security.self_healer import start_healer as _start_healer
 
@@ -2980,6 +3000,8 @@ async def init_auto_rollback(s: Any) -> Any | None:
     Registered after 'broker' and 'cache' so it can observe their state from
     the first monitoring cycle.
     """
+    if _skip_prod_only_subsystem("AutoRollbackManager", "AUTO_ROLLBACK_ENABLED"):
+        return None
     try:
         from resilience.auto_rollback import rollback_manager as _rm
 

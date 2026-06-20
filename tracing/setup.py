@@ -44,7 +44,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_ENABLED = os.getenv("OTEL_ENABLED", "true").lower() != "false"
+# Default OFF outside production: without an OTLP collector the exporter spams
+# errors and the FastAPI instrumentation 500s on mounted sub-apps. Production
+# defaults ON. Override either way with OTEL_ENABLED=true/false.
+_ENABLED = os.getenv(
+    "OTEL_ENABLED",
+    "true" if os.getenv("APP_ENV", "development").lower() == "production" else "false",
+).lower() not in ("false", "0", "no")
 _SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "hopefx-api")
 _EXPORTER = os.getenv("OTEL_EXPORTER", "otlp").lower()
 _SAMPLE_RATE = float(os.getenv("OTEL_SAMPLE_RATE", "1.0"))

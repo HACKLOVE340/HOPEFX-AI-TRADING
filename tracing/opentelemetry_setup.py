@@ -90,6 +90,20 @@ async def init_telemetry() -> bool:
     if _initialized:
         return True
 
+    # Default OFF outside production: without a collector the OTLP exporter spams
+    # errors, and the global FastAPI instrumentation 500s on mounted sub-apps
+    # (Mount routes have no .path). Production defaults ON. Override with
+    # OTEL_ENABLED=true/false (or the standard OTEL_SDK_DISABLED=true).
+    _otel = os.getenv("OTEL_ENABLED", "").lower()
+    _is_prod = os.getenv("APP_ENV", "development").lower() == "production"
+    if (
+        os.getenv("OTEL_SDK_DISABLED", "").lower() == "true"
+        or _otel in ("false", "0", "no")
+        or (not _is_prod and _otel not in ("true", "1", "yes"))
+    ):
+        logger.info("OpenTelemetry init skipped (disabled outside production; set OTEL_ENABLED=true to force)")
+        return False
+
     try:
         from opentelemetry import trace, metrics
         from opentelemetry.sdk.trace import TracerProvider
