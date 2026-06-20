@@ -153,4 +153,8 @@ echo   ============================================================
 echo   Press Ctrl+C to stop
 echo.
 
-python -m uvicorn app:app --host %API_HOST% --port %API_PORT% --reload %*
+:: NOTE: no --reload by default. A bare --reload watches the whole project
+:: (venv, the SQLite .db, logs, and the json/yara files the self-healer and
+:: antivirus write at startup) and restarts in an endless loop on Windows.
+:: For code hot-reload during development, append --reload yourself.
+python -m uvicorn app:app --host %API_HOST% --port %API_PORT% %*

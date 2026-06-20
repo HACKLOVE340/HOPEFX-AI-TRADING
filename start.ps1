@@ -159,6 +159,9 @@ if (-not $env:APP_ENV) { $env:APP_ENV = "development" }
 if ($env:APP_ENV -eq "development" -and -not $env:STARTUP_GATE) { $env:STARTUP_GATE = "false" }
 
 $uvicornArgs = @("app:app", "--host", $apiHost, "--port", $apiPort)
-if (-not $NoReload) { $uvicornArgs += "--reload" }
+# NOTE: no --reload by default. A bare --reload watches the whole project (venv,
+# SQLite .db, logs, and the json/yara files the self-healer/antivirus write at
+# startup) and restarts in an endless loop. For code hot-reload during
+# development, append "--reload" when you call this script.
 
-python -m uvicorn @uvicornArgs
+python -m uvicorn @uvicornArgs @args
