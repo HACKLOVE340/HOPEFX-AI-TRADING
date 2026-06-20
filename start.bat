@@ -66,7 +66,7 @@ python -c "import hashlib,os,sys; f='venv\\.req_hash'; h=hashlib.md5(open('requi
 if errorlevel 1 set "NEED_DEPS=1"
 python -c "import jwt, fastapi, uvicorn, pydantic, sqlalchemy, dotenv" >nul 2>&1
 if errorlevel 1 (
-    echo [INFO] Core dependencies missing or broken — will (re)install.
+    echo [INFO] Core dependencies missing or broken - will reinstall.
     set "NEED_DEPS=1"
 )
 if "!NEED_DEPS!"=="1" (
