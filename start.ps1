@@ -153,6 +153,11 @@ Write-Host "  ============================================================"
 Write-Host "  Press Ctrl+C to stop"
 Write-Host ""
 
+# Dev convenience: without Postgres/Redis the readiness gate holds the app at
+# 503 on a SQLite-only setup. Open it in development; production keeps it on.
+if (-not $env:APP_ENV) { $env:APP_ENV = "development" }
+if ($env:APP_ENV -eq "development" -and -not $env:STARTUP_GATE) { $env:STARTUP_GATE = "false" }
+
 $uvicornArgs = @("app:app", "--host", $apiHost, "--port", $apiPort)
 if (-not $NoReload) { $uvicornArgs += "--reload" }
 

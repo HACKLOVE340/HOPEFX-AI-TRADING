@@ -41,6 +41,8 @@ fi
 
 # ── Environment defaults ─────────────────────────────────────────────────────
 export APP_ENV="${APP_ENV:-development}"
+# Dev: open the readiness gate so SQLite-only setups serve immediately (prod keeps it on).
+[ "$APP_ENV" = "development" ] && export STARTUP_GATE="${STARTUP_GATE:-false}"
 export API_HOST="${API_HOST:-0.0.0.0}"
 export API_PORT="${API_PORT:-8000}"
 

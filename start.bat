@@ -5,10 +5,10 @@
 ::   start.bat              (port 8000)
 ::   start.bat --port 8080  (custom port)
 ::
-:: Requirements: Python 3.12+, Node.js (for frontend build)
+:: Requirements: Python 3.10+, Node.js (for frontend build)
 ::
 :: What this does:
-::   1. Checks Python 3.12+
+::   1. Checks Python 3.10+
 ::   2. Creates a venv on first run
 ::   3. Installs dependencies ONLY on first run or when requirements.txt changes
 ::   4. Installs MetaTrader5 SDK if not present (Windows only)
@@ -20,10 +20,10 @@
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-:: ── 1. Check Python 3.12+ ────────────────────────────────────────────────────
+:: ── 1. Check Python 3.10+ ────────────────────────────────────────────────────
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python not found. Install Python 3.12+ from https://python.org
+    echo [ERROR] Python not found. Install Python 3.10+ from https://python.org
     pause & exit /b 1
 )
 for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set PY_VER=%%v
@@ -32,11 +32,11 @@ for /f "tokens=1,2 delims=." %%a in ("%PY_VER%") do (
     set PY_MINOR=%%b
 )
 if %PY_MAJOR% LSS 3 (
-    echo [ERROR] Python 3.12+ required. Found %PY_VER%.
+    echo [ERROR] Python 3.10+ required. Found %PY_VER%.
     pause & exit /b 1
 )
-if %PY_MINOR% LSS 12 (
-    echo [ERROR] Python 3.12+ required. Found %PY_VER%.
+if %PY_MINOR% LSS 10 (
+    echo [ERROR] Python 3.10+ required. Found %PY_VER%.
     pause & exit /b 1
 )
 echo [OK] Python %PY_VER%
@@ -130,6 +130,12 @@ if not exist "static\index.html" (
 if not defined APP_ENV  set APP_ENV=development
 if not defined API_HOST set API_HOST=127.0.0.1
 if not defined API_PORT set API_PORT=8000
+
+:: Dev convenience: without Postgres/Redis the readiness gate would hold data
+:: endpoints (and the SPA) at 503 on a plain SQLite setup. Open the gate in
+:: development so the app serves immediately. Production (APP_ENV=production)
+:: keeps the gate ON — provision Postgres/Redis there.
+if /i "%APP_ENV%"=="development" if not defined STARTUP_GATE set STARTUP_GATE=false
 
 echo.
 echo   ============================================================
