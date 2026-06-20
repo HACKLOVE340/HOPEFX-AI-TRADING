@@ -125,6 +125,22 @@ def _build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("LOG_LEVEL", "INFO"),
         help="Log level (default: INFO)",
     )
+    # ── Backtest options (only used with --mode backtest) ─────────────────────
+    p.add_argument(
+        "--data-file",
+        default="data/XAUUSD_5Y.csv",
+        help="Backtest: OHLCV CSV to run on (default: data/XAUUSD_5Y.csv)",
+    )
+    p.add_argument(
+        "--start-date",
+        default=None,
+        help="Backtest: ISO start date (e.g. 2023-01-01). Default: start of file.",
+    )
+    p.add_argument(
+        "--end-date",
+        default=None,
+        help="Backtest: ISO end date (e.g. 2023-12-31). Default: end of file.",
+    )
     return p
 
 
@@ -370,25 +386,39 @@ async def _run_api() -> None:
 
 
 async def _run_backtest(args: argparse.Namespace) -> None:
-    """Run the backtest engine."""
-    try:
-        from backtesting.engine import BacktestEngine
+    """Run the backtest engine end-to-end on committed historical OHLCV data.
 
-        engine = BacktestEngine()
-        from datetime import datetime
+    Wires a real data handler + strategy (the previous stub called engine.run()
+    with neither, which raised "Strategy not set"). Uses backtesting.cli_runner
+    so the same path is importable from CI/tests.
+    """
+    from datetime import datetime
 
-        start_dt = datetime.fromisoformat(args.start_date) if hasattr(args, "start_date") and args.start_date else None
-        end_dt = datetime.fromisoformat(args.end_date) if hasattr(args, "end_date") and args.end_date else None
-        engine.run(start_date=start_dt, end_date=end_dt)
-    except ImportError:
-        # Fallback to the existing backtest runner
-        import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
+    from backtesting.cli_runner import run_backtest
 
-        result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
-            [sys.executable, "backtest_runner.py", "--config", args.config],
-            check=False,
-        )
-        sys.exit(result.returncode)
+    start_dt = datetime.fromisoformat(args.start_date) if getattr(args, "start_date", None) else None
+    end_dt = datetime.fromisoformat(args.end_date) if getattr(args, "end_date", None) else None
+    symbol = args.symbol or "XAU/USD"
+
+    metrics = run_backtest(
+        data_file=getattr(args, "data_file", "data/XAUUSD_5Y.csv"),
+        symbol=symbol,
+        start_date=start_dt,
+        end_date=end_dt,
+    )
+
+    # Concise result summary (metrics is a PerformanceMetrics dataclass).
+    def _g(name: str, default: float = 0.0) -> float:
+        return float(getattr(metrics, name, default) or 0.0)
+
+    logger.info("─" * 56)
+    logger.info("  Backtest result — %s", symbol)
+    logger.info("  Total return : %7.2f%%", _g("total_return") * 100)
+    logger.info("  Max drawdown : %7.2f%%", _g("max_drawdown") * 100)
+    logger.info("  Sharpe       : %7.2f", _g("sharpe_ratio"))
+    logger.info("  Total trades : %7d", int(_g("total_trades")))
+    logger.info("  Win rate     : %7.2f%%", _g("win_rate") * 100)
+    logger.info("─" * 56)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
