@@ -396,3 +396,39 @@ async def public_prices() -> dict:
         "prices": list(_price_cache.values()),
         "count": len(_price_cache),
     }
+
+
+@router.get("/api/public/signals")
+async def public_signals(limit: int = 8) -> dict:
+    """
+    Public (no-auth) teaser of the latest signals for the landing page.
+
+    Sanitised on purpose: only symbol/direction/confidence/strength/timeframe and
+    timestamp are exposed — the actionable trade levels (entry, stop-loss,
+    take-profit) are withheld so they remain a sign-up incentive. Returns an
+    empty list (never an error) when the signal service isn't ready.
+    """
+    try:
+        from api.signals import _get_signal_service
+
+        svc = _get_signal_service()
+        recent = svc.get_signal_history(symbol=None, hours=24)[: max(1, min(limit, 25))]
+        out = []
+        for s in recent:
+            d = s.to_dict()
+            strategies = d.get("strategies_agreeing") or []
+            out.append(
+                {
+                    "symbol": d.get("symbol"),
+                    "direction": str(d.get("direction", "neutral")).lower(),
+                    "confidence": d.get("confidence", 0),
+                    "strength": d.get("strength"),
+                    "timeframe": d.get("timeframe"),
+                    "strategy": (strategies[0] if strategies else d.get("regime")) or "HOPEFX",
+                    "timestamp": d.get("timestamp"),
+                }
+            )
+        return {"signals": out, "count": len(out)}
+    except Exception as exc:  # nosec B110 — teaser only, never surface an error
+        logger.debug("ws_public: public signals unavailable: %s", exc)
+        return {"signals": [], "count": 0}

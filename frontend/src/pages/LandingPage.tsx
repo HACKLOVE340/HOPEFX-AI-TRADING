@@ -1148,7 +1148,9 @@ function Footer() {
 }
 
 // ── Live signal feed strip ────────────────────────────────────────────────────
-// Polls /api/signals/latest (real endpoint, no mocks) and shows a scrolling strip.
+// Polls /api/public/signals (no-auth, sanitised teaser) and shows a scrolling
+// strip. The authenticated /api/signals/latest must NOT be used here — the
+// landing page has no token, so it would 401 on every poll.
 
 interface SignalItem {
   symbol: string;
@@ -1166,7 +1168,7 @@ function useLatestSignals() {
 
     const fetch_ = async () => {
       try {
-        const res = await fetch('/api/signals/latest');
+        const res = await fetch('/api/public/signals');
         if (!res.ok || cancelled) return;
         const data = await res.json() as { signals?: SignalItem[] } | SignalItem[];
         const list = Array.isArray(data) ? data : (data.signals ?? []);
