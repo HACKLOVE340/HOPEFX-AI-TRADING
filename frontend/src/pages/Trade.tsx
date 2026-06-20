@@ -48,7 +48,15 @@ import type { PriceTick } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD', 'ETH/USD'];
+// Tradable universe — mirrors the 6-char pairs in config/multi_source_feed.yaml
+// (metals, FX majors, crypto) that the store's normaliseSymbol maps cleanly to
+// BASE/QUOTE. Oil/indices (USOIL/NAS100/US30) use non-standard tickers and are
+// intentionally excluded here until their slash-mapping is handled.
+const SYMBOLS = [
+  'XAU/USD', 'XAG/USD', 'XPT/USD',
+  'EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF', 'AUD/USD', 'USD/CAD', 'NZD/USD',
+  'BTC/USD', 'ETH/USD',
+];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

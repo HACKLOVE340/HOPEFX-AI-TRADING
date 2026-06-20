@@ -69,14 +69,29 @@ class MACrossoverStrategy:
     Matches the BacktestEngine strategy contract:
         strategy(timestamp, symbol, tick, positions, capital, history) -> list[dict]
 
-    Emits one signal on each fast/slow SMA crossover. Position size is a fixed
-    fraction of current capital converted to units at the current price.
+    Emits one signal on each fast/slow SMA crossover, optionally filtered by a
+    longer-term trend SMA (``trend>0``) so it only trades *with* the prevailing
+    trend. NOTE: measured on the committed XAUUSD 2Y/5Y data the trend filter
+    *reduced* return and win rate (it over-filters gold's behaviour), so it
+    defaults OFF (``trend=0`` = raw crossover baseline). It is kept as a
+    configurable knob, not a recommended default — this is a baseline strategy,
+    not the platform's ML engine.
+
+    Position size is a fixed fraction of current capital, in units at price.
     """
 
-    def __init__(self, symbol: str, fast: int = 10, slow: int = 30, capital_fraction: float = 0.5):
+    def __init__(
+        self,
+        symbol: str,
+        fast: int = 10,
+        slow: int = 30,
+        trend: int = 0,
+        capital_fraction: float = 0.5,
+    ):
         self.symbol = symbol
         self.fast = fast
         self.slow = slow
+        self.trend = trend
         self.capital_fraction = capital_fraction
         self._closes: list[float] = []
         self._last_state: str | None = None  # "fast_above" | "fast_below"
@@ -90,7 +105,8 @@ class MACrossoverStrategy:
             return []
         price = float(tick.ask)
         self._closes.append(price)
-        if len(self._closes) < self.slow + 1:
+        warmup = max(self.slow, self.trend) + 1
+        if len(self._closes) < warmup:
             return []
 
         fast_ma = self._sma(self._closes, self.fast)
@@ -105,10 +121,19 @@ class MACrossoverStrategy:
         if prev_state is None:
             return []  # establish baseline without trading on the first comparison
 
+        action = "buy" if state == "fast_above" else "sell"
+
+        # Trend filter: skip entries that fight the longer-term trend.
+        if self.trend > 0:
+            trend_ma = self._sma(self._closes, self.trend)
+            if action == "buy" and price < trend_ma:
+                return []
+            if action == "sell" and price > trend_ma:
+                return []
+
         qty = round((capital * self.capital_fraction) / max(price, 1e-9), 4)
         if qty <= 0:
             return []
-        action = "buy" if state == "fast_above" else "sell"
         return [{"action": action, "quantity": qty}]
 
 
@@ -121,6 +146,7 @@ def run_backtest(
     data_frequency: str = "1d",
     fast: int = 10,
     slow: int = 30,
+    trend: int = 0,
 ):
     """Run a real-data backtest and return PerformanceMetrics."""
     df = load_ohlcv_csv(data_file)
@@ -130,7 +156,7 @@ def run_backtest(
 
     engine = BacktestEngine(initial_capital=initial_capital, data_frequency=data_frequency)
     engine.set_data_handler(DataFrameDataHandler(df, symbol))
-    engine.set_strategy(MACrossoverStrategy(symbol, fast=fast, slow=slow), [symbol])
+    engine.set_strategy(MACrossoverStrategy(symbol, fast=fast, slow=slow, trend=trend), [symbol])
 
     logger.info(
         "Backtest: %s %s bars=%d range=%s→%s capital=$%.0f",

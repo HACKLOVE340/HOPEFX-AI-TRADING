@@ -165,6 +165,14 @@ multi_source_feed:
       price_min: 1000.0
       price_max: 1000000.0
 
+    ETHUSD:
+      yfinance_ticker:      "ETH-USD"
+      alpha_vantage_symbol: "ETH"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "ETH/USD"
+      price_min: 100.0
+      price_max: 100000.0
+
     # ── Equity indices ────────────────────────────────────────────────────────
     NAS100:
       # NASDAQ-100 futures (continuous)
