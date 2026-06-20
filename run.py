@@ -141,6 +141,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Backtest: ISO end date (e.g. 2023-12-31). Default: end of file.",
     )
+    p.add_argument(
+        "--strategy",
+        choices=("ma", "ml"),
+        default="ma",
+        help="Backtest strategy: ma (MA-crossover baseline) | ml (real advanced_oos model)",
+    )
     return p
 
 
@@ -405,6 +411,7 @@ async def _run_backtest(args: argparse.Namespace) -> None:
         symbol=symbol,
         start_date=start_dt,
         end_date=end_dt,
+        strategy=getattr(args, "strategy", "ma"),
     )
 
     # Concise result summary (metrics is a PerformanceMetrics dataclass).

@@ -58,6 +58,20 @@ logger = logging.getLogger(__name__)
 # ── Exceptions ────────────────────────────────────────────────────────────────
 
 
+def _now_comparable_to(index: pd.Index) -> pd.Timestamp:
+    """Return a 'now' Timestamp comparable to *index*.
+
+    Comparing a tz-naive DatetimeIndex (e.g. datetime64[us] loaded from a CSV)
+    against a tz-aware ``Timestamp.now(tz=UTC)`` raises pandas' "Invalid
+    comparison between dtype=datetime64[..] and Timestamp". That exception was
+    being swallowed upstream and silently forcing the inference engine into its
+    neutral fallback — i.e. the model never traded. Match the index's tz-awareness
+    so the future-date check actually runs.
+    """
+    tz = getattr(index, "tz", None)
+    return pd.Timestamp.now(tz=UTC) if tz is not None else pd.Timestamp.now()
+
+
 class DataValidationError(ValueError):
     """Raised when data fails a validation check in strict mode."""
 
@@ -236,8 +250,8 @@ def validate_ohlcv(
                     "Sort the DataFrame by timestamp before use."
                 )
 
-        # Future timestamps
-        now_ts = pd.Timestamp.now(tz=UTC)
+        # Future timestamps (tz-safe: match the index's tz-awareness)
+        now_ts = _now_comparable_to(df.index)
         future_mask = df.index > now_ts
         if future_mask.any():
             n = int(future_mask.sum())
@@ -341,9 +355,9 @@ def validate_features(
         if extra:
             logger.debug("validate_features: extra columns (ignored): %s", sorted(extra)[:10])
 
-    # Future-dated index
+    # Future-dated index (tz-safe: match the index's tz-awareness)
     if isinstance(X.index, pd.DatetimeIndex):
-        now_ts = pd.Timestamp.now(tz=UTC)
+        now_ts = _now_comparable_to(X.index)
         future_count = int(np.nan_to_num((X.index > now_ts).sum(), nan=0))
         if future_count > 0:
             errors.append(f"{future_count} rows have future timestamps in the feature index — possible look-ahead bias")

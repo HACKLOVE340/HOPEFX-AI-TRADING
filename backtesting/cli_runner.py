@@ -137,6 +137,69 @@ class MACrossoverStrategy:
         return [{"action": action, "quantity": qty}]
 
 
+class MLInferenceStrategy:
+    """Runs the REAL platform model (ml.inference_engine.InferenceEngine) over
+    history — the same calibrated ensemble used live (advanced_oos.pkl), not a
+    hand-written rule. This validates the actual model edge on real data.
+
+    On each bar it feeds the trailing daily OHLCV window to ``predict()`` and
+    acts on the returned ``direction`` (long/short), which the engine only emits
+    after its own probability thresholds + calibration. To avoid pyramiding it
+    only trades when the direction *changes* (clean position flips), mirroring
+    how the live decision pipeline opens/flips a position.
+
+    No look-ahead: the window is sliced up to and including the current bar only.
+    """
+
+    def __init__(self, ohlcv_df, symbol: str, capital_fraction: float = 0.5, window: int = 300):
+        from ml.inference_engine import InferenceEngine
+
+        self._df = ohlcv_df
+        self.symbol = symbol
+        # predict() expects the underscore symbol form (e.g. XAU_USD).
+        self._pred_symbol = symbol.replace("/", "_")
+        self.capital_fraction = capital_fraction
+        self.window = window
+        self._engine = InferenceEngine()
+        self._last_dir: str | None = None
+        self.fallback_bars = 0
+        self.model_bars = 0
+        self.model_version: str | None = None
+
+    def __call__(self, *, timestamp, symbol, tick, positions, capital, history) -> list[dict]:
+        if symbol != self.symbol:
+            return []
+        # Trailing window up to and including the current bar (no future data).
+        win = self._df.loc[:timestamp].tail(self.window)
+        if len(win) < 100:  # InferenceEngine._MIN_BARS
+            return []
+
+        try:
+            res = self._engine.predict(win, symbol=self._pred_symbol)
+        except RuntimeError:
+            # Stale/drift block (if enabled) — abstain, like the live Phase-2 gate.
+            return []
+        except Exception:
+            return []
+
+        if res.get("fallback"):
+            self.fallback_bars += 1
+        else:
+            self.model_bars += 1
+            self.model_version = res.get("model_version")
+
+        direction = res.get("direction", "neutral")
+        if direction not in ("long", "short") or direction == self._last_dir:
+            return []
+        self._last_dir = direction
+
+        price = float(tick.ask)
+        qty = round((capital * self.capital_fraction) / max(price, 1e-9), 4)
+        if qty <= 0:
+            return []
+        return [{"action": "buy" if direction == "long" else "sell", "quantity": qty}]
+
+
 def run_backtest(
     data_file: str = "data/XAUUSD_5Y.csv",
     symbol: str = "XAU/USD",
@@ -147,8 +210,13 @@ def run_backtest(
     fast: int = 10,
     slow: int = 30,
     trend: int = 0,
+    strategy: str = "ma",
 ):
-    """Run a real-data backtest and return PerformanceMetrics."""
+    """Run a real-data backtest and return PerformanceMetrics.
+
+    strategy="ma"  → MACrossoverStrategy baseline
+    strategy="ml"  → MLInferenceStrategy (the real advanced_oos.pkl model)
+    """
     df = load_ohlcv_csv(data_file)
     # Default to the full span of the file when no dates are given.
     start = start_date or df.index.min().to_pydatetime()
@@ -156,11 +224,22 @@ def run_backtest(
 
     engine = BacktestEngine(initial_capital=initial_capital, data_frequency=data_frequency)
     engine.set_data_handler(DataFrameDataHandler(df, symbol))
-    engine.set_strategy(MACrossoverStrategy(symbol, fast=fast, slow=slow, trend=trend), [symbol])
+    if strategy == "ml":
+        strat = MLInferenceStrategy(df, symbol)
+    else:
+        strat = MACrossoverStrategy(symbol, fast=fast, slow=slow, trend=trend)
+    engine.set_strategy(strat, [symbol])
 
     logger.info(
-        "Backtest: %s %s bars=%d range=%s→%s capital=$%.0f",
-        symbol, data_file, len(df), start.date(), end.date(), initial_capital,
+        "Backtest: %s strategy=%s %s bars=%d range=%s→%s capital=$%.0f",
+        symbol, strategy, data_file, len(df), start.date(), end.date(), initial_capital,
     )
     metrics = engine.run(start_date=start, end_date=end)
+    if strategy == "ml":
+        logger.info(
+            "  ML coverage: %d bars on real model (%s), %d fallback bars",
+            getattr(strat, "model_bars", 0),
+            getattr(strat, "model_version", None) or "?",
+            getattr(strat, "fallback_bars", 0),
+        )
     return metrics
