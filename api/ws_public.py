@@ -137,36 +137,69 @@ async def _release_ip_slot(ip: str) -> None:
             _ip_open_count.pop(ip, None)
 
 
-async def _get_price_tick(symbol: str) -> dict | None:
-    """
-    Fetch the latest price tick for a symbol.
+# ── Shared price cache + refresher ──────────────────────────────────────────────
+# One background task refreshes prices for ALL public symbols and every
+# connection (plus the /api/public/prices REST endpoint) reads from this shared
+# cache. This avoids hammering the upstream once per connection and guarantees
+# the landing ticker is populated the moment a client connects.
+_price_cache: dict[str, dict] = {}
+_refresher_task: asyncio.Task | None = None
+_refresher_lock = asyncio.Lock()
+_yf_last_fetch: dict[str, float] = {}
 
-    Priority:
-      1. Live data-layer tick (real broker price)
-      2. Redis cache
-      3. None — caller skips this symbol
-    """
+REFRESH_INTERVAL_SECONDS: float = float(os.getenv("WS_PUBLIC_REFRESH_INTERVAL", "3.0"))
+# yfinance is a slow external call — rate-limit it per symbol so we never spam it.
+YF_MIN_INTERVAL_SECONDS: float = float(os.getenv("WS_PUBLIC_YF_INTERVAL", "15.0"))
+
+# Symbol → yfinance ticker. Used only as a last-resort fallback so the public
+# ticker still shows indicative (delayed) prices when no broker feed / Redis is
+# configured (e.g. a fresh install with no API keys).
+_YF_TICKER_MAP: dict[str, str] = {
+    "XAU_USD": "GC=F",
+    "XAG_USD": "SI=F",
+    "EUR_USD": "EURUSD=X",
+    "GBP_USD": "GBPUSD=X",
+    "USD_JPY": "JPY=X",
+    "USD_CHF": "CHF=X",
+    "AUD_USD": "AUDUSD=X",
+    "BTC_USD": "BTC-USD",
+}
+
+
+def _make_tick(symbol: str, bid: float, ask: float, source: str) -> dict | None:
+    """Build a normalised tick dict and update the change-percentage baseline."""
+    if bid <= 0 or ask <= 0:
+        return None
+    mid = (bid + ask) / 2.0
+    prev = _last_mid.get(symbol, mid)
+    change_pct = ((mid - prev) / prev * 100.0) if prev > 0 else 0.0
+    _last_mid[symbol] = mid
+    return {
+        "symbol": symbol,
+        "bid": round(bid, 5),
+        "ask": round(ask, 5),
+        "mid": round(mid, 5),
+        "change_pct": round(change_pct, 4),
+        "source": source,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
+def _fetch_orchestrator_tick(symbol: str) -> dict | None:
+    """Latest tick from the live data-layer orchestrator (sync, in-memory/Redis)."""
     try:
-        from data_layer import get_latest_tick
+        from data_layer import orchestrator
 
-        tick = await get_latest_tick(symbol)
+        tick = orchestrator.get_latest_tick(symbol)
         if tick:
-            mid = (tick.bid + tick.ask) / 2.0
-            prev = _last_mid.get(symbol, mid)
-            change_pct = ((mid - prev) / prev * 100.0) if prev > 0 else 0.0
-            _last_mid[symbol] = mid
-            return {
-                "symbol": symbol,
-                "bid": round(tick.bid, 5),
-                "ask": round(tick.ask, 5),
-                "mid": round(mid, 5),
-                "change_pct": round(change_pct, 4),
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-    except Exception as _exc:  # nosec B110 — fallback to Redis cache below
-        logger.debug("ws_public: live tick unavailable for %s: %s", symbol, _exc)
+            return _make_tick(symbol, float(tick.bid), float(tick.ask), "live")
+    except Exception as exc:  # nosec B110 — fall through to next source
+        logger.debug("ws_public: orchestrator tick unavailable for %s: %s", symbol, exc)
+    return None
 
-    # Redis cache fallback
+
+async def _fetch_redis_tick(symbol: str) -> dict | None:
+    """Latest tick from the Redis price cache (tick:{symbol})."""
     try:
         from cache.redis_client import get_redis
 
@@ -175,30 +208,81 @@ async def _get_price_tick(symbol: str) -> dict | None:
             raw = await redis.get(f"tick:{symbol}")
             if raw:
                 data = json.loads(raw)
-                bid = float(data.get("bid", 0))
-                ask = float(data.get("ask", 0))
-                mid = (bid + ask) / 2.0
-                prev = _last_mid.get(symbol, mid)
-                change_pct = ((mid - prev) / prev * 100.0) if prev > 0 else 0.0
-                _last_mid[symbol] = mid
-                return {
-                    "symbol": symbol,
-                    "bid": round(bid, 5),
-                    "ask": round(ask, 5),
-                    "mid": round(mid, 5),
-                    "change_pct": round(change_pct, 4),
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
-    except Exception as _exc:  # nosec B110 — returns None, caller skips symbol
-        logger.debug("ws_public: Redis tick unavailable for %s: %s", symbol, _exc)
-
+                return _make_tick(symbol, float(data.get("bid", 0)), float(data.get("ask", 0)), "cache")
+    except Exception as exc:  # nosec B110 — fall through to next source
+        logger.debug("ws_public: Redis tick unavailable for %s: %s", symbol, exc)
     return None
 
 
+def _fetch_yf_sync(symbol: str) -> dict | None:
+    """Blocking yfinance fallback — must be called via a thread executor."""
+    try:
+        import yfinance as _yf
+
+        yticker = _YF_TICKER_MAP.get(symbol)
+        if not yticker:
+            return None
+        info = _yf.Ticker(yticker).fast_info
+        last = float(info.last_price) if getattr(info, "last_price", None) else None
+        if last and last > 0:
+            spread = max(last * 0.0001, 1e-5)  # ~1 bp indicative spread
+            return _make_tick(symbol, last - spread, last + spread, "delayed")
+    except Exception as exc:  # nosec B110 — returns None, symbol simply has no price
+        logger.debug("ws_public: yfinance fallback failed for %s: %s", symbol, exc)
+    return None
+
+
+async def _refresh_symbol(symbol: str) -> None:
+    """Refresh one symbol in the shared cache: live → Redis → yfinance."""
+    tick = _fetch_orchestrator_tick(symbol)
+    if tick is None:
+        tick = await _fetch_redis_tick(symbol)
+    if tick is None:
+        # yfinance is slow + rate-limited per symbol, and runs off the event loop.
+        now = time.monotonic()
+        if now - _yf_last_fetch.get(symbol, 0.0) >= YF_MIN_INTERVAL_SECONDS:
+            _yf_last_fetch[symbol] = now
+            loop = asyncio.get_event_loop()
+            tick = await loop.run_in_executor(None, _fetch_yf_sync, symbol)
+    if tick is not None:
+        _price_cache[symbol] = tick
+
+
+async def _refresh_loop() -> None:
+    """Continuously refresh all public symbols into the shared cache."""
+    while True:
+        for symbol in PUBLIC_SYMBOLS:
+            try:
+                await _refresh_symbol(symbol)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # never let one symbol kill the loop
+                logger.debug("ws_public: refresh error for %s: %s", symbol, exc)
+        await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
+
+
+async def _ensure_refresher() -> None:
+    """Start the shared price refresher once (idempotent)."""
+    global _refresher_task
+    async with _refresher_lock:
+        if _refresher_task is None or _refresher_task.done():
+            _refresher_task = asyncio.create_task(_refresh_loop())
+            logger.info("ws_public: shared price refresher started")
+
+
 async def _broadcast_ticks(ws: WebSocket) -> None:
-    """Continuously push price ticks to a single connection."""
+    """Continuously push cached price ticks to a single connection."""
     heartbeat_counter = 0
     heartbeat_every = max(1, int(HEARTBEAT_INTERVAL_SECONDS / TICK_INTERVAL_SECONDS))
+
+    # Send whatever is already cached immediately so the client isn't blank.
+    for symbol in PUBLIC_SYMBOLS:
+        tick = _price_cache.get(symbol)
+        if tick is not None:
+            try:
+                await ws.send_json({"type": "price_tick", "data": tick})
+            except Exception:
+                return
 
     while True:
         await asyncio.sleep(TICK_INTERVAL_SECONDS)
@@ -212,9 +296,9 @@ async def _broadcast_ticks(ws: WebSocket) -> None:
             except Exception:
                 return
 
-        # Price ticks
+        # Price ticks (read from the shared cache)
         for symbol in PUBLIC_SYMBOLS:
-            tick = await _get_price_tick(symbol)
+            tick = _price_cache.get(symbol)
             if tick is None:
                 continue
             try:
@@ -256,10 +340,16 @@ async def ws_public(ws: WebSocket) -> None:
         len(_active_connections),
     )
 
+    # Make sure the shared price refresher is running so ticks actually flow.
+    await _ensure_refresher()
+
     broadcast_task: asyncio.Task | None = None
     try:
-        # Confirm subscription
-        await ws.send_json({"type": "subscribed", "channels": ["prices"]})
+        # Confirm subscription (echo back the public symbols so the client can
+        # render the subscribed set even before the first tick arrives).
+        await ws.send_json(
+            {"type": "subscribed", "channels": ["prices"], "symbols": PUBLIC_SYMBOLS}
+        )
 
         # Start tick broadcast in background
         broadcast_task = asyncio.create_task(_broadcast_ticks(ws))
@@ -289,3 +379,20 @@ async def ws_public(ws: WebSocket) -> None:
             client_ip,
             len(_active_connections),
         )
+
+
+@router.get("/api/public/prices")
+async def public_prices() -> dict:
+    """
+    Public (no-auth) snapshot of the landing-page ticker prices.
+
+    Polling fallback for clients where the WebSocket is blocked (corporate
+    proxies, etc.). Reads the same shared cache the WS broadcasts from, so it
+    never hits the upstream once per request. Starts the refresher on first call.
+    """
+    await _ensure_refresher()
+    return {
+        "symbols": PUBLIC_SYMBOLS,
+        "prices": list(_price_cache.values()),
+        "count": len(_price_cache),
+    }

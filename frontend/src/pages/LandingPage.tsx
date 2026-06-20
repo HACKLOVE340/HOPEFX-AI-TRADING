@@ -215,38 +215,43 @@ function useLiveTicker() {
     } catch { /* WS constructor threw — polling fallback handles data */ }
   }, []);
 
-  // Polling fallback — fetches real ticks from data-layer API every 3 s.
-  // Runs in parallel with WS; WS ticks take precedence (they overwrite the
+  // Polling fallback — fetches real ticks from the PUBLIC prices endpoint every
+  // 3 s. Runs in parallel with WS; WS ticks take precedence (they overwrite the
   // same state key) but polling ensures data even when WS is unavailable.
+  // NOTE: must hit a no-auth endpoint — the landing page has no token, so the
+  // authenticated /api/data-layer/tick route would always 401 here.
   useEffect(() => {
     let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-    const pollSymbol = async (symbol: string) => {
+    const pollPrices = async () => {
       try {
-        const res = await fetch(`/api/data-layer/tick?symbol=${encodeURIComponent(symbol)}`);
+        const res = await fetch('/api/public/prices');
         if (!res.ok) return;
-        const data = await res.json() as {
-          symbol: string; bid: number; ask: number; mid?: number; change_pct?: number;
+        const body = await res.json() as {
+          prices?: Array<{ symbol: string; bid: number; ask: number; mid?: number; change_pct?: number }>;
         };
         // Only update from poll if WS is not connected (avoid flicker)
-        if (!wsConnected.current) {
-          setTicks(prev => ({
-            ...prev,
-            [data.symbol]: {
-              symbol: data.symbol,
-              bid: data.bid,
-              ask: data.ask,
-              change_pct: data.change_pct ?? 0,
-            },
-          }));
+        if (!wsConnected.current && Array.isArray(body.prices)) {
+          setTicks(prev => {
+            const next = { ...prev };
+            for (const d of body.prices!) {
+              next[d.symbol] = {
+                symbol: d.symbol,
+                bid: d.bid,
+                ask: d.ask,
+                change_pct: d.change_pct ?? 0,
+              };
+            }
+            return next;
+          });
         }
       } catch { /* network unavailable on public page */ }
     };
 
     connect();
-    // Poll all public symbols on first load
-    PUBLIC_SYMBOLS.forEach(s => pollSymbol(s));
-    pollInterval = setInterval(() => PUBLIC_SYMBOLS.forEach(s => pollSymbol(s)), 3_000);
+    // Fetch all public symbols on first load
+    pollPrices();
+    pollInterval = setInterval(pollPrices, 3_000);
 
     return () => {
       unmounted.current = true;
