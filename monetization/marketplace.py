@@ -890,6 +890,9 @@ class _StrategyListing:
     status: "StrategyStatus" = None
     avg_rating: float = 0.0
     _reviews: list = field(default_factory=list)
+    license_type: "StrategyLicenseType" = StrategyLicenseType.SUBSCRIPTION
+    subscriber_count: int = 0
+    performance: dict | None = None
 
     def __post_init__(self):
         if self.status is None:
@@ -900,6 +903,26 @@ class _StrategyListing:
 
     def is_available(self) -> bool:
         return self.status == StrategyStatus.APPROVED
+
+    def to_dict(self) -> dict:
+        def _val(x):
+            return x.value if hasattr(x, "value") else (str(x) if x is not None else None)
+
+        return {
+            "strategy_id": self.strategy_id,
+            "creator_id": self.creator_id,
+            "name": self.name,
+            "description": self.description,
+            "category": _val(self.category),
+            "price": float(self.price),
+            "license_type": _val(self.license_type),
+            "rating": round(self.avg_rating, 2),
+            "review_count": len(self._reviews),
+            "subscriber_count": self.subscriber_count,
+            "status": _val(self.status),
+            "tags": list(self.tags),
+            "performance": self.performance,
+        }
 
 
 @dataclass
@@ -1152,9 +1175,155 @@ class StrategyMarketplace:
             raise ValueError(f"Invalid strategy code: {e}") from e
         return True
 
+    def seed_default_strategies(self) -> int:
+        """
+        Populate the catalogue with HOPEFX's official built-in strategies.
 
-# Module-level singleton
+        Idempotent: strategies use stable IDs, so re-seeding (e.g. after a
+        restart) never creates duplicates. Listings carry honest metadata only —
+        no fabricated performance, ratings, or subscriber counts. Performance
+        fields stay null until populated from real backtests, and ratings start
+        at zero because these are freshly listed.
+        """
+        seeded = 0
+        for spec in _OFFICIAL_STRATEGIES:
+            sid = spec["strategy_id"]
+            if sid in self._strategies:
+                continue
+            listing = _StrategyListing(
+                strategy_id=sid,
+                creator_id="hopefx-official",
+                name=spec["name"],
+                description=spec["description"],
+                category=spec["category"],
+                price=_Decimal(str(spec["price"])),
+                tags=spec["tags"],
+                license_type=spec["license_type"],
+            )
+            listing.status = StrategyStatus.APPROVED
+            self._strategies[sid] = listing
+            seeded += 1
+        if seeded:
+            logger.info("StrategyMarketplace: seeded %d official strategies", seeded)
+        return seeded
+
+
+# ── Official HOPEFX strategy catalogue ────────────────────────────────────────
+# Real, shippable strategies the platform actually runs. Metadata is honest:
+# no invented track records. Stable IDs keep deep links and licences valid.
+_OFFICIAL_STRATEGIES: list[dict] = [
+    {
+        "strategy_id": "official-golden-cross",
+        "name": "Golden Cross Trend",
+        "description": (
+            "Classic moving-average crossover for XAU/USD. Goes long when the "
+            "fast MA crosses above the slow MA and flat/short on the reverse — a "
+            "robust trend-following baseline. Free to use."
+        ),
+        "category": StrategyCategory.TREND_FOLLOWING,
+        "price": 0,
+        "license_type": StrategyLicenseType.FREE,
+        "tags": ["trend", "moving-average", "gold", "beginner"],
+    },
+    {
+        "strategy_id": "official-rsi-reversion",
+        "name": "RSI Mean Reversion",
+        "description": (
+            "Fades overbought/oversold extremes using RSI(14) with adaptive "
+            "thresholds. Best in ranging regimes; pairs well with the regime "
+            "filter to stand aside during strong trends."
+        ),
+        "category": StrategyCategory.MEAN_REVERSION,
+        "price": 29,
+        "license_type": StrategyLicenseType.SUBSCRIPTION,
+        "tags": ["rsi", "mean-reversion", "range"],
+    },
+    {
+        "strategy_id": "official-macd-momentum",
+        "name": "MACD Momentum",
+        "description": (
+            "Trades MACD signal-line crossovers and histogram momentum to ride "
+            "intraday and swing moves in gold. Includes a momentum filter to cut "
+            "whipsaws in low-volatility sessions."
+        ),
+        "category": StrategyCategory.ALGORITHMIC,
+        "price": 39,
+        "license_type": StrategyLicenseType.SUBSCRIPTION,
+        "tags": ["macd", "momentum", "algorithmic"],
+    },
+    {
+        "strategy_id": "official-bollinger-breakout",
+        "name": "Bollinger Breakout",
+        "description": (
+            "Captures volatility expansions: enters on closes outside the "
+            "Bollinger Bands(20,2) with a volatility confirmation, targeting "
+            "fast directional bursts after squeezes."
+        ),
+        "category": StrategyCategory.BREAKOUT,
+        "price": 39,
+        "license_type": StrategyLicenseType.SUBSCRIPTION,
+        "tags": ["bollinger", "breakout", "volatility"],
+    },
+    {
+        "strategy_id": "official-ml-gold-predictor",
+        "name": "ML Gold Predictor",
+        "description": (
+            "HOPEFX's machine-learning engine: a calibrated model over 50+ price, "
+            "macro and sentiment features producing a directional signal with a "
+            "confidence score, gated by drift and staleness checks."
+        ),
+        "category": StrategyCategory.ML_BASED,
+        "price": 99,
+        "license_type": StrategyLicenseType.SUBSCRIPTION,
+        "tags": ["ml", "ai", "macro", "sentiment", "premium"],
+    },
+    {
+        "strategy_id": "official-nuclear-scalper",
+        "name": "Nuclear Scalper",
+        "description": (
+            "High-frequency scalping agent that reads microstructure and order "
+            "flow to take small, frequent positions. Designed for tight spreads "
+            "and active sessions; risk-capped per trade."
+        ),
+        "category": StrategyCategory.SCALPING,
+        "price": 79,
+        "license_type": StrategyLicenseType.SUBSCRIPTION,
+        "tags": ["scalping", "microstructure", "high-frequency"],
+    },
+    {
+        "strategy_id": "official-swing-gold",
+        "name": "Swing Gold Pro",
+        "description": (
+            "Multi-day swing strategy combining higher-timeframe trend with "
+            "pullback entries. Fewer, higher-conviction trades for traders who "
+            "don't watch the screen all day."
+        ),
+        "category": StrategyCategory.SWING_TRADING,
+        "price": 49,
+        "license_type": StrategyLicenseType.SUBSCRIPTION,
+        "tags": ["swing", "multi-timeframe", "position"],
+    },
+    {
+        "strategy_id": "official-macro-fusion",
+        "name": "Macro-Fusion Day Trader",
+        "description": (
+            "Fuses the macro calendar and news sentiment with intraday price "
+            "action, standing aside through high-impact events and trading the "
+            "resolution. Intraday horizon."
+        ),
+        "category": StrategyCategory.DAY_TRADING,
+        "price": 59,
+        "license_type": StrategyLicenseType.SUBSCRIPTION,
+        "tags": ["macro", "news", "intraday", "fusion"],
+    },
+]
+
+
+# Module-level singleton — seeded with the official catalogue so the marketplace
+# is populated out of the box. Fresh StrategyMarketplace() instances (e.g. in
+# tests) stay empty.
 strategy_marketplace = StrategyMarketplace()
+strategy_marketplace.seed_default_strategies()
 
 
 @dataclass
