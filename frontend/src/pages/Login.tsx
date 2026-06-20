@@ -18,6 +18,7 @@ import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import type { UserRole } from '../store';
 import { Eye, EyeOff, Activity, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import { extractApiError } from '../lib/utils';
+import AuthBackground from '../components/AuthBackground';
 
 // ── Error normaliser ──────────────────────────────────────────────────────────
 
@@ -168,6 +169,7 @@ const Login: React.FC = () => {
 
   return (
     <div style={s.page}>
+      <AuthBackground />
       <div style={s.card}>
         {/* Logo */}
         <Link to="/" style={s.logoLink}>
@@ -307,23 +309,28 @@ const Login: React.FC = () => {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
+    position: 'relative',
     minHeight: '100vh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.06) 0%, #0f172a 60%)',
+    background: '#070b14',
     /* Enough padding so card never touches screen edges on any phone */
     padding: 'clamp(12px, 4vw, 24px)',
   },
   card: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    position: 'relative',
+    zIndex: 1,
+    background: 'rgba(20, 30, 48, 0.72)',
+    backdropFilter: 'blur(14px)',
+    WebkitBackdropFilter: 'blur(14px)',
+    border: '1px solid rgba(59,130,246,0.18)',
     borderRadius: 16,
     /* Responsive padding: 20px on narrow phones, 36px on wider screens */
     padding: 'clamp(20px, 6vw, 40px) clamp(16px, 5vw, 36px)',
     width: '100%',
     maxWidth: 420,
-    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+    boxShadow: '0 24px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.02) inset',
   },
   logoLink: {
     display: 'flex', alignItems: 'center', gap: 8,
