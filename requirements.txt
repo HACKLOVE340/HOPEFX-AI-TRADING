@@ -20,7 +20,10 @@ asyncpg>=0.29.0
 psycopg2-binary>=2.9.0
 
 # ── Caching ───────────────────────────────────────────────────────────────────
-redis[asyncio]>=5.0.0
+# redis-py 4.2+ ships async support in the base package (import: redis.asyncio),
+# and redis 8.x dropped the now-empty `asyncio` extra — so plain `redis` is
+# correct and avoids the "does not provide the extra 'asyncio'" pip warning.
+redis>=5.0.0
 kubernetes-asyncio>=29.0.0   # K8s ConfigMap fallback for kill switch cross-pod propagation
 kubernetes>=29.0.0            # sync K8s client (used when no event loop is running)
 
