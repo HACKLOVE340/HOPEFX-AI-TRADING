@@ -55,16 +55,30 @@ if not exist "venv\Scripts\activate.bat" (
 :: ── 3. Activate venv ──────────────────────────────────────────────────────────
 call venv\Scripts\activate.bat
 
-:: ── 4. Sync dependencies only when requirements.txt changes ──────────────────
-:: Hash-check: MD5 of requirements.txt is stored in venv/.req_hash.
-:: pip only runs on first launch or after requirements.txt is modified.
+:: ── 4. Sync dependencies when requirements.txt changes OR core deps missing ──
+:: Hash-check: MD5 of requirements.txt is stored in venv/.req_hash so pip only
+:: runs on first launch or after requirements.txt is modified. We ALSO verify a
+:: handful of core imports actually work — a partial/broken venv (e.g. an
+:: interrupted install) would otherwise pass the hash check and crash at startup
+:: with "No module named 'jwt'". If anything is missing we repair the venv.
+set "NEED_DEPS=0"
 python -c "import hashlib,os,sys; f='venv\\.req_hash'; h=hashlib.md5(open('requirements.txt','rb').read()).hexdigest(); sys.exit(0 if os.path.exists(f) and open(f).read().strip()==h else 1)" >nul 2>&1
+if errorlevel 1 set "NEED_DEPS=1"
+python -c "import jwt, fastapi, uvicorn, pydantic, sqlalchemy, dotenv" >nul 2>&1
 if errorlevel 1 (
-    echo [INFO] Requirements changed — syncing dependencies...
-    pip cache purge >nul 2>&1
+    echo [INFO] Core dependencies missing or broken — will (re)install.
+    set "NEED_DEPS=1"
+)
+if "!NEED_DEPS!"=="1" (
+    echo [INFO] Installing Python dependencies ^(this can take a few minutes^)...
     pip install --no-cache-dir -r requirements.txt
     if errorlevel 1 (
         echo [ERROR] Dependency install failed. See output above.
+        pause & exit /b 1
+    )
+    python -c "import jwt, fastapi, uvicorn, pydantic, sqlalchemy, dotenv" >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Core imports still failing after install. See output above.
         pause & exit /b 1
     )
     python -c "import hashlib; open('venv\\.req_hash','w').write(hashlib.md5(open('requirements.txt','rb').read()).hexdigest())"
