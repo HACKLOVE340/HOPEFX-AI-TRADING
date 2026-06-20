@@ -1492,7 +1492,7 @@ def set_maintenance(
     try:
         import redis as _redis
 
-        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=0.5, socket_timeout=1.5)
         import json as _json
 
         rc.set("platform:maintenance", _json.dumps(state))
@@ -1532,7 +1532,7 @@ def broadcast_message(
     try:
         import redis as _redis
 
-        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=0.5, socket_timeout=1.5)
         rc.lpush("platform:broadcasts", _json.dumps(msg))
         rc.ltrim("platform:broadcasts", 0, 49)
         rc.publish("platform:broadcast", _json.dumps(msg))

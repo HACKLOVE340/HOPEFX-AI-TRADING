@@ -52,10 +52,16 @@ HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_PUBLIC_HEARTBEAT_INTERVA
 MAX_PUBLIC_CONNECTIONS: int = int(os.getenv("WS_PUBLIC_MAX_CONNECTIONS", "500"))
 
 # Per-IP rate limiting
-# Max concurrent open connections from a single IP address.
-WS_MAX_CONNECTIONS_PER_IP: int = int(os.getenv("WS_MAX_CONNECTIONS_PER_IP", "10"))
+# Max concurrent open connections from a single IP address. Raised from 10 →
+# a single user opens several sockets per page (ticker/live/chat) across tabs,
+# and behind a NAT/proxy many users share one IP, so 10 was far too low.
+WS_MAX_CONNECTIONS_PER_IP: int = int(os.getenv("WS_MAX_CONNECTIONS_PER_IP", "50"))
 # Max new connections per IP per minute (sliding window).
-WS_MAX_CONNECTIONS_PER_MINUTE: int = int(os.getenv("WS_MAX_CONNECTIONS_PER_MINUTE", "30"))
+WS_MAX_CONNECTIONS_PER_MINUTE: int = int(os.getenv("WS_MAX_CONNECTIONS_PER_MINUTE", "120"))
+
+# Loopback addresses are never rate-limited: in local dev every connection comes
+# from 127.0.0.1, so the per-IP cap would otherwise drop WS on some pages.
+_LOOPBACK_IPS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 PUBLIC_SYMBOLS = [
     "XAU_USD",
@@ -96,6 +102,9 @@ async def _check_ip_rate_limit(ip: str) -> tuple[bool, str]:
     Returns (allowed: bool, reason: str).
     Cleans up stale rate-window entries on each call.
     """
+    # Never rate-limit loopback (local development).
+    if ip in _LOOPBACK_IPS:
+        return True, ""
     async with _ip_lock:
         now = time.monotonic()
         window = _ip_rate_window[ip]

@@ -260,6 +260,11 @@ class WebSocketConnectionLimiter:
         -------
         (allowed, reason) — if allowed=False the socket is already closed.
         """
+        # Never rate-limit loopback (local development): every connection comes
+        # from 127.0.0.1, so the per-IP cap would drop WS on some pages.
+        if client_ip in ("127.0.0.1", "::1", "localhost"):
+            return True, ""
+
         self._try_connect_redis()
 
         if self._redis is not None:
