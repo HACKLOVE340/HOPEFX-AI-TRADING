@@ -437,17 +437,22 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
         }
         return descriptions.get(ind_type, "Technical indicator")
 
-    def get_templates(self) -> list[dict[str, Any]]:
-        """Get list of available strategy templates."""
-        return [
+    def get_templates(self, category: str | None = None) -> list[dict[str, Any]]:
+        """Get list of available strategy templates, optionally filtered by category."""
+        out = [
             {
                 "id": tid,
                 "name": t.name,
                 "description": t.description,
+                "category": getattr(t, "category", "custom"),
                 "rules_count": len(t.rules),
             }
             for tid, t in self.templates.items()
         ]
+        if category:
+            cat = category.lower()
+            out = [t for t in out if str(t.get("category", "")).lower() == cat]
+        return out
 
     def create_from_template(self, template_id: str, name: str, symbol: str, timeframe: str) -> NoCodeStrategy | None:
         """Create a new strategy from a template."""
