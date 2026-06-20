@@ -259,7 +259,7 @@ class SecurityAuditor:
         self.audit_logger = logging.getLogger("security_audit")
         self.audit_logger.setLevel(logging.INFO)
 
-        handler = logging.FileHandler(log_path)
+        handler = logging.FileHandler(log_path, encoding="utf-8")  # avoid cp1252 errors on Windows
         handler.setFormatter(logging.Formatter("%(asctime)s - AUDIT - %(levelname)s - %(message)s"))
         self.audit_logger.addHandler(handler)
 

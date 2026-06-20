@@ -286,8 +286,12 @@ class HOPEFXLogger:
                 root_logger.addHandler(console_handler)
 
         # File handler with rotation
+        # encoding="utf-8" is required: on Windows RotatingFileHandler otherwise
+        # opens the file in the locale encoding (cp1252), which raises
+        # UnicodeEncodeError on the Unicode symbols (→, —, ═, ✅) used in many
+        # log messages — flooding the console with "--- Logging error ---".
         file_handler = logging.handlers.RotatingFileHandler(
-            log_path / f"{app_name}.log", maxBytes=max_bytes, backupCount=backup_count
+            log_path / f"{app_name}.log", maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
         )
 
         if json_format:
@@ -310,6 +314,7 @@ class HOPEFXLogger:
             log_path / f"{app_name}_errors.log",
             maxBytes=max_bytes,
             backupCount=backup_count,
+            encoding="utf-8",
         )
         error_handler.setLevel(logging.ERROR)
         error_handler.setFormatter(StructuredLogFormatter())
@@ -333,6 +338,7 @@ class HOPEFXLogger:
             log_path / f"{app_name}_audit.log",
             maxBytes=max_bytes,
             backupCount=backup_count,
+            encoding="utf-8",
         )
         audit_handler.setFormatter(StructuredLogFormatter())
         self._audit_logger = logging.getLogger("hopefx.audit")

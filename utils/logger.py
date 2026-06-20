@@ -105,6 +105,7 @@ class Logger:
             log_file,
             maxBytes=10485760,  # 10MB
             backupCount=5,
+            encoding="utf-8",  # avoid cp1252 UnicodeEncodeError on Windows
         )
         file_handler.setLevel(cls._log_level)
         file_handler.setFormatter(formatter)
