@@ -29,6 +29,8 @@ import {
 } from 'lightweight-charts';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { useOHLCV } from '../hooks/useChartData';
+import { ohlcvLimitFor } from '../services/chart-api';
+import { ema, bollinger, rsi } from '../utils/indicators';
 import { COLORS, CHART_DIMS } from '../utils/design-tokens';
 import { formatPrice, formatTime } from '../utils/formatters';
 import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartClickContext } from '../types';
@@ -36,6 +38,18 @@ import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartClickContext } fr
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
+
+// Symbols the user can switch between (slash form — the backend normalises).
+const SYMBOLS = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
+
+// Indicator toggles available in the toolbar.
+type IndicatorKey = 'ema20' | 'ema50' | 'bb' | 'rsi';
+const INDICATORS: { key: IndicatorKey; label: string }[] = [
+  { key: 'ema20', label: 'EMA 20' },
+  { key: 'ema50', label: 'EMA 50' },
+  { key: 'bb',    label: 'BB' },
+  { key: 'rsi',   label: 'RSI' },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -106,6 +120,26 @@ const TFSelector = memo(({ value, onChange }: { value: string; onChange: (tf: st
 ));
 TFSelector.displayName = 'TFSelector';
 
+// ─── Indicator Selector ─────────────────────────────────────────────────────
+
+const IndicatorSelector = memo(
+  ({ active, onToggle }: { active: Record<IndicatorKey, boolean>; onToggle: (k: IndicatorKey) => void }) => (
+    <div style={styles.tfRow}>
+      {INDICATORS.map(({ key, label }) => (
+        <button
+          key={key}
+          onClick={() => onToggle(key)}
+          style={{ ...styles.tfBtn, ...(active[key] ? styles.tfBtnActive : {}) }}
+          title={`Toggle ${label}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  ),
+);
+IndicatorSelector.displayName = 'IndicatorSelector';
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 interface CoreChartProps {
@@ -123,6 +157,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
   levels = [],
   height = CHART_DIMS.mainHeight,
 }) => {
+  const wrapperRef       = useRef<HTMLDivElement>(null);
   const containerRef     = useRef<HTMLDivElement>(null);
   const chartRef         = useRef<IChartApi | null>(null);
   const candleRef        = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -140,12 +175,21 @@ const CoreChart: React.FC<CoreChartProps> = ({
   const timeframe  = useChartBotStore((s) => s.timeframe);
   const liveTick   = useChartBotStore((s) => s.liveTick);
   const setTF      = useChartBotStore((s) => s.setTimeframe);
+  const setSymbol  = useChartBotStore((s) => s.setSymbol);
   const setReady   = useChartBotStore((s) => s.setChartReady);
   const setCtx     = useChartBotStore((s) => s.setClickContext);
 
   const [crosshair, setCrosshair] = useState<CrosshairInfo | null>(null);
+  const [indicators, setIndicators] = useState<Record<IndicatorKey, boolean>>({
+    ema20: false, ema50: false, bb: false, rsi: false,
+  });
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const { data: bars, isLoading } = useOHLCV(symbol, timeframe, 500);
+  const toggleIndicator = useCallback((k: IndicatorKey) => {
+    setIndicators((prev) => ({ ...prev, [k]: !prev[k] }));
+  }, []);
+
+  const { data: bars, isLoading, isError } = useOHLCV(symbol, timeframe, ohlcvLimitFor(timeframe));
 
   // ── Chart initialisation ──────────────────────────────────────────────────
 
@@ -390,15 +434,90 @@ const CoreChart: React.FC<CoreChartProps> = ({
     });
   }, [levels]);
 
+  // ── Technical indicators (EMA / Bollinger / RSI) ──────────────────────────
+  // Recreate active overlay series whenever toggles or bars change; the cleanup
+  // removes them so toggling off (or switching symbol/timeframe) leaves no
+  // orphan series or empty RSI pane.
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !bars || bars.length === 0) return;
+
+    const created: ISeriesApi<'Line'>[] = [];
+    const addLine = (color: string, data: LineData[], opts?: { lineWidth?: 1 | 2; pane?: number }) => {
+      const series = chart.addSeries(
+        LineSeries,
+        {
+          color,
+          lineWidth: opts?.lineWidth ?? 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+        },
+        opts?.pane,
+      );
+      series.setData(data);
+      created.push(series);
+      return series;
+    };
+
+    if (indicators.ema20) addLine(COLORS.neon.cyan, ema(bars, 20));
+    if (indicators.ema50) addLine(COLORS.neon.gold, ema(bars, 50));
+    if (indicators.bb) {
+      const bb = bollinger(bars, 20, 2);
+      addLine(COLORS.chart.bidLine, bb.upper, { lineWidth: 1 });
+      addLine(COLORS.text.muted, bb.middle, { lineWidth: 1 });
+      addLine(COLORS.chart.askLine, bb.lower, { lineWidth: 1 });
+    }
+    if (indicators.rsi) {
+      // RSI lives in its own pane (index 1) on a 0–100 scale.
+      const rsiSeries = addLine(COLORS.neon.purple, rsi(bars, 14), { lineWidth: 1, pane: 1 });
+      rsiSeries.createPriceLine({ price: 70, color: COLORS.loss.base, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '70' });
+      rsiSeries.createPriceLine({ price: 30, color: COLORS.profit.base, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '30' });
+    }
+
+    return () => {
+      created.forEach((s) => {
+        try { chart.removeSeries(s); } catch { /* chart already disposed */ }
+      });
+    };
+  }, [indicators, bars]);
+
+  // ── Fullscreen ────────────────────────────────────────────────────────────
+
+  const toggleFullscreen = useCallback(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => { /* ignore */ });
+    } else {
+      document.exitFullscreen?.().catch(() => { /* ignore */ });
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
   const bid = liveTick?.bid ?? 0;
   const ask = liveTick?.ask ?? 0;
+  const noData = !isLoading && (isError || !bars || bars.length === 0);
 
   return (
-    <div style={styles.wrapper}>
+    <div ref={wrapperRef} style={styles.wrapper}>
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerLeft}>
-          <span style={styles.symbolText}>{symbol}</span>
+          <select
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value)}
+            style={styles.symbolSelect}
+            title="Select instrument"
+          >
+            {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
           <span style={{ ...styles.priceText, color: liveTick ? (liveTick.change_pct >= 0 ? COLORS.profit.base : COLORS.loss.base) : COLORS.text.muted }}>
             {liveTick ? formatPrice(liveTick.mid) : '—'}
           </span>
@@ -408,7 +527,13 @@ const CoreChart: React.FC<CoreChartProps> = ({
             </span>
           )}
         </div>
-        <TFSelector value={timeframe} onChange={setTF} />
+        <div style={styles.headerRight}>
+          <IndicatorSelector active={indicators} onToggle={toggleIndicator} />
+          <TFSelector value={timeframe} onChange={setTF} />
+          <button onClick={toggleFullscreen} style={styles.tfBtn} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+            {isFullscreen ? '⤢' : '⤡'}
+          </button>
+        </div>
       </div>
 
       {/* Crosshair info */}
@@ -420,6 +545,14 @@ const CoreChart: React.FC<CoreChartProps> = ({
           <div style={styles.loadingOverlay}>
             <div style={styles.loadingDot} />
             <span style={styles.loadingText}>Loading market data…</span>
+          </div>
+        )}
+        {noData && (
+          <div style={styles.loadingOverlay}>
+            <span style={styles.loadingText}>
+              No market data for {symbol} {timeframe}. Configure a price feed
+              (OANDA_API_KEY / GOLDAPI_IO_KEY) or check your connection.
+            </span>
           </div>
         )}
         <div ref={containerRef} style={{ width: '100%', height }} />
@@ -451,12 +584,30 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 12,
   },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   symbolText: {
     fontFamily: '"JetBrains Mono", monospace',
     fontSize: 15,
     fontWeight: 700,
     color: COLORS.text.primary,
     letterSpacing: '0.04em',
+  },
+  symbolSelect: {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 14,
+    fontWeight: 700,
+    color: COLORS.text.primary,
+    background: COLORS.bg.elevated,
+    border: `1px solid ${COLORS.bg.border}`,
+    borderRadius: 4,
+    padding: '4px 8px',
+    letterSpacing: '0.04em',
+    cursor: 'pointer',
   },
   priceText: {
     fontFamily: '"JetBrains Mono", monospace',

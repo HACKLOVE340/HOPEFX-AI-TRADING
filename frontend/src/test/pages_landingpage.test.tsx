@@ -590,11 +590,11 @@ describe('LandingPage — Live ticker', () => {
     }, { timeout: 3000 });
   });
 
-  it('polling fallback calls /api/data-layer/tick', async () => {
+  it('polling fallback calls the public prices endpoint', async () => {
     await renderLanding();
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/data-layer/tick')
+        expect.stringContaining('/api/public/prices')
       );
     }, { timeout: 3000 });
   });

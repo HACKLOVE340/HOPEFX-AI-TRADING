@@ -25,6 +25,7 @@ import {
   useLiveLevels,
 } from '../hooks/useOrchestratorWS';
 import { useOHLCV, useLevels, useTrendlines, usePatterns, useSignals, useEquityCurve, useSentiment, useNews, useRiskMetrics } from '../hooks/useChartData';
+import { ohlcvLimitFor } from '../services/chart-api';
 import { COLORS, CSS_VARS } from '../utils/design-tokens';
 import CoreChart from './CoreChart';
 import AIOverlays from './AIOverlays';
@@ -197,8 +198,8 @@ const DataInitialiser: React.FC = () => {
 
   // Deep timeframes pull far more bars so the chart can scroll back decades
   // (daily gold history reaches ~2000); intraday stays light for speed.
-  const ohlcvLimit = timeframe === '1d' ? 8000 : timeframe === '1w' ? 2000 : 500;
-  const { data: bars }      = useOHLCV(symbol, timeframe, ohlcvLimit);
+  // Shared helper keeps this key identical to CoreChart's so they share cache.
+  const { data: bars }      = useOHLCV(symbol, timeframe, ohlcvLimitFor(timeframe));
   const { data: levels }    = useLevels(symbol);
   const { data: trendlines }= useTrendlines(symbol);
   const { data: patterns }  = usePatterns(symbol);

@@ -29,7 +29,7 @@ import type { ChartClickContext, TradeOrder } from '../types';
 
 export function useOHLCV(symbol: string, timeframe: string, limit = 500) {
   return useQuery({
-    queryKey: queryKeys.ohlcv(symbol, timeframe),
+    queryKey: queryKeys.ohlcv(symbol, timeframe, limit),
     queryFn:  () => fetchOHLCV({ symbol, timeframe, limit }),
     staleTime: 30_000,
     refetchInterval: 60_000,

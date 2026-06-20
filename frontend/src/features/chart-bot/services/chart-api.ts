@@ -34,6 +34,22 @@ export interface OHLCVParams {
   to?: number;
 }
 
+/**
+ * Bars to request per timeframe. Deep timeframes pull far more history so the
+ * chart can scroll back years (daily gold reaches ~2000); intraday stays
+ * lighter for speed but still deep enough to analyse. Centralised so every
+ * caller (CoreChart, DataInitialiser) shares the same TanStack Query cache key.
+ */
+export function ohlcvLimitFor(timeframe: string): number {
+  switch (timeframe) {
+    case '1d': return 8000;
+    case '1w': return 2000;
+    case '4h': return 2000;
+    case '1h': return 1500;
+    default:   return 1000;
+  }
+}
+
 export async function fetchOHLCV(params: OHLCVParams): Promise<OHLCVBar[]> {
   const { symbol, timeframe, limit = 500, from, to } = params;
   const query = new URLSearchParams({
@@ -304,7 +320,7 @@ export async function fetchWorldMonitorViews(): Promise<WorldMonitorViews> {
 // Centralised key factory for TanStack Query cache management
 
 export const queryKeys = {
-  ohlcv:              (symbol: string, tf: string) => ['ohlcv', symbol, tf] as const,
+  ohlcv:              (symbol: string, tf: string, limit: number) => ['ohlcv', symbol, tf, limit] as const,
   signals:            (symbol: string)             => ['signals', symbol] as const,
   sentiment:          (symbol: string)             => ['sentiment', symbol] as const,
   news:               (symbol: string)             => ['news', symbol] as const,
