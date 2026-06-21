@@ -694,9 +694,17 @@ class EventBus:
                 self._metrics["errors"] += 1
                 _consecutive_errors += 1
 
+                # In non-production, Redis is optional — the in-process local bus
+                # handles everything — so a missing Redis is expected and must not
+                # spam ERROR. Log the first failure (WARNING in dev, ERROR in prod)
+                # then drop to DEBUG for the retries.
+                _redis_optional = os.getenv("APP_ENV", "development").lower() != "production"
+                _first = _consecutive_errors == 1
+                _emit = (logger.warning if _redis_optional else logger.error) if _first else logger.debug
+
                 if _consecutive_errors >= _RECONNECT_MAX_ATTEMPTS:
                     self._degraded = True
-                    logger.error(
+                    (logger.warning if _redis_optional else logger.error)(
                         "EventBus: %d consecutive reconnect failures — giving up, "
                         "switching to local fallback. Last error: %s",
                         _consecutive_errors,
@@ -706,7 +714,7 @@ class EventBus:
 
                 # Exponential backoff capped at _RECONNECT_MAX_S
                 backoff_s = min(_RECONNECT_BASE_S * (2 ** (_consecutive_errors - 1)), _RECONNECT_MAX_S)
-                logger.error(
+                _emit(
                     "EventBus subscribe error (attempt %d/%d): %s — reconnecting in %.0fs",
                     _consecutive_errors,
                     _RECONNECT_MAX_ATTEMPTS,
@@ -722,7 +730,7 @@ class EventBus:
                     _consecutive_errors = 0
                 except Exception as _reconnect_exc:
                     self._degraded = True
-                    logger.error(
+                    (logger.debug if (_redis_optional or not _first) else logger.error)(
                         "EventBus: Redis reconnect failed (attempt %d/%d): %s",
                         _consecutive_errors,
                         _RECONNECT_MAX_ATTEMPTS,
