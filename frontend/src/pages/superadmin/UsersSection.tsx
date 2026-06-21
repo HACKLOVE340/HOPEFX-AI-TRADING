@@ -145,7 +145,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: roleStyle.bg, border: `2px solid ${roleStyle.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: roleStyle.color }}>
-              {user.username[0].toUpperCase()}
+              {user.username?.[0]?.toUpperCase() ?? '?'}
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{user.username}</div>

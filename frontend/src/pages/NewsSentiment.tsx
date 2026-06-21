@@ -50,9 +50,9 @@ const NewsSentiment: React.FC = () => {
   }, [load]);
 
   const tiles = [
-    { label: 'Sentiment', value: sentiment?.overall_score != null ? sentiment.overall_score.toFixed(1) : '—' },
-    { label: 'Bullish', value: sentiment?.bullish_pct != null ? `${sentiment.bullish_pct}%` : '—' },
-    { label: 'Bearish', value: sentiment?.bearish_pct != null ? `${sentiment.bearish_pct}%` : '—' },
+    { label: 'Sentiment', value: Number.isFinite(sentiment?.overall_score) ? (sentiment!.overall_score as number).toFixed(1) : '—' },
+    { label: 'Bullish', value: Number.isFinite(sentiment?.bullish_pct) ? `${sentiment!.bullish_pct}%` : '—' },
+    { label: 'Bearish', value: Number.isFinite(sentiment?.bearish_pct) ? `${sentiment!.bearish_pct}%` : '—' },
     { label: 'Articles', value: sentiment?.news_count != null ? String(sentiment.news_count) : '—' },
   ];
 

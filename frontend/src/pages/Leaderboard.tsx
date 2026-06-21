@@ -8,7 +8,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { api } from '../hooks/useApi';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPctRaw, fmtRatio } from '../lib/utils';
+
+/** Guarded sort value / integer formatter for possibly missing trader fields. */
+const sv = (v: number | null | undefined) => (Number.isFinite(v as number) ? (v as number) : 0);
+const fInt = (v: number | null | undefined) =>
+  Number.isFinite(v as number) ? (v as number).toLocaleString() : '—';
+const fPctPlain = (v: number | null | undefined, d = 1) =>
+  Number.isFinite(v as number) ? `${(v as number).toFixed(d)}%` : '—';
 
 interface Trader {
   rank: number;
@@ -45,9 +52,9 @@ const PodiumCard: React.FC<{ trader: Trader; tall?: boolean }> = ({ trader, tall
       </div>
       <div className="text-base font-bold text-slate-100 text-center">{trader.name}</div>
       {trader.country && <div className="text-xs text-slate-500">{trader.country}</div>}
-      <div className="text-2xl font-black text-green-400">+{trader.return.toFixed(1)}%</div>
+      <div className="text-2xl font-black text-green-400">{fmtPctRaw(trader.return, 1)}</div>
       <div className="text-xs text-slate-500 text-center">
-        Sharpe {trader.sharpe.toFixed(2)} · {trader.followers.toLocaleString()} followers
+        Sharpe {fmtRatio(trader.sharpe)} · {fInt(trader.followers)} followers
       </div>
       {trader.strategy_tag && (
         <span className="text-2xs px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-400 bg-violet-500/10">
@@ -106,10 +113,10 @@ const Leaderboard: React.FC = () => {
     if (search) list = list.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
     if (stratFilter) list = list.filter(t => t.strategy_tag === stratFilter);
     list.sort((a, b) => {
-      if (sortBy === 'return')    return b.return - a.return;
-      if (sortBy === 'sharpe')    return b.sharpe - a.sharpe;
-      if (sortBy === 'win_rate')  return (b.win_rate ?? 0) - (a.win_rate ?? 0);
-      if (sortBy === 'followers') return b.followers - a.followers;
+      if (sortBy === 'return')    return sv(b.return) - sv(a.return);
+      if (sortBy === 'sharpe')    return sv(b.sharpe) - sv(a.sharpe);
+      if (sortBy === 'win_rate')  return sv(b.win_rate) - sv(a.win_rate);
+      if (sortBy === 'followers') return sv(b.followers) - sv(a.followers);
       return 0;
     });
     return list;
@@ -252,17 +259,17 @@ const Leaderboard: React.FC = () => {
                         {trader.country && <div className="text-2xs text-slate-600 mt-0.5">{trader.country}</div>}
                       </td>
                       <td className={`px-3 sm:px-4 py-3 font-semibold text-sm tabular-nums whitespace-nowrap ${trader.return >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {trader.return >= 0 ? '+' : ''}{trader.return.toFixed(1)}%
+                        {fmtPctRaw(trader.return, 1)}
                       </td>
-                      <td className="px-3 sm:px-4 py-3 text-slate-300 text-sm tabular-nums">{trader.sharpe.toFixed(2)}</td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-300 text-sm tabular-nums">{fmtRatio(trader.sharpe)}</td>
                       <td className={`px-3 sm:px-4 py-3 text-sm tabular-nums ${(trader.win_rate ?? 0) >= 60 ? 'text-green-400' : 'text-slate-400'}`}>
-                        {trader.win_rate != null ? `${trader.win_rate.toFixed(1)}%` : '—'}
+                        {fPctPlain(trader.win_rate)}
                       </td>
                       <td className="px-3 sm:px-4 py-3 text-red-400 text-sm tabular-nums">
-                        {trader.max_drawdown != null ? `${trader.max_drawdown.toFixed(1)}%` : '—'}
+                        {fPctPlain(trader.max_drawdown)}
                       </td>
-                      <td className="px-3 sm:px-4 py-3 text-slate-400 text-sm tabular-nums">{trader.total_trades?.toLocaleString() ?? '—'}</td>
-                      <td className="px-3 sm:px-4 py-3 text-slate-400 text-sm tabular-nums">{trader.followers.toLocaleString()}</td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-400 text-sm tabular-nums">{fInt(trader.total_trades)}</td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-400 text-sm tabular-nums">{fInt(trader.followers)}</td>
                       <td className="px-3 sm:px-4 py-3 text-amber-400 font-semibold text-sm whitespace-nowrap">{trader.prize}</td>
                       <td className="px-3 sm:px-4 py-3">
                         <div className="flex items-center gap-1.5">

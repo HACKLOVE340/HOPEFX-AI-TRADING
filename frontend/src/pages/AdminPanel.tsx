@@ -73,7 +73,9 @@ interface AdminAlert {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmtUSD = (n: number) =>
-  n >= 1_000_000
+  !Number.isFinite(n)
+    ? '—'
+    : n >= 1_000_000
     ? `$${(n / 1_000_000).toFixed(2)}M`
     : n >= 1_000
     ? `$${(n / 1_000).toFixed(1)}K`
@@ -395,8 +397,8 @@ const AdminPanel: React.FC = () => {
             <KpiCard label="Trades Today"     value={overview ? overview.total_trades_today.toLocaleString() : '—'}    sub={overview ? `${overview.open_positions} open positions` : undefined}                              accent="#22c55e" />
             <KpiCard label="Revenue Today"    value={overview ? fmtUSD(overview.revenue_today_usd) : '—'}              sub={overview ? `MTD: ${fmtUSD(overview.revenue_mtd_usd)}` : undefined}                               accent="#f59e0b" />
             <KpiCard label="Active Subs"      value={overview ? overview.active_subscriptions.toLocaleString() : '—'}  sub={overview ? `${overview.pending_withdrawals} pending withdrawals` : undefined}                    accent="#8b5cf6" />
-            <KpiCard label="Platform Uptime"  value={overview ? `${overview.platform_uptime_pct.toFixed(2)}%` : '—'}   sub={overview ? `${overview.ws_connections} WS connections` : undefined}                              accent="#06b6d4" />
-            <KpiCard label="ML Accuracy"      value={overview ? `${(overview.ml_model_accuracy * 100).toFixed(1)}%` : '—'} sub={overview && overview.flagged_accounts > 0 ? `⚠️ ${overview.flagged_accounts} flagged` : 'No flagged accounts'} accent={overview && overview.flagged_accounts > 0 ? '#f87171' : '#22c55e'} />
+            <KpiCard label="Platform Uptime"  value={overview && Number.isFinite(overview.platform_uptime_pct) ? `${overview.platform_uptime_pct.toFixed(2)}%` : '—'}   sub={overview ? `${overview.ws_connections} WS connections` : undefined}                              accent="#06b6d4" />
+            <KpiCard label="ML Accuracy"      value={overview && Number.isFinite(overview.ml_model_accuracy) ? `${(overview.ml_model_accuracy * 100).toFixed(1)}%` : '—'} sub={overview && overview.flagged_accounts > 0 ? `⚠️ ${overview.flagged_accounts} flagged` : 'No flagged accounts'} accent={overview && overview.flagged_accounts > 0 ? '#f87171' : '#22c55e'} />
           </div>
 
           {/* Active Alerts */}

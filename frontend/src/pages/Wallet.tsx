@@ -22,7 +22,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Spinner } from '../components/Spinner';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPnl } from '../lib/utils';
 
 
 
@@ -374,8 +374,8 @@ const Wallet: React.FC = () => {
               className="flex items-center gap-3 sm:gap-4 bg-terminal-surface border border-terminal-border rounded-xl px-3 sm:px-4 py-3 mb-2 hover:border-slate-600 transition-colors">
               {/* Icon */}
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
-                style={{ background: `${TYPE_COLOR[tx.type]}22`, color: TYPE_COLOR[tx.type] }}>
-                {TYPE_ICON[tx.type]}
+                style={{ background: `${TYPE_COLOR[tx.type] ?? '#94a3b8'}22`, color: TYPE_COLOR[tx.type] ?? '#94a3b8' }}>
+                {TYPE_ICON[tx.type] ?? '•'}
               </div>
               {/* Info */}
               <div className="flex-1 min-w-0">
@@ -388,11 +388,11 @@ const Wallet: React.FC = () => {
               </div>
               {/* Amount + status */}
               <div className="text-right flex-shrink-0">
-                <div className={`text-sm font-bold tabular-nums ${tx.amount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {tx.amount >= 0 ? '+' : ''}${Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <div className={`text-sm font-bold tabular-nums ${(tx.amount ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {fmtPnl(tx.amount)}
                 </div>
                 <div className="text-2xs font-semibold capitalize mt-0.5"
-                  style={{ color: STATUS_COLOR[tx.status] }}>
+                  style={{ color: STATUS_COLOR[tx.status] ?? '#64748b' }}>
                   {tx.status}
                 </div>
               </div>
