@@ -80,7 +80,11 @@ _last_mid_lock = _threading.Lock()
 # 5 s is sufficient for any legitimate client on a normal connection.
 # 30 s was too long — it allowed unauthenticated connections to hold a slot
 # for half a minute, enabling trivial resource exhaustion.
-AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "5"))
+# 20s (was 5s): on a cold page load the client must first silently refresh its
+# access token before it can send the WS auth message; on a busy/slow machine
+# that round-trip can exceed 5s, causing the server to drop the socket (4001)
+# and churn reconnects. 20s is comfortably above any normal auth round-trip.
+AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "20"))
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
 # Set to "false" to allow unauthenticated connections (dev/demo mode only).
