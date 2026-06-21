@@ -54,66 +54,65 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
     }
 
     # ── DB queries: users, trades, signals, sessions, connections ─────────────
-    try:
-        from database.connection import SessionLocal
-        from database.models import Signal, Trade, WalletTransaction
-        from database.user_models import User, UserSession
-        from sqlalchemy import func, text
-
-        db = SessionLocal()
+    # Run all blocking DB work in a thread so it never blocks the asyncio event
+    # loop (which also serves the live WebSocket, feeds and every other request).
+    # On a busy host, sync DB queries on the loop were a robustness gap that made
+    # the whole superadmin section slow/time out.
+    def _db_snapshot() -> dict[str, Any]:
+        out: dict[str, Any] = {}
         try:
-            # Users
-            overview["total_users"] = db.query(User).count()
-            overview["active_users_24h"] = (
-                db.query(User).filter(User.last_login_at >= now - timedelta(hours=24)).count()
-            )
-            overview["new_users_7d"] = db.query(User).filter(User.created_at >= now - timedelta(days=7)).count()
+            from database.connection import SessionLocal
+            from database.models import Signal, Trade, WalletTransaction
+            from database.user_models import User, UserSession
+            from sqlalchemy import func, text
 
-            # Trades opened today
-            overview["total_trades_today"] = db.query(Trade).filter(Trade.entry_time >= today_start).count()
-
-            # Open positions
-            overview["open_positions"] = db.query(Trade).filter(Trade.is_open == True).count()
-
-            # Signals generated today
-            overview["signals_generated_today"] = db.query(Signal).filter(Signal.generated_at >= today_start).count()
-
-            # Active (non-revoked, non-expired) sessions
-            overview["active_sessions"] = (
-                db.query(UserSession)
-                .filter(
-                    UserSession.is_revoked == False,
-                    UserSession.expires_at > now,
-                )
-                .count()
-            )
-
-            # Revenue MTD: sum of completed inbound wallet transactions this month
+            db = SessionLocal()
             try:
-                rev_row = (
-                    db.query(func.sum(WalletTransaction.amount))  # pylint: disable=not-callable
-                    .filter(
-                        WalletTransaction.created_at >= mtd_start,
-                        WalletTransaction.transaction_type.in_(["deposit", "subscription", "fee_credit", "commission"]),
-                        WalletTransaction.status == "completed",
+                out["total_users"] = db.query(User).count()
+                out["active_users_24h"] = (
+                    db.query(User).filter(User.last_login_at >= now - timedelta(hours=24)).count()
+                )
+                out["new_users_7d"] = db.query(User).filter(User.created_at >= now - timedelta(days=7)).count()
+                out["total_trades_today"] = db.query(Trade).filter(Trade.entry_time >= today_start).count()
+                out["open_positions"] = db.query(Trade).filter(Trade.is_open == True).count()
+                out["signals_generated_today"] = db.query(Signal).filter(Signal.generated_at >= today_start).count()
+                out["active_sessions"] = (
+                    db.query(UserSession)
+                    .filter(UserSession.is_revoked == False, UserSession.expires_at > now)
+                    .count()
+                )
+                try:
+                    rev_row = (
+                        db.query(func.sum(WalletTransaction.amount))  # pylint: disable=not-callable
+                        .filter(
+                            WalletTransaction.created_at >= mtd_start,
+                            WalletTransaction.transaction_type.in_(
+                                ["deposit", "subscription", "fee_credit", "commission"]
+                            ),
+                            WalletTransaction.status == "completed",
+                        )
+                        .scalar()
                     )
-                    .scalar()
-                )
-                overview["revenue_mtd"] = round(float(rev_row or 0.0), 2)
-            except Exception as exc:
-                logger.warning("overview: revenue_mtd wallet query: %s", exc)
+                    out["revenue_mtd"] = round(float(rev_row or 0.0), 2)
+                except Exception as exc:
+                    logger.warning("overview: revenue_mtd wallet query: %s", exc)
+                try:
+                    row = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")).scalar()
+                    out["db_connections"] = int(row or 0)
+                except Exception:  # nosec B110  # noqa: S110
+                    pass
+            finally:
+                db.close()
+        except Exception as exc:
+            logger.warning("overview: DB unavailable: %s", exc)
+        return out
 
-            # Active DB connections (PostgreSQL only; silently skipped on SQLite)
-            try:
-                row = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")).scalar()
-                overview["db_connections"] = int(row or 0)
-            except Exception:  # nosec B110  # noqa: S110
-                pass
+    import asyncio as _asyncio
 
-        finally:
-            db.close()
+    try:
+        overview.update(await _asyncio.to_thread(_db_snapshot))
     except Exception as exc:
-        logger.warning("overview: DB unavailable: %s", exc)
+        logger.warning("overview: DB snapshot failed: %s", exc)
 
     # ── Revenue MTD fallback: monetization analytics ──────────────────────────
     if overview["revenue_mtd"] == 0.0:
