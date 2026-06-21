@@ -161,7 +161,30 @@ def _load_equity_curve() -> list[EquityPoint]:
     except Exception as exc:
         logger.debug("broker equity history load failed: %s", exc)
 
-    return []
+    # ── 4. No trade history yet — flat baseline at current/starting equity ─────
+    # A fresh paper account has no closed trades; rather than leave the chart
+    # blank ("Awaiting equity data…") indefinitely, render the starting capital
+    # as a flat line so the user sees their account from day one.
+    import datetime as _dt
+
+    current_equity = starting
+    try:
+        from core.app_state import app_state as _app_state3
+
+        engine = getattr(_app_state3, "hopefx_engine", None)
+        if engine is not None:
+            current_equity = float(getattr(engine, "_starting_equity", starting))
+        broker = getattr(_app_state3, "broker", None)
+        if broker is not None and hasattr(broker, "get_equity"):
+            eq = broker.get_equity()
+            if eq:
+                current_equity = float(eq)
+    except Exception as exc:
+        logger.debug("baseline equity lookup failed: %s", exc)
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    baseline = [(now - _dt.timedelta(days=1), current_equity), (now, current_equity)]
+    return _build_equity_points(baseline, current_equity)
 
 
 def _db_trade_count() -> int:

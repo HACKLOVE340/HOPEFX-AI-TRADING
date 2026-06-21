@@ -43,6 +43,7 @@ export function EquityCurveChart() {
   const chartApiRef   = useRef<IChartApi | null>(null);
   const equitySerRef  = useRef<ISeriesApi<'Area'> | null>(null);
   const ddSerRef      = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const priceLineRef  = useRef<ReturnType<ISeriesApi<'Area'>['createPriceLine']> | null>(null);
   const rafRef        = useRef<number>(0);
 
   // ── Chart init (mount once) ────────────────────────────────────────────────
@@ -100,6 +101,7 @@ export function EquityCurveChart() {
       chartApiRef.current  = null;
       equitySerRef.current = null;
       ddSerRef.current     = null;
+      priceLineRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -125,18 +127,25 @@ export function EquityCurveChart() {
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     )) {
       const t = toUT(pt.timestamp);
-      if (seen.has(t)) continue;
+      // Skip duplicate or non-finite points — LWC throws on NaN/Infinity and
+      // requires strictly increasing, valid timestamps.
+      if (seen.has(t) || !Number.isFinite(t) || !Number.isFinite(pt.equity)) continue;
       seen.add(t);
       equityData.push({ time: t, value: pt.equity });
-      ddData.push({ time: t, value: pt.drawdown, color: 'rgba(255,59,92,0.5)' });
+      ddData.push({ time: t, value: Number.isFinite(pt.drawdown) ? pt.drawdown : 0, color: 'rgba(255,59,92,0.5)' });
     }
 
     equitySerRef.current.setData(equityData);
     ddSerRef.current.setData(ddData);
 
-    // Draw start-equity reference line
+    // Draw start-equity reference line. Remove the previous one first so lines
+    // don't accumulate on every 30s refetch.
+    if (priceLineRef.current) {
+      equitySerRef.current.removePriceLine(priceLineRef.current);
+      priceLineRef.current = null;
+    }
     const startEquity = equityData[0]?.value ?? 0;
-    equitySerRef.current.createPriceLine({
+    priceLineRef.current = equitySerRef.current.createPriceLine({
       price:              startEquity,
       color:              '#1e2d3d',
       lineWidth:          1,

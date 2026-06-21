@@ -201,7 +201,14 @@ export function useEquityCurve() {
     queryKey: ['performance', 'equity-curve'],
     queryFn:  async () => {
       const res = await performanceApi.equityCurve();
-      return res.data;
+      // Defend against malformed payloads (non-array, missing/NaN fields) so a
+      // bad response can never crash the chart — keep only valid points.
+      const raw = Array.isArray(res.data) ? res.data : [];
+      return raw.filter(
+        (p): p is EquityPoint =>
+          p != null && typeof p.timestamp === 'string' &&
+          Number.isFinite(p.equity) && Number.isFinite(p.drawdown),
+      );
     },
     enabled:         hydrated && isAuth && delayed,
     refetchInterval: 30_000,
