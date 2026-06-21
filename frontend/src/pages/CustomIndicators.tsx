@@ -286,7 +286,7 @@ const CustomIndicators: React.FC = () => {
           }
           {preview.length > 0 && (
             <div style={{ fontSize:12, color:'#64748b', marginTop:8 }}>
-              {preview.length} data points · min {Math.min(...preview.map(d=>d.value)).toFixed(4)} · max {Math.max(...preview.map(d=>d.value)).toFixed(4)}
+              {preview.length} data points · min {(() => { const v = preview.map(d=>d.value).filter(Number.isFinite); return v.length ? Math.min(...v).toFixed(4) : '—'; })()} · max {(() => { const v = preview.map(d=>d.value).filter(Number.isFinite); return v.length ? Math.max(...v).toFixed(4) : '—'; })()}
             </div>
           )}
         </div>

@@ -59,10 +59,10 @@ const Transparency: React.FC = () => {
 
   const tiles = [
     { label: 'Decisions', value: stats?.total_decisions != null ? String(stats.total_decisions) : '—' },
-    { label: 'Win rate', value: stats?.win_rate != null ? `${stats.win_rate.toFixed(1)}%` : '—' },
-    { label: 'Avg confidence', value: stats?.avg_confidence != null ? `${(stats.avg_confidence * (stats.avg_confidence <= 1 ? 100 : 1)).toFixed(0)}%` : '—' },
-    { label: 'Avg exec', value: stats?.avg_execution_ms != null ? `${stats.avg_execution_ms.toFixed(0)}ms` : '—' },
-    { label: 'Skip rate', value: stats?.skip_rate != null ? `${stats.skip_rate.toFixed(1)}%` : '—' },
+    { label: 'Win rate', value: Number.isFinite(stats?.win_rate) ? `${(stats!.win_rate as number).toFixed(1)}%` : '—' },
+    { label: 'Avg confidence', value: Number.isFinite(stats?.avg_confidence) ? `${((stats!.avg_confidence as number) * ((stats!.avg_confidence as number) <= 1 ? 100 : 1)).toFixed(0)}%` : '—' },
+    { label: 'Avg exec', value: Number.isFinite(stats?.avg_execution_ms) ? `${(stats!.avg_execution_ms as number).toFixed(0)}ms` : '—' },
+    { label: 'Skip rate', value: Number.isFinite(stats?.skip_rate) ? `${(stats!.skip_rate as number).toFixed(1)}%` : '—' },
   ];
 
   return (
@@ -99,7 +99,7 @@ const Transparency: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                       <span style={{ fontWeight: 700 }}>{d.symbol ?? '—'}</span>
                       <span style={{ fontSize: 12, color: d.direction === 'short' || d.direction === 'sell' ? '#f87171' : '#4ade80', fontWeight: 600 }}>{(d.direction ?? '').toUpperCase()}</span>
-                      {d.confidence != null && <span style={{ fontSize: 12, color: '#94a3b8' }}>{(d.confidence <= 1 ? d.confidence * 100 : d.confidence).toFixed(0)}% conf</span>}
+                      {Number.isFinite(d.confidence) && <span style={{ fontSize: 12, color: '#94a3b8' }}>{(d.confidence! <= 1 ? d.confidence! * 100 : d.confidence!).toFixed(0)}% conf</span>}
                       {d.outcome && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: OUTCOME_COLOR[d.outcome.toLowerCase()] ?? '#94a3b8' }}>{d.outcome}</span>}
                     </div>
                     {d.reasoning && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{d.reasoning}</div>}

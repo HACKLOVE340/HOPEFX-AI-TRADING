@@ -54,8 +54,8 @@ const EXAMPLE_PROMPTS = [
   'Momentum strategy: buy when MACD histogram turns positive and volume is above 20-period average.',
 ];
 
-const fmt = (n: number, decimals = 2) => n.toFixed(decimals);
-const pct = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}%`;
+const fmt = (n: number, decimals = 2) => (Number.isFinite(n) ? n.toFixed(decimals) : '—');
+const pct = (n: number) => (Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : '—');
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -241,11 +241,11 @@ const AIStrategyGenerator: React.FC = () => {
                 </div>
                 {str.backtest && (
                   <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: str.backtest.total_return_pct >= 0 ? '#4ade80' : '#f87171' }}>
-                      {str.backtest.total_return_pct >= 0 ? '+' : ''}{str.backtest.total_return_pct.toFixed(1)}% return
+                    <span style={{ fontSize: 11, color: (str.backtest.total_return_pct ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                      {pct(str.backtest.total_return_pct)} return
                     </span>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Sharpe {str.backtest.sharpe_ratio.toFixed(2)}</span>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>WR {str.backtest.win_rate.toFixed(0)}%</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Sharpe {fmt(str.backtest.sharpe_ratio)}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>WR {fmt(str.backtest.win_rate, 0)}%</span>
                   </div>
                 )}
               </div>

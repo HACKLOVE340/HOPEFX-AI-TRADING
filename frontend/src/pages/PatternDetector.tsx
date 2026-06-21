@@ -46,7 +46,7 @@ function formatPatternName(raw: string): string {
 }
 
 const fmtPrice = (n: number): string =>
-  '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Number.isFinite(n) ? '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 
 function confidenceColor(c: number): string {
   if (c >= 0.7) return '#4ade80';
@@ -55,9 +55,11 @@ function confidenceColor(c: number): string {
 }
 
 function riskReward(entry: number, target: number, stop: number): string {
+  if (![entry, target, stop].every(Number.isFinite)) return '—';
   const denom = Math.abs(stop - entry);
   if (denom === 0) return '—';
-  return (Math.abs(target - entry) / denom).toFixed(2);
+  const ratio = Math.abs(target - entry) / denom;
+  return Number.isFinite(ratio) ? ratio.toFixed(2) : '—';
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────────
@@ -301,7 +303,7 @@ const PatternDetector: React.FC = () => {
           <button onClick={scan} style={s.retryBtn}>Retry</button>
         </div>
       ) : data ? (
-        data.patterns.length === 0 ? (
+        (data.patterns ?? []).length === 0 ? (
           <div style={s.center}>
             <span style={{ fontSize: 32, marginBottom: 12 }}>🔍</span>
             <p style={{ color: '#64748b', fontSize: 14, textAlign: 'center', maxWidth: 420, lineHeight: 1.7 }}>
@@ -317,7 +319,7 @@ const PatternDetector: React.FC = () => {
               <strong style={{ color: '#94a3b8' }}>{data.symbol}</strong> / {timeframe}
             </div>
             <div style={s.grid}>
-              {data.patterns.map((p, i) => (
+              {(data.patterns ?? []).map((p, i) => (
                 <PatternCard key={`${p.pattern_type}-${p.start_index}-${i}`} pattern={p} symbol={symbol} onTrade={handleTrade} />
               ))}
             </div>

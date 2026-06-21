@@ -99,7 +99,7 @@ const AIIntelligence: React.FC = () => {
           </div>
         ) : a ? (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Stat label="Signals generated" value={a.signals_generated.toLocaleString()} />
+            <Stat label="Signals generated" value={Number.isFinite(a.signals_generated) ? a.signals_generated.toLocaleString() : '—'} />
             <Stat
               label="TP hit rate"
               value={totalOutcomes ? `${(a.tp_rate * 100).toFixed(0)}%` : '—'}
@@ -111,8 +111,8 @@ const AIIntelligence: React.FC = () => {
               value={totalOutcomes ? `${(a.sl_rate * 100).toFixed(0)}%` : '—'}
               color={a.sl_rate > 0.5 ? '#f87171' : '#94a3b8'}
             />
-            <Stat label="Avg confidence" value={`${(a.avg_confidence * 100).toFixed(0)}%`} />
-            <Stat label="Avg R:R" value={a.avg_rr_ratio.toFixed(2)} color={a.avg_rr_ratio >= 1.5 ? '#22c55e' : '#fbbf24'} />
+            <Stat label="Avg confidence" value={Number.isFinite(a.avg_confidence) ? `${(a.avg_confidence * 100).toFixed(0)}%` : '—'} />
+            <Stat label="Avg R:R" value={Number.isFinite(a.avg_rr_ratio) ? a.avg_rr_ratio.toFixed(2) : '—'} color={a.avg_rr_ratio >= 1.5 ? '#22c55e' : '#fbbf24'} />
           </div>
         ) : (
           <div style={{ fontSize: 13, color: '#475569' }}>Analytics unavailable.</div>

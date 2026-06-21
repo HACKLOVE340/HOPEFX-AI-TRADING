@@ -41,7 +41,7 @@ const Pill: React.FC<{
 };
 
 const pct = (v: number | null | undefined) =>
-  v == null ? '—' : `${(v * 100).toFixed(0)}%`;
+  (v == null || !Number.isFinite(v)) ? '—' : `${(v * 100).toFixed(0)}%`;
 
 export const MlSafetyStrip: React.FC = () => {
   const { data, isLoading, isError } = useQuery({
