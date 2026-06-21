@@ -269,7 +269,9 @@ export interface LoginResponse {
 }
 
 export const authApi = {
-  login:    (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload),
+  // 60s timeout (vs the default 30s): the very first login right after a cold
+  // start can be slow while the backend finishes warming up, so give it room.
+  login:    (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload, { timeout: 60_000 }),
   // Cookies (access + refresh) are cleared server-side via Set-Cookie: max-age=0.
   // withCredentials ensures the browser sends the httpOnly refresh cookie.
   logout:   () => api.post('/auth/logout', {}, { withCredentials: true }),

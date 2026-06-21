@@ -122,6 +122,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 _bearer = HTTPBearer(auto_error=False)
 
+# Dedicated thread pool for auth so login / username-lookup never queue behind
+# the shared I/O executor when background market-data feeds saturate it — which
+# happens when the host is offline and outbound HTTP calls hang for ~20-30s.
+# Without this, login's asyncio.to_thread() can wait on a free worker and the
+# frontend's 30s request timeout fires ("can't log in"). A dedicated pool keeps
+# auth responsive regardless of feed load.
+from concurrent.futures import ThreadPoolExecutor as _ThreadPoolExecutor
+
+_AUTH_EXECUTOR = _ThreadPoolExecutor(max_workers=8, thread_name_prefix="hopefx-auth")
+
+
+async def _auth_to_thread(_fn, /, *args, **kwargs):
+    """Run a blocking auth call on the dedicated auth thread pool."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_AUTH_EXECUTOR, functools.partial(_fn, *args, **kwargs))
+
 # Module-level service reference — injected from app.py startup
 _auth_service = None
 
@@ -580,7 +596,7 @@ async def login(
     resolved_email = identifier
     if identifier and "@" not in identifier:
         try:
-            user_obj = await asyncio.to_thread(_svc().get_user_by_username, identifier)
+            user_obj = await _auth_to_thread(_svc().get_user_by_username, identifier)
             if user_obj:
                 resolved_email = user_obj.email
             else:
@@ -593,15 +609,13 @@ async def login(
             raise HTTPException(status_code=401, detail="Invalid credentials") from _exc
 
     try:
-        ok, msg, tokens = await asyncio.to_thread(
-            functools.partial(
-                _svc().login,
-                email=resolved_email,
-                password=body.password,
-                ip_address=ip,
-                device_info=device,
-                totp_code=body.totp_code,
-            )
+        ok, msg, tokens = await _auth_to_thread(
+            _svc().login,
+            email=resolved_email,
+            password=body.password,
+            ip_address=ip,
+            device_info=device,
+            totp_code=body.totp_code,
         )
     except Exception as _login_exc:
         logger.error("Login service error for %s: %s", resolved_email, _login_exc, exc_info=True)
