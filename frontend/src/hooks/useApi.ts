@@ -13,6 +13,11 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 30_000,
+  // Send cookies on every request. The CSRF double-submit pattern requires the
+  // `hopefx_csrf` cookie to accompany the X-CSRF-Token header on state-changing
+  // requests; without this, cross-origin calls (e.g. Vite dev :5173 → API :8000)
+  // drop the cookie and the server rejects them with "CSRF token missing".
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -231,12 +236,25 @@ function _redirectToLogin(): void {
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    const original = err.config as typeof err.config & { _retried?: boolean };
+    const original = err.config as typeof err.config & { _retried?: boolean; _csrfRetried?: boolean };
     // Only attempt refresh on 401, once per request, and not for auth endpoints
     // themselves (login/refresh/logout) to avoid infinite loops.
     const isAuthEndpoint = original?.url?.includes('/auth/login') ||
                            original?.url?.includes('/auth/refresh') ||
                            original?.url?.includes('/auth/logout');
+
+    // Self-heal stale/missing CSRF tokens: on a 403 whose detail mentions CSRF,
+    // drop the cached token, fetch a fresh one, and retry the request once.
+    const detail = (err?.response?.data?.detail ?? '') as string;
+    if (err?.response?.status === 403 && /csrf/i.test(detail) && original && !original._csrfRetried) {
+      original._csrfRetried = true;
+      resetCsrfCache();
+      const fresh = await _fetchCsrfToken();
+      if (fresh) {
+        original.headers = { ...original.headers, [CSRF_HEADER]: fresh };
+        return api(original);
+      }
+    }
 
     if (err?.response?.status === 401 && !isAuthEndpoint) {
       if (!original._retried) {
