@@ -42,9 +42,8 @@ const EquityStats = memo(() => {
   const balance   = risk?.balance ?? 0;
   const dailyPnl  = risk?.daily_pnl ?? 0;
   const drawdown  = risk?.drawdown_pct ?? 0;
-  const maxDD     = curve.length
-    ? Math.min(...curve.map((p) => p.drawdown))
-    : 0;
+  const _dds      = curve.map((p) => p.drawdown).filter((d) => Number.isFinite(d));
+  const maxDD     = _dds.length ? Math.min(..._dds) : 0;
 
   const pnlColor = dailyPnl >= 0 ? '#00ff88' : '#ef4444';
   const ddColor  = drawdown < -2 ? '#ef4444' : drawdown < -1 ? '#fbbf24' : '#64748b';

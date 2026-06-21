@@ -25,6 +25,7 @@ import {
 import type { UTCTimestamp } from 'lightweight-charts';
 import { useStore, selectIsAuth, useHasHydrated } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
+import { ohlcvLimitFor } from '../../features/chart-bot/services/chart-api';
 import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
 
@@ -224,7 +225,10 @@ export function AIChart({
     if (!candleRef.current || !hydrated || !isAuth) return;
     if (initial) { setLoading(true); setChartError(null); setAiResult(null); }
 
-    tradingApi.ohlcv(symbol, timeframe, 300)
+    // Load a meaningful history window per timeframe (e.g. ~1500 bars on 1h,
+    // 8000 on daily) instead of a fixed 300 bars, which only covered ~12 days
+    // of 1h candles — the "short history" the user saw on the chart.
+    tradingApi.ohlcv(symbol, timeframe, ohlcvLimitFor(timeframe))
       .then((r) => {
         const raw  = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data = Array.isArray(raw) ? raw : (raw.data ?? []);

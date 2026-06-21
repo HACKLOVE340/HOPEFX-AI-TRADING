@@ -152,7 +152,7 @@ const NuclearGeopoliticalBanner = memo(({ onClickExplain }: Props) => {
                 {nuclear.rl_action_label}
               </span>
               <span style={s.rlConf}>
-                {(nuclear.confidence * 100).toFixed(0)}% conf
+                {Number.isFinite(nuclear.confidence) ? (nuclear.confidence * 100).toFixed(0) : '—'}% conf
               </span>
             </div>
             <button style={{ ...s.explainBtn, borderColor: color, color }} onClick={onClickExplain}>

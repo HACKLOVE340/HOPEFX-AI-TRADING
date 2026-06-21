@@ -151,8 +151,8 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
       {/* Account summary */}
       {account && (
         <div className="flex items-center gap-4 text-[11px]">
-          <span className="text-slate-500">Balance <span className="text-slate-300 font-semibold">${account.balance.toLocaleString()}</span></span>
-          <span className="text-slate-500">Equity <span className="text-slate-300 font-semibold">${account.equity.toLocaleString()}</span></span>
+          <span className="text-slate-500">Balance <span className="text-slate-300 font-semibold">${fmtPrice(account.balance)}</span></span>
+          <span className="text-slate-500">Equity <span className="text-slate-300 font-semibold">${fmtPrice(account.equity)}</span></span>
           <span className="text-slate-500">P&L <span className={cn('font-semibold', account.daily_pnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>{fmtPnl(account.daily_pnl)}</span></span>
         </div>
       )}
@@ -451,9 +451,10 @@ function SignalsSummaryPanel({ symbol }: { symbol: string }) {
         <tbody>
           {filtered.map((sig) => {
             const isLong = sig.direction === 'long';
+            const _rrRisk = Math.abs(sig.entry_price - sig.stop_loss);
             const rr = sig.risk_reward ?? (
-              sig.entry_price > 0 && sig.stop_loss > 0 && sig.take_profit > 0
-                ? Math.abs(sig.take_profit - sig.entry_price) / Math.abs(sig.entry_price - sig.stop_loss)
+              sig.entry_price > 0 && sig.stop_loss > 0 && sig.take_profit > 0 && _rrRisk > 0
+                ? Math.abs(sig.take_profit - sig.entry_price) / _rrRisk
                 : null
             );
             const confColor = sig.confidence >= 0.75 ? '#00e676' : sig.confidence >= 0.55 ? '#ffb800' : '#ff6b35';

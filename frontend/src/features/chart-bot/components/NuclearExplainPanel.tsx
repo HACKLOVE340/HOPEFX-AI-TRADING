@@ -14,6 +14,10 @@ import { severityColor, actionColor } from '../types/nuclear';
 import type { NuclearState, NuclearRiskData, NuclearEvent } from '../types/nuclear';
 import NuclearDecisionTrace from './NuclearDecisionTrace';
 
+/** Guard .toFixed against undefined/NaN risk fields (partial WS payloads). */
+const safeFixed = (v: number | null | undefined, dec: number): string =>
+  Number.isFinite(v as number) ? (v as number).toFixed(dec) : '—';
+
 // ─── SHAP-style feature bar ───────────────────────────────────────────────────
 
 const FeatureBar = memo(({
@@ -26,7 +30,7 @@ const FeatureBar = memo(({
       <div style={s.featureTrack}>
         <div style={{ ...s.featureFill, width: `${pct}%`, background: color }} />
       </div>
-      <span style={{ ...s.featureValue, color }}>{value.toFixed(2)}</span>
+      <span style={{ ...s.featureValue, color }}>{safeFixed(value, 2)}</span>
     </div>
   );
 });
@@ -157,14 +161,14 @@ const RiskMetricsCard = memo(({ risk }: { risk: NuclearRiskData }) => (
       )}
     </div>
     <div style={s.riskGrid}>
-      <RiskRow label="CVaR 95%" value={`${(risk.cvar_95 * 100).toFixed(2)}%`} danger={risk.cvar_95 > 0.02} />
-      <RiskRow label="CVaR 99%" value={`${(risk.cvar_99 * 100).toFixed(2)}%`} danger={risk.cvar_99 > 0.03} />
-      <RiskRow label="VaR 95%"  value={`${(risk.var_95 * 100).toFixed(2)}%`}  danger={false} />
-      <RiskRow label="Exposure" value={`${(risk.exposure * 100).toFixed(1)}%`} danger={risk.exposure > 0.8} />
-      <RiskRow label="Max Risk" value={`${(risk.max_risk * 100).toFixed(0)}%`} danger={risk.max_risk === 0} />
-      <RiskRow label="Drawdown" value={`${risk.drawdown_pct.toFixed(2)}%`}     danger={risk.drawdown_pct > 2} />
-      <RiskRow label="Daily P&L" value={`$${risk.daily_pnl.toFixed(2)}`}       danger={risk.daily_pnl < 0} />
-      <RiskRow label="Equity"   value={`$${risk.equity.toFixed(2)}`}           danger={false} />
+      <RiskRow label="CVaR 95%" value={`${safeFixed(risk.cvar_95 * 100, 2)}%`} danger={risk.cvar_95 > 0.02} />
+      <RiskRow label="CVaR 99%" value={`${safeFixed(risk.cvar_99 * 100, 2)}%`} danger={risk.cvar_99 > 0.03} />
+      <RiskRow label="VaR 95%"  value={`${safeFixed(risk.var_95 * 100, 2)}%`}  danger={false} />
+      <RiskRow label="Exposure" value={`${safeFixed(risk.exposure * 100, 1)}%`} danger={risk.exposure > 0.8} />
+      <RiskRow label="Max Risk" value={`${safeFixed(risk.max_risk * 100, 0)}%`} danger={risk.max_risk === 0} />
+      <RiskRow label="Drawdown" value={`${safeFixed(risk.drawdown_pct, 2)}%`}     danger={risk.drawdown_pct > 2} />
+      <RiskRow label="Daily P&L" value={`$${safeFixed(risk.daily_pnl, 2)}`}       danger={risk.daily_pnl < 0} />
+      <RiskRow label="Equity"   value={`$${safeFixed(risk.equity, 2)}`}           danger={false} />
     </div>
   </div>
 ));

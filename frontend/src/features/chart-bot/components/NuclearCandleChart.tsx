@@ -30,6 +30,7 @@ import {
   Time,
 } from 'lightweight-charts';
 import { useNuclearStore, selectActiveBars } from '../store/nuclear-store';
+import { fmtPrice, fmtPctRaw } from '../../../lib/utils';
 import { severityColor, actionColor } from '../types/nuclear';
 import type { OHLCVBar, PredictionPoint, NuclearEvent } from '../types/nuclear';
 
@@ -84,11 +85,11 @@ const PriceHeader = memo(() => {
   return (
     <div style={s.priceHeader}>
       <span style={s.symbolLabel}>XAU/USD</span>
-      <span style={s.midPrice}>{price.mid.toFixed(2)}</span>
+      <span style={s.midPrice}>{fmtPrice(price.mid)}</span>
       <span style={{ ...s.changePct, color: changeColor }}>
-        {changePct >= 0 ? '+' : ''}{(changePct * 100).toFixed(3)}%
+        {fmtPctRaw(changePct * 100, 3)}
       </span>
-      <span style={s.spread}>Spread: {price.spread.toFixed(2)}</span>
+      <span style={s.spread}>Spread: {fmtPrice(price.spread)}</span>
       {severity > 0 && (
         <span style={{ ...s.severityTag, background: color, color: '#000' }}>
           SEV {severity}

@@ -298,7 +298,7 @@ const TaxReportsPanel: React.FC = () => {
                   <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{r.jurisdiction}</td>
                   <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.total_revenue, r.currency)}</td>
                   <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.taxable_amount, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{r.tax_rate_pct.toFixed(1)}%</td>
+                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{Number.isFinite(r.tax_rate_pct) ? r.tax_rate_pct.toFixed(1) : '—'}%</td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: r.status === 'overdue' ? '#f87171' : '#fbbf24' }}>{fmtMoney(r.tax_owed, r.currency)}</td>
                   <td style={{ padding: '10px 12px', color: r.status === 'overdue' ? '#f87171' : '#64748b', fontSize: 12 }}>{fmtDateShort(r.due_date)}</td>
                   <td style={{ padding: '10px 12px' }}>
@@ -672,7 +672,7 @@ const FinancialSection: React.FC = () => {
                     <KpiTile label="Revenue MTD"   value={fmtMoney(revenue.revenue_mtd, revenue.currency)}   icon="📊" accent="#8b5cf6" />
                     <KpiTile label="New Subs MTD"  value={revenue.new_subs_mtd}                              icon="➕" accent="#06b6d4" />
                     <KpiTile label="Cancelled MTD" value={revenue.cancelled_mtd}                             icon="➖" accent="#ef4444" />
-                    <KpiTile label="Churn Rate"    value={`${revenue.churn_rate_pct.toFixed(2)}%`}           icon="📉" accent="#f87171" />
+                    <KpiTile label="Churn Rate"    value={`${Number.isFinite(revenue.churn_rate_pct) ? revenue.churn_rate_pct.toFixed(2) : '—'}%`}           icon="📉" accent="#f87171" />
                     <KpiTile label="Avg LTV"       value={fmtMoney(revenue.ltv_avg, revenue.currency)}       icon="⭐" accent="#fbbf24" />
                   </div>
 

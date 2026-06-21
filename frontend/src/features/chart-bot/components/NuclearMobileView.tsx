@@ -8,6 +8,7 @@ import React, { memo, useState, useCallback } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { useNuclearWS } from '../hooks/useNuclearWS';
 import { useStore } from '../../../store';
+import { fmtPrice, fmtPctRaw, fmtPnl } from '../../../lib/utils';
 import { severityColor, actionColor } from '../types/nuclear';
 import NuclearCandleChart from './NuclearCandleChart';
 import NuclearAlertOverlay from './NuclearAlertOverlay';
@@ -58,9 +59,9 @@ const MobilePriceBar = memo(() => {
   return (
     <div style={ms.priceBar}>
       <span style={ms.symbol}>XAU/USD</span>
-      <span style={ms.price}>{price.mid.toFixed(2)}</span>
+      <span style={ms.price}>{fmtPrice(price.mid)}</span>
       <span style={{ ...ms.change, color: chg >= 0 ? '#00ff88' : '#ef4444' }}>
-        {chg >= 0 ? '+' : ''}{(chg * 100).toFixed(3)}%
+        {fmtPctRaw(chg * 100, 3)}
       </span>
     </div>
   );
@@ -92,10 +93,10 @@ const MobileExplainAccordion = memo(() => {
           )}
           {risk && (
             <div style={ms.riskGrid}>
-              <MobileRiskCell label="CVaR 95%" value={`${(risk.cvar_95 * 100).toFixed(2)}%`} />
-              <MobileRiskCell label="Exposure" value={`${(risk.exposure * 100).toFixed(1)}%`} />
-              <MobileRiskCell label="Drawdown" value={`${risk.drawdown_pct.toFixed(2)}%`} />
-              <MobileRiskCell label="Daily P&L" value={`$${risk.daily_pnl.toFixed(2)}`} />
+              <MobileRiskCell label="CVaR 95%" value={fmtPctRaw(risk.cvar_95 * 100, 2)} />
+              <MobileRiskCell label="Exposure" value={fmtPctRaw(risk.exposure * 100, 1)} />
+              <MobileRiskCell label="Drawdown" value={fmtPctRaw(risk.drawdown_pct, 2)} />
+              <MobileRiskCell label="Daily P&L" value={fmtPnl(risk.daily_pnl)} />
             </div>
           )}
         </div>
