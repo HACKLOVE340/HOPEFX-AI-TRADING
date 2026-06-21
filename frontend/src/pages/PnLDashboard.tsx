@@ -403,7 +403,10 @@ const PnLDashboard: React.FC = () => {
   // ── Equity curve ───────────────────────────────────────────────────────────
   const equityQ = useQuery<EquityPoint[]>({
     queryKey:        ['pnl', 'equity-curve'],
-    queryFn:         async () => (await pnlApi.equityCurve()).data as EquityPoint[],
+    queryFn:         async () => {
+      const d = (await pnlApi.equityCurve()).data;
+      return (Array.isArray(d) ? d : []) as EquityPoint[];
+    },
     enabled,
     refetchInterval: 60_000,
     staleTime:       30_000,

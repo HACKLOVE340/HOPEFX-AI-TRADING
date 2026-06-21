@@ -237,7 +237,15 @@ const Performance: React.FC = () => {
 
   const equityQ = useQuery<EquityPoint[]>({
     queryKey: ['performance', 'equity-curve'],
-    queryFn:  async () => { const r = await performanceApi.equityCurve(); return r.data; },
+    queryFn:  async () => {
+      const r = await performanceApi.equityCurve();
+      const raw = Array.isArray(r.data) ? r.data : [];
+      return raw.filter(
+        (p): p is EquityPoint =>
+          p != null && typeof p.timestamp === 'string' &&
+          Number.isFinite(p.equity) && Number.isFinite(p.drawdown),
+      );
+    },
     refetchInterval: 5 * 60_000,
     staleTime:       2 * 60_000,
   });
