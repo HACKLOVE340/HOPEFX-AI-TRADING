@@ -3730,9 +3730,10 @@ async def init_advanced_order_manager(s: Any) -> Any | None:
         from execution.advanced_orders import AdvancedOrderManager
 
         broker = getattr(s, "broker", None)
-        trade_executor = getattr(s, "trade_executor", None)
-        manager = AdvancedOrderManager(broker=broker, trade_executor=trade_executor)
-        await manager.start()
+        # AdvancedOrderManager takes no constructor args — broker/event_bus are
+        # passed to start().
+        manager = AdvancedOrderManager()
+        await manager.start(broker=broker)
         s.advanced_order_manager = manager
         logger.info("AdvancedOrderManager initialised")
         return manager
@@ -3748,10 +3749,13 @@ async def init_continuous_learning(s: Any) -> Any | None:
 
         inference_engine = getattr(s, "inference_engine", None)
         model_registry = getattr(s, "model_registry", None)
-        pipeline = ContinuousLearningPipeline(
-            inference_engine=inference_engine,
-            model_registry=model_registry,
-        )
+        # ContinuousLearningPipeline takes no constructor args; inject the
+        # optional collaborators after construction if it exposes the attributes.
+        pipeline = ContinuousLearningPipeline()
+        if inference_engine is not None and hasattr(pipeline, "inference_engine"):
+            pipeline.inference_engine = inference_engine
+        if model_registry is not None and hasattr(pipeline, "model_registry"):
+            pipeline.model_registry = model_registry
         await pipeline.start()
         s.continuous_learning = pipeline
         logger.info("ContinuousLearningPipeline initialised")

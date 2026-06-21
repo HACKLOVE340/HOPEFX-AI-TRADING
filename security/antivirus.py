@@ -215,6 +215,12 @@ SKIP_PATHS: set[str] = {
     "venv",
     "data/quarantine",
     "frontend/node_modules",
+    # Alembic migrations contain raw DDL/SQL (op.execute, CREATE/INSERT) that
+    # trips the SQL-injection pattern matcher — they are legitimate schema code,
+    # never user input. Quarantining them breaks DB migrations at startup.
+    "alembic/versions",
+    "alembic",
+    "migrations",
     # Test directories contain intentional fixture patterns — not threats
     "tests",
     "test",

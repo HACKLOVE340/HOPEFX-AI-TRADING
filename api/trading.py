@@ -4152,9 +4152,11 @@ async def get_equity_curve_alias(
     chart-bot frontend can use a consistent /api/trading/* base path.
     """
     try:
-        from api.performance import get_equity_curve as _get_equity_curve
+        # The canonical handler is api.performance.equity_curve(_user=...); it
+        # returns the full curve (no days arg). Call it directly with our user.
+        from api.performance import equity_curve as _equity_curve
 
-        return await _get_equity_curve(days=days, user=user)
+        return await _equity_curve(_user=user)
     except Exception as exc:
         logger.warning("equity-curve alias failed: %s", exc)
         # Return empty curve rather than 503 so the chart renders without crashing
