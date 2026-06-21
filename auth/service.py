@@ -453,7 +453,7 @@ class AuthService:
                 _rc_candidate = _redis_sync.from_url(
                     os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                     decode_responses=True,
-                    socket_connect_timeout=1,
+                    socket_connect_timeout=0.5,
                     socket_timeout=1,
                 )
                 _rc_candidate.ping()  # raises if Redis is unreachable
@@ -589,7 +589,7 @@ class AuthService:
                     _clear_rc = _redis_sync.from_url(
                         os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                         decode_responses=True,
-                        socket_connect_timeout=1,
+                        socket_connect_timeout=0.5,
                         socket_timeout=1,
                     )
                     _clear_rc.ping()  # validate before use

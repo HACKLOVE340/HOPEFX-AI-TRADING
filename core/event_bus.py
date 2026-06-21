@@ -369,9 +369,9 @@ def _make_redis() -> aioredis.Redis:
 
             sentinel = _Sentinel(
                 hosts,
-                sentinel_kwargs={"password": password, "socket_timeout": 2.0},
+                sentinel_kwargs={"password": password, "socket_timeout": 0.5},
                 password=password,
-                socket_timeout=5,
+                socket_timeout=1.0,
                 decode_responses=True,
             )
             logger.info("EventBus: using Redis Sentinel (master=%s)", master_name)
@@ -396,7 +396,7 @@ def _make_redis() -> aioredis.Redis:
     return aioredis.from_url(
         url,
         decode_responses=True,
-        socket_connect_timeout=5,
+        socket_connect_timeout=0.5,
         socket_timeout=None,
     )
 

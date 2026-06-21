@@ -85,8 +85,8 @@ def _resolve_redis_url() -> str:
 
 _REDIS_URL: str = _resolve_redis_url()
 _MAX_CONNECTIONS: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
-_SOCKET_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
-_SOCKET_CONNECT_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "3"))
+_SOCKET_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_TIMEOUT", "1.0"))
+_SOCKET_CONNECT_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "0.5"))
 _KEEPALIVE: bool = os.getenv("REDIS_SOCKET_KEEPALIVE", "true").lower() in ("true", "1", "yes")
 _HEALTH_CHECK_INTERVAL: int = int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30"))
 

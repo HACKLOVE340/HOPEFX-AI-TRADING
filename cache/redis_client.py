@@ -94,11 +94,11 @@ async def _try_cluster(
             startup_nodes=startup_nodes,
             password=password,
             decode_responses=decode_responses,
-            socket_timeout=5.0,
-            socket_connect_timeout=3.0,
+            socket_timeout=1.0,
+            socket_connect_timeout=0.5,
             # Cluster mode ignores db parameter — always db=0
             skip_full_coverage_check=True,
-            retry_on_timeout=True,
+            retry_on_timeout=False,
         )
         await client.ping()
         logger.info("Redis Cluster connected (%d startup nodes)", len(startup_nodes))
@@ -136,10 +136,10 @@ async def _try_sentinel(
         )
         sentinel = Sentinel(
             hosts,
-            sentinel_kwargs={"password": password, "socket_timeout": 2.0},
+            sentinel_kwargs={"password": password, "socket_timeout": 0.5},
             password=password,
-            socket_timeout=5.0,
-            socket_connect_timeout=3.0,
+            socket_timeout=1.0,
+            socket_connect_timeout=0.5,
             decode_responses=decode_responses,
             db=db,
         )
@@ -278,8 +278,8 @@ async def _try_direct(
                 redis_url,
                 decode_responses=decode_responses,
                 db=db,
-                socket_timeout=5.0,
-                socket_connect_timeout=3.0,
+                socket_timeout=1.0,
+                socket_connect_timeout=0.5,
                 **ssl_kwargs,
             )
             client = aioredis.Redis(connection_pool=pool)
@@ -289,9 +289,9 @@ async def _try_direct(
                 redis_url,
                 decode_responses=decode_responses,
                 db=db,
-                socket_timeout=5.0,
-                socket_connect_timeout=3.0,
-                retry_on_timeout=True,
+                socket_timeout=1.0,
+                socket_connect_timeout=0.5,
+                retry_on_timeout=False,
             )
 
         logger.info("Redis: connecting directly via URL (tls=%s)", is_tls)
@@ -602,8 +602,8 @@ def get_sync_redis() -> Any | None:
         client = _redis_sync.Redis.from_url(
             redis_url,
             decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
+            socket_connect_timeout=0.5,
+            socket_timeout=1.0,
         )
         client.ping()
         return client
