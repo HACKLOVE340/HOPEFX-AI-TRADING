@@ -21,6 +21,7 @@ discovers the URL can run up OpenAI charges indefinitely.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import timezone
@@ -110,7 +111,15 @@ async def ai_chat(
     agent, key = _get_agent(session_key)
 
     try:
-        response_text = await agent.chat(body.message)
+        # Cap the LLM round-trip so a slow/unreachable provider returns a clean
+        # 504 instead of hanging until the client's request timeout fires.
+        response_text = await asyncio.wait_for(agent.chat(body.message), timeout=25.0)
+    except TimeoutError:
+        logger.warning("LLM chat timed out after 25s")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="AI response timed out — the model provider did not respond in time.",
+        ) from None
     except Exception:
         logger.exception("LLM chat error")
         raise HTTPException(
