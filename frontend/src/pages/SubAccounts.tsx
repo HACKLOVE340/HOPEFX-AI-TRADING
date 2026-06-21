@@ -58,7 +58,8 @@ const ROLE_VARIANT: Record<string, BadgeVariant> = {
   viewer:  'neutral',
 };
 
-function fmt(n: number, prefix = '$'): string {
+function fmt(n: number | null | undefined, prefix = '$'): string {
+  if (n == null || !Number.isFinite(n)) return '—';
   return `${prefix}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -344,9 +345,9 @@ const SubAccounts: React.FC = () => {
 
   // ── Derived metrics ───────────────────────────────────────────────────────
 
-  const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-  const totalEquity  = accounts.reduce((s, a) => s + a.equity, 0);
-  const totalPnl     = accounts.reduce((s, a) => s + a.daily_pnl, 0);
+  const totalBalance = accounts.reduce((s, a) => s + (a.balance ?? 0), 0);
+  const totalEquity  = accounts.reduce((s, a) => s + (a.equity ?? 0), 0);
+  const totalPnl     = accounts.reduce((s, a) => s + (a.daily_pnl ?? 0), 0);
 
   const accCols    = buildAccCols((a) => setEditAcc({ ...a }), handleDeleteAcc);
   const memberCols = buildMemberCols(handleRoleChange, handleRemoveMember);

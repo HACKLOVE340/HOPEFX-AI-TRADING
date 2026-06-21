@@ -17,8 +17,8 @@ type Tab = 'overview'|'referrals'|'commissions'|'leaderboard';
 
 const LEVEL_COLORS: Record<string,string> = { bronze:'#cd7f32', silver:'#94a3b8', gold:'#f59e0b', platinum:'#a78bfa' };
 const LEVEL_RATES: Record<string,string>  = { bronze:'10%', silver:'15%', gold:'20%', platinum:'25%' };
-const fmt = (n:number,d=2) => n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
-const fmtUSD = (n:number) => '$'+fmt(n);
+const fmt = (n:number|null|undefined,d=2) => (n == null || !Number.isFinite(n)) ? '—' : n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtUSD = (n:number|null|undefined) => (n == null || !Number.isFinite(n)) ? '—' : '$'+fmt(n);
 
 const statusBadge=(s:string)=>{ const m:Record<string,{bg:string;color:string}>={pending:{bg:'#1e3a5f',color:'#60a5fa'},converted:{bg:'#14532d',color:'#4ade80'},paid:{bg:'#1a2e1a',color:'#22c55e'},expired:{bg:'#2d1b1b',color:'#f87171'},cancelled:{bg:'#2d1b1b',color:'#f87171'},active:{bg:'#14532d',color:'#4ade80'}}; const c=m[s]??{bg:'#1e293b',color:'#94a3b8'}; return <span style={{...st.badge,background:c.bg,color:c.color}}>{s}</span>; };
 const MetricCard:React.FC<{label:string;value:string;sub?:string}>=({label,value,sub})=>(<div style={st.metricCard}><div style={st.metricValue}>{value}</div><div style={st.metricLabel}>{label}</div>{sub&&<div style={st.metricSub}>{sub}</div>}</div>);
@@ -126,7 +126,7 @@ const Affiliate:React.FC=()=>{
           <h1 style={st.heading}>Affiliate Program</h1>
           <div style={{display:'flex',alignItems:'center',gap:10}}>
             <span style={{...st.levelBadge,background:LEVEL_COLORS[account.level]+'22',color:LEVEL_COLORS[account.level],border:`1px solid ${LEVEL_COLORS[account.level]}`}}>{account.level.toUpperCase()}</span>
-            <span style={{color:'#64748b',fontSize:14}}>{(account.commission_rate*100).toFixed(0)}% commission · {statusBadge(account.status)}</span>
+            <span style={{color:'#64748b',fontSize:14}}>{Number.isFinite(account.commission_rate) ? (account.commission_rate*100).toFixed(0) : '—'}% commission · {statusBadge(account.status)}</span>
           </div>
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>

@@ -140,7 +140,7 @@ function AccountManagerCard() {
           )}
           <div style={{ marginTop: 16, padding: '12px', background: '#1e293b', borderRadius: 8 }}>
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
-            {Object.entries(am.response_sla).map(([priority, time]) => (
+            {Object.entries(am.response_sla ?? {}).map(([priority, time]) => (
               <div key={priority} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
                 <span style={badgeStyle(PRIORITY_COLORS[priority] ?? '#64748b')}>{priority}</span>
                 <span style={{ color: '#94a3b8' }}>{time}</span>
