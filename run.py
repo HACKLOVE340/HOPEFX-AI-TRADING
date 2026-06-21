@@ -61,6 +61,18 @@ from dotenv import load_dotenv
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore[attr-defined]
 
+    # Force aiohttp to use the OS resolver on Windows: aiodns (c-ares) often
+    # fails with "Could not contact DNS servers" despite the machine being
+    # online, breaking all outbound feeds. See app.py for the full rationale.
+    try:
+        import aiohttp.connector as _aioconn
+        import aiohttp.resolver as _aiores
+
+        _aiores.DefaultResolver = _aiores.ThreadedResolver
+        _aioconn.DefaultResolver = _aiores.ThreadedResolver
+    except Exception:  # nosec B110
+        pass
+
 # ── logging setup (overridden by --log flag after arg parse) ──────────────────
 logging.basicConfig(
     level=logging.INFO,

@@ -52,6 +52,23 @@ from pathlib import Path
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore[attr-defined]
 
+    # ── Windows DNS fix for aiohttp ───────────────────────────────────────────
+    # When aiodns (c-ares) is installed, aiohttp uses it for DNS by default. On
+    # Windows c-ares frequently cannot read the system's configured DNS servers
+    # and fails every outbound request with "Could not contact DNS servers" —
+    # even though the machine is online (the browser works fine). This breaks the
+    # gold/news/market feeds. Force aiohttp to use the OS resolver
+    # (ThreadedResolver → socket.getaddrinfo), which always honours Windows DNS.
+    # connector.py imports DefaultResolver at import time, so patch both modules.
+    try:
+        import aiohttp.connector as _aioconn
+        import aiohttp.resolver as _aiores
+
+        _aiores.DefaultResolver = _aiores.ThreadedResolver
+        _aioconn.DefaultResolver = _aiores.ThreadedResolver
+    except Exception:  # nosec B110 — non-fatal; aiohttp may be unavailable
+        pass
+
 # ── Logging setup ─────────────────────────────────────────────────────────────
 # Bootstrap with basicConfig first so any import-time log calls have a handler.
 # HOPEFXLogger.setup() then replaces it with the full production configuration
