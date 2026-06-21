@@ -344,7 +344,7 @@ const SecurityDashboard: React.FC = () => {
                 <div key={i} style={alertRowStyle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#ef4444', fontSize: 10 }}>⬤</span>
-                    <span style={ipTextStyle}>{alert.type.toUpperCase()}</span>
+                    <span style={ipTextStyle}>{(alert.type ?? 'unknown').toUpperCase()}</span>
                     <span style={{ color: '#94a3b8', fontSize: 11 }}>{alert.ip}</span>
                   </div>
                   <span style={timeStyle}>

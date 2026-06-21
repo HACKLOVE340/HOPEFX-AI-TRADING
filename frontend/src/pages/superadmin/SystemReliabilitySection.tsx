@@ -1321,7 +1321,7 @@ const SystemReliabilitySection: React.FC = () => {
                   background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 16px',
                 }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: '#60a5fa' }}>
-                    {typeof val === 'number' ? (key.includes('pct') ? `${val}%` : val) : String(val)}
+                    {typeof val === 'number' ? (Number.isFinite(val) ? (key.includes('pct') ? `${val}%` : val) : '—') : String(val)}
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {key.replace(/_/g, ' ')}
@@ -1333,7 +1333,7 @@ const SystemReliabilitySection: React.FC = () => {
                   background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 16px',
                 }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: '#a78bfa' }}>
-                    {typeof val === 'number' ? val.toLocaleString() : String(val)}
+                    {typeof val === 'number' ? (Number.isFinite(val) ? val.toLocaleString() : '—') : String(val)}
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Redis: {key.replace(/_/g, ' ')}

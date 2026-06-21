@@ -67,10 +67,10 @@ const Observability: React.FC = () => {
   }, [load]);
 
   const tiles: { label: string; value: string }[] = [
-    { label: 'CPU', value: metrics?.cpu_percent != null ? `${metrics.cpu_percent.toFixed(1)}%` : '—' },
-    { label: 'Memory', value: metrics?.memory_percent != null ? `${metrics.memory_percent.toFixed(1)}%` : '—' },
-    { label: 'Req/s', value: metrics?.request_rate != null ? metrics.request_rate.toFixed(1) : '—' },
-    { label: 'Error rate', value: metrics?.error_rate != null ? `${(metrics.error_rate * 100).toFixed(2)}%` : '—' },
+    { label: 'CPU', value: Number.isFinite(metrics?.cpu_percent) ? `${(metrics!.cpu_percent as number).toFixed(1)}%` : '—' },
+    { label: 'Memory', value: Number.isFinite(metrics?.memory_percent) ? `${(metrics!.memory_percent as number).toFixed(1)}%` : '—' },
+    { label: 'Req/s', value: Number.isFinite(metrics?.request_rate) ? (metrics!.request_rate as number).toFixed(1) : '—' },
+    { label: 'Error rate', value: Number.isFinite(metrics?.error_rate) ? `${((metrics!.error_rate as number) * 100).toFixed(2)}%` : '—' },
     { label: 'Connections', value: metrics?.active_connections != null ? String(metrics.active_connections) : '—' },
   ];
 
