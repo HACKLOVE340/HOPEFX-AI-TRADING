@@ -19,6 +19,7 @@ GET  /api/calendar/auto-pause       — get current auto-pause config
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -168,7 +169,10 @@ async def get_upcoming(
     from news.economic_calendar import EventImportance
 
     try:
-        cal = _get_live_calendar()
+        # _get_live_calendar() does a SYNCHRONOUS urllib call to Finnhub (up to
+        # 10s when the key is slow/unreachable). Run it off the event loop so it
+        # can't block every other request and the live WebSocket.
+        cal = await asyncio.to_thread(_get_live_calendar)
     except RuntimeError as exc:
         # No API key configured — return empty list so the frontend degrades
         # gracefully instead of showing an error banner.

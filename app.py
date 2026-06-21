@@ -66,7 +66,7 @@ if platform.system() == "Windows":
 
         _aiores.DefaultResolver = _aiores.ThreadedResolver
         _aioconn.DefaultResolver = _aiores.ThreadedResolver
-    except Exception:  # nosec B110 — non-fatal; aiohttp may be unavailable
+    except Exception:  # noqa: S110  # nosec B110 — non-fatal; aiohttp may be unavailable
         pass
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
@@ -520,7 +520,9 @@ async def lifespan(_app: FastAPI):
     setup_rate_limiting(_app)
     # Increase the default thread pool so yfinance / blocking I/O calls
     # don't starve when many background tasks are running.
-    _io_executor = concurrent_futures.ThreadPoolExecutor(max_workers=32, thread_name_prefix="hopefx-io")
+    _io_executor = concurrent_futures.ThreadPoolExecutor(
+        max_workers=int(os.getenv("IO_THREAD_POOL_SIZE", "64")), thread_name_prefix="hopefx-io"
+    )
     asyncio.get_running_loop().set_default_executor(_io_executor)
 
     await kill_switch.start()
