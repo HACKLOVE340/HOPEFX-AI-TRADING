@@ -98,7 +98,6 @@ async def _try_cluster(
             socket_connect_timeout=0.5,
             # Cluster mode ignores db parameter — always db=0
             skip_full_coverage_check=True,
-            retry_on_timeout=False,
         )
         await client.ping()
         logger.info("Redis Cluster connected (%d startup nodes)", len(startup_nodes))
@@ -291,7 +290,6 @@ async def _try_direct(
                 db=db,
                 socket_timeout=1.0,
                 socket_connect_timeout=0.5,
-                retry_on_timeout=False,
             )
 
         logger.info("Redis: connecting directly via URL (tls=%s)", is_tls)

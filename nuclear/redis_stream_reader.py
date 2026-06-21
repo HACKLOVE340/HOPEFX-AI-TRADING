@@ -321,20 +321,25 @@ class RedisStreamReader:
     async def _listen_loop(self) -> None:
         """Main pub/sub loop with reconnect on failure."""
         backoff = 1.0
+        _warned = False
         while self._running:
             try:
                 await self._connect()
                 backoff = 1.0
+                _warned = False
                 await self._consume()
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 self._connected = False
-                logger.warning(
+                # Log the first disconnect at WARNING, then DEBUG — a missing
+                # Redis (dev) otherwise repeats this every backoff cycle forever.
+                (logger.warning if not _warned else logger.debug)(
                     "RedisStreamReader disconnected (%s) — reconnecting in %.1fs",
                     exc,
                     backoff,
                 )
+                _warned = True
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
 
@@ -351,9 +356,10 @@ class RedisStreamReader:
             db=self._db,
             password=self._password,
             decode_responses=True,
-            socket_connect_timeout=5,
+            socket_connect_timeout=0.5,  # fail fast when Redis is absent
             socket_timeout=30,
-            retry_on_timeout=True,
+            # retry_on_timeout removed: deprecated in redis-py 6.0 (TimeoutError
+            # is retried by default) — passing it emits a DeprecationWarning.
         )
         self._pubsub = self._redis_client.pubsub()
         await self._pubsub.subscribe(*ALL_CHANNELS)

@@ -384,7 +384,6 @@ class NuclearStreamer:
                 # stall the tick-processing loop for the OS TCP timeout (~2 min).
                 socket_connect_timeout=2.0,
                 socket_timeout=2.0,
-                retry_on_timeout=False,
             )
             logger.info(
                 "Redis client created: %s:%d db=%d (connect_timeout=2s)",
