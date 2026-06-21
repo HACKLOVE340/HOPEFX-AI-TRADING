@@ -458,6 +458,88 @@ def fetch_live_calendar(days_ahead: int = 7) -> "EconomicCalendar":
     return cal
 
 
+# ── Keyless fallback calendar ─────────────────────────────────────────────────
+# Published FOMC rate-decision dates (announcement day, ~14:00 ET / 18:00-19:00
+# UTC). Source: federalreserve.gov FOMC calendars. These are scheduled years in
+# advance so they are safe to hard-code. Update annually.
+_FOMC_DECISION_DATES = (
+    "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
+    "2025-07-30", "2025-09-17", "2025-10-29", "2025-12-10",
+    "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
+    "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
+    "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-16",
+)  # fmt: skip
+
+
+def build_keyless_calendar(days_ahead: int = 30) -> "EconomicCalendar":
+    """Build an economic calendar from known recurring schedules — no API key.
+
+    Used as a fallback when ``FINNHUB_API_KEY`` is absent or the live fetch
+    fails, so the UI still shows the high-impact US events that move gold. Only
+    events that can be derived deterministically are included:
+
+    - **FOMC rate decision** — Fed's published meeting dates (CRITICAL).
+    - **Non-Farm Payrolls** — first Friday of each month, 12:30 UTC (CRITICAL).
+    - **Initial Jobless Claims** — every Thursday, 12:30 UTC (MEDIUM).
+
+    These carry no forecast/actual values (that needs a live feed); they are
+    labelled "scheduled" so the desk knows they are calendar estimates.
+    """
+    now = datetime.now(UTC)
+    end = now + timedelta(days=days_ahead)
+    cal = EconomicCalendar()
+
+    # FOMC rate decisions (announced ~14:00 ET → 18:00-19:00 UTC; use 18:00).
+    for ds in _FOMC_DECISION_DATES:
+        sched = datetime.strptime(ds, "%Y-%m-%d").replace(hour=18, tzinfo=UTC)
+        if now <= sched <= end:
+            cal.add_event(
+                EconomicEvent(
+                    title="FOMC Interest Rate Decision (scheduled)",
+                    event_type=EventType.INTEREST_RATE,
+                    importance=EventImportance.CRITICAL,
+                    scheduled_time=sched,
+                    country="US",
+                    currency="USD",
+                    description="Federal Reserve rate decision — published FOMC date.",
+                )
+            )
+
+    # Walk each day in the window for the weekly/monthly recurring releases.
+    day = now.replace(hour=12, minute=30, second=0, microsecond=0)
+    while day <= end:
+        # Non-Farm Payrolls — first Friday of the month.
+        if day.weekday() == 4 and day.day <= 7 and day >= now:
+            cal.add_event(
+                EconomicEvent(
+                    title="US Non-Farm Payrolls (scheduled)",
+                    event_type=EventType.EMPLOYMENT,
+                    importance=EventImportance.CRITICAL,
+                    scheduled_time=day,
+                    country="US",
+                    currency="USD",
+                    description="Monthly US employment report — first Friday (estimate).",
+                )
+            )
+        # Initial Jobless Claims — every Thursday.
+        elif day.weekday() == 3 and day >= now:
+            cal.add_event(
+                EconomicEvent(
+                    title="US Initial Jobless Claims (scheduled)",
+                    event_type=EventType.EMPLOYMENT,
+                    importance=EventImportance.MEDIUM,
+                    scheduled_time=day,
+                    country="US",
+                    currency="USD",
+                    description="Weekly US jobless claims — every Thursday.",
+                )
+            )
+        day += timedelta(days=1)
+
+    logger.info("Built keyless economic calendar with %d scheduled events", len(cal.events))
+    return cal
+
+
 def _safe_float(value) -> float | None:
     """Convert a value to float, returning None on failure."""
     if value is None or value == "":

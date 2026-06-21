@@ -85,11 +85,14 @@ _CALENDAR_CACHE_TTL_SECONDS = 3600  # refresh at most once per hour
 
 def _get_live_calendar():
     """
-    Return a populated EconomicCalendar from Finnhub.
+    Return a populated EconomicCalendar.
+
+    Prefers the live Finnhub feed (FINNHUB_API_KEY). When that key is absent or
+    the request fails, falls back to a keyless calendar built from known
+    recurring schedules (FOMC dates, NFP, jobless claims) so the UI still shows
+    the high-impact gold drivers instead of an empty list.
 
     Results are cached for one hour to avoid hammering the API.
-    Raises RuntimeError when FINNHUB_API_KEY is absent or the request fails —
-    callers must handle this and return an appropriate HTTP error.
     """
     global _calendar_cache
     now_ts = datetime.now(UTC).timestamp()
@@ -99,9 +102,16 @@ def _get_live_calendar():
         if now_ts - fetched_at < _CALENDAR_CACHE_TTL_SECONDS:
             return cal
 
-    from news.economic_calendar import fetch_live_calendar
+    from news.economic_calendar import build_keyless_calendar, fetch_live_calendar
 
-    cal = fetch_live_calendar(days_ahead=30)
+    try:
+        cal = fetch_live_calendar(days_ahead=30)
+    except Exception as exc:
+        # No key, or Finnhub unreachable/timed out — degrade to the keyless
+        # schedule rather than showing nothing.
+        logger.info("Calendar: live fetch unavailable (%s) — using keyless schedule", exc)
+        cal = build_keyless_calendar(days_ahead=30)
+
     _calendar_cache = (cal, now_ts)
     return cal
 

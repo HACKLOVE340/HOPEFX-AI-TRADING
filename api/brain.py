@@ -236,6 +236,55 @@ async def deploy_strategy(
         )
 
 
+def _keyless_chat_reply(message: str) -> str:
+    """Rule-based assistant used when no LLM backend (ANTHROPIC/OPENAI) is set.
+
+    Keeps the chat usable offline: recognises common intents and points the user
+    at the right part of the platform instead of returning a 503 error.
+    """
+    m = message.lower().strip()
+
+    def has(*words: str) -> bool:
+        return any(w in m for w in words)
+
+    note = (
+        "\n\n_(Offline assistant — set `ANTHROPIC_API_KEY` (Claude) or "
+        "`OPENAI_API_KEY` in your `.env` to unlock the full conversational AI.)_"
+    )
+
+    if has("hello", "hi ", "hey", "good morning", "good afternoon") or m in {"hi", "hey"}:
+        return "Hi — I'm the HOPEFX assistant. Ask me about your account, open positions, signals, risk, or how to use the platform." + note
+    if has("help", "what can you", "how do i", "commands"):
+        return (
+            "I can point you to:\n"
+            "• **Account / balance** → Dashboard → Account panel\n"
+            "• **Open positions** → Positions page\n"
+            "• **Live signals** → Signals page\n"
+            "• **Gold price / chart** → Markets → XAUUSD\n"
+            "• **Risk & kill-switch** → Risk page\n"
+            "• **Economic events** → Calendar page\n"
+            "• **AI strategies** → Brain → Generate Strategy" + note
+        )
+    if has("account", "balance", "equity", "margin", "p&l", "pnl", "profit"):
+        return "Your live account balance, equity, margin and P&L are on the **Dashboard → Account** panel, refreshed in real time." + note
+    if has("position", "open trade", "my trades"):
+        return "Open positions, entry price, size and unrealised P&L are on the **Positions** page. Use the Risk page to manage exposure." + note
+    if has("signal", "entry", "setup"):
+        return "Active ML trade signals (direction, confidence, entry/stop/target) are on the **Signals** page." + note
+    if has("price", "gold", "xau", "quote", "market"):
+        return "Live XAUUSD price and candles are on **Markets → XAUUSD**. Note: only the keyless gold feed is active unless you configure broker/feed API keys." + note
+    if has("risk", "kill switch", "drawdown", "stop"):
+        return "Risk limits, drawdown, VaR/CVaR and the kill switch are on the **Risk** page. The kill switch halts all new orders immediately." + note
+    if has("strategy", "backtest"):
+        return "Generate and backtest AI strategies under **Brain → Generate Strategy**. Full strategy generation needs an LLM key (see below)." + note
+    if has("news", "event", "calendar", "fomc", "nfp", "cpi"):
+        return "Upcoming high-impact events (FOMC, NFP, jobless claims) are on the **Calendar** page." + note
+    return (
+        "I'm running in offline mode, so I can't reason freely yet — but I can help you find your "
+        "account, positions, signals, market data, risk controls, or the calendar. Ask about any of those." + note
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
@@ -245,15 +294,13 @@ async def chat(
     Free-form chat with the HOPEFX AI trading assistant.
 
     Maintains per-process conversation history (LLMAgent is module-level
-    singleton per worker).  Requires role >= 'starter'.
+    singleton per worker).  Requires role >= 'starter'.  When no LLM backend is
+    configured, falls back to a rule-based offline assistant instead of erroring.
     """
     backend, api_key = _detect_llm_backend()
 
     if not backend:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=("LLM backend not configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable AI chat."),
-        )
+        return ChatResponse(reply=_keyless_chat_reply(req.message))
 
     try:
         from brain.llm_agent import LLMAgent
@@ -267,11 +314,10 @@ async def chat(
         reply = await _chat_agent.chat(req.message)
         return ChatResponse(reply=reply)
     except Exception as exc:
-        logger.warning("Chat agent error: %s", exc, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Chat failed — check server logs",
-        ) from exc
+        # LLM backend errored (bad key, timeout, rate limit). Degrade to the
+        # offline assistant so the user still gets a useful response.
+        logger.warning("Chat agent error: %s — falling back to offline assistant", exc, exc_info=True)
+        return ChatResponse(reply=_keyless_chat_reply(req.message))
 
 
 _chat_agent: object | None = None

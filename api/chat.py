@@ -73,7 +73,15 @@ def _get_agent(session_id: str | None = None):
 
     key = session_id or "__default__"
     if key not in _agents:
-        _agents[key] = LLMAgent()
+        # Use whichever backend is configured (Claude/Anthropic or OpenAI).
+        try:
+            from api.brain import _detect_llm_backend
+
+            backend, api_key = _detect_llm_backend()
+            _agents[key] = LLMAgent(api_key=api_key, backend=backend) if backend else LLMAgent()
+        except TypeError:
+            # Older LLMAgent signature without api_key/backend kwargs.
+            _agents[key] = LLMAgent()
     return _agents[key], key
 
 
@@ -98,34 +106,30 @@ async def ai_chat(
 
     Requires a valid JWT bearer token and OPENAI_API_KEY in the environment.
     """
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OPENAI_API_KEY is not configured. Set it in your .env file.",
-        )
+    # Accept either Claude (Anthropic) or OpenAI. When neither is configured,
+    # degrade to the offline rule-based assistant instead of returning 503 so
+    # the chat stays usable out of the box.
+    from api.brain import _detect_llm_backend, _keyless_chat_reply
+
+    backend, _ = _detect_llm_backend()
+    session_key = f"{user.sub}:{body.session_id}" if body.session_id else user.sub
+
+    if not backend:
+        return ChatResponse(response=_keyless_chat_reply(body.message), session_id=session_key)
 
     # Scope session key to the authenticated user so histories never bleed
     # across accounts even when callers omit session_id.
-    session_key = f"{user.sub}:{body.session_id}" if body.session_id else user.sub
     agent, key = _get_agent(session_key)
 
     try:
         # Cap the LLM round-trip so a slow/unreachable provider returns a clean
-        # 504 instead of hanging until the client's request timeout fires.
+        # response instead of hanging until the client's request timeout fires.
         response_text = await asyncio.wait_for(agent.chat(body.message), timeout=25.0)
-    except TimeoutError:
-        logger.warning("LLM chat timed out after 25s")
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="AI response timed out — the model provider did not respond in time.",
-        ) from None
-    except Exception:
-        logger.exception("LLM chat error")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI response failed — check server logs",
-        ) from None
+    except Exception as exc:
+        # Slow/failed provider (timeout, bad key, rate limit) — fall back to the
+        # offline assistant so the user still gets a useful reply.
+        logger.warning("LLM chat unavailable (%s) — using offline assistant", exc)
+        return ChatResponse(response=_keyless_chat_reply(body.message), session_id=key)
 
     return ChatResponse(response=response_text, session_id=key)
 
@@ -166,8 +170,14 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     """
     from datetime import datetime
 
-    api_key_set = bool(os.getenv("OPENAI_API_KEY", ""))
-    model = os.getenv("OPENAI_MODEL", "gpt-4o")
+    from api.brain import _detect_llm_backend
+
+    backend, _ = _detect_llm_backend()
+    api_key_set = backend is not None
+    if backend == "anthropic":
+        model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+    else:
+        model = os.getenv("OPENAI_MODEL", "gpt-4o")
 
     llm_available = False
     llm_error: str | None = None
