@@ -381,6 +381,14 @@ class PolygonL2Feed:
             except Exception as exc:
                 self._fail_count += 1
                 exc_str = str(exc)
+                _low = exc_str.lower()
+                # Permanent auth/plan failure — never succeeds on retry. Stop.
+                if any(s in _low for s in ("auth failed", "auth_failed", "plan doesn't include", "unauthorized", "invalid api key")):
+                    logger.warning(
+                        "PolygonL2Feed permanently disabled — %s. Fix the API key/plan and restart.",
+                        exc,
+                    )
+                    return
                 # "no close frame received or sent" / "sent 1000 (OK)" are
                 # clean WebSocket closes, not real errors.
                 if "no close frame" in exc_str or "sent 1000" in exc_str or "1000 (OK)" in exc_str:
@@ -390,7 +398,8 @@ class PolygonL2Feed:
                         backoff,
                     )
                 else:
-                    logger.warning(
+                    # First failure → WARNING; subsequent → DEBUG (avoid spam).
+                    (logger.warning if self._fail_count <= 1 else logger.debug)(
                         "PolygonL2Feed disconnected (attempt %d): %s — reconnecting in %.0f s",
                         self._fail_count,
                         exc,
@@ -619,6 +628,13 @@ class FinnhubTradeFeed:
             except Exception as exc:
                 self._fail_count += 1
                 exc_str = str(exc)
+                _low = exc_str.lower()
+                if any(s in _low for s in ("auth failed", "auth_failed", "plan doesn't include", "unauthorized", "invalid api key")):
+                    logger.warning(
+                        "FinnhubTradeFeed permanently disabled — %s. Fix the API key/plan and restart.",
+                        exc,
+                    )
+                    return
                 # "no close frame received or sent" is a clean WebSocket close
                 # in some websockets library versions — not a real error.
                 if "no close frame" in exc_str or "sent 1000" in exc_str or "1000 (OK)" in exc_str:
@@ -628,7 +644,7 @@ class FinnhubTradeFeed:
                         backoff,
                     )
                 else:
-                    logger.warning(
+                    (logger.warning if self._fail_count <= 1 else logger.debug)(
                         "FinnhubTradeFeed disconnected (attempt %d): %s — reconnecting in %.0f s",
                         self._fail_count,
                         exc,

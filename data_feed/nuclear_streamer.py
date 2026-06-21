@@ -440,12 +440,15 @@ class NuclearStreamer:
         self._fail_counts[source] = self._fail_counts.get(source, 0) + 1
         if self._fail_counts[source] >= self.circuit_breaker_threshold:
             self._circuit_open_at[source] = time.monotonic()
-            logger.warning(
-                "Circuit breaker OPEN for source '%s' after %d failures — will retry in %.0f s",
-                source,
-                self._fail_counts[source],
-                self.circuit_breaker_cooldown,
-            )
+            # Log the circuit-open only on the transition (==threshold), not on
+            # every subsequent failure, to avoid flooding the log.
+            if self._fail_counts[source] == self.circuit_breaker_threshold:
+                logger.warning(
+                    "Circuit breaker OPEN for source '%s' after %d failures — will retry in %.0f s",
+                    source,
+                    self._fail_counts[source],
+                    self.circuit_breaker_cooldown,
+                )
 
     def _record_success(self, source: str) -> None:
         self._fail_counts[source] = 0
@@ -465,7 +468,7 @@ class NuclearStreamer:
                 remaining = self.circuit_breaker_cooldown - (
                     time.monotonic() - (self._circuit_open_at.get(source) or 0)
                 )
-                logger.info(
+                logger.debug(
                     "Circuit breaker open for '%s' — waiting %.0f s",
                     source,
                     max(remaining, 0),
@@ -488,6 +491,21 @@ class NuclearStreamer:
             except Exception as exc:
                 self._record_failure(source)
                 exc_str = str(exc)
+                # Permanent auth/plan failures (bad key, or a plan that doesn't
+                # include WebSocket access) will NEVER succeed on retry — stop the
+                # loop entirely so we don't spam the log forever. Log once.
+                _low = exc_str.lower()
+                if any(
+                    s in _low
+                    for s in ("auth_failed", "auth failed", "plan doesn't include", "unauthorized", "invalid api key", "401")
+                ):
+                    logger.warning(
+                        "Source '%s' permanently disabled — %s. "
+                        "Fix the API key/plan and restart to re-enable.",
+                        source,
+                        exc,
+                    )
+                    return
                 # "sent 1000 (OK)" is a clean WebSocket close masquerading as
                 # an exception in some websockets library versions — treat it
                 # as a non-error reconnect and log at DEBUG.
@@ -498,7 +516,8 @@ class NuclearStreamer:
                         backoff,
                     )
                 else:
-                    logger.warning(
+                    # First failure for this source → WARNING; subsequent → DEBUG.
+                    (logger.warning if self._fail_counts.get(source, 0) <= 1 else logger.debug)(
                         "Source '%s' disconnected: %s — reconnecting in %.0f s",
                         source,
                         exc,
