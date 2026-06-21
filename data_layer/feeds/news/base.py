@@ -137,9 +137,13 @@ class NewsFeedBase(ABC):
                     or "Name or service not known" in exc_str
                     or "Connection refused" in exc_str
                 )
-                if is_permanent:
+                # 401/403 mean the API key is invalid or the plan doesn't permit
+                # this endpoint — retrying never helps. Stop immediately and log
+                # once (the caller logs a summary) instead of hammering 4x/cycle.
+                is_auth_error = isinstance(exc, aiohttp.ClientResponseError) and exc.status in (401, 403)
+                if is_permanent or is_auth_error:
                     logger.debug(
-                        "%s unreachable (DNS/connection): %s — skipping retries",
+                        "%s permanent error (%s) — skipping retries",
                         self.name.value,
                         exc,
                     )
