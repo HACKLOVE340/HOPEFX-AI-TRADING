@@ -1349,6 +1349,23 @@ export const chatApi = {
   onlineUsers:      ()                                        => api.get('/chat/online'),
 };
 
+// ── AI Assistant API ──────────────────────────────────────────────────────────
+// Backend: api/chat.py — POST /api/chat (LLM agent with offline fallback).
+// Distinct from the community chatApi above (which is /api/chat/rooms/*).
+
+export const aiAssistantApi = {
+  /** Send a message to the AI assistant. `session_id` isolates conversation
+   *  history (e.g. "assistant" vs "support"). Backend caps the round-trip at
+   *  25s, so allow a little headroom on the client. */
+  send:         (message: string, sessionId?: string) =>
+                  api.post('/chat', { message, session_id: sessionId }, { timeout: 35_000 }),
+  /** Clear conversation history for a session. */
+  clearHistory: (sessionId?: string) =>
+                  api.delete('/chat/history', { params: sessionId ? { session_id: sessionId } : {} }),
+  /** Readiness / configured backend probe. */
+  status:       () => api.get('/chat/status'),
+};
+
 // ── Risk Calculator API ───────────────────────────────────────────────────────
 // Backend: /api/risk/calculator/*
 

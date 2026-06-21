@@ -51,6 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/portfolio',    label: 'Portfolio',      icon: '💼', group: 'core',      plan: 'free',    featureKey: 'portfolio'    },
   { path: '/watchlist',    label: 'Watchlist',      icon: '👁️', group: 'core',      plan: 'free',    featureKey: 'watchlist'    },
   { path: '/calendar',     label: 'Economic Calendar', icon: '📅', group: 'core',      plan: 'free',    featureKey: 'calendar'     },
+  { path: '/ai-assistant', label: 'AI Assistant',   icon: '🤖', group: 'core',      plan: 'free',    featureKey: 'dashboard'    },
   { path: '/alerts',       label: 'Price Alerts',   icon: '🔔', group: 'core',      plan: 'starter', featureKey: 'alerts'       },
   { path: '/status',       label: 'System Status',  icon: '🟢', group: 'core',      plan: 'free',    featureKey: 'status'       },
   { path: '/docs',         label: 'Documentation',  icon: '📚', group: 'core',      plan: 'free',    featureKey: 'dashboard'    },

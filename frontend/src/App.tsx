@@ -28,6 +28,7 @@ import SuperAdminGuard from './components/SuperAdminGuard';
 import SubscriptionGate from './components/SubscriptionGate';
 import TrialBanner from './components/TrialBanner';
 import Sidebar from './components/sidebar/Sidebar';
+import AISupportWidget from './components/ai/AISupportWidget';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ToastProvider } from './components/Toast';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
@@ -107,6 +108,7 @@ const TwoFactorSetup      = React.lazy(() => import('./pages/TwoFactorSetup'));
 const NotificationsPage   = React.lazy(() => import('./pages/NotificationsPage'));
 const KYCPage             = React.lazy(() => import('./pages/KYCPage'));
 const ChatPage            = React.lazy(() => import('./pages/ChatPage'));
+const AIAssistant         = React.lazy(() => import('./pages/AIAssistant'));
 const MobilePage          = React.lazy(() => import('./pages/MobilePage'));
 const Academy             = React.lazy(() => import('./pages/Academy'));
 
@@ -590,6 +592,7 @@ const AppShell: React.FC = () => {
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
             <Route path="/kyc"             element={wrap(<AuthGuard><KYCPage /></AuthGuard>)} />
             <Route path="/chat"            element={wrap(<AuthGuard><ChatPage /></AuthGuard>)} />
+            <Route path="/ai-assistant"    element={wrap(<AuthGuard><AIAssistant /></AuthGuard>)} />
             <Route path="/mobile"          element={wrap(<AuthGuard><MobilePage /></AuthGuard>)} />
             <Route path="/academy"         element={wrap(<AuthGuard><Academy /></AuthGuard>)} />
 
@@ -629,6 +632,7 @@ const AppShell: React.FC = () => {
       </main>
       </div>
     </div>
+    {isAuth && <AISupportWidget />}
     </>
   );
 };
