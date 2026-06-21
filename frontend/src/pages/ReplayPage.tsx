@@ -143,7 +143,7 @@ function SessionCard({ session, selected, onClick }: {
       </div>
       <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
         <span style={{ color: session.pnl >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
-          P&L: {session.pnl >= 0 ? '+' : ''}{session.pnl.toFixed(2)}
+          P&L: {Number.isFinite(session.pnl) ? `${session.pnl >= 0 ? '+' : ''}${session.pnl.toFixed(2)}` : '—'}
         </span>
         <span style={{ color: '#64748b' }}>
           {session.start_date.slice(0, 10)} → {session.end_date.slice(0, 10)}
@@ -394,14 +394,14 @@ const ReplayPage: React.FC = () => {
                 <div style={{ fontSize: 12, color: '#64748b' }}>
                   Bar {selected.current_bar} / {selected.total_bars}
                   {' · '}
-                  Price: <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{selected.current_price.toFixed(5)}</span>
+                  Price: <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{Number.isFinite(selected.current_price) ? selected.current_price.toFixed(5) : '—'}</span>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {/* P&L */}
                 <div style={{ fontSize: 14, fontWeight: 700,
                   color: selected.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                  {selected.pnl >= 0 ? '+' : ''}{selected.pnl.toFixed(2)}
+                  {Number.isFinite(selected.pnl) ? `${selected.pnl >= 0 ? '+' : ''}${selected.pnl.toFixed(2)}` : '—'}
                 </div>
                 <button onClick={() => deleteMut.mutate(selected.session_id)}
                   style={{ padding: '6px 10px', background: '#ef444422', color: '#ef4444',
@@ -502,12 +502,12 @@ const ReplayPage: React.FC = () => {
                     }}>
                       <span style={{ color: t.side === 'buy' ? '#22c55e' : '#ef4444', fontWeight: 600,
                         textTransform: 'uppercase', width: 30 }}>{t.side}</span>
-                      <span style={{ color: '#94a3b8' }}>@ {t.entry_price.toFixed(5)}</span>
-                      {t.exit_price && <span style={{ color: '#64748b' }}>→ {t.exit_price.toFixed(5)}</span>}
-                      {t.pnl !== null && (
+                      <span style={{ color: '#94a3b8' }}>@ {Number.isFinite(t.entry_price) ? t.entry_price.toFixed(5) : '—'}</span>
+                      {Number.isFinite(t.exit_price) && <span style={{ color: '#64748b' }}>→ {t.exit_price!.toFixed(5)}</span>}
+                      {Number.isFinite(t.pnl) && (
                         <span style={{ marginLeft: 'auto', fontWeight: 700,
-                          color: t.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                          {t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(2)}
+                          color: t.pnl! >= 0 ? '#22c55e' : '#ef4444' }}>
+                          {t.pnl! >= 0 ? '+' : ''}{t.pnl!.toFixed(2)}
                         </span>
                       )}
                     </div>

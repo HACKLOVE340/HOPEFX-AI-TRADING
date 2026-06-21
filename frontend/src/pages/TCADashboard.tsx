@@ -600,10 +600,10 @@ const TCADashboard: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                     <span style={{ color: slippageColor(s.mean_slippage_bps), fontSize: 13, fontWeight: 600 }}>
-                      {s.mean_slippage_bps.toFixed(2)} bps
+                      {Number.isFinite(s.mean_slippage_bps) ? s.mean_slippage_bps.toFixed(2) : '—'} bps
                     </span>
                     <span style={{ color: '#94a3b8', fontSize: 12 }}>
-                      {(s.adverse_rate * 100).toFixed(0)}% adverse
+                      {Number.isFinite(s.adverse_rate) ? (s.adverse_rate * 100).toFixed(0) : '—'}% adverse
                     </span>
                   </div>
                 </div>

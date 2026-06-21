@@ -108,7 +108,7 @@ function SignalCard({ signal }: { signal: Signal }) {
             {signal.direction.toUpperCase()}
           </span>
           <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>
-            {(signal.confidence * 100).toFixed(0)}% confidence
+            {Number.isFinite(signal.confidence) ? (signal.confidence * 100).toFixed(0) : '—'}% confidence
           </span>
         </div>
         <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>{signal.description}</p>
@@ -130,7 +130,7 @@ function MetricsGrid({ metrics }: { metrics: Record<string, number> }) {
             {key.replace(/_/g, ' ')}
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0' }}>
-            {typeof val === 'number' ? val.toFixed(2) : val}
+            {typeof val === 'number' ? (Number.isFinite(val) ? val.toFixed(2) : '—') : val}
           </div>
         </div>
       ))}

@@ -115,11 +115,11 @@ interface WorldMonitorSectionProps {
 const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
   const [tabGroup, setTabGroup] = useState<TabGroup>('crisis');
   const [activeCrisis, setActiveCrisis] = useState<string>(
-    Object.keys(data.crisis_views)[0] ?? 'ukraine_russia',
+    Object.keys(data.crisis_views ?? {})[0] ?? 'ukraine_russia',
   );
   const [activeRegion, setActiveRegion] = useState<string>('global');
   const [activeGold, setActiveGold] = useState<string>(
-    Object.keys(data.gold_relevant_views)[0] ?? 'global_overview',
+    Object.keys(data.gold_relevant_views ?? {})[0] ?? 'global_overview',
   );
   const [activeLayers, setActiveLayers] = useState<Set<string>>(
     () => new Set(data.available_layers ?? []),
@@ -146,9 +146,9 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
     return baseUrl.replace(/layers=[^&]*/i, `layers=${layerStr}`);
   }, [baseUrl, activeLayers]);
 
-  const crisisKeys = Object.keys(data.crisis_views);
-  const regionKeys = Object.keys(data.all_region_views);
-  const goldKeys = Object.keys(data.gold_relevant_views);
+  const crisisKeys = Object.keys(data.crisis_views ?? {});
+  const regionKeys = Object.keys(data.all_region_views ?? {});
+  const goldKeys = Object.keys(data.gold_relevant_views ?? {});
 
   const GOLD_LABELS: Record<string, string> = {
     middle_east:     'Middle East',

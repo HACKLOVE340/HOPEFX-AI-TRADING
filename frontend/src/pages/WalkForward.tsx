@@ -52,6 +52,10 @@ interface MonteCarloResult {
 
 // ─── Fold colours ─────────────────────────────────────────────────────────────
 
+// Guarded numeric formatters — backend stats can arrive as NaN/undefined.
+const nf = (v: number | null | undefined, d = 1) => (Number.isFinite(v as number) ? (v as number).toFixed(d) : '—');
+const nInt = (v: number | null | undefined) => (Number.isFinite(v as number) ? (v as number).toLocaleString() : '—');
+
 const FOLD_COLORS = [
   '#60a5fa', '#4ade80', '#f59e0b', '#f87171', '#a78bfa',
   '#34d399', '#fb923c', '#e879f9', '#38bdf8', '#84cc16',
@@ -85,7 +89,7 @@ const EquityChart: React.FC<{ folds: FoldResult[]; visibleFolds: Set<number> }> 
         lineWidth: 2,
         title: `Fold ${fold.fold}`,
       });
-      series.setData(fold.equity_curve.map(p => ({ time: (p.time as unknown) as UTCTimestamp, value: p.value })));
+      series.setData((fold.equity_curve ?? []).map(p => ({ time: (p.time as unknown) as UTCTimestamp, value: p.value })));
     });
 
     chart.timeScale().fitContent();
@@ -132,7 +136,7 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
       }}>
-        <span style={{ fontSize: 20, fontWeight: 800, color }}>{score.toFixed(0)}</span>
+        <span style={{ fontSize: 20, fontWeight: 800, color }}>{nf(score, 0)}</span>
         <span style={{ fontSize: 10, color: '#64748b' }}>/ 100</span>
       </div>
       <div>
@@ -172,7 +176,7 @@ const WalkForward: React.FC = () => {
       const res = await api.get(endpoint);
       if (!mountedRef.current) return;
       setData(res.data);
-      setVisible(new Set(res.data.folds.map((f: FoldResult) => f.fold)));
+      setVisible(new Set((res.data.folds ?? []).map((f: FoldResult) => f.fold)));
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       const status = (err as { response?: { status?: number } })?.response?.status;
@@ -273,7 +277,7 @@ const WalkForward: React.FC = () => {
         <div style={s.cardHeader}>
           <div style={s.cardTitle}>Fold Equity Curves</div>
           <div style={s.foldToggles}>
-            {data.folds.map((f) => (
+            {(data.folds ?? []).map((f) => (
               <button
                 key={f.fold}
                 style={{
@@ -306,7 +310,7 @@ const WalkForward: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {data.folds.map((f) => (
+              {(data.folds ?? []).map((f) => (
                 <tr key={f.fold} style={s.tr}>
                   <td style={s.td}>
                     <span style={{
@@ -318,17 +322,17 @@ const WalkForward: React.FC = () => {
                   </td>
                   <td style={s.td}>{f.test_start} → {f.test_end}</td>
                   <td style={{ ...s.td, color: f.accuracy >= 55 ? '#4ade80' : '#f87171' }}>
-                    {f.accuracy.toFixed(1)}%
+                    {nf(f.accuracy, 1)}%
                   </td>
                   <td style={{ ...s.td, color: f.sharpe >= 1 ? '#4ade80' : '#facc15' }}>
-                    {f.sharpe.toFixed(2)}
+                    {nf(f.sharpe, 2)}
                   </td>
-                  <td style={{ ...s.td, color: '#f87171' }}>{f.max_drawdown.toFixed(1)}%</td>
-                  <td style={{ ...s.td, color: f.total_return >= 0 ? '#4ade80' : '#f87171' }}>
-                    {f.total_return >= 0 ? '+' : ''}{f.total_return.toFixed(1)}%
+                  <td style={{ ...s.td, color: '#f87171' }}>{nf(f.max_drawdown, 1)}%</td>
+                  <td style={{ ...s.td, color: (f.total_return ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    {Number.isFinite(f.total_return) ? `${f.total_return >= 0 ? '+' : ''}${f.total_return.toFixed(1)}%` : '—'}
                   </td>
                   <td style={s.td}>{f.total_trades}</td>
-                  <td style={s.td}>{f.win_rate.toFixed(1)}%</td>
+                  <td style={s.td}>{nf(f.win_rate, 1)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -339,12 +343,12 @@ const WalkForward: React.FC = () => {
       {/* Monte Carlo */}
       {data.monte_carlo && (
         <div style={s.card}>
-          <div style={s.cardTitle}>Monte Carlo Simulation ({data.monte_carlo.simulations.toLocaleString()} runs)</div>
+          <div style={s.cardTitle}>Monte Carlo Simulation ({nInt(data.monte_carlo.simulations)} runs)</div>
           <div style={s.mcGrid}>
-            <MCCard label="Median Equity"       value={`$${data.monte_carlo.median_equity.toLocaleString()}`} color="#60a5fa" />
-            <MCCard label="5th Percentile (Worst)" value={`$${data.monte_carlo.p5_equity.toLocaleString()}`} color="#f87171" />
-            <MCCard label="95th Percentile (Best)" value={`$${data.monte_carlo.p95_equity.toLocaleString()}`} color="#4ade80" />
-            <MCCard label="Probability of Ruin" value={`${data.monte_carlo.probability_of_ruin.toFixed(1)}%`}
+            <MCCard label="Median Equity"       value={`$${nInt(data.monte_carlo.median_equity)}`} color="#60a5fa" />
+            <MCCard label="5th Percentile (Worst)" value={`$${nInt(data.monte_carlo.p5_equity)}`} color="#f87171" />
+            <MCCard label="95th Percentile (Best)" value={`$${nInt(data.monte_carlo.p95_equity)}`} color="#4ade80" />
+            <MCCard label="Probability of Ruin" value={`${nf(data.monte_carlo.probability_of_ruin, 1)}%`}
               color={data.monte_carlo.probability_of_ruin < 5 ? '#4ade80' : '#f87171'} />
           </div>
         </div>

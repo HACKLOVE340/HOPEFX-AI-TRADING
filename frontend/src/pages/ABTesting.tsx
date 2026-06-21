@@ -151,7 +151,7 @@ const ABTesting: React.FC = () => {
                 {sel.winner}
               </div>
               <div style={{ fontSize:12, color:'#64748b' }}>
-                p={sel.p_value} · {sel.significant ? 'Statistically significant' : 'Not significant yet'}
+                p={Number.isFinite(sel.p_value) ? sel.p_value.toFixed(4) : '—'} · {sel.significant ? 'Statistically significant' : 'Not significant yet'}
               </div>
             </div>
             <div style={{ fontSize:12, color:'#94a3b8', margin:'12px 0 4px' }}>{sel.recommendation}</div>
@@ -162,7 +162,7 @@ const ABTesting: React.FC = () => {
             </div>
             <MetricRow label="Total Return" a={`${sel.strategy_a.total_return}%`} b={`${sel.strategy_b.total_return}%`}
               winner={sel.winner} stratA={sel.strategy_a.strategy} stratB={sel.strategy_b.strategy} />
-            <MetricRow label="Sharpe Ratio" a={sel.strategy_a.sharpe_ratio.toFixed(2)} b={sel.strategy_b.sharpe_ratio.toFixed(2)}
+            <MetricRow label="Sharpe Ratio" a={Number.isFinite(sel.strategy_a.sharpe_ratio) ? sel.strategy_a.sharpe_ratio.toFixed(2) : '—'} b={Number.isFinite(sel.strategy_b.sharpe_ratio) ? sel.strategy_b.sharpe_ratio.toFixed(2) : '—'}
               winner={sel.winner} stratA={sel.strategy_a.strategy} stratB={sel.strategy_b.strategy} />
             <MetricRow label="Max Drawdown" a={`${sel.strategy_a.max_drawdown}%`} b={`${sel.strategy_b.max_drawdown}%`}
               winner={sel.winner} stratA={sel.strategy_a.strategy} stratB={sel.strategy_b.strategy} />

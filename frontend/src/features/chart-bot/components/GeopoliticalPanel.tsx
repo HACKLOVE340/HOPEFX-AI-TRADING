@@ -52,7 +52,7 @@ const RiskGauge = memo(({ score }: { score: number }) => {
     <div style={s.gaugeWrap}>
       <div style={s.gaugeHeader}>
         <span style={s.gaugeLabel}>GLOBAL RISK</span>
-        <span style={{ ...s.gaugeScore, color }}>{score.toFixed(0)}/100</span>
+        <span style={{ ...s.gaugeScore, color }}>{Number.isFinite(score) ? score.toFixed(0) : '—'}/100</span>
       </div>
       <div style={s.gaugeTrack}>
         <div
@@ -112,7 +112,7 @@ const EventItem = memo(({ event }: { event: GeopoliticalAssessment['key_events']
       <div style={s.eventContent}>
         <span style={s.eventTitle}>{event.title}</span>
         <span style={s.eventMeta}>
-          {event.region} · {event.source} · risk {event.risk_score.toFixed(0)}
+          {event.region} · {event.source} · risk {Number.isFinite(event.risk_score) ? event.risk_score.toFixed(0) : '—'}
         </span>
       </div>
     </div>
