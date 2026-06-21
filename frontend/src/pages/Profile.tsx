@@ -214,7 +214,7 @@ const Profile: React.FC = () => {
               <div key={str.strategy_id} style={s.stratRow}>
                 <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
                 <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers} subscribers</span>
-                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Math.round(str.rating))} {str.rating.toFixed(1)}</span>
+                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
               </div>
             ))}
           </div>

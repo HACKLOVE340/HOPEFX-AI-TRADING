@@ -171,7 +171,7 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
     bySymbol[t.symbol].pnl += t.realized_pnl;
   }
   const symbolRows = Object.entries(bySymbol).sort((a, b) => b[1].pnl - a[1].pnl);
-  const maxAbsPnl = Math.max(...symbolRows.map(([, d]) => Math.abs(d.pnl)), 1);
+  const maxAbsPnl = Math.max(...symbolRows.map(([, d]) => Math.abs(d.pnl ?? 0)), 1);
 
   const rows = [
     { label: 'Closed trades',  value: closed.length.toString(),                                    color: '#f1f5f9' },

@@ -67,7 +67,7 @@ const EMOTION_EMOJI: Record<string, string> = {
 };
 
 function fmt(n: number | null | undefined, d = 2): string {
-  if (n == null) return '—';
+  if (n == null || !Number.isFinite(n)) return '—';
   return n.toFixed(d);
 }
 
@@ -326,7 +326,7 @@ const TradeJournal: React.FC = () => {
         <div>
           <div style={s.statsGrid}>
             <StatCard label="Total Trades" value={String(stats.total_trades)} />
-            <StatCard label="Win Rate" value={`${stats.win_rate}%`} positive={stats.win_rate >= 50} />
+            <StatCard label="Win Rate" value={`${fmt(stats.win_rate, 0)}%`} positive={stats.win_rate >= 50} />
             <StatCard label="Avg P&L" value={`$${fmt(stats.avg_pnl)}`} positive={stats.avg_pnl >= 0} />
             <StatCard label="Best Trade" value={`+$${fmt(stats.best_trade_pnl)}`} positive />
             <StatCard label="Worst Trade" value={`$${fmt(stats.worst_trade_pnl)}`} positive={false} />
@@ -442,8 +442,8 @@ const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) =
     <div style={{ flex: 1, background: '#0f172a', borderRadius: 4, height: 8, overflow: 'hidden' }}>
       <div style={{ width: `${stat.win_rate}%`, height: '100%', background: stat.win_rate >= 50 ? '#4ade80' : '#f87171', borderRadius: 4 }} />
     </div>
-    <span style={{ width: 50, textAlign: 'right', color: stat.win_rate >= 50 ? '#4ade80' : '#f87171', fontSize: 13, fontWeight: 600 }}>{stat.win_rate}%</span>
-    <span style={{ width: 70, textAlign: 'right', color: stat.avg_pnl >= 0 ? '#4ade80' : '#f87171', fontSize: 13 }}>${stat.avg_pnl.toFixed(0)}</span>
+    <span style={{ width: 50, textAlign: 'right', color: (stat.win_rate ?? 0) >= 50 ? '#4ade80' : '#f87171', fontSize: 13, fontWeight: 600 }}>{Number.isFinite(stat.win_rate) ? stat.win_rate : '—'}%</span>
+    <span style={{ width: 70, textAlign: 'right', color: (stat.avg_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171', fontSize: 13 }}>${Number.isFinite(stat.avg_pnl) ? stat.avg_pnl.toFixed(0) : '—'}</span>
   </div>
 );
 

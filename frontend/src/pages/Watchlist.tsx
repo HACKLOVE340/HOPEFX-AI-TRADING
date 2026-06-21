@@ -36,6 +36,7 @@ const AVAILABLE_SYMBOLS = [
 ];
 
 function formatPrice(symbol: string, price: number): string {
+  if (price == null || !Number.isFinite(price)) return '—';
   if (symbol.includes('JPY')) return price.toFixed(2);
   if (symbol.includes('BTC') || symbol.includes('ETH') || symbol.includes('XAU')) return price.toFixed(2);
   return price.toFixed(5);
@@ -240,8 +241,8 @@ const WatchlistPage: React.FC = () => {
               <span style={{ width: 90, textAlign: 'right', color: '#f87171', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.bid)}</span>
               <span style={{ width: 90, textAlign: 'right', color: '#4ade80', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.ask)}</span>
               <span style={{ width: 100, textAlign: 'right', color: '#f8fafc', fontSize: 13, fontWeight: 700 }}>{formatPrice(item.symbol, item.mid)}</span>
-              <span style={{ width: 80, textAlign: 'right', fontWeight: 600, color: item.change_pct >= 0 ? '#4ade80' : '#f87171' }}>
-                {item.change_pct >= 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
+              <span style={{ width: 80, textAlign: 'right', fontWeight: 600, color: (item.change_pct ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                {Number.isFinite(item.change_pct) ? `${item.change_pct >= 0 ? '+' : ''}${item.change_pct.toFixed(2)}%` : '—'}
               </span>
               <span style={{ width: 70, display: 'flex', justifyContent: 'center' }}>
                 <Sparkline history={item.history} />
