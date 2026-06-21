@@ -71,7 +71,7 @@ const SignalCard = memo(({ signal, isSelected, onSelect, onTrade, trading }: Sig
         <PriceLevel label="SL"    value={signal.stop_loss}   color={COLORS.loss.base} />
         <PriceLevel label="TP"    value={signal.take_profit} color={COLORS.profit.base} />
         <div style={scDynamic.rrBadge(rr >= 2 ? COLORS.profit.base : rr >= 1 ? COLORS.neon.gold : COLORS.loss.base)}>
-          R:R {rr.toFixed(1)}
+          R:R {Number.isFinite(rr) ? rr.toFixed(1) : '—'}
         </div>
       </div>
 

@@ -91,11 +91,11 @@ function calculate(state: CalcState): CalcResult | null {
 
   // pip value per lot = pipSize * contractSize (in quote currency, assume USD quote)
   const pipValuePerLot = sym.pipSize * sym.contractSize;
-  const lotSize        = stopPips > 0 ? riskAmount / (stopPips * pipValuePerLot) : 0;
+  const lotSize        = stopPips > 0 && pipValuePerLot > 0 ? riskAmount / (stopPips * pipValuePerLot) : 0;
   const pipValue       = pipValuePerLot * lotSize;
 
   const notional       = entry * sym.contractSize * lotSize;
-  const marginRequired = notional / leverage;
+  const marginRequired = leverage > 0 ? notional / leverage : 0;
   const maxLoss        = stopPips * pipValue;
 
   // break-even win rate = 1 / (1 + R:R)
@@ -473,7 +473,7 @@ const RiskCalculator: React.FC = () => {
                 <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 2 }}>
-                      {h.label || h.symbol} · 1:{h.rr_ratio.toFixed(2)} R:R
+                      {h.label || h.symbol} · 1:{Number.isFinite(h.rr_ratio) ? h.rr_ratio.toFixed(2) : '—'} R:R
                     </div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>
                       Entry {h.entry_price} · SL {h.stop_loss} · TP {h.take_profit} · {h.lot_size.toFixed(4)} lots

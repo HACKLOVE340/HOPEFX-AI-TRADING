@@ -46,9 +46,9 @@ import type { PerformanceSummary } from '../types';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmtPct = (n: number) =>
-  `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+  Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : '—';
 
-const fmtRatio = (n: number) => n.toFixed(2);
+const fmtRatio = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '—');
 
 // ── Stat tile ─────────────────────────────────────────────────────────────────
 
@@ -147,10 +147,10 @@ const PerformanceMetrics: React.FC = () => {
     { label: 'Win Rate',       value: fmtPct(winRate),                positive: winRate >= 50 },
     { label: 'Profit Factor',  value: fmtRatio(profitFactor),         positive: profitFactor >= 1 },
     { label: 'Total Trades',   value: String(totalTrades) },
-    { label: 'Avg Trade P&L',  value: `$${avgPnl.toFixed(2)}`,        positive: avgPnl >= 0 },
-    { label: 'Best Trade',     value: `+$${bestTrade.toFixed(2)}`,    positive: true },
-    { label: 'Worst Trade',    value: `-$${Math.abs(worstTrade).toFixed(2)}`, positive: false },
-    { label: 'CVaR 95%',       value: `$${cvar.toFixed(2)}`,          positive: false },
+    { label: 'Avg Trade P&L',  value: fmtPnl(avgPnl),                 positive: avgPnl >= 0 },
+    { label: 'Best Trade',     value: fmtPnl(bestTrade),              positive: true },
+    { label: 'Worst Trade',    value: fmtPnl(worstTrade),             positive: false },
+    { label: 'CVaR 95%',       value: fmtPnl(cvar),                   positive: false },
   ];
 
   return (
@@ -269,7 +269,7 @@ const TradeHistory: React.FC = () => {
       ))}
       {filtered.length > 0 && (
         <span style={{ fontSize: 10, color: totalPnl >= 0 ? '#00e676' : '#ff1744', fontFamily: 'monospace', fontWeight: 700 }}>
-          {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)} ({wins}/{filtered.length})
+          {Number.isFinite(totalPnl) ? `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}` : '—'} ({wins}/{filtered.length})
         </span>
       )}
     </div>
@@ -481,13 +481,13 @@ const SymbolPnLSparklines: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-[11px] font-bold text-slate-200">{sym}</span>
                 <span className={cn('text-[11px] font-semibold tabular-nums', isPos ? 'text-[#00e676]' : 'text-[#ff1744]')}>
-                  {isPos ? '+' : ''}${totalPnl.toFixed(2)}
+                  {fmtPnl(totalPnl)}
                 </span>
               </div>
               <div className="flex gap-1 flex-wrap">
                 {entries.map((e, i) => (
                   <span key={i} className={cn('text-[9px] px-1 py-0.5 rounded', e.side === 'long' ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]')}>
-                    {e.side === 'long' ? '▲' : '▼'} ${e.pnl.toFixed(2)}
+                    {e.side === 'long' ? '▲' : '▼'} {Number.isFinite(e.pnl) ? `$${e.pnl.toFixed(2)}` : '—'}
                   </span>
                 ))}
               </div>
@@ -565,7 +565,7 @@ const Portfolio: React.FC = () => {
   const toast = useToast();
 
   const equityPoints = useMemo(() =>
-    equityHistory.map((p) => ({ t: new Date(p.timestamp).getTime() / 1000, v: p.equity })),
+    (equityHistory ?? []).map((p) => ({ t: new Date(p.timestamp).getTime() / 1000, v: p.equity })),
     [equityHistory],
   );
 

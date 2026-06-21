@@ -299,7 +299,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
         close:     cd.close,
         volume:    bar?.volume ?? 0,
         change:    cd.close - cd.open,
-        changePct: ((cd.close - cd.open) / cd.open) * 100,
+        changePct: cd.open ? ((cd.close - cd.open) / cd.open) * 100 : 0,
       });
     });
 

@@ -244,6 +244,10 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
     // Client-side SL direction validation — catches obvious mistakes before
     // the round-trip to the backend. The backend PreTradeGate also validates.
     const slNum = parseFloat(sl);
+    if (sl && !Number.isFinite(slNum)) {
+      setResult({ ok: false, msg: 'Invalid stop loss value' });
+      return;
+    }
     if (slNum > 0 && entryPrice > 0) {
       if (side === 'buy' && slNum >= entryPrice) {
         setResult({ ok: false, msg: 'Stop loss must be below entry price for a buy order' });
@@ -255,6 +259,10 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
       }
     }
     const tpNum = parseFloat(tp);
+    if (tp && !Number.isFinite(tpNum)) {
+      setResult({ ok: false, msg: 'Invalid take profit value' });
+      return;
+    }
     if (tpNum > 0 && entryPrice > 0) {
       if (side === 'buy' && tpNum <= entryPrice) {
         setResult({ ok: false, msg: 'Take profit must be above entry price for a buy order' });

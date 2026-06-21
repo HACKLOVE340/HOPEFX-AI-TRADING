@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase, extractApiError } from '../lib/utils';
+import { getWsBase, extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -158,9 +158,11 @@ const SocialFeed: React.FC = () => {
   const filteredItems = items.filter(item =>
     symbolFilter === 'All' || item.symbol === symbolFilter
   ).sort((a, b) => {
-    if (sortBy === 'confidence') return b.confidence - a.confidence;
-    if (sortBy === 'return')     return b.pnl - a.pnl;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (sortBy === 'confidence') return (b.confidence ?? 0) - (a.confidence ?? 0);
+    if (sortBy === 'return')     return (b.pnl ?? 0) - (a.pnl ?? 0);
+    const at = new Date(a.created_at).getTime();
+    const bt = new Date(b.created_at).getTime();
+    return (isNaN(bt) ? 0 : bt) - (isNaN(at) ? 0 : at);
   });
 
   return (
@@ -235,18 +237,18 @@ const SocialFeed: React.FC = () => {
                   {item.direction}
                 </span>
                 <span style={s.symbol}>{item.symbol}</span>
-                <span style={s.confidence}>{(item.confidence * 100).toFixed(0)}% conf</span>
+                <span style={s.confidence}>{Number.isFinite(item.confidence) ? (item.confidence * 100).toFixed(0) : '—'}% conf</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 13, color: '#64748b' }}>by <strong style={{ color: '#94a3b8' }}>{item.username}</strong></span>
-                <span style={{ fontSize: 11, color: '#475569' }}>{new Date(item.created_at).toLocaleTimeString()}</span>
+                <span style={{ fontSize: 11, color: '#475569' }}>{fmtTime(item.created_at)}</span>
               </div>
             </div>
 
             <div style={s.metrics}>
-              <span style={s.metric}>Entry: <strong>${item.entry_price.toFixed(4)}</strong></span>
-              <span style={{ ...s.metric, color: item.pnl >= 0 ? '#4ade80' : '#f87171' }}>
-                P&L: <strong>{item.pnl >= 0 ? '+' : ''}{item.pnl.toFixed(2)}%</strong>
+              <span style={s.metric}>Entry: <strong>${fmtPrice(item.entry_price, 4)}</strong></span>
+              <span style={{ ...s.metric, color: (item.pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                P&L: <strong>{fmtPctRaw(item.pnl, 2)}</strong>
               </span>
               <span style={s.metric}>Copies: <strong>{item.copies}</strong></span>
             </div>
@@ -281,7 +283,7 @@ const SocialFeed: React.FC = () => {
                 {(comments[item.signal_id] ?? []).map(c => (
                   <div key={c.comment_id} style={s.comment}>
                     <strong style={{ color: '#94a3b8', fontSize: 12 }}>{c.username}</strong>
-                    <span style={{ color: '#64748b', fontSize: 11, marginLeft: 8 }}>{new Date(c.created_at).toLocaleTimeString()}</span>
+                    <span style={{ color: '#64748b', fontSize: 11, marginLeft: 8 }}>{fmtTime(c.created_at)}</span>
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#cbd5e1' }}>{c.text}</p>
                   </div>
                 ))}

@@ -325,7 +325,7 @@ const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
     <div className="flex flex-col gap-2">
       {symSignals.map((sig) => {
         const isLong = sig.direction === 'long';
-        const conf   = sig.confidence * 100;
+        const conf   = (sig.confidence ?? 0) * 100;
         return (
           <div key={sig.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
             <span className={cn(
