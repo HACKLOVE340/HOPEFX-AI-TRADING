@@ -269,9 +269,30 @@ export interface LoginResponse {
 }
 
 export const authApi = {
-  // 60s timeout (vs the default 30s): the very first login right after a cold
-  // start can be slow while the backend finishes warming up, so give it room.
-  login:    (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload, { timeout: 60_000 }),
+  // Login with automatic retry on 503 ("Auth service not initialised"). The
+  // backend accepts requests as soon as it boots, but the auth service finishes
+  // initialising a few seconds later (longer on slow machines / cold start), so
+  // an early login can transiently 503. Retry for ~24s before giving up. Bad
+  // credentials return 401 and are NOT retried. 60s per-attempt timeout covers
+  // a slow first response.
+  login: async (payload: LoginPayload) => {
+    const maxAttempts = 12;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await api.post<LoginResponse>('/auth/login', payload, { timeout: 60_000 });
+      } catch (err) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 503 && attempt < maxAttempts - 1) {
+          lastErr = err;
+          await new Promise((r) => setTimeout(r, 2000)); // auth still warming up
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastErr;
+  },
   // Cookies (access + refresh) are cleared server-side via Set-Cookie: max-age=0.
   // withCredentials ensures the browser sends the httpOnly refresh cookie.
   logout:   () => api.post('/auth/logout', {}, { withCredentials: true }),

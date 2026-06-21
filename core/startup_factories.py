@@ -781,16 +781,18 @@ async def init_auth(s: Any) -> Any:
             "Set SECURITY_JWT_SECRET to a random string of ≥32 characters."
         ) from exc
 
-    User.__table__.create(s.db_engine, checkfirst=True)
-    UserSession.__table__.create(s.db_engine, checkfirst=True)
-    LoginAttempt.__table__.create(s.db_engine, checkfirst=True)
+    # Create the core auth tables. Guarded so a transient DB hiccup here cannot
+    # leave the auth service unregistered (which makes every login return
+    # "503 Auth service not initialised"). checkfirst=True is idempotent.
+    try:
+        User.__table__.create(s.db_engine, checkfirst=True)
+        UserSession.__table__.create(s.db_engine, checkfirst=True)
+        LoginAttempt.__table__.create(s.db_engine, checkfirst=True)
+    except Exception as exc:
+        logger.warning("Auth table creation issue (continuing — tables may already exist): %s", exc)
 
-    # Add any columns present in the ORM model but missing from the live DB.
-    # This handles databases created before a migration was applied (e.g. the
-    # KYC columns added in migration k1l2m3n4o5p6).  Safe to run on every
-    # startup — existing columns are left untouched.
-    _ensure_user_columns(s.db_engine)
-
+    # Register the auth service NOW — before the optional column-sync and
+    # bootstrap steps below — so login works even if one of those fails.
     svc = AuthService(session_factory=s.db_session_factory)
     set_auth_service(svc)
     log_activity("Auth Service initialized")
@@ -799,9 +801,19 @@ async def init_auth(s: Any) -> Any:
         len(_jwt_get_secret()),
     )
 
+    # Add any columns present in the ORM model but missing from the live DB.
+    # Non-fatal: the service is already registered above.
+    try:
+        _ensure_user_columns(s.db_engine)
+    except Exception as exc:
+        logger.warning("Auth column sync issue (non-fatal): %s", exc)
+
     # Ensure bootstrap users exist so superadmin/admin/trader can always log in.
-    # Idempotent — skips users that already exist.
-    _ensure_bootstrap_users(s.db_session_factory)
+    # Idempotent — skips users that already exist. Non-fatal.
+    try:
+        _ensure_bootstrap_users(s.db_session_factory)
+    except Exception as exc:
+        logger.warning("Bootstrap users seeding issue (non-fatal): %s", exc)
 
     # Background task: purge expired/revoked sessions daily to keep the table lean.
     async def _purge_expired_sessions() -> None:
