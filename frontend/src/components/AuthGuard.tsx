@@ -106,21 +106,33 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
             clearAuth();
             return;
           }
-          return authApi.me().then((res) => {
-            const fresh = res.data;
-            // Grab the token after restoreSession / the interceptor set it.
-            const currentToken = useStore.getState().token;
-            if (fresh && currentToken) {
-              const changed =
-                fresh.role  !== user?.role  ||
-                fresh.email !== user?.email ||
-                fresh.plan  !== user?.plan;
-              if (changed) setAuth(currentToken, fresh);
-            }
-          });
+          return authApi.me()
+            .then((res) => {
+              const fresh = res.data;
+              // Grab the token after restoreSession / the interceptor set it.
+              const currentToken = useStore.getState().token;
+              if (fresh && currentToken) {
+                const changed =
+                  fresh.role  !== user?.role  ||
+                  fresh.email !== user?.email ||
+                  fresh.plan  !== user?.plan;
+                if (changed) setAuth(currentToken, fresh);
+              }
+            })
+            .catch((meErr: unknown) => {
+              // Only force logout if the token was EXPLICITLY rejected (401).
+              // A transient /me failure (network blip, timeout, 5xx) must NOT
+              // log the user out right after a successful login — we still hold
+              // a valid token, and the response interceptor handles genuine 401s
+              // (with a silent refresh). Logging out on any error caused an
+              // "logged in then immediately kicked out" bug when the machine was
+              // busy (feeds/WS churn) and /me timed out.
+              const status = (meErr as { response?: { status?: number } })?.response?.status;
+              if (status === 401) clearAuth();
+            });
         })
         .catch(() => {
-          // Restore or /me failed → force re-login.
+          // ensureSession (silent refresh on a cold load) failed → no session.
           clearAuth();
         })
         .finally(() => setSyncing(false));
