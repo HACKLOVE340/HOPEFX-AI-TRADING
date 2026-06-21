@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPrice, fmtRatio } from '../lib/utils';
 import { useToast } from '../components/Toast';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -210,8 +210,8 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                   <div style={{ fontSize: 11, color: '#64748b' }}>{m.email}</div>
                 </div>
                 <RoleBadge role={m.role} />
-                <div style={{ fontSize: 12, color: m.pnl_contribution >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
-                  {m.pnl_contribution >= 0 ? '+' : ''}{m.pnl_contribution.toFixed(2)}
+                <div style={{ fontSize: 12, color: (m.pnl_contribution ?? 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                  {Number.isFinite(m.pnl_contribution) ? `${m.pnl_contribution >= 0 ? '+' : ''}${m.pnl_contribution.toFixed(2)}` : '—'}
                 </div>
                 {isOwner && m.role !== 'owner' && (
                   <button onClick={() => removeMut.mutate(m.user_id)}
@@ -229,12 +229,12 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
       {tab === 'performance' && perf && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
-            <StatCard label="Total P&L" value={`$${perf.total_pnl.toFixed(2)}`}
-              color={perf.total_pnl >= 0 ? '#22c55e' : '#ef4444'} />
-            <StatCard label="Win Rate" value={`${(perf.win_rate * 100).toFixed(1)}%`} />
-            <StatCard label="Total Trades" value={perf.total_trades.toString()} />
-            <StatCard label="Sharpe" value={perf.sharpe.toFixed(2)} />
-            <StatCard label="Max Drawdown" value={`${perf.max_drawdown_pct.toFixed(1)}%`}
+            <StatCard label="Total P&L" value={`$${fmtPrice(perf.total_pnl)}`}
+              color={(perf.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444'} />
+            <StatCard label="Win Rate" value={Number.isFinite(perf.win_rate) ? `${(perf.win_rate * 100).toFixed(1)}%` : '—'} />
+            <StatCard label="Total Trades" value={(perf.total_trades ?? 0).toString()} />
+            <StatCard label="Sharpe" value={fmtRatio(perf.sharpe)} />
+            <StatCard label="Max Drawdown" value={Number.isFinite(perf.max_drawdown_pct) ? `${perf.max_drawdown_pct.toFixed(1)}%` : '—'}
               color="#ef4444" />
           </div>
           <div style={{ fontSize: 11, color: '#475569', textAlign: 'right' }}>Period: {perf.period}</div>

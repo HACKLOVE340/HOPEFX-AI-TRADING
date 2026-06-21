@@ -121,15 +121,16 @@ const CorrelationDashboard: React.FC = () => {
                   <thead>
                     <tr>
                       <th style={s.mth} />
-                      {corr.symbols.map(sym => <th key={sym} style={s.mth}>{sym}</th>)}
+                      {(corr.symbols ?? []).map(sym => <th key={sym} style={s.mth}>{sym}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {corr.symbols.map(row => (
+                    {(corr.symbols ?? []).map(row => (
                       <tr key={row}>
                         <td style={{ ...s.mtd, fontWeight:600, color:'#94a3b8', whiteSpace:'nowrap' }}>{row}</td>
-                        {corr.symbols.map(col => {
-                          const v = corr.matrix[row]?.[col] ?? 0;
+                        {(corr.symbols ?? []).map(col => {
+                          const raw = corr.matrix?.[row]?.[col];
+                          const v = Number.isFinite(raw) ? (raw as number) : 0;
                           return (
                             <td key={col} style={{ ...s.mtd, background: row===col ? '#334155' : `${corrColor(v)}22`, color: corrColor(v), fontWeight: row===col ? 700 : 400 }}>
                               {v.toFixed(2)}
@@ -151,7 +152,7 @@ const CorrelationDashboard: React.FC = () => {
                     🤖 Build Strategy from Insights
                   </button>
                 </div>
-                {corr.insights.map((ins, i) => (
+                {(corr.insights ?? []).map((ins, i) => (
                   <div key={i} style={{ fontSize:13, color:'#94a3b8', padding:'4px 0', borderBottom:'1px solid #0f172a' }}>
                     • {ins}
                   </div>
@@ -193,11 +194,11 @@ const CorrelationDashboard: React.FC = () => {
                 <span style={s.cotLabel}>Short Positions</span>
                 <span style={{ color:'#f87171' }}>{(cot.short_positions ?? 0).toLocaleString()}</span>
               </div>
-              {cot.weekly_change !== undefined && (
+              {Number.isFinite(cot.weekly_change) && (
                 <div style={s.cotRow}>
                   <span style={s.cotLabel}>Weekly Change</span>
-                  <span style={{ color: cot.weekly_change > 0 ? '#4ade80' : '#f87171' }}>
-                    {cot.weekly_change > 0 ? '+' : ''}{cot.weekly_change.toLocaleString()}
+                  <span style={{ color: cot.weekly_change! > 0 ? '#4ade80' : '#f87171' }}>
+                    {cot.weekly_change! > 0 ? '+' : ''}{cot.weekly_change!.toLocaleString()}
                   </span>
                 </div>
               )}

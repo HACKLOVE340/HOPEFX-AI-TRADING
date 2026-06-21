@@ -11,7 +11,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPrice, fmtPnl } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -279,8 +279,8 @@ const CopyTrading: React.FC = () => {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: totalPnl >= 0 ? '#4ade80' : '#f87171' }}>
-                      {totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}
+                    <div style={{ fontSize: 22, fontWeight: 700, color: (totalPnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                      {fmtPnl(totalPnl)}
                     </div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>Total P&L</div>
                   </div>
@@ -289,7 +289,7 @@ const CopyTrading: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, margin: '16px 0' }}>
                   <div style={s.sessMetric}>
                     <div style={{ fontSize: 11, color: '#64748b' }}>Allocation</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>${sess.allocation_amount.toLocaleString()}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>${fmtPrice(sess.allocation_amount)}</div>
                   </div>
                   <div style={s.sessMetric}>
                     <div style={{ fontSize: 11, color: '#64748b' }}>Unrealised P&L</div>
@@ -402,7 +402,7 @@ const CopyTrading: React.FC = () => {
               <div style={s.summaryRow}>
                 <span style={s.summaryLabel}>Max Drawdown Stop</span>
                 <span style={{ ...s.summaryVal, color: '#f87171' }}>
-                  ${(allocation * Math.abs(selectedLeader.max_dd) / 100).toFixed(0)}
+                  ${Number.isFinite(allocation * Math.abs(selectedLeader.max_dd) / 100) ? (allocation * Math.abs(selectedLeader.max_dd) / 100).toFixed(0) : '—'}
                 </span>
               </div>
               <div style={s.summaryRow}>

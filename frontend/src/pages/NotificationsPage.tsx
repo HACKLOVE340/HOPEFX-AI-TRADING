@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase } from '../lib/utils';
+import { getWsBase, fmtDateTime } from '../lib/utils';
 
 interface Notification {
   id: string;
@@ -181,7 +181,7 @@ const NotificationsPage: React.FC = () => {
               <div style={{ fontWeight: n.read ? 500 : 700, color: '#f1f5f9', fontSize: 14 }}>{n.title}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 {!n.read && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />}
-                <span style={{ fontSize: 11, color: '#64748b' }}>{new Date(n.created_at).toLocaleString()}</span>
+                <span style={{ fontSize: 11, color: '#64748b' }}>{fmtDateTime(n.created_at)}</span>
                 <button
                   onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
                   style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}

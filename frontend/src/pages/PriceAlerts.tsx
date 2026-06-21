@@ -282,7 +282,7 @@ const PriceAlerts: React.FC = () => {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>{alert.name}</div>
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                {alert.symbol} · {alert.conditions.map((c) => `${CONDITION_LABELS[c.type] ?? c.type} ${c.threshold}`).join(', ')}
+                {alert.symbol} · {(alert.conditions ?? []).map((c) => `${CONDITION_LABELS[c.type] ?? c.type} ${c.threshold}`).join(', ')}
                 {' · '}{alert.notification_channels.join(', ')}
               </div>
             </div>
