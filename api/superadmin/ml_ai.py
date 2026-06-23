@@ -132,7 +132,11 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
                     "name": name,
                     "version": info.get("sha256", "")[:8] or "1.0",
                     "status": status,
-                    "accuracy": round(float(info.get("oos_accuracy", 0.0)), 4),
+                    # oos_accuracy is stored as a fraction (0–1); the frontend
+                    # AccuracyBar expects a 0–100 percent (matches accuracy_7d).
+                    "accuracy": round(
+                        (lambda a: a * 100 if a <= 1.0 else a)(float(info.get("oos_accuracy", 0.0))), 2
+                    ),
                     "last_trained": info.get("registered_at", _utcnow().isoformat()),
                     "predictions_today": preds_today,
                     "drift_score": 0.0,  # populated by drift monitor if running
