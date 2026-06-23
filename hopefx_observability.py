@@ -223,10 +223,17 @@ def _attach_asyncio_handler() -> None:
 # ── install() ───────────────────────────────────────────────────────────────--
 def install(
     log_dir: str | os.PathLike[str] = "logs",
-    level: int = logging.INFO,
+    level: int | None = None,
     capture_warnings: bool = True,
 ) -> None:
     """Install global observability. Idempotent — safe to call more than once.
+
+    Captures EVERYTHING by default (DEBUG) into ``hopefx_all.log`` so the quiet
+    failures — the ``logger.debug(...)`` paths and otherwise-flat code — are no
+    longer invisible. Override with ``HOPEFX_OBSERVE_LEVEL`` (e.g. INFO) if the
+    DEBUG stream is too verbose. A few pathologically noisy third-party loggers
+    (urllib3, asyncio selector, etc.) are capped at INFO unless
+    ``HOPEFX_OBSERVE_ALL=1`` is set — then truly everything is captured.
 
     Sets up the two log files, a root file handler (so every logger is captured),
     a JSONL mirror of WARNING+ records, and process-wide hooks for uncaught
@@ -236,6 +243,11 @@ def install(
         # On a re-call, just (re)try the asyncio handler — a loop may exist now.
         _attach_asyncio_handler()
         return
+
+    # Resolve capture level: explicit arg > env > DEBUG (capture everything).
+    if level is None:
+        _lvl_name = os.getenv("HOPEFX_OBSERVE_LEVEL", "DEBUG").upper()
+        level = getattr(logging, _lvl_name, logging.DEBUG)
 
     d = Path(log_dir)
     try:
@@ -310,10 +322,53 @@ def install(
     if capture_warnings:
         logging.captureWarnings(True)
 
+    # Unraisable exceptions — failures in __del__, GC finalizers, weakref
+    # callbacks. These are the most "flat" of all: Python prints them to stderr
+    # and moves on. Route them into the event stream.
+    if hasattr(sys, "unraisablehook"):
+        _prev_unraisable = sys.unraisablehook
+
+        def _unraisablehook(args: Any) -> None:
+            exc = args.exc_value
+            _emit_event(
+                {
+                    "event": "unraisable_exception",
+                    "error_type": type(exc).__name__ if exc else None,
+                    "error": str(exc) if exc else None,
+                    "object": repr(getattr(args, "object", None)),
+                    "traceback": "".join(
+                        traceback.format_exception(args.exc_type, exc, args.exc_traceback)
+                    )
+                    if exc
+                    else None,
+                }
+            )
+            _log.error("UNRAISABLE %s", type(exc).__name__ if exc else "?")
+            _prev_unraisable(args)
+
+        sys.unraisablehook = _unraisablehook
+
+    # Cap a few pathologically chatty third-party loggers so the DEBUG stream
+    # stays readable — unless HOPEFX_OBSERVE_ALL=1 ("capture literally all").
+    if os.getenv("HOPEFX_OBSERVE_ALL", "").lower() not in ("1", "true", "yes"):
+        for _noisy in ("urllib3", "asyncio", "websockets", "aiohttp.access", "charset_normalizer", "PIL"):
+            logging.getLogger(_noisy).setLevel(logging.INFO)
+
     _attach_asyncio_handler()
     _STATE["installed"] = True
-    event("observability_installed", all_log=str(all_log), events=_STATE["events_path"], pid=os.getpid())
-    _log.info("hopefx observability installed → %s / %s", all_log, _STATE["events_path"])
+    event(
+        "observability_installed",
+        all_log=str(all_log),
+        events=_STATE["events_path"],
+        capture_level=logging.getLevelName(level),
+        pid=os.getpid(),
+    )
+    _log.info(
+        "hopefx observability installed (capture=%s) → %s / %s",
+        logging.getLevelName(level),
+        all_log,
+        _STATE["events_path"],
+    )
 
 
 if __name__ == "__main__":  # tiny self-test
