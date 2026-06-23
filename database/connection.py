@@ -167,6 +167,7 @@ class DatabaseManager:
 
             is_sqlite = "sqlite" in sync_url
             is_pg = "postgresql" in sync_url
+            self._is_sqlite = is_sqlite
 
             if is_sqlite:
                 # SQLite does not support QueuePool with pool_size/max_overflow.
@@ -230,9 +231,29 @@ class DatabaseManager:
             self._metrics.checked_out_connections -= 1
 
     def _on_connect(self, dbapi_conn, connection_record):
-        """Called when new connection created"""
+        """Called when a new DBAPI connection is created."""
         with self._metrics_lock:
             self._metrics.total_connections += 1
+
+        # SQLite concurrency hardening. Without WAL, SQLite locks the ENTIRE
+        # database file on every write, so the platform's many background
+        # writers serialize and foreground requests (e.g. login, which writes
+        # login_attempts/sessions) stall up to the 30s busy timeout — exactly
+        # the multi-second/timed-out logins seen in the runtime logs. WAL lets
+        # readers run concurrently with the single writer; busy_timeout makes
+        # writers wait for a lock instead of erroring; synchronous=NORMAL is the
+        # safe+fast pairing with WAL. (Production uses PostgreSQL; this only
+        # affects the SQLite dev database.)
+        if getattr(self, "_is_sqlite", False):
+            try:
+                cur = dbapi_conn.cursor()
+                cur.execute("PRAGMA journal_mode=WAL")
+                cur.execute("PRAGMA busy_timeout=30000")
+                cur.execute("PRAGMA synchronous=NORMAL")
+                cur.execute("PRAGMA foreign_keys=ON")
+                cur.close()
+            except Exception as exc:  # pragma: no cover — never block on PRAGMA
+                logger.warning("SQLite PRAGMA setup failed (continuing): %s", exc)
 
     def _check_circuit(self) -> bool:
         """
@@ -603,6 +624,22 @@ class AsyncDatabaseManager:
                 echo=self.echo,
                 connect_args=connect_args,
             )
+            # Match the sync engine's SQLite hardening on every async connection
+            # (WAL persists in the file; busy_timeout is per-connection) so
+            # background async writers don't reintroduce full-DB lock stalls.
+            from sqlalchemy import event as _sa_event
+
+            @_sa_event.listens_for(self._engine.sync_engine, "connect")
+            def _set_sqlite_pragma(dbapi_conn, _rec):
+                try:
+                    cur = dbapi_conn.cursor()
+                    cur.execute("PRAGMA journal_mode=WAL")
+                    cur.execute("PRAGMA busy_timeout=30000")
+                    cur.execute("PRAGMA synchronous=NORMAL")
+                    cur.execute("PRAGMA foreign_keys=ON")
+                    cur.close()
+                except Exception as exc:  # pragma: no cover
+                    logger.warning("Async SQLite PRAGMA setup failed (continuing): %s", exc)
         else:
             self._engine = create_async_engine(
                 async_url,
