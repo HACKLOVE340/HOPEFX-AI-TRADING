@@ -122,6 +122,18 @@ except Exception as _log_setup_err:
     # Non-fatal — basicConfig fallback remains active
     logging.getLogger(__name__).warning("HOPEFXLogger setup failed (using basicConfig fallback): %s", _log_setup_err)
 
+# ── Observability ─────────────────────────────────────────────────────────────
+# Make invisible failures visible. Installed AFTER the logging block above so the
+# console/file handlers stay intact; this only ADDS logs/hopefx_all.log +
+# logs/hopefx_events.jsonl plus process-wide hooks for uncaught / thread /
+# asyncio exceptions. Idempotent and best-effort — never blocks boot.
+try:
+    from hopefx_observability import install as _install_observability
+
+    _install_observability(log_dir=os.getenv("LOG_DIR", "logs"))
+except Exception as _obs_err:
+    logging.getLogger(__name__).warning("Observability install skipped: %s", _obs_err)
+
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse

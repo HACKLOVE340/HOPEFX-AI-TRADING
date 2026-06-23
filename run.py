@@ -70,7 +70,7 @@ if platform.system() == "Windows":
 
         _aiores.DefaultResolver = _aiores.ThreadedResolver
         _aioconn.DefaultResolver = _aiores.ThreadedResolver
-    except Exception:  # nosec B110
+    except Exception:  # noqa: S110  # nosec B110
         pass
 
 # ── logging setup (overridden by --log flag after arg parse) ──────────────────
@@ -80,6 +80,17 @@ logging.basicConfig(
     datefmt="%Y-%m-%dT%H:%M:%SZ",
 )
 logger = logging.getLogger("run")
+
+# ── Observability ─────────────────────────────────────────────────────────────
+# Route every log record + uncaught/thread/asyncio exception into
+# logs/hopefx_all.log + logs/hopefx_events.jsonl so a real broker-fill attempt
+# leaves a debuggable trail. Best-effort; never blocks startup.
+try:
+    from hopefx_observability import install as _install_observability
+
+    _install_observability(log_dir=os.getenv("LOG_DIR", "logs"))
+except Exception as _obs_err:
+    logger.warning("Observability install skipped: %s", _obs_err)
 
 # ── supported values ──────────────────────────────────────────────────────────
 BROKERS = ("oanda", "mt5", "ibkr", "binance", "alpaca", "paper")

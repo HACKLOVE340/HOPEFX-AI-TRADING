@@ -52,6 +52,22 @@ _MIN_MARGIN_BUFFER: float = float(os.getenv("MIN_MARGIN_BUFFER", "2.0"))
 
 logger = logging.getLogger(__name__)
 
+# Observability — make silent failures visible. Falls back to a no-op context
+# manager if the harness isn't present, so the engine never depends on it.
+try:
+    from hopefx_observability import observe
+except Exception:  # harness is optional
+    from contextlib import contextmanager as _cm
+
+    @_cm
+    def observe(_label, *, fatal=False, **_ctx):  # type: ignore[misc]
+        try:
+            yield
+        except Exception:
+            if fatal:
+                raise
+            logger.warning("silent failure in %s", _label, exc_info=True)
+
 # Optional Sentry
 try:
     import sentry_sdk
@@ -462,17 +478,19 @@ class ExecutionEngine:
                 _guard_err,
             )
             return  # Do not update last tick with invalid data
-        except Exception:  # nosec B110 — guard is non-fatal if unavailable  # noqa: S110
-            pass
+        except Exception:  # guard is non-fatal if unavailable — but make it visible
+            logger.warning(
+                "ExecutionEngine: LiveTradingGuard unavailable for %s (tick accepted)",
+                symbol,
+                exc_info=True,
+            )
 
         self._last_ticks[symbol] = tick
-        # Feed spread monitor for real-time spike detection
-        try:
+        # Feed spread monitor for real-time spike detection (non-fatal, now visible)
+        with observe("execution: spread_monitor.on_tick", symbol=symbol):
             from execution.spread_monitor import get_spread_monitor
 
             get_spread_monitor().on_tick_obj(symbol, tick)
-        except Exception:  # nosec B110 — spread monitor is non-fatal  # noqa: S110
-            pass
 
     def get_last_tick(self, symbol: str) -> Any | None:
         """Return the most recent validated tick for a symbol, or None."""
