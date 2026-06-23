@@ -1350,8 +1350,10 @@ class ExecutionEngine:
                     p.kind == inspect.Parameter.VAR_KEYWORD for p in _params.values()
                 ):
                     _po_kwargs["client_order_id"] = request.request_id
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as _sig_err:
+                # Could not introspect place_order signature — fall back to
+                # calling it without client_order_id. Benign; log at debug.
+                logger.debug("place_order signature introspection failed: %s", _sig_err)
             return await loop.run_in_executor(
                 None,
                 lambda: self._broker.place_order(**_po_kwargs),

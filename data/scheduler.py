@@ -577,8 +577,10 @@ async def _update_timeframe(
                     if _l - _tol <= _o <= _h + _tol and not (_l <= _o <= _h):
                         bar = dict(bar)  # noqa: PLW2901 — copy-on-write; intentional loop-var rebind
                         bar["open"] = max(_l, min(_h, _o))
-            except (KeyError, TypeError, ValueError):
-                pass
+            except (KeyError, TypeError, ValueError) as _bar_err:
+                # Malformed bar — skip it, but log at debug so data-quality
+                # issues are visible instead of silently dropped.
+                logger.debug("scheduler: skipped malformed OHLCV bar: %s", _bar_err)
 
             result = validator.validate_bar(bar)
             if result.ok:

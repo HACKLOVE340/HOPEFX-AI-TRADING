@@ -524,8 +524,10 @@ class DynamicStrategyRegistry:
             params = list(sig.parameters.keys())
             if len(params) < 1:
                 errors.append("generate_signal() must accept at least one parameter (market data)")
-        except (ValueError, TypeError):
-            pass  # Cannot inspect — skip
+        except (ValueError, TypeError) as _sig_err:
+            # Cannot introspect generate_signal() — skip the arity check. Benign;
+            # log at debug so it's visible when validating a custom strategy.
+            logger.debug("Cannot inspect generate_signal signature: %s", _sig_err)
 
         return errors
 

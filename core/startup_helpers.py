@@ -60,8 +60,10 @@ def push_state_to_api_modules(state) -> None:
             if fn is not None:
                 fn(state)
                 logger.info("State pushed → %s", mod_name)
-        except ImportError:
-            pass  # nosec B110 — module may not be installed in all environments
+        except ImportError as _imp_err:
+            # Module may not be installed in all environments — benign, but log
+            # at debug so a missing state push is visible when chasing it.
+            logger.debug("State module %s unavailable: %s", mod_name, _imp_err)
         except Exception as exc:
             logger.warning("Failed to push state to %s: %s", mod_name, exc)
 
