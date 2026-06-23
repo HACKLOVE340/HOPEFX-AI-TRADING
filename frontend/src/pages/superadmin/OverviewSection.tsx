@@ -55,14 +55,21 @@ interface InfraData {
   queues: QueueEntry[];
 }
 
-const fmt = (n: number) => n >= 1_000_000
-  ? `${(n / 1_000_000).toFixed(2)}M`
+const fmt = (n: number) =>
+  !Number.isFinite(n) ? '—'
+  : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M`
   : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n);
 
-const fmtMoney = (n: number, cur = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
+const fmtMoney = (n: number, cur = 'USD') => {
+  if (!Number.isFinite(n)) return '—';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || 'USD', maximumFractionDigits: 0 }).format(n);
+  } catch {
+    return `$${n.toFixed(0)}`;
+  }
+};
 
-const fmtPct = (n: number) => `${n.toFixed(1)}%`;
+const fmtPct = (n: number) => (Number.isFinite(n) ? `${n.toFixed(1)}%` : '—');
 
 interface GaugeBarProps { label: string; value: number; max?: number; color?: string; unit?: string }
 const GaugeBar: React.FC<GaugeBarProps> = ({ label, value, max = 100, color = '#3b82f6', unit = '%' }) => {
@@ -261,7 +268,7 @@ const OverviewSection: React.FC = () => {
         <KpiTile label="Trades Today"       value={fmt(data.total_trades_today)}   icon="📊" accent="#8b5cf6" />
         <KpiTile label="Open Positions"     value={data.open_positions}            icon="📈" accent="#06b6d4" />
         <KpiTile label="Active Sessions"    value={data.active_sessions}           icon="🔗" accent="#ec4899" />
-        <KpiTile label="ML Accuracy"        value={`${(data.ml_model_accuracy ?? 0).toFixed(1)}%`} icon="🧠" accent="#a78bfa" />
+        <KpiTile label="ML Accuracy"        value={fmtPct((data.ml_model_accuracy ?? 0) * 100)} icon="🧠" accent="#a78bfa" />
         <KpiTile label="Signals Today"      value={fmt(data.signals_generated_today)} icon="📡" accent="#34d399" />
       </div>
 
