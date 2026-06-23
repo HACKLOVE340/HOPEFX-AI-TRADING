@@ -77,7 +77,8 @@ except ImportError:
     MarketOrder = None
     StopLimitOrder = None
     StopOrder = None
-    logger.warning("ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86")
+    # Optional broker — expected absent unless IBKR is in use. Debug, not warning.
+    logger.debug("ib_insync not installed — IBKRBroker unavailable (optional). pip install ib_insync==0.9.86")
 
 # ── env config ────────────────────────────────────────────────────────────────
 _HOST = os.getenv("IBKR_HOST", "127.0.0.1")

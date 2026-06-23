@@ -39,8 +39,10 @@ try:
 except ImportError:
     _mt5 = None
     _MT5_AVAILABLE = False
-    logger.warning(
-        "MetaTrader5 SDK not installed — MT5Broker will be unavailable. Install with: pip install MetaTrader5"
+    # Optional, Windows-only broker — expected to be absent on Linux/macOS.
+    # Debug, not warning, so it doesn't drown real signal; connect() errors loud.
+    logger.debug(
+        "MetaTrader5 SDK not installed — MT5Broker unavailable (optional, Windows-only)."
     )
 
 

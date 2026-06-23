@@ -29,7 +29,10 @@ try:
     MT5_AVAILABLE = True
 except ImportError:
     MT5_AVAILABLE = False
-    logger.warning("MetaTrader5 package not installed. MT5 connector will not work.")
+    # MetaTrader5 is Windows-only and an optional broker — its absence is
+    # expected on Linux/macOS. Log at debug so it doesn't pollute WARNING every
+    # boot; the connect() path raises a real error if MT5 is actually used.
+    logger.debug("MetaTrader5 package not installed — MT5 connector unavailable (optional, Windows-only).")
 
 from .base import (
     AccountInfo,

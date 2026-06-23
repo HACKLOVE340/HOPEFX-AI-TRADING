@@ -57,7 +57,8 @@ try:
 except ImportError:
     IB = None  # type: ignore
     _IB_AVAILABLE = False
-    logger.warning("ib_insync not installed — IBKRBroker will be unavailable. Install with: pip install ib_insync")
+    # Optional broker — expected absent unless IBKR is in use. Debug, not warning.
+    logger.debug("ib_insync not installed — IBKRBroker unavailable (optional). Install with: pip install ib_insync")
 
 # TWS / IB Gateway default ports.
 _PORT_PAPER = 7497

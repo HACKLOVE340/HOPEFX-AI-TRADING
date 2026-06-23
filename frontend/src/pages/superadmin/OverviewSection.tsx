@@ -224,7 +224,7 @@ const OverviewSection: React.FC = () => {
   if (!data) return null;
 
   const alerts: { level: 'info' | 'warn' | 'critical'; message: string }[] = [];
-  if (data.kill_switch_active) alerts.push({ level: 'critical', message: 'Kill switch is ACTIVE — all trading halted' });
+  if (data.kill_switch_active) alerts.push({ level: 'warn', message: 'Kill switch is ACTIVE — all trading halted (operator control)' });
   if (data.maintenance_mode)   alerts.push({ level: 'warn',     message: 'Platform is in maintenance mode — users see downtime page' });
   if ((data.error_rate_pct ?? 0) > 5) alerts.push({ level: 'critical', message: `Error rate elevated: ${fmtPct(data.error_rate_pct ?? 0)} (threshold: 5%)` });
   if ((data.cpu_pct ?? 0) > 85)       alerts.push({ level: 'warn',     message: `CPU usage high: ${fmtPct(data.cpu_pct ?? 0)}` });

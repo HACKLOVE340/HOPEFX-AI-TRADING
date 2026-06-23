@@ -236,10 +236,16 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 
     # ── Derive system_health from populated metrics ───────────────────────────
-    if overview["kill_switch_active"] or overview["error_rate_pct"] > 10:
+    # system_health reflects PLATFORM health, not operator intent. An active
+    # kill switch or maintenance mode is a *deliberate* state (trading paused,
+    # platform otherwise fine) → "degraded", not "critical". Reserve "critical"
+    # for genuine failures (e.g. a high error rate) so real incidents stand out
+    # instead of being drowned by an intentionally-engaged control.
+    if overview["error_rate_pct"] > 10:
         overview["system_health"] = "critical"
     elif (
-        overview["maintenance_mode"]
+        overview["kill_switch_active"]
+        or overview["maintenance_mode"]
         or overview["cpu_pct"] > 85
         or overview["memory_pct"] > 85
         or overview["error_rate_pct"] > 2
