@@ -4078,6 +4078,22 @@ async def get_chart_patterns(
 
     patterns: list[dict] = []
 
+    # Canonical pattern names. The two engines name the same pattern differently
+    # (classic: "head_and_shoulders", "bull_flag"; advanced enum: "head_shoulders",
+    # "flag"), which defeated the cross-engine de-dup below and showed the SAME
+    # pattern twice. Normalise both to one vocabulary so duplicates collapse.
+    _PATTERN_ALIASES = {
+        "head_and_shoulders": "head_shoulders",
+        "inverse_head_and_shoulders": "inverse_head_shoulders",
+        "bull_flag": "flag",
+        "bear_flag": "flag",
+        "bull_pennant": "pennant",
+        "bear_pennant": "pennant",
+    }
+
+    def _canon(t: str) -> str:
+        return _PATTERN_ALIASES.get(t, t)
+
     # ── Engine 1: classic reversal/continuation patterns ──────────────────────
     try:
         from analysis.patterns.chart_patterns import ChartPatternDetector
@@ -4086,7 +4102,7 @@ async def get_chart_patterns(
             entry = float(getattr(p, "entry_price", 0) or 0) or last_close
             patterns.append(
                 {
-                    "pattern_type": str(getattr(p, "pattern_type", "")),
+                    "pattern_type": _canon(str(getattr(p, "pattern_type", ""))),
                     "direction": str(getattr(p, "direction", "neutral")),
                     "confidence": float(getattr(p, "confidence", 0)),
                     "entry_price": entry,
@@ -4108,7 +4124,7 @@ async def get_chart_patterns(
         for p in AdvancedPatternDetector().detect_all_patterns(df, min_confidence=min_confidence):
             patterns.append(
                 {
-                    "pattern_type": str(getattr(getattr(p, "pattern_type", ""), "value", "")),
+                    "pattern_type": _canon(str(getattr(getattr(p, "pattern_type", ""), "value", ""))),
                     "direction": str(getattr(getattr(p, "direction", ""), "value", "neutral")),
                     "confidence": float(getattr(p, "confidence", 0)),
                     "entry_price": float(getattr(p, "entry_price", 0) or 0) or last_close,
@@ -4123,20 +4139,37 @@ async def get_chart_patterns(
     except Exception as exc:
         logger.warning("Advanced pattern detection failed for %s: %s", symbol, exc)
 
-    # De-duplicate across engines: keep the highest-confidence detection when two
-    # patterns of the same type overlap in index range.
-    patterns.sort(key=lambda d: d["confidence"], reverse=True)
+    # Collapse duplicates into distinct patterns. The detectors emit one signal
+    # per sliding window, so a single flat zone produces dozens of overlapping/
+    # adjacent same-type detections (e.g. 18 identical "rectangle bearish 0.71"
+    # tiles). Merge any same-type + same-direction detections whose ranges
+    # overlap OR sit within a small gap into ONE pattern spanning the whole
+    # region, keeping the highest-confidence detection's levels. This yields one
+    # pattern per real formation instead of the same pattern repeated.
+    _ADJ_GAP = 3  # bars; tiled detections sit ~1 bar apart, distinct ones far more
+    patterns.sort(key=lambda d: (d["pattern_type"], d["direction"], d["start_index"]))
     merged: list[dict] = []
     for cand in patterns:
-        if any(
-            cand["pattern_type"] == kept["pattern_type"]
-            and cand["start_index"] <= kept["end_index"]
-            and kept["start_index"] <= cand["end_index"]
-            for kept in merged
-        ):
+        host = next(
+            (
+                k
+                for k in merged
+                if k["pattern_type"] == cand["pattern_type"]
+                and k["direction"] == cand["direction"]
+                and cand["start_index"] <= k["end_index"] + _ADJ_GAP
+            ),
+            None,
+        )
+        if host is None:
+            merged.append(dict(cand))
             continue
-        merged.append(cand)
+        # Extend the region; adopt the stronger detection's confidence + levels.
+        host["end_index"] = max(host["end_index"], cand["end_index"])
+        if cand["confidence"] > host["confidence"]:
+            for _k in ("confidence", "entry_price", "target_price", "stop_loss", "description", "source"):
+                host[_k] = cand[_k]
 
+    merged.sort(key=lambda d: d["confidence"], reverse=True)
     return {"patterns": merged, "symbol": symbol, "count": len(merged), "bars": int(len(df))}
 
 
