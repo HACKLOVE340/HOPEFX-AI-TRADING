@@ -283,7 +283,11 @@ async def _probe_otel_tracing() -> dict[str, Any]:
     try:
         from api.tracing import _OTEL_AVAILABLE, _OTLP_ENDPOINT, _SERVICE_NAME, _SAMPLING_RATE
 
-        status = "ok" if _OTEL_AVAILABLE and _OTLP_ENDPOINT else ("warning" if _OTEL_AVAILABLE else "degraded")
+        # Tracing is an OPTIONAL feature. It being disabled (no OTLP endpoint
+        # configured, or the OTel SDK not installed) is an intentional, healthy
+        # state — NOT platform degradation. Only warn when an endpoint IS
+        # configured but the SDK is missing (a real misconfiguration).
+        status = "warning" if (_OTLP_ENDPOINT and not _OTEL_AVAILABLE) else "ok"
         return {
             "status": status,
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -392,7 +396,16 @@ async def _probe_env_vars() -> dict[str, Any]:
     ]
     missing_required = [k for k in required if not os.getenv(k)]
     missing_recommended = [k for k in recommended if not os.getenv(k)]
-    status = "error" if missing_required else ("warning" if missing_recommended else "ok")
+    # Missing *recommended* keys (e.g. OANDA_API_KEY) is expected in dev — it's
+    # informational, not a warning. Only flag it as a warning in production/
+    # staging where those integrations are actually expected to be configured.
+    _is_prod = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
+    if missing_required:
+        status = "error"
+    elif missing_recommended and _is_prod:
+        status = "warning"
+    else:
+        status = "ok"
     return {
         "status": status,
         "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
