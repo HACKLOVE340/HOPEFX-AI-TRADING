@@ -9,7 +9,13 @@
 
 **Legend:** ✅ Enforced · 🟡 Partial · ❌ Gap
 **Mechanisms now in place:**
-- `invariants/constitution.py` — pure invariant predicates (15 tests, all green)
+- **`invariants/` — ~65 pure invariant predicates across 6 domain modules (35 tests, all green):**
+  - `constitution.py` — order state machine, PnL/capital conservation, duplicate-id, tick/spread, finiteness, human control
+  - `market.py` — order book, multi-feed agreement, freshness/staleness, clock drift, future-event, event sequence, causal order, market-open/halt, delisting
+  - `risk.py` — daily loss, drawdown, VaR, leverage, margin buffer, liquidation distance, liquidity, per-dimension exposure, concentration, dependency, catastrophic-loss kill triggers
+  - `ai.py` — model-approved/hash, drift, confidence, entropy, ensemble dominance, consensus, feature/embedding integrity, hallucination pre-trade guard, explainability, agent authority/tool/loop/self-escalation/memory ownership
+  - `execution.py` — slippage, latency budget, broker reconciliation, reported-vs-actual reality, settlement balance, full pre-trade gate
+  - `governance.py` — no-lookahead, no-data-leakage, after-cost viability, pod isolation, audit immutability/completeness, segregation-of-duties, dual control, config drift, deployment gates, human supremacy
 - `scripts/runtime_invariant_check.py` — boots app + probes endpoints + asserts output invariants + scans the event log
 - `hopefx_observability.py` — whole-platform capture (DEBUG) + uncaught/thread/asyncio/unraisable hooks → **No Silent Failure** substrate
 
