@@ -117,6 +117,11 @@ class PositionReconciler:
 
         # Fetch latest prices and update unrealized P&L
         updated = 0
+        # Aggregate book value (DB vs broker) for the constitutional
+        # reconciliation invariant run after the loop.
+        agg_db_value = 0.0
+        agg_broker_value = 0.0
+        have_broker_values = False
         for pos in db_positions:
             price = await self._get_price(pos.symbol)
             if price is None:
@@ -167,6 +172,9 @@ class PositionReconciler:
                         db_value = db_qty * price
                         broker_value = broker_qty * price
                         value_diff = abs(db_value - broker_value)
+                        agg_db_value += db_value
+                        agg_broker_value += broker_value
+                        have_broker_values = True
                     else:
                         db_value = broker_value = 0.0
                         value_diff = 0.0
@@ -181,6 +189,13 @@ class PositionReconciler:
                             broker_value=broker_value,
                             value_diff=value_diff,
                         )
+
+        # ── Constitutional reconciliation invariant (feature-flagged) ─────────
+        # Aggregate book value the platform believes (DB) vs. what the broker
+        # reports must reconcile.  In MONITOR mode this only logs; in ENFORCE
+        # mode a CONSTITUTIONAL breach trips the kill switch (No Hidden Loss).
+        if have_broker_values:
+            await self._enforce_reconciliation(agg_db_value, agg_broker_value)
 
         if updated:
             logger.debug(
@@ -201,6 +216,35 @@ class PositionReconciler:
                 )
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
+
+    async def _enforce_reconciliation(self, db_value: float, broker_value: float) -> None:
+        """Run the constitutional reconciliation invariant on aggregate book value
+        and, in ENFORCE mode, trip the kill switch on a CONSTITUTIONAL breach.
+
+        Fail-safe: any error here is logged and swallowed — a bug in the
+        invariant layer must never crash the reconciliation loop.
+        """
+        try:
+            from invariants.enforcement import enforce_reconciliation
+
+            result = enforce_reconciliation(
+                internal_value=db_value,
+                external_value=broker_value,
+                value_tol=self._drift_value,
+            )
+            if result.should_halt:
+                reason = (
+                    f"Reconciliation breach: DB book ${db_value:.2f} vs broker ${broker_value:.2f} — {result.reason}"
+                )
+                logger.critical("RECONCILE_KILL: %s", reason)
+                try:
+                    from kill_switch import KillSwitch
+
+                    KillSwitch().activate(reason)
+                except Exception as ks_exc:
+                    logger.error("Could not activate kill switch on reconciliation breach: %s", ks_exc)
+        except Exception as exc:
+            logger.warning("Reconciliation invariant check failed (suppressed): %s", exc)
 
     async def _trigger_drift_halt(
         self,

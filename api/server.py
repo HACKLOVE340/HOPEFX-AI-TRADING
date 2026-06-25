@@ -391,6 +391,24 @@ def _register_probe_routes(app, trading_app, health_checker):
         registry = get_metrics_registry()
         return PlainTextResponse(content=registry.export_prometheus(), media_type="text/plain")
 
+    @app.get("/health/invariants")
+    async def invariants_health():
+        """Live constitutional-invariant enforcement status for the control center.
+
+        Surfaces the enforcement mode (off/monitor/enforce), engine self-check,
+        counters, and recent violations.  Returns 503 only when the invariant
+        engine itself is unhealthy (monitor the monitors) — not on detected
+        violations, which are reported in the body.
+        """
+        try:
+            from invariants.enforcement import status as _inv_status
+
+            data = _inv_status()
+            return JSONResponse(content=data, status_code=200 if data.get("engine_healthy") else 503)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("invariants health endpoint error: %s", exc)
+            return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=503)
+
 
 def _register_account_routes(app: Any, trading_app: Any, get_current_user: Any) -> None:
     """Register status, account, and position read routes."""

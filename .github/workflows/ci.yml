@@ -369,6 +369,36 @@ jobs:
             --timeout=120 \
             -q
 
+      # Runtime invariant check — boots the app, probes endpoints, asserts output
+      # invariants and scans the event log so "looks right, behaves wrong" fails
+      # the build.  Exit 1 (invariant findings) fails CI; exit 2 (could not boot
+      # in this environment) is surfaced as a warning, not a hard failure.
+      - name: Runtime invariant check (output invariants)
+        env:
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
+          REDIS_URL: redis://localhost:6379/0
+          CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # pragma: allowlist secret
+          CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"  # pragma: allowlist secret
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"  # pragma: allowlist secret
+          ENVIRONMENT: testing
+          OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
+          OANDA_ACCOUNT_ID: ci-placeholder
+          OANDA_PRACTICE: "true"
+          INITIAL_BALANCE: "100000"
+          HOPEFX_INVARIANT_MODE: monitor
+        run: |
+          set +e
+          python scripts/runtime_invariant_check.py
+          code=$?
+          if [ "$code" = "1" ]; then
+            echo "::error::Runtime invariant findings detected"
+            exit 1
+          elif [ "$code" = "2" ]; then
+            echo "::warning::runtime_invariant_check could not boot the app (exit 2) — not failing the build"
+            exit 0
+          fi
+          exit 0
+
       # Per-package coverage gates — read from the .coverage file produced above.
       # Uses `coverage report --include` to filter by package. No test re-runs.
       - name: Coverage gate - risk/ (80% required)

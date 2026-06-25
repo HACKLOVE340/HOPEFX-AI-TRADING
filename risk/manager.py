@@ -49,6 +49,8 @@ from typing import Any
 
 import numpy as np
 
+from invariants.enforcement import enforce_pre_trade
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -753,6 +755,15 @@ class RiskManager:
                 lineage_id,
                 f"data_quality:{data_quality:.3f}<{_MIN_DATA_QUALITY}",
             )
+
+        # ── Constitutional invariant gate (feature-flagged, fail-safe) ──────
+        # All hard gates have passed; verify the constitutional invariants on the
+        # signal before any capital is sized.  In MONITOR mode this only logs; in
+        # ENFORCE mode a CONSTITUTIONAL/CRITICAL violation refuses the order.  The
+        # facade never raises into this hot path (see invariants.enforcement).
+        _inv = enforce_pre_trade(signal, data_quality=data_quality, equity=equity)
+        if not _inv.allowed:
+            return self._zero_sizing(symbol, direction, lineage_id, f"invariant:{_inv.reason}")
 
         # ── Scaling factors ────────────────────────────────────────────────
         features = self._get_orchestrator_features(signal)
