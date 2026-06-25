@@ -9,15 +9,30 @@
 
 **Legend:** ✅ Enforced · 🟡 Partial · ❌ Gap
 **Mechanisms now in place:**
-- **`invariants/` — ~65 pure invariant predicates across 6 domain modules (35 tests, all green):**
+- **`invariants/` — ~130 pure invariant predicates across 13 domain modules (62 tests, all green):**
   - `constitution.py` — order state machine, PnL/capital conservation, duplicate-id, tick/spread, finiteness, human control
   - `market.py` — order book, multi-feed agreement, freshness/staleness, clock drift, future-event, event sequence, causal order, market-open/halt, delisting
   - `risk.py` — daily loss, drawdown, VaR, leverage, margin buffer, liquidation distance, liquidity, per-dimension exposure, concentration, dependency, catastrophic-loss kill triggers
   - `ai.py` — model-approved/hash, drift, confidence, entropy, ensemble dominance, consensus, feature/embedding integrity, hallucination pre-trade guard, explainability, agent authority/tool/loop/self-escalation/memory ownership
   - `execution.py` — slippage, latency budget, broker reconciliation, reported-vs-actual reality, settlement balance, full pre-trade gate
   - `governance.py` — no-lookahead, no-data-leakage, after-cost viability, pod isolation, audit immutability/completeness, segregation-of-duties, dual control, config drift, deployment gates, human supremacy
+  - `portfolio.py` — portfolio state machine, portfolio-value reconciliation, position sizing, diversification, correlation budget, hedging, currency reconciliation, synthetic-exposure tracking, capital efficiency
+  - `reconciliation.py` — reconciliation chain, custody, double-entry ledger, ledger immutability, treasury flow, alpha attribution, fee integrity, revenue leakage
+  - `derivatives.py` — Greek-limit bounds, collateral sufficiency, expiry handling
+  - `systems.py` — single-leader/quorum, exactly-once, stream lag, DLQ, cache freshness/version, acyclic graphs, zombie detection, blast-radius containment
+  - `compliance.py` — wash-trade, spoofing, layering, restricted/MNPI, retention, jurisdiction, chain-of-custody, approval workflow, privilege escalation
+  - `operations.py` — alert delivery/ack, monitoring coverage, incident timeline, operator readiness/fatigue, emergency reversibility, alert fatigue, monitor-the-monitors
+  - `ai_governance.py` — determinism, reproducibility, decision lineage, prompt version, context completeness, goal alignment, reward-hacking, shadow objective, alpha decay, belief-vs-reality, calibration, strategy approval/identity, self-replication & autonomous capital/strategy controls
 - `scripts/runtime_invariant_check.py` — boots app + probes endpoints + asserts output invariants + scans the event log
 - `hopefx_observability.py` — whole-platform capture (DEBUG) + uncaught/thread/asyncio/unraisable hooks → **No Silent Failure** substrate
+
+> **Honest framing (per the framework's §9–11):** the file enumerates 300+ invariant
+> *categories*. ~130 are now implemented as pure, tested predicates (the ones
+> expressible as logic/math). The remainder are either **infrastructure probes**
+> (DNS/SSL/k8s/disk — belong in the runtime checker / ops monitors, not pure
+> functions) or need the platform to **expose state** before they can be wired.
+> This library is the enforcement substrate; wiring each to live state is the
+> tracked program below.
 
 ---
 
