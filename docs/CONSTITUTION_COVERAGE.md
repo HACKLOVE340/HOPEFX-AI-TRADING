@@ -9,7 +9,7 @@
 
 **Legend:** ✅ Enforced · 🟡 Partial · ❌ Gap
 **Mechanisms now in place:**
-- **`invariants/` — ~130 pure invariant predicates across 13 domain modules (62 tests, all green):**
+- **`invariants/` — ~198 pure invariant predicates across 23 domain modules (37 test functions, all green):**
   - `constitution.py` — order state machine, PnL/capital conservation, duplicate-id, tick/spread, finiteness, human control
   - `market.py` — order book, multi-feed agreement, freshness/staleness, clock drift, future-event, event sequence, causal order, market-open/halt, delisting
   - `risk.py` — daily loss, drawdown, VaR, leverage, margin buffer, liquidation distance, liquidity, per-dimension exposure, concentration, dependency, catastrophic-loss kill triggers
@@ -23,6 +23,16 @@
   - `compliance.py` — wash-trade, spoofing, layering, restricted/MNPI, retention, jurisdiction, chain-of-custody, approval workflow, privilege escalation
   - `operations.py` — alert delivery/ack, monitoring coverage, incident timeline, operator readiness/fatigue, emergency reversibility, alert fatigue, monitor-the-monitors
   - `ai_governance.py` — determinism, reproducibility, decision lineage, prompt version, context completeness, goal alignment, reward-hacking, shadow objective, alpha decay, belief-vs-reality, calibration, strategy approval/identity, self-replication & autonomous capital/strategy controls
+  - `market_structure.py` — halts, circuit breakers, LULD bands, auctions, venue eligibility, cross-venue price sanity
+  - `replay.py` — market/strategy/decision/agent replay fidelity, historical recoverability, data-resurrection, snapshot-vs-event-log
+  - `drift.py` — risk-appetite, allocation-policy, governance, compliance, constitution-version, incentive drift
+  - `knowledge.py` — RAG retrieval/trust/freshness, knowledge-graph orphans/contradictions, memory aging/conflict
+  - `ml_pipeline.py` — feature schema, online/offline parity, dataset completeness, training reproducibility, model lineage/signing, inference cost, GPU
+  - `resilience.py` — backup recency/integrity, restore-tested, failover, multi-region, recovery path/rollback, chaos survival, recovery SLA
+  - `multi_agent.py` — deadlock, collusion, conflict rate, resource fairness, circular delegation, emergent behavior, agent-count bound
+  - `economic.py` — economic equilibrium, report accuracy, fund segregation, redemption fairness, contract limits, cost growth
+  - `security.py` — exposed secrets, rotation, secret usage, artifact signing, data provenance, trust boundaries, prompt-injection & input-poisoning
+  - `meta.py` — observation integrity (observed==actual), platform identity, anomaly-detector liveness, human-can-stop, invariant-engine health, constitution aggregate, five-master-guarantees
 - `scripts/runtime_invariant_check.py` — boots app + probes endpoints + asserts output invariants + scans the event log
 - `hopefx_observability.py` — whole-platform capture (DEBUG) + uncaught/thread/asyncio/unraisable hooks → **No Silent Failure** substrate
 
