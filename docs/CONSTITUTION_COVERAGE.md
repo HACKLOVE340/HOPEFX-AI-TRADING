@@ -9,7 +9,7 @@
 
 **Legend:** ✅ Enforced · 🟡 Partial · ❌ Gap
 **Mechanisms now in place:**
-- **`invariants/` — ~198 pure invariant predicates across 23 domain modules (37 test functions, all green):**
+- **`invariants/` — 322 pure invariant predicates across 34 domain modules (48 test functions, all green):**
   - `constitution.py` — order state machine, PnL/capital conservation, duplicate-id, tick/spread, finiteness, human control
   - `market.py` — order book, multi-feed agreement, freshness/staleness, clock drift, future-event, event sequence, causal order, market-open/halt, delisting
   - `risk.py` — daily loss, drawdown, VaR, leverage, margin buffer, liquidation distance, liquidity, per-dimension exposure, concentration, dependency, catastrophic-loss kill triggers
@@ -33,16 +33,29 @@
   - `economic.py` — economic equilibrium, report accuracy, fund segregation, redemption fairness, contract limits, cost growth
   - `security.py` — exposed secrets, rotation, secret usage, artifact signing, data provenance, trust boundaries, prompt-injection & input-poisoning
   - `meta.py` — observation integrity (observed==actual), platform identity, anomaly-detector liveness, human-can-stop, invariant-engine health, constitution aggregate, five-master-guarantees
+  - `platform_web.py` — service-up, uptime SLA, error rate, crash-loop, console errors, render, page-load/web-vitals, bundle size, API status/schema/latency/version, resource headroom, disk-full, pool exhaustion, TLS expiry
+  - `platform_data.py` — PK uniqueness, FK validity, orphans, referential integrity, migrations applied, index health, cache==db, search==db, replica lag, rollup==source, NOT-NULL, timestamp monotonicity
+  - `platform_auth.py` — token signature/expiry, session validity, password & MFA policy, revoked-blocked, resource ownership (IDOR/BOLA), permission/scope, cross-tenant, secret-in-response, rate limiter, security headers, CSRF, failed-login lockout
+  - `payments.py` — charge authorization, idempotency (no double-charge), amount validity, refund ≤ original (single & cumulative), ledger balanced, balance arithmetic, currency consistency, gateway reconciliation, withdrawal ≤ available
+  - `jobs.py` — job SLA, scheduled-fire, queue depth/age, DLQ bound, idempotency, zombie detection, attempts bound, singleton concurrency, failure rate
+  - `business_logic.py` — workflow state machine, quantity conservation, total==sum, count match, value range, discount bound, uniqueness, cross-service agreement, no-partial-commit (atomicity), read-only stability
+  - `ai_quality.py` — feature-count stability/sparsity, regime confidence, signal concentration, trade clustering, explanation consistency, action==rationale, risk-model freshness, stress-model completeness, output bounds, calibration
+  - `market_lifecycle.py` — tick/lot/notional rules, corporate actions, symbol-mapping stability, instrument tradability, settlement calendar, tax/withholding, liquidity-mirage, exchange position limits
+  - `ops_extended.py` — alert escalation, incident root-cause, postmortem, override logging/attribution/authorization/rate, retired-strategy stop, emergency-authority governance, prod-change approval
+  - `assurance.py` — sim/paper fidelity, paper≠live routing, data sovereignty, cross-region leak, no-unilateral-capital-move, least privilege, dual control, access review, anomalous-access block
+  - `integrations.py` — dependency health/rate-limit/SLA, webhook signature/replay, notification delivery, storage durability/checksum, pipeline freshness, event-loss, circuit-breaker on failure
 - `scripts/runtime_invariant_check.py` — boots app + probes endpoints + asserts output invariants + scans the event log
 - `hopefx_observability.py` — whole-platform capture (DEBUG) + uncaught/thread/asyncio/unraisable hooks → **No Silent Failure** substrate
 
 > **Honest framing (per the framework's §9–11):** the file enumerates 300+ invariant
-> *categories*. ~130 are now implemented as pure, tested predicates (the ones
-> expressible as logic/math). The remainder are either **infrastructure probes**
-> (DNS/SSL/k8s/disk — belong in the runtime checker / ops monitors, not pure
-> functions) or need the platform to **expose state** before they can be wired.
-> This library is the enforcement substrate; wiring each to live state is the
-> tracked program below.
+> *categories*. **322 are now implemented as pure, tested predicates** — the full
+> breadth, from the trading/AI/risk core to the generic-platform layer
+> (availability, frontend, DB integrity, auth/tenancy, payments, jobs, business
+> logic, integrations). A handful of raw **infrastructure probes**
+> (DNS/SSL/k8s liveness) still belong in the runtime checker / ops monitors
+> rather than pure functions. This library is the enforcement substrate; the
+> remaining work is **wiring each predicate to live state** (the tracked program
+> below) — building the predicates is done.
 
 ---
 
