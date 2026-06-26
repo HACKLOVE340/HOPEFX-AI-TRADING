@@ -53,7 +53,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-_ROOT = os.path.dirname(Path(__file__).parent)
+_ROOT = str(Path(__file__).resolve().parents[2])
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -390,7 +390,9 @@ class TestLiveTradingGate:
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": ""}, clear=False):
             result = gate.check()
         assert result.allowed is False
-        assert len(result.checks) == 5
+        # LiveTradingGate runs 6 checks: config_consistency, kill_switch,
+        # paper_clock, oos_accuracy, sharpe_gate, feature_flag.
+        assert len(result.checks) == 6
 
     def test_kill_switch_check_passes_when_inactive(self):
         from core.live_trading_gate import LiveTradingGate

@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-_ROOT = os.path.dirname(Path(__file__).parent)
+_ROOT = str(Path(__file__).resolve().parents[2])
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
