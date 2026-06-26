@@ -56,6 +56,13 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# Run as a script (`python scripts/runtime_invariant_check.py`) puts scripts/ on
+# sys.path[0], NOT the repo root — so the in-process Phase-3 checks (audit chain,
+# tenant isolation, recovery readiness) could not import repo modules. Put the
+# repo root first so those imports resolve exactly as they do in the app.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 # ── tunable thresholds ─────────────────────────────────────────────────────────
 DUP_HARD = 4  # ≥ this many byte-identical list items → ERROR
 DUP_SOFT = 3  # ≥ this many → WARN
