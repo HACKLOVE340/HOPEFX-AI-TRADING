@@ -93,26 +93,26 @@ even has **staleness** and **feature-drift** guards. That is real ML engineering
 
 | Metadata source | samples | years | features | accuracy | note |
 |---|---|---|---|---|---|
-| `advanced_training_report.json` | 271 | 2 | 193 | wf 0.60 / final-AUC 0.44 | tiny → overfit-prone; final AUC < 0.5 |
-| `registry.json` (active `xgb_horizon5_v1`) | 2,016 OOS | 50 | 222 | OOS 0.565, Sharpe-gate ✓ | the record the live system trusts |
-| Independent retrain (2026-06-26, 50y, horizon=1, no-macro) | 2,376 / 756 OOS | 50 | 193 | OOS **0.569 ± 0.018**, binomial **p=0.0001** | reproduces a *significant* ~57% edge |
+| `advanced_training_report.json` (old, stale) | 271 | 2 | 193 | wf 0.60 / final-AUC 0.44 | tiny → overfit-prone; final AUC < 0.5 |
+| `registry.json` (former active `xgb_horizon5_v1`) | 2,016 OOS | 50 | 222 | OOS 0.565, Sharpe-gate ✓ | the record the live system used to trust |
+| **Shipped 2026-06-26 — active `xgb_horizon5_v3`** | 7,994 / 2,016 OOS | 50 | 193 | **OOS 0.5734 ± 0.011, binomial p=0.0000, Sharpe-gate ✓** | OANDA-free, horizon=5 aligned to the 5-bar hold; metadata reconciled |
 
-The independent retrain (run this session on the bundled 50-year CSV, OANDA-free)
-landed at the same place: **~56.9% OOS directional accuracy, statistically
-significant (p=0.0001), passing the N≥600 Sharpe-SE credibility gate** — but the
-trainer itself flags *"OOS above chance (56.9%) but below the 68% production
-threshold"*. It was **not shipped**: it used a different horizon/feature contract
-than the registered production model, and the model-integrity gate correctly
-refused to load a mismatched artifact. (The OANDA-removal + 50-year default code
-change WAS shipped.)
+**Resolution (shipped):** the provenance discrepancy is now fixed. A clean
+horizon=5 retrain was run on the bundled 50-year CSV (OANDA-free), and its
+report, `registry.json` (new active `xgb_horizon5_v3`), the model binary, and
+`model_checksums.json` were all reconciled so they agree. The earlier horizon=1
+experiment was *not* shipped (wrong horizon/feature contract; the integrity gate
+correctly refused the mismatched artifact); this horizon=5 model **is** the
+active model and the integrity gate accepts it.
 
 **Honest conclusion on intelligence:** the ML is *real and the edge is real but
-small* — roughly **56–57% directional accuracy on gold, statistically
-significant on multi-thousand-sample out-of-sample windows**. That is a genuine,
-reproducible edge (markets are near-efficient, so this is unsurprising) — **not**
-the flashy Sharpe-4+ figures that appear in some tiny-window reports, and **below
-the project's own 68% production bar**. This is **"validated research-grade
-ML with a small real edge,"** not **"institutional alpha."**
+small* — the shipped model scores **57.3% out-of-sample directional accuracy on
+gold over 2,016 trades (8 years), statistically significant (p≈0)**, passing the
+N≥600 Sharpe-SE credibility gate. That is a genuine, reproducible edge (markets
+are near-efficient, so this is unsurprising) — **not** the flashy Sharpe-4+
+figures that appear in some tiny-window reports, and **below the project's own
+0.68 production bar**. This is **"validated research-grade ML with a small real
+edge,"** not **"institutional alpha."**
 
 ### 3c. The "AI brain" / chatbot
 `brain/llm_agent.py` is a **real** wrapper around Anthropic (Claude) or OpenAI.
@@ -215,7 +215,7 @@ drawdown, kill switch) and a `pre_trade_gate.py` as well.
 | Data + broker plumbing | **B+** | Real feeds + many real connectors |
 | Safety system (built) | **B+** | 337 real checks, wired in |
 | Safety system (active by default) | **C** | Monitor-only / fail-open until you flip `enforce` |
-| ML intelligence | **C+** | Real, ~56–57% OOS accuracy (significant) but below the 68% bar; model provenance ambiguous (see §3b) |
+| ML intelligence | **C+** | Real, ~56–57% OOS accuracy (significant) but below the 0.68 bar; model provenance ambiguous (see §3b) |
 | Live-money readiness | **D / Not yet** | Live off by default; small edge below production bar; CI red |
 
 ### What it IS
@@ -235,7 +235,7 @@ intentionally locked.
    and `registry.json` disagree about the live model (§3b). Reconcile them
    (regenerate the report from the registered model, or re-promote a freshly
    trained one through the registry), and push accuracy toward the project's own
-   68% bar before trusting it with capital.
+   0.68 bar before trusting it with capital.
 2. **Set `HOPEFX_INVARIANT_MODE=enforce`** (and consider fail-closed) so the 337
    safety checks actually block, not just log.
 3. **Clear the 61 dependency vulnerabilities** (17 high first).
