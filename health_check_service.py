@@ -369,6 +369,32 @@ async def liveness() -> LivenessResponse:
 
 
 @health_router.get(
+    "/health/invariants",
+    summary="Constitutional invariant enforcement status",
+    description=(
+        "Live status of the constitutional-invariant enforcement layer: the mode "
+        "(off/monitor/enforce), an engine self-check, counters, and recent "
+        "violations. Returns 503 only when the invariant engine itself is "
+        "unhealthy (monitor the monitors) — not on detected violations, which "
+        "are reported in the body."
+    ),
+)
+async def invariants_health() -> dict[str, Any]:
+    """Surface the invariant enforcement status to the control center."""
+    try:
+        from invariants.enforcement import status as _inv_status
+
+        data = _inv_status()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("invariants health endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail={"ok": False, "error": str(exc)}) from exc
+
+    if not data.get("engine_healthy"):
+        raise HTTPException(status_code=503, detail=data)
+    return data
+
+
+@health_router.get(
     "/health/ready",
     summary="Readiness probe",
     description=(
