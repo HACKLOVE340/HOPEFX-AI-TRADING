@@ -51,7 +51,13 @@ from invariants.constitution import (
 )
 from invariants.governance import verify_action_audited, verify_pod_isolation
 from invariants.resilience import verify_recovery_path_exists
-from invariants.risk import verify_exposure_limits, verify_var
+from invariants.risk import (
+    verify_daily_loss,
+    verify_drawdown,
+    verify_exposure_limits,
+    verify_leverage,
+    verify_var,
+)
 from invariants.systems import verify_blast_radius_contained, verify_no_single_point_of_failure
 
 logger = logging.getLogger("hopefx.invariants")
@@ -336,6 +342,65 @@ def enforce_var(portfolio_var: float, approved_var: float) -> EnforcementResult:
     """Assert portfolio Value-at-Risk stays within the approved limit each cycle
     (No Hidden Risk). Both are positive loss magnitudes (USD)."""
     return _safe("var", lambda: verify_var(portfolio_var, approved_var))
+
+
+def enforce_risk_appetite(state: dict[str, Any], policy: dict[str, Any]) -> EnforcementResult:
+    """Enforce the firm's Risk Appetite Framework against live ``state``.
+
+    ``policy`` is a loaded risk-appetite policy (see ``risk.risk_appetite``).
+    ``state`` may contain any of: ``daily_loss_pct``, ``drawdown_pct``,
+    ``portfolio_var`` (USD), ``leverage``, ``symbol_exposures`` (name->USD),
+    ``traded_symbol``, ``jurisdiction``. Each present field is checked against the
+    policy; off-limits symbols/jurisdictions are refused outright. This is the
+    technical half of the governance process: the system actually obeys the
+    signed risk policy, not just a document.
+    """
+
+    def _check() -> list[Violation]:
+        out: list[Violation] = []
+        limits = dict(policy.get("limits", {}) or {})
+        prohibited = policy.get("prohibited", {}) or {}
+        allowed_jur = set(policy.get("allowed_jurisdictions", []) or [])
+
+        if "daily_loss_pct" in state and "max_daily_loss_pct" in limits:
+            out += verify_daily_loss(state["daily_loss_pct"], limits["max_daily_loss_pct"])
+        if "drawdown_pct" in state and "max_drawdown_pct" in limits:
+            out += verify_drawdown(state["drawdown_pct"], limits["max_drawdown_pct"])
+        if "leverage" in state and "max_leverage" in limits:
+            out += verify_leverage(state["leverage"], limits["max_leverage"])
+        if "portfolio_var" in state and float(limits.get("approved_var_usd", 0) or 0) > 0:
+            out += verify_var(state["portfolio_var"], limits["approved_var_usd"])
+        if "symbol_exposures" in state and "max_symbol_exposure_usd" in limits:
+            exposures = dict(state["symbol_exposures"])
+            caps = dict.fromkeys(exposures, limits["max_symbol_exposure_usd"])
+            out += verify_exposure_limits(exposures, caps)
+
+        sym = state.get("traded_symbol")
+        if sym is not None and sym in set(prohibited.get("symbols", []) or []):
+            out.append(_v("No Unauthorized Trade", CONSTITUTIONAL, f"trade on prohibited symbol {sym!r} (risk-appetite)"))
+
+        jur = state.get("jurisdiction")
+        if jur is not None:
+            if jur in set(prohibited.get("jurisdictions_blocked", []) or []):
+                out.append(_v("No Compliance Breach", CONSTITUTIONAL, f"trade in blocked jurisdiction {jur!r}"))
+            elif allowed_jur and jur not in allowed_jur:
+                out.append(_v("No Compliance Breach", CRITICAL, f"jurisdiction {jur!r} not in allowed set"))
+        return out
+
+    return _safe("risk_appetite", _check)
+
+
+def enforce_policy_governance(policy: dict[str, Any], today: str | None = None) -> EnforcementResult:
+    """Surface governance-hygiene problems with the risk-appetite policy itself
+    (unsigned, placeholder approver, overdue review). An unsigned/overdue policy
+    governing capital is itself a control failure."""
+
+    def _check() -> list[Violation]:
+        from risk.risk_appetite import validate_policy
+
+        return [_v("No Loss Of Human Control", CRITICAL, msg) for msg in validate_policy(policy, today)]
+
+    return _safe("policy_governance", _check)
 
 
 def enforce_ledger_reconciliation(

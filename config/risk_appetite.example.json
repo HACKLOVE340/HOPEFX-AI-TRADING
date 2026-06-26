@@ -1,0 +1,20 @@
+{
+  "_comment": "Risk Appetite Framework — formal, versioned, governance-approved policy-as-code. Copy to config/risk_appetite.json and have the risk committee sign off (approved_by). The platform loads it via risk.risk_appetite.load_risk_appetite() and enforces it via invariants.enforcement.enforce_risk_appetite(). See docs/INSTITUTIONAL_READINESS.md.",
+  "version": "1.0.0",
+  "approved_by": "CHANGE_ME_risk_committee_signoff",
+  "effective_date": "2026-01-01",
+  "review_due": "2026-12-31",
+  "limits": {
+    "max_daily_loss_pct": 0.05,
+    "max_drawdown_pct": 0.10,
+    "max_position_pct": 0.05,
+    "max_symbol_exposure_usd": 1000000,
+    "max_leverage": 10,
+    "approved_var_usd": 50000
+  },
+  "prohibited": {
+    "symbols": [],
+    "jurisdictions_blocked": []
+  },
+  "allowed_jurisdictions": ["US", "UK", "EU"]
+}
