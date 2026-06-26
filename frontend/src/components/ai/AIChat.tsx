@@ -11,6 +11,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { aiAssistantApi } from '../../hooks/useApi';
+import { useVoice } from '../../hooks/useVoice';
 
 interface ChatTurn {
   id: string;
@@ -61,9 +62,15 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
   const [turns, setTurns]     = useState<ChatTurn[]>([]);
   const [input, setInput]     = useState('');
   const [sending, setSending] = useState(false);
+  const [speakReplies, setSpeakReplies] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef  = useRef<HTMLTextAreaElement | null>(null);
   const mountedRef = useRef(true);
+  const spokenRef  = useRef<string | null>(null);
+
+  // Browser-native voice (talk + listen). No key, no money path; safe no-op
+  // when the browser lacks the Web Speech API. Available to all users.
+  const voice = useVoice();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -73,6 +80,27 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns, sending]);
+
+  // Mirror the live dictation transcript into the input box while listening,
+  // so the user sees what was heard before it is sent.
+  useEffect(() => {
+    if (voice.listening && voice.transcript) setInput(voice.transcript);
+  }, [voice.listening, voice.transcript]);
+
+  // Read the latest assistant reply aloud when "speak replies" is enabled.
+  useEffect(() => {
+    if (!speakReplies) return;
+    const last = turns[turns.length - 1];
+    if (last && last.role === 'assistant' && last.id !== spokenRef.current) {
+      spokenRef.current = last.id;
+      voice.speak(last.content);
+    }
+  }, [turns, speakReplies, voice]);
+
+  // Stop any in-progress read-out the moment the toggle is switched off.
+  useEffect(() => {
+    if (!speakReplies) voice.cancelSpeak();
+  }, [speakReplies, voice]);
 
   const send = useCallback(async (text: string) => {
     const content = text.trim();
@@ -108,6 +136,16 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input); }
   };
+
+  // Toggle hands-free dictation: start listening, and when the user stops
+  // speaking auto-send the final transcript.
+  const toggleMic = useCallback(() => {
+    if (voice.listening) { voice.stopListening(); return; }
+    voice.startListening((finalText) => {
+      const t = finalText.trim();
+      if (t) void send(t);
+    });
+  }, [voice, send]);
 
   const fs = compact ? 13 : 14;
   const pad = compact ? '8px 12px' : '10px 14px';
@@ -178,6 +216,40 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
               borderRadius: 10, color: '#f1f5f9', fontSize: fs, outline: 'none', padding: pad, fontFamily: 'inherit',
             }}
           />
+          {voice.sttSupported && (
+            <button
+              type="button"
+              onClick={toggleMic}
+              title={voice.listening ? 'Stop listening' : 'Speak your message'}
+              aria-label={voice.listening ? 'Stop listening' : 'Speak your message'}
+              aria-pressed={voice.listening}
+              style={{
+                background: voice.listening ? '#dc2626' : '#1e293b',
+                border: `1px solid ${voice.listening ? '#ef4444' : '#334155'}`, borderRadius: 10,
+                color: voice.listening ? '#fff' : '#94a3b8', cursor: 'pointer',
+                fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
+              }}
+            >
+              {voice.listening ? '⏹' : '🎤'}
+            </button>
+          )}
+          {voice.ttsSupported && (
+            <button
+              type="button"
+              onClick={() => setSpeakReplies(v => !v)}
+              title={speakReplies ? 'Mute spoken replies' : 'Read replies aloud'}
+              aria-label={speakReplies ? 'Mute spoken replies' : 'Read replies aloud'}
+              aria-pressed={speakReplies}
+              style={{
+                background: speakReplies ? '#1e3a5f' : '#1e293b',
+                border: `1px solid ${speakReplies ? '#1d4ed8' : '#334155'}`, borderRadius: 10,
+                color: speakReplies ? '#60a5fa' : '#94a3b8', cursor: 'pointer',
+                fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
+              }}
+            >
+              {speakReplies ? '🔊' : '🔈'}
+            </button>
+          )}
           <button
             onClick={() => void send(input)}
             disabled={!input.trim() || sending}

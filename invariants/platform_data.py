@@ -14,6 +14,7 @@ service is "up". Each function returns ``list[Violation]``.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -131,4 +132,32 @@ def verify_timestamp_monotonic(timestamps: Iterable[float]) -> list[Violation]:
         if prev is not None and _is_finite_number(ts) and ts < prev:
             return [_v(_RULE, CRITICAL, f"non-monotonic timestamp at index {i}: {ts} < {prev}")]
         prev = ts
+    return []
+
+
+def verify_money_precision(column: str, sql_type: str) -> list[Violation]:
+    """Monetary columns must be exact NUMERIC/DECIMAL, never FLOAT/REAL/DOUBLE —
+    binary floats silently lose cents (master-registry #66)."""
+    t = str(sql_type or "").upper()
+    if any(bad in t for bad in ("FLOAT", "REAL", "DOUBLE")):
+        return [_v(_RULE, CONSTITUTIONAL,
+                   f"monetary column {column!r} is {sql_type!r} — use NUMERIC/DECIMAL, not binary float")]
+    return []
+
+
+def verify_enum_value(column: str, value: Any, allowed: set[Any]) -> list[Violation]:
+    """A status/type column may only hold a value from its declared enum
+    (check-constraint equivalent, master-registry #68)."""
+    if allowed and value not in allowed:
+        return [_v(_RULE, CRITICAL, f"{column}={value!r} not in allowed enum {sorted(map(str, allowed))[:8]}")]
+    return []
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def verify_email_format(email: str) -> list[Violation]:
+    """A stored user email must be syntactically valid (master-registry #70)."""
+    if not email or not _EMAIL_RE.match(str(email)):
+        return [_v(_RULE, WARNING, f"invalid email format: {email!r}")]
     return []

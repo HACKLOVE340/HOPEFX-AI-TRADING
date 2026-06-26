@@ -163,3 +163,40 @@ def verify_memory_ownership(memory_owner: Any, pod_id: Any) -> list[Violation]:
         return [_v("No Cross-Tenant Leakage", CONSTITUTIONAL,
                    f"memory owner {memory_owner!r} != pod {pod_id!r} (memory contamination)")]
     return []
+
+
+# ── AI subsystem trust scoring (architecture requirement #7) ─────────────────────
+def verify_trust_score(score: float, name: str = "subsystem") -> list[Violation]:
+    """A subsystem trust score must be finite and within [0, 1] — an out-of-range
+    or NaN trust score corrupts trust-weighted capital allocation."""
+    if not _is_finite_number(score) or not (0.0 <= float(score) <= 1.0):
+        return [_v("No Unverified AI Decision", CRITICAL, f"trust score for {name!r} out of range [0,1]: {score!r}")]
+    return []
+
+
+def verify_trust_floor(score: float, allocated_capital: float, floor: float) -> list[Violation]:
+    """A subsystem whose trust has fallen below the floor must receive no capital —
+    distrusted AI must not move money."""
+    if _is_finite_number(score) and _is_finite_number(allocated_capital) and score < floor and allocated_capital > 0:
+        return [_v("No Unverified AI Decision", CONSTITUTIONAL,
+                   f"distrusted subsystem (trust {score} < floor {floor}) still allocated {allocated_capital}")]
+    return []
+
+
+def verify_trust_weighted_allocation(allocations: dict[str, dict[str, float]]) -> list[Violation]:
+    """Capital must not invert trust: a lower-trust subsystem must not receive more
+    capital than a higher-trust one. ``allocations`` maps name -> {trust, capital}."""
+    items = [
+        (n, float(a["trust"]), float(a["capital"]))
+        for n, a in allocations.items()
+        if _is_finite_number(a.get("trust")) and _is_finite_number(a.get("capital"))
+    ]
+    out: list[Violation] = []
+    for i, (ni, ti, ci) in enumerate(items):
+        for nj, tj, cj in items[i + 1 :]:
+            hi, lo = ((ni, ti, ci), (nj, tj, cj)) if ti >= tj else ((nj, tj, cj), (ni, ti, ci))
+            if hi[1] > lo[1] and hi[2] < lo[2]:
+                out.append(_v("No Unverified AI Decision", WARNING,
+                              f"trust/capital inversion: {lo[0]!r}(trust {lo[1]}, cap {lo[2]}) "
+                              f"> {hi[0]!r}(trust {hi[1]}, cap {hi[2]})"))
+    return out

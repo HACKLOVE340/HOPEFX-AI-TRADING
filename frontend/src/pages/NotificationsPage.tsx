@@ -13,6 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase, fmtDateTime } from '../lib/utils';
+import { useVoice } from '../hooks/useVoice';
+import { useVoiceAlerts } from '../lib/voicePrefs';
 
 interface Notification {
   id: string;
@@ -47,6 +49,8 @@ const NotificationsPage: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
   const token = useStore(s => s.token);
+  const voice = useVoice();
+  const [voiceAlerts, setVoiceAlerts] = useVoiceAlerts();
 
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
@@ -126,6 +130,25 @@ const NotificationsPage: React.FC = () => {
           <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Real-time alerts and updates</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {voice.ttsSupported && (
+            <button
+              onClick={() => {
+                const next = !voiceAlerts;
+                setVoiceAlerts(next);
+                if (next) voice.speak('Spoken alerts enabled');
+                else voice.cancelSpeak();
+              }}
+              title={voiceAlerts ? 'Disable spoken alerts' : 'Read risk and fill alerts aloud'}
+              aria-pressed={voiceAlerts}
+              style={{
+                padding: '6px 13px',
+                background: voiceAlerts ? 'rgba(96,165,250,0.14)' : 'rgba(100,116,139,0.12)',
+                border: `1px solid ${voiceAlerts ? 'rgba(96,165,250,0.5)' : 'rgba(100,116,139,0.35)'}`,
+                borderRadius: 7, color: voiceAlerts ? '#60a5fa' : '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}>
+              {voiceAlerts ? '🔊 Spoken alerts on' : '🔈 Spoken alerts off'}
+            </button>
+          )}
           <button onClick={() => navigate('/settings')}
             style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ⚙️ Settings

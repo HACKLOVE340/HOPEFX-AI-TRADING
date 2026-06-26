@@ -141,6 +141,7 @@ def register_routers(
     from api.chat import router as chat_router
     from api.explain import router as explain_router
     from api.health import router as health_router
+
     # api.landing (static templates/landing.html served at / and /landing) is
     # intentionally NOT registered: it shadowed the live React SPA landing
     # (frontend LandingPage.tsx, which has the real-time price ticker). With it
@@ -211,6 +212,14 @@ def register_routers(
         logger.warning("Webhooks router not loaded: %s", _e)
         _webhooks = None
 
+    try:
+        from api.voice import router as _voice_router
+
+        _voice = _voice_router
+    except Exception as _e:
+        logger.warning("Voice router not loaded: %s", _e)
+        _voice = None
+
     for _router in [
         auth_router,
         trading_router,
@@ -261,6 +270,7 @@ def register_routers(
         (_community_chat_ws_router, "Community Chat WS"),
         (_kyc_alias, "KYC alias"),
         (_webhooks, "Webhooks (TradingView)"),
+        (_voice, "Voice (cloud TTS/STT)"),
     ]:
         if _opt_router is not None:
             try:
