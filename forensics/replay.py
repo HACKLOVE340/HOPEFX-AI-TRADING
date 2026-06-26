@@ -130,8 +130,12 @@ def replay_failure(record: dict[str, Any]) -> dict[str, Any]:
     kind = record.get("kind", "")
     runner = _FAILURE_KINDS.get(kind)
     if runner is None:
-        return {"kind": kind, "reproduced": False, "error": f"unknown failure kind {kind!r}",
-                "supported": sorted(_FAILURE_KINDS)}
+        return {
+            "kind": kind,
+            "reproduced": False,
+            "error": f"unknown failure kind {kind!r}",
+            "supported": sorted(_FAILURE_KINDS),
+        }
     expected = bool(record.get("expected_violation", True))
     with _forced_enforce():
         try:

@@ -36,9 +36,13 @@ _COUNTER_KEYS = ("checks", "violations", "blocked", "halts_signalled", "checker_
 
 
 def _fetch(url: str, timeout: float) -> tuple[int, dict]:
+    # Only http(s) — reject file:// and other schemes (this is an ops tool that
+    # polls a health endpoint, never local files).
+    if not url.lower().startswith(("http://", "https://")):
+        return 0, {"error": f"refusing non-http(s) URL: {url!r}"}
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - scheme validated above
             return resp.status, json.loads(resp.read() or b"{}")
     except urllib.error.HTTPError as e:
         body = e.read() or b"{}"
@@ -77,10 +81,12 @@ def _print_snapshot(data: dict, prev: dict | None) -> None:
     # Surface any newly-recorded violations (the 'recent' ring buffer).
     recent = data.get("recent", [])
     prev_recent = (prev or {}).get("recent", [])
-    new = recent[len(prev_recent):] if len(recent) >= len(prev_recent) else recent
+    new = recent[len(prev_recent) :] if len(recent) >= len(prev_recent) else recent
     for item in new:
-        print(f"        ⚠ {item.get('kind')}: {item.get('reason')} "
-              f"(mode={item.get('mode')}, would_block={not item.get('allowed')})")
+        print(
+            f"        ⚠ {item.get('kind')}: {item.get('reason')} "
+            f"(mode={item.get('mode')}, would_block={not item.get('allowed')})"
+        )
 
 
 def main() -> int:

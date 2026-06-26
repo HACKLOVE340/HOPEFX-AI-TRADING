@@ -43,7 +43,7 @@ def discover_predicates() -> dict[str, list[str]]:
             continue
         try:
             mod = importlib.import_module(f"invariants.{name}")
-        except Exception:  # noqa: S112 - a module that won't import simply isn't inventoried
+        except Exception:  # noqa: S112  # nosec B112 - a module that won't import simply isn't inventoried
             continue
         preds = sorted(
             fn_name
@@ -75,18 +75,18 @@ def registry_summary() -> dict[str, Any]:
 # protected/monitored/alerted/recoverable are booleans the coverage report checks.
 # Keep this honest: a component marked critical without protection is a real gap.
 CRITICAL_COMPONENTS: dict[str, dict[str, bool]] = {
-    "order_execution":   {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "risk_engine":       {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "reconciliation":    {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "kill_switch":       {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "market_data_feed":  {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "ml_inference":      {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "audit_log":         {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "database":          {"protected": True, "monitored": True, "alerted": True, "recoverable": False},
-    "redis_cache":       {"protected": True, "monitored": True, "alerted": True, "recoverable": False},
+    "order_execution": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "risk_engine": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "reconciliation": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "kill_switch": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "market_data_feed": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "ml_inference": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "audit_log": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "database": {"protected": True, "monitored": True, "alerted": True, "recoverable": False},
+    "redis_cache": {"protected": True, "monitored": True, "alerted": True, "recoverable": False},
     "broker_connection": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "ledger_treasury":   {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
-    "ai_agents":         {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "ledger_treasury": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "ai_agents": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
 }
 
 

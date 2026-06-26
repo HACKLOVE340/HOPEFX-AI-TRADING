@@ -59,50 +59,56 @@ def run_scenarios() -> list[dict]:
     results: list[dict] = []
 
     # 1. Flash crash — a -12% intraday move must trip the drawdown limit.
-    results.append(_expect_violation(
-        "flash_crash", "drawdown_limit",
-        risk.verify_drawdown(0.12, 0.10), expect=True))
-    results.append(_expect_violation(
-        "flash_crash", "daily_loss_limit",
-        risk.verify_daily_loss(0.08, 0.05), expect=True))
+    results.append(_expect_violation("flash_crash", "drawdown_limit", risk.verify_drawdown(0.12, 0.10), expect=True))
+    results.append(
+        _expect_violation("flash_crash", "daily_loss_limit", risk.verify_daily_loss(0.08, 0.05), expect=True)
+    )
 
     # 2. Liquidity freeze — order dwarfs available liquidity → must be flagged.
-    results.append(_expect_violation(
-        "liquidity_freeze", "order_liquidity",
-        risk.verify_order_liquidity(1_000_000, 500_000, max_fraction=0.25), expect=True))
+    results.append(
+        _expect_violation(
+            "liquidity_freeze",
+            "order_liquidity",
+            risk.verify_order_liquidity(1_000_000, 500_000, max_fraction=0.25),
+            expect=True,
+        )
+    )
 
     # 3. Stale feed (data outage) — a 120s-old tick must fail freshness.
-    results.append(_expect_violation(
-        "data_outage", "market_data_freshness",
-        verify_data_freshness(120.0, 5.0), expect=True))
+    results.append(
+        _expect_violation("data_outage", "market_data_freshness", verify_data_freshness(120.0, 5.0), expect=True)
+    )
 
     # 4. Exchange outage — with failover (>=1 standby) the platform survives.
-    results.append(_expect_violation(
-        "exchange_outage", "failover_ready",
-        verify_failover_ready(1, 1), expect=False))
-    results.append(_expect_violation(
-        "exchange_outage", "blast_radius",
-        systems.verify_blast_radius_contained(1, 5), expect=False))
+    results.append(_expect_violation("exchange_outage", "failover_ready", verify_failover_ready(1, 1), expect=False))
+    results.append(
+        _expect_violation("exchange_outage", "blast_radius", systems.verify_blast_radius_contained(1, 5), expect=False)
+    )
 
     # 5. Cascading failure — most components down must breach blast-radius.
-    results.append(_expect_violation(
-        "cascading_failure", "blast_radius",
-        systems.verify_blast_radius_contained(4, 5), expect=True))
+    results.append(
+        _expect_violation("cascading_failure", "blast_radius", systems.verify_blast_radius_contained(4, 5), expect=True)
+    )
 
     # 6. Chaos drill — broker + DB offline simultaneously must be survivable.
-    results.append(_expect_violation(
-        "chaos_drill", "chaos_survival",
-        verify_chaos_survival({"broker_offline": True, "db_offline": True}), expect=False))
+    results.append(
+        _expect_violation(
+            "chaos_drill",
+            "chaos_survival",
+            verify_chaos_survival({"broker_offline": True, "db_offline": True}),
+            expect=False,
+        )
+    )
 
     # 7. Cost shock — fees/slippage spike makes a strategy unviable net.
-    results.append(_expect_violation(
-        "cost_shock", "after_cost_viability",
-        verify_strategy_viable_after_costs(100, 60, 40, 20), expect=True))
+    results.append(
+        _expect_violation(
+            "cost_shock", "after_cost_viability", verify_strategy_viable_after_costs(100, 60, 40, 20), expect=True
+        )
+    )
 
     # 8. Leverage spike — a 50x book must breach the leverage limit.
-    results.append(_expect_violation(
-        "leverage_spike", "leverage_limit",
-        risk.verify_leverage(50, 10), expect=True))
+    results.append(_expect_violation("leverage_spike", "leverage_limit", risk.verify_leverage(50, 10), expect=True))
 
     return results
 
@@ -121,8 +127,7 @@ def main() -> int:
         print("HOPEFX scenario stress test / resilience drill\n" + "=" * 48)
         for r in results:
             icon = "✅" if r["ok"] else "❌"
-            print(f"{icon} {r['scenario']:18s} {r['control']:22s} "
-                  f"expected={r['expected']:4s} observed={r['observed']}")
+            print(f"{icon} {r['scenario']:18s} {r['control']:22s} expected={r['expected']:4s} observed={r['observed']}")
             if r["detail"]:
                 print(f"      → {r['detail']}")
         print("=" * 48)

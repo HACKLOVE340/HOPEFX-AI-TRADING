@@ -64,12 +64,16 @@ def main() -> int:
         for r in report["results"]:
             if args.mode == "failure":
                 icon = "✅" if r.get("reproduced") else "❌"
-                print(f"{icon} {r.get('kind'):18s} expected_violation={r.get('expected_violation')} "
-                      f"observed={r.get('observed_violation')}")
+                print(
+                    f"{icon} {r.get('kind'):18s} expected_violation={r.get('expected_violation')} "
+                    f"observed={r.get('observed_violation')}"
+                )
             else:
                 icon = "✅" if r.get("reconstructable") else "❌"
-                print(f"{icon} decision={r.get('decision_id')} reconstructable={r.get('reconstructable')} "
-                      f"would_pass_today={r.get('would_pass_today')}")
+                print(
+                    f"{icon} decision={r.get('decision_id')} reconstructable={r.get('reconstructable')} "
+                    f"would_pass_today={r.get('would_pass_today')}"
+                )
                 if r.get("trace_gaps"):
                     print(f"      missing links: {r['trace_gaps']}")
             for v in r.get("violations", []):

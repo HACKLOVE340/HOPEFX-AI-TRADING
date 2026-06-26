@@ -50,7 +50,11 @@ def build_report() -> dict:
     r, rt = counts["recoverable"]
     checks = [
         ("invariant", meta.verify_invariant_coverage(p, pt), "ERROR"),
-        ("monitoring", meta.verify_monitoring_coverage(m, mt) if hasattr(meta, "verify_monitoring_coverage") else [], "ERROR"),
+        (
+            "monitoring",
+            meta.verify_monitoring_coverage(m, mt) if hasattr(meta, "verify_monitoring_coverage") else [],
+            "ERROR",
+        ),
         ("alert", meta.verify_alert_coverage(a, at), "ERROR"),
         ("recovery", meta.verify_recovery_coverage(r, rt), "WARN"),
     ]
@@ -86,7 +90,9 @@ def main() -> int:
     print("-" * 48)
     print("Critical components:")
     for name, c in CRITICAL_COMPONENTS.items():
-        flags = " ".join(k[0].upper() if c.get(k) else f"-{k[0]}" for k in ("protected", "monitored", "alerted", "recoverable"))
+        flags = " ".join(
+            k[0].upper() if c.get(k) else f"-{k[0]}" for k in ("protected", "monitored", "alerted", "recoverable")
+        )
         print(f"   {name:20s} [{flags}]")
     if report["gaps"]:
         print("-" * 48)
