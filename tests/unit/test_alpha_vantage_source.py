@@ -19,7 +19,7 @@ import re
 
 import aiohttp
 import pytest
-from aioresponses import aioresponses
+from tests.support.aioresponses_shim import aioresponses
 
 from data_feed.sources.alpha_vantage import (
     AlphaVantageSource,
