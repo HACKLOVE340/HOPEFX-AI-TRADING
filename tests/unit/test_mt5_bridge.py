@@ -26,6 +26,14 @@ from brokers.mt5_bridge import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _force_signal_export_mode(monkeypatch):
+    """Every test in this file assumes signal-export mode (_MT5_AVAILABLE=False).
+    Force it so the suite is robust to another test importing the real MT5
+    package or flipping the module-level flag (full-suite ordering)."""
+    monkeypatch.setattr("brokers.mt5_bridge._MT5_AVAILABLE", False, raising=False)
+
+
 # ── _retry decorator ──────────────────────────────────────────────────────────
 
 

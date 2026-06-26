@@ -99,6 +99,11 @@ class TestMTFFusionStore:
 
         from core.signal_engine import _fetch_mtf_df
 
+        # Ensure the module-level store singleton is empty — another test may have
+        # populated it; with the flag ON, _fetch_mtf_df falls back to this
+        # singleton, so a leaked ready store would make the result non-None.
+        monkeypatch.setattr("research.pipeline.mtf_fusion._MTF_STORE_SINGLETON", None, raising=False)
+
         ohlcv = _make_ohlcv(100)
         # No store available — should return None gracefully
         result = _fetch_mtf_df(ohlcv, app_state=None)

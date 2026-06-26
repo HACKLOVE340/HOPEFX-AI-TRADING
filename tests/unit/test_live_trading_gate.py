@@ -160,7 +160,10 @@ class TestCheckPaperClock:
 
     def test_blocks_when_unavailable(self):
         gate = _gate()
-        with patch.dict("sys.modules", {"brokers.oanda_paper_clock": None}):
+        # Patch the name bound in the gate's namespace, not sys.modules: get_clock
+        # is imported at module load, so once live_trading_gate has been imported
+        # (as it has by the full suite) patching sys.modules no longer affects it.
+        with patch("core.live_trading_gate.get_clock", None):
             passed, _ = gate._check_paper_clock()
         assert passed is False
 
