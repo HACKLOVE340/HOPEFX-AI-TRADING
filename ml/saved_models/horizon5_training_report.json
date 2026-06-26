@@ -336,5 +336,15 @@
     "cal_month_cos": 0.008092
   },
   "script": "scripts/retrain_horizon5.py",
-  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training."
+  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training.",
+  "sharpe_gate": {
+    "n_trades": 2016,
+    "sharpe": 1.52,
+    "se": 0.0327,
+    "credible": true,
+    "gate_passed": true,
+    "target_n": 600,
+    "n_required_for_se_010": 216,
+    "message": "Sharpe gate PASSED: N=2016 >= 600, SE=0.033 <= 0.10"
+  }
 }

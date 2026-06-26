@@ -379,6 +379,16 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
     full_report["trained_at"] = now_iso
     full_report["script"] = "scripts/retrain_horizon5.py"
     full_report["note"] = meta["note"]
+    # The Sharpe-SE gate is the authoritative credibility check; train_advanced
+    # writes it into advanced_oos_meta.json. Mirror it into the report so the
+    # canonical artifact is self-contained (CI asserts report.sharpe_gate).
+    if "sharpe_gate" not in full_report:
+        try:
+            _adv_meta = json.loads((_MODEL_DIR / "advanced_oos_meta.json").read_text())
+            if isinstance(_adv_meta.get("sharpe_gate"), dict):
+                full_report["sharpe_gate"] = _adv_meta["sharpe_gate"]
+        except (OSError, ValueError):
+            pass
 
     h5_report_path = _MODEL_DIR / "horizon5_training_report.json"
     h5_report_path.write_text(json.dumps(full_report, indent=2, default=str))
