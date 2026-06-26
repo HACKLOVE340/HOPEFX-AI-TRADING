@@ -403,3 +403,84 @@ groups:
             Live predictions landed in HIGH_VOL_PARABOLIC over the last 15m
             (close > 1.30*MA200, or rv14 > 2.5*rv90 with price <= 75% of 200-bar
             peak). Confirm risk sizing is reduced. Ref: docs/FOLD2_REGIME_ANALYSIS.md.
+
+  # ---------------------------------------------------------------------------
+  # Constitutional invariant enforcement  (docs/INVARIANT_ROLLOUT.md)
+  # Metrics (synced by prometheus_monitoring.py):
+  #   hopefx_invariant_mode               0=off 1=monitor 2=enforce
+  #   hopefx_invariant_engine_healthy     1=engine self-check passing
+  #   hopefx_invariant_checks_total       cumulative checks run
+  #   hopefx_invariant_violations_total   cumulative violations detected
+  #   hopefx_invariant_blocked_total      cumulative orders refused (enforce)
+  #   hopefx_invariant_halts_signalled_total  cumulative kill-switch trips
+  #   hopefx_invariant_checker_errors_total   cumulative checker-internal errors
+  # ---------------------------------------------------------------------------
+  - name: hopefx-invariants
+    rules:
+      # The invariant engine itself is the monitor — if it is unhealthy, the
+      # protection layer is blind. Page immediately ("monitor the monitors").
+      - alert: HopeFXInvariantEngineUnhealthy
+        expr: hopefx_invariant_engine_healthy == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Invariant engine self-check FAILING"
+          description: >
+            hopefx_invariant_engine_healthy == 0 — the constitutional invariant
+            engine cannot verify itself. The enforcement layer is blind. Check
+            /health/invariants and recent deploys.
+
+      # A bug inside a checker — surfaces silently failing-open enforcement.
+      - alert: HopeFXInvariantCheckerErrors
+        expr: increase(hopefx_invariant_checker_errors_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Invariant checker raised an internal error"
+          description: >
+            {{ $value | humanize }} checker error(s) in 10m. A checker is failing
+            (fail-open by default, so trades are NOT blocked by it). Investigate
+            the offending predicate before relying on enforce mode.
+
+      # Any violation during the SOAK (monitor mode) is a would-be block — review.
+      - alert: HopeFXInvariantViolationsDuringSoak
+        expr: increase(hopefx_invariant_violations_total[15m]) > 0 and hopefx_invariant_mode == 1
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Invariant violations during monitor-mode soak"
+          description: >
+            {{ $value | humanize }} violation(s) in 15m while in MONITOR mode —
+            each is an order/cycle that WOULD be blocked under enforce. Review
+            /health/invariants `recent` and confirm they are true positives
+            before flipping to enforce. (docs/INVARIANT_ROLLOUT.md)
+
+      # In enforce mode, blocked orders are expected on bad input but a spike
+      # may indicate a bad threshold or a real incident.
+      - alert: HopeFXInvariantBlockSpike
+        expr: increase(hopefx_invariant_blocked_total[5m]) > 5 and hopefx_invariant_mode == 2
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Invariant enforcement is blocking orders ({{ $value | humanize }}/5m)"
+          description: >
+            Enforce mode refused {{ $value | humanize }} order(s) in 5m. Confirm
+            these are genuine constitutional breaches and not a mis-set threshold.
+            Roll back to monitor (HOPEFX_INVARIANT_MODE=monitor) if false-positive.
+
+      # A constitutional reconciliation breach tripped the kill switch.
+      - alert: HopeFXInvariantKillSwitchTrip
+        expr: increase(hopefx_invariant_halts_signalled_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Invariant reconciliation breach tripped the kill switch"
+          description: >
+            A CONSTITUTIONAL reconciliation breach signalled a halt. Trading is
+            halted. Reconcile DB vs broker positions before clearing the kill
+            switch (see kill_switch deactivate runbook).

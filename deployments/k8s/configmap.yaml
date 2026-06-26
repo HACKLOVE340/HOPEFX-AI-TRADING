@@ -9,3 +9,10 @@ data:
   TRADING_MODE: "paper"
   DB_POOL_SIZE: "20"
   REDIS_SOCKET_TIMEOUT: "5"
+  # Constitutional invariant enforcement — see docs/INVARIANT_ROLLOUT.md.
+  # monitor = observe + log (safe default); flip to "enforce" after a clean soak.
+  HOPEFX_INVARIANT_MODE: "monitor"
+  HOPEFX_INVARIANT_FAIL_CLOSED: "0"
+  RISK_MAX_TICK_STALENESS_S: "5.0"
+  RISK_MAX_SYMBOL_EXPOSURE_USD: "1000000.0"
+  RISK_APPROVED_VAR_USD: "0"

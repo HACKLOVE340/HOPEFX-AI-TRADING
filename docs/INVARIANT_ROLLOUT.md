@@ -63,6 +63,29 @@ Watch for: `checker_errors == 0` (the layer itself is healthy), and the
 `recent` list / `violations` counter. **Every entry in `recent` during the soak
 is a would-be block** — investigate each before enforcing.
 
+### Tooling for the soak
+
+- **Live CLI watch:** `python scripts/invariant_soak.py --url http://<host>:8000 --interval 30`
+  prints mode, engine health, and counter deltas each cycle and surfaces every
+  new violation. `--once` for a single snapshot. Exits non-zero if the engine
+  goes unhealthy or any checker error is seen.
+- **Prometheus metrics** (synced every scrape by `prometheus_monitoring.py`):
+  `hopefx_invariant_mode` (0/1/2), `hopefx_invariant_engine_healthy`,
+  `hopefx_invariant_checks_total`, `hopefx_invariant_violations_total`,
+  `hopefx_invariant_blocked_total`, `hopefx_invariant_halts_signalled_total`,
+  `hopefx_invariant_checker_errors_total`.
+- **Alerts** (`monitoring/rules/alerts.yml`, group `hopefx-invariants`):
+  engine-unhealthy (critical), checker-errors (warning), violations-during-soak
+  (warning), block-spike in enforce (critical), kill-switch-trip (critical).
+
+### Config wiring
+
+`HOPEFX_INVARIANT_MODE` (+ `HOPEFX_INVARIANT_FAIL_CLOSED` and the tunable
+thresholds) are declared in `.env.example`, `docker-compose.yml`
+(`${HOPEFX_INVARIANT_MODE:-monitor}`), and `deployments/k8s/configmap.yaml`
+(`hopefx-config`). To change mode in k8s, edit the ConfigMap and restart the
+deployment; in compose, set the var in `.env` and `docker compose up -d`.
+
 ---
 
 ## Rollout sequence (do NOT skip steps)
