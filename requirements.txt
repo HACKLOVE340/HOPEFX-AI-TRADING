@@ -29,12 +29,12 @@ kubernetes>=29.0.0            # sync K8s client (used when no event loop is runn
 
 # ── Auth & security (pinned exactly — CVE surface is non-negotiable) ──────────
 # To upgrade: audit CVE list, run full test suite, update checksums.
-PyJWT==2.12.0
+PyJWT==2.13.0  # GHSA: JWK public key accepted as HMAC secret (HS256 forgery) fixed in 2.12.1+; empty-key signing now rejected
 itsdangerous>=2.1.2
 argon2-cffi>=23.1.0,<24.0.0
 bcrypt>=4.1.3,<6.0.0
 passlib==1.7.4
-cryptography==46.0.7
+cryptography>=47.0.0  # GHSA: vulnerable OpenSSL bundled in cryptography wheels through 46.0.7; fixed in 47.0.0+
 pyotp>=2.9.0,<3.0.0
 # python-ecdsa removed: package abandoned at 0.18.0, no 0.19.x release exists.
 # CVE-2024-49298 (Minerva timing attack) is mitigated by the `cryptography`
@@ -43,15 +43,15 @@ hdwallet>=3.6.1,<4.0.0
 pydantic[email]>=2.5.0,<3.0.0
 email-validator>=2.1.0,<3.0.0
 # Web framework — pin minor to avoid breaking middleware changes
-fastapi>=0.115.0,<1.0.0
+fastapi>=0.136.0,<1.0.0  # >=0.136 resolves with the patched starlette 1.3.x line
 uvicorn[standard]>=0.27.0,<1.0.0
-starlette>=0.40.0,<1.0.0  # CVE-2024-47874 fixed in 0.40.0
+starlette>=1.3.1  # GHSA: Host-header path poisoning, UNC StaticFiles SSRF, form() limit DoS fixed in 1.3.x
 
 # ── Data & numerics ───────────────────────────────────────────────────────────
 pandas>=2.1.0
 numpy>=1.26.0
 requests>=2.33.1  # CVE-2026-25645 fixed in 2.33.0+
-aiohttp>=3.13.5,<3.14  # CVE-2025-69223..69230, CVE-2026-22815..34520 fixed in 3.13.x
+aiohttp>=3.13.5,<3.14  # held at 3.13.x: aioresponses 0.7.9 breaks on 3.14 (ClientResponse stream_writer). 4 Moderate 3.14-only advisories deferred until aioresponses ships 3.14 support.
 anyio>=4.4.0    # SNYK-PYTHON-ANYIO-7361842 (race condition) fixed in 4.4.0+
 h11>=0.16.0     # SNYK-PYTHON-H11-10293728 (request smuggling) fixed in 0.16.0+
 certifi>=2026.2.25  # CVE-2024-39689 fixed in 2024.7.4+; use latest CA bundle

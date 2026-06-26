@@ -22,9 +22,9 @@ pip>=26.0.1
 wheel>=0.46.2
 
 # ── Web framework ─────────────────────────────────────────────────────────────
-fastapi>=0.115.0,<1.0.0  # CVE-2024-24762 fixed in 0.109.1+; align with requirements.txt
+fastapi>=0.136.0,<1.0.0  # >=0.136 resolves with patched starlette 1.3.x; align with requirements.txt
 uvicorn[standard]>=0.27.0,<1.0.0
-starlette>=0.40.0,<1.0.0
+starlette>=1.3.1  # GHSA: Host-header path poisoning, UNC StaticFiles SSRF, form() limit DoS fixed in 1.3.x
 websockets>=12.0,<14.0
 python-multipart>=0.0.18,<1.0.0
 
@@ -39,11 +39,11 @@ psycopg2-binary>=2.9.0
 redis>=5.0.0
 
 # ── Auth & security ───────────────────────────────────────────────────────────
-PyJWT==2.12.0
+PyJWT==2.13.0  # GHSA: JWK public key accepted as HMAC secret (HS256 forgery) fixed in 2.12.1+
 passlib>=1.7.4
 argon2-cffi>=23.1.0,<24.0.0
 bcrypt>=4.1.3,<6.0.0
-cryptography==46.0.7
+cryptography>=47.0.0  # GHSA: vulnerable OpenSSL bundled in wheels through 46.0.7; fixed in 47.0.0+
 pyotp>=2.9.0,<3.0.0
 hdwallet>=3.6.1,<4.0.0
 pydantic[email]>=2.5.0,<3.0.0
@@ -54,7 +54,7 @@ email-validator>=2.1.0,<3.0.0
 pandas>=2.1.0
 numpy>=1.26.0
 requests>=2.33.1
-aiohttp>=3.13.5,<3.14  # cap: aioresponses cannot mock aiohttp 3.14 yet
+aiohttp>=3.13.5,<3.14  # held at 3.13.x: aioresponses 0.7.9 breaks on 3.14. 4 Moderate 3.14-only advisories deferred until aioresponses ships 3.14 support.
 anyio>=4.4.0    # SNYK-PYTHON-ANYIO-7361842 fixed in 4.4.0+
 h11>=0.16.0     # SNYK-PYTHON-H11-10293728 fixed in 0.16.0+
 certifi>=2026.2.25

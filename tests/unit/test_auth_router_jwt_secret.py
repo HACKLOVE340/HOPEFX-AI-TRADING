@@ -17,6 +17,10 @@ Verifies that _get_current_user_id:
   8. Raises HTTP 401 for a completely malformed token string.
 """
 
+import base64
+import hashlib
+import hmac
+import json
 import sys
 import time
 
@@ -46,6 +50,33 @@ def _make_token(  # nosec B107 - test file
         "exp": int(time.time()) + exp_offset,
     }
     return jwt.encode(payload, secret, algorithm="HS256")
+
+
+def _forge_empty_key_token(  # nosec B107 - test file
+    sub: str = "user-123",
+    token_type: str = "access",
+    exp_offset: int = 3600,
+) -> str:
+    """Hand-craft an HS256 token signed with an EMPTY HMAC key.
+
+    PyJWT >= 2.13 refuses to ``encode()`` with an empty key (a hardening fix), so
+    we build the token at the byte level to faithfully reproduce the historical
+    empty-secret bypass attack an external actor could still attempt. The server
+    must reject it regardless of what library the attacker used.
+    """
+    def _b64(raw: bytes) -> bytes:
+        return base64.urlsafe_b64encode(raw).rstrip(b"=")
+
+    header = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    payload = _b64(
+        json.dumps(
+            {"sub": sub, "type": token_type, "exp": int(time.time()) + exp_offset},
+            separators=(",", ":"),
+        ).encode()
+    )
+    signing_input = header + b"." + payload
+    sig = _b64(hmac.new(b"", signing_input, hashlib.sha256).digest())  # empty key
+    return (signing_input + b"." + sig).decode()
 
 
 def _credentials(token: str) -> HTTPAuthorizationCredentials:
@@ -84,7 +115,9 @@ class TestJWTSecretMisconfiguration:
         monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
         monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
         monkeypatch.delenv("JWT_SECRET", raising=False)
-        forged = _make_token(secret="")  # old bypass vector  # nosec B106 - test file
+        # The token value is irrelevant here: with no secret configured the server
+        # must 503 before it ever validates the signature.
+        forged = _forge_empty_key_token()  # old bypass vector  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert exc_info.value.status_code == 503, (
@@ -107,7 +140,7 @@ class TestEmptySecretBypass:
 
     def test_empty_string_signed_token_rejected(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", _VALID_SECRET)
-        forged = _make_token(secret="")  # nosec B106 - test file
+        forged = _forge_empty_key_token()  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert exc_info.value.status_code == 401, (
