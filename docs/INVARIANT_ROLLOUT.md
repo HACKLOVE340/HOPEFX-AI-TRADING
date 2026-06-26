@@ -17,11 +17,25 @@ never a surprise.
 | `monitor` *(default)* | Checks run and **log** violations; **never block**. Zero change to trading behaviour. | Always — this is the safe default and the soak-test mode. |
 | `enforce` | A CONSTITUTIONAL/CRITICAL violation **blocks the trade / halts** (pre-trade returns zero size; OMS/router refuse the order; reconciliation trips the kill switch). WARNINGs only log. | Only after a clean soak in `monitor`. |
 
-Secondary control:
+Secondary controls:
 
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `HOPEFX_INVARIANT_FAIL_CLOSED` | `0` (fail-open) | If a bug *inside the checker* raises, do we block (`1`) or allow (`0`)? Keep `0` during rollout so a checker bug can't halt the desk; consider `1` only once the layer is trusted. |
+| `HOPEFX_INVARIANT_ENFORCE_KINDS` | *(empty)* | **Staged rollout lever.** Comma-separated check *kinds* to enforce **while the global mode stays `monitor`** (or `all`). This is how you turn enforcement on **one check at a time** instead of flipping everything at once. e.g. `order_authorization` then `order_authorization,reconciliation,ledger`. |
+| `HOPEFX_INVARIANT_MONITOR_KINDS` | *(empty)* | Inverse lever: when the global mode is `enforce`, hold these named kinds back in `monitor` (carve out one noisy check without losing enforcement everywhere else). |
+
+**Check kinds** (the vocabulary for the two vars above): `pre_trade`,
+`order_authorization`, `reconciliation`, `ledger`, `exposure`, `var`,
+`trust_allocation`, `risk_appetite`, `policy_governance`, `spof`,
+`blast_radius`, `action_audit`, `pod_isolation`, `recovery_readiness`,
+`audit_chain`. `GET /health/invariants` → `resolved` shows the live mode of
+every kind, and `blocking_enabled` is true if *any* kind is enforcing.
+
+Precedence: global `off` disables everything (a per-kind promotion cannot
+re-activate it); otherwise a per-kind promotion/demotion overrides the global
+mode for that kind only. With neither var set, every kind follows the global
+mode — so behaviour is unchanged by default.
 
 The mode is re-read on every check, so you can change it via env/Config without
 a code deploy (process restart picks it up; some orchestrators hot-reload env).
@@ -97,27 +111,44 @@ deployment; in compose, set the var in `.env` and `docker compose up -d`.
   false positives), `checker_errors == 0`. If you see violations on healthy
   trades, fix the threshold/predicate first — do not proceed.
 
-### Step 1 — Enforce the pre-trade gate (lowest blast radius)
-- The pre-trade gate refuses **one order** at a time; it cannot halt the desk.
-- Set `HOPEFX_INVARIANT_MODE=enforce`.
-- Watch `counters.blocked`. Each block = an order that failed a constitutional
-  check (non-finite price, crossed book, stale tick, low confidence). Confirm
-  each blocked order *should* have been blocked.
+> **Stage with `HOPEFX_INVARIANT_ENFORCE_KINDS`, not the global flip.** Keep
+> `HOPEFX_INVARIANT_MODE=monitor` throughout Steps 1–3 and promote one check at a
+> time. This way a surprise in any single check blocks only that check — never
+> the whole desk. Rollback at any point is removing the kind from the list.
+> (Setting `HOPEFX_INVARIANT_MODE=enforce` directly is the end state: it enforces
+> every check at once. Only do that after each kind has soaked clean.)
 
-### Step 2 — Confirm order-authorization gates
-- Same flag already enables the OMS/router/executor gates. Confirm normal orders
-  carry a `risk_approval_token` + `decision_id` and are **not** being refused
-  (`counters.blocked` should not spike on healthy flow). If healthy orders are
-  refused, the token is not being threaded on some path — return to `monitor`
-  and fix the threading before continuing.
+### Step 1 — Enforce order-authorization (lowest blast radius, highest value)
+- The choke-point guarantee: no order reaches a broker without a
+  `risk_approval_token` + `decision_id`. It refuses **one order** at a time and
+  cannot halt the desk.
+- Set `HOPEFX_INVARIANT_ENFORCE_KINDS=order_authorization` (global stays
+  `monitor`). Confirm `resolved.order_authorization == "enforce"` on
+  `/health/invariants`.
+- Watch `counters.blocked`. Healthy orders carry both fields and must **not** be
+  refused. If healthy flow is blocked, the token isn't threaded on some path —
+  remove the kind (instant rollback) and fix the threading first.
+
+### Step 2 — Add the pre-trade gate
+- Promote it: `HOPEFX_INVARIANT_ENFORCE_KINDS=order_authorization,pre_trade`.
+- The pre-trade gate refuses one order at a time (non-finite price, crossed book,
+  stale tick, low confidence). Confirm each block *should* have been blocked.
 
 ### Step 3 — Reconciliation → kill switch (highest blast radius, last)
 - This is the only gate that can **halt all trading** (it trips the kill switch
-  on a book-value/PnL reconciliation breach).
+  on a book-value/PnL reconciliation breach), so add it last and alone:
+  `HOPEFX_INVARIANT_ENFORCE_KINDS=order_authorization,pre_trade,reconciliation,ledger`.
 - Keep `RECONCILER_DRIFT_VALUE` at a sane tolerance so normal broker rounding
   does not trip it.
 - Watch `counters.halts_signalled`. The first real trip should correspond to a
   genuine DB-vs-broker divergence; verify against the broker before resuming.
+
+### Step 3b — Promote the rest, then collapse to the global flag
+- Add the remaining kinds (`exposure`, `var`, `trust_allocation`,
+  `risk_appetite`, `audit_chain`, …) a few at a time, soaking between each.
+- Once **every** kind has run clean, you may simplify config to
+  `HOPEFX_INVARIANT_MODE=enforce` and drop `HOPEFX_INVARIANT_ENFORCE_KINDS` —
+  the end state is identical, just expressed with the global flag.
 
 ### Step 4 — (optional) Fail-closed
 - Once the layer has run clean in `enforce` for a sustained period, you may set
@@ -128,7 +159,11 @@ deployment; in compose, set the var in `.env` and `docker compose up -d`.
 
 ## Rollback (instant, at any step)
 
-1. Set `HOPEFX_INVARIANT_MODE=monitor` (or `off`) — blocking stops immediately
+0. **Staged rollback (preferred):** remove the offending kind from
+   `HOPEFX_INVARIANT_ENFORCE_KINDS` (or clear the var entirely). Blocking for
+   that check stops on the next check — no code deploy, and the other staged
+   checks keep enforcing.
+1. **Full rollback:** set `HOPEFX_INVARIANT_MODE=monitor` (or `off`) — blocking stops immediately
    on the next check; no code deploy required.
 2. If the kill switch was tripped by Step 3, clear it per the kill-switch runbook
    (`kill_switch.py` `deactivate(token)` + remove the flag file) **only after**

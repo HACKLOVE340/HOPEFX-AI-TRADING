@@ -15,6 +15,13 @@ Design rules (this is a money-moving system):
   ``enforce``}. Default ``monitor`` — checks run and log but **never block**, so
   turning the wiring on changes no trading behaviour. Flipping to ``enforce`` is
   the deliberate, explicit activation of blocking/halting.
+* **Staged rollout (per-check).** Rather than one global flip that makes every
+  check blocking at once, keep the global mode at ``monitor`` and promote
+  individual checks via ``HOPEFX_INVARIANT_ENFORCE_KINDS`` (comma-separated
+  kinds, or ``all``). ``HOPEFX_INVARIANT_MONITOR_KINDS`` is the inverse — hold a
+  named check in monitor while the global mode is ``enforce``. See
+  :func:`effective_mode`. This is the safe way to enable enforcement on a live
+  desk: one check at a time, watching telemetry between steps.
 * **Fail-safe on findings.** In ``enforce`` mode a CONSTITUTIONAL or CRITICAL
   violation blocks the trade / signals a halt. WARNINGs only log.
 * **Cannot take the desk down by accident.** A bug *inside this layer* must not
@@ -72,10 +79,69 @@ _DEFAULT_MODE = MODE_MONITOR
 
 
 def current_mode() -> str:
-    """Read the enforcement mode from the environment (re-read each call so ops
-    can change it without a restart). Unknown values fall back to ``monitor``."""
+    """Read the *global* enforcement mode from the environment (re-read each call
+    so ops can change it without a restart). Unknown values fall back to
+    ``monitor``."""
     mode = os.environ.get("HOPEFX_INVARIANT_MODE", _DEFAULT_MODE).strip().lower()
     return mode if mode in _VALID_MODES else _DEFAULT_MODE
+
+
+# Every check ``kind`` the façade emits — the vocabulary for staged rollout and
+# the resolved view in :func:`status`. Keep in sync with the ``_safe(...)`` calls.
+KNOWN_KINDS: tuple[str, ...] = (
+    "pre_trade",
+    "order_authorization",
+    "reconciliation",
+    "ledger",
+    "exposure",
+    "var",
+    "trust_allocation",
+    "risk_appetite",
+    "policy_governance",
+    "spof",
+    "blast_radius",
+    "action_audit",
+    "pod_isolation",
+    "recovery_readiness",
+    "audit_chain",
+)
+
+
+def _kinds_from_env(var: str) -> frozenset[str]:
+    """Parse a comma-separated set of check kinds from ``var`` (lower-cased)."""
+    return frozenset(k.strip().lower() for k in os.environ.get(var, "").split(",") if k.strip())
+
+
+def effective_mode(kind: str) -> str:
+    """Resolve the enforcement mode for a specific check *kind*.
+
+    This is what makes a **staged** enforce rollout safe on a live money path:
+    rather than one global flip that makes every check blocking at once, ops can
+    keep the global mode at ``monitor`` and promote individual kinds to
+    ``enforce`` one at a time via ``HOPEFX_INVARIANT_ENFORCE_KINDS`` (a
+    comma-separated list, or ``all``). The inverse lever
+    ``HOPEFX_INVARIANT_MONITOR_KINDS`` demotes named kinds back to ``monitor``
+    while the global mode is ``enforce`` — useful to carve out one noisy check
+    without losing enforcement everywhere else.
+
+    Precedence: ``off`` (global) wins over everything. Otherwise a per-kind
+    promotion/demotion overrides the global mode for that kind only. With no
+    per-kind vars set, this is exactly ``current_mode()`` for every kind, so
+    behaviour is unchanged by default.
+    """
+    mode = current_mode()
+    if mode == MODE_OFF:
+        return MODE_OFF
+    k = kind.strip().lower()
+    if mode == MODE_MONITOR:
+        enforce_kinds = _kinds_from_env("HOPEFX_INVARIANT_ENFORCE_KINDS")
+        if "all" in enforce_kinds or k in enforce_kinds:
+            return MODE_ENFORCE
+        return MODE_MONITOR
+    # mode == enforce: allow selectively holding a kind back in monitor.
+    if k in _kinds_from_env("HOPEFX_INVARIANT_MONITOR_KINDS"):
+        return MODE_MONITOR
+    return MODE_ENFORCE
 
 
 def _fail_closed() -> bool:
@@ -162,7 +228,7 @@ def _decide(kind: str, violations: list[Violation], *, checker_error: bool = Fal
       * monitor  → log findings, never block.
       * enforce  → block/halt on a blocking violation (or fail-closed error).
     """
-    mode = current_mode()
+    mode = effective_mode(kind)
     blocking = _is_blocking(violations) or (checker_error and _fail_closed())
     reason = _reason(violations) if violations else ("checker_error" if checker_error else "ok")
 
@@ -192,7 +258,7 @@ def _decide(kind: str, violations: list[Violation], *, checker_error: bool = Fal
 
 def _safe(kind: str, fn: Any) -> EnforcementResult:
     """Run a checker thunk; never let an internal error reach the caller."""
-    if current_mode() == MODE_OFF:
+    if effective_mode(kind) == MODE_OFF:
         return EnforcementResult(True, False, [], MODE_OFF, "off")
     try:
         violations = fn() or []
@@ -395,7 +461,9 @@ def enforce_risk_appetite(state: dict[str, Any], policy: dict[str, Any]) -> Enfo
 
         sym = state.get("traded_symbol")
         if sym is not None and sym in set(prohibited.get("symbols", []) or []):
-            out.append(_v("No Unauthorized Trade", CONSTITUTIONAL, f"trade on prohibited symbol {sym!r} (risk-appetite)"))
+            out.append(
+                _v("No Unauthorized Trade", CONSTITUTIONAL, f"trade on prohibited symbol {sym!r} (risk-appetite)")
+            )
 
         jur = state.get("jurisdiction")
         if jur is not None:
@@ -554,11 +622,16 @@ def status() -> dict[str, Any]:
         engine_ok = False
 
     mode = current_mode()
+    resolved = {k: effective_mode(k) for k in KNOWN_KINDS}
     return {
         "mode": mode,
         "active": mode != MODE_OFF,
-        "blocking_enabled": mode == MODE_ENFORCE,
+        # True if *any* check blocks — global enforce OR a staged per-kind promotion.
+        "blocking_enabled": any(m == MODE_ENFORCE for m in resolved.values()),
         "fail_closed": _fail_closed(),
+        "enforce_kinds": sorted(_kinds_from_env("HOPEFX_INVARIANT_ENFORCE_KINDS")),
+        "monitor_kinds": sorted(_kinds_from_env("HOPEFX_INVARIANT_MONITOR_KINDS")),
+        "resolved": resolved,
         "engine_healthy": engine_ok,
         "counters": dict(_counters),
         "recent": list(_recent),

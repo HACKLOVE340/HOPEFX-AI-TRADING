@@ -29,6 +29,8 @@ _BAD = dict(confidence=float("nan"), probability=0.6, tick_mid=2000.0, tick_spre
 def _clean(monkeypatch):
     monkeypatch.delenv("HOPEFX_INVARIANT_MODE", raising=False)
     monkeypatch.delenv("HOPEFX_INVARIANT_FAIL_CLOSED", raising=False)
+    monkeypatch.delenv("HOPEFX_INVARIANT_ENFORCE_KINDS", raising=False)
+    monkeypatch.delenv("HOPEFX_INVARIANT_MONITOR_KINDS", raising=False)
     enf.reset_telemetry()
     yield
     enf.reset_telemetry()
@@ -294,3 +296,71 @@ def test_status_off_mode_inactive(monkeypatch):
     s = enf.status()
     assert s["active"] is False
     assert s["blocking_enabled"] is False
+
+
+# ── staged rollout: per-check effective mode ───────────────────────────────────────
+def test_effective_mode_defaults_to_global(monkeypatch):
+    # No per-kind vars → every kind resolves to the global mode (unchanged behaviour).
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "monitor")
+    assert all(enf.effective_mode(k) == "monitor" for k in enf.KNOWN_KINDS)
+
+
+def test_selective_enforce_promotes_only_named_kind(monkeypatch):
+    # Global monitor, but order_authorization promoted to enforce.
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "monitor")
+    monkeypatch.setenv("HOPEFX_INVARIANT_ENFORCE_KINDS", "order_authorization")
+    assert enf.effective_mode("order_authorization") == "enforce"
+    assert enf.effective_mode("pre_trade") == "monitor"
+
+    # The promoted check actually blocks…
+    blocked = enf.enforce_order_authorization({"risk_approval_token": ""})
+    assert blocked.allowed is False
+    # …while a non-promoted check still only monitors (detects but allows).
+    monitored = enf.enforce_pre_trade(_Signal(**_BAD))
+    assert monitored.allowed is True
+    assert monitored.violations
+
+
+def test_selective_enforce_accepts_list_and_whitespace(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "monitor")
+    monkeypatch.setenv("HOPEFX_INVARIANT_ENFORCE_KINDS", " reconciliation , ledger ")
+    assert enf.effective_mode("reconciliation") == "enforce"
+    assert enf.effective_mode("ledger") == "enforce"
+    assert enf.effective_mode("var") == "monitor"
+
+
+def test_enforce_kinds_all_keyword(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "monitor")
+    monkeypatch.setenv("HOPEFX_INVARIANT_ENFORCE_KINDS", "all")
+    assert all(enf.effective_mode(k) == "enforce" for k in enf.KNOWN_KINDS)
+
+
+def test_monitor_kinds_demotes_under_global_enforce(monkeypatch):
+    # Global enforce, but hold pre_trade back in monitor (e.g. it is noisy).
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    monkeypatch.setenv("HOPEFX_INVARIANT_MONITOR_KINDS", "pre_trade")
+    assert enf.effective_mode("pre_trade") == "monitor"
+    assert enf.effective_mode("order_authorization") == "enforce"
+
+    allowed = enf.enforce_pre_trade(_Signal(**_BAD))
+    assert allowed.allowed is True  # demoted → detected but not blocked
+    assert allowed.violations
+
+
+def test_off_global_overrides_per_kind(monkeypatch):
+    # off is the master kill switch — per-kind promotion cannot re-activate it.
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "off")
+    monkeypatch.setenv("HOPEFX_INVARIANT_ENFORCE_KINDS", "all")
+    assert enf.effective_mode("order_authorization") == "off"
+    assert enf.enforce_order_authorization({"risk_approval_token": ""}).allowed is True
+
+
+def test_status_reports_staged_config(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "monitor")
+    monkeypatch.setenv("HOPEFX_INVARIANT_ENFORCE_KINDS", "order_authorization,ledger")
+    s = enf.status()
+    assert s["mode"] == "monitor"
+    assert s["blocking_enabled"] is True  # at least one kind now blocks
+    assert s["enforce_kinds"] == ["ledger", "order_authorization"]
+    assert s["resolved"]["order_authorization"] == "enforce"
+    assert s["resolved"]["pre_trade"] == "monitor"
