@@ -10,6 +10,7 @@
 **Legend:** ✅ Enforced · 🟡 Partial · ❌ Gap
 **Mechanisms now in place:**
 - **Meta layer (manages complexity at scale):** `invariants/registry.py` auto-discovers every predicate (one source of truth — no hand-maintained list to drift) and declares the critical-component manifest; `invariants/meta.py` adds coverage **meta-invariants** (`verify_invariant_coverage`, `verify_alert_coverage`, `verify_recovery_coverage`, `verify_ai_explainability_coverage`, `verify_decision_trace`); `scripts/invariant_coverage.py` produces the coverage report (CI gate). Risk Appetite Framework: `risk/risk_appetite.py` + `config/risk_appetite.example.json`. Stress drills: `scripts/stress_test.py`.
+- **Forensics & dashboards:** `forensics/replay.py` + `scripts/forensic_replay.py` reconstruct a past **decision** (decision→model→prompt→features→data→trade; would today's controls allow it?) and replay a past **failure** to confirm it reproduces (regression check) — driving the real enforcement code path. `monitoring/grafana/invariant_dashboard.json` visualizes the `hopefx_invariant_*` metrics (mode, violations, blocked, halts, engine health).
 - **`invariants/` — 330 pure invariant predicates across 34 domain modules (all green):**
   - `constitution.py` — order state machine, PnL/capital conservation, duplicate-id, tick/spread, finiteness, human control
   - `market.py` — order book, multi-feed agreement, freshness/staleness, clock drift, future-event, event sequence, causal order, market-open/halt, delisting
