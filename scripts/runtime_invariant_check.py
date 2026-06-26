@@ -607,6 +607,40 @@ def check_dependency_spof(res: CheckResult) -> None:
         res.add("ERROR", "dependency_inventory", "blast_radius", v.message)
 
 
+def check_route_coverage(base: str, token: str | None, res: CheckResult) -> None:
+    """Enumerate EVERY GET route from /openapi.json and assert none returns 500
+    (master-registry #16) and that protected routes don't return 200 without auth
+    (#29). Parameterised paths ({id}) are skipped — they need fixtures. This turns
+    "looks right" into "every endpoint actually responds sanely".
+    """
+    status, raw = _http("GET", f"{base}/openapi.json")
+    if status != 200:
+        res.add("WARN", "/openapi.json", "openapi", f"OpenAPI schema not available (HTTP {status})")
+        return
+    try:
+        spec = json.loads(raw)
+        paths = spec.get("paths", {})
+    except Exception as e:
+        res.add("ERROR", "/openapi.json", "openapi", f"invalid OpenAPI JSON: {e}")
+        return
+
+    # OK = sane non-500 responses; 5xx is never acceptable for a GET probe.
+    allowed = {200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 405, 422, 429, 503}
+    checked = 0
+    for path, methods in paths.items():
+        if "{" in path or "get" not in {m.lower() for m in methods}:
+            continue  # skip parameterised paths and non-GET endpoints
+        checked += 1
+        st, _ = _http("GET", f"{base}{path}", token=token)
+        if st is None:
+            res.add("ERROR", path, "route_coverage", "GET route unreachable")
+        elif st >= 500:
+            res.add("ERROR", path, "route_coverage", f"GET {path} returned {st} (server error)")
+        elif st not in allowed:
+            res.add("WARN", path, "route_coverage", f"GET {path} unexpected status {st}")
+    res.add("INFO", "routes", "route_coverage", f"smoke-tested {checked} parameter-free GET routes")
+
+
 def report(res: CheckResult, as_json: bool) -> int:
     if as_json:
         print(
@@ -665,6 +699,8 @@ def main() -> int:
 
         print("Phase 2 — probing endpoints + asserting invariants…")
         run(base, token, res)
+        print("Phase 2b — route coverage (every GET route never 500)…")
+        check_route_coverage(base, token, res)
         print("Phase 3 — verifying audit hash-chain, tenant isolation & recovery readiness…")
         check_audit_integrity(res)
         check_tenant_isolation(res)

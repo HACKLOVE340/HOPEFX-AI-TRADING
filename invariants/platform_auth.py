@@ -145,3 +145,15 @@ def verify_failed_login_throttled(attempts: int, max_attempts: int) -> list[Viol
     if attempts > max_attempts:
         return [_v(_SEC, CRITICAL, f"{attempts} failed logins exceeds lockout threshold {max_attempts}")]
     return []
+
+
+def verify_token_algorithm(alg: str, allowed: tuple[str, ...] = ("HS256", "RS256")) -> list[Violation]:
+    """A JWT must be signed with an allow-listed algorithm. The ``none`` algorithm
+    (or any unexpected alg) is a forgery vector and must always be rejected
+    (master-registry #42)."""
+    a = str(alg or "").strip()
+    if a.lower() == "none" or a == "":
+        return [_v(_AUTHZ, CONSTITUTIONAL, f"JWT 'alg' is {alg!r} — unsigned tokens are forbidden")]
+    if a not in allowed:
+        return [_v(_AUTHZ, CONSTITUTIONAL, f"JWT 'alg' {a!r} not in allow-list {list(allowed)}")]
+    return []
