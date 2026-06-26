@@ -7,6 +7,7 @@
 import React, { useState, Suspense, lazy, Component, useEffect, useCallback, useRef } from 'react';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
+import VoiceTradingPanel from '../components/voice/VoiceTradingPanel';
 import type { SuperAdminTab } from './superadmin/types';
 import { SuperAdminNavContext } from './superadmin/types';
 import { SAStyles, Spinner } from './superadmin/ui';
@@ -246,7 +247,7 @@ const SuperAdminDashboard: React.FC = () => {
       case 'users':             return <UsersSection />;
       case 'platform':          return <PlatformSection />;
       case 'ml-ai':             return <MLAISection />;
-      case 'trading-engine':    return <TradingEngineSection />;
+      case 'trading-engine':    return <><VoiceTradingPanel /><TradingEngineSection /></>;
       case 'financial':         return <FinancialSection />;
       case 'security':          return <SecuritySection />;
       case 'logs':              return <LogsSection />;

@@ -1384,6 +1384,25 @@ export const aiAssistantApi = {
   status:       () => api.get('/chat/status'),
 };
 
+// ── Cloud Voice API (optional) ──────────────────────────────────────────────────
+// Backend: /api/voice/* — server-side TTS/STT behind a provider key. When no
+// provider is configured these return 503 and the frontend falls back to the
+// browser-native Web Speech API. See api/voice.py.
+
+export const voiceApi = {
+  /** Which cloud providers (if any) are configured. */
+  status: () => api.get<{ tts_available: boolean; stt_available: boolean; tts_provider?: string | null; stt_provider?: string | null }>('/voice/status'),
+  /** Synthesize text to speech; returns an audio blob (audio/mpeg). */
+  tts:    (text: string, voice?: string) =>
+            api.post('/voice/tts', { text, voice }, { responseType: 'blob', timeout: 35_000 }),
+  /** Transcribe an audio clip to text. */
+  stt:    (audio: Blob, filename = 'audio.webm') => {
+            const form = new FormData();
+            form.append('audio', audio, filename);
+            return api.post<{ text: string }>('/voice/stt', form, { timeout: 35_000 });
+          },
+};
+
 // ── Risk Calculator API ───────────────────────────────────────────────────────
 // Backend: /api/risk/calculator/*
 

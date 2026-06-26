@@ -14,6 +14,8 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useVoice } from '../hooks/useVoice';
+import { useVoiceAlerts } from '../lib/voicePrefs';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -194,6 +196,15 @@ function genId() { return `toast-${++_idCounter}-${Date.now()}`; }
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
+  // Spoken alerts (output-only, opt-in): read important notifications aloud.
+  // Kept in refs so `add`'s identity stays stable for consumers.
+  const voice = useVoice();
+  const [voiceAlerts] = useVoiceAlerts();
+  const speakRef = useRef(voice.speak);
+  const voiceAlertsRef = useRef(voiceAlerts);
+  useEffect(() => { speakRef.current = voice.speak; }, [voice.speak]);
+  useEffect(() => { voiceAlertsRef.current = voiceAlerts; }, [voiceAlerts]);
+
   const remove = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
@@ -201,6 +212,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const add = useCallback((item: Omit<ToastItem, 'id'>): string => {
     const id = genId();
     setToasts(prev => [...prev.slice(-4), { ...item, id }]); // cap at 5
+    // Read risk/fill/price alerts aloud when the user has opted in. Limit to
+    // the actionable variants so success/info chatter is not spoken.
+    if (voiceAlertsRef.current && (item.variant === 'error' || item.variant === 'warning')) {
+      try { speakRef.current(item.message); } catch { /* TTS is best-effort */ }
+    }
     return id;
   }, []);
 
