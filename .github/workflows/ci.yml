@@ -369,6 +369,12 @@ jobs:
             --timeout=120 \
             -q
 
+      # Invariant coverage report — pure introspection (no app boot). Fails the
+      # build if a critical component lacks invariant or alert coverage. Cheap
+      # meta-gate that catches "we added a component but forgot to protect it".
+      - name: Invariant coverage report
+        run: python scripts/invariant_coverage.py
+
       # Runtime invariant check — boots the app, probes endpoints, asserts output
       # invariants and scans the event log so "looks right, behaves wrong" fails
       # the build.  Exit 1 (invariant findings) fails CI; exit 2 (could not boot
