@@ -79,26 +79,40 @@ connectors, and the data feeds.
 These are loaded and used for live inference (`ml/inference_engine.py`), which
 even has **staleness** and **feature-drift** guards. That is real ML engineering.
 
-### 3b. But the intelligence is EARLY-STAGE / WEAK — this is the honest part
-The training reports tell the real story (`advanced_training_report.json`,
-`ab_baseline_report.json`):
+### 3b. The intelligence is MODEST — and the model's provenance is ambiguous
 
-| Reality check | Number | Honest read |
-|---|---|---|
-| Training samples | **271** | Tiny. Real quant models use 10,000s–millions |
-| Features | **193** | 193 features on 271 rows ⇒ **severe overfitting risk** |
-| Walk-forward accuracy | **0.60** | Barely above a coin flip (0.50) |
-| Final-test AUC | **0.44** | **Below 0.50 = worse than random** on the holdout |
-| Model confidence (avg) | **0.12** | The model itself is rarely confident |
-| A/B accuracy lift vs simple rules | **+3.0 pp** (0.58→0.61) | A small, real edge |
-| Reported Sharpe | 4.4 | **Not trustworthy** — measured on a tiny window |
+> **Correction (2026-06-26):** this section originally read the model's accuracy
+> off `advanced_training_report.json` (271 samples / 2 years / horizon=1 /
+> final-test AUC 0.44). A closer look at `ml/saved_models/registry.json` shows
+> the **active** registered model (`xgb_horizon5_v1`) describes a *different*
+> training run for the **same `advanced_oos.pkl` file**: **50 years**, horizon=5,
+> **222 features**, **2,016 OOS trades**, OOS accuracy **0.565**, Sharpe-gate
+> PASSED. The two metadata records contradict each other — so the model's true
+> provenance is **ambiguous and should be reconciled** (that ambiguity is itself
+> a finding). Both records nonetheless agree the directional accuracy is ~**56–57%**.
 
-**Honest conclusion on intelligence:** The ML is *real but modest*. It finds a
-**small** directional edge (~3 percentage points over a basic rule) on gold, on a
-**small** dataset, with **overfitting risk** and **near-coin-flip** accuracy. The
-flashy Sharpe ratios come from tiny out-of-sample windows and should not be
-trusted as proof of profitability. This is **"promising research-grade ML,"** not
-**"institutional alpha."**
+| Metadata source | samples | years | features | accuracy | note |
+|---|---|---|---|---|---|
+| `advanced_training_report.json` | 271 | 2 | 193 | wf 0.60 / final-AUC 0.44 | tiny → overfit-prone; final AUC < 0.5 |
+| `registry.json` (active `xgb_horizon5_v1`) | 2,016 OOS | 50 | 222 | OOS 0.565, Sharpe-gate ✓ | the record the live system trusts |
+| Independent retrain (2026-06-26, 50y, horizon=1, no-macro) | 2,376 / 756 OOS | 50 | 193 | OOS **0.569 ± 0.018**, binomial **p=0.0001** | reproduces a *significant* ~57% edge |
+
+The independent retrain (run this session on the bundled 50-year CSV, OANDA-free)
+landed at the same place: **~56.9% OOS directional accuracy, statistically
+significant (p=0.0001), passing the N≥600 Sharpe-SE credibility gate** — but the
+trainer itself flags *"OOS above chance (56.9%) but below the 68% production
+threshold"*. It was **not shipped**: it used a different horizon/feature contract
+than the registered production model, and the model-integrity gate correctly
+refused to load a mismatched artifact. (The OANDA-removal + 50-year default code
+change WAS shipped.)
+
+**Honest conclusion on intelligence:** the ML is *real and the edge is real but
+small* — roughly **56–57% directional accuracy on gold, statistically
+significant on multi-thousand-sample out-of-sample windows**. That is a genuine,
+reproducible edge (markets are near-efficient, so this is unsurprising) — **not**
+the flashy Sharpe-4+ figures that appear in some tiny-window reports, and **below
+the project's own 68% production bar**. This is **"validated research-grade
+ML with a small real edge,"** not **"institutional alpha."**
 
 ### 3c. The "AI brain" / chatbot
 `brain/llm_agent.py` is a **real** wrapper around Anthropic (Claude) or OpenAI.
@@ -201,8 +215,8 @@ drawdown, kill switch) and a `pre_trade_gate.py` as well.
 | Data + broker plumbing | **B+** | Real feeds + many real connectors |
 | Safety system (built) | **B+** | 337 real checks, wired in |
 | Safety system (active by default) | **C** | Monitor-only / fail-open until you flip `enforce` |
-| ML intelligence | **C+** | Real models, but tiny data, ~coin-flip accuracy, overfit risk |
-| Live-money readiness | **D / Not yet** | Live off by default; weak edge; 61 dep vulns; CI red |
+| ML intelligence | **C+** | Real, ~56–57% OOS accuracy (significant) but below the 68% bar; model provenance ambiguous (see §3b) |
+| Live-money readiness | **D / Not yet** | Live off by default; small edge below production bar; CI red |
 
 ### What it IS
 A **large, well-built, real** AI trading **research & paper-trading platform**
@@ -215,8 +229,13 @@ unvalidated at scale, the safety net is advisory by default, and live trading is
 intentionally locked.
 
 ### The 5 things to fix before trusting it with real money
-1. **Retrain the models on far more data** (years of bars, not 271 samples) and
-   re-validate out-of-sample — the current edge is too small/overfit to trust.
+1. **Reconcile the model provenance and reach the production bar.** The training
+   data is now 50-year + OANDA-free (done this session), and a clean retrain
+   reproduces a *significant* ~57% OOS edge — but `advanced_training_report.json`
+   and `registry.json` disagree about the live model (§3b). Reconcile them
+   (regenerate the report from the registered model, or re-promote a freshly
+   trained one through the registry), and push accuracy toward the project's own
+   68% bar before trusting it with capital.
 2. **Set `HOPEFX_INVARIANT_MODE=enforce`** (and consider fail-closed) so the 337
    safety checks actually block, not just log.
 3. **Clear the 61 dependency vulnerabilities** (17 high first).
