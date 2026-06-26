@@ -57,8 +57,8 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # ── tunable thresholds ─────────────────────────────────────────────────────────
-DUP_HARD = 4          # ≥ this many byte-identical list items → ERROR
-DUP_SOFT = 3          # ≥ this many → WARN
+DUP_HARD = 4  # ≥ this many byte-identical list items → ERROR
+DUP_SOFT = 3  # ≥ this many → WARN
 DUP_RATIO_HARD = 0.5  # ≥ 50% of a (len≥4) list identical → ERROR
 BOOT_READY_TIMEOUT = 180  # seconds to wait for full startup
 HTTP_TIMEOUT = 45
@@ -158,13 +158,17 @@ def check_duplicate_items(resp: Any, ep: str, res: CheckResult) -> None:
         ratio = worst / len(dict_items)
         if worst >= DUP_HARD or (len(dict_items) >= 4 and ratio >= DUP_RATIO_HARD):
             res.add(
-                "ERROR", ep, "duplicate_items",
+                "ERROR",
+                ep,
+                "duplicate_items",
                 f"{p}: {worst}/{len(dict_items)} list items are identical "
                 f"(ignoring id/index/time) — likely duplicated/tiled output",
             )
         elif worst >= DUP_SOFT:
             res.add(
-                "WARN", ep, "duplicate_items",
+                "WARN",
+                ep,
+                "duplicate_items",
                 f"{p}: {worst} identical items — verify not unintended duplicates",
             )
 
@@ -183,7 +187,9 @@ def check_all_identical_metrics(resp: Any, ep: str, res: CheckResult) -> None:
             vals = [it.get(k) for it in dict_items if isinstance(it.get(k), (int, float))]
             if len(vals) >= 4 and len(set(vals)) == 1:
                 res.add(
-                    "WARN", ep, "all_identical_metric",
+                    "WARN",
+                    ep,
+                    "all_identical_metric",
                     f"{p}[*].{k} is {vals[0]!r} for all {len(vals)} rows — metric not varying",
                 )
 
@@ -203,12 +209,12 @@ def _iter_lists(obj: Any, path: str = "$"):
 @dataclass
 class Endpoint:
     path: str
-    auth: bool = True            # send the superadmin bearer token
-    expect_keys: tuple[str, ...] = ()   # keys that must be present (dict response)
+    auth: bool = True  # send the superadmin bearer token
+    expect_keys: tuple[str, ...] = ()  # keys that must be present (dict response)
     list_key: str | None = None  # key whose value must be a list
-    max_same_type: int = 0       # patterns/signals: max rows sharing (type/direction)
+    max_same_type: int = 0  # patterns/signals: max rows sharing (type/direction)
     type_fields: tuple[str, ...] = ()
-    allow_503: bool = False      # data endpoints may 503 during warmup — retry
+    allow_503: bool = False  # data endpoints may 503 during warmup — retry
 
 
 ENDPOINTS: list[Endpoint] = [
@@ -221,7 +227,9 @@ ENDPOINTS: list[Endpoint] = [
     Endpoint("/api/superadmin/engine/status", expect_keys=("status",)),
     Endpoint(
         "/api/trading/patterns?symbol=XAUUSD&timeframe=1h&limit=400",
-        list_key="patterns", max_same_type=3, type_fields=("pattern_type", "direction"),
+        list_key="patterns",
+        max_same_type=3,
+        type_fields=("pattern_type", "direction"),
         allow_503=True,
     ),
     Endpoint("/api/signals/active", allow_503=True),
@@ -254,7 +262,9 @@ def check_endpoint_specific(ep: Endpoint, resp: Any, res: CheckResult) -> None:
         for key, n in groups.items():
             if n > ep.max_same_type:
                 res.add(
-                    "ERROR", name, "excessive_same_type",
+                    "ERROR",
+                    name,
+                    "excessive_same_type",
                     f"{n} rows share {ep.type_fields}={key} (max {ep.max_same_type}) — duplicated detections",
                 )
 
@@ -312,8 +322,11 @@ def boot_server(port: int) -> subprocess.Popen:
     log = open(REPO_ROOT / "logs" / "invariant_server.out", "w")  # noqa: SIM115
     return subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port), "--no-access-log"],
-        cwd=str(REPO_ROOT), stdout=log, stderr=subprocess.STDOUT,
-        start_new_session=True, env=env,
+        cwd=str(REPO_ROOT),
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        env=env,
     )
 
 
@@ -389,10 +402,53 @@ def run(base: str, token: str | None, res: CheckResult) -> None:
         check_endpoint_specific(ep, resp, res)
 
 
+def check_audit_integrity(res: CheckResult) -> None:
+    """Exercise the live audit hash-chain mechanism (No Audit Gap): a fresh log
+    must verify intact, and a tampered record must be detected. If the deployed
+    hashing/verify logic is broken, this fails the build — monitoring the monitor.
+    """
+    import tempfile
+
+    try:
+        from compliance.auditor import AuditLevel, ImmutableAuditLog
+    except Exception as e:  # audit module must import
+        res.add("ERROR", "compliance/auditor.py", "audit_import", f"{type(e).__name__}: {e}")
+        return
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            log = ImmutableAuditLog(log_path=f"{tmp}/")
+            log.append(AuditLevel.INFO, "TEST", "checker", "probe-1", {"n": 1})
+            log.append(AuditLevel.INFO, "TEST", "checker", "probe-2", {"n": 2})
+            if not log.verify_integrity():
+                res.add(
+                    "ERROR",
+                    "compliance/auditor.py",
+                    "audit_chain",
+                    "verify_integrity() False on an untampered chain — audit hashing is broken",
+                )
+                return
+            # Tamper with a record; the verifier MUST now report a break.
+            log.records[0].data["n"] = 999
+            if log.verify_integrity():
+                res.add(
+                    "ERROR",
+                    "compliance/auditor.py",
+                    "audit_chain",
+                    "tampering NOT detected — audit log is not tamper-evident (No Audit Gap)",
+                )
+    except Exception as e:
+        res.add("ERROR", "compliance/auditor.py", "audit_chain", f"{type(e).__name__}: {e}")
+
+
 def report(res: CheckResult, as_json: bool) -> int:
     if as_json:
-        print(json.dumps({"findings": [f.__dict__ for f in res.findings],
-                          "errors": len(res.errors), "warnings": len(res.warns)}, indent=2))
+        print(
+            json.dumps(
+                {"findings": [f.__dict__ for f in res.findings], "errors": len(res.errors), "warnings": len(res.warns)},
+                indent=2,
+            )
+        )
     else:
         if not res.findings:
             print("✅ runtime invariant check: all endpoints passed, no anomalies.")
@@ -443,6 +499,8 @@ def main() -> int:
 
         print("Phase 2 — probing endpoints + asserting invariants…")
         run(base, token, res)
+        print("Phase 3 — verifying audit hash-chain integrity…")
+        check_audit_integrity(res)
         if not args.no_log_scan:
             scan_event_log(started, res)
         return report(res, args.json)

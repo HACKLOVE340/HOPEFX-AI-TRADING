@@ -38,6 +38,10 @@ _MISMATCH_ALERT_THRESHOLD = 3
 _DRIFT_QTY_THRESHOLD = float(os.getenv("RECONCILER_DRIFT_QTY", "1.0"))  # units
 _DRIFT_VALUE_THRESHOLD = float(os.getenv("RECONCILER_DRIFT_VALUE", "100.0"))  # USD
 
+# Max per-symbol notional exposure (USD). The exposure invariant flags any symbol
+# whose summed open notional exceeds this (No Hidden Exposure).
+_MAX_SYMBOL_EXPOSURE_USD = float(os.getenv("RISK_MAX_SYMBOL_EXPOSURE_USD", "1000000.0"))
+
 
 class PositionReconciler:
     """
@@ -122,10 +126,15 @@ class PositionReconciler:
         agg_db_value = 0.0
         agg_broker_value = 0.0
         have_broker_values = False
+        # Per-symbol notional exposure (sums multiple positions on the same
+        # symbol) for the No Hidden Exposure invariant run after the loop.
+        symbol_exposure: dict[str, float] = {}
         for pos in db_positions:
             price = await self._get_price(pos.symbol)
             if price is None:
                 continue
+
+            symbol_exposure[pos.symbol] = symbol_exposure.get(pos.symbol, 0.0) + abs(float(pos.quantity or 0) * price)
 
             pnl = self._calc_pnl(pos, price)
             with self._sf() as session:
@@ -197,6 +206,10 @@ class PositionReconciler:
         if have_broker_values:
             await self._enforce_reconciliation(agg_db_value, agg_broker_value)
 
+        # ── Per-symbol exposure invariant (feature-flagged) ───────────────────
+        if symbol_exposure:
+            self._enforce_exposure(symbol_exposure)
+
         if updated:
             logger.debug(
                 "Reconciler cycle %d: updated P&L for %d positions",
@@ -245,6 +258,21 @@ class PositionReconciler:
                     logger.error("Could not activate kill switch on reconciliation breach: %s", ks_exc)
         except Exception as exc:
             logger.warning("Reconciliation invariant check failed (suppressed): %s", exc)
+
+    def _enforce_exposure(self, symbol_exposure: dict[str, float]) -> None:
+        """Run the No Hidden Exposure invariant on per-symbol notional. In MONITOR
+        mode this only logs; in ENFORCE mode an over-limit symbol is surfaced via
+        the facade (and counted) for the control center. Fail-safe: swallow errors.
+        """
+        try:
+            from invariants.enforcement import enforce_exposure
+
+            limits = dict.fromkeys(symbol_exposure, _MAX_SYMBOL_EXPOSURE_USD)
+            result = enforce_exposure(symbol_exposure, limits)
+            if result.violations:
+                logger.warning("EXPOSURE: %s", result.reason)
+        except Exception as exc:
+            logger.warning("Exposure invariant check failed (suppressed): %s", exc)
 
     async def _trigger_drift_halt(
         self,

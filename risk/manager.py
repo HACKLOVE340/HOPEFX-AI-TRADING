@@ -66,6 +66,9 @@ _MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
 _MAX_DRAWDOWN_PCT = float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10"))
 _MAX_OPEN_POSITIONS = int(os.getenv("RISK_MAX_OPEN_POSITIONS", "3"))
 _MIN_DATA_QUALITY = float(os.getenv("RISK_MIN_DATA_QUALITY", "0.40"))
+# Max market-data staleness for a tradable signal (seconds). The pre-trade
+# invariant gate only enforces this when the signal carries a timestamp.
+_MAX_TICK_STALENESS_S = float(os.getenv("RISK_MAX_TICK_STALENESS_S", "5.0"))
 _SENT_SIZE_SCALE = float(os.getenv("RISK_SENT_SIZE_SCALE", "0.40"))
 _IMPACT_SIZE_SCALE = float(os.getenv("RISK_IMPACT_SIZE_SCALE", "0.50"))
 _DD_SIZE_SCALE = float(os.getenv("RISK_DD_SIZE_SCALE", "0.80"))
@@ -110,6 +113,9 @@ class PositionSizingResult:
     impact_f: float = 1.0  # macro impact scaling factor
     dd_f: float = 1.0  # drawdown scaling factor
     lineage_id: str = ""
+    # Proof this sizing passed the full risk gate — copied onto the Order so the
+    # OMS can refuse any order that never went through risk (No Unauthorized Trade).
+    risk_approval_token: str = ""
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Convenience: allow attribute access as .size (legacy callers)
@@ -761,7 +767,13 @@ class RiskManager:
         # signal before any capital is sized.  In MONITOR mode this only logs; in
         # ENFORCE mode a CONSTITUTIONAL/CRITICAL violation refuses the order.  The
         # facade never raises into this hot path (see invariants.enforcement).
-        _inv = enforce_pre_trade(signal, data_quality=data_quality, equity=equity)
+        _inv = enforce_pre_trade(
+            signal,
+            data_quality=data_quality,
+            equity=equity,
+            now=datetime.now(UTC).timestamp(),
+            max_staleness_s=_MAX_TICK_STALENESS_S,
+        )
         if not _inv.allowed:
             return self._zero_sizing(symbol, direction, lineage_id, f"invariant:{_inv.reason}")
 
@@ -820,6 +832,10 @@ class RiskManager:
             take_profit_usd=round(take_profit_usd, 4),
             risk_usd=round(risk_usd, 2),
             lineage_id=lineage_id,
+            # Mint the risk-approval token: this sizing passed every gate above.
+            # Downstream order builders copy it onto the Order; the OMS refuses
+            # any order lacking it (No Unauthorized Trade).
+            risk_approval_token=f"rat-{lineage_id}",
         )
 
         self._sizing_history.append(

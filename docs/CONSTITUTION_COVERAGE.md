@@ -9,7 +9,7 @@
 
 **Legend:** ✅ Enforced · 🟡 Partial · ❌ Gap
 **Mechanisms now in place:**
-- **`invariants/` — 322 pure invariant predicates across 34 domain modules (48 test functions, all green):**
+- **`invariants/` — 323 pure invariant predicates across 34 domain modules (all green):**
   - `constitution.py` — order state machine, PnL/capital conservation, duplicate-id, tick/spread, finiteness, human control
   - `market.py` — order book, multi-feed agreement, freshness/staleness, clock drift, future-event, event sequence, causal order, market-open/halt, delisting
   - `risk.py` — daily loss, drawdown, VaR, leverage, margin buffer, liquidation distance, liquidity, per-dimension exposure, concentration, dependency, catastrophic-loss kill triggers
@@ -47,10 +47,11 @@
 - `scripts/runtime_invariant_check.py` — boots app + probes endpoints + asserts output invariants + scans the event log
 - `hopefx_observability.py` — whole-platform capture (DEBUG) + uncaught/thread/asyncio/unraisable hooks → **No Silent Failure** substrate
 - **`invariants/enforcement.py` — the bridge from pure predicates to the live money path (feature-flagged, fail-safe).** Wired at four points:
-  1. **Pre-trade gate** — `risk/manager.py` `size_order()` calls `enforce_pre_trade()` after the hard gates; in `enforce` mode a CONSTITUTIONAL/CRITICAL violation returns zero sizing (order refused).
-  2. **Reconciliation loop** — `core/position_reconciler.py` checks aggregate DB-vs-broker book value each cycle and trips the kill switch on a CONSTITUTIONAL breach in `enforce` mode.
-  3. **CI gate** — `.github/workflows/ci.yml` runs `runtime_invariant_check.py` (findings fail the build).
-  4. **`/health/invariants`** — live status (mode, engine self-check, counters, recent violations) on the health router app.py includes.
+  1. **Pre-trade gate** — `risk/manager.py` `size_order()` calls `enforce_pre_trade()` after the hard gates (finiteness, tick/spread, confidence floor, **market-data freshness**); in `enforce` mode a CONSTITUTIONAL/CRITICAL violation returns zero sizing (order refused). It also **mints a `risk_approval_token`** onto the sizing result.
+  2. **Order-authorization gate** — `execution/oms.py` `submit_order()` calls `enforce_order_authorization()` so no order reaches a broker without a `risk_approval_token` + `decision_id` (No Unauthorized Trade / No Hidden Decision).
+  3. **Reconciliation loop** — `core/position_reconciler.py` checks aggregate DB-vs-broker book value each cycle (trips the kill switch on a CONSTITUTIONAL breach in `enforce`) **and per-symbol exposure** (`enforce_exposure`).
+  4. **CI gate** — `.github/workflows/ci.yml` runs `runtime_invariant_check.py`, which probes endpoints, scans the event log, **and exercises the audit hash-chain verifier** (findings fail the build).
+  5. **`/health/invariants`** — live status (mode, engine self-check, counters, recent violations) on the health router app.py includes.
   - Mode via `HOPEFX_INVARIANT_MODE` ∈ {`off`, `monitor`, `enforce`}, **default `monitor`** (runs + logs, never blocks → zero behaviour change until deliberately set to `enforce`). Checker-internal errors fail **open** by default (`HOPEFX_INVARIANT_FAIL_CLOSED=1` to opt out). Tested in `tests/unit/test_invariants_enforcement.py`, `tests/unit/test_pre_trade_invariant_gate.py`, `tests/integration/test_invariants_endpoint.py`.
 
 > **Honest framing (per the framework's §9–11):** the file enumerates 300+ invariant
@@ -69,16 +70,16 @@
 
 | # | Rule | Status | Where enforced / gap & recommendation |
 |---|------|--------|----------------------------------------|
-| 1 | No Unauthorized Trade | 🟢 | **Wired:** `risk/manager.py` `size_order()` now calls `enforce_pre_trade()` (invariants/enforcement.py) after the hard gates — in `enforce` mode a violation refuses the order (zero sizing). Plus `kill_switch.py` gate. **Remaining:** assert every broker order carries a risk-approval token (AI-bypass guard). |
+| 1 | No Unauthorized Trade | 🟢 | **Wired:** `size_order()` calls `enforce_pre_trade()` after the hard gates and **mints a `risk_approval_token`** onto the sizing result; the **OMS refuses any order lacking that token + a decision id** (`enforce_order_authorization()` at `submit_order`) in `enforce` mode. Plus `kill_switch.py`. **Remaining:** thread the token through the smart-router / trade-executor broker paths (OMS path is gated). |
 | 2 | No Unauthorized Capital Movement | 🟡 | Wallet/withdrawal endpoints require auth + role. **Gap:** no `verify_capital_equation` wired to a ledger endpoint. *Rec: expose a treasury/ledger reconciliation endpoint, assert the capital equation each cycle.* |
 | 3 | No Hidden Loss | 🟢 | **Wired:** `core/position_reconciler.py` now runs `enforce_reconciliation()` each cycle on aggregate DB-vs-broker book value; a CONSTITUTIONAL breach trips the kill switch in `enforce` mode. Library `verify_pnl_reconciliation`/`verify_no_negative_balance` back it. **Remaining:** also assert the PnL identity against a live `total_pnl` account field. |
-| 4 | No Hidden Exposure | ❌ | **Gap:** no per-symbol/sector/leverage exposure endpoint to assert against. *Rec: expose an exposure snapshot; assert `verify_within_limit` per dimension.* |
+| 4 | No Hidden Exposure | 🟢 | **Wired:** the reconciliation loop aggregates per-symbol notional each cycle and runs `enforce_exposure()` (`verify_exposure_limits`) against `RISK_MAX_SYMBOL_EXPOSURE_USD`; surfaced via the facade counters. **Remaining:** sector/factor dimensions beyond per-symbol notional. |
 | 5 | No Hidden Risk | 🟡 | VaR/CVaR computed in `risk/manager.py`; surfaced in reliability/risk endpoints. `verify_within_limit` available. *Rec: assert VaR ≤ approved each cycle in the checker.* |
-| 6 | No Hidden Decision | 🟡 | Decisions logged via `core/decision/HOPEFXDecisionEngine.py`. **Gap:** no completeness invariant. *Rec: assert every executed order has a linked decision id.* |
+| 6 | No Hidden Decision | 🟢 | **Wired:** the OMS authorization gate refuses any order with no `decision_id` (`enforce_order_authorization()`); `Order` now carries `decision_id`/`lineage_id`. Decisions logged via `HOPEFXDecisionEngine`. **Remaining:** populate `decision_id` from the engine on every execution path. |
 | 7 | No Hidden AI Action | 🟡 | Observability captures agent/brain logs whole-platform. **Gap:** no structured per-action audit record assertion. *Rec: emit `event()` per AI action; assert presence.* |
 | 8 | No Data Corruption | ✅ | `verify_tick`, `verify_spread`, `verify_no_duplicate_ids`, `verify_finite` (library); runtime checker flags NaN/Inf + duplicate/tiled list items on **every** probed endpoint (caught the 18-rectangle + fraction bugs). |
 | 9 | No State Corruption | ✅ | `verify_order_state_transition` + `verify_order_not_contradictory` (library, mirrors `execution/oms.py`'s enforced transition table); terminal-state re-entry & phantom fills caught. |
-| 10 | No Audit Gap | 🟡 | `api.admin.log_activity` + audit endpoints exist and return data. **Gap:** no immutability / completeness invariant. *Rec: hash-chain audit records; assert chain integrity.* |
+| 10 | No Audit Gap | 🟢 | **Wired:** `compliance/auditor.py` hash-chains records; the **runtime checker (CI) now exercises `verify_integrity()`** — a clean chain must verify and tampering must be detected, else the build fails. Pure `governance.verify_hash_chain` predicate + `enforce_audit_chain` facade back it. **Remaining:** call `verify_integrity()` on a schedule in production ops. |
 | 11 | No Compliance Breach | 🟡 | Compliance endpoints (AML/KYC/sanctions/surveillance) live and returning data (verified). **Gap:** no automated surveillance invariants (wash/spoofing). *Rec: add surveillance checks to the suite.* |
 | 12 | No Cross-Tenant Leakage | 🟡 | Pod/tenant isolation code exists; auth scopes per user. **Gap:** no runtime isolation assertion. *Rec: probe two pods, assert disjoint positions/memory/models.* |
 | 13 | No Cross-Pod Leakage | 🟡 | Same as #12. *Rec: same isolation probe at the pod boundary.* |
@@ -87,10 +88,10 @@
 | 16 | No Unrecoverable Failure | 🟡 | Auto-rollback, self-healer, hot-standby modules exist. **Gap:** recovery paths not continuously verified. *Rec: periodic restore/failover drill assertion.* |
 | 17 | No Unexplained System Behavior | ✅ | `hopefx_observability.py` captures every logger + all uncaught/thread/asyncio/unraisable exceptions to `hopefx_all.log` + `hopefx_events.jsonl`; checker scans the log and fails on any logged exception. |
 | 18 | No Critical Single Point Of Failure | 🟡 | Redis EventBus, async DB pool, multi-source feeds with failover. **Gap:** SPOF inventory not invariant-checked. *Rec: dependency-graph SPOF audit.* |
-| 19 | No Unverified AI Decision | 🟢 | **Wired:** `enforce_pre_trade()` checks finite confidence/probability and (optionally) a `min_confidence` floor in `size_order()`. ML drift/staleness gating in `ml/inference_engine.py`. **Remaining:** market-data freshness assertion pre-trade. |
+| 19 | No Unverified AI Decision | 🟢 | **Wired:** `enforce_pre_trade()` checks finite confidence/probability, an optional `min_confidence` floor, **and market-data freshness** (rejects a tick older than `RISK_MAX_TICK_STALENESS_S` when the signal carries a timestamp) in `size_order()`. ML drift/staleness gating in `ml/inference_engine.py`. |
 | 20 | No Silent Failure | ✅ | The observability harness is the substrate; the runtime checker is now a **CI gate** (`.github/workflows/ci.yml`) so "looks right, behaves wrong" fails the build. |
 
-**Tally:** ✅ 5 fully enforced · 🟢 4 newly wired to the money path (pre-trade #1/#19, reconciliation #3, kill-switch #14) · 🟡 9 partial (foundation + recommendation) · ❌ 1 gap. Up from 0 explicit enforcement at session start.
+**Tally:** ✅ 5 fully enforced · 🟢 6 wired to the money path (#1 token gate, #3 reconciliation, #4 exposure, #6 decision link, #14 kill-switch, #19 pre-trade+freshness) · 🟡 7 partial · ❌ 0 gaps. Up from 0 explicit enforcement at session start.
 
 > **Legend addition:** 🟢 = predicate **wired into the live money path** behind
 > the `HOPEFX_INVARIANT_MODE` flag (active in `monitor`, blocking in `enforce`).
@@ -116,11 +117,10 @@
 
 The framework (§9–11) defines success not as zero bugs but as the **five master guarantees**:
 
-1. Nothing important happens unnoticed → observability harness (whole-platform).
-2. Nothing dangerous happens unbounded → risk gate + kill switch + `verify_within_limit`.
-3. Nothing critical fails unrecoverably → rollback/self-heal (verification = gap).
-4. Nothing financial becomes unaccounted → PnL/capital invariants (wiring = gap).
-5. Nothing autonomous outranks human control → `verify_human_control` + kill switch.
+1. Nothing important happens unnoticed → observability harness (whole-platform) + `/health/invariants`.
+2. Nothing dangerous happens unbounded → risk gate + kill switch + pre-trade `enforce_pre_trade` + per-symbol `enforce_exposure`.
+3. Nothing critical fails unrecoverably → rollback/self-heal (continuous verification still a gap — needs restore/failover drills).
+4. Nothing financial becomes unaccounted → PnL/capital invariants **now wired** into the reconciliation loop (trips the kill switch) + audit hash-chain verified in CI.
+5. Nothing autonomous outranks human control → `verify_human_control` + kill switch (auto-tripped on reconciliation breach) + OMS order-authorization gate.
 
-**Three of five are operational; two have the foundation + a concrete wiring task.**
-This map is the living tracker — each 🟡/❌ is a real, scoped task, not a silent omission.
+**Four of five are operational; #3 (continuous recovery verification) has the foundation and remains the open program** — it needs restore/failover drills, not just code. This map is the living tracker — each 🟡 is a real, scoped task, not a silent omission.

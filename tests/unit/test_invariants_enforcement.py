@@ -95,6 +95,68 @@ def test_pre_trade_crossed_spread_blocks(monkeypatch):
     assert isinstance(r.allowed, bool)
 
 
+# ── market-data freshness (#19) ─────────────────────────────────────────────────────
+def test_pre_trade_stale_tick_blocked(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    fresh = _Signal(confidence=0.7, probability=0.6, tick_mid=2000.0, tick_spread=0.5, tick_ts=1000.0)
+    assert enf.enforce_pre_trade(fresh, now=1000.2, max_staleness_s=5.0).allowed is True
+    stale = _Signal(confidence=0.7, probability=0.6, tick_mid=2000.0, tick_spread=0.5, tick_ts=1000.0)
+    assert enf.enforce_pre_trade(stale, now=1010.0, max_staleness_s=5.0).allowed is False
+
+
+def test_pre_trade_no_timestamp_skips_freshness(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    # No timestamp attr → freshness is a no-op, order still allowed.
+    r = enf.enforce_pre_trade(_Signal(**_GOOD), now=9999.0, max_staleness_s=1.0)
+    assert r.allowed is True
+
+
+# ── exposure (#4) ───────────────────────────────────────────────────────────────────
+def test_exposure_within_limits(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    r = enf.enforce_exposure({"XAUUSD": 500.0}, {"XAUUSD": 1000.0})
+    assert r.violations == []
+    assert r.should_halt is False
+
+
+def test_exposure_breach_detected(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    r = enf.enforce_exposure({"XAUUSD": 5000.0}, {"XAUUSD": 1000.0})
+    assert r.violations
+    assert r.should_halt is True
+
+
+# ── order authorization (#1/#6) ──────────────────────────────────────────────────────
+def test_order_authorization_requires_token_and_decision(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+
+    class _O:
+        risk_approval_token = ""
+        decision_id = ""
+
+    assert enf.enforce_order_authorization(_O()).allowed is False
+    ok = _O()
+    ok.risk_approval_token = "rat-1"
+    ok.decision_id = "dec-1"
+    assert enf.enforce_order_authorization(ok).allowed is True
+
+
+def test_order_authorization_reads_metadata_and_dict(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    as_dict = {"risk_approval_token": "rat-9", "decision_id": "dec-9"}
+    assert enf.enforce_order_authorization(as_dict).allowed is True
+    assert enf.enforce_order_authorization({"risk_approval_token": "rat-9"}).allowed is False  # no decision
+
+
+# ── audit chain (#10) ─────────────────────────────────────────────────────────────────
+def test_audit_chain_intact_vs_broken(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    assert enf.enforce_audit_chain(True).violations == []
+    broken = enf.enforce_audit_chain(False, broken_at=7)
+    assert broken.violations
+    assert broken.should_halt is True
+
+
 # ── reconciliation ────────────────────────────────────────────────────────────────
 def test_reconciliation_match_no_halt(monkeypatch):
     monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")

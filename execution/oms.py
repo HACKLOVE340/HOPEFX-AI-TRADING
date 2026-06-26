@@ -68,6 +68,12 @@ class Order:
     strategy_id: str = "unknown"
     tags: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Provenance / authorization (constitutional: No Unauthorized Trade,
+    # No Hidden Decision). An order must carry proof it passed the risk gate
+    # (risk_approval_token) and a link to the decision that produced it.
+    risk_approval_token: str = ""
+    decision_id: str = ""
+    lineage_id: str = ""
 
     @property
     def remaining_quantity(self) -> Decimal:
@@ -183,6 +189,24 @@ class OrderLifecycleManager:
         order = self.orders.get(order_id)
         if not order:
             return False
+
+        # ── Order-authorization gate (feature-flagged, fail-safe) ────────────
+        # No order may reach a broker without proof it passed the risk gate
+        # (risk_approval_token) and a linked decision id.  MONITOR logs; ENFORCE
+        # refuses the order.  The facade never raises into this path.
+        try:
+            from invariants.enforcement import enforce_order_authorization
+
+            _auth = enforce_order_authorization(order)
+            if not _auth.allowed:
+                logger.critical(
+                    "OMS.submit_order BLOCKED: order=%s failed authorization (%s)",
+                    order_id,
+                    _auth.reason,
+                )
+                return False
+        except Exception as _auth_exc:  # never let the gate itself crash submission
+            logger.error("OMS.submit_order: authorization check raised %s (order %s)", _auth_exc, order_id)
 
         success = self._transition(order, OrderStatus.PENDING_NEW)
         if success:

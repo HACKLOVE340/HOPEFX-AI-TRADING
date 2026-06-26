@@ -40,6 +40,7 @@ from invariants.constitution import (
     CONSTITUTIONAL,
     CRITICAL,
     Violation,
+    _v,
     summarize,
     verify_finite,
     verify_pnl_reconciliation,
@@ -47,6 +48,7 @@ from invariants.constitution import (
     verify_tick,
     verify_within_limit,
 )
+from invariants.risk import verify_exposure_limits
 
 logger = logging.getLogger("hopefx.invariants")
 
@@ -196,14 +198,23 @@ def _safe(kind: str, fn: Any) -> EnforcementResult:
 # 1. PRE-TRADE GATE
 # ════════════════════════════════════════════════════════════════════════════════
 def enforce_pre_trade(
-    signal: Any, *, data_quality: float | None = None, equity: float | None = None, min_confidence: float = 0.0
+    signal: Any,
+    *,
+    data_quality: float | None = None,
+    equity: float | None = None,
+    min_confidence: float = 0.0,
+    now: float | None = None,
+    max_staleness_s: float | None = None,
 ) -> EnforcementResult:
     """Verify constitutional invariants on a signal/order *before* it can size.
 
     Reads attributes defensively (``getattr``) so it works with any signal-like
     object. Checks: finite confidence/probability/equity, valid tick price &
-    spread, and (optionally) a minimum confidence floor. In enforce mode a
-    blocking violation makes ``allowed`` False so the caller refuses the order.
+    spread, an optional minimum confidence floor, and — when the signal carries a
+    timestamp and ``now``/``max_staleness_s`` are supplied — market-data
+    freshness (No Unverified AI Decision: never trade on a stale tick). In
+    enforce mode a blocking violation makes ``allowed`` False so the caller
+    refuses the order.
     """
 
     def _check() -> list[Violation]:
@@ -239,6 +250,28 @@ def enforce_pre_trade(
                 rule="No Unverified AI Decision",
                 severity=CRITICAL,
             )
+
+        # Market-data freshness — never trade on a stale tick. Only runs when a
+        # timestamp is present on the signal and a budget was supplied; the first
+        # attribute among (tick_ts, tick_timestamp, ts, timestamp) wins.
+        if now is not None and max_staleness_s is not None:
+            tick_ts = next(
+                (
+                    getattr(signal, attr)
+                    for attr in ("tick_ts", "tick_timestamp", "ts", "timestamp")
+                    if isinstance(getattr(signal, attr, None), (int, float))
+                    and not isinstance(getattr(signal, attr, None), bool)
+                ),
+                None,
+            )
+            if tick_ts is not None:
+                out += verify_within_limit(
+                    now - tick_ts,
+                    max_staleness_s,
+                    "market_data_staleness_s",
+                    rule="No Unverified AI Decision",
+                    severity=CRITICAL,
+                )
         return out
 
     return _safe("pre_trade", _check)
@@ -281,6 +314,67 @@ def enforce_reconciliation(
         return out
 
     return _safe("reconciliation", _check)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# 2b. EXPOSURE — per-dimension/per-symbol limits (No Hidden Exposure)
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_exposure(exposure: dict[str, float], limits: dict[str, float]) -> EnforcementResult:
+    """Verify each exposure dimension (per-symbol notional, sector, leverage)
+    stays within its approved limit. ``exposure`` and ``limits`` share keys; a
+    dimension over its limit is a CRITICAL breach (No Hidden Exposure).
+    ``should_halt`` is set so a caller may halt/trip on a breach in enforce mode.
+    """
+    return _safe("exposure", lambda: verify_exposure_limits(exposure, limits))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# 3. ORDER AUTHORIZATION — no order reaches a broker without passing the risk gate
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_order_authorization(order: Any) -> EnforcementResult:
+    """Assert an order carries proof it passed the risk gate (a non-empty
+    ``risk_approval_token``) and is linked to a decision (``decision_id``).
+
+    This is the choke-point guarantee for No Unauthorized Trade + No Hidden
+    Decision: in enforce mode an order missing either is refused. Reads both
+    attributes and ``metadata`` defensively so it works with the OMS Order
+    dataclass or a plain dict-like.
+    """
+
+    def _get(name: str) -> Any:
+        val = getattr(order, name, None)
+        if not val and isinstance(getattr(order, "metadata", None), dict):
+            val = order.metadata.get(name)
+        if not val and isinstance(order, dict):
+            val = order.get(name)
+        return val
+
+    def _check() -> list[Violation]:
+        out: list[Violation] = []
+        if not _get("risk_approval_token"):
+            out.append(
+                _v("No Unauthorized Trade", CONSTITUTIONAL, "order has no risk-approval token (risk gate bypassed?)")
+            )
+        if not _get("decision_id"):
+            out.append(_v("No Hidden Decision", CRITICAL, "order has no linked decision id"))
+        return out
+
+    return _safe("order_authorization", _check)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# AUDIT CHAIN — tamper-evident audit log (No Audit Gap)
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_audit_chain(intact: bool, *, broken_at: Any = None) -> EnforcementResult:
+    """Assert the audit hash-chain verified intact. A broken chain is a
+    CONSTITUTIONAL breach (No Audit Gap) — evidence of tampering or loss."""
+
+    def _check() -> list[Violation]:
+        if not intact:
+            return [_v("No Audit Gap", CONSTITUTIONAL, f"audit hash-chain integrity broken (at {broken_at!r})")]
+        return []
+
+    return _safe("audit_chain", _check)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
