@@ -24,7 +24,7 @@ pytestmark = pytest.mark.unit
 
 def test_portfolio():
     assert pf.verify_portfolio_state_transition("ACTIVE", "LIQUIDATING") == []
-    assert pf.verify_portfolio_state_transition("ACTIVE", "CLOSED")          # must liquidate first
+    assert pf.verify_portfolio_state_transition("ACTIVE", "CLOSED")  # must liquidate first
     assert pf.verify_portfolio_value(600, 300, 50, 50, 1000) == []
     assert pf.verify_portfolio_value(600, 300, 50, 50, 1200)
     assert pf.verify_position_sizing(10, 100, 25) == []
@@ -65,7 +65,7 @@ def test_reconciliation():
 def test_derivatives():
     assert d.verify_greek_limits({"delta": 100, "vega": 50}, {"delta": 200, "vega": 100}) == []
     assert d.verify_greek_limits({"delta": 300}, {"delta": 200})
-    assert d.verify_greek_limits({"delta": -300}, {"delta": 200})           # abs value
+    assert d.verify_greek_limits({"delta": -300}, {"delta": 200})  # abs value
     assert d.verify_collateral_sufficient(1000, 1200) == []
     assert d.verify_collateral_sufficient(1000, 800)
     assert d.verify_expiry_handled(5, False) == []
@@ -75,8 +75,8 @@ def test_derivatives():
 
 def test_systems():
     assert sysm.verify_single_leader(1) == []
-    assert sysm.verify_single_leader(2)                                     # split-brain
-    assert sysm.verify_single_leader(0)                                     # leaderless
+    assert sysm.verify_single_leader(2)  # split-brain
+    assert sysm.verify_single_leader(0)  # leaderless
     assert sysm.verify_quorum(3, 5) == []
     assert sysm.verify_quorum(2, 5)
     assert sysm.verify_exactly_once(10, 10) == []
@@ -90,11 +90,16 @@ def test_systems():
     assert sysm.verify_cache_version("v1", "v1") == []
     assert sysm.verify_cache_version("v1", "v2")
     assert sysm.verify_acyclic({"a": ["b"], "b": ["c"], "c": []}) == []
-    assert sysm.verify_acyclic({"a": ["b"], "b": ["a"]})                    # cycle
+    assert sysm.verify_acyclic({"a": ["b"], "b": ["a"]})  # cycle
     assert sysm.verify_no_zombies(0, "agent") == []
     assert sysm.verify_no_zombies(2, "capital")
     assert sysm.verify_blast_radius_contained(1, 10) == []
     assert sysm.verify_blast_radius_contained(8, 10)
+    # single point of failure (No Critical Single Point Of Failure)
+    assert sysm.verify_no_single_point_of_failure({"db": {"critical": True, "redundancy": 2}}) == []
+    assert sysm.verify_no_single_point_of_failure({"db": {"critical": True, "redundancy": 1, "failover": True}}) == []
+    assert sysm.verify_no_single_point_of_failure({"db": {"critical": True, "redundancy": 1, "failover": False}})
+    assert sysm.verify_no_single_point_of_failure({"x": {"critical": False, "redundancy": 1}}) == []
 
 
 def test_compliance():

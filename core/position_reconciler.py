@@ -38,6 +38,14 @@ _MISMATCH_ALERT_THRESHOLD = 3
 _DRIFT_QTY_THRESHOLD = float(os.getenv("RECONCILER_DRIFT_QTY", "1.0"))  # units
 _DRIFT_VALUE_THRESHOLD = float(os.getenv("RECONCILER_DRIFT_VALUE", "100.0"))  # USD
 
+# Max per-symbol notional exposure (USD). The exposure invariant flags any symbol
+# whose summed open notional exceeds this (No Hidden Exposure).
+_MAX_SYMBOL_EXPOSURE_USD = float(os.getenv("RISK_MAX_SYMBOL_EXPOSURE_USD", "1000000.0"))
+
+# Approved portfolio VaR limit (USD, positive loss magnitude). 0 disables the
+# per-cycle VaR invariant (No Hidden Risk).
+_APPROVED_VAR_USD = float(os.getenv("RISK_APPROVED_VAR_USD", "0"))
+
 
 class PositionReconciler:
     """
@@ -117,10 +125,20 @@ class PositionReconciler:
 
         # Fetch latest prices and update unrealized P&L
         updated = 0
+        # Aggregate book value (DB vs broker) for the constitutional
+        # reconciliation invariant run after the loop.
+        agg_db_value = 0.0
+        agg_broker_value = 0.0
+        have_broker_values = False
+        # Per-symbol notional exposure (sums multiple positions on the same
+        # symbol) for the No Hidden Exposure invariant run after the loop.
+        symbol_exposure: dict[str, float] = {}
         for pos in db_positions:
             price = await self._get_price(pos.symbol)
             if price is None:
                 continue
+
+            symbol_exposure[pos.symbol] = symbol_exposure.get(pos.symbol, 0.0) + abs(float(pos.quantity or 0) * price)
 
             pnl = self._calc_pnl(pos, price)
             with self._sf() as session:
@@ -167,6 +185,9 @@ class PositionReconciler:
                         db_value = db_qty * price
                         broker_value = broker_qty * price
                         value_diff = abs(db_value - broker_value)
+                        agg_db_value += db_value
+                        agg_broker_value += broker_value
+                        have_broker_values = True
                     else:
                         db_value = broker_value = 0.0
                         value_diff = 0.0
@@ -181,6 +202,21 @@ class PositionReconciler:
                             broker_value=broker_value,
                             value_diff=value_diff,
                         )
+
+        # ── Constitutional reconciliation invariant (feature-flagged) ─────────
+        # Aggregate book value the platform believes (DB) vs. what the broker
+        # reports must reconcile.  In MONITOR mode this only logs; in ENFORCE
+        # mode a CONSTITUTIONAL breach trips the kill switch (No Hidden Loss).
+        if have_broker_values:
+            await self._enforce_reconciliation(agg_db_value, agg_broker_value)
+
+        # ── Per-symbol exposure invariant (feature-flagged) ───────────────────
+        if symbol_exposure:
+            self._enforce_exposure(symbol_exposure)
+
+        # ── Portfolio VaR invariant (No Hidden Risk, feature-flagged) ─────────
+        if _APPROVED_VAR_USD > 0:
+            self._enforce_var()
 
         if updated:
             logger.debug(
@@ -201,6 +237,69 @@ class PositionReconciler:
                 )
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
+
+    async def _enforce_reconciliation(self, db_value: float, broker_value: float) -> None:
+        """Run the constitutional reconciliation invariant on aggregate book value
+        and, in ENFORCE mode, trip the kill switch on a CONSTITUTIONAL breach.
+
+        Fail-safe: any error here is logged and swallowed — a bug in the
+        invariant layer must never crash the reconciliation loop.
+        """
+        try:
+            from invariants.enforcement import enforce_reconciliation
+
+            result = enforce_reconciliation(
+                internal_value=db_value,
+                external_value=broker_value,
+                value_tol=self._drift_value,
+            )
+            if result.should_halt:
+                reason = (
+                    f"Reconciliation breach: DB book ${db_value:.2f} vs broker ${broker_value:.2f} — {result.reason}"
+                )
+                logger.critical("RECONCILE_KILL: %s", reason)
+                try:
+                    from kill_switch import KillSwitch
+
+                    KillSwitch().activate(reason)
+                except Exception as ks_exc:
+                    logger.error("Could not activate kill switch on reconciliation breach: %s", ks_exc)
+        except Exception as exc:
+            logger.warning("Reconciliation invariant check failed (suppressed): %s", exc)
+
+    def _enforce_exposure(self, symbol_exposure: dict[str, float]) -> None:
+        """Run the No Hidden Exposure invariant on per-symbol notional. In MONITOR
+        mode this only logs; in ENFORCE mode an over-limit symbol is surfaced via
+        the facade (and counted) for the control center. Fail-safe: swallow errors.
+        """
+        try:
+            from invariants.enforcement import enforce_exposure
+
+            limits = dict.fromkeys(symbol_exposure, _MAX_SYMBOL_EXPOSURE_USD)
+            result = enforce_exposure(symbol_exposure, limits)
+            if result.violations:
+                logger.warning("EXPOSURE: %s", result.reason)
+        except Exception as exc:
+            logger.warning("Exposure invariant check failed (suppressed): %s", exc)
+
+    def _enforce_var(self) -> None:
+        """Run the portfolio-VaR invariant each cycle (No Hidden Risk): current
+        VaR must stay within the approved limit. Reads the live risk manager;
+        MONITOR logs, fail-safe (errors suppressed)."""
+        try:
+            from core.app_state import app_state
+
+            rm = getattr(app_state, "risk_manager", None)
+            if rm is None or not hasattr(rm, "value_at_risk"):
+                return
+            current_var = abs(float(rm.value_at_risk()))
+            from invariants.enforcement import enforce_var
+
+            result = enforce_var(current_var, _APPROVED_VAR_USD)
+            if result.violations:
+                logger.warning("VAR: %s", result.reason)
+        except Exception as exc:
+            logger.warning("VaR invariant check failed (suppressed): %s", exc)
 
     async def _trigger_drift_halt(
         self,

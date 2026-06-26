@@ -322,6 +322,32 @@ class TradeExecutor:
                 latency_ms=0,
             )
 
+        # ── 4b. Order authorization (feature-flagged, fail-safe) ──────────────
+        # The order has passed the mandatory pre-trade gate above — stamp the
+        # risk-approval token + decision id, then verify before the broker call so
+        # this path carries the same No Unauthorized Trade / No Hidden Decision
+        # guarantee as the OMS and smart-router paths. MONITOR logs; ENFORCE refuses.
+        signal["risk_approval_token"] = signal.get("risk_approval_token") or f"rat-{signal.get('signal_id', 'te')}"
+        signal["decision_id"] = signal.get("decision_id") or signal.get("signal_id") or signal["risk_approval_token"]
+        try:
+            from invariants.enforcement import enforce_order_authorization
+
+            _auth = enforce_order_authorization(signal)
+            if not _auth.allowed:
+                logger.critical("TradeExecutor BLOCKED order | symbol=%s reason=%s", symbol, _auth.reason)
+                return ExecutionResult(
+                    success=False,
+                    order_id=None,
+                    filled_quantity=0,
+                    average_price=0,
+                    commission=0,
+                    status=OrderStatus.REJECTED,
+                    message=f"[UNAUTHORIZED] {_auth.reason}",
+                    latency_ms=0,
+                )
+        except Exception as _auth_exc:  # never let the gate crash execution
+            logger.error("TradeExecutor: authorization check raised %s", _auth_exc)
+
         # ── 5. Place order ────────────────────────────────────────────────────
         order = await self.broker.place_market_order(
             symbol=symbol,

@@ -64,7 +64,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = REPO_ROOT / ".env.example"
 DOCKER_COMPOSE = REPO_ROOT / "docker-compose.yml"
 

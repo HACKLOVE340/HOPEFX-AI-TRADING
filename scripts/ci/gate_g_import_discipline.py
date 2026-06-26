@@ -96,7 +96,7 @@ def _is_data_layer_internal(node: ast.Import | ast.ImportFrom, file_path: Path) 
     try:
         file_path.relative_to(REPO_ROOT / "data_layer")
         return False, ""
-    except ValueError:
+    except ValueError:  # nosec B110 - relative_to raises ValueError when path is not under data_layer
         pass
 
     if isinstance(node, ast.ImportFrom) and node.module:

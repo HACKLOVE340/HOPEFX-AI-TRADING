@@ -24,6 +24,14 @@ services:
       APP_ENV: ${APP_ENV:-production}
       API_HOST: "0.0.0.0"
       API_PORT: "8000"
+      # ── Constitutional invariant enforcement (docs/INVARIANT_ROLLOUT.md) ──
+      # Default monitor = observe + log, never block. Flip to enforce only
+      # after a clean soak (watch /health/invariants).
+      HOPEFX_INVARIANT_MODE: ${HOPEFX_INVARIANT_MODE:-monitor}
+      HOPEFX_INVARIANT_FAIL_CLOSED: ${HOPEFX_INVARIANT_FAIL_CLOSED:-0}
+      RISK_MAX_TICK_STALENESS_S: ${RISK_MAX_TICK_STALENESS_S:-5.0}
+      RISK_MAX_SYMBOL_EXPOSURE_USD: ${RISK_MAX_SYMBOL_EXPOSURE_USD:-1000000.0}
+      RISK_APPROVED_VAR_USD: ${RISK_APPROVED_VAR_USD:-0}
       # ── HOPEFXBrain — sourced from .env (set these before docker compose up) ──
       # LLM backend: "anthropic" (default) or "openai"
       LLM_BACKEND: ${LLM_BACKEND:-anthropic}

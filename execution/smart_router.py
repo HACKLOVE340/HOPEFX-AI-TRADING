@@ -545,6 +545,19 @@ class SmartRouter:
         ranked: list[tuple[str, float]],
         decision: RoutingDecision,
     ) -> dict[str, Any]:
+        # ── Order-authorization gate (feature-flagged, fail-safe) ────────────
+        # No order may reach a broker without a risk-approval token + decision id.
+        # MONITOR logs; ENFORCE refuses. Facade never raises into this path.
+        try:
+            from invariants.enforcement import enforce_order_authorization
+
+            _auth = enforce_order_authorization(order_request)
+            if not _auth.allowed:
+                logger.critical("Router BLOCKED order %s: %s", order_request.get("order_id"), _auth.reason)
+                return {"status": "rejected", "reason": f"unauthorized:{_auth.reason}", "broker": "none"}
+        except Exception as _auth_exc:  # never let the gate crash routing
+            logger.error("Router: authorization check raised %s", _auth_exc)
+
         last_error = "unknown"
         for broker_id, score in ranked:
             t0 = time.monotonic()

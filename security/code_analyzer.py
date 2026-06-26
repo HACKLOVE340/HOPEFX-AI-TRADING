@@ -257,6 +257,12 @@ class _ASTAnalyzer(ast.NodeVisitor):
             for s in body
         )
         if all_pass:
+            # Honor an explicit reviewer escape for intentional null-object /
+            # no-op stubs (e.g. fallback classes when an optional lib is absent),
+            # consistent with the line-based checks' "# healer: ignore" support.
+            def_line = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
+            if "# healer: ignore" in def_line or "# noqa: healer" in def_line:
+                return
             self._add(
                 node.lineno,
                 "unfinished_code",

@@ -1,0 +1,111 @@
+{
+  "__comment": "HOPEFX Constitutional Invariants dashboard. Import into Grafana (Dashboards → Import) against the Prometheus datasource that scrapes /metrics. Metrics are synced by prometheus_monitoring.py from invariants.enforcement.status(). See docs/INVARIANT_ROLLOUT.md.",
+  "title": "HOPEFX — Constitutional Invariants",
+  "uid": "hopefx-invariants",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "tags": ["hopefx", "invariants", "risk", "governance"],
+  "time": {"from": "now-6h", "to": "now"},
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Enforcement mode",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"expr": "hopefx_invariant_mode", "legendFormat": "mode"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "OFF", "color": "red"}}},
+            {"type": "value", "options": {"1": {"text": "MONITOR", "color": "yellow"}}},
+            {"type": "value", "options": {"2": {"text": "ENFORCE", "color": "green"}}}
+          ],
+          "thresholds": {"steps": [{"color": "red", "value": null}]}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Invariant engine healthy",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"expr": "hopefx_invariant_engine_healthy", "legendFormat": "healthy"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "UNHEALTHY", "color": "red"}}},
+            {"type": "value", "options": {"1": {"text": "HEALTHY", "color": "green"}}}
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Checker errors (total)",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"expr": "hopefx_invariant_checker_errors_total", "legendFormat": "checker_errors"}],
+      "fieldConfig": {"defaults": {"thresholds": {"steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}, "color": {"mode": "thresholds"}}}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Kill-switch trips (total)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"expr": "hopefx_invariant_halts_signalled_total", "legendFormat": "halts"}],
+      "fieldConfig": {"defaults": {"thresholds": {"steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}, "color": {"mode": "thresholds"}}}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Violations detected (rate /5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"expr": "rate(hopefx_invariant_violations_total[5m])", "legendFormat": "violations/s"}]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Orders blocked (rate /5m) — enforce mode",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"expr": "rate(hopefx_invariant_blocked_total[5m])", "legendFormat": "blocked/s"}]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Checks performed (rate /5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"expr": "rate(hopefx_invariant_checks_total[5m])", "legendFormat": "checks/s"}]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Cumulative violations",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "hopefx_invariant_violations_total", "legendFormat": "violations"},
+        {"expr": "hopefx_invariant_blocked_total", "legendFormat": "blocked"},
+        {"expr": "hopefx_invariant_checks_total", "legendFormat": "checks"}
+      ]
+    }
+  ]
+}

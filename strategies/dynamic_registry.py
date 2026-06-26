@@ -671,7 +671,7 @@ class DynamicStrategyRegistry:
                         logger.warning("DynamicStrategyRegistry: failed to process update: %s", exc)
 
                 await asyncio.sleep(0.1)
-        except asyncio.CancelledError:
+        except asyncio.CancelledError:  # nosec B110 - graceful task cancellation; nothing to clean up
             pass
         except Exception as exc:
             logger.error("DynamicStrategyRegistry: subscriber crashed: %s", exc)

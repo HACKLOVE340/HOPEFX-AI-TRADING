@@ -270,6 +270,37 @@ def _sync_trading_gauges() -> None:
     except Exception as _exc:
         logger.debug("risk_manager gauge sync failed: %s", _exc)
 
+    try:
+        # ── Constitutional invariant enforcement ──────────────────────────────
+        # Exposes the enforcement mode + cumulative counters so the soak can be
+        # watched in Prometheus/Grafana and alerted on (see monitoring/rules).
+        from invariants.enforcement import status as _inv_status
+
+        s = _inv_status()
+        mode_map = {"off": 0, "monitor": 1, "enforce": 2}
+        gauges = {
+            "hopefx_invariant_mode": (
+                "Invariant enforcement mode: 0=off, 1=monitor, 2=enforce",
+                mode_map.get(s.get("mode"), 1),
+            ),
+            "hopefx_invariant_engine_healthy": (
+                "1 when the invariant engine self-check passes, 0 otherwise",
+                1 if s.get("engine_healthy") else 0,
+            ),
+        }
+        counters = s.get("counters", {})
+        for key in ("checks", "violations", "blocked", "halts_signalled", "checker_errors"):
+            gauges[f"hopefx_invariant_{key}_total"] = (
+                f"Cumulative invariant '{key}' since process start",
+                float(counters.get(key, 0)),
+            )
+        for name, (desc, value) in gauges.items():
+            g = _get_or_create_gauge(name, desc)
+            if g is not None:
+                g.set(value)
+    except Exception as _exc:
+        logger.debug("invariant enforcement gauge sync failed: %s", _exc)
+
 
 def setup_prometheus_monitoring(app: FastAPI) -> None:
     """

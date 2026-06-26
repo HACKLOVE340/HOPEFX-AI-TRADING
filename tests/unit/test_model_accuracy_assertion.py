@@ -66,7 +66,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 OOS_META_PATH = REPO_ROOT / "ml" / "saved_models" / "advanced_oos_meta.json"
 README_PATH = REPO_ROOT / "README.md"
 SIGNALS_PY_PATH = REPO_ROOT / "api" / "signals.py"

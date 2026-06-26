@@ -64,7 +64,7 @@ import yaml
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_BASE = REPO_ROOT / "docker-compose.yml"
 COMPOSE_SMOKE = REPO_ROOT / "docker-compose.smoke.yml"
 COMPOSE_LOWLATENCY = REPO_ROOT / "docker-compose.lowlatency.yml"

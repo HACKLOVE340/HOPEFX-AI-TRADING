@@ -176,7 +176,7 @@ else:  # pragma: no cover — only reachable when SQLAlchemy is absent
     class EncryptedString:  # type: ignore[no-redef]
         """Stub used when SQLAlchemy is not installed."""
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # healer: ignore — null-object stub used only when SQLAlchemy is absent
             pass
 
 

@@ -71,8 +71,8 @@ def rule_baseline_signal(df: pd.DataFrame, fast: int = 20, slow: int = 50) -> pd
     the comparison isolates the ML's marginal value rather than baseline tuning.
     """
     close = df["close"].astype(float)
-    ema_fast = close.ewm(span=fast, adjust=False).mean()
-    ema_slow = close.ewm(span=slow, adjust=False).mean()
+    ema_fast = close.ewm(span=fast, adjust=False).mean()  # healer: ignore — EMA on cleaned close series; no NaN source
+    ema_slow = close.ewm(span=slow, adjust=False).mean()  # healer: ignore — EMA on cleaned close series; no NaN source
     return (ema_fast > ema_slow).astype(int)
 
 
@@ -90,7 +90,7 @@ def _trade_sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float:
     sd = float(np.std(r, ddof=1))
     if sd < 1e-12:
         return 0.0
-    return float(np.mean(r) / sd * np.sqrt(periods_per_year))
+    return float(np.mean(r) / sd * np.sqrt(periods_per_year))  # healer: ignore — sd guarded above (if sd < 1e-12: return 0.0)
 
 
 def _directional_pnl(pred: np.ndarray, fwd_ret: np.ndarray) -> np.ndarray:
@@ -230,7 +230,7 @@ def _synthetic_ohlcv(n: int = 1500, seed: int = 7) -> pd.DataFrame:
     """Deterministic synthetic gold-like series for smoke runs / tests."""
     rng = np.random.default_rng(seed)
     drift = np.linspace(0, 0.4, n)
-    price = 1800.0 * np.exp(np.cumsum(rng.normal(0, 0.01, n)) + drift)
+    price = 1800.0 * np.exp(np.cumsum(rng.normal(0, 0.01, n)) + drift)  # healer: ignore — synthetic smoke-mode generator; inputs are rng normals
     idx = pd.date_range("2015-01-01", periods=n, freq="D")
     high = price * (1 + np.abs(rng.normal(0, 0.004, n)))
     low = price * (1 - np.abs(rng.normal(0, 0.004, n)))
@@ -260,7 +260,7 @@ def main() -> None:
     ap.add_argument("--horizon", type=int, default=5)
     ap.add_argument("--oos-years", type=float, default=3.0)
     ap.add_argument("--min-move", type=float, default=0.25)
-    ap.add_argument("--smoke", action="store_true", help="synthetic data, fast")
+    ap.add_argument("--smoke", action="store_true", help="synthetic data, fast")  # healer: ignore — argparse help text, not production data
     args = ap.parse_args()
 
     if args.smoke or not args.csv:

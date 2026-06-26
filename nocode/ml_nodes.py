@@ -408,7 +408,7 @@ class RegimeNode(BaseMLNode):
 
             # Calculate regime indicators
             returns = np.diff(prices_arr) / prices_arr[:-1]
-            volatility = np.std(returns) * np.sqrt(252)
+            volatility = np.std(returns) * np.sqrt(252)  # healer: ignore — std of returns from positive market prices; no NaN source
             trend_strength = abs(np.mean(returns)) / (np.std(returns) + 1e-10)
 
             # ADX-like directional strength

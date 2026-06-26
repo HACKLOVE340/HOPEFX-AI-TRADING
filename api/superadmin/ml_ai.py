@@ -16,6 +16,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _live_drift_score() -> float:
+    """Read the current feature-drift score from the drift monitor (Redis).
+
+    Returns 0.0 when the monitor is not running / Redis is unavailable. This is
+    the single source of truth for drift used by both /ml/status and /ml/models,
+    so the dashboard never shows a hardcoded zero while real drift exists.
+    """
+    try:
+        import json as _json
+
+        from cache.redis_client import get_sync_redis_client
+
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get("ml:drift:status")
+            if raw:
+                return float(_json.loads(raw).get("drift_score", 0.0))
+    except Exception as exc:  # best-effort; drift is informational
+        logger.debug("_live_drift_score: %s", exc)
+    return 0.0
+
+
 # ── ML / AI ───────────────────────────────────────────────────────────────────
 
 
@@ -67,19 +90,8 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
     except Exception as exc:
         logger.debug("get_ml_status: inference engine unavailable: %s", exc)
 
-    # ── Drift score from drift monitor ────────────────────────────────────────
-    try:
-        import json as _json
-        from cache.redis_client import get_sync_redis_client
-
-        rc = get_sync_redis_client()
-        if rc:
-            raw = rc.get("ml:drift:status")
-            if raw:
-                drift_data = _json.loads(raw)
-                result["drift_score"] = round(float(drift_data.get("drift_score", 0.0)), 4)
-    except Exception as exc:
-        logger.debug("get_ml_status: drift score redis: %s", exc)
+    # ── Drift score from drift monitor (shared source of truth) ───────────────
+    result["drift_score"] = round(_live_drift_score(), 4)
 
     return result
 
@@ -114,6 +126,11 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
         except Exception:  # nosec B110  # noqa: S110
             pass
 
+        # Live drift score from the drift monitor (applies to the model actually
+        # serving inference). Previously every row was hardcoded to 0.0, which
+        # made the dashboard show all models as zero-drift regardless of reality.
+        active_drift = _live_drift_score()
+
         for name, info in versions.items():
             state = info.get("state", "staging")
             # Map registry state → MLModel status values
@@ -134,12 +151,12 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
                     "status": status,
                     # oos_accuracy is stored as a fraction (0–1); the frontend
                     # AccuracyBar expects a 0–100 percent (matches accuracy_7d).
-                    "accuracy": round(
-                        (lambda a: a * 100 if a <= 1.0 else a)(float(info.get("oos_accuracy", 0.0))), 2
-                    ),
+                    "accuracy": round((lambda a: a * 100 if a <= 1.0 else a)(float(info.get("oos_accuracy", 0.0))), 2),
                     "last_trained": info.get("registered_at", _utcnow().isoformat()),
                     "predictions_today": preds_today,
-                    "drift_score": 0.0,  # populated by drift monitor if running
+                    # Only the serving (active) model has a live drift score;
+                    # staged/retired versions are not serving, so 0.0 is correct.
+                    "drift_score": round(active_drift, 4) if name == active_version else 0.0,
                     "deployed_at": info.get("promoted_at"),
                 }
             )
