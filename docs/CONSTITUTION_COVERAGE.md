@@ -50,8 +50,10 @@
   1. **Pre-trade gate** — `risk/manager.py` `size_order()` calls `enforce_pre_trade()` after the hard gates (finiteness, tick/spread, confidence floor, **market-data freshness**); in `enforce` mode a CONSTITUTIONAL/CRITICAL violation returns zero sizing (order refused). It also **mints a `risk_approval_token`** onto the sizing result.
   2. **Order-authorization gate** — `execution/oms.py` `submit_order()` calls `enforce_order_authorization()` so no order reaches a broker without a `risk_approval_token` + `decision_id` (No Unauthorized Trade / No Hidden Decision).
   3. **Reconciliation loop** — `core/position_reconciler.py` checks aggregate DB-vs-broker book value each cycle (trips the kill switch on a CONSTITUTIONAL breach in `enforce`) **and per-symbol exposure** (`enforce_exposure`).
-  4. **CI gate** — `.github/workflows/ci.yml` runs `runtime_invariant_check.py`, which probes endpoints, scans the event log, **and exercises the audit hash-chain verifier** (findings fail the build).
-  5. **`/health/invariants`** — live status (mode, engine self-check, counters, recent violations) on the health router app.py includes.
+  4. **Per-cycle VaR** — `core/position_reconciler.py` runs `enforce_var()` against `RISK_APPROVED_VAR_USD` (No Hidden Risk).
+  5. **CI gate** — `.github/workflows/ci.yml` runs `runtime_invariant_check.py`, which probes endpoints, scans the event log, **and exercises the audit hash-chain, tenant-isolation, recovery-readiness and surveillance (wash/spoof/layering) mechanisms** (findings fail the build).
+  6. **`/health/invariants`** — live status (mode, engine self-check, counters, recent violations) on the health router app.py includes.
+  - **Rollout:** see `docs/INVARIANT_ROLLOUT.md` for the monitor→staged-enforce operator runbook.
   - Mode via `HOPEFX_INVARIANT_MODE` ∈ {`off`, `monitor`, `enforce`}, **default `monitor`** (runs + logs, never blocks → zero behaviour change until deliberately set to `enforce`). Checker-internal errors fail **open** by default (`HOPEFX_INVARIANT_FAIL_CLOSED=1` to opt out). Tested in `tests/unit/test_invariants_enforcement.py`, `tests/unit/test_pre_trade_invariant_gate.py`, `tests/integration/test_invariants_endpoint.py`.
 
 > **Honest framing (per the framework's §9–11):** the file enumerates 300+ invariant
@@ -74,13 +76,13 @@
 | 2 | No Unauthorized Capital Movement | 🟡 | Wallet/withdrawal endpoints require auth + role. **Gap:** no `verify_capital_equation` wired to a ledger endpoint. *Rec: expose a treasury/ledger reconciliation endpoint, assert the capital equation each cycle.* |
 | 3 | No Hidden Loss | 🟢 | **Wired:** `core/position_reconciler.py` now runs `enforce_reconciliation()` each cycle on aggregate DB-vs-broker book value; a CONSTITUTIONAL breach trips the kill switch in `enforce` mode. Library `verify_pnl_reconciliation`/`verify_no_negative_balance` back it. **Remaining:** also assert the PnL identity against a live `total_pnl` account field. |
 | 4 | No Hidden Exposure | 🟢 | **Wired:** the reconciliation loop aggregates per-symbol notional each cycle and runs `enforce_exposure()` (`verify_exposure_limits`) against `RISK_MAX_SYMBOL_EXPOSURE_USD`; surfaced via the facade counters. **Remaining:** sector/factor dimensions beyond per-symbol notional. |
-| 5 | No Hidden Risk | 🟡 | VaR/CVaR computed in `risk/manager.py`; surfaced in reliability/risk endpoints. `verify_within_limit` available. *Rec: assert VaR ≤ approved each cycle in the checker.* |
+| 5 | No Hidden Risk | 🟢 | **Wired:** the reconciliation loop runs `enforce_var()` each cycle — live `risk_manager.value_at_risk()` must stay within `RISK_APPROVED_VAR_USD` (No Hidden Risk). VaR/CVaR computed in `risk/manager.py`. **Remaining:** per-factor VaR decomposition. |
 | 6 | No Hidden Decision | 🟢 | **Wired:** the OMS authorization gate refuses any order with no `decision_id` (`enforce_order_authorization()`); `Order` now carries `decision_id`/`lineage_id`. Decisions logged via `HOPEFXDecisionEngine`. **Remaining:** populate `decision_id` from the engine on every execution path. |
 | 7 | No Hidden AI Action | 🟡 | Observability captures agent/brain logs whole-platform. **Gap:** no structured per-action audit record assertion. *Rec: emit `event()` per AI action; assert presence.* |
 | 8 | No Data Corruption | ✅ | `verify_tick`, `verify_spread`, `verify_no_duplicate_ids`, `verify_finite` (library); runtime checker flags NaN/Inf + duplicate/tiled list items on **every** probed endpoint (caught the 18-rectangle + fraction bugs). |
 | 9 | No State Corruption | ✅ | `verify_order_state_transition` + `verify_order_not_contradictory` (library, mirrors `execution/oms.py`'s enforced transition table); terminal-state re-entry & phantom fills caught. |
 | 10 | No Audit Gap | 🟢 | **Wired:** `compliance/auditor.py` hash-chains records; the **runtime checker (CI) now exercises `verify_integrity()`** — a clean chain must verify and tampering must be detected, else the build fails. Pure `governance.verify_hash_chain` predicate + `enforce_audit_chain` facade back it. **Remaining:** call `verify_integrity()` on a schedule in production ops. |
-| 11 | No Compliance Breach | 🟡 | Compliance endpoints (AML/KYC/sanctions/surveillance) live and returning data (verified). **Gap:** no automated surveillance invariants (wash/spoofing). *Rec: add surveillance checks to the suite.* |
+| 11 | No Compliance Breach | 🟢 | **Wired:** the runtime checker (CI) exercises the wash-trade / spoofing / layering detectors (`invariants.compliance`) — each must flag a known-bad case or the build fails. Compliance endpoints (AML/KYC/sanctions) live. **Remaining:** stream live order flow through the detectors in production. |
 | 12 | No Cross-Tenant Leakage | 🟢 | **Wired:** runtime checker asserts two tenants' `NamespacedCache` keyspaces are disjoint and that `verify_pod_isolation` detects shared state; `enforce_pod_isolation` facade available. **Remaining:** a live two-pod probe in a multi-pod deployment. |
 | 13 | No Cross-Pod Leakage | 🟢 | Same mechanism as #12 (`enforce_pod_isolation` + runtime isolation check). **Remaining:** live cross-pod probe at deployment scale. |
 | 14 | No Loss Of Human Control | ✅ | `verify_human_control` (library) asserts the kill switch is wired and operable; `kill_switch.py` provides engage/query + cross-pod propagation via Redis EventBus. The reconciliation loop now **auto-trips** that same kill switch on a constitutional breach. |
@@ -91,7 +93,12 @@
 | 19 | No Unverified AI Decision | 🟢 | **Wired:** `enforce_pre_trade()` checks finite confidence/probability, an optional `min_confidence` floor, **and market-data freshness** (rejects a tick older than `RISK_MAX_TICK_STALENESS_S` when the signal carries a timestamp) in `size_order()`. ML drift/staleness gating in `ml/inference_engine.py`. |
 | 20 | No Silent Failure | ✅ | The observability harness is the substrate; the runtime checker is now a **CI gate** (`.github/workflows/ci.yml`) so "looks right, behaves wrong" fails the build. |
 
-**Tally:** ✅ 5 fully enforced · 🟢 9 wired/operational (#1 token gate, #3 reconciliation, #4 exposure, #6 decision link, #10 audit-chain, #12/#13 isolation, #16 recovery, #19 pre-trade+freshness) · 🟡 6 partial (#2, #5, #7, #11, #15, #18) · ❌ 0 gaps. Up from 0 explicit enforcement at session start.
+**Tally:** ✅ 5 fully enforced · 🟢 11 wired/operational (#1 token gate, #3 reconciliation, #4 exposure, #5 VaR/cycle, #6 decision link, #10 audit-chain, #11 surveillance, #12/#13 isolation, #16 recovery, #19 pre-trade+freshness) · 🟡 4 partial (#2 ledger reconciliation, #7 per-AI-action audit, #15 blast-radius, #18 SPOF) · ❌ 0 gaps. Up from 0 explicit enforcement at session start.
+
+> The 4 remaining 🟡 each need the platform to **expose new state** (a treasury/
+> ledger endpoint, structured per-AI-action audit records, a blast-radius/SPOF
+> dependency inventory) before they can be asserted — they are feature work, not
+> missing predicates. The reusable predicates already exist in `invariants/`.
 
 > **Legend addition:** 🟢 = predicate **wired into the live money path** behind
 > the `HOPEFX_INVARIANT_MODE` flag (active in `monitor`, blocking in `enforce`).

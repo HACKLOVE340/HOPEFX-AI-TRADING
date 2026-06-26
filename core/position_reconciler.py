@@ -42,6 +42,10 @@ _DRIFT_VALUE_THRESHOLD = float(os.getenv("RECONCILER_DRIFT_VALUE", "100.0"))  # 
 # whose summed open notional exceeds this (No Hidden Exposure).
 _MAX_SYMBOL_EXPOSURE_USD = float(os.getenv("RISK_MAX_SYMBOL_EXPOSURE_USD", "1000000.0"))
 
+# Approved portfolio VaR limit (USD, positive loss magnitude). 0 disables the
+# per-cycle VaR invariant (No Hidden Risk).
+_APPROVED_VAR_USD = float(os.getenv("RISK_APPROVED_VAR_USD", "0"))
+
 
 class PositionReconciler:
     """
@@ -210,6 +214,10 @@ class PositionReconciler:
         if symbol_exposure:
             self._enforce_exposure(symbol_exposure)
 
+        # ── Portfolio VaR invariant (No Hidden Risk, feature-flagged) ─────────
+        if _APPROVED_VAR_USD > 0:
+            self._enforce_var()
+
         if updated:
             logger.debug(
                 "Reconciler cycle %d: updated P&L for %d positions",
@@ -273,6 +281,25 @@ class PositionReconciler:
                 logger.warning("EXPOSURE: %s", result.reason)
         except Exception as exc:
             logger.warning("Exposure invariant check failed (suppressed): %s", exc)
+
+    def _enforce_var(self) -> None:
+        """Run the portfolio-VaR invariant each cycle (No Hidden Risk): current
+        VaR must stay within the approved limit. Reads the live risk manager;
+        MONITOR logs, fail-safe (errors suppressed)."""
+        try:
+            from core.app_state import app_state
+
+            rm = getattr(app_state, "risk_manager", None)
+            if rm is None or not hasattr(rm, "value_at_risk"):
+                return
+            current_var = abs(float(rm.value_at_risk()))
+            from invariants.enforcement import enforce_var
+
+            result = enforce_var(current_var, _APPROVED_VAR_USD)
+            if result.violations:
+                logger.warning("VAR: %s", result.reason)
+        except Exception as exc:
+            logger.warning("VaR invariant check failed (suppressed): %s", exc)
 
     async def _trigger_drift_halt(
         self,

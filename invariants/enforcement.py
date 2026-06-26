@@ -50,7 +50,7 @@ from invariants.constitution import (
 )
 from invariants.governance import verify_pod_isolation
 from invariants.resilience import verify_recovery_path_exists
-from invariants.risk import verify_exposure_limits
+from invariants.risk import verify_exposure_limits, verify_var
 
 logger = logging.getLogger("hopefx.invariants")
 
@@ -328,6 +328,12 @@ def enforce_exposure(exposure: dict[str, float], limits: dict[str, float]) -> En
     ``should_halt`` is set so a caller may halt/trip on a breach in enforce mode.
     """
     return _safe("exposure", lambda: verify_exposure_limits(exposure, limits))
+
+
+def enforce_var(portfolio_var: float, approved_var: float) -> EnforcementResult:
+    """Assert portfolio Value-at-Risk stays within the approved limit each cycle
+    (No Hidden Risk). Both are positive loss magnitudes (USD)."""
+    return _safe("var", lambda: verify_var(portfolio_var, approved_var))
 
 
 # ════════════════════════════════════════════════════════════════════════════════

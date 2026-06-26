@@ -510,6 +510,34 @@ def check_recovery_readiness(res: CheckResult) -> None:
         res.add("ERROR", "resilience/", "recovery_readiness", f"recovery mechanism(s) not importable: {missing}")
 
 
+def check_surveillance(res: CheckResult) -> None:
+    """Exercise the market-surveillance predicates (No Compliance Breach):
+    wash-trade, spoofing and layering detection must each flag a known-bad case.
+    A broken surveillance mechanism would silently pass manipulation."""
+    try:
+        from invariants.compliance import (
+            verify_no_layering,
+            verify_no_spoofing,
+            verify_no_wash_trade,
+        )
+
+        cases = [
+            ("wash_trade", verify_no_wash_trade("acct-1", "acct-1")),  # buyer == seller
+            ("spoofing", verify_no_spoofing(placed=100, cancelled=99, filled=0)),
+            ("layering", verify_no_layering(same_side_orders_at_levels=25, max_levels=10)),
+        ]
+        for name, result in cases:
+            if not result:
+                res.add(
+                    "ERROR",
+                    "invariants/compliance.py",
+                    "surveillance",
+                    f"{name} detector failed to flag a known-bad case",
+                )
+    except Exception as e:
+        res.add("ERROR", "invariants/compliance.py", "surveillance", f"{type(e).__name__}: {e}")
+
+
 def report(res: CheckResult, as_json: bool) -> int:
     if as_json:
         print(
@@ -572,6 +600,7 @@ def main() -> int:
         check_audit_integrity(res)
         check_tenant_isolation(res)
         check_recovery_readiness(res)
+        check_surveillance(res)
         if not args.no_log_scan:
             scan_event_log(started, res)
         return report(res, args.json)

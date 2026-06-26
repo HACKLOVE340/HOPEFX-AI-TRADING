@@ -174,6 +174,14 @@ def test_recovery_readiness(monkeypatch):
     assert gap.violations
 
 
+# ── portfolio VaR (#5) ────────────────────────────────────────────────────────────────
+def test_var_within_and_over_limit(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    assert enf.enforce_var(100.0, 500.0).violations == []
+    over = enf.enforce_var(900.0, 500.0)
+    assert over.violations
+
+
 # ── reconciliation ────────────────────────────────────────────────────────────────
 def test_reconciliation_match_no_halt(monkeypatch):
     monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
