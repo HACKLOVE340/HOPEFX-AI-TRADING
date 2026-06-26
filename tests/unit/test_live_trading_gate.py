@@ -386,8 +386,9 @@ class TestCheckMaster:
         gate = _all_pass_gate(tmp_path)
         gate._check_paper_clock = lambda: (False, "clock incomplete")
         result = gate.check()
-        # All five checks must appear in result.checks
-        assert len(result.checks) == 5
+        # All six checks must appear in result.checks (config_consistency,
+        # kill_switch, paper_clock, oos_accuracy, sharpe_gate, feature_flag).
+        assert len(result.checks) == 6
 
     def test_check_exception_handled_gracefully(self, tmp_path):
         gate = _all_pass_gate(tmp_path)

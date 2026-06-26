@@ -299,7 +299,9 @@ def test_check_all_checks_evaluated_even_after_first_failure():
     g._check_feature_flag = lambda: (False, "flag off")
     result = g.check()
     assert not result.allowed
-    assert len(result.checks) == 5
+    # 6 checks: config_consistency, kill_switch, paper_clock, oos_accuracy,
+    # sharpe_gate, feature_flag.
+    assert len(result.checks) == 6
 
 
 def test_check_handles_exception_in_check_fn():
