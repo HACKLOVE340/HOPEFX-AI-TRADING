@@ -564,8 +564,8 @@ class _NoOpMeter:
 class _NoOpInstrument:
     """No-op metric instrument."""
 
-    def add(self, value: float, attributes: dict | None = None) -> None:
+    def add(self, value: float, attributes: dict | None = None) -> None:  # healer: ignore — no-op metric instrument (OTel disabled)
         pass
 
-    def record(self, value: float, attributes: dict | None = None) -> None:
+    def record(self, value: float, attributes: dict | None = None) -> None:  # healer: ignore — no-op metric instrument (OTel disabled)
         pass
