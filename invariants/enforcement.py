@@ -49,6 +49,7 @@ from invariants.constitution import (
     verify_tick,
     verify_within_limit,
 )
+from invariants.ai import verify_trust_floor, verify_trust_score, verify_trust_weighted_allocation
 from invariants.governance import verify_action_audited, verify_pod_isolation
 from invariants.resilience import verify_recovery_path_exists
 from invariants.risk import (
@@ -342,6 +343,23 @@ def enforce_var(portfolio_var: float, approved_var: float) -> EnforcementResult:
     """Assert portfolio Value-at-Risk stays within the approved limit each cycle
     (No Hidden Risk). Both are positive loss magnitudes (USD)."""
     return _safe("var", lambda: verify_var(portfolio_var, approved_var))
+
+
+def enforce_trust_allocation(allocations: dict[str, dict[str, float]], floor: float = 0.0) -> EnforcementResult:
+    """Enforce AI subsystem trust scoring (architecture #7): every trust score is
+    valid [0,1], no distrusted subsystem (trust < ``floor``) holds capital, and
+    capital is not inverted vs trust. ``allocations`` maps name -> {trust, capital}."""
+
+    def _check() -> list[Violation]:
+        out: list[Violation] = []
+        for name, a in allocations.items():
+            out += verify_trust_score(a.get("trust"), name)
+            if floor > 0:
+                out += verify_trust_floor(a.get("trust"), a.get("capital", 0.0), floor)
+        out += verify_trust_weighted_allocation(allocations)
+        return out
+
+    return _safe("trust_allocation", _check)
 
 
 def enforce_risk_appetite(state: dict[str, Any], policy: dict[str, Any]) -> EnforcementResult:
