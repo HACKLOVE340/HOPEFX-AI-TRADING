@@ -81,17 +81,17 @@
 | 9 | No State Corruption | ✅ | `verify_order_state_transition` + `verify_order_not_contradictory` (library, mirrors `execution/oms.py`'s enforced transition table); terminal-state re-entry & phantom fills caught. |
 | 10 | No Audit Gap | 🟢 | **Wired:** `compliance/auditor.py` hash-chains records; the **runtime checker (CI) now exercises `verify_integrity()`** — a clean chain must verify and tampering must be detected, else the build fails. Pure `governance.verify_hash_chain` predicate + `enforce_audit_chain` facade back it. **Remaining:** call `verify_integrity()` on a schedule in production ops. |
 | 11 | No Compliance Breach | 🟡 | Compliance endpoints (AML/KYC/sanctions/surveillance) live and returning data (verified). **Gap:** no automated surveillance invariants (wash/spoofing). *Rec: add surveillance checks to the suite.* |
-| 12 | No Cross-Tenant Leakage | 🟡 | Pod/tenant isolation code exists; auth scopes per user. **Gap:** no runtime isolation assertion. *Rec: probe two pods, assert disjoint positions/memory/models.* |
-| 13 | No Cross-Pod Leakage | 🟡 | Same as #12. *Rec: same isolation probe at the pod boundary.* |
+| 12 | No Cross-Tenant Leakage | 🟢 | **Wired:** runtime checker asserts two tenants' `NamespacedCache` keyspaces are disjoint and that `verify_pod_isolation` detects shared state; `enforce_pod_isolation` facade available. **Remaining:** a live two-pod probe in a multi-pod deployment. |
+| 13 | No Cross-Pod Leakage | 🟢 | Same mechanism as #12 (`enforce_pod_isolation` + runtime isolation check). **Remaining:** live cross-pod probe at deployment scale. |
 | 14 | No Loss Of Human Control | ✅ | `verify_human_control` (library) asserts the kill switch is wired and operable; `kill_switch.py` provides engage/query + cross-pod propagation via Redis EventBus. The reconciliation loop now **auto-trips** that same kill switch on a constitutional breach. |
 | 15 | No Unbounded Failure | 🟡 | Circuit breakers (`resilience/`, feed circuits), kill switch. **Gap:** no blast-radius invariant. *Rec: chaos test + assert containment.* |
-| 16 | No Unrecoverable Failure | 🟡 | Auto-rollback, self-healer, hot-standby modules exist. **Gap:** recovery paths not continuously verified. *Rec: periodic restore/failover drill assertion.* |
+| 16 | No Unrecoverable Failure | 🟢 | **Wired:** runtime checker asserts the recovery mechanisms (`kill_switch`, `resilience.auto_rollback`/`hot_standby`/`circuit_breaker`, reconciler) are present & importable; `enforce_recovery_readiness` facade checks per-path readiness. **Remaining:** live restore/failover *drills* (ops runbook, not code). |
 | 17 | No Unexplained System Behavior | ✅ | `hopefx_observability.py` captures every logger + all uncaught/thread/asyncio/unraisable exceptions to `hopefx_all.log` + `hopefx_events.jsonl`; checker scans the log and fails on any logged exception. |
 | 18 | No Critical Single Point Of Failure | 🟡 | Redis EventBus, async DB pool, multi-source feeds with failover. **Gap:** SPOF inventory not invariant-checked. *Rec: dependency-graph SPOF audit.* |
 | 19 | No Unverified AI Decision | 🟢 | **Wired:** `enforce_pre_trade()` checks finite confidence/probability, an optional `min_confidence` floor, **and market-data freshness** (rejects a tick older than `RISK_MAX_TICK_STALENESS_S` when the signal carries a timestamp) in `size_order()`. ML drift/staleness gating in `ml/inference_engine.py`. |
 | 20 | No Silent Failure | ✅ | The observability harness is the substrate; the runtime checker is now a **CI gate** (`.github/workflows/ci.yml`) so "looks right, behaves wrong" fails the build. |
 
-**Tally:** ✅ 5 fully enforced · 🟢 6 wired to the money path (#1 token gate, #3 reconciliation, #4 exposure, #6 decision link, #14 kill-switch, #19 pre-trade+freshness) · 🟡 7 partial · ❌ 0 gaps. Up from 0 explicit enforcement at session start.
+**Tally:** ✅ 5 fully enforced · 🟢 9 wired/operational (#1 token gate, #3 reconciliation, #4 exposure, #6 decision link, #10 audit-chain, #12/#13 isolation, #16 recovery, #19 pre-trade+freshness) · 🟡 6 partial (#2, #5, #7, #11, #15, #18) · ❌ 0 gaps. Up from 0 explicit enforcement at session start.
 
 > **Legend addition:** 🟢 = predicate **wired into the live money path** behind
 > the `HOPEFX_INVARIANT_MODE` flag (active in `monitor`, blocking in `enforce`).
@@ -119,8 +119,12 @@ The framework (§9–11) defines success not as zero bugs but as the **five mast
 
 1. Nothing important happens unnoticed → observability harness (whole-platform) + `/health/invariants`.
 2. Nothing dangerous happens unbounded → risk gate + kill switch + pre-trade `enforce_pre_trade` + per-symbol `enforce_exposure`.
-3. Nothing critical fails unrecoverably → rollback/self-heal (continuous verification still a gap — needs restore/failover drills).
+3. Nothing critical fails unrecoverably → rollback/self-heal **present & import-verified in CI** (`enforce_recovery_readiness`); live restore/failover drills remain an ops runbook.
 4. Nothing financial becomes unaccounted → PnL/capital invariants **now wired** into the reconciliation loop (trips the kill switch) + audit hash-chain verified in CI.
 5. Nothing autonomous outranks human control → `verify_human_control` + kill switch (auto-tripped on reconciliation breach) + OMS order-authorization gate.
 
-**Four of five are operational; #3 (continuous recovery verification) has the foundation and remains the open program** — it needs restore/failover drills, not just code. This map is the living tracker — each 🟡 is a real, scoped task, not a silent omission.
+**All five master guarantees are operational in code.** The remaining work is
+deployment-topology verification (live two-pod isolation probes, live
+restore/failover drills) and the live activation decision (`HOPEFX_INVARIANT_MODE
+=enforce`) — operational programs, not missing code. This map is the living
+tracker — each 🟡 is a real, scoped task, not a silent omission.

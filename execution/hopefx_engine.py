@@ -543,6 +543,11 @@ class HopeFXEngine:
             "impact": signal.impact_score,
             "features": signal.features,
             "lineage_id": signal.lineage_id,
+            # Provenance for the order-authorization gate (No Unauthorized Trade /
+            # No Hidden Decision): the token minted by the risk gate and the
+            # decision/lineage that produced this order.
+            "risk_approval_token": getattr(sized, "risk_approval_token", ""),
+            "decision_id": getattr(signal, "decision_id", "") or signal.lineage_id,
             "created_at": datetime.now(UTC).isoformat(),
         }
 

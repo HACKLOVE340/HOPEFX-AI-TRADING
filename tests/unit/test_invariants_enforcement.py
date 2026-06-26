@@ -157,6 +157,23 @@ def test_audit_chain_intact_vs_broken(monkeypatch):
     assert broken.should_halt is True
 
 
+# ── pod / tenant isolation (#12/#13) ──────────────────────────────────────────────────
+def test_pod_isolation_disjoint_vs_shared(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    assert enf.enforce_pod_isolation({"positions": [1]}, {"positions": [2]}).violations == []
+    shared = enf.enforce_pod_isolation({"memory": "x"}, {"memory": "x"})
+    assert shared.violations
+    assert shared.should_halt is True
+
+
+# ── recovery readiness (#3) ───────────────────────────────────────────────────────────
+def test_recovery_readiness(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    assert enf.enforce_recovery_readiness({"db": (True, True), "broker": (True, True)}).violations == []
+    gap = enf.enforce_recovery_readiness({"db": (False, False)})
+    assert gap.violations
+
+
 # ── reconciliation ────────────────────────────────────────────────────────────────
 def test_reconciliation_match_no_halt(monkeypatch):
     monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")

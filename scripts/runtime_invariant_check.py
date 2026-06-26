@@ -441,6 +441,68 @@ def check_audit_integrity(res: CheckResult) -> None:
         res.add("ERROR", "compliance/auditor.py", "audit_chain", f"{type(e).__name__}: {e}")
 
 
+def check_tenant_isolation(res: CheckResult) -> None:
+    """Exercise the cross-tenant isolation mechanism (No Cross-Tenant Leakage):
+    two tenants' namespaced cache keys must be disjoint, and the isolation
+    predicate must detect shared state. Fails the build if isolation is broken.
+    """
+    try:
+        from whitelabel.tenant_isolation import NamespacedCache
+
+        a = NamespacedCache(redis_client=None, tenant_id="tenant-a")
+        b = NamespacedCache(redis_client=None, tenant_id="tenant-b")
+        ka, kb = a._key("balance"), b._key("balance")
+        if ka == kb or ka in kb or kb in ka:
+            res.add(
+                "ERROR",
+                "whitelabel/tenant_isolation.py",
+                "tenant_isolation",
+                f"namespaced keys are not disjoint: {ka!r} vs {kb!r} (cross-tenant leakage)",
+            )
+    except Exception as e:
+        res.add(
+            "WARN",
+            "whitelabel/tenant_isolation.py",
+            "tenant_isolation",
+            f"could not verify tenant isolation: {type(e).__name__}: {e}",
+        )
+
+    try:
+        from invariants.governance import verify_pod_isolation
+
+        if not verify_pod_isolation({"positions": [1]}, {"positions": [1]}):
+            res.add(
+                "ERROR",
+                "invariants/governance.py",
+                "pod_isolation",
+                "verify_pod_isolation failed to detect identical shared state",
+            )
+    except Exception as e:
+        res.add("ERROR", "invariants/governance.py", "pod_isolation", f"{type(e).__name__}: {e}")
+
+
+def check_recovery_readiness(res: CheckResult) -> None:
+    """Assert the recovery mechanisms (No Unrecoverable Failure) are present and
+    importable — a recovery path that does not exist cannot be exercised in an
+    incident. Live restore/failover *drills* still require an ops runbook.
+    """
+    recovery_modules = (
+        "kill_switch",
+        "resilience.auto_rollback",
+        "resilience.hot_standby",
+        "resilience.circuit_breaker",
+        "core.position_reconciler",
+    )
+    missing: list[str] = []
+    for mod in recovery_modules:
+        try:
+            __import__(mod)
+        except Exception as e:  # a missing recovery path is a real gap
+            missing.append(f"{mod} ({type(e).__name__})")
+    if missing:
+        res.add("ERROR", "resilience/", "recovery_readiness", f"recovery mechanism(s) not importable: {missing}")
+
+
 def report(res: CheckResult, as_json: bool) -> int:
     if as_json:
         print(
@@ -499,8 +561,10 @@ def main() -> int:
 
         print("Phase 2 — probing endpoints + asserting invariants…")
         run(base, token, res)
-        print("Phase 3 — verifying audit hash-chain integrity…")
+        print("Phase 3 — verifying audit hash-chain, tenant isolation & recovery readiness…")
         check_audit_integrity(res)
+        check_tenant_isolation(res)
+        check_recovery_readiness(res)
         if not args.no_log_scan:
             scan_event_log(started, res)
         return report(res, args.json)

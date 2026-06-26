@@ -59,11 +59,15 @@ class TestExecuteWithFallback:
         assert result["status"] == "rejected"
 
     @pytest.mark.asyncio
-    async def test_broker_timeout_returns_rejected(self):
+    async def test_broker_timeout_returns_unknown_not_rerouted(self):
+        # A timeout is an UNKNOWN outcome — the order may have filled while the
+        # response was slow. The router must NOT re-route (that risks a duplicate
+        # fill); it returns status="unknown" for manual reconciliation. Asserting
+        # "rejected" here would be unsafe — a rejected order is one you may retry.
         r = _router_with_broker(raise_exc=TimeoutError("timed out"))
         result = await r.route_and_execute(_order())
-        assert result["status"] == "rejected"
-        assert "all_brokers_failed" in result["reason"]
+        assert result["status"] == "unknown"
+        assert "timeout" in result["reason"]
 
     @pytest.mark.asyncio
     async def test_broker_connection_error_returns_rejected(self):

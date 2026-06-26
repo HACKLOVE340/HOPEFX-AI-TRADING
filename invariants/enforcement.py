@@ -48,6 +48,8 @@ from invariants.constitution import (
     verify_tick,
     verify_within_limit,
 )
+from invariants.governance import verify_pod_isolation
+from invariants.resilience import verify_recovery_path_exists
 from invariants.risk import verify_exposure_limits
 
 logger = logging.getLogger("hopefx.invariants")
@@ -360,6 +362,34 @@ def enforce_order_authorization(order: Any) -> EnforcementResult:
         return out
 
     return _safe("order_authorization", _check)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# ISOLATION — no cross-tenant / cross-pod leakage
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_pod_isolation(
+    pod_a: dict[str, Any], pod_b: dict[str, Any], keys: tuple[str, ...] = ("positions", "memory", "models", "capital")
+) -> EnforcementResult:
+    """Assert two pods/tenants share no state across the named dimensions. Shared
+    identical state is a CONSTITUTIONAL breach (No Cross-Pod Leakage)."""
+    return _safe("pod_isolation", lambda: verify_pod_isolation(pod_a, pod_b, keys))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# RECOVERY — no unrecoverable failure
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_recovery_readiness(paths: dict[str, tuple[bool, bool]]) -> EnforcementResult:
+    """Assert each critical subsystem has a recovery path that exists and has been
+    tested. ``paths`` maps name -> (has_path, tested). A missing/untested path is
+    a CRITICAL gap (No Unrecoverable Failure)."""
+
+    def _check() -> list[Violation]:
+        out: list[Violation] = []
+        for name, (has_path, tested) in paths.items():
+            out += verify_recovery_path_exists(name, has_path, tested)
+        return out
+
+    return _safe("recovery_readiness", _check)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
