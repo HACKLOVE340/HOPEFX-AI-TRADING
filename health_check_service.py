@@ -394,6 +394,83 @@ async def invariants_health() -> dict[str, Any]:
     return data
 
 
+def _ledger_snapshot() -> dict[str, Any]:
+    """Best-effort system capital-equation snapshot from the ledger tables.
+
+    Aggregates deposits/withdrawals/fees (wallet_transactions), realized PnL
+    (trades) and opening/closing balances (accounts), then runs the
+    capital-equation invariant. Read-only — never gates trading. Returns
+    {"status": "unavailable", ...} when the DB/tables are not ready, rather than
+    a misleading zero-reconciliation.
+    """
+    try:
+        from sqlalchemy import func
+
+        from database.connection import get_db_manager
+        from database.models import Account, Trade, WalletTransaction
+        from invariants.enforcement import enforce_ledger_reconciliation
+
+        mgr = get_db_manager()
+        if mgr is None:
+            return {"status": "unavailable", "reason": "db manager not initialised"}
+
+        def _sum(session, col, *filters):
+            q = session.query(func.coalesce(func.sum(col), 0.0))
+            for f in filters:
+                q = q.filter(f)
+            return float(q.scalar() or 0.0)
+
+        with mgr.session() as s:
+            deposits = _sum(s, WalletTransaction.amount, WalletTransaction.transaction_type == "deposit")
+            withdrawals = _sum(s, WalletTransaction.amount, WalletTransaction.transaction_type == "withdrawal")
+            fees = _sum(s, WalletTransaction.amount, WalletTransaction.transaction_type.in_(("fee", "commission")))
+            realized = _sum(s, Trade.realized_pnl)
+            opening = _sum(s, Account.balance)
+            closing = _sum(s, func.coalesce(Account.equity, Account.balance))
+
+        result = enforce_ledger_reconciliation(
+            opening=opening,
+            deposits=deposits,
+            realized=realized,
+            withdrawals=withdrawals,
+            fees=fees,
+            closing=closing,
+        )
+        return {
+            "status": "ok",
+            "capital_equation": {
+                "opening": round(opening, 2),
+                "deposits": round(deposits, 2),
+                "realized_pnl": round(realized, 2),
+                "withdrawals": round(withdrawals, 2),
+                "fees": round(fees, 2),
+                "expected_closing": round(opening + deposits + realized - withdrawals - fees, 2),
+                "actual_closing": round(closing, 2),
+            },
+            "reconciled": not result.violations,
+            "mode": result.mode,
+            "violations": [{"rule": v.rule, "severity": v.severity, "message": v.message} for v in result.violations],
+        }
+    except Exception as exc:
+        logger.debug("ledger snapshot unavailable: %s", exc)
+        return {"status": "unavailable", "reason": str(exc)[:200]}
+
+
+@health_router.get(
+    "/health/ledger",
+    summary="Treasury / ledger reconciliation",
+    description=(
+        "Read-only system capital-equation reconciliation "
+        "(opening + deposits + realized − withdrawals − fees == closing) from the "
+        "ledger tables. Surfaces the No Hidden Capital invariant to ops; never "
+        "gates trading. Returns status='unavailable' when the DB is not ready."
+    ),
+)
+async def ledger_reconciliation() -> dict[str, Any]:
+    """Surface the treasury/ledger reconciliation status (No Hidden Capital)."""
+    return _ledger_snapshot()
+
+
 @health_router.get(
     "/health/ready",
     summary="Readiness probe",

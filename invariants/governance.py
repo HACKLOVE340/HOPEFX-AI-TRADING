@@ -100,6 +100,17 @@ def verify_audit_complete(
     return []
 
 
+def verify_action_audited(action_id: Any, audited_ids: Iterable[Any]) -> list[Violation]:
+    """Every executed AI action / decision must leave a structured audit record
+    (No Hidden AI Action). An action whose id is absent from the audit set ran
+    without being recorded — a constitutional accountability gap."""
+    if action_id is None:
+        return [_v("No Hidden AI Action", CRITICAL, "AI action has no id to audit")]
+    if action_id not in set(audited_ids):
+        return [_v("No Hidden AI Action", CONSTITUTIONAL, f"AI action {action_id!r} executed without an audit record")]
+    return []
+
+
 def verify_hash_chain(
     records: list[dict[str, Any]], *, hash_field: str = "hash", prev_field: str = "prev_hash", genesis: str = "0" * 64
 ) -> list[Violation]:

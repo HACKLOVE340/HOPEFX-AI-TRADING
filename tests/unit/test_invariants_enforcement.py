@@ -182,6 +182,46 @@ def test_var_within_and_over_limit(monkeypatch):
     assert over.violations
 
 
+# ── ledger reconciliation (#2) ────────────────────────────────────────────────────────
+def test_ledger_reconciliation(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    ok = enf.enforce_ledger_reconciliation(
+        opening=100.0, deposits=50.0, realized=10.0, withdrawals=20.0, fees=5.0, closing=135.0
+    )
+    assert ok.violations == []
+    bad = enf.enforce_ledger_reconciliation(
+        opening=100.0, deposits=50.0, realized=10.0, withdrawals=20.0, fees=5.0, closing=999.0
+    )
+    assert bad.violations
+    assert bad.should_halt is True
+
+
+# ── SPOF (#18) ────────────────────────────────────────────────────────────────────────
+def test_no_spof(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    assert enf.enforce_no_spof({"db": {"critical": True, "redundancy": 2}}).violations == []
+    assert enf.enforce_no_spof({"db": {"critical": True, "redundancy": 1, "failover": True}}).violations == []
+    spof = enf.enforce_no_spof({"db": {"critical": True, "redundancy": 1, "failover": False}})
+    assert spof.violations
+    # non-critical single instance is fine
+    assert enf.enforce_no_spof({"x": {"critical": False, "redundancy": 1}}).violations == []
+
+
+# ── blast radius (#15) ────────────────────────────────────────────────────────────────
+def test_blast_radius(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    assert enf.enforce_blast_radius(1, 10).violations == []
+    assert enf.enforce_blast_radius(8, 10).violations
+
+
+# ── per-AI-action audit (#7) ──────────────────────────────────────────────────────────
+def test_action_audited(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    assert enf.enforce_action_audited("dec-1", ["dec-1", "dec-2"]).violations == []
+    assert enf.enforce_action_audited("dec-9", ["dec-1"]).violations
+    assert enf.enforce_action_audited(None, []).violations
+
+
 # ── reconciliation ────────────────────────────────────────────────────────────────
 def test_reconciliation_match_no_halt(monkeypatch):
     monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")

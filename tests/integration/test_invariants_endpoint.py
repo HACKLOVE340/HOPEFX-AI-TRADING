@@ -35,8 +35,20 @@ if _import_error is not None:  # pragma: no cover
 def test_health_invariants_is_mounted_and_reports_status():
     client = TestClient(app, raise_server_exceptions=False)
     r = client.get("/health/invariants")
-    assert r.status_code == 200          # engine healthy by default
+    assert r.status_code == 200  # engine healthy by default
     body = r.json()
     assert body["mode"] in ("off", "monitor", "enforce")
     assert body["engine_healthy"] is True
     assert "counters" in body and "checks" in body["counters"]
+
+
+@pytest.mark.integration
+def test_health_ledger_is_mounted():
+    client = TestClient(app, raise_server_exceptions=False)
+    r = client.get("/health/ledger")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] in ("ok", "unavailable")
+    if body["status"] == "ok":
+        assert "capital_equation" in body
+        assert "reconciled" in body

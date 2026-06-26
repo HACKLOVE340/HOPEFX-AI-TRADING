@@ -42,15 +42,17 @@ from invariants.constitution import (
     Violation,
     _v,
     summarize,
+    verify_capital_equation,
     verify_finite,
     verify_pnl_reconciliation,
     verify_spread,
     verify_tick,
     verify_within_limit,
 )
-from invariants.governance import verify_pod_isolation
+from invariants.governance import verify_action_audited, verify_pod_isolation
 from invariants.resilience import verify_recovery_path_exists
 from invariants.risk import verify_exposure_limits, verify_var
+from invariants.systems import verify_blast_radius_contained, verify_no_single_point_of_failure
 
 logger = logging.getLogger("hopefx.invariants")
 
@@ -334,6 +336,46 @@ def enforce_var(portfolio_var: float, approved_var: float) -> EnforcementResult:
     """Assert portfolio Value-at-Risk stays within the approved limit each cycle
     (No Hidden Risk). Both are positive loss magnitudes (USD)."""
     return _safe("var", lambda: verify_var(portfolio_var, approved_var))
+
+
+def enforce_ledger_reconciliation(
+    *,
+    opening: float,
+    deposits: float,
+    realized: float,
+    withdrawals: float,
+    fees: float,
+    closing: float,
+    tol: float = 0.01,
+) -> EnforcementResult:
+    """Assert the capital equation holds (No Hidden Capital):
+    opening + deposits + realized − withdrawals − fees == closing. A breach means
+    an accounting/reconciliation bug or fraud; ``should_halt`` flags it."""
+    return _safe(
+        "ledger",
+        lambda: verify_capital_equation(opening, deposits, realized, withdrawals, fees, closing, tol),
+    )
+
+
+def enforce_no_spof(dependencies: dict[str, dict[str, Any]]) -> EnforcementResult:
+    """Assert no critical dependency is a single point of failure (No Critical
+    Single Point Of Failure). ``dependencies`` maps name -> {critical, redundancy,
+    failover}."""
+    return _safe("spof", lambda: verify_no_single_point_of_failure(dependencies))
+
+
+def enforce_blast_radius(failed_components: int, total_components: int, max_fraction: float = 0.5) -> EnforcementResult:
+    """Assert a single failure cannot take down most of the platform
+    (No Unbounded Failure)."""
+    return _safe(
+        "blast_radius", lambda: verify_blast_radius_contained(failed_components, total_components, max_fraction)
+    )
+
+
+def enforce_action_audited(action_id: Any, audited_ids: Any) -> EnforcementResult:
+    """Assert an executed AI action/decision left a structured audit record
+    (No Hidden AI Action)."""
+    return _safe("action_audit", lambda: verify_action_audited(action_id, audited_ids))
 
 
 # ════════════════════════════════════════════════════════════════════════════════

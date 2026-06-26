@@ -538,6 +538,75 @@ def check_surveillance(res: CheckResult) -> None:
         res.add("ERROR", "invariants/compliance.py", "surveillance", f"{type(e).__name__}: {e}")
 
 
+def check_action_audit(res: CheckResult) -> None:
+    """Exercise the per-AI-action audit mechanism (No Hidden AI Action, #7): an
+    action appended to the audit log must be discoverable, and an unaudited
+    action id must be flagged by the completeness predicate."""
+    import tempfile
+
+    try:
+        from compliance.auditor import AuditLevel, ImmutableAuditLog
+        from invariants.governance import verify_action_audited
+    except Exception as e:
+        res.add("ERROR", "compliance/auditor.py", "action_audit", f"{type(e).__name__}: {e}")
+        return
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            log = ImmutableAuditLog(log_path=f"{tmp}/")
+            log.append(AuditLevel.INFO, "AI_ACTION", "decision_engine", "decision", {"decision_id": "dec-1"})
+            audited = {r.data.get("decision_id") for r in log.records}
+            # A recorded action passes; an unrecorded one is flagged.
+            if verify_action_audited("dec-1", audited):
+                res.add(
+                    "ERROR", "invariants/governance.py", "action_audit", "audited action wrongly flagged as unaudited"
+                )
+            if not verify_action_audited("dec-UNLOGGED", audited):
+                res.add(
+                    "ERROR",
+                    "invariants/governance.py",
+                    "action_audit",
+                    "unaudited action NOT flagged — No Hidden AI Action completeness broken",
+                )
+    except Exception as e:
+        res.add("ERROR", "compliance/auditor.py", "action_audit", f"{type(e).__name__}: {e}")
+
+
+def check_dependency_spof(res: CheckResult) -> None:
+    """Build a dependency inventory and assert no critical SPOF (No Critical
+    Single Point Of Failure, #18) and blast-radius containment (#15).
+
+    The platform's critical dependencies (DB, Redis, broker) are single-instance
+    by current architecture, so this is reported as WARN, not a build failure —
+    it makes the SPOF inventory explicit rather than silent. Data feeds are
+    multi-source (redundant) and pass.
+    """
+    try:
+        from invariants.systems import verify_blast_radius_contained, verify_no_single_point_of_failure
+    except Exception as e:
+        res.add("ERROR", "invariants/systems.py", "spof", f"{type(e).__name__}: {e}")
+        return
+
+    # Declared inventory: redundancy/failover reflect the current architecture.
+    # Data feeds are multi-source (consensus); DB/Redis/broker are single-instance.
+    inventory = {
+        "database": {"critical": True, "redundancy": 1, "failover": False},
+        "redis": {"critical": True, "redundancy": 1, "failover": False},
+        "broker": {"critical": True, "redundancy": 1, "failover": False},
+        "gold_data_feed": {"critical": True, "redundancy": 5, "failover": True},
+        "news_data_feed": {"critical": False, "redundancy": 5, "failover": True},
+    }
+    spofs = verify_no_single_point_of_failure(inventory)
+    for v in spofs:
+        # Known single-instance infra → WARN (explicit, not a silent omission).
+        res.add("WARN", "dependency_inventory", "spof", v.message)
+
+    # Blast radius: with all declared components healthy, 0 failed → contained.
+    blast = verify_blast_radius_contained(0, len(inventory))
+    for v in blast:
+        res.add("ERROR", "dependency_inventory", "blast_radius", v.message)
+
+
 def report(res: CheckResult, as_json: bool) -> int:
     if as_json:
         print(
@@ -601,6 +670,8 @@ def main() -> int:
         check_tenant_isolation(res)
         check_recovery_readiness(res)
         check_surveillance(res)
+        check_action_audit(res)
+        check_dependency_spof(res)
         if not args.no_log_scan:
             scan_event_log(started, res)
         return report(res, args.json)

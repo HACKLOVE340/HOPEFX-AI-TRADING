@@ -169,6 +169,10 @@ def test_governance_invariants():
     tampered = [{"prev_hash": g, "hash": "a"}, {"prev_hash": "X", "hash": "b"}]
     assert governance.verify_hash_chain(tampered)
     assert governance.verify_hash_chain([{"prev_hash": g, "hash": ""}])  # missing hash
+    # per-AI-action audit completeness (No Hidden AI Action)
+    assert governance.verify_action_audited("d1", ["d1", "d2"]) == []
+    assert governance.verify_action_audited("d9", ["d1"])
+    assert governance.verify_action_audited(None, [])
     assert governance.verify_segregation_of_duties("alice", "bob") == []
     assert governance.verify_segregation_of_duties("alice", "alice")
     assert governance.verify_dual_control(["alice", "bob"]) == []
