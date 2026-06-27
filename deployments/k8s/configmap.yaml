@@ -12,13 +12,11 @@ data:
   # Constitutional invariant enforcement — see docs/INVARIANT_ROLLOUT.md.
   # monitor = observe + log (safe default); flip to "enforce" after a clean soak.
   HOPEFX_INVARIANT_MODE: "monitor"
-  # Staged rollout: enforce these checks while the global mode stays monitor.
-  # order_authorization + pre_trade refuse single orders (cannot halt the desk);
-  # reconciliation + ledger can trip the kill switch (halt ALL trading) on a
-  # book-value/PnL or capital-equation breach — keep RECONCILER_DRIFT_VALUE sane and
-  # HOPEFX_INVARIANT_FAIL_CLOSED="0". Remove a kind to roll it back instantly; when
-  # all have soaked clean, collapse to HOPEFX_INVARIANT_MODE="enforce".
-  HOPEFX_INVARIANT_ENFORCE_KINDS: "order_authorization,pre_trade,reconciliation,ledger"
+  # Staged rollout: enforce the can't-halt-the-desk pair now (order_authorization,
+  # pre_trade — they only refuse a single bad order). Promote reconciliation + ledger
+  # (which can trip the kill switch / halt ALL trading) only after a clean monitor
+  # soak — see docs/INVARIANT_ROLLOUT.md. Remove a kind to roll back instantly.
+  HOPEFX_INVARIANT_ENFORCE_KINDS: "order_authorization,pre_trade"
   HOPEFX_INVARIANT_FAIL_CLOSED: "0"
   RISK_MAX_TICK_STALENESS_S: "5.0"
   RISK_MAX_SYMBOL_EXPOSURE_USD: "1000000.0"
