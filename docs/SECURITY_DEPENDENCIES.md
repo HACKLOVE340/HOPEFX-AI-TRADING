@@ -60,9 +60,28 @@ Metro bundler and RN CLI pull `cosmiconfig@5.2.1`, which depends on
 - forcing js-yaml ≥4 across the tree throws inside Metro config loading → the
   mobile build breaks.
 
-Forcing `cosmiconfig` up instead risks breaking RN CLI 13's config loader
-(cosmiconfig changed its API at v6). Either way the fix cannot be verified
-without a mobile build (simulator/device), which this environment lacks.
+Forcing `cosmiconfig` up instead **also breaks the build** — confirmed by
+reading both consumers (not just "risks"):
+
+- `@react-native-community/cli-config@13` → `cosmiconfig('react-native', …).searchSync(…)`.
+  cosmiconfig 6+ removed the synchronous `.searchSync` (it moved to a separate
+  `cosmiconfigSync()` factory), so a bump makes `explorer.searchSync` undefined.
+- `metro-config@0.80` → uses the `cosmiconfig.loadJson` / `cosmiconfig.loadYaml`
+  static loaders, which were removed in cosmiconfig 7+.
+
+So js-yaml here is **doubly locked**: can't raise js-yaml (cosmiconfig@5 needs
+the removed `safeLoad`), can't raise cosmiconfig (the RN consumers need its v5
+API). Neither fix can be verified without a mobile build (simulator/device),
+which this environment lacks. (A `patch-package` patch of cosmiconfig@5's
+`safeLoad`→`load` plus a js-yaml 4.2.0 override is the only in-place option, but
+it is disproportionate, unverifiable here, and adds a postinstall maintenance
+burden for a non-exploitable advisory — see risk assessment.)
+
+The advisory itself (GHSA-h67p-54hq-rp68): quadratic CPU blow-up in js-yaml
+merge-key handling when an alias is repeated many times in a `<<:` sequence on
+**untrusted** YAML; fixed in js-yaml **4.2.0** (already applied to our 4.x
+consumers via the `js-yaml` override). The only residual copy is the 3.14.x one
+pinned by cosmiconfig@5.
 
 **Risk assessment:** **low/practically nil.** The vulnerable path is a
 **build-time** YAML config loader operating on **local, trusted** config files,
