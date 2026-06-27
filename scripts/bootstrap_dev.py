@@ -177,6 +177,10 @@ OANDA_ACCESS_TOKEN=
 OANDA_API_SECRET=
 OANDA_API_TOKEN=
 OANDA_MAX_RETRIES=3
+# Broker-agnostic paper-run gate evidence (any broker; see config/feature_flags.py).
+# Set PAPER_RUN_START_UTC when a paper run begins; PAPER_FILL_COUNT after it ends.
+PAPER_RUN_START_UTC=
+PAPER_FILL_COUNT=0
 OANDA_PAPER_FILL_COUNT=0
 OANDA_PAPER_STAMP_PATH=data/oanda_paper_stamp.json
 OANDA_PRACTICE=true

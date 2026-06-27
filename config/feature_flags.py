@@ -563,9 +563,9 @@ class FeatureFlags:
         description=(
             "Phase 2: Anomaly weighting (IF+LOF ensemble). Signals on anomalous "
             "bars are blended toward neutral by down_weight_factor (default 0.5). "
-            "Gate: 30-day OANDA paper run must complete and paper Sharpe must not "
-            "drop by more than 0.2 after enabling. "
-            "Set OANDA_PAPER_RUN_START_UTC to the ISO-8601 start timestamp. "
+            "Gate: 30-day paper run (any supported broker) must complete and paper "
+            "Sharpe must not drop by more than 0.2 after enabling. "
+            "Set PAPER_RUN_START_UTC to the ISO-8601 start timestamp. "
             "Enable with FEATURE_ANOMALY_WEIGHTING=true after gate passes."
         ),
     )
@@ -578,8 +578,8 @@ class FeatureFlags:
             "Blends primary model (default 0.7) with IncrementalXGBoost that "
             "updates on each confirmed fill (default 0.3). Adaptive weights shift "
             "toward the better-performing model. "
-            "Gate: 90-day OANDA paper run with >= 500 fills. "
-            "Set OANDA_PAPER_RUN_START_UTC and OANDA_PAPER_FILL_COUNT. "
+            "Gate: 90-day paper run (any supported broker) with >= 500 fills. "
+            "Set PAPER_RUN_START_UTC and PAPER_FILL_COUNT. "
             "Enable with FEATURE_ONLINE_LEARNING=true after gate passes."
         ),
     )
@@ -718,12 +718,25 @@ class FeatureFlags:
 # ---------------------------------------------------------------------------
 
 
+# Paper-run evidence is broker-agnostic: a paper run on ANY supported broker
+# (OANDA, MT5, IBKR, Alpaca, Binance, …) counts toward the gates. The
+# broker-neutral env vars are preferred; the legacy OANDA_* names remain as
+# backward-compatible fallbacks so existing deployments keep working.
+def _paper_run_start_utc() -> str:
+    return os.getenv("PAPER_RUN_START_UTC") or os.getenv("OANDA_PAPER_RUN_START_UTC", "")
+
+
+def _paper_fill_count() -> str:
+    return os.getenv("PAPER_FILL_COUNT") or os.getenv("OANDA_PAPER_FILL_COUNT", "0")
+
+
 def check_phase2_gate() -> tuple[bool, str]:
     """
     Verify the Phase 2 (anomaly weighting) paper-trading gate.
 
-    Reads OANDA_PAPER_RUN_START_UTC from the environment and checks that
-    at least 30 calendar days have elapsed since the paper run started.
+    Reads PAPER_RUN_START_UTC (or the legacy OANDA_PAPER_RUN_START_UTC) from the
+    environment and checks that at least 30 calendar days have elapsed since the
+    paper run started — on any supported broker, not only OANDA.
 
     Returns
     -------
@@ -731,9 +744,9 @@ def check_phase2_gate() -> tuple[bool, str]:
     """
     from datetime import datetime, timedelta
 
-    start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
+    start_str = _paper_run_start_utc()
     if not start_str:
-        return False, ("OANDA_PAPER_RUN_START_UTC not set. Set to ISO-8601 UTC timestamp when the paper run started.")
+        return False, ("PAPER_RUN_START_UTC not set. Set to the ISO-8601 UTC timestamp when the paper run started (any broker).")
     try:
         start = datetime.fromisoformat(start_str)
         if start.tzinfo is None:
@@ -745,16 +758,16 @@ def check_phase2_gate() -> tuple[bool, str]:
             return False, (f"Phase 2 gate: {elapsed.days} days elapsed, {remaining.days} days remaining (need 30).")
         return True, f"Phase 2 gate passed: {elapsed.days} days elapsed."
     except ValueError as exc:
-        return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
+        return False, f"PAPER_RUN_START_UTC parse error: {exc}"
 
 
 def check_phase3_gate() -> tuple[bool, str]:
     """
     Verify the Phase 3 (online learning) paper-trading gate.
 
-    Checks that:
-    1. At least 90 calendar days have elapsed since OANDA_PAPER_RUN_START_UTC.
-    2. OANDA_PAPER_FILL_COUNT >= 500.
+    Checks that (on any supported broker, not only OANDA):
+    1. At least 90 calendar days have elapsed since PAPER_RUN_START_UTC.
+    2. PAPER_FILL_COUNT >= 500.
 
     Returns
     -------
@@ -763,22 +776,22 @@ def check_phase3_gate() -> tuple[bool, str]:
     from datetime import datetime, timedelta
 
     # Check fill count
-    fill_count_str = os.getenv("OANDA_PAPER_FILL_COUNT", "0")
+    fill_count_str = _paper_fill_count()
     try:
         fill_count = int(fill_count_str)
     except ValueError:
-        return False, f"OANDA_PAPER_FILL_COUNT is not an integer: {fill_count_str!r}"
+        return False, f"PAPER_FILL_COUNT is not an integer: {fill_count_str!r}"
 
     if fill_count < 500:
         return False, (
             f"Phase 3 gate: {fill_count} fills recorded, need >= 500. "
-            "Set OANDA_PAPER_FILL_COUNT after the paper run completes."
+            "Set PAPER_FILL_COUNT after the paper run completes (any broker)."
         )
 
     # Check elapsed days
-    start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
+    start_str = _paper_run_start_utc()
     if not start_str:
-        return False, ("OANDA_PAPER_RUN_START_UTC not set. Set to ISO-8601 UTC timestamp when the paper run started.")
+        return False, ("PAPER_RUN_START_UTC not set. Set to the ISO-8601 UTC timestamp when the paper run started (any broker).")
     try:
         start = datetime.fromisoformat(start_str)
         if start.tzinfo is None:
@@ -790,7 +803,7 @@ def check_phase3_gate() -> tuple[bool, str]:
             return False, (f"Phase 3 gate: {elapsed.days} days elapsed, {remaining.days} days remaining (need 90).")
         return True, (f"Phase 3 gate passed: {elapsed.days} days elapsed, {fill_count} fills.")
     except ValueError as exc:
-        return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
+        return False, f"PAPER_RUN_START_UTC parse error: {exc}"
 
 
 def check_phase4_gate(
