@@ -57,7 +57,7 @@ from invariants.constitution import (
     verify_within_limit,
 )
 from invariants.ai import verify_trust_floor, verify_trust_score, verify_trust_weighted_allocation
-from invariants.governance import verify_action_audited, verify_pod_isolation
+from invariants.governance import verify_action_audited, verify_human_approval, verify_pod_isolation
 from invariants.resilience import verify_recovery_path_exists
 from invariants.risk import (
     verify_daily_loss,
@@ -91,6 +91,7 @@ def current_mode() -> str:
 KNOWN_KINDS: tuple[str, ...] = (
     "pre_trade",
     "order_authorization",
+    "human_approval",
     "reconciliation",
     "ledger",
     "exposure",
@@ -561,6 +562,51 @@ def enforce_order_authorization(order: Any) -> EnforcementResult:
         return out
 
     return _safe("order_authorization", _check)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# 3b. HUMAN APPROVAL — large notionals need a named human (four-eyes / dual control)
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_human_approval(order: Any, threshold: float | None = None) -> EnforcementResult:
+    """Require a named human approver on orders at/above a notional threshold.
+
+    The threshold comes from ``threshold`` or the ``RISK_HUMAN_APPROVAL_NOTIONAL_USD``
+    env var (default ``0`` = gate disabled). Notional is read defensively as
+    ``notional_usd``/``notional``, else ``abs(quantity) * (price|tick_mid)``. The
+    approver is read from ``approved_by``/``approver`` (attr, ``metadata``, or dict
+    key). In enforce mode a large order with no approver is refused (No Loss Of
+    Human Control) — the human-in-the-loop gate the readiness map calls for.
+    """
+    if threshold is None:
+        try:
+            threshold = float(os.environ.get("RISK_HUMAN_APPROVAL_NOTIONAL_USD", "0") or 0)
+        except (TypeError, ValueError):
+            threshold = 0.0
+
+    def _get(name: str) -> Any:
+        val = getattr(order, name, None)
+        if not val and isinstance(getattr(order, "metadata", None), dict):
+            val = order.metadata.get(name)
+        if not val and isinstance(order, dict):
+            val = order.get(name)
+        return val
+
+    def _num(name: str) -> float | None:
+        v = _get(name)
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    def _check() -> list[Violation]:
+        notional = _num("notional_usd")
+        if notional is None:
+            notional = _num("notional")
+        if notional is None:
+            qty = _num("quantity") or _num("size")
+            px = _num("price") or _num("tick_mid") or _num("fill_price")
+            notional = abs(qty) * px if (qty is not None and px is not None) else float("nan")
+        approver = _get("approved_by") or _get("approver")
+        return verify_human_approval(notional, float(threshold or 0.0), approver)
+
+    return _safe("human_approval", _check)
 
 
 # ════════════════════════════════════════════════════════════════════════════════

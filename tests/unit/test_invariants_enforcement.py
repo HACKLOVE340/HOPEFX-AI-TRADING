@@ -31,6 +31,7 @@ def _clean(monkeypatch):
     monkeypatch.delenv("HOPEFX_INVARIANT_FAIL_CLOSED", raising=False)
     monkeypatch.delenv("HOPEFX_INVARIANT_ENFORCE_KINDS", raising=False)
     monkeypatch.delenv("HOPEFX_INVARIANT_MONITOR_KINDS", raising=False)
+    monkeypatch.delenv("RISK_HUMAN_APPROVAL_NOTIONAL_USD", raising=False)
     enf.reset_telemetry()
     yield
     enf.reset_telemetry()
@@ -148,6 +149,41 @@ def test_order_authorization_reads_metadata_and_dict(monkeypatch):
     as_dict = {"risk_approval_token": "rat-9", "decision_id": "dec-9"}
     assert enf.enforce_order_authorization(as_dict).allowed is True
     assert enf.enforce_order_authorization({"risk_approval_token": "rat-9"}).allowed is False  # no decision
+
+
+# ── human-approval gate (four-eyes for large notionals) ────────────────────────────
+def test_human_approval_disabled_by_default(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    # No threshold env → gate disabled → any order allowed even without approver.
+    r = enf.enforce_human_approval({"notional_usd": 1_000_000.0})
+    assert r.allowed is True
+    assert r.violations == []
+
+
+def test_human_approval_blocks_large_unapproved(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    monkeypatch.setenv("RISK_HUMAN_APPROVAL_NOTIONAL_USD", "100000")
+    big = enf.enforce_human_approval({"notional_usd": 250_000.0})
+    assert big.allowed is False  # large + no approver → refused
+    ok = enf.enforce_human_approval({"notional_usd": 250_000.0, "approved_by": "ops-jane"})
+    assert ok.allowed is True  # large + approver → allowed
+    small = enf.enforce_human_approval({"notional_usd": 5_000.0})
+    assert small.allowed is True  # below threshold → allowed
+
+
+def test_human_approval_computes_notional_from_qty_price(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    monkeypatch.setenv("RISK_HUMAN_APPROVAL_NOTIONAL_USD", "100000")
+    # 50 lots * 2400 = 120,000 → over threshold, no approver → blocked
+    r = enf.enforce_human_approval({"quantity": 50.0, "price": 2400.0})
+    assert r.allowed is False
+
+
+def test_human_approval_explicit_threshold_arg(monkeypatch):
+    monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
+    r = enf.enforce_human_approval({"notional_usd": 600.0}, threshold=500.0)
+    assert r.allowed is False
+    assert enf.enforce_human_approval({"notional_usd": 600.0, "approver": "cfo"}, threshold=500.0).allowed is True
 
 
 # ── audit chain (#10) ─────────────────────────────────────────────────────────────────

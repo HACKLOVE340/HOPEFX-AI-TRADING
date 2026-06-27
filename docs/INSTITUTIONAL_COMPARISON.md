@@ -75,19 +75,31 @@ need most of it for XAUUSD swing/position trading.**
 
 ## 4. What is MISSING (the real gaps, prioritized)
 
+> **Correction (2026-06-27, verified in code):** three items previously listed
+> here as missing are actually **present** — re-confirmed by reading source:
+> **EWC** (`ml/online_learner.py::EWCRegularizer`, Fisher matrix + penalty,
+> Kirkpatrick 2017), **Almgren–Chriss** market-impact model
+> (`backtesting/enhanced_engine.py`, XAUUSD-calibrated η/γ), and **SHAP** code
+> (`ml/explainability.py::get_shap_values`, with a feature-importance fallback).
+> They are removed from the gap list below. The `shap` *library* is not installed,
+> so XAI runs in fallback mode — see A.3.
+
 ### A. Highest value (alpha + trust) — *in our wheelhouse*
 1. **Model edge below the production bar** — ~57% OOS vs the 0.68 target. Needs
    real paper-run validation + richer features (macro on, multi-symbol) + better
    labels. **This is the gap that matters most for a *trading* product.**
 2. **No proven live/paper track record** — the 30/90-day broker paper-run gates
    are built but unmet (no live evidence of profitability).
-3. **XAI generation** — invariants assert explanations must exist; **no SHAP/LIME**
-   feature-attribution actually produced (`ELITE #2`).
-4. **EWC / catastrophic-forgetting protection** for online learning (`ELITE #5`).
-5. **Almgren–Chriss** optimal-execution model (have slippage TCA, not the model) (`ELITE #6`).
+3. **Full XAI dormant** — `ml/explainability.py` has real SHAP code but the `shap`
+   library isn't installed, so it falls back to built-in feature importance.
+   Activate by adding `shap` to requirements (no new code).
 
 ### B. Institutional operations / compliance — *people + code*
-6. **Human-approval gate for large notionals** (`requires_human_approval`) — readiness map #3.
+6. **Human-approval gate for large notionals** — ✅ **BUILT 2026-06-27**:
+   `governance.verify_human_approval` + `enforcement.enforce_human_approval`
+   (kind `human_approval`), wired into `execution/oms.py`, gated by
+   `RISK_HUMAN_APPROVAL_NOTIONAL_USD` (0=off). Off by default; enable by setting a
+   threshold + adding `human_approval` to `HOPEFX_INVARIANT_ENFORCE_KINDS`.
 7. **Regulatory reporting pipelines** (CFTC/MiFID) — disabled/not built (`ROADMAP_GAPS #10`).
 8. **Client-facing auditable statement endpoint** (risk+AI+attribution bundle) — readiness #9.
 9. **Scheduled retrain orchestration** (guards coded; the cron is ops) — readiness #10.

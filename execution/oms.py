@@ -208,6 +208,24 @@ class OrderLifecycleManager:
         except Exception as _auth_exc:  # never let the gate itself crash submission
             logger.error("OMS.submit_order: authorization check raised %s (order %s)", _auth_exc, order_id)
 
+        # ── Human-approval gate (four-eyes for large notionals; fail-safe) ────
+        # Orders at/above RISK_HUMAN_APPROVAL_NOTIONAL_USD must carry a named
+        # approver. Disabled by default (threshold 0); MONITOR logs, ENFORCE
+        # (kind "human_approval") refuses. Never raises into submission.
+        try:
+            from invariants.enforcement import enforce_human_approval
+
+            _appr = enforce_human_approval(order)
+            if not _appr.allowed:
+                logger.critical(
+                    "OMS.submit_order BLOCKED: order=%s needs human approval (%s)",
+                    order_id,
+                    _appr.reason,
+                )
+                return False
+        except Exception as _appr_exc:  # never let the gate itself crash submission
+            logger.error("OMS.submit_order: human-approval check raised %s (order %s)", _appr_exc, order_id)
+
         success = self._transition(order, OrderStatus.PENDING_NEW)
         if success:
             # Simulate async submission

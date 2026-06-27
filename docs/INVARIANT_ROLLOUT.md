@@ -26,7 +26,7 @@ Secondary controls:
 | `HOPEFX_INVARIANT_MONITOR_KINDS` | *(empty)* | Inverse lever: when the global mode is `enforce`, hold these named kinds back in `monitor` (carve out one noisy check without losing enforcement everywhere else). |
 
 **Check kinds** (the vocabulary for the two vars above): `pre_trade`,
-`order_authorization`, `reconciliation`, `ledger`, `exposure`, `var`,
+`order_authorization`, `human_approval`, `reconciliation`, `ledger`, `exposure`, `var`,
 `trust_allocation`, `risk_appetite`, `policy_governance`, `spof`,
 `blast_radius`, `action_audit`, `pod_isolation`, `recovery_readiness`,
 `audit_chain`. `GET /health/invariants` → `resolved` shows the live mode of

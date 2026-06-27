@@ -19,5 +19,7 @@ data:
   HOPEFX_INVARIANT_ENFORCE_KINDS: "order_authorization,pre_trade"
   HOPEFX_INVARIANT_FAIL_CLOSED: "0"
   RISK_MAX_TICK_STALENESS_S: "5.0"
+  # Four-eyes gate: orders >= this USD notional need an approver (0=off).
+  RISK_HUMAN_APPROVAL_NOTIONAL_USD: "0"
   RISK_MAX_SYMBOL_EXPOSURE_USD: "1000000.0"
   RISK_APPROVED_VAR_USD: "0"

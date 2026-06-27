@@ -184,3 +184,27 @@ def verify_human_supremacy(human_authority: float, system_authority: float) -> l
     ):
         return [_v("No Loss Of Human Control", CONSTITUTIONAL, "human authority does not exceed system authority")]
     return []
+
+
+def verify_human_approval(notional: float, threshold: float, approved_by: Any) -> list[Violation]:
+    """Large trades require a named human approver (four-eyes / dual control).
+
+    Institutional control: an order whose notional reaches ``threshold`` must
+    carry a non-empty ``approved_by`` (the human who authorized it). Autonomous
+    capital movement at/above the threshold without a human in the loop is a
+    CONSTITUTIONAL breach (No Loss Of Human Control). ``threshold <= 0`` disables
+    the gate. A non-finite notional is treated as unknown and not blocked here
+    (other gates catch bad numbers).
+    """
+    if threshold <= 0 or not _is_finite_number(notional):
+        return []
+    if abs(notional) >= threshold and not (isinstance(approved_by, str) and approved_by.strip()):
+        return [
+            _v(
+                "No Loss Of Human Control",
+                CONSTITUTIONAL,
+                f"order notional {abs(notional):.2f} >= human-approval threshold {threshold:.2f} "
+                "but carries no approver (approved_by)",
+            )
+        ]
+    return []
