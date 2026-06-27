@@ -387,8 +387,8 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
             _adv_meta = json.loads((_MODEL_DIR / "advanced_oos_meta.json").read_text())
             if isinstance(_adv_meta.get("sharpe_gate"), dict):
                 full_report["sharpe_gate"] = _adv_meta["sharpe_gate"]
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not mirror sharpe_gate from advanced_oos_meta.json: %s", exc)
 
     h5_report_path = _MODEL_DIR / "horizon5_training_report.json"
     h5_report_path.write_text(json.dumps(full_report, indent=2, default=str))
