@@ -45,6 +45,11 @@
 # pip install mlflow>=2.13.0
 # mlflow>=2.13.0
 
+# ── Explainable AI (SHAP) ─────────────────────────────────────────────────────
+# Activates full SHAP feature-attribution in ml/explainability.py. Without it,
+# explainability gracefully falls back to the model's built-in feature_importances_.
+shap>=0.46.0
+
 # ── Alpaca Trade API ──────────────────────────────────────────────────────────
 # US equities broker SDK.
 # pip install alpaca-trade-api>=3.3.0
