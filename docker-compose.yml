@@ -28,6 +28,9 @@ services:
       # Default monitor = observe + log, never block. Flip to enforce only
       # after a clean soak (watch /health/invariants).
       HOPEFX_INVARIANT_MODE: ${HOPEFX_INVARIANT_MODE:-monitor}
+      # Staged rollout Step 1: enforce the order-authorization choke-point while
+      # global mode stays monitor. Add kinds as each soaks clean.
+      HOPEFX_INVARIANT_ENFORCE_KINDS: ${HOPEFX_INVARIANT_ENFORCE_KINDS:-order_authorization}
       HOPEFX_INVARIANT_FAIL_CLOSED: ${HOPEFX_INVARIANT_FAIL_CLOSED:-0}
       RISK_MAX_TICK_STALENESS_S: ${RISK_MAX_TICK_STALENESS_S:-5.0}
       RISK_MAX_SYMBOL_EXPOSURE_USD: ${RISK_MAX_SYMBOL_EXPOSURE_USD:-1000000.0}

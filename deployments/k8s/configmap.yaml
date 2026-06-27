@@ -12,6 +12,10 @@ data:
   # Constitutional invariant enforcement — see docs/INVARIANT_ROLLOUT.md.
   # monitor = observe + log (safe default); flip to "enforce" after a clean soak.
   HOPEFX_INVARIANT_MODE: "monitor"
+  # Staged rollout Step 1: enforce the order-authorization choke-point while the
+  # global mode stays monitor. Add kinds (pre_trade, reconciliation, ledger, …)
+  # as each soaks clean, then collapse to HOPEFX_INVARIANT_MODE="enforce".
+  HOPEFX_INVARIANT_ENFORCE_KINDS: "order_authorization"
   HOPEFX_INVARIANT_FAIL_CLOSED: "0"
   RISK_MAX_TICK_STALENESS_S: "5.0"
   RISK_MAX_SYMBOL_EXPOSURE_USD: "1000000.0"
