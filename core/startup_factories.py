@@ -2878,6 +2878,7 @@ async def init_trading_engine(s: Any) -> Any | None:
             autostart = os.getenv("ENGINE_AUTOSTART", "true").lower() == "true"
 
         if autostart:
+
             async def _run_engine() -> None:
                 try:
                     await engine.start()

@@ -347,9 +347,7 @@ async def ws_public(ws: WebSocket) -> None:
     try:
         # Confirm subscription (echo back the public symbols so the client can
         # render the subscribed set even before the first tick arrives).
-        await ws.send_json(
-            {"type": "subscribed", "channels": ["prices"], "symbols": PUBLIC_SYMBOLS}
-        )
+        await ws.send_json({"type": "subscribed", "channels": ["prices"], "symbols": PUBLIC_SYMBOLS})
 
         # Start tick broadcast in background
         broadcast_task = asyncio.create_task(_broadcast_ticks(ws))

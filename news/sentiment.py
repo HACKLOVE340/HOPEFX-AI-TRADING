@@ -263,8 +263,8 @@ class FinancialSentimentAnalyzer:
                 magnitude = min(abs(polarity), 1.0)
                 return SentimentScore(
                     polarity=polarity,
-                    subjectivity=magnitude,            # strong sentiment ≈ more subjective
-                    confidence=max(magnitude, 0.5),    # softmax prob of winning class
+                    subjectivity=magnitude,  # strong sentiment ≈ more subjective
+                    confidence=max(magnitude, 0.5),  # softmax prob of winning class
                     label=self._get_label(polarity),
                     compound_score=polarity,
                 )

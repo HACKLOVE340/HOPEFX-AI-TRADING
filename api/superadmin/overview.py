@@ -69,17 +69,13 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             db = SessionLocal()
             try:
                 out["total_users"] = db.query(User).count()
-                out["active_users_24h"] = (
-                    db.query(User).filter(User.last_login_at >= now - timedelta(hours=24)).count()
-                )
+                out["active_users_24h"] = db.query(User).filter(User.last_login_at >= now - timedelta(hours=24)).count()
                 out["new_users_7d"] = db.query(User).filter(User.created_at >= now - timedelta(days=7)).count()
                 out["total_trades_today"] = db.query(Trade).filter(Trade.entry_time >= today_start).count()
                 out["open_positions"] = db.query(Trade).filter(Trade.is_open == True).count()
                 out["signals_generated_today"] = db.query(Signal).filter(Signal.generated_at >= today_start).count()
                 out["active_sessions"] = (
-                    db.query(UserSession)
-                    .filter(UserSession.is_revoked == False, UserSession.expires_at > now)
-                    .count()
+                    db.query(UserSession).filter(UserSession.is_revoked == False, UserSession.expires_at > now).count()
                 )
                 try:
                     rev_row = (

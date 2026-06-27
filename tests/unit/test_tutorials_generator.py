@@ -53,9 +53,9 @@ def test_content_hash_changes_on_script_edit() -> None:
 def test_build_storyboard_has_scenes_and_narration() -> None:
     sb = gen.build_storyboard(_sample_ep())
     headings = [s.heading for s in sb.scenes]
-    assert sb.scenes[0].heading == "Test Episode"      # intro
+    assert sb.scenes[0].heading == "Test Episode"  # intro
     assert "First topic" in headings and "Second topic" in headings
-    assert "Wrap-up" in headings                        # outro
+    assert "Wrap-up" in headings  # outro
     # The duplicate "Introduction" chapter is folded into the intro scene.
     assert headings.count("Introduction") == 0
     assert sb.total_duration_s > 0
@@ -91,12 +91,12 @@ def test_check_stale_detects_drift(monkeypatch) -> None:
     ep = _sample_ep()
     monkeypatch.setattr(gen, "_episodes", lambda: [ep])
 
-    assert gen.check_stale() == [99]      # nothing generated yet
+    assert gen.check_stale() == [99]  # nothing generated yet
     gen.generate()
-    assert gen.check_stale() == []        # now in sync
+    assert gen.check_stale() == []  # now in sync
 
     ep["chapters"] = ep["chapters"] + ["8:00 New topic"]  # app/script changed
-    assert gen.check_stale() == [99]      # drift detected → would regenerate
+    assert gen.check_stale() == [99]  # drift detected → would regenerate
 
 
 def test_force_regenerates_unchanged(monkeypatch) -> None:

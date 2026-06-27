@@ -17,7 +17,7 @@ pytestmark = pytest.mark.unit
 def test_registry_discovers_predicates():
     s = registry.registry_summary()
     assert s["modules"] >= 30
-    assert s["predicates"] >= 300            # the whole library is inventoried
+    assert s["predicates"] >= 300  # the whole library is inventoried
     assert s["predicates"] == registry.predicate_count()
 
 
@@ -50,10 +50,16 @@ def test_invariant_alert_recovery_coverage():
 
 
 def test_decision_trace_reconstructable():
-    full = {"decision_id": "d", "model_version": "m", "prompt_hash": "p",
-            "features_hash": "f", "data_snapshot": "s", "trade_id": "t"}
+    full = {
+        "decision_id": "d",
+        "model_version": "m",
+        "prompt_hash": "p",
+        "features_hash": "f",
+        "data_snapshot": "s",
+        "trade_id": "t",
+    }
     assert meta.verify_decision_trace(full) == []
-    assert meta.verify_decision_trace({"decision_id": "d"})           # missing links
+    assert meta.verify_decision_trace({"decision_id": "d"})  # missing links
     assert meta.verify_decision_trace({**full, "data_snapshot": ""})  # broken link
 
 

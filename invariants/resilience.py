@@ -50,15 +50,25 @@ def verify_restore_tested(restore_test_passed: bool, days_since_test: float, max
 
 def verify_failover_ready(replicas_healthy: int, min_replicas: int = 1) -> list[Violation]:
     if replicas_healthy < min_replicas:
-        return [_v("No Critical Single Point Of Failure", CRITICAL,
-                   f"failover not ready: {replicas_healthy} healthy replica(s) < {min_replicas}")]
+        return [
+            _v(
+                "No Critical Single Point Of Failure",
+                CRITICAL,
+                f"failover not ready: {replicas_healthy} healthy replica(s) < {min_replicas}",
+            )
+        ]
     return []
 
 
 def verify_multi_region(regions_replicated: int, min_regions: int = 2) -> list[Violation]:
     if regions_replicated < min_regions:
-        return [_v("No Critical Single Point Of Failure", WARNING,
-                   f"only {regions_replicated} region(s) replicated (< {min_regions}) — region SPOF")]
+        return [
+            _v(
+                "No Critical Single Point Of Failure",
+                WARNING,
+                f"only {regions_replicated} region(s) replicated (< {min_regions}) — region SPOF",
+            )
+        ]
     return []
 
 

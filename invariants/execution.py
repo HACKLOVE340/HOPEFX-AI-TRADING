@@ -28,8 +28,14 @@ def verify_slippage(expected_price: float, actual_price: float, max_slippage_pct
         return [_v("No Hidden Loss", CRITICAL, f"invalid prices expected={expected_price} actual={actual_price}")]
     slip = abs(actual_price - expected_price) / expected_price * 100
     if slip > max_slippage_pct:
-        return [_v("No Hidden Loss", CRITICAL, f"slippage {slip:.3f}% exceeds max {max_slippage_pct}%",
-                   slippage_pct=round(slip, 4))]
+        return [
+            _v(
+                "No Hidden Loss",
+                CRITICAL,
+                f"slippage {slip:.3f}% exceeds max {max_slippage_pct}%",
+                slippage_pct=round(slip, 4),
+            )
+        ]
     return []
 
 
@@ -38,16 +44,23 @@ def verify_latency_budget(latencies_ms: dict[str, float], budget_ms: float) -> l
     vals = [v for v in latencies_ms.values() if _is_finite_number(v)]
     total = sum(vals)
     if total > budget_ms:
-        return [_v("No Unbounded Failure", CRITICAL,
-                   f"decision latency {total:.1f}ms exceeds budget {budget_ms}ms", stages=latencies_ms)]
+        return [
+            _v(
+                "No Unbounded Failure",
+                CRITICAL,
+                f"decision latency {total:.1f}ms exceeds budget {budget_ms}ms",
+                stages=latencies_ms,
+            )
+        ]
     return []
 
 
 def verify_broker_reconciliation(local_state: Any, broker_state: Any, name: str = "position") -> list[Violation]:
     """Local platform state must match the broker's (No Hidden Exposure)."""
     if local_state != broker_state:
-        return [_v("No Hidden Exposure", CONSTITUTIONAL,
-                   f"{name} mismatch: local={local_state!r} broker={broker_state!r}")]
+        return [
+            _v("No Hidden Exposure", CONSTITUTIONAL, f"{name} mismatch: local={local_state!r} broker={broker_state!r}")
+        ]
     return []
 
 
@@ -55,8 +68,13 @@ def verify_reported_matches_actual(reported_fill: Any, exchange_fill: Any) -> li
     """What the system BELIEVES happened must equal what ACTUALLY happened — the
     reality-integrity invariant that sits above almost all others."""
     if reported_fill != exchange_fill:
-        return [_v("No State Corruption", CONSTITUTIONAL,
-                   f"reality mismatch: reported {reported_fill!r} != exchange {exchange_fill!r}")]
+        return [
+            _v(
+                "No State Corruption",
+                CONSTITUTIONAL,
+                f"reality mismatch: reported {reported_fill!r} != exchange {exchange_fill!r}",
+            )
+        ]
     return []
 
 
@@ -64,14 +82,26 @@ def verify_settlement_balanced(trades_value: float, clearing_value: float, tol: 
     if not (_is_finite_number(trades_value) and _is_finite_number(clearing_value)):
         return [_v("No Hidden Capital", CONSTITUTIONAL, "settlement values non-finite")]
     if abs(trades_value - clearing_value) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"settlement unbalanced: trades {trades_value} != clearing {clearing_value}")]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"settlement unbalanced: trades {trades_value} != clearing {clearing_value}",
+            )
+        ]
     return []
 
 
-def verify_pre_trade_gate(*, prediction_exists: bool, confidence_ok: bool, risk_approved: bool,
-                          capital_available: bool, market_open: bool, broker_reachable: bool,
-                          kill_switch_active: bool) -> list[Violation]:
+def verify_pre_trade_gate(
+    *,
+    prediction_exists: bool,
+    confidence_ok: bool,
+    risk_approved: bool,
+    capital_available: bool,
+    market_open: bool,
+    broker_reachable: bool,
+    kill_switch_active: bool,
+) -> list[Violation]:
     """Every autonomous trade must pass ALL pre-trade checks. A single failure
     (or an active kill switch) blocks the trade — No Unauthorized Trade."""
     out: list[Violation] = []

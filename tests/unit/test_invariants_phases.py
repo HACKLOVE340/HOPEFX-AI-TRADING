@@ -75,8 +75,8 @@ def test_drift():
 
 def test_knowledge():
     assert kn.verify_retrieval([1], {1, 2}, {"sec"}, ["sec"]) == []
-    assert kn.verify_retrieval([9], {1, 2}, {"sec"}, ["sec"])             # missing doc
-    assert kn.verify_retrieval([1], {1}, {"sec"}, ["evil"])               # untrusted source
+    assert kn.verify_retrieval([9], {1, 2}, {"sec"}, ["sec"])  # missing doc
+    assert kn.verify_retrieval([1], {1}, {"sec"}, ["evil"])  # untrusted source
     assert kn.verify_context_freshness(10, 60) == []
     assert kn.verify_context_freshness(120, 60)
     assert kn.verify_no_orphan_entities({1, 2}, {1}) == []
@@ -91,7 +91,7 @@ def test_knowledge():
 
 def test_ml_pipeline():
     assert mlp.verify_feature_schema({"a": 1, "b": 2}, {"a", "b"}) == []
-    assert mlp.verify_feature_schema({"a": 1}, {"a", "b"})                # missing col
+    assert mlp.verify_feature_schema({"a": 1}, {"a", "b"})  # missing col
     assert mlp.verify_online_offline_parity(1.0, 1.0) == []
     assert mlp.verify_online_offline_parity(1.0, 2.0)
     assert mlp.verify_dataset_complete(1000, 500, 0.01) == []
@@ -146,7 +146,7 @@ def test_multi_agent():
 
 
 def test_economic():
-    assert eco.verify_economic_equilibrium(100, 50, 30, 10, 70) == []     # 100-50+30-10=70
+    assert eco.verify_economic_equilibrium(100, 50, 30, 10, 70) == []  # 100-50+30-10=70
     assert eco.verify_economic_equilibrium(100, 50, 30, 10, 999)
     assert eco.verify_report_accurate(100, 100) == []
     assert eco.verify_report_accurate(100, 80)
@@ -154,7 +154,7 @@ def test_economic():
     assert eco.verify_fund_segregation({"c1": 100.0}, commingled=True)
     assert eco.verify_fund_segregation({"c1": -1.0}, commingled=False)
     assert eco.verify_redemption_fairness(100, 100, 200) == []
-    assert eco.verify_redemption_fairness(100, 50, 200)                   # short-paid despite funds
+    assert eco.verify_redemption_fairness(100, 50, 200)  # short-paid despite funds
     assert eco.verify_within_contract_limits(50, 100, "drawdown") == []
     assert eco.verify_within_contract_limits(150, 100, "drawdown")
     assert eco.verify_cost_growth(5, 20) == []
@@ -195,12 +195,21 @@ def test_meta():
     assert meta.verify_invariant_engine_healthy(False)
     assert meta.verify_constitution([]) == []
     from invariants import constitution as c
+
     assert meta.verify_constitution(c.verify_pnl_reconciliation(1, 1, 999))
     ok = meta.verify_five_master_guarantees(
-        nothing_unnoticed=True, nothing_unbounded=True, nothing_unrecoverable=True,
-        nothing_unaccounted=True, human_in_control=True)
+        nothing_unnoticed=True,
+        nothing_unbounded=True,
+        nothing_unrecoverable=True,
+        nothing_unaccounted=True,
+        human_in_control=True,
+    )
     assert ok == []
     bad = meta.verify_five_master_guarantees(
-        nothing_unnoticed=True, nothing_unbounded=True, nothing_unrecoverable=True,
-        nothing_unaccounted=True, human_in_control=False)
+        nothing_unnoticed=True,
+        nothing_unbounded=True,
+        nothing_unrecoverable=True,
+        nothing_unaccounted=True,
+        human_in_control=False,
+    )
     assert bad

@@ -100,9 +100,7 @@ async def get_news_feed(
                 # Score each article with nuclear wordmap
                 nuclear_score = 0
                 if scorer and article.get("title"):
-                    nuclear_score = await _severity(
-                        scorer, article.get("title", "") + " " + article.get("summary", "")
-                    )
+                    nuclear_score = await _severity(scorer, article.get("title", "") + " " + article.get("summary", ""))
 
                 articles.append(
                     {

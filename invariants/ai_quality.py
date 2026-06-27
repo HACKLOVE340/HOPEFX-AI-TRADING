@@ -61,8 +61,9 @@ def verify_signal_concentration(weights: Iterable[float], max_weight: float) -> 
 def verify_trade_not_clustered(trades_in_window: int, max_in_window: int, window: str = "1m") -> list[Violation]:
     """A burst of trades in a tiny window suggests a loop/runaway model."""
     if trades_in_window > max_in_window:
-        return [_v(_RULE, CRITICAL,
-                   f"{trades_in_window} trades in {window} exceeds {max_in_window} (clustering/runaway)")]
+        return [
+            _v(_RULE, CRITICAL, f"{trades_in_window} trades in {window} exceeds {max_in_window} (clustering/runaway)")
+        ]
     return []
 
 
@@ -76,8 +77,7 @@ def verify_explanation_consistent(explanation_a: Any, explanation_b: Any) -> lis
 def verify_prediction_matches_explanation(direction: str, explained_direction: str) -> list[Violation]:
     """The action taken must agree with its stated rationale (no post-hoc fiction)."""
     if direction != explained_direction:
-        return [_v(_RULE, CONSTITUTIONAL,
-                   f"action {direction!r} contradicts its explanation {explained_direction!r}")]
+        return [_v(_RULE, CONSTITUTIONAL, f"action {direction!r} contradicts its explanation {explained_direction!r}")]
     return []
 
 
@@ -105,8 +105,9 @@ def verify_model_output_bounded(value: float, low: float, high: float, name: str
     return []
 
 
-def verify_calibration_error(observed_freq: Mapping[Any, float], predicted_prob: Mapping[Any, float],
-                             max_error: float) -> list[Violation]:
+def verify_calibration_error(
+    observed_freq: Mapping[Any, float], predicted_prob: Mapping[Any, float], max_error: float
+) -> list[Violation]:
     """Predicted probabilities must roughly match observed frequencies (calibration)."""
     out: list[Violation] = []
     for bucket, pred in predicted_prob.items():
@@ -114,6 +115,5 @@ def verify_calibration_error(observed_freq: Mapping[Any, float], predicted_prob:
         if obs is None or not (_is_finite_number(obs) and _is_finite_number(pred)):
             continue
         if abs(obs - pred) > max_error:
-            out.append(_v(_RULE, WARNING,
-                          f"miscalibrated bucket {bucket!r}: predicted {pred} vs observed {obs}"))
+            out.append(_v(_RULE, WARNING, f"miscalibrated bucket {bucket!r}: predicted {pred} vs observed {obs}"))
     return out

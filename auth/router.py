@@ -138,6 +138,7 @@ async def _auth_to_thread(_fn, /, *args, **kwargs):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_AUTH_EXECUTOR, functools.partial(_fn, *args, **kwargs))
 
+
 # Module-level service reference — injected from app.py startup
 _auth_service = None
 

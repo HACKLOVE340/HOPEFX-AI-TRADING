@@ -63,9 +63,7 @@ __all__ = ["install", "observe", "event", "trace", "is_installed"]
 # ── module state ──────────────────────────────────────────────────────────────
 _LOCK = threading.Lock()
 _STATE: dict[str, Any] = {"installed": False, "events_path": None, "log_dir": None}
-_TRACE_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "hopefx_trace_id", default=None
-)
+_TRACE_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar("hopefx_trace_id", default=None)
 _log = logging.getLogger("hopefx.observability")
 
 
@@ -204,11 +202,7 @@ def _attach_asyncio_handler() -> None:
                 "message": ctx.get("message"),
                 "error_type": type(exc).__name__ if exc else None,
                 "error": str(exc) if exc else None,
-                "traceback": "".join(
-                    traceback.format_exception(type(exc), exc, exc.__traceback__)
-                )
-                if exc
-                else None,
+                "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)) if exc else None,
             }
         )
         _log.error("ASYNCIO UNHANDLED: %s", ctx.get("message"))
@@ -301,6 +295,7 @@ def install(
 
     # Uncaught exceptions in worker threads.
     if hasattr(threading, "excepthook"):
+
         def _threadhook(args: Any) -> None:
             _emit_event(
                 {
@@ -308,11 +303,7 @@ def install(
                     "thread": getattr(args.thread, "name", "?"),
                     "error_type": args.exc_type.__name__,
                     "error": str(args.exc_value),
-                    "traceback": "".join(
-                        traceback.format_exception(
-                            args.exc_type, args.exc_value, args.exc_traceback
-                        )
-                    ),
+                    "traceback": "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)),
                 }
             )
             _log.error("THREAD UNCAUGHT [%s] %s", getattr(args.thread, "name", "?"), args.exc_type.__name__)
@@ -336,9 +327,7 @@ def install(
                     "error_type": type(exc).__name__ if exc else None,
                     "error": str(exc) if exc else None,
                     "object": repr(getattr(args, "object", None)),
-                    "traceback": "".join(
-                        traceback.format_exception(args.exc_type, exc, args.exc_traceback)
-                    )
+                    "traceback": "".join(traceback.format_exception(args.exc_type, exc, args.exc_traceback))
                     if exc
                     else None,
                 }

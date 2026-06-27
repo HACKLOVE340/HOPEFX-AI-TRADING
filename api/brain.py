@@ -253,7 +253,10 @@ def _keyless_chat_reply(message: str) -> str:
     )
 
     if has("hello", "hi ", "hey", "good morning", "good afternoon") or m in {"hi", "hey"}:
-        return "Hi — I'm the HOPEFX assistant. Ask me about your account, open positions, signals, risk, or how to use the platform." + note
+        return (
+            "Hi — I'm the HOPEFX assistant. Ask me about your account, open positions, signals, risk, or how to use the platform."
+            + note
+        )
     if has("help", "what can you", "how do i", "commands"):
         return (
             "I can point you to:\n"
@@ -266,17 +269,32 @@ def _keyless_chat_reply(message: str) -> str:
             "• **AI strategies** → Brain → Generate Strategy" + note
         )
     if has("account", "balance", "equity", "margin", "p&l", "pnl", "profit"):
-        return "Your live account balance, equity, margin and P&L are on the **Dashboard → Account** panel, refreshed in real time." + note
+        return (
+            "Your live account balance, equity, margin and P&L are on the **Dashboard → Account** panel, refreshed in real time."
+            + note
+        )
     if has("position", "open trade", "my trades"):
-        return "Open positions, entry price, size and unrealised P&L are on the **Positions** page. Use the Risk page to manage exposure." + note
+        return (
+            "Open positions, entry price, size and unrealised P&L are on the **Positions** page. Use the Risk page to manage exposure."
+            + note
+        )
     if has("signal", "entry", "setup"):
         return "Active ML trade signals (direction, confidence, entry/stop/target) are on the **Signals** page." + note
     if has("price", "gold", "xau", "quote", "market"):
-        return "Live XAUUSD price and candles are on **Markets → XAUUSD**. Note: only the keyless gold feed is active unless you configure broker/feed API keys." + note
+        return (
+            "Live XAUUSD price and candles are on **Markets → XAUUSD**. Note: only the keyless gold feed is active unless you configure broker/feed API keys."
+            + note
+        )
     if has("risk", "kill switch", "drawdown", "stop"):
-        return "Risk limits, drawdown, VaR/CVaR and the kill switch are on the **Risk** page. The kill switch halts all new orders immediately." + note
+        return (
+            "Risk limits, drawdown, VaR/CVaR and the kill switch are on the **Risk** page. The kill switch halts all new orders immediately."
+            + note
+        )
     if has("strategy", "backtest"):
-        return "Generate and backtest AI strategies under **Brain → Generate Strategy**. Full strategy generation needs an LLM key (see below)." + note
+        return (
+            "Generate and backtest AI strategies under **Brain → Generate Strategy**. Full strategy generation needs an LLM key (see below)."
+            + note
+        )
     if has("news", "event", "calendar", "fomc", "nfp", "cpi"):
         return "Upcoming high-impact events (FOMC, NFP, jobless claims) are on the **Calendar** page." + note
     return (

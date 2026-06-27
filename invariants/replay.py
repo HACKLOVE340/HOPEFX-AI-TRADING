@@ -30,13 +30,14 @@ def verify_replay_matches(original: Any, replayed: Any, kind: str = "decision") 
     return []
 
 
-def verify_replay_within_tolerance(original: float, replayed: float, tol: float, kind: str = "market") -> list[Violation]:
+def verify_replay_within_tolerance(
+    original: float, replayed: float, tol: float, kind: str = "market"
+) -> list[Violation]:
     """Numeric replay (PnL/price reconstruction) must match within tolerance."""
     if not (_is_finite_number(original) and _is_finite_number(replayed)):
         return [_v("No Audit Gap", CRITICAL, f"{kind} replay value non-finite")]
     if abs(original - replayed) > tol:
-        return [_v("No Audit Gap", CRITICAL,
-                   f"{kind} replay drift {abs(original - replayed)} > tol {tol}")]
+        return [_v("No Audit Gap", CRITICAL, f"{kind} replay drift {abs(original - replayed)} > tol {tol}")]
     return []
 
 
@@ -51,9 +52,14 @@ def verify_deleted_stays_deleted(deleted_ids: Iterable[Any], present_ids: Iterab
     """Deleted records must not reappear (data resurrection)."""
     resurrected = set(deleted_ids) & set(present_ids)
     if resurrected:
-        return [_v("No State Corruption", CONSTITUTIONAL,
-                   f"data resurrection: {len(resurrected)} deleted record(s) reappeared",
-                   ids=sorted(resurrected)[:5])]
+        return [
+            _v(
+                "No State Corruption",
+                CONSTITUTIONAL,
+                f"data resurrection: {len(resurrected)} deleted record(s) reappeared",
+                ids=sorted(resurrected)[:5],
+            )
+        ]
     return []
 
 
@@ -69,6 +75,7 @@ def verify_snapshot_consistent(snapshot_total: float, rebuilt_total: float, tol:
     if not (_is_finite_number(snapshot_total) and _is_finite_number(rebuilt_total)):
         return [_v("No State Corruption", CRITICAL, "snapshot/rebuilt total non-finite")]
     if abs(snapshot_total - rebuilt_total) > tol:
-        return [_v("No State Corruption", CONSTITUTIONAL,
-                   f"snapshot {snapshot_total} != event-log rebuild {rebuilt_total}")]
+        return [
+            _v("No State Corruption", CONSTITUTIONAL, f"snapshot {snapshot_total} != event-log rebuild {rebuilt_total}")
+        ]
     return []

@@ -117,8 +117,12 @@ def test_platform_auth():
     assert auth.verify_no_secret_in_response({"password": "x"})
     assert auth.verify_rate_limiter_active(True) == []
     assert auth.verify_rate_limiter_active(False)
-    good_headers = {"content-security-policy": "x", "x-content-type-options": "nosniff",
-                    "x-frame-options": "DENY", "strict-transport-security": "max-age=1"}
+    good_headers = {
+        "content-security-policy": "x",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "strict-transport-security": "max-age=1",
+    }
     assert auth.verify_security_headers(good_headers) == []
     assert auth.verify_security_headers({"content-security-policy": "x"})
     assert auth.verify_csrf_protected(True, True) == []

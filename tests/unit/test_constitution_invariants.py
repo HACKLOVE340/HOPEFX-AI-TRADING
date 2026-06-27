@@ -92,16 +92,16 @@ def test_within_limit():
 # ── market data (No Data Corruption) ────────────────────────────────────────────
 def test_tick_validation():
     assert c.verify_tick(2650.5, 100) == []
-    assert c.verify_tick(0, 100)            # price must be > 0
+    assert c.verify_tick(0, 100)  # price must be > 0
     assert c.verify_tick(-1, 100)
-    assert c.verify_tick(2650.5, -5)        # volume must be >= 0
+    assert c.verify_tick(2650.5, -5)  # volume must be >= 0
     assert c.verify_tick(2650.5, 100, ts=1000, now=10)  # future-dated
     assert c.verify_tick(2650.5, 100, ts=10, now=1000) == []
 
 
 def test_spread_integrity():
-    assert c.verify_spread(2650.0, 2650.5) == []      # bid <= ask
-    assert c.verify_spread(2651.0, 2650.0)            # crossed book
+    assert c.verify_spread(2650.0, 2650.5) == []  # bid <= ask
+    assert c.verify_spread(2651.0, 2650.0)  # crossed book
     assert c.verify_spread(float("nan"), 2650.0)
 
 
@@ -117,11 +117,13 @@ def test_finite():
 # ── human control (No Loss Of Human Control) ────────────────────────────────────
 class _GoodKill:
     def trigger(self): ...
-    def is_active(self): return False
+    def is_active(self):
+        return False
 
 
 class _NoEngageKill:
-    def is_active(self): return False
+    def is_active(self):
+        return False
 
 
 def test_human_control():

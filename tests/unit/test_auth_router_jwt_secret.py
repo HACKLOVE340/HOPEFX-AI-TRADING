@@ -64,6 +64,7 @@ def _forge_empty_key_token(  # nosec B107 - test file
     empty-secret bypass attack an external actor could still attempt. The server
     must reject it regardless of what library the attacker used.
     """
+
     def _b64(raw: bytes) -> bytes:
         return base64.urlsafe_b64encode(raw).rstrip(b"=")
 

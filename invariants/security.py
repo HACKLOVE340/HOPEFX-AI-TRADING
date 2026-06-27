@@ -26,8 +26,9 @@ from invariants.constitution import (
 _RULE = "No Compliance Breach"
 
 
-def verify_no_exposed_secret(value: str, placeholder_markers: tuple[str, ...] = (
-        "CHANGE_ME", "your_", "_here", "changeme", "replace_me")) -> list[Violation]:
+def verify_no_exposed_secret(
+    value: str, placeholder_markers: tuple[str, ...] = ("CHANGE_ME", "your_", "_here", "changeme", "replace_me")
+) -> list[Violation]:
     """A live secret slot must not contain a placeholder (and must be non-empty)."""
     if not value:
         return [_v(_RULE, CRITICAL, "secret is empty/unset")]
@@ -83,6 +84,7 @@ def verify_prompt_not_injected(injection_detected: bool) -> list[Violation]:
 def verify_input_not_poisoned(anomaly_score: float, threshold: float, channel: str = "market_data") -> list[Violation]:
     """Market-data / memory / tool inputs must be screened for poisoning."""
     if _is_finite_number(anomaly_score) and anomaly_score > threshold:
-        return [_v("No Data Corruption", CRITICAL,
-                   f"possible {channel} poisoning: anomaly {anomaly_score} > {threshold}")]
+        return [
+            _v("No Data Corruption", CRITICAL, f"possible {channel} poisoning: anomaly {anomaly_score} > {threshold}")
+        ]
     return []

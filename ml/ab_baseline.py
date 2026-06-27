@@ -90,7 +90,9 @@ def _trade_sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float:
     sd = float(np.std(r, ddof=1))
     if sd < 1e-12:
         return 0.0
-    return float(np.mean(r) / sd * np.sqrt(periods_per_year))  # healer: ignore — sd guarded above (if sd < 1e-12: return 0.0)
+    return float(
+        np.mean(r) / sd * np.sqrt(periods_per_year)
+    )  # healer: ignore — sd guarded above (if sd < 1e-12: return 0.0)
 
 
 def _directional_pnl(pred: np.ndarray, fwd_ret: np.ndarray) -> np.ndarray:
@@ -131,7 +133,7 @@ def run_ab(
 
     # 2. Forward returns aligned to the feature index (for trade-level PnL).
     close = df["close"].astype(float)
-    fwd = (close.shift(-horizon) / close - 1.0)
+    fwd = close.shift(-horizon) / close - 1.0
     fwd = fwd.reindex(X.index)
 
     # 3. Leakage-safe OOS split: carve the tail, then purge `horizon` boundary
@@ -152,12 +154,17 @@ def run_ab(
 
     # 4. ML predictions on OOS (same calibrated-XGB pipeline as oos_eval_advanced).
     base = xgb.XGBClassifier(
-        n_estimators=n_estimators, max_depth=5, learning_rate=0.05,
-        subsample=0.75, colsample_bytree=0.75, min_child_weight=3,
-        eval_metric="logloss", random_state=42, n_jobs=1,
+        n_estimators=n_estimators,
+        max_depth=5,
+        learning_rate=0.05,
+        subsample=0.75,
+        colsample_bytree=0.75,
+        min_child_weight=3,
+        eval_metric="logloss",
+        random_state=42,
+        n_jobs=1,
     )
-    model = Pipeline([("scaler", StandardScaler()),
-                      ("model", CalibratedClassifierCV(base, method="isotonic", cv=3))])
+    model = Pipeline([("scaler", StandardScaler()), ("model", CalibratedClassifierCV(base, method="isotonic", cv=3))])
     model.fit(X_cv, y_cv)
     ml_pred = model.predict(X_oos)
     ml_proba = model.predict_proba(X_oos)[:, 1]
@@ -176,9 +183,7 @@ def run_ab(
     agree = ml_pred == base_pred
     n_agree = int(agree.sum())
     filt_pnl = base_pnl[agree]
-    filt_acc = (
-        float(accuracy_score(y_oos_arr[agree], base_pred[agree])) if n_agree > 0 else 0.0
-    )
+    filt_acc = float(accuracy_score(y_oos_arr[agree], base_pred[agree])) if n_agree > 0 else 0.0
 
     lift = ml_acc - base_acc
     report: dict[str, Any] = {
@@ -230,13 +235,14 @@ def _synthetic_ohlcv(n: int = 1500, seed: int = 7) -> pd.DataFrame:
     """Deterministic synthetic gold-like series for smoke runs / tests."""
     rng = np.random.default_rng(seed)
     drift = np.linspace(0, 0.4, n)
-    price = 1800.0 * np.exp(np.cumsum(rng.normal(0, 0.01, n)) + drift)  # healer: ignore — synthetic smoke-mode generator; inputs are rng normals
+    price = 1800.0 * np.exp(
+        np.cumsum(rng.normal(0, 0.01, n)) + drift
+    )  # healer: ignore — synthetic smoke-mode generator; inputs are rng normals
     idx = pd.date_range("2015-01-01", periods=n, freq="D")
     high = price * (1 + np.abs(rng.normal(0, 0.004, n)))
     low = price * (1 - np.abs(rng.normal(0, 0.004, n)))
     return pd.DataFrame(
-        {"open": price, "high": high, "low": low, "close": price,
-         "volume": rng.integers(1000, 5000, n)},
+        {"open": price, "high": high, "low": low, "close": price, "volume": rng.integers(1000, 5000, n)},
         index=idx,
     )
 
@@ -260,7 +266,9 @@ def main() -> None:
     ap.add_argument("--horizon", type=int, default=5)
     ap.add_argument("--oos-years", type=float, default=3.0)
     ap.add_argument("--min-move", type=float, default=0.25)
-    ap.add_argument("--smoke", action="store_true", help="synthetic data, fast")  # healer: ignore — argparse help text, not production data
+    ap.add_argument(
+        "--smoke", action="store_true", help="synthetic data, fast"
+    )  # healer: ignore — argparse help text, not production data
     args = ap.parse_args()
 
     if args.smoke or not args.csv:
@@ -273,24 +281,38 @@ def main() -> None:
         n_est = 300
 
     report = run_ab(
-        df, horizon=args.horizon, oos_years=args.oos_years,
-        min_move_atr=args.min_move, n_estimators=n_est,
+        df,
+        horizon=args.horizon,
+        oos_years=args.oos_years,
+        min_move_atr=args.min_move,
+        n_estimators=n_est,
     )
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, indent=2))
 
     logger.info("\n%s", "=" * 64)
-    logger.info("A/B — ML vs RULE BASELINE  (OOS bars: %d, horizon: %d)",
-                report["oos_bars"], report["horizon"])
+    logger.info("A/B — ML vs RULE BASELINE  (OOS bars: %d, horizon: %d)", report["oos_bars"], report["horizon"])
     logger.info("=" * 64)
-    logger.info("  baseline   acc=%.3f  sharpe=%.2f  (n=%d)",
-                report["baseline"]["accuracy"], report["baseline"]["sharpe"], report["baseline"]["trades"])
-    logger.info("  ml         acc=%.3f  sharpe=%.2f  (n=%d)",
-                report["ml"]["accuracy"], report["ml"]["sharpe"], report["ml"]["trades"])
-    logger.info("  ml_filter  acc=%.3f  sharpe=%.2f  (n=%d, agree=%.0f%%)",
-                report["ml_as_filter"]["accuracy"], report["ml_as_filter"]["sharpe"],
-                report["ml_as_filter"]["trades"], report["ml_as_filter"]["agreement_rate"] * 100)
+    logger.info(
+        "  baseline   acc=%.3f  sharpe=%.2f  (n=%d)",
+        report["baseline"]["accuracy"],
+        report["baseline"]["sharpe"],
+        report["baseline"]["trades"],
+    )
+    logger.info(
+        "  ml         acc=%.3f  sharpe=%.2f  (n=%d)",
+        report["ml"]["accuracy"],
+        report["ml"]["sharpe"],
+        report["ml"]["trades"],
+    )
+    logger.info(
+        "  ml_filter  acc=%.3f  sharpe=%.2f  (n=%d, agree=%.0f%%)",
+        report["ml_as_filter"]["accuracy"],
+        report["ml_as_filter"]["sharpe"],
+        report["ml_as_filter"]["trades"],
+        report["ml_as_filter"]["agreement_rate"] * 100,
+    )
     logger.info("  ML lift    %+.1fpp", report["ml_accuracy_lift"] * 100)
     logger.info("  VERDICT: %s", report["verdict"])
     logger.info("=" * 64)

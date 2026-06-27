@@ -87,6 +87,12 @@ class FMPFeed(NewsFeedBase):
                 self._total_fetched += 1
 
         except Exception as exc:
-            logger.log(logging.DEBUG if any(s in str(exc).lower() for s in ("connect", "dns", "ssl", "timeout")) else logging.WARNING, "FMP fetch_articles error: %s", exc)
+            logger.log(
+                logging.DEBUG
+                if any(s in str(exc).lower() for s in ("connect", "dns", "ssl", "timeout"))
+                else logging.WARNING,
+                "FMP fetch_articles error: %s",
+                exc,
+            )
 
         return articles

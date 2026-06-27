@@ -136,7 +136,10 @@ class LLMGeopoliticalScorer:
             if severity >= 5:
                 logger.info(
                     "LLMGeopoliticalScorer: severity=%d action=%s category=%s impact=%s",
-                    severity, action, meta["category"], meta["gold_impact"],
+                    severity,
+                    action,
+                    meta["category"],
+                    meta["gold_impact"],
                 )
             return severity, action, float(severity), meta
         except Exception as exc:

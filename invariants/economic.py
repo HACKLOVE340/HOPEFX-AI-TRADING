@@ -25,16 +25,22 @@ from invariants.constitution import (
 )
 
 
-def verify_economic_equilibrium(inflows: float, outflows: float, profit: float, fees: float,
-                                delta_capital: float, tol: float = 0.01) -> list[Violation]:
+def verify_economic_equilibrium(
+    inflows: float, outflows: float, profit: float, fees: float, delta_capital: float, tol: float = 0.01
+) -> list[Violation]:
     """inflows − outflows + profit − fees must equal the change in capital."""
     vals = [inflows, outflows, profit, fees, delta_capital]
     if not all(_is_finite_number(x) for x in vals):
         return [_v("No Hidden Capital", CONSTITUTIONAL, "economic-equilibrium component non-finite")]
     expected = inflows - outflows + profit - fees
     if abs(expected - delta_capital) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"economic disequilibrium: expected Δcapital {round(expected, 4)} != {delta_capital}")]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"economic disequilibrium: expected Δcapital {round(expected, 4)} != {delta_capital}",
+            )
+        ]
     return []
 
 
@@ -43,8 +49,9 @@ def verify_report_accurate(reported: float, actual: float, tol: float = 0.01) ->
     if not (_is_finite_number(reported) and _is_finite_number(actual)):
         return [_v("No Compliance Breach", CRITICAL, "report values non-finite")]
     if abs(reported - actual) > tol:
-        return [_v("No Compliance Breach", CONSTITUTIONAL,
-                   f"misleading report: reported {reported} != actual {actual}")]
+        return [
+            _v("No Compliance Breach", CONSTITUTIONAL, f"misleading report: reported {reported} != actual {actual}")
+        ]
     return []
 
 
@@ -63,8 +70,13 @@ def verify_redemption_fairness(requested: float, honored: float, available: floa
     if not all(_is_finite_number(x) for x in (requested, honored, available)):
         return [_v("No Compliance Breach", CRITICAL, "redemption values non-finite")]
     if honored < requested and available >= requested:
-        return [_v("No Compliance Breach", CRITICAL,
-                   f"unfair redemption: honored {honored} < requested {requested} despite {available} available")]
+        return [
+            _v(
+                "No Compliance Breach",
+                CRITICAL,
+                f"unfair redemption: honored {honored} < requested {requested} despite {available} available",
+            )
+        ]
     return []
 
 

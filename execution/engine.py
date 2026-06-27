@@ -68,6 +68,7 @@ except Exception:  # harness is optional
                 raise
             logger.warning("silent failure in %s", _label, exc_info=True)
 
+
 # Optional Sentry
 try:
     import sentry_sdk

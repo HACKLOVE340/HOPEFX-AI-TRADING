@@ -33,23 +33,34 @@ def verify_critical_alert_delivered(delivered: bool) -> list[Violation]:
 
 def verify_critical_alert_acknowledged(age_s: float, max_ack_s: float) -> list[Violation]:
     if _is_finite_number(age_s) and age_s > max_ack_s:
-        return [_v("No Silent Failure", CRITICAL,
-                   f"critical alert unacknowledged for {age_s}s (> {max_ack_s}s) — must escalate")]
+        return [
+            _v(
+                "No Silent Failure",
+                CRITICAL,
+                f"critical alert unacknowledged for {age_s}s (> {max_ack_s}s) — must escalate",
+            )
+        ]
     return []
 
 
 def verify_monitoring_coverage(monitored: int, critical_total: int) -> list[Violation]:
     """No critical workflow may be unmonitored (blind-spot detection)."""
     if critical_total > 0 and monitored < critical_total:
-        return [_v("No Silent Failure", CRITICAL,
-                   f"monitoring blind spot: {monitored}/{critical_total} critical workflows monitored")]
+        return [
+            _v(
+                "No Silent Failure",
+                CRITICAL,
+                f"monitoring blind spot: {monitored}/{critical_total} critical workflows monitored",
+            )
+        ]
     return []
 
 
 def verify_incident_timeline_complete(has_detect: bool, has_cause: bool, has_resolve: bool) -> list[Violation]:
     """Every incident must be reconstructable (detected→root-caused→resolved)."""
-    missing = [n for n, ok in (("detection", has_detect), ("root_cause", has_cause), ("resolution", has_resolve))
-               if not ok]
+    missing = [
+        n for n, ok in (("detection", has_detect), ("root_cause", has_cause), ("resolution", has_resolve)) if not ok
+    ]
     if missing:
         return [_v("No Unexplained System Behavior", CRITICAL, f"incident timeline incomplete: missing {missing}")]
     return []
@@ -64,8 +75,13 @@ def verify_operator_available(qualified_operators_on_call: int) -> list[Violatio
 
 def verify_operator_fatigue(hours_on_shift: float, max_hours: float) -> list[Violation]:
     if _is_finite_number(hours_on_shift) and hours_on_shift > max_hours:
-        return [_v("No Loss Of Human Control", WARNING,
-                   f"operator fatigue: {hours_on_shift}h on shift exceeds {max_hours}h")]
+        return [
+            _v(
+                "No Loss Of Human Control",
+                WARNING,
+                f"operator fatigue: {hours_on_shift}h on shift exceeds {max_hours}h",
+            )
+        ]
     return []
 
 
@@ -79,8 +95,9 @@ def verify_emergency_reversible(action: str, has_rollback: bool) -> list[Violati
 def verify_alert_fatigue(false_alert_rate: float, threshold: float) -> list[Violation]:
     """Too many false alerts degrade response — protect signal quality."""
     if _is_finite_number(false_alert_rate) and false_alert_rate > threshold:
-        return [_v("No Silent Failure", WARNING,
-                   f"alert fatigue risk: false-alert rate {false_alert_rate} > {threshold}")]
+        return [
+            _v("No Silent Failure", WARNING, f"alert fatigue risk: false-alert rate {false_alert_rate} > {threshold}")
+        ]
     return []
 
 

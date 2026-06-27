@@ -106,7 +106,13 @@ class NewsAPIFeed(NewsFeedBase):
                 self._total_fetched += 1
 
         except Exception as exc:
-            logger.log(logging.DEBUG if any(s in str(exc).lower() for s in ("connect", "dns", "ssl", "timeout")) else logging.WARNING, "NewsAPI.org error: %s", exc)
+            logger.log(
+                logging.DEBUG
+                if any(s in str(exc).lower() for s in ("connect", "dns", "ssl", "timeout"))
+                else logging.WARNING,
+                "NewsAPI.org error: %s",
+                exc,
+            )
 
         return articles
 
@@ -163,6 +169,12 @@ class NewsAPIFeed(NewsFeedBase):
                 self._total_fetched += 1
 
         except Exception as exc:
-            logger.log(logging.DEBUG if any(s in str(exc).lower() for s in ("connect", "dns", "ssl", "timeout")) else logging.WARNING, "NewsAPI.ai error: %s", exc)
+            logger.log(
+                logging.DEBUG
+                if any(s in str(exc).lower() for s in ("connect", "dns", "ssl", "timeout"))
+                else logging.WARNING,
+                "NewsAPI.ai error: %s",
+                exc,
+            )
 
         return articles

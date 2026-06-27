@@ -497,11 +497,17 @@ class NuclearStreamer:
                 _low = exc_str.lower()
                 if any(
                     s in _low
-                    for s in ("auth_failed", "auth failed", "plan doesn't include", "unauthorized", "invalid api key", "401")
+                    for s in (
+                        "auth_failed",
+                        "auth failed",
+                        "plan doesn't include",
+                        "unauthorized",
+                        "invalid api key",
+                        "401",
+                    )
                 ):
                     logger.warning(
-                        "Source '%s' permanently disabled — %s. "
-                        "Fix the API key/plan and restart to re-enable.",
+                        "Source '%s' permanently disabled — %s. Fix the API key/plan and restart to re-enable.",
                         source,
                         exc,
                     )

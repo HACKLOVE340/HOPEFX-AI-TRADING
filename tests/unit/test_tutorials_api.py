@@ -97,13 +97,14 @@ def test_generated_video_url_surfaces_from_registry(monkeypatch) -> None:
     import tutorials.generator as gen
 
     monkeypatch.setattr(
-        gen, "load_registry",
+        gen,
+        "load_registry",
         lambda: {"1": {"status": "rendered", "video_url": "https://cdn.example/ep1.mp4"}},
     )
 
     client = _client()
     cat = {e["episode"]: e for e in client.get("/api/tutorials").json()["episodes"]}
-    assert cat[1]["published"] is True   # free episode now has a generated video
+    assert cat[1]["published"] is True  # free episode now has a generated video
     assert cat[2]["published"] is False  # no registry entry → still not published
 
     detail = client.get("/api/tutorials/1").json()

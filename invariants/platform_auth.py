@@ -81,8 +81,7 @@ def verify_revoked_blocked(credential_id: Any, revoked_ids: set[Any]) -> list[Vi
 def verify_owns_resource(principal: Any, resource_owner: Any) -> list[Violation]:
     """A principal may act on a resource only if it owns it (IDOR / BOLA guard)."""
     if principal != resource_owner:
-        return [_v(_AUTHZ, CONSTITUTIONAL,
-                   f"principal {principal!r} accessed resource owned by {resource_owner!r}")]
+        return [_v(_AUTHZ, CONSTITUTIONAL, f"principal {principal!r} accessed resource owned by {resource_owner!r}")]
     return []
 
 
@@ -96,13 +95,13 @@ def verify_has_permission(required: str, granted: Iterable[str]) -> list[Violati
 def verify_no_cross_tenant(principal_tenant: Any, resource_tenant: Any) -> list[Violation]:
     """A principal must never reach another tenant's data."""
     if principal_tenant != resource_tenant:
-        return [_v(_TENANT, CONSTITUTIONAL,
-                   f"cross-tenant access: tenant {principal_tenant!r} -> {resource_tenant!r}")]
+        return [_v(_TENANT, CONSTITUTIONAL, f"cross-tenant access: tenant {principal_tenant!r} -> {resource_tenant!r}")]
     return []
 
 
-def verify_no_secret_in_response(payload: Any, secret_markers: tuple[str, ...] = (
-        "password", "api_key", "secret", "private_key", "token", "ssn")) -> list[Violation]:
+def verify_no_secret_in_response(
+    payload: Any, secret_markers: tuple[str, ...] = ("password", "api_key", "secret", "private_key", "token", "ssn")
+) -> list[Violation]:
     """An API response body must not leak credential-shaped keys."""
     leaked: list[str] = []
     if isinstance(payload, Mapping):
@@ -122,9 +121,15 @@ def verify_rate_limiter_active(enabled: bool, endpoint: str = "") -> list[Violat
     return []
 
 
-def verify_security_headers(headers: Mapping[str, Any], required: Iterable[str] = (
-        "content-security-policy", "x-content-type-options",
-        "x-frame-options", "strict-transport-security")) -> list[Violation]:
+def verify_security_headers(
+    headers: Mapping[str, Any],
+    required: Iterable[str] = (
+        "content-security-policy",
+        "x-content-type-options",
+        "x-frame-options",
+        "strict-transport-security",
+    ),
+) -> list[Violation]:
     """Responses must carry the standard browser-security headers."""
     present = {str(h).lower() for h in headers}
     missing = sorted({r.lower() for r in required} - present)

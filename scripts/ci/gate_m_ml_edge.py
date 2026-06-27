@@ -57,10 +57,15 @@ def main() -> int:
     print(f"Gate M — running A/B: csv={csv} horizon={horizon} oos_years={oos_years}")
     result = subprocess.run(
         [
-            sys.executable, "-m", "ml.ab_baseline",
-            "--csv", str(csv_path),
-            "--horizon", horizon,
-            "--oos-years", oos_years,
+            sys.executable,
+            "-m",
+            "ml.ab_baseline",
+            "--csv",
+            str(csv_path),
+            "--horizon",
+            horizon,
+            "--oos-years",
+            oos_years,
         ],
         cwd=str(REPO_ROOT),
         check=False,

@@ -383,7 +383,10 @@ class PolygonL2Feed:
                 exc_str = str(exc)
                 _low = exc_str.lower()
                 # Permanent auth/plan failure — never succeeds on retry. Stop.
-                if any(s in _low for s in ("auth failed", "auth_failed", "plan doesn't include", "unauthorized", "invalid api key")):
+                if any(
+                    s in _low
+                    for s in ("auth failed", "auth_failed", "plan doesn't include", "unauthorized", "invalid api key")
+                ):
                     logger.warning(
                         "PolygonL2Feed permanently disabled — %s. Fix the API key/plan and restart.",
                         exc,
@@ -629,7 +632,10 @@ class FinnhubTradeFeed:
                 self._fail_count += 1
                 exc_str = str(exc)
                 _low = exc_str.lower()
-                if any(s in _low for s in ("auth failed", "auth_failed", "plan doesn't include", "unauthorized", "invalid api key")):
+                if any(
+                    s in _low
+                    for s in ("auth failed", "auth_failed", "plan doesn't include", "unauthorized", "invalid api key")
+                ):
                     logger.warning(
                         "FinnhubTradeFeed permanently disabled — %s. Fix the API key/plan and restart.",
                         exc,

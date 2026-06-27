@@ -41,9 +41,7 @@ except ImportError:
     _MT5_AVAILABLE = False
     # Optional, Windows-only broker — expected to be absent on Linux/macOS.
     # Debug, not warning, so it doesn't drown real signal; connect() errors loud.
-    logger.debug(
-        "MetaTrader5 SDK not installed — MT5Broker unavailable (optional, Windows-only)."
-    )
+    logger.debug("MetaTrader5 SDK not installed — MT5Broker unavailable (optional, Windows-only).")
 
 
 def _resolve_env(value: object) -> str:

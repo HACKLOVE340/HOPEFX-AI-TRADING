@@ -286,7 +286,9 @@ class DriftDetector:
         cur_pct = np.clip(cur_pct, 1e-6, None)
 
         # PSI formula
-        psi = np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))  # healer: ignore — cur_pct clipped to [1e-6, None] above; log/div safe
+        psi = np.sum(
+            (cur_pct - ref_pct) * np.log(cur_pct / ref_pct)
+        )  # healer: ignore — cur_pct clipped to [1e-6, None] above; log/div safe
         return float(psi)
 
     def check_prediction_drift(self, recent_predictions: np.ndarray, reference_predictions: np.ndarray) -> DriftReport:

@@ -70,8 +70,9 @@ def verify_corporate_action_applied(applied: bool, action: str = "split") -> lis
 def verify_symbol_mapping_stable(internal: Any, resolved: Any, symbol: str = "") -> list[Violation]:
     """Symbol resolution must be stable (mapping drift trades the wrong instrument)."""
     if internal != resolved:
-        return [_v("No Data Corruption", CONSTITUTIONAL,
-                   f"symbol mapping drift for {symbol}: {internal!r} != {resolved!r}")]
+        return [
+            _v("No Data Corruption", CONSTITUTIONAL, f"symbol mapping drift for {symbol}: {internal!r} != {resolved!r}")
+        ]
     return []
 
 
@@ -96,8 +97,13 @@ def verify_tax_applied(expected_tax: float, applied_tax: float, tol: float = 0.0
     if not (_is_finite_number(expected_tax) and _is_finite_number(applied_tax)):
         return [_v("No Data Corruption", CRITICAL, "tax values non-finite")]
     if abs(expected_tax - applied_tax) > tol:
-        return [_v("No Compliance Breach", CONSTITUTIONAL,
-                   f"tax mismatch: expected {expected_tax} != applied {applied_tax}")]
+        return [
+            _v(
+                "No Compliance Breach",
+                CONSTITUTIONAL,
+                f"tax mismatch: expected {expected_tax} != applied {applied_tax}",
+            )
+        ]
     return []
 
 
@@ -108,14 +114,24 @@ def verify_no_liquidity_mirage(quoted_size: float, executable_size: float, max_s
     if quoted_size > 0:
         shortfall = (quoted_size - executable_size) / quoted_size
         if shortfall > max_shortfall:
-            return [_v("No Data Corruption", WARNING,
-                       f"liquidity mirage: only {executable_size}/{quoted_size} executable (shortfall {round(shortfall, 3)})")]
+            return [
+                _v(
+                    "No Data Corruption",
+                    WARNING,
+                    f"liquidity mirage: only {executable_size}/{quoted_size} executable (shortfall {round(shortfall, 3)})",
+                )
+            ]
     return []
 
 
 def verify_position_within_exchange_limit(position: float, exchange_limit: float, symbol: str = "") -> list[Violation]:
     """A position must not breach exchange/regulatory position limits."""
     if _is_finite_number(position) and _is_finite_number(exchange_limit) and abs(position) > exchange_limit:
-        return [_v("No Compliance Breach", CONSTITUTIONAL,
-                   f"position {position} on {symbol} exceeds exchange limit {exchange_limit}")]
+        return [
+            _v(
+                "No Compliance Breach",
+                CONSTITUTIONAL,
+                f"position {position} on {symbol} exceeds exchange limit {exchange_limit}",
+            )
+        ]
     return []

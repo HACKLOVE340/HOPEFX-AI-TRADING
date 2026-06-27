@@ -38,7 +38,7 @@ def test_rule_baseline_signal_is_binary() -> None:
 
 def test_trade_sharpe_edge_cases() -> None:
     assert _trade_sharpe(np.array([])) == 0.0
-    assert _trade_sharpe(np.array([0.01])) == 0.0           # < 2 trades
+    assert _trade_sharpe(np.array([0.01])) == 0.0  # < 2 trades
     assert _trade_sharpe(np.array([0.01, 0.01, 0.01])) == 0.0  # zero variance
     assert _trade_sharpe(np.array([0.02, -0.01, 0.03, -0.005])) != 0.0
 

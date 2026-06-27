@@ -38,8 +38,8 @@ _EPS = 1e-9
 
 @dataclass(frozen=True)
 class Violation:
-    rule: str          # constitutional rule, e.g. "No Hidden Loss"
-    severity: str      # CONSTITUTIONAL | CRITICAL | WARNING
+    rule: str  # constitutional rule, e.g. "No Hidden Loss"
+    severity: str  # CONSTITUTIONAL | CRITICAL | WARNING
     message: str
     context: dict[str, Any] | None = None
 
@@ -62,7 +62,9 @@ TERMINAL_STATES = frozenset({"FILLED", "CANCELLED", "REJECTED", "EXPIRED"})
 VALID_TRANSITIONS: dict[str, frozenset[str]] = {
     "CREATED": frozenset({"PENDING_NEW", "NEW", "CANCELLED", "REJECTED"}),
     "PENDING_NEW": frozenset({"NEW", "REJECTED", "CANCELLED"}),
-    "NEW": frozenset({"ACKNOWLEDGED", "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "EXPIRED", "PENDING_CANCEL"}),
+    "NEW": frozenset(
+        {"ACKNOWLEDGED", "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "EXPIRED", "PENDING_CANCEL"}
+    ),
     "ACKNOWLEDGED": frozenset({"PARTIALLY_FILLED", "FILLED", "CANCELLED", "EXPIRED", "PENDING_CANCEL"}),
     "PARTIALLY_FILLED": frozenset({"FILLED", "CANCELLED", "EXPIRED", "PENDING_CANCEL"}),
     "PENDING_CANCEL": frozenset({"CANCELLED", "FILLED"}),
@@ -78,11 +80,11 @@ def verify_order_state_transition(from_status: str, to_status: str) -> list[Viol
     f, t = str(from_status).upper(), str(to_status).upper()
     out: list[Violation] = []
     if f in TERMINAL_STATES and f != t:
-        out.append(_v("No State Corruption", CONSTITUTIONAL,
-                      f"order left terminal state {f}→{t}", from_status=f, to_status=t))
+        out.append(
+            _v("No State Corruption", CONSTITUTIONAL, f"order left terminal state {f}→{t}", from_status=f, to_status=t)
+        )
     elif f in VALID_TRANSITIONS and t not in VALID_TRANSITIONS[f] and f != t:
-        out.append(_v("No State Corruption", CRITICAL,
-                      f"illegal order transition {f}→{t}", from_status=f, to_status=t))
+        out.append(_v("No State Corruption", CRITICAL, f"illegal order transition {f}→{t}", from_status=f, to_status=t))
     return out
 
 
@@ -96,15 +98,22 @@ def verify_order_not_contradictory(order: dict[str, Any]) -> list[Violation]:
     if status == "FILLED" and order.get("cancelled"):
         out.append(_v("No State Corruption", CONSTITUTIONAL, "order is FILLED and cancelled", order_id=order.get("id")))
     if _is_finite_number(filled) and _is_finite_number(qty) and filled > qty + _EPS:
-        out.append(_v("No State Corruption", CONSTITUTIONAL,
-                      f"filled {filled} exceeds ordered {qty} (phantom fill)", order_id=order.get("id")))
+        out.append(
+            _v(
+                "No State Corruption",
+                CONSTITUTIONAL,
+                f"filled {filled} exceeds ordered {qty} (phantom fill)",
+                order_id=order.get("id"),
+            )
+        )
     if _is_finite_number(filled) and filled < -_EPS:
         out.append(_v("No State Corruption", CRITICAL, f"negative filled quantity {filled}", order_id=order.get("id")))
     return out
 
 
-def verify_no_duplicate_ids(items: Iterable[dict[str, Any]], id_field: str = "id",
-                            rule: str = "No Data Corruption") -> list[Violation]:
+def verify_no_duplicate_ids(
+    items: Iterable[dict[str, Any]], id_field: str = "id", rule: str = "No Data Corruption"
+) -> list[Violation]:
     """No two records (orders, fills, transactions) may share an id — the
     duplicate-processing / double-fill guard."""
     seen: set[Any] = set()
@@ -117,29 +126,41 @@ def verify_no_duplicate_ids(items: Iterable[dict[str, Any]], id_field: str = "id
             dups.add(i)
         seen.add(i)
     if dups:
-        return [_v(rule, CONSTITUTIONAL, f"{len(dups)} duplicate {id_field}(s): {sorted(dups)[:5]}",
-                   field=id_field, count=len(dups))]
+        return [
+            _v(
+                rule,
+                CONSTITUTIONAL,
+                f"{len(dups)} duplicate {id_field}(s): {sorted(dups)[:5]}",
+                field=id_field,
+                count=len(dups),
+            )
+        ]
     return []
 
 
 # ════════════════════════════════════════════════════════════════════════════════
 # 3/4/5. No Hidden Loss / Exposure / Risk — capital & PnL conservation
 # ════════════════════════════════════════════════════════════════════════════════
-def verify_pnl_reconciliation(realized: float, unrealized: float, total: float,
-                              tol: float = 0.01) -> list[Violation]:
+def verify_pnl_reconciliation(realized: float, unrealized: float, total: float, tol: float = 0.01) -> list[Violation]:
     """realized + unrealized must equal total PnL (no hidden/unaccounted PnL)."""
     for name, val in (("realized", realized), ("unrealized", unrealized), ("total", total)):
         if not _is_finite_number(val):
             return [_v("No Hidden Loss", CONSTITUTIONAL, f"PnL component '{name}' is non-finite ({val!r})")]
     if abs((realized + unrealized) - total) > tol:
-        return [_v("No Hidden Loss", CONSTITUTIONAL,
-                   f"PnL mismatch: realized({realized}) + unrealized({unrealized}) != total({total})",
-                   diff=round((realized + unrealized) - total, 6))]
+        return [
+            _v(
+                "No Hidden Loss",
+                CONSTITUTIONAL,
+                f"PnL mismatch: realized({realized}) + unrealized({unrealized}) != total({total})",
+                diff=round((realized + unrealized) - total, 6),
+            )
+        ]
     return []
 
 
-def verify_capital_conservation(allocated: float, available: float, reserved: float,
-                                total: float, tol: float = 0.01) -> list[Violation]:
+def verify_capital_conservation(
+    allocated: float, available: float, reserved: float, total: float, tol: float = 0.01
+) -> list[Violation]:
     """allocated + available + reserved must equal total capital (no money
     created or destroyed)."""
     parts = {"allocated": allocated, "available": available, "reserved": reserved, "total": total}
@@ -147,15 +168,21 @@ def verify_capital_conservation(allocated: float, available: float, reserved: fl
         if not _is_finite_number(val):
             return [_v("No Hidden Capital", CONSTITUTIONAL, f"capital component '{name}' is non-finite ({val!r})")]
     if abs((allocated + available + reserved) - total) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   "capital does not reconcile: allocated+available+reserved != total",
-                   diff=round((allocated + available + reserved) - total, 6), **parts)]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                "capital does not reconcile: allocated+available+reserved != total",
+                diff=round((allocated + available + reserved) - total, 6),
+                **parts,
+            )
+        ]
     return []
 
 
-def verify_capital_equation(opening: float, deposits: float, realized: float,
-                            withdrawals: float, fees: float, closing: float,
-                            tol: float = 0.01) -> list[Violation]:
+def verify_capital_equation(
+    opening: float, deposits: float, realized: float, withdrawals: float, fees: float, closing: float, tol: float = 0.01
+) -> list[Violation]:
     """opening + deposits + realized − withdrawals − fees == closing.
     A violation means an accounting bug, reconciliation bug, or fraud."""
     vals = [opening, deposits, realized, withdrawals, fees, closing]
@@ -163,9 +190,14 @@ def verify_capital_equation(opening: float, deposits: float, realized: float,
         return [_v("No Hidden Capital", CONSTITUTIONAL, "capital-equation component is non-finite")]
     expected = opening + deposits + realized - withdrawals - fees
     if abs(expected - closing) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"capital equation broken: expected closing {round(expected, 4)} != {closing}",
-                   diff=round(expected - closing, 6))]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"capital equation broken: expected closing {round(expected, 4)} != {closing}",
+                diff=round(expected - closing, 6),
+            )
+        ]
     return []
 
 
@@ -182,8 +214,9 @@ def verify_no_negative_balance(balance: float, name: str = "balance") -> list[Vi
 # ════════════════════════════════════════════════════════════════════════════════
 # 5. No Hidden Risk — hard limit bounds
 # ════════════════════════════════════════════════════════════════════════════════
-def verify_within_limit(value: float, limit: float, name: str,
-                        rule: str = "No Hidden Risk", severity: str = CRITICAL) -> list[Violation]:
+def verify_within_limit(
+    value: float, limit: float, name: str, rule: str = "No Hidden Risk", severity: str = CRITICAL
+) -> list[Violation]:
     """A risk/exposure metric must stay within its approved hard limit."""
     if not _is_finite_number(value):
         return [_v(rule, CONSTITUTIONAL, f"{name} is non-finite ({value!r})")]
@@ -195,8 +228,7 @@ def verify_within_limit(value: float, limit: float, name: str,
 # ════════════════════════════════════════════════════════════════════════════════
 # 8. No Data Corruption — market data integrity
 # ════════════════════════════════════════════════════════════════════════════════
-def verify_tick(price: float, volume: float, ts: float | None = None,
-                now: float | None = None) -> list[Violation]:
+def verify_tick(price: float, volume: float, ts: float | None = None, now: float | None = None) -> list[Violation]:
     """A market tick must have price>0, volume>=0, and a non-future timestamp."""
     out: list[Violation] = []
     if not _is_finite_number(price) or price <= 0:
@@ -238,8 +270,13 @@ def verify_human_control(kill_switch: Any) -> list[Violation]:
     engage = any(hasattr(kill_switch, m) for m in ("trigger", "engage", "activate", "trip"))
     query = any(hasattr(kill_switch, m) for m in ("is_active", "active", "is_triggered", "status"))
     if not engage:
-        return [_v("No Loss Of Human Control", CONSTITUTIONAL,
-                   "kill switch exposes no engage method (trigger/engage/activate)")]
+        return [
+            _v(
+                "No Loss Of Human Control",
+                CONSTITUTIONAL,
+                "kill switch exposes no engage method (trigger/engage/activate)",
+            )
+        ]
     if not query:
         return [_v("No Loss Of Human Control", CRITICAL, "kill switch exposes no state query method")]
     return []
