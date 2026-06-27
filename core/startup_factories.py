@@ -528,17 +528,25 @@ async def init_cache(s: Any) -> Any:
         password = os.getenv("REDIS_PASSWORD") or None
         db = 0
 
-    # ── TLS ssl_context from RedisSettings ───────────────────────────────────
-    # Build the ssl_context once here so MarketDataCache and every other
-    # Redis client in the process uses the same TLS configuration.
+    # ── TLS params from RedisSettings ────────────────────────────────────────
+    # redis-py 8.x sync client accepts ``ssl=True`` + individual ``ssl_*`` params,
+    # NOT an ``ssl.SSLContext`` object. Resolve the individual params here so
+    # MarketDataCache wires the same TLS policy as cache/redis_client.py.
     # Falls back gracefully when config/settings.py is unavailable.
-    _ssl_context = None
+    _tls_kwargs: dict = {}
     try:
         from config.settings import get_settings as _get_settings
 
         _redis_cfg = _get_settings().redis
-        _ssl_context = _redis_cfg.build_ssl_context()
-        if _ssl_context is not None:
+        _needs_tls = _redis_cfg.force_tls or os.getenv("REDIS_URL", "").strip().startswith("rediss://")
+        if _needs_tls:
+            _tls_kwargs["ssl"] = True
+            _tls_kwargs["ssl_cert_reqs"] = "none" if _redis_cfg.tls_skip_verify else "required"
+            if _redis_cfg.tls_ca_cert:
+                _tls_kwargs["ssl_ca_certs"] = _redis_cfg.tls_ca_cert
+            if _redis_cfg.tls_client_cert and _redis_cfg.tls_client_key:
+                _tls_kwargs["ssl_certfile"] = _redis_cfg.tls_client_cert
+                _tls_kwargs["ssl_keyfile"] = _redis_cfg.tls_client_key
             logger.info(
                 "Redis TLS enabled (force_tls=%s skip_verify=%s)",
                 _redis_cfg.force_tls,
@@ -554,8 +562,8 @@ async def init_cache(s: Any) -> Any:
 
     from cache import MarketDataCache
 
-    # Pass ssl_context when TLS is required; MarketDataCache forwards it to
-    # redis.Redis(ssl_context=...) so the connection is encrypted end-to-end.
+    # Pass TLS params when required; MarketDataCache forwards them to
+    # redis.Redis(ssl=True, ssl_*=...) so the connection is encrypted end-to-end.
     _cache_kwargs: dict = dict(
         host=host,
         port=port,
@@ -565,9 +573,7 @@ async def init_cache(s: Any) -> Any:
         socket_connect_timeout=1,
         enable_fallback=True,
     )
-    if _ssl_context is not None:
-        _cache_kwargs["ssl"] = True
-        _cache_kwargs["ssl_context"] = _ssl_context
+    _cache_kwargs.update(_tls_kwargs)
 
     cache = MarketDataCache(**_cache_kwargs)
 

@@ -118,8 +118,8 @@ def _load_equity_curve() -> list[EquityPoint]:
             if _async_pool is None:
                 raise RuntimeError("Async DB pool not initialised")
             async with _async_pool.session() as _db:
-                repo = _TR(_db)
-                return await repo.get_by_user(user_id=None, status="closed", limit=50000)
+                repo = _TR()
+                return await repo.get_recent(_db, status="closed", limit=50000)
 
         try:
             try:
@@ -199,14 +199,8 @@ def _db_trade_count() -> int:
             if _async_pool is None:
                 raise RuntimeError("Async DB pool not initialised")
             async with _async_pool.session() as _db:
-                repo = _TR(_db)
-                rows = await repo.get_by_user(user_id=None, status="closed", limit=1, offset=0)
-                # Use paginate to get total count if available
-                try:
-                    total = await repo.count(status="closed")
-                    return total
-                except Exception:
-                    return len(rows)
+                repo = _TR()
+                return await repo.count_by_status(_db, status="closed")
 
         try:
             try:
@@ -618,8 +612,8 @@ def _load_trades() -> list[dict]:
             if _async_pool is None:
                 raise RuntimeError("Async DB pool not initialised")
             async with _async_pool.session() as _db:
-                repo = _TR(_db)
-                return await repo.get_by_user(user_id=None, limit=500)
+                repo = _TR()
+                return await repo.get_recent(_db, limit=500)
 
         try:
             try:

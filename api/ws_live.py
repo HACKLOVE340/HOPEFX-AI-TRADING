@@ -1972,7 +1972,12 @@ async def ws_audit_events(websocket: WebSocket) -> None:
       error        — auth failure or insufficient role
     """
     await websocket.accept()
-    await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
+    try:
+        await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
+    except (WebSocketDisconnect, RuntimeError):
+        # Client hung up during the handshake — nothing to clean up, just return
+        # rather than letting the ASGI layer surface a WebSocketDisconnect traceback.
+        return
 
     # Support token as query param
     token_param = websocket.query_params.get("token", "")
