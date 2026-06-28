@@ -86,6 +86,10 @@ venv.bak/
 # Database
 *.db
 *.sqlite
+# SQLite write-ahead-log / shared-memory sidecar files (transient, local-only)
+*.db-shm
+*.db-wal
+*.db-journal
 *.sqlite3
 # data/ — source package, not ignored
 # /data/  # uncomment to ignore data download cache
