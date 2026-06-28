@@ -83,7 +83,7 @@ class FinnhubFeed(NewsFeedBase):
                 self._total_fetched += 1
 
         except Exception as exc:
-            logger.debug("Finnhub fetch_articles error: %s", exc)
+            logger.debug("Finnhub fetch_articles error: %s", str(exc) or type(exc).__name__)
 
         return articles
 

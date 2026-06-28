@@ -87,12 +87,16 @@ class FMPFeed(NewsFeedBase):
                 self._total_fetched += 1
 
         except Exception as exc:
+            # str(TimeoutError()) is "" — fall back to the type name so the log is
+            # never blank, and treat TimeoutError as transient (DEBUG) by type.
+            exc_str = str(exc) or type(exc).__name__
+            transient = isinstance(exc, TimeoutError) or any(
+                s in exc_str.lower() for s in ("connect", "dns", "ssl", "timeout")
+            )
             logger.log(
-                logging.DEBUG
-                if any(s in str(exc).lower() for s in ("connect", "dns", "ssl", "timeout"))
-                else logging.WARNING,
+                logging.DEBUG if transient else logging.WARNING,
                 "FMP fetch_articles error: %s",
-                exc,
+                exc_str,
             )
 
         return articles
