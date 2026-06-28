@@ -75,7 +75,7 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import websockets
@@ -617,6 +617,18 @@ class NuclearStreamer:
 
         # ── Stale-tick rejection ──────────────────────────────────────────────
         age_seconds = now - event_ts
+        # Guard against source clock skew / mis-parsed timestamps that place
+        # event_ts ahead of local time (negative age). The price is still usable;
+        # only the timestamp is suspect, so clamp to "now" rather than emitting a
+        # nonsensical negative latency downstream.
+        if age_seconds < 0:
+            if -age_seconds > _MAX_STALE_SECONDS:
+                logger.debug(
+                    "FUTURE TICK [%s]: event_ts %.0fs ahead of now — clamping to now",
+                    source,
+                    -age_seconds,
+                )
+            age_seconds = 0.0
         if age_seconds > _MAX_STALE_SECONDS:
             logger.warning(
                 "STALE TICK [%s]: age=%.1f s exceeds limit=%.0f s — tick discarded",
@@ -892,7 +904,13 @@ class NuclearStreamer:
                         ts = float(ts_raw) / 1000.0 if ts_raw > 1e10 else float(ts_raw)
                     else:
                         try:
-                            ts = datetime.fromisoformat(str(ts_raw)).timestamp()
+                            _dt = datetime.fromisoformat(str(ts_raw))
+                            # Twelve Data ISO strings are UTC but often tz-naive;
+                            # without this, .timestamp() applies the server's local
+                            # offset and produces a future-dated event_ts.
+                            if _dt.tzinfo is None:
+                                _dt = _dt.replace(tzinfo=timezone.utc)
+                            ts = _dt.timestamp()
                         except ValueError:
                             ts = time.time()
                     await self.process_tick(float(price), ts, "twelvedata")

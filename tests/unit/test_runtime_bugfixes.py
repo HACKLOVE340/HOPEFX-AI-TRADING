@@ -121,3 +121,92 @@ def test_ws_audit_events_handles_handshake_disconnect():
     # Must return cleanly (no WebSocketDisconnect propagating out of the handler).
     asyncio.run(ws_live.ws_audit_events(ws))
     assert ws.accepted is True
+
+
+# ── BUG D: poll loop tolerates a scalar get_price() return ───────────────────────
+def _engine_with_broker(broker):
+    """Build a HOPEFXEngine shell wired to *broker* without running __init__."""
+    from hopefx_engine import HopeFXEngine
+
+    eng = HopeFXEngine.__new__(HopeFXEngine)
+    eng._broker = broker
+    eng._ticks = []
+
+    async def _capture(symbol, bid, ask, mid):
+        eng._ticks.append((symbol, bid, ask, mid))
+
+    eng._on_tick = _capture  # type: ignore[method-assign]
+    return eng
+
+
+def test_poll_symbol_handles_scalar_price():
+    """get_price() returning a float (e.g. MultiSourceFeed) must not crash with
+    "'float' object has no attribute 'get'"."""
+
+    class _ScalarBroker:
+        def get_price(self, symbol):
+            return 1.1390  # a bare float, not a dict
+
+    eng = _engine_with_broker(_ScalarBroker())
+    asyncio.run(eng._poll_symbol("EUR_USD"))
+    assert eng._ticks == [("EUR/USD", 1.1390, 1.1390, 1.1390)]
+
+
+def test_poll_symbol_handles_dict_price():
+    class _DictBroker:
+        def get_price(self, symbol):
+            return {"bid": 1.10, "ask": 1.12}
+
+    eng = _engine_with_broker(_DictBroker())
+    asyncio.run(eng._poll_symbol("EUR_USD"))
+    assert eng._ticks[0][0] == "EUR/USD"
+    assert eng._ticks[0][3] == pytest.approx(1.11)  # mid
+
+
+def test_poll_symbol_ignores_zero_and_none():
+    class _NoneBroker:
+        def get_price(self, symbol):
+            return None
+
+    eng = _engine_with_broker(_NoneBroker())
+    asyncio.run(eng._poll_symbol("EUR_USD"))
+    assert eng._ticks == []  # nothing emitted, no crash
+
+
+# ── BUG E: streamer clamps a future-dated / mis-parsed timestamp ─────────────────
+def _minimal_streamer():
+    from data_feed.nuclear_streamer import NuclearStreamer
+
+    s = NuclearStreamer.__new__(NuclearStreamer)
+    s.symbol = "XAUUSD"
+    s.anomaly_jump_pct = 5.0
+    s._dedup_cache = {}
+    s._dedup_counts = {}
+    s._last_seq = {}
+    s._seq_gap_counts = {}
+    s._latency_samples = {}
+    s._latency_samples_max = 100
+    s._price_lock = asyncio.Lock()
+    s._last_price = None
+    s._anomaly_counts = {}
+    s._source_prices = {}
+    s._consensus_reject_count = 0
+    s._redis = None
+    s._redis_publish_errors = 0
+    s._subscribers = []
+    return s
+
+
+def test_streamer_clamps_future_timestamp():
+    import time
+
+    s = _minimal_streamer()
+    future_ts = time.time() + 8 * 3600  # 8h ahead — what the tz-naive bug produced
+    asyncio.run(s.process_tick(price=4080.0, event_ts=future_ts, source="twelvedata"))
+
+    # The tick is still published (single source → graceful degradation), and the
+    # recorded latency is clamped to a non-negative value rather than a huge
+    # negative number.
+    samples = s._latency_samples.get("twelvedata", [])
+    assert samples, "future-dated tick should not be discarded"
+    assert all(v >= 0 for v in samples), f"negative latency leaked: {samples}"

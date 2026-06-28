@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import ClassVar
+from typing import Any, ClassVar
 import logging
 import os
 import signal
@@ -851,16 +851,26 @@ class HopeFXEngine:
 
     async def _poll_symbol(self, symbol: str) -> None:
         try:
-            price_data = {}
+            price_data: Any = None
             if hasattr(self._broker, "get_price"):
-                price_data = self._broker.get_price(symbol) or {}
+                price_data = self._broker.get_price(symbol)
             elif hasattr(self._broker, "market_prices"):
                 price_data = self._broker.market_prices.get(symbol, {})
             if not price_data:
                 return
-            bid = float(price_data.get("bid", price_data.get("price", 0)))
-            ask = float(price_data.get("ask", bid))
+            # get_price() may return a scalar mid-price (float — e.g.
+            # MultiSourceFeed) or a bid/ask dict, depending on the broker/feed
+            # implementation. Handle both rather than assuming a dict.
+            if isinstance(price_data, (int, float)) and not isinstance(price_data, bool):
+                bid = ask = float(price_data)
+            elif isinstance(price_data, dict):
+                bid = float(price_data.get("bid", price_data.get("price", 0)))
+                ask = float(price_data.get("ask", bid))
+            else:
+                return
             mid = (bid + ask) / 2
+            if mid <= 0:
+                return
             await self._on_tick(symbol=symbol.replace("_", "/"), bid=bid, ask=ask, mid=mid)
         except Exception as exc:
             logger.debug("Poll symbol %s error: %s", symbol, exc)
