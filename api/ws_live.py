@@ -108,6 +108,47 @@ async def _safe_ws_close(websocket: Any, code: int = 1000, reason: str = "") -> 
         await websocket.close(code=code, reason=reason)
 
 
+def _ws_origin_allowed(websocket: Any) -> bool:
+    """Defense-in-depth against cross-site WebSocket hijacking.
+
+    Browsers attach an ``Origin`` header to WS upgrade requests. We allow:
+      - a *missing* Origin (non-browser clients — server scripts, mobile, tests):
+        the JWT handshake still gates access, so this isn't a bypass;
+      - an Origin in the app's configured allow-list (same list as CORS);
+      - a same-origin request (Origin host == Host header).
+    A *present* Origin matching none of these is rejected. When no allow-list is
+    configured (local dev / misconfig) we don't block, to avoid breaking dev.
+    """
+    origin = websocket.headers.get("origin")
+    if not origin:
+        return True
+    try:
+        allowed = list(getattr(websocket.app.state, "allowed_origins", []) or [])
+    except Exception:
+        allowed = []
+    if not allowed:
+        return True
+    if origin in allowed:
+        return True
+    host = websocket.headers.get("host", "")
+    return bool(host) and origin.endswith("://" + host)
+
+
+async def _reject_ws_bad_origin(websocket: Any) -> bool:
+    """Reject (close before accept) a WS whose Origin isn't allowed.
+
+    Returns True if the connection was rejected so the caller can ``return``.
+    """
+    if _ws_origin_allowed(websocket):
+        return False
+    import contextlib
+
+    logger.warning("WS rejected: disallowed Origin %r", websocket.headers.get("origin"))
+    with contextlib.suppress(Exception):
+        await websocket.close(code=4403, reason="origin_not_allowed")
+    return True
+
+
 def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
     token = token.removeprefix("Bearer ")
@@ -1377,6 +1418,9 @@ async def ws_live(websocket: WebSocket) -> None:
     """
     from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
+    if await _reject_ws_bad_origin(websocket):
+        return
+
     limiter = get_ws_limiter()
     client_ip = get_client_ip(websocket)
 
@@ -1660,6 +1704,8 @@ async def ws_nuclear(websocket: WebSocket) -> None:
       heartbeat            — 30s keepalive
       error                — auth failure or server error
     """
+    if await _reject_ws_bad_origin(websocket):
+        return
     await websocket.accept()
     await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
 
@@ -1849,6 +1895,8 @@ async def ws_notifications(websocket: WebSocket) -> None:
       heartbeat      — 30s keepalive
       error          — auth failure
     """
+    if await _reject_ws_bad_origin(websocket):
+        return
     await websocket.accept()
     await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
 
@@ -1971,6 +2019,8 @@ async def ws_audit_events(websocket: WebSocket) -> None:
       heartbeat    — 30s keepalive
       error        — auth failure or insufficient role
     """
+    if await _reject_ws_bad_origin(websocket):
+        return
     await websocket.accept()
     try:
         await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))

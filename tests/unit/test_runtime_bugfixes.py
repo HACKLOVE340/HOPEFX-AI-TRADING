@@ -107,6 +107,7 @@ def test_ws_audit_events_handles_handshake_disconnect():
         def __init__(self):
             self.accepted = False
             self.closed = False
+            self.headers = {}  # no Origin → origin check allows (JWT still gates)
 
         async def accept(self):
             self.accepted = True
@@ -121,6 +122,44 @@ def test_ws_audit_events_handles_handshake_disconnect():
     # Must return cleanly (no WebSocketDisconnect propagating out of the handler).
     asyncio.run(ws_live.ws_audit_events(ws))
     assert ws.accepted is True
+
+
+# ── WS origin check (defense-in-depth against cross-site WS) ──────────────────────
+def _fake_ws(origin=None, host="app.hopefx.io", allowed=None):
+    class _State:
+        allowed_origins = allowed if allowed is not None else []
+
+    class _App:
+        state = _State()
+
+    class _WS:
+        app = _App()
+        headers = {}
+
+    ws = _WS()
+    h = {}
+    if origin is not None:
+        h["origin"] = origin
+    if host is not None:
+        h["host"] = host
+    ws.headers = h
+    return ws
+
+
+def test_ws_origin_allowed_logic():
+    from api import ws_live
+
+    allow = ["https://app.hopefx.io"]
+    # Allow-listed origin
+    assert ws_live._ws_origin_allowed(_fake_ws(origin="https://app.hopefx.io", allowed=allow)) is True
+    # Cross-site origin → rejected
+    assert ws_live._ws_origin_allowed(_fake_ws(origin="https://evil.example", allowed=allow)) is False
+    # Missing Origin (non-browser client) → allowed (JWT still gates)
+    assert ws_live._ws_origin_allowed(_fake_ws(origin=None, allowed=allow)) is True
+    # Same-origin (Origin host == Host) even if not explicitly listed
+    assert ws_live._ws_origin_allowed(_fake_ws(origin="https://app.hopefx.io", host="app.hopefx.io", allowed=[])) is True
+    # No allow-list configured → don't block (dev safety)
+    assert ws_live._ws_origin_allowed(_fake_ws(origin="https://anything.example", allowed=[])) is True
 
 
 # ── BUG D: poll loop tolerates a scalar get_price() return ───────────────────────

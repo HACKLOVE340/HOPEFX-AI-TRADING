@@ -44,6 +44,11 @@ const WS_URL: string = _envWsUrl ?? (() => {
 const HEARTBEAT_INTERVAL_MS  = 30_000;
 const INITIAL_RECONNECT_MS   = 1_000;
 const MAX_RECONNECT_MS       = 30_000;
+// Cap auto-reconnect so a permanently-dead server doesn't retry forever. With
+// exponential backoff capped at 30s, 15 attempts ≈ several minutes of trying.
+// After the cap we fall back to REST polling and re-arm on a browser 'online'
+// event (or a page refresh), so a transient outage still recovers.
+const MAX_RECONNECT_ATTEMPTS = 15;
 // Poll REST prices when WS is not connected so the UI shows live-ish data.
 const REST_POLL_INTERVAL_MS  = 5_000;
 
@@ -88,6 +93,7 @@ interface WsMessage {
 export function useWebSocket(enabled = true) {
   const wsRef          = useRef<WebSocket | null>(null);
   const reconnectDelay = useRef(INITIAL_RECONNECT_MS);
+  const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const restPollTimer  = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -393,6 +399,7 @@ export function useWebSocket(enabled = true) {
     ws.onopen = () => {
       if (unmounted.current) { ws.close(); return; }
       reconnectDelay.current = INITIAL_RECONNECT_MS;
+      reconnectAttempts.current = 0; // connected — reset the attempt counter
       stopRestPoll(); // WS is up — stop REST polling
       startHeartbeat(ws);
     };
@@ -415,6 +422,12 @@ export function useWebSocket(enabled = true) {
       // the connection is gone (fires after onerror when there is an error,
       // and directly when the server closes cleanly).
       startRestPoll();
+      // Stop retrying after the cap — REST polling stays as the live-data
+      // fallback. The 'online' listener (below) re-arms on network recovery.
+      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        return;
+      }
+      reconnectAttempts.current += 1;
       const delay = reconnectDelay.current;
       // Add ±10% jitter to prevent thundering herd when many clients reconnect
       const jitter = delay * (0.9 + Math.random() * 0.2);
@@ -434,8 +447,22 @@ export function useWebSocket(enabled = true) {
     if (!enabled) return;
     unmounted.current = false;
     connect();
+
+    // Re-arm reconnect when the browser regains connectivity, so a long outage
+    // that exhausted MAX_RECONNECT_ATTEMPTS recovers without a page refresh.
+    const onOnline = () => {
+      if (unmounted.current) return;
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      reconnectAttempts.current = 0;
+      reconnectDelay.current = INITIAL_RECONNECT_MS;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      connectRef.current();
+    };
+    window.addEventListener('online', onOnline);
+
     return () => {
       unmounted.current = true;
+      window.removeEventListener('online', onOnline);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       stopRestPoll();

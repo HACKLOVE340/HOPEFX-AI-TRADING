@@ -984,8 +984,11 @@ export const backtestExtApi = {
   walkForwardLatest: ()                        => api.get('/backtesting/walk-forward/latest'),
   walkForwardGet:   (id: string)               => api.get(`/backtesting/walk-forward/${id}`),
   walkForwardRun:   (params: object)           => api.post('/backtesting/walk-forward/run', params),
-  replayRun:        (params: object)           => api.post('/backtesting/replay/run', params, { timeout: 300_000 }),
-  replayStress:     (params: object)           => api.post('/backtesting/replay/stress', params, { timeout: 300_000 }),
+  // These start a background job and return { run_id, status: 'running' }
+  // immediately — no long-held request. Poll replayResult(run_id) for completion.
+  replayRun:        (params: object)           => api.post('/backtesting/replay/run', params),
+  replayStress:     (params: object)           => api.post('/backtesting/replay/stress', params),
+  replayResult:     (runId: string)            => api.get(`/backtesting/results/${runId}`),
   replayRegimes:    ()                         => api.get('/backtesting/replay/regimes'),
 };
 

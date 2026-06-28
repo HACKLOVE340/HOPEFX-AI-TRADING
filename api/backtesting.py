@@ -960,7 +960,7 @@ async def run_replay_backtest(
     Data flows: Dukascopy bi5 → MarketReplayEngine → DQE → BacktestEngine.
     Causal ordering is enforced — no look-ahead bias.
 
-    Returns immediately with run_id. Poll /api/backtest/results/{run_id}.
+    Returns immediately with run_id. Poll /api/backtesting/results/{run_id}.
     """
     run_id = str(uuid.uuid4())[:12]
 
@@ -1014,7 +1014,7 @@ async def run_replay_backtest(
     return {
         "run_id": run_id,
         "status": "running",
-        "message": f"Poll /api/backtest/results/{run_id} for completion",
+        "message": f"Poll /api/backtesting/results/{run_id} for completion",
     }
 
 
@@ -1030,7 +1030,7 @@ async def run_regime_stress_test(
     Regimes: covid_crash_2020, gold_flash_crash_2021, fed_rate_shock_2022,
              ukraine_war_spike_2022, svb_banking_crisis_2023, normal_baseline_2019
 
-    Returns immediately with run_id. Poll /api/backtest/results/{run_id}.
+    Returns immediately with run_id. Poll /api/backtesting/results/{run_id}.
     """
     run_id = str(uuid.uuid4())[:12]
 
@@ -1101,7 +1101,7 @@ async def run_regime_stress_test(
     return {
         "run_id": run_id,
         "status": "running",
-        "message": f"Poll /api/backtest/results/{run_id} for completion",
+        "message": f"Poll /api/backtesting/results/{run_id} for completion",
     }
 
 
