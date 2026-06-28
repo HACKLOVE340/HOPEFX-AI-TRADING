@@ -125,8 +125,16 @@ class AlphaVantageSource:
         except (ValueError, KeyError) as exc:
             logger.warning("AlphaVantageSource[%s]: parse error: %s", symbol, exc)
             return None
+        except TimeoutError as exc:
+            # Transient network timeout (aiohttp total-timeout; asyncio.TimeoutError
+            # is aliased to builtin TimeoutError on 3.11+). Expected under rate
+            # limits / slow upstream — warn, don't raise an ERROR.
+            logger.warning("AlphaVantageSource[%s]: timeout: %r", symbol, exc)
+            return None
         except Exception as exc:
-            logger.error("AlphaVantageSource[%s]: unexpected error: %s", symbol, exc)
+            # %r so the message is never blank: str(TimeoutError()) == "" produced
+            # the useless "unexpected error:" line with no detail.
+            logger.error("AlphaVantageSource[%s]: unexpected error: %r", symbol, exc)
             return None
         finally:
             if self._owns_session and not self._session:
