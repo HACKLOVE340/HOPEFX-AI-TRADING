@@ -48,6 +48,12 @@ env:
   PYTHONPATH: .
   PYTHONUNBUFFERED: "1"
 
+# Least-privilege token. The retrain commits model metadata back to the branch
+# (contents: write) and opens a GitHub issue on failure (issues: write).
+permissions:
+  contents: write
+  issues: write
+
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # Gate: only proceed on the first Sunday of a quarter month

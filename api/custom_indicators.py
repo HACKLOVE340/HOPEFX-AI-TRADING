@@ -218,7 +218,9 @@ async def calculate_indicator(body: CalculateRequest, _user: TokenPayload = Depe
 
 
 class PreviewRequest(BaseModel):
-    formula: str
+    # Bound the length so the formula parser's regexes can't be fed a huge string
+    # (defense-in-depth against ReDoS / polynomial backtracking on user input).
+    formula: str = Field(..., min_length=1, max_length=200)
     symbol: str = "XAUUSD"
     periods: int = Field(100, ge=10, le=500)
 
@@ -263,7 +265,7 @@ async def preview_indicator(
         if formula.startswith("SMA("):
             import re
 
-            m = re.search(r"SMA\(.*?,\s*(\d+)\)", formula)
+            m = re.search(r"SMA\([^,]*,\s*(\d+)\)", formula)
             period = int(m.group(1)) if m else 20
             for i in range(len(closes)):
                 if i < period - 1:
@@ -273,7 +275,7 @@ async def preview_indicator(
         elif formula.startswith("EMA("):
             import re
 
-            m = re.search(r"EMA\(.*?,\s*(\d+)\)", formula)
+            m = re.search(r"EMA\([^,]*,\s*(\d+)\)", formula)
             period = int(m.group(1)) if m else 20
             k = 2 / (period + 1)
             ema = closes[0]
@@ -283,7 +285,7 @@ async def preview_indicator(
         elif formula.startswith("RSI("):
             import re
 
-            m = re.search(r"RSI\(.*?,\s*(\d+)\)", formula)
+            m = re.search(r"RSI\([^,]*,\s*(\d+)\)", formula)
             period = int(m.group(1)) if m else 14
             gains, losses = [], []
             for i in range(1, len(closes)):
