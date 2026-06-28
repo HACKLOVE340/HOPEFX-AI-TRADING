@@ -123,6 +123,7 @@ class _SymbolState:
         "price_min",
         "price_max",
         "last_price_for_anomaly",
+        "stale_warned",
     )
 
     def __init__(self, symbol: str, price_min: float, price_max: float, history_size: int) -> None:
@@ -136,6 +137,10 @@ class _SymbolState:
         self.price_min = price_min
         self.price_max = price_max
         self.last_price_for_anomaly: float | None = None
+        # Suppress repeated stale-rotation warnings: WARNING on the first stale
+        # detection, DEBUG while it stays stale (e.g. a market-closed weekend or a
+        # source with no coverage). Reset on the next successful update.
+        self.stale_warned: bool = False
 
     def is_circuit_open(self, source: str, cooldown: float) -> bool:
         open_at = self.circuit_open_at.get(source)
@@ -174,6 +179,7 @@ class _SymbolState:
         self.last_update = datetime.now(tz=UTC)
         self.history.append((price, self.last_update))
         self.last_price_for_anomaly = price
+        self.stale_warned = False  # fresh data — re-arm the stale warning
 
     def pick_source(self, fallback_order: list[str], cooldown: float) -> str:
         for src in fallback_order:
@@ -571,7 +577,16 @@ class MultiSourceTickFeed:
                     continue
                 age_s = (now - state.last_update).total_seconds()
                 if age_s > self._max_stale_s:
-                    logger.warning("MultiSourceFeed[%s]: stale (%.0f s) — rotating source", sym, age_s)
+                    # First stale detection logs at WARNING; while it stays stale
+                    # (market closed / no source coverage) drop to DEBUG to avoid
+                    # flooding the logs every 15 s.
+                    if not state.stale_warned:
+                        logger.warning("MultiSourceFeed[%s]: stale (%.0f s) — rotating source", sym, age_s)
+                        state.stale_warned = True
+                    else:
+                        logger.debug(
+                            "MultiSourceFeed[%s]: still stale (%.0f s) — rotating source (suppressed)", sym, age_s
+                        )
                     state.record_failure(state.active_source, self._cb_threshold)
                     state.active_source = state.pick_source(self._active_order, self._cb_cooldown)
 

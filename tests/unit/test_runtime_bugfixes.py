@@ -210,3 +210,17 @@ def test_streamer_clamps_future_timestamp():
     samples = s._latency_samples.get("twelvedata", [])
     assert samples, "future-dated tick should not be discarded"
     assert all(v >= 0 for v in samples), f"negative latency leaked: {samples}"
+
+
+# ── BUG F: MultiSourceFeed suppresses repeated stale-rotation warnings ────────────
+def test_symbol_state_stale_warning_is_suppressed_then_rearmed():
+    from data_feed.multi_source_feed import _SymbolState
+
+    st = _SymbolState("XAUUSD", price_min=1000.0, price_max=10000.0, history_size=10)
+    assert st.stale_warned is False
+    # Simulate the health monitor flagging it stale: first time warns, then latches.
+    st.stale_warned = True
+    assert st.stale_warned is True
+    # A successful update re-arms the warning so the next stale spell logs once more.
+    st.record_success(st.active_source, 4080.0)
+    assert st.stale_warned is False

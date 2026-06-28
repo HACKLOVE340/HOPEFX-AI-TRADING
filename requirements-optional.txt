@@ -95,3 +95,14 @@ shap>=0.46.0
 # Fast DataFrame library. Optional alternative to pandas for heavy ETL.
 # pip install polars>=0.20.3
 # polars>=0.20.3
+
+# ── fakeredis ─────────────────────────────────────────────────────────────────
+# In-process Redis substitute. When no real Redis server is reachable, the cache
+# layer (cache/redis_client.py) automatically uses fakeredis IF it is installed,
+# silencing the repeated "Redis unavailable / fakeredis not installed" log lines
+# in local / standalone-engine runs. Already pinned in requirements-dev.txt and
+# requirements-ci.txt; listed here for local runs that install only requirements.txt.
+# NOTE: do NOT install in production — fakeredis is per-process, so it would mask a
+# real Redis outage and break multi-process coordination (JWT blacklist, locks).
+# pip install fakeredis>=2.20.0
+# fakeredis>=2.20.0
