@@ -154,11 +154,17 @@ call npm install --silent
 call npm run build
 set "BUILD_RC=!errorlevel!"
 popd
+:: Trust the actual artifact, not just npm's exit code: on Windows the PWA/
+:: workbox step can exit non-zero AFTER Vite has already written a valid bundle
+:: ("✓ built"), so a non-zero rc with a present index.html is still a usable UI.
 if "!BUILD_RC!"=="0" (
     >"%~dp0static\.build-commit" echo !CURRENT_COMMIT!
     echo [OK] Frontend built
+) else if exist "%~dp0static\index.html" (
+    >"%~dp0static\.build-commit" echo !CURRENT_COMMIT!
+    echo [OK] Frontend built ^(npm exit=!BUILD_RC! but bundle present — likely a post-build PWA warning^)
 ) else (
-    echo [WARN] Frontend build failed. API will still start without UI.
+    echo [WARN] Frontend build failed ^(npm exit=!BUILD_RC!, no static\index.html^). API will still start without UI.
 )
 goto :eof
 

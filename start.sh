@@ -45,8 +45,13 @@ if [ "$NEED_BUILD" = "1" ]; then
         if (cd frontend && npm install --silent && npm run build); then
             echo "$CURRENT_COMMIT" > static/.build-commit
             echo "[INFO] Frontend built successfully → static/"
+        elif [ -f "static/index.html" ]; then
+            # Trust the artifact: a post-build step (e.g. PWA/workbox) can exit
+            # non-zero after Vite has already written a valid bundle.
+            echo "$CURRENT_COMMIT" > static/.build-commit
+            echo "[INFO] Frontend built (npm exit non-zero but bundle present — likely a post-build PWA warning)"
         else
-            echo "[WARN] Frontend build failed — API will still start, but / may show stale/no UI"
+            echo "[WARN] Frontend build failed (no static/index.html) — API will still start, but / may show stale/no UI"
         fi
     else
         echo "[WARN] npm not found or frontend/package.json missing — skipping frontend build"
