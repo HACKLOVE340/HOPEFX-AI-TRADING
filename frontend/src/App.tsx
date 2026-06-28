@@ -38,6 +38,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
 import { useBootstrapData } from './hooks/useOrchestratorData';
 import { getCsrfToken } from './hooks/useApi';
+import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
@@ -189,15 +190,29 @@ if (typeof window !== 'undefined') {
 // ── Error boundary ────────────────────────────────────────────────────────────
 const _IS_DEV = import.meta.env.DEV;
 
-interface EBState { hasError: boolean; message: string; stack?: string }
+interface EBState { hasError: boolean; message: string; stack?: string; isChunk?: boolean }
 class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
-  state: EBState = { hasError: false, message: '', stack: undefined };
+  state: EBState = { hasError: false, message: '', stack: undefined, isChunk: false };
 
   static getDerivedStateFromError(err: Error): EBState {
-    return { hasError: true, message: err.message, stack: err.stack };
+    const isChunk = isChunkLoadError(err);
+    return {
+      hasError: true,
+      isChunk,
+      message: isChunk
+        ? 'The app was updated to a new version. Reloading to get the latest — if this persists, click Retry.'
+        : err.message,
+      stack: err.stack,
+    };
   }
 
   componentDidCatch(err: Error, info: React.ErrorInfo) {
+    if (isChunkLoadError(err)) {
+      // Stale-build dynamic-import failure: try a one-time hard reload to fetch
+      // the new chunks. If we just reloaded, fall through to the error screen.
+      console.warn('[ErrorBoundary] Chunk load error — attempting reload:', err.message);
+      if (tryChunkReload()) return;
+    }
     console.error('[ErrorBoundary] Uncaught render error:', err, info.componentStack);
     // Forward to Sentry / monitoring if available
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -237,7 +252,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
         </div>
 
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>
-          Something went wrong
+          {this.state.isChunk ? 'Updating to the latest version' : 'Something went wrong'}
         </h2>
         <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24, maxWidth: 420, lineHeight: 1.6 }}>
           {this.state.message || 'An unexpected error occurred. The page will reload when you click Retry.'}
