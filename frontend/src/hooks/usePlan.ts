@@ -45,7 +45,10 @@ export function usePlan(): void {
 
     let cancelled = false;
 
-    api.get<BillingResponse>('/billing/subscription')
+    // Short, dedicated timeout: the plan is non-critical (we degrade to 'free'
+    // on any failure), so don't make the user wait on the global 30s timeout if
+    // the billing endpoint is slow or unreachable.
+    api.get<BillingResponse>('/billing/subscription', { timeout: 8_000 })
       .then((r) => {
         if (cancelled) return;
         // Accept either 'plan' or 'tier' key from the API response
