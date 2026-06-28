@@ -193,19 +193,24 @@ async def trigger_backup(
     location = f"backups/{backup_id}.sql.gz"
     try:
         import subprocess
+        import tempfile
 
+        # Use the OS temp dir (cross-platform): "/tmp" doesn't exist on Windows,
+        # which made this endpoint fail/mislocate the dump on Windows hosts.
+        _tmp = tempfile.gettempdir()
         db_url = os.getenv("DATABASE_URL", "")
         if db_url.startswith("postgresql"):
             # pg_dump
+            dump_path = os.path.join(_tmp, f"{backup_id}.dump")
             result = subprocess.run(
-                ["pg_dump", "--format=custom", f"--file=/tmp/{backup_id}.dump", db_url],
+                ["pg_dump", "--format=custom", f"--file={dump_path}", db_url],
                 capture_output=True,
                 timeout=60,
                 check=False,
             )
             if result.returncode == 0:
-                size_mb = round(os.path.getsize(f"/tmp/{backup_id}.dump") / 1024 / 1024, 2)  # noqa: S108
-                location = f"/tmp/{backup_id}.dump"  # noqa: S108
+                size_mb = round(os.path.getsize(dump_path) / 1024 / 1024, 2)
+                location = dump_path
             else:
                 status = "failed"
         elif db_url.startswith("sqlite"):
@@ -213,7 +218,7 @@ async def trigger_backup(
 
             db_path = db_url.replace("sqlite:///", "").replace("sqlite://", "")
             if os.path.exists(db_path):
-                dest = f"/tmp/{backup_id}.db"  # noqa: S108
+                dest = os.path.join(_tmp, f"{backup_id}.db")
                 shutil.copy2(db_path, dest)
                 size_mb = round(os.path.getsize(dest) / 1024 / 1024, 2)
                 location = dest

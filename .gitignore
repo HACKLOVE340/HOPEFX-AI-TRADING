@@ -90,6 +90,9 @@ venv.bak/
 *.db-shm
 *.db-wal
 *.db-journal
+
+# Generated platform-doctor health reports (local diagnostics, not source)
+diagnostics/
 *.sqlite3
 # data/ — source package, not ignored
 # /data/  # uncomment to ignore data download cache
