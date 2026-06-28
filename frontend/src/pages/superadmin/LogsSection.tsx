@@ -7,7 +7,7 @@ import {
   ErrorState,
 } from './ui';
 import type { LogEntry } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const LEVEL_COLORS: Record<string, { color: string; bg: string }> = {
   DEBUG:    { color: '#94a3b8', bg: '#1e293b' },
@@ -44,7 +44,7 @@ const LogsSection: React.FC = () => {
         superadminApi.logLevels(),
       ]);
       if (!mountedRef.current) return;
-      setLogs(logRes.data.logs ?? logRes.data);
+      setLogs(asArray(logRes.data, 'logs'));
       setLogLevels(lvlRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;

@@ -7,7 +7,7 @@ import {
   ErrorState, LoadingRows,
 } from './ui';
 import type { FeatureFlag } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 interface UserOverride { flag: string; enabled: boolean }
 
@@ -30,7 +30,7 @@ const FeatureFlagsSection: React.FC = () => {
     try {
       const res = await superadminApi.featureFlags();
       if (!mountedRef.current) return;
-      setFlags(res.data.flags ?? res.data);
+      setFlags(asArray(res.data, 'flags'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Failed to load feature flags'));
@@ -57,7 +57,7 @@ const FeatureFlagsSection: React.FC = () => {
     setOverrideLoading(true); setOverrideMsg('');
     try {
       const res = await superadminApi.userFlagOverrides(userIdInput.trim());
-      setUserOverrides(res.data.overrides ?? res.data);
+      setUserOverrides(asArray(res.data, 'overrides'));
     } catch (e: unknown) {
       setOverrideMsg(extractApiError(e, 'Failed to load overrides'));
     } finally { setOverrideLoading(false); }

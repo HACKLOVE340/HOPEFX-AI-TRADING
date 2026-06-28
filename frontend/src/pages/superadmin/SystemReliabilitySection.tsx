@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 import { Card, SectionHeader, Button, StatusBadge } from '../settings/ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -612,7 +612,7 @@ const RoutesPanel: React.FC = () => {
     try {
       const res = await superadminApi.reliabilityRoutes();
       if (!mountedRef.current) return;
-      setRoutes(res.data.routes ?? res.data ?? []);
+      setRoutes(asArray(res.data, 'routes'));
     } catch { /* non-fatal */ }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
@@ -1259,7 +1259,7 @@ const SystemReliabilitySection: React.FC = () => {
           </p>
           {envAudit && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {Object.entries(envAudit.groups as Record<string, Record<string, { set: boolean; required: boolean }>>).map(([group, vars]) => (
+              {Object.entries((envAudit.groups ?? {}) as Record<string, Record<string, { set: boolean; required: boolean }>>).map(([group, vars]) => (
                 <div key={group}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
                     {group}

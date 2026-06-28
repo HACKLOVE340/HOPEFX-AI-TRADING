@@ -118,7 +118,9 @@ const RateLimitingSection: React.FC = () => {
         scope:          newRule.scope,
         enabled:        true,
       });
-      setRules(prev => [...prev, res.data]);
+      // Backend returns { ok, rule }, not the bare rule — push the rule so the
+      // new row has scope/current_hits/rule_id and doesn't crash the table.
+      setRules(prev => [...prev, res.data?.rule ?? res.data]);
       setNewRule({ endpoint: '', limit: '100', window_seconds: '60', scope: 'per_user' });
       setShowCreate(false);
       setMsg('Rule created');

@@ -8,7 +8,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { AlertRule } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -49,8 +49,8 @@ const AlertingSection: React.FC = () => {
         superadminApi.prometheusStatus(),
       ]);
       if (!mountedRef.current) return;
-      setRules(rRes.data.rules ?? rRes.data);
-      setFired(fRes.data.alerts ?? fRes.data.fired ?? fRes.data.history ?? fRes.data);
+      setRules(asArray(rRes.data, 'rules'));
+      setFired(asArray(fRes.data.alerts ?? fRes.data.fired ?? fRes.data.history ?? fRes.data));
       setPromStatus(pRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
@@ -93,7 +93,9 @@ const AlertingSection: React.FC = () => {
         channels:  newRule.channels.split(',').map(c => c.trim()).filter(Boolean),
         enabled:   true,
       });
-      setRules(prev => [...prev, res.data]);
+      // Backend returns { ok, rule }, not the bare rule — push the rule so the
+      // new row has channels/severity/rule_id and doesn't crash the table.
+      setRules(prev => [...prev, res.data?.rule ?? res.data]);
       setNewRule({ name: '', condition: '', severity: 'warning', channels: 'slack' });
       setShowCreate(false);
       setMsg('Alert rule created');

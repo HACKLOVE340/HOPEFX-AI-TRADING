@@ -9,7 +9,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { Tenant } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -260,11 +260,11 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
-                  { label: 'API Calls Today',  value: usage.api_calls_today.toLocaleString(), icon: '🔌', color: '#3b82f6' },
-                  { label: 'Active Users',     value: usage.active_users,                    icon: '👥', color: '#22c55e' },
-                  { label: 'Storage',          value: `${usage.storage_mb.toFixed(1)} MB`,   icon: '💾', color: '#f59e0b' },
-                  { label: 'Bandwidth',        value: `${usage.bandwidth_mb.toFixed(1)} MB`, icon: '📡', color: '#8b5cf6' },
-                  { label: 'Trades Today',     value: usage.trades_today.toLocaleString(),   icon: '📊', color: '#06b6d4' },
+                  { label: 'API Calls Today',  value: (usage.api_calls_today ?? 0).toLocaleString(), icon: '🔌', color: '#3b82f6' },
+                  { label: 'Active Users',     value: usage.active_users ?? 0,                       icon: '👥', color: '#22c55e' },
+                  { label: 'Storage',          value: `${(usage.storage_mb ?? 0).toFixed(1)} MB`,    icon: '💾', color: '#f59e0b' },
+                  { label: 'Bandwidth',        value: `${(usage.bandwidth_mb ?? 0).toFixed(1)} MB`,  icon: '📡', color: '#8b5cf6' },
+                  { label: 'Trades Today',     value: (usage.trades_today ?? 0).toLocaleString(),    icon: '📊', color: '#06b6d4' },
                 ].map(m => (
                   <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: '14px 16px' }}>
                     <div style={{ fontSize: 12, color: '#475569', marginBottom: 6 }}>{m.icon} {m.label}</div>
@@ -359,7 +359,7 @@ const WhiteLabelSection: React.FC = () => {
     try {
       const res = await superadminApi.tenants({ search });
       if (!mountedRef.current) return;
-      setTenants(res.data.tenants ?? res.data);
+      setTenants(asArray(res.data, 'tenants'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Failed to load tenants'));

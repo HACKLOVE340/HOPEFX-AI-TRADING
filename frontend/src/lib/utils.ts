@@ -167,6 +167,27 @@ export function getWsBase(): string {
   return `${proto}//${window.location.host}`;
 }
 
+// ── API response coercion ──────────────────────────────────────────────────────
+
+/**
+ * Coerce an API response into an array, tolerating the common shapes a FastAPI
+ * endpoint may return: `{ <key>: [...] }`, a bare `[...]`, or anything else
+ * (error envelope, partial object) → `[]`.
+ *
+ * This prevents the frequent "X.map is not a function" / "X.filter is not a
+ * function" render crash when a section does `setState(res.data.items ?? res.data)`
+ * and the response is a non-array object. Always returns a real array.
+ *
+ * Usage: `setEvents(asArray(res.data, 'events'))`
+ */
+export function asArray<T = unknown>(data: unknown, key?: string): T[] {
+  if (key && data && typeof data === 'object' && !Array.isArray(data)) {
+    const v = (data as Record<string, unknown>)[key];
+    if (Array.isArray(v)) return v as T[];
+  }
+  return Array.isArray(data) ? (data as T[]) : [];
+}
+
 // ── Misc ──────────────────────────────────────────────────────────────────────
 
 /** Clamp a value between min and max */

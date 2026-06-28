@@ -8,7 +8,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { KYCRecord, AMLAlert, SanctionsHit } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 interface RegulatoryReport {
   report_id: string;
@@ -75,10 +75,10 @@ const ComplianceSection: React.FC = () => {
         superadminApi.regulatoryReports(),
       ]);
       if (!mountedRef.current) return;
-      setKyc(kycRes.data.records ?? kycRes.data);
-      setAml(amlRes.data.alerts ?? amlRes.data);
-      setSanctions(sanRes.data.hits ?? sanRes.data);
-      setRegReports(repRes.data.reports ?? repRes.data);
+      setKyc(asArray(kycRes.data, 'records'));
+      setAml(asArray(amlRes.data, 'alerts'));
+      setSanctions(asArray(sanRes.data, 'hits'));
+      setRegReports(asArray(repRes.data, 'reports'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(apiErr(e, 'Failed to load compliance data'));
@@ -89,7 +89,7 @@ const ComplianceSection: React.FC = () => {
     try {
       const res = await superadminApi.consentLog(consentUserId || undefined);
       if (!mountedRef.current) return;
-      setConsentLog(res.data.entries ?? res.data);
+      setConsentLog(asArray(res.data, 'entries'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setMsg(apiErr(e, 'Failed to load consent log'));

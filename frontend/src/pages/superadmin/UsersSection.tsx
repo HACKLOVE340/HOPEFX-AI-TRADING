@@ -10,7 +10,7 @@ import type { SuperAdminUser, BulkUserResult } from './types';
 import { ROLE_BADGE_STYLES, ROLE_LABELS, PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { UserRole } from '../../store';
 import type { Plan } from '../../lib/subscription';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'Never';
@@ -335,7 +335,7 @@ const UsersSection: React.FC = () => {
       params.page_size = String(PAGE_SIZE);
       const res = await superadminApi.users(params);
       if (!mountedRef.current) return;
-      setUsers(res.data.users ?? res.data);
+      setUsers(asArray(res.data, 'users'));
       setCheckedIds(new Set());
     } catch (e: unknown) {
       if (!mountedRef.current) return;
@@ -499,7 +499,7 @@ const UsersSection: React.FC = () => {
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <div style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0 }}>
-                            {u.username[0].toUpperCase()}
+                            {u.username?.[0]?.toUpperCase() ?? '?'}
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{u.username}</div>

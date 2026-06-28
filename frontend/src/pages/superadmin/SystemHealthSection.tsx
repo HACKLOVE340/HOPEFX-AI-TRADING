@@ -9,7 +9,7 @@ import {
   ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { ServiceStatus, BackupRecord, ScheduledJob } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -63,10 +63,10 @@ const SystemHealthSection: React.FC = () => {
         superadminApi.infraApiKeys(),
       ]);
       if (!mountedRef.current) return;
-      setServices(sRes.data.services ?? sRes.data);
-      setBackups(bRes.data.backups ?? bRes.data);
-      setJobs(jRes.data.jobs ?? jRes.data);
-      setApiKeys(kRes.data.api_keys ?? kRes.data.keys ?? kRes.data);
+      setServices(asArray(sRes.data, 'services'));
+      setBackups(asArray(bRes.data, 'backups'));
+      setJobs(asArray(jRes.data, 'jobs'));
+      setApiKeys(asArray(kRes.data.api_keys ?? kRes.data.keys ?? kRes.data));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Failed to load system health data'));

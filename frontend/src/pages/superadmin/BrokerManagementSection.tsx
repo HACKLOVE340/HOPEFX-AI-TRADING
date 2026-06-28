@@ -8,7 +8,7 @@ import {
   ErrorState, LoadingRows,
 } from './ui';
 import type { BrokerHealth, TCAMetric } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -68,9 +68,9 @@ const BrokerManagementSection: React.FC = () => {
         superadminApi.brokerRouting(),
       ]);
       if (!mountedRef.current) return;
-      setBrokers(bRes.data.brokers ?? bRes.data);
-      setTca(tRes.data.metrics ?? tRes.data);
-      setRouting(rRes.data.rules ?? rRes.data ?? []);
+      setBrokers(asArray(bRes.data, 'brokers'));
+      setTca(asArray(tRes.data, 'metrics'));
+      setRouting(asArray(rRes.data, 'rules'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Failed to load broker data'));

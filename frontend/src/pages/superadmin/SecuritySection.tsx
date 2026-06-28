@@ -8,7 +8,7 @@ import {
   ErrorState, LoadingRows, ConfirmDialog, KpiTile,
 } from './ui';
 import type { SecurityEvent } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 interface BlockedIP { ip: string; reason: string; blocked_at: string; blocked_by: string }
 interface Session   { session_id: string; user_id: string; username: string; ip: string; device: string; created_at: string; last_active: string }
@@ -53,9 +53,9 @@ const SecuritySection: React.FC = () => {
         superadminApi.activeSessions(),
       ]);
       if (!mountedRef.current) return;
-      setEvents(evRes.data.events ?? evRes.data);
-      setBlocked(blRes.data.blocked_ips ?? blRes.data);
-      setSessions(seRes.data.sessions ?? seRes.data);
+      setEvents(asArray(evRes.data, 'events'));
+      setBlocked(asArray(blRes.data, 'blocked_ips'));
+      setSessions(asArray(seRes.data, 'sessions'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Failed to load security data'));

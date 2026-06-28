@@ -11,6 +11,7 @@ import {
 import type { RevenueStats, SubscriptionStats, Chargeback, TaxReport, ReconciliationRecord, AffiliateStats } from './types';
 import { PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { Plan } from '../../lib/subscription';
+import { asArray } from '../../lib/utils';
 
 interface Payment {
   payment_id: string;
@@ -117,7 +118,7 @@ const ChargebacksPanel: React.FC = () => {
       if (statusFilter !== 'all') params['status'] = statusFilter;
       const res = await superadminApi.chargebacks(params);
       if (!mountedRef.current) return;
-      setItems(res.data.chargebacks ?? res.data ?? []);
+      setItems(asArray(res.data, 'chargebacks'));
     } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load chargebacks')); }
     finally { if (mountedRef.current) setLoad(false); }
   }, [statusFilter]);
@@ -228,7 +229,7 @@ const TaxReportsPanel: React.FC = () => {
     try {
       const res = await superadminApi.taxReports();
       if (!mountedRef.current) return;
-      setReports(res.data.reports ?? res.data ?? []);
+      setReports(asArray(res.data, 'reports'));
     } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load tax reports')); }
     finally { if (mountedRef.current) setLoad(false); }
   }, []);
@@ -351,7 +352,7 @@ const ReconciliationPanel: React.FC = () => {
       if (provider !== 'all') params['provider'] = provider;
       const res = await superadminApi.reconciliationRecords(params);
       if (!mountedRef.current) return;
-      setRecords(res.data.records ?? res.data ?? []);
+      setRecords(asArray(res.data, 'records'));
     } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load reconciliation records')); }
     finally { if (mountedRef.current) setLoad(false); }
   }, [provider]);
@@ -577,7 +578,7 @@ const FinancialSection: React.FC = () => {
       ]);
       if (!mountedRef.current) return;
       setRevenue(revRes.data);
-      setPayments(payRes.data.payments ?? payRes.data);
+      setPayments(asArray(payRes.data, 'payments'));
       setSubStats(subRes.data);
     } catch (e) {
       if (!mountedRef.current) return;

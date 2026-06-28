@@ -7,7 +7,7 @@ import {
   ErrorState, LoadingRows, ConfirmDialog, KpiTile,
 } from './ui';
 import type { MLModel } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -79,7 +79,7 @@ const MLAISection: React.FC = () => {
         superadminApi.mlStatus(),
       ]);
       if (!mountedRef.current) return;
-      setModels(mRes.data.models ?? mRes.data);
+      setModels(asArray(mRes.data, 'models'));
       setMetrics(meRes.data);
       setRlStatus(rlRes.data);
       setMlStatus(stRes.data);

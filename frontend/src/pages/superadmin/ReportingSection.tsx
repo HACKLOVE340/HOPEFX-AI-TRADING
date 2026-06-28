@@ -8,7 +8,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { ReportRecord } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -38,7 +38,7 @@ const ReportingSection: React.FC = () => {
     try {
       const res = await superadminApi.reportList();
       if (!mountedRef.current) return;
-      setReports(res.data.reports ?? res.data);
+      setReports(asArray(res.data, 'reports'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Failed to load reports'));

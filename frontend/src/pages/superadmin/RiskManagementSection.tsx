@@ -12,7 +12,7 @@ import type {
   CircuitBreakerState, VaRMetrics, StressTestResult,
   PropBreach, DrawdownStats,
 } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
 
 const fmtMoney = (n: number, cur = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
@@ -69,10 +69,10 @@ const RiskManagementSection: React.FC = () => {
         superadminApi.drawdownStats(),
       ]);
       if (!mountedRef.current) return;
-      setBreakers(cbRes.data.circuit_breakers ?? cbRes.data.breakers ?? cbRes.data);
+      setBreakers(asArray(cbRes.data.circuit_breakers ?? cbRes.data.breakers ?? cbRes.data));
       setVarMetrics(varRes.data);
-      setStressTests(stRes.data.results ?? stRes.data);
-      setPropBreaches(pbRes.data.breaches ?? pbRes.data);
+      setStressTests(asArray(stRes.data, 'results'));
+      setPropBreaches(asArray(pbRes.data, 'breaches'));
       setDrawdown(ddRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
