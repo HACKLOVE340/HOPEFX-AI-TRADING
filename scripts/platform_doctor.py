@@ -359,10 +359,116 @@ def check_frontend_pages(rep: Report) -> None:
                 rep.add(area, OK, f"{label} guard wired", f"{guard}(...) present in App.tsx")
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Runtime-log analysis — classify the server's console/log output so the report
+# shows live state (real bugs vs environmental noise vs shutdown noise) too.
+# (regex, category, explanation). Order matters: shutdown + environmental are
+# matched first so they don't masquerade as "real" code errors.
+# ──────────────────────────────────────────────────────────────────────────────
+_LOG_RULES = [
+    (re.compile(r"KeyboardInterrupt|CancelledError|anyio\.WouldBlock|raise_signal\(captured_signal\)|Application shutdown"),
+     "shutdown", "Server shutdown/teardown noise (Ctrl+C cancelling in-flight work) — not a bug."),
+    (re.compile(r"Redis unavailable|Sync Redis connection failed|Redis connect failed|"
+                r"(?:connecting to|connection to).{0,40}6379|fakeredis not installed|"
+                r"using ring buffer|in-memory fallback|circuit OPEN"),
+     "redis", "Redis not running — app uses in-memory/ring-buffer fallback."),
+    (re.compile(r"empty DataFrame returned|not a Coinbase product"),
+     "feed", "Data source returned nothing (off-hours future / unsupported symbol) — expected."),
+    (re.compile(r"403, message='Forbidden'|HTTP 429|Too Many Requests|permanent error \(403|"
+                r"Connection timeout to host|FMP fetch_articles error|HTTP error attempt"),
+     "feed_api", "External data/news API auth/rate-limit/timeout."),
+    (re.compile(r"vaderSentiment not installed|geopolitical sources unavailable|stale cached events|"
+                r"ClamAV.{0,40}not reachable"),
+     "optional", "Optional capability degraded gracefully (missing dep / external service)."),
+    (re.compile(r"no signal for regime|Pipeline: 0 ticks|only 0 bars|Strategy decision timeout|"
+                r"stale \(\d+ s\) — rotating source|GoldFeedManager:.*circuit OPEN"),
+     "warmup", "Cold-start / market-closed: no bars / no signal yet — expected until data warms up."),
+    (re.compile(r"object has no attribute|takes no arguments|unexpected keyword argument|@ -\d+ ms|"
+                r"\bTypeError\b|\bKeyError\b|\bAttributeError\b|\bValueError\b|\bIndexError\b|"
+                r"\bNameError\b|\bImportError\b|\bModuleNotFoundError\b|\bUnboundLocalError\b"),
+     "real", "Possible real code error — investigate."),
+]
+
+
+def _normalize_log_line(line: str) -> str:
+    s = re.sub(r"^\d{4}-\d{2}-\d{2}[ T][\d:,\.]+", "", line).strip()
+    s = re.sub(r"0x[0-9a-fA-F]+", "0x…", s)
+    s = re.sub(r"\d+", "N", s)
+    return s[:140]
+
+
+def _resolve_log(explicit: str | None) -> Path | None:
+    if explicit:
+        p = Path(explicit)
+        return p if p.exists() and p.is_file() else None
+    candidates: list[Path] = []
+    for pat in ("logs/*.log", "*.log", "logs/*.txt", "server.log"):
+        candidates += [c for c in ROOT.glob(pat) if c.is_file()]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda c: c.stat().st_mtime)
+
+
+def check_runtime_log(rep: Report, log_path: str | None) -> None:
+    area = "Runtime log"
+    path = _resolve_log(log_path)
+    if not path:
+        rep.add(area, INFO, "No runtime log found",
+                "Pass --log <path>, or capture the server console to a file and re-run.",
+                fix="On Windows: python app.py > logs\\server.log 2>&1   (then re-run the doctor)")
+        return
+    rep.add(area, INFO, "Analyzing log", str(path))
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()[-200_000:]  # cap very large logs
+    except Exception as exc:
+        rep.add(area, WARN, "Could not read log", f"{type(exc).__name__}: {exc}")
+        return
+
+    cats: dict[str, int] = {}
+    real_samples: dict[str, int] = {}
+    api_samples: dict[str, int] = {}
+    for ln in lines:
+        for rx, cat, _why in _LOG_RULES:
+            if rx.search(ln):
+                cats[cat] = cats.get(cat, 0) + 1
+                if cat == "real":
+                    k = _normalize_log_line(ln)
+                    real_samples[k] = real_samples.get(k, 0) + 1
+                elif cat == "feed_api":
+                    k = _normalize_log_line(ln)
+                    api_samples[k] = api_samples.get(k, 0) + 1
+                break  # first matching rule wins
+
+    rep.add(area, INFO, "Lines scanned", f"{len(lines):,}")
+
+    env_parts = [f"{k}={cats[k]}" for k in ("shutdown", "redis", "feed", "warmup", "optional") if cats.get(k)]
+    if env_parts:
+        rep.add(area, INFO, "Environmental / expected lines",
+                ", ".join(env_parts) + " — graceful fallbacks & shutdown noise, not code bugs.")
+
+    if cats.get("feed_api"):
+        rep.add(area, WARN, f"External API failures ({cats['feed_api']})",
+                "; ".join(list(api_samples)[:5]),
+                fix="Add provider API keys to .env, or ignore (the free yfinance fallback is used).")
+
+    if cats.get("real"):
+        top = sorted(real_samples.items(), key=lambda x: -x[1])[:8]
+        rep.add(area, WARN, f"Possible code errors in log ({cats['real']})",
+                " | ".join(f'"{k}" (x{v})' for k, v in top),
+                fix="If a line matches an already-fixed issue (e.g. \"object has no attribute 'get'\", "
+                    "\"@ -<n> ms\"), your running process is on OLD code — redeploy from main. "
+                    "Otherwise investigate the specific message.")
+    else:
+        rep.add(area, OK, "No real code errors in log", "only environmental / shutdown noise detected")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="HOPEFX platform health diagnostic")
     parser.add_argument("--output", "-o", default=str(ROOT / "diagnostics" / "HOPEFX_HEALTH_REPORT.md"),
                         help="Path to write the markdown report")
+    parser.add_argument("--log", "-l", default=None,
+                        help="Path to a server log file to analyze (auto-detects logs/*.log if omitted)")
     args = parser.parse_args()
 
     # Ensure the app package is importable.
@@ -379,6 +485,7 @@ def main() -> int:
     _safe(check_frontend_pages, rep, "Frontend pages (routes)")
     # Backend import last — heaviest, most likely to be slow.
     _safe(check_backend_import, rep, "Backend")
+    _safe(lambda r: check_runtime_log(r, args.log), rep, "Runtime log")
 
     md = rep.render()
     out = Path(args.output)
