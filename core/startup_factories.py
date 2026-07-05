@@ -131,6 +131,26 @@ async def init_env(s: Any) -> bool:
             "in .env to enable outbound email."
         )
 
+    # ── Safety gate: enforce invariants when a live broker is configured ─────
+    # Constitutional Rule 1 (No Unauthorized Trade): the invariant system is
+    # worthless in monitor mode — every check logs but always returns allowed=True.
+    # Block startup if a live broker is configured without enforcement mode.
+    broker_type = (os.getenv("BROKER_TYPE") or os.getenv("BROKER") or "paper").lower()
+    invariant_mode = os.getenv("HOPEFX_INVARIANT_MODE", "monitor").lower()
+    if broker_type != "paper" and app_env != "test" and invariant_mode != "enforce":
+        msg = (
+            f"STARTUP BLOCKED: BROKER_TYPE={broker_type!r} but "
+            f"HOPEFX_INVARIANT_MODE={invariant_mode!r}. "
+            "Set HOPEFX_INVARIANT_MODE=enforce in your environment or k8s ConfigMap "
+            "before connecting a live broker. The invariant layer is in monitor mode "
+            "and will allow all orders through regardless of violations."
+        )
+        if is_production:
+            logger.critical(msg)
+            sys.exit(1)
+        else:
+            logger.warning(msg)
+
     # ── Run full env validator ────────────────────────────────────────────────
     try:
         from core.env_validator import validate_and_report

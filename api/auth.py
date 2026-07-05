@@ -85,6 +85,7 @@ class TokenPayload(BaseModel):
     type: str | None = None  # "access" discriminator checked by _decode_token
     email: str | None = None
     username: str | None = None
+    two_factor_verified: bool = False  # True only when TOTP 2FA was completed at login
 
 
 def _get_jwt_secret() -> str:

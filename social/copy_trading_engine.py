@@ -211,6 +211,40 @@ class AdvancedCopyTradingEngine:
         Returns:
             Results for each follower
         """
+        # Constitutional Rule 1 & 14: check kill switch before placing ANY orders.
+        # Copy trades must respect the same kill switch as manual trades — the kill
+        # switch is the last line of defence during a runaway-loss event.
+        try:
+            from kill_switch import KillSwitch as _KillSwitch
+
+            _ks = _KillSwitch.get_instance() if hasattr(_KillSwitch, "get_instance") else None
+            if _ks is None:
+                import app as _app_mod
+
+                _ks = getattr(_app_mod, "kill_switch", None)
+            if _ks is not None and _ks.is_active():
+                reason = getattr(_ks, "reason", "kill switch active")
+                logger.critical(
+                    "Copy trading BLOCKED — kill switch active: %s. "
+                    "No copy orders will be placed until the kill switch is cleared.",
+                    reason,
+                )
+                blocked = {
+                    f.follower_id: {"status": "blocked", "reason": f"kill_switch: {reason}"}
+                    for f in followers
+                }
+                return blocked
+        except Exception as _ks_exc:
+            logger.error(
+                "Copy trading kill switch check raised an exception — "
+                "blocking all copy trades as a safety measure: %s",
+                _ks_exc,
+            )
+            return {
+                f.follower_id: {"status": "blocked", "reason": "kill_switch_check_error"}
+                for f in followers
+            }
+
         results = {}
 
         # Store signal

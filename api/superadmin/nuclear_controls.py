@@ -27,7 +27,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
-from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from ._shared import require_superadmin_2fa, _utcnow, _log_superadmin_action
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -84,7 +84,7 @@ def _append_nuclear_log(event: str, detail: dict, actor: str) -> None:
 
 @router.get("/nuclear/status")
 async def get_nuclear_status(
-    user: TokenPayload = Depends(_require_superadmin),
+    user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict[str, Any]:
     ks = _get_kill_switch()
     kill_switch_active = False
@@ -136,7 +136,7 @@ async def get_nuclear_status(
 @router.post("/nuclear/halt")
 async def nuclear_halt(
     body: dict,
-    user: TokenPayload = Depends(_require_superadmin),
+    user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
     reason = body.get("reason", "Superadmin emergency halt")
     ks = _get_kill_switch()
@@ -186,7 +186,7 @@ async def nuclear_halt(
 
 @router.post("/nuclear/resume")
 async def nuclear_resume(
-    user: TokenPayload = Depends(_require_superadmin),
+    user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
     ks = _get_kill_switch()
     if ks is not None:
@@ -235,7 +235,7 @@ async def nuclear_resume(
 @router.post("/nuclear/hedge/activate")
 async def activate_hedge(
     body: dict,
-    user: TokenPayload = Depends(_require_superadmin),
+    user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
@@ -268,7 +268,7 @@ async def activate_hedge(
 
 @router.post("/nuclear/hedge/deactivate")
 async def deactivate_hedge(
-    user: TokenPayload = Depends(_require_superadmin),
+    user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
@@ -295,7 +295,7 @@ async def deactivate_hedge(
 @router.post("/nuclear/risk-override")
 async def max_risk_override(
     body: dict,
-    user: TokenPayload = Depends(_require_superadmin),
+    user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
     override = {**body, "set_by": user.sub, "set_at": _utcnow().isoformat()}
     try:
@@ -326,7 +326,7 @@ async def max_risk_override(
 
 @router.get("/nuclear/log")
 async def get_nuclear_log(
-    user: TokenPayload = Depends(_require_superadmin),
+    user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
     log: list[dict] = []
     try:

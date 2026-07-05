@@ -555,6 +555,7 @@ class AuthService:
                 return False, f"Account is {user.status}. Contact support.", None
 
             # 2FA check
+            _totp_verified = False
             if user.totp_enabled:
                 if not totp_code:
                     return False, "2FA code required", None
@@ -562,9 +563,10 @@ class AuthService:
                 if not verify_totp(plain_secret, totp_code):
                     _record(False, "invalid_2fa")
                     return False, "Invalid 2FA code", None
+                _totp_verified = True
 
             # Issue tokens
-            access_token = self._create_access_token(user)
+            access_token = self._create_access_token(user, two_factor_verified=_totp_verified)
             raw_refresh, _ = self._create_refresh_session(
                 user,
                 ip_address,
@@ -852,7 +854,7 @@ class AuthService:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _create_access_token(self, user) -> str:
+    def _create_access_token(self, user, two_factor_verified: bool = False) -> str:
         now = _now()
         payload = {
             "sub": user.id,
@@ -865,6 +867,7 @@ class AuthService:
                 (now + timedelta(minutes=_access_token_expire_minutes())).timestamp(),
             ),
             "type": "access",
+            "two_factor_verified": two_factor_verified,
         }
         return jwt.encode(payload, _get_secret(), algorithm=ALGORITHM)
 

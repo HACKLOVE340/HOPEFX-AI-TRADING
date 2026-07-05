@@ -12,7 +12,7 @@ import re as _re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, require_role
@@ -25,6 +25,28 @@ UTC = timezone.utc
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 
 _require_superadmin = require_role("superadmin")
+
+
+def require_superadmin_2fa(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> TokenPayload:
+    """FastAPI dependency: require superadmin role **and** a 2FA-verified token.
+
+    Superadmin operations that affect live trading (kill switch activation,
+    engine pause, risk limit changes) must only be reachable from tokens that
+    were issued after a successful TOTP verification.  A stolen or forged
+    access token without the ``two_factor_verified`` claim is rejected here
+    before it reaches any nuclear control endpoint.
+    """
+    if not getattr(user, "two_factor_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Superadmin nuclear operations require 2FA verification. "
+                "Log in again with a valid TOTP code."
+            ),
+        )
+    return user
 
 # Report IDs must be UUID-format with an optional .json/.html/.csv extension.
 _REPORT_ID_RE = _re.compile(
