@@ -235,7 +235,16 @@ const SuperAdminDashboard: React.FC = () => {
     finally { setTogglingKill(false); }
   };
 
-  if (!user || !isSuperAdmin(user.role)) return null;
+  if (!user) {
+    // Still resolving user from store — show spinner instead of blank
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid #1e293b', borderTopColor: '#3b82f6', animation: 'spin 0.7s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+  if (!isSuperAdmin(user.role)) return null;
 
   const activeTabDef = TABS.find(t => t.id === activeTab) ?? TABS[0]!;
   const killSwitchActive = engineHealth?.kill_switch_active ?? false;

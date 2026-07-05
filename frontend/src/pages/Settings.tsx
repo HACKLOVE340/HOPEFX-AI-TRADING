@@ -288,7 +288,7 @@ const Settings: React.FC = () => {
       case 'sa-reliability':    return superAdmin ? <SystemReliabilitySection /> : null;
       // Danger
       case 'danger':            return <DangerSection />;
-      default:                  return null;
+      default:                  return <ProfileSection />;
     }
   };
 

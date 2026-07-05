@@ -598,7 +598,51 @@ const CryptoCheckout: React.FC = () => {
     );
   }
 
-  return null;
+  // Fallback: step='address' or 'confirming' but depositInfo not yet set
+  // (can occur during the React batch-render between setDepositInfo + setStep)
+  return (
+    <div className="page-content">
+      <PageHeader
+        title={step === 'confirming' ? 'Confirming Payment' : 'Send Payment'}
+        breadcrumbs={breadcrumbs}
+        actions={
+          <button onClick={() => { setStep('select'); setAddressError(null); }} style={st.backBtn}>
+            ← Back
+          </button>
+        }
+      />
+      <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
+        {addressError ? (
+          <>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#f87171', marginBottom: 8 }}>
+              Failed to generate deposit address
+            </div>
+            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20 }}>{addressError}</div>
+            <button
+              onClick={() => { setAddressError(null); setStep('select'); }}
+              style={st.backBtn}
+            >
+              ← Back to Plan Selection
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{
+              width: 36, height: 36,
+              border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+              borderRadius: '50%', animation: 'spin 0.7s linear infinite',
+              margin: '0 auto 16px',
+            }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <div style={{ color: '#64748b', fontSize: 14 }}>
+              {loadingAddress ? 'Generating deposit address…' : 'Loading payment details…'}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
