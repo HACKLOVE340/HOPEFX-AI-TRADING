@@ -34,7 +34,7 @@ import io
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
 
@@ -93,7 +93,7 @@ class JournalEntry(BaseModel):
     emotion: str | None = None
     followed_rules: bool = True
     rule_deviation: str | None = None
-    screenshot_url: str | None = None
+    screenshot_url: AnyHttpUrl | None = None
     created_at: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat(),
     )
@@ -108,7 +108,7 @@ class JournalUpdate(BaseModel):
     emotion: str | None = None
     followed_rules: bool | None = None
     rule_deviation: str | None = None
-    screenshot_url: str | None = None
+    screenshot_url: AnyHttpUrl | None = None
     exit_price: float | None = None
     pnl: float | None = None
     closed_at: str | None = None

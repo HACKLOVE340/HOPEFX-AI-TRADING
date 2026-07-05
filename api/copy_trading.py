@@ -39,7 +39,7 @@ def _get_copy_engine():
 
 
 @router.get("/my-copies")
-async def get_my_copies():
+async def get_my_copies(user: TokenPayload = Depends(get_current_user)):
     """
     Retrieve all active copy trading subscriptions for the current user.
     Returns: list of copies with master trader info, performance, and settings.
@@ -49,7 +49,7 @@ async def get_my_copies():
         return {"copies": [], "total": 0}
 
     try:
-        copies = await engine.get_user_copies()
+        copies = await engine.get_user_copies(user_id=user.sub)
         return {"copies": copies, "total": len(copies)}
     except Exception as e:
         logger.error(f"Failed to get copies: {e}")
@@ -124,14 +124,14 @@ async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Dep
 
 
 @router.get("/copies/{copy_id}/performance")
-async def get_copy_performance(copy_id: str):
-    """Get performance metrics for a specific copy subscription."""
+async def get_copy_performance(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Get performance metrics for a specific copy subscription (must belong to the requesting user)."""
     engine = _get_copy_engine()
     if not engine:
         raise HTTPException(status_code=503, detail="Copy trading engine unavailable")
 
     try:
-        perf = await engine.get_copy_performance(copy_id)
+        perf = await engine.get_copy_performance(copy_id, user_id=user.sub)
         return perf
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
