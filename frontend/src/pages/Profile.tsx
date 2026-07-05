@@ -103,7 +103,20 @@ const Profile: React.FC = () => {
 
   if (loading) return <div style={s.page}><p style={{color:'#94a3b8'}}>Loading profile…</p></div>;
   if (error)   return <div style={s.page}><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
-  if (!profile) return null;
+  if (!profile) return (
+    <div style={s.page}>
+      <div style={{ textAlign: 'center', padding: '60px 24px', color: '#64748b' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>👤</div>
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#f1f5f9', marginBottom: 8 }}>
+          Profile not found
+        </div>
+        <div style={{ fontSize: 14, marginBottom: 24 }}>
+          This profile does not exist or has been removed.
+        </div>
+        <button onClick={() => navigate(-1)} style={s.retryBtn}>← Go back</button>
+      </div>
+    </div>
+  );
 
   // stats may be absent for a brand-new profile — fall back to zeros so the
   // stats grid renders instead of crashing the whole page.
