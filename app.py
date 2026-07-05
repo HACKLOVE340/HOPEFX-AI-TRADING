@@ -134,7 +134,6 @@ try:
 except Exception as _obs_err:
     logging.getLogger(__name__).warning("Observability install skipped: %s", _obs_err)
 
-import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRouter as _APIRouter
@@ -952,6 +951,8 @@ register_page_routes(app)  # mounts React dashboard LAST
 
 def run_server():
     """Run the API server."""
+    import uvicorn  # Deferred: only needed when actually starting the server process.
+
     # Default to 0.0.0.0 so the server is reachable inside containers/Gitpod.
     # Override with API_HOST env var for production deployments.
     host = os.getenv("API_HOST", "0.0.0.0")

@@ -198,24 +198,52 @@ def check_env_file(rep: Report) -> None:
 
 def check_dependencies(rep: Report) -> None:
     area = "Dependencies"
-    # Optional deps whose absence changes behaviour (we saw these in the logs).
-    optional = {
-        "fakeredis": "In-process Redis substitute — silences 'Redis unavailable' noise locally.",
-        "vaderSentiment": "Richer news sentiment (else keyword-only scoring).",
-        "talib": "Native TA indicators (else pure-Python fallback).",
-        "shap": "Full ML explainability (else feature_importances_ fallback).",
-        "redis": "Redis client (core).",
-        "fastapi": "API framework (core).",
-        "xgboost": "Active model backend (core for ML).",
-    }
-    for mod, why in optional.items():
-        spec = importlib.util.find_spec(mod) if mod != "talib" else importlib.util.find_spec("talib")
-        installed = spec is not None
-        core = mod in ("redis", "fastapi", "xgboost")
-        status = OK if installed else (FAIL if core else WARN)
-        rep.add(area, status, mod,
-                "installed" if installed else f"NOT installed — {why}",
-                fix="" if installed else f"pip install {mod}")
+    # Each entry: module_name -> (description, pip_install_command, is_core)
+    # is_core=True → FAIL when missing; is_core=False → WARN when missing.
+    _deps: list[tuple[str, str, str, bool]] = [
+        (
+            "fakeredis",
+            "In-process Redis substitute — silences 'Redis unavailable' noise locally.",
+            "pip install fakeredis>=2.20.0",
+            False,
+        ),
+        (
+            "vaderSentiment",
+            "Richer news sentiment (else keyword-only scoring).",
+            "pip install vaderSentiment>=3.3.2",
+            False,
+        ),
+        (
+            "talib",
+            "Native TA indicators (else pure-Python fallback).",
+            # TA-Lib requires the C library first:
+            #   Ubuntu/Debian: sudo apt-get install libta-lib-dev
+            #   macOS:         brew install ta-lib
+            # Then: pip install ta-lib>=0.4.28
+            "Install C lib first (apt-get install libta-lib-dev  OR  brew install ta-lib), "
+            "then: pip install ta-lib>=0.4.28",
+            False,
+        ),
+        (
+            "shap",
+            "Full ML explainability (else feature_importances_ fallback).",
+            "pip install shap>=0.44.0",
+            False,
+        ),
+        ("redis", "Redis client (core).", "pip install redis>=5.0.0", True),
+        ("fastapi", "API framework (core).", "pip install -r requirements.txt", True),
+        ("xgboost", "Active model backend (core for ML).", "pip install -r requirements.txt", True),
+    ]
+    for mod, why, fix_cmd, is_core in _deps:
+        installed = importlib.util.find_spec(mod) is not None
+        sev = OK if installed else (FAIL if is_core else WARN)
+        rep.add(
+            area,
+            sev,
+            mod,
+            "installed" if installed else f"NOT installed — {why}",
+            fix="" if installed else fix_cmd,
+        )
 
 
 def check_backend_import(rep: Report) -> None:
