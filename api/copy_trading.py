@@ -132,6 +132,12 @@ async def get_copy_performance(copy_id: str, user: TokenPayload = Depends(get_cu
 
     try:
         perf = await engine.get_copy_performance(copy_id, user_id=user.sub)
+        # Engine returns None when copy_id doesn't exist or belongs to another user
+        if perf is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Copy subscription '{copy_id}' not found or does not belong to the requesting user",
+            )
         return perf
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
