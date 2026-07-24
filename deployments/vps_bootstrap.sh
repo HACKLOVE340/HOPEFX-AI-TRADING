@@ -204,6 +204,7 @@ else
   env_set ALLOWED_ORIGINS "https://${DOMAIN}"
   env_set POSTGRES_PASSWORD "$(openssl rand -hex 24)"
   env_set REDIS_PASSWORD "$(openssl rand -hex 24)"
+  env_set GRAFANA_ADMIN_PASSWORD "$(openssl rand -hex 16)"
   env_set SECURITY_JWT_SECRET "$(openssl rand -hex 32)"
   env_set CONFIG_ENCRYPTION_KEY "$(openssl rand -hex 32)"
   env_set HOPEFX_KILL_SWITCH_TOKEN "$(openssl rand -hex 24)"

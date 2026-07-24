@@ -37,7 +37,7 @@ else die "Docker Compose not installed."; fi
 getenv() { grep -E "^${1}=" .env | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" ; }
 
 REQUIRED=(APP_ENV HOPEFX_DOMAIN ALLOWED_ORIGINS POSTGRES_PASSWORD REDIS_PASSWORD
-          CONFIG_ENCRYPTION_KEY HOPEFX_KILL_SWITCH_TOKEN CRYPTO_WEBHOOK_SECRET)
+          GRAFANA_ADMIN_PASSWORD CONFIG_ENCRYPTION_KEY HOPEFX_KILL_SWITCH_TOKEN CRYPTO_WEBHOOK_SECRET)
 missing=()
 for v in "${REQUIRED[@]}"; do
   val="$(getenv "$v" || true)"
