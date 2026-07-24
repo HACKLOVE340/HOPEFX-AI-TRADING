@@ -11,10 +11,22 @@ Prevents inadvertent self-matching and wash trades
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+UTC = timezone.utc
+
+# Default lifetime for a resting order before it is treated as stale and pruned.
+# Live callers (execution/engine.py) add every submitted order to the resting
+# book but do not currently call remove_resting_order() on fill/cancel. Without
+# a TTL the book grows unbounded and long-since-filled "phantom" orders keep
+# matching against new orders forever, producing worsening false-positive
+# self-trade blocks. One hour comfortably covers any genuinely resting order in
+# this system (execution requests fill or are cancelled in seconds) while
+# guaranteeing the book cannot accumulate stale entries.
+_DEFAULT_RESTING_TTL_SECONDS = 3600.0
 
 
 class SelfTradeAction(Enum):
@@ -47,10 +59,21 @@ class SelfTradePrevention:
         prevention_level: str = "account",  # firm, group, account, strategy
         action: SelfTradeAction = SelfTradeAction.CANCEL_RESTING,
         allow_intentional: bool = False,
+        resting_ttl_seconds: float | None = _DEFAULT_RESTING_TTL_SECONDS,
+        max_resting_per_symbol: int = 10_000,
     ):
         self.level = prevention_level
         self.action = action
         self.allow_intentional = allow_intentional
+
+        # Resting orders older than this (seconds) are considered filled/cancelled
+        # and are pruned so they can neither grow the book unbounded nor match
+        # against new orders. Set to None to disable TTL pruning entirely (not
+        # recommended in live paths that never call remove_resting_order()).
+        self.resting_ttl_seconds = resting_ttl_seconds
+        # Hard upper bound per symbol as a defence-in-depth cap even inside the
+        # TTL window; the oldest entries are dropped first.
+        self.max_resting_per_symbol = max_resting_per_symbol
 
         # Track resting orders
         self.resting_orders: dict[str, list[Order]] = {}  # symbol -> orders
@@ -64,6 +87,10 @@ class SelfTradePrevention:
 
         if symbol not in self.resting_orders:
             return None
+
+        # Drop filled/cancelled "phantom" orders before matching so stale entries
+        # can never produce a false-positive self-trade block.
+        self._prune_stale(symbol)
 
         opposing_side = "sell" if new_order.side == "buy" else "buy"
 
@@ -141,11 +168,54 @@ class SelfTradePrevention:
 
     def add_resting_order(self, order: Order) -> None:
         """Add order to resting book"""
-        if order.symbol not in self.resting_orders:
-            self.resting_orders[order.symbol] = []
-        self.resting_orders[order.symbol].append(order)
+        book = self.resting_orders.setdefault(order.symbol, [])
+        book.append(order)
+        # Prune on insert so the book self-limits even when callers never call
+        # remove_resting_order() on fill/cancel.
+        self._prune_stale(order.symbol)
 
     def remove_resting_order(self, order_id: str, symbol: str) -> None:
         """Remove filled or cancelled order"""
         if symbol in self.resting_orders:
             self.resting_orders[symbol] = [o for o in self.resting_orders[symbol] if o.id != order_id]
+
+    @staticmethod
+    def _order_age_seconds(order: Order, now: datetime) -> float:
+        """Age of an order in seconds, tolerant of naive/aware timestamps."""
+        ts = order.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        return (now - ts).total_seconds()
+
+    def _prune_stale(self, symbol: str) -> None:
+        """
+        Drop resting orders that are past their TTL, then enforce the per-symbol
+        hard cap (oldest first). Keeps the book bounded and prevents already
+        filled/cancelled phantom orders from matching against new orders.
+        """
+        book = self.resting_orders.get(symbol)
+        if not book:
+            return
+
+        now = datetime.now(UTC)
+
+        if self.resting_ttl_seconds is not None:
+            ttl = self.resting_ttl_seconds
+            kept = [o for o in book if self._order_age_seconds(o, now) <= ttl]
+            dropped = len(book) - len(kept)
+            if dropped:
+                logger.debug("STP: pruned %d stale resting order(s) for %s (ttl=%ss)", dropped, symbol, ttl)
+                book = kept
+                self.resting_orders[symbol] = book
+
+        # Defence-in-depth hard cap: keep the newest max_resting_per_symbol.
+        if self.max_resting_per_symbol and len(book) > self.max_resting_per_symbol:
+            overflow = len(book) - self.max_resting_per_symbol
+            book.sort(key=lambda o: self._order_age_seconds(o, now))  # newest first
+            del book[self.max_resting_per_symbol :]
+            logger.warning(
+                "STP: resting book for %s exceeded cap %d; dropped %d oldest order(s)",
+                symbol,
+                self.max_resting_per_symbol,
+                overflow,
+            )

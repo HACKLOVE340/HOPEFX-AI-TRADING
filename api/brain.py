@@ -93,6 +93,7 @@ class DeployRequest(BaseModel):
     strategy_name: str
     strategy_code: str
     symbol: str = "XAU_USD"
+    timeframe: str = "H1"
     mode: str = "paper"
 
 
@@ -100,6 +101,8 @@ class DeployResponse(BaseModel):
     success: bool
     message: str
     strategy_id: str | None = None
+    status: str | None = None
+    validation_errors: list[str] | None = None
 
 
 class ChatRequest(BaseModel):
@@ -208,7 +211,16 @@ async def deploy_strategy(
 ) -> DeployResponse:
     """
     Deploy a generated strategy to paper/live trading.
-    Stores the strategy code and registers it with the nocode builder.
+
+    Registers the strategy source with the DynamicStrategyRegistry — which
+    AST-safety-validates and compiles it in an isolated namespace — and then
+    activates it so it is actually available for live signal generation. This
+    performs a real, verifiable deployment: on success the returned
+    ``strategy_id`` is the registry version_id and the strategy is ACTIVE.
+
+    If validation/compilation fails, an HONEST ``success=False`` response is
+    returned with the validation errors — never a false "deployed" claim.
+
     Requires: role >= 'admin' (deploys to live trading infrastructure).
     """
     if not req.strategy_code.strip():
@@ -218,22 +230,69 @@ async def deploy_strategy(
         )
 
     try:
-        from nocode.builder import NoCodeStrategyBuilder
-
-        NoCodeStrategyBuilder()
-        strategy_id = f"ai_{req.strategy_name.lower().replace(' ', '_')}"
-        logger.info("Deploying AI strategy %s to %s mode", strategy_id, req.mode)
-        return DeployResponse(
-            success=True,
-            message=f"Strategy '{req.strategy_name}' deployed to {req.mode} trading.",
-            strategy_id=strategy_id,
-        )
+        from strategies.dynamic_registry import get_dynamic_registry
     except Exception as exc:
-        logger.warning("Deploy error: %s", exc, exc_info=True)
+        # Registry unavailable — do NOT claim a deployment happened.
+        logger.warning("Deploy: dynamic registry import failed: %s", exc, exc_info=True)
         return DeployResponse(
             success=False,
-            message="Deploy failed — check server logs",
+            message="Deployment infrastructure unavailable — strategy was NOT deployed. Check server logs.",
+            status="unavailable",
         )
+
+    registry = get_dynamic_registry()
+
+    # Phase 1: register (AST safety validation + isolated compilation).
+    try:
+        version_id = await registry.register_strategy(
+            name=req.strategy_name,
+            source_code=req.strategy_code,
+            symbol=req.symbol,
+            timeframe=req.timeframe,
+            author_id=user.sub,
+        )
+    except ValueError as verr:
+        # Validation/compilation rejected the strategy — return an honest failure
+        # rather than pretending it deployed.
+        logger.info("Deploy: strategy '%s' rejected by registry: %s", req.strategy_name, verr)
+        return DeployResponse(
+            success=False,
+            message=f"Strategy '{req.strategy_name}' failed validation and was NOT deployed.",
+            status="validation_failed",
+            validation_errors=[str(verr)],
+        )
+    except Exception as exc:
+        logger.warning("Deploy: registration error: %s", exc, exc_info=True)
+        return DeployResponse(
+            success=False,
+            message="Deploy failed during registration — strategy was NOT deployed. Check server logs.",
+            status="error",
+        )
+
+    # Phase 2: activate (atomic swap into the live active strategy set).
+    try:
+        await registry.activate_strategy(version_id)
+    except Exception as exc:
+        # Registered/validated but activation failed — be honest about the
+        # partial state instead of reporting a successful deploy.
+        logger.warning("Deploy: activation error for %s: %s", version_id, exc, exc_info=True)
+        return DeployResponse(
+            success=False,
+            message=(
+                f"Strategy '{req.strategy_name}' validated and registered but activation FAILED — "
+                "it is NOT live. Check server logs."
+            ),
+            strategy_id=version_id,
+            status="validated_not_activated",
+        )
+
+    logger.info("Deployed AI strategy %s (version %s) to %s mode", req.strategy_name, version_id, req.mode)
+    return DeployResponse(
+        success=True,
+        message=f"Strategy '{req.strategy_name}' deployed and activated for {req.mode} trading.",
+        strategy_id=version_id,
+        status="active",
+    )
 
 
 def _keyless_chat_reply(message: str) -> str:
