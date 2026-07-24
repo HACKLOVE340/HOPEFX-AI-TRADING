@@ -399,6 +399,8 @@ _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
     "/ws",  # WebSocket — auth is checked inside the handler
     "/api/status",  # lightweight status page
     "/api/billing",  # billing/plans must be readable before startup completes
+    "/api/pricing",  # public plan catalogue — the landing + /pricing pages need it pre-init
+    "/api/public",  # public price ticks (landing ticker REST fallback) — unauthenticated
     "/api/notifications",
     "/api/kyc",
     "/api/profiles",
