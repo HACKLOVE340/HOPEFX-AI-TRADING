@@ -217,6 +217,12 @@ export function computeDrawdown(equity: number[]): number[] {
  * so callers never render [object Object].
  *
  * Priority: response.data.detail → response.data.message → err.message → fallback
+ *
+ * A request timeout / network failure has NO response at all (err.response is
+ * undefined), so it falls through to err.message — which for Axios is the raw
+ * string "timeout of 30000ms exceeded". That was leaking to users verbatim
+ * across every call site that renders this function's result. Detected and
+ * replaced with a friendly, actionable message instead.
  */
 export function extractApiError(err: unknown, fallback = 'An error occurred'): string {
   if (err == null) return fallback;
@@ -233,7 +239,18 @@ export function extractApiError(err: unknown, fallback = 'An error occurred'): s
   // For 404 with no body, return the fallback rather than the raw Axios message
   // ("Request failed with status code 404") which is not user-friendly.
   if (response?.status === 404) return fallback;
+  // Timeout / network error: no HTTP response was ever received. Never show
+  // the raw "timeout of Nms exceeded" string — show something the user can
+  // act on (retry), which is also the accurate explanation (nothing came back
+  // at all, as opposed to the server actively returning an error).
+  const code = (err as { code?: unknown })?.code;
   const msg = (err as { message?: unknown })?.message;
+  const isTimeoutOrNetwork =
+    !response &&
+    (code === 'ECONNABORTED' ||
+      code === 'ERR_NETWORK' ||
+      (typeof msg === 'string' && /timeout of \d+ms exceeded/i.test(msg)));
+  if (isTimeoutOrNetwork) return 'Connection is slow or unavailable — please try again.';
   if (typeof msg === 'string' && msg.length > 0) return msg;
   return fallback;
 }

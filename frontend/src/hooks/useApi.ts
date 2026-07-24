@@ -187,16 +187,59 @@ api.interceptors.request.use(async (config) => {
 
 let _refreshPromise: Promise<string | null> | null = null;
 
+// Bare axios calls in this function have no baseURL/timeout/interceptors of
+// their own (see _fetchCsrfToken above for why: avoids the interceptor calling
+// back into itself). Without an explicit timeout they use the browser's own
+// default, which is effectively unbounded — a slow/hung network then hangs
+// EVERY page load indefinitely instead of failing fast.
+const _REFRESH_TIMEOUT_MS = 10_000;
+
+/** True only for a DEFINITIVE auth rejection (refresh token invalid/expired/
+ *  absent) — as opposed to a timeout/network/5xx, which says nothing about
+ *  whether the session is actually valid. Exported for unit testing. */
+export function _isDefiniteAuthRejection(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  return status === 401 || status === 403;
+}
+
+async function _refreshRequest(): Promise<string | null> {
+  // Send with credentials so the browser includes the httpOnly
+  // hopefx_refresh_token cookie scoped to /api/auth/refresh.
+  const res = await axios.post(
+    `${BASE_URL}/auth/refresh`,
+    {},
+    { withCredentials: true, timeout: _REFRESH_TIMEOUT_MS },
+  );
+  const { access_token } = res.data as { access_token: string };
+  return access_token || null;
+}
+
 async function _silentRefresh(): Promise<string | null> {
   // Deduplicate: if a refresh is already in-flight, wait for it.
   if (_refreshPromise) return _refreshPromise;
 
   _refreshPromise = (async () => {
     try {
-      // Send with credentials so the browser includes the httpOnly
-      // hopefx_refresh_token cookie scoped to /api/auth/refresh.
-      const res = await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
-      const { access_token } = res.data as { access_token: string };
+      let access_token: string | null;
+      try {
+        access_token = await _refreshRequest();
+      } catch (err) {
+        if (_isDefiniteAuthRejection(err)) {
+          // The refresh token itself was rejected — genuinely no session.
+          return null;
+        }
+        // Transient failure (timeout / network blip / 5xx) says nothing about
+        // whether the session is valid. Retry once after a short pause rather
+        // than immediately treating a slow network the same as "not logged
+        // in" — this was previously indistinguishable and would force-log-out
+        // a user whose session was fine but whose network hiccuped.
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          access_token = await _refreshRequest();
+        } catch {
+          return null; // still failing after a retry — give up gracefully
+        }
+      }
       if (!access_token) return null;
 
       // Use persisted user from store; if missing, fetch from /me.
@@ -205,6 +248,7 @@ async function _silentRefresh(): Promise<string | null> {
         try {
           const meRes = await axios.get(`${BASE_URL}/auth/me`, {
             headers: { Authorization: `Bearer ${access_token}` },
+            timeout: _REFRESH_TIMEOUT_MS,
           });
           user = meRes.data as import('../store').User;
         } catch {
