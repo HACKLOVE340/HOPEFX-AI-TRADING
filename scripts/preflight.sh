@@ -141,9 +141,15 @@ except Exception as e:
 PYEOF
 )
 if [ "${REDIS_CHECK}" != "ok" ]; then
-    fail "Redis connection failed. Check REDIS_URL."
+    # Redis is OPTIONAL: the app degrades gracefully to an in-memory / ring-buffer
+    # fallback when Redis is unavailable. A failed check must NOT crash-loop the
+    # container (previously `fail` → exit 1). Warn instead and continue.
+    # For full multi-process functionality set REDIS_URL to the compose service,
+    # e.g. REDIS_URL=redis://redis:6379/0 (host 'redis', NOT 'localhost').
+    warn "Redis not reachable — continuing with in-memory fallback. Set REDIS_URL to redis://redis:6379/0 for full functionality."
+else
+    ok "Redis reachable"
 fi
-ok "Redis reachable"
 
 # ── 7. Startup validator (Python-level checks) ────────────────────────────────
 echo "[ 7/8 ] Startup validator"
