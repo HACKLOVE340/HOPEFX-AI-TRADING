@@ -202,10 +202,17 @@ jobs:
       - name: Validate training artefacts (legacy check)
         run: python scripts/retrain_horizon5.py --verify-only
 
-      - name: Verify model integrity (ml/verify_model.py)
-        run: python -m ml.verify_model
-        env:
-          PYTHONPATH: .
+      # NOTE: "Verify model integrity (ml/verify_model.py)" was here and was
+      # REMOVED — it checks that advanced_oos.pkl's SHA-256 matches the
+      # ALREADY-COMMITTED entry in registry.json (an anti-tampering check for a
+      # model that is presumed unchanged). ml/train_advanced.py (the training
+      # script run above) unconditionally overwrites advanced_oos.pkl on disk
+      # but never touches registry.json itself — promotion to "active" is a
+      # separate, deliberate step, not automatic. So this check was guaranteed
+      # to fail on every single retrain (new file, stale registry checksum),
+      # which is exactly what happened every week — see issues #183/#185/#186.
+      # It still correctly runs in the smoke-test job above, where the model
+      # files are NOT retrained and should still match the committed registry.
 
       - name: Upload training artefacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

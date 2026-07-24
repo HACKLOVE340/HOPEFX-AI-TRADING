@@ -252,10 +252,14 @@ jobs:
         env:
           PYTHONPATH: .
 
-      - name: Verify model integrity
-        run: python -m ml.verify_model
-        env:
-          PYTHONPATH: .
+      # NOTE: "Verify model integrity" (ml/verify_model.py) was here and was
+      # REMOVED — same reasoning as retrain.yml: it checks advanced_oos.pkl's
+      # SHA-256 against the ALREADY-COMMITTED registry.json entry, but the
+      # retrain step above unconditionally overwrites advanced_oos.pkl without
+      # touching registry.json (promotion is separate/manual), so this was
+      # guaranteed to fail on every quarterly retrain — see issue #184. It
+      # still correctly runs in the smoke-test job above, where the model
+      # files are NOT retrained and should still match the committed registry.
 
       - name: Gate M — ML edge regression
         run: python scripts/ci/gate_m_ml_edge.py
