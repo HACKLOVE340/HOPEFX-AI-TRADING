@@ -58,6 +58,11 @@ certifi>=2026.2.25  # CVE-2024-39689 fixed in 2024.7.4+; use latest CA bundle
 vaderSentiment>=3.3.2
 textblob>=0.18.0,<1.0.0          # secondary sentiment scorer (news/sentiment.py)
 openai>=1.0.0
+# chromadb: PYSEC-2026-311 (pre-auth RCE) affects the HTTP SERVER endpoint
+# /api/v2/.../collections when trust_remote_code=true. We use only the embedded
+# chromadb.PersistentClient (research/vector_store.py) — no HTTP server is run
+# and trust_remote_code is never set — so the vulnerable path is unreachable.
+# No fixed release exists yet; revisit when chromadb ships a patched version.
 chromadb>=0.4.0
 # stable-baselines3 2.3+ supports gymnasium 1.x (API-stable since gym 0.26).
 # Pin gymnasium to <2.0 to avoid breaking the SB3 VecEnv wrappers until SB3
