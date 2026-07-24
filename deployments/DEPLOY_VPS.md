@@ -20,6 +20,33 @@ the latest code, and runs `docker compose build && up` with a health check.
 
 ---
 
+## Quickest path: one-command bootstrap (recommended for a fresh VPS)
+
+If you're starting from a **freshly (re)installed** Ubuntu 22.04/24.04 VPS with
+nothing on it yet, `deployments/vps_bootstrap.sh` does everything in sections
+1–5 below automatically — OS checks, DNS check, Docker install, firewall,
+clone, `.env` generation with strong random secrets, TLS certificate (via a
+temporary self-signed cert + Let's Encrypt webroot challenge — no manual
+certbot dance), starts the stack, seeds the superadmin/admin accounts, and
+schedules automatic certificate renewal. It is idempotent — safe to re-run if
+anything fails partway.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HACKLOVE340/HOPEFX-AI-TRADING/main/deployments/vps_bootstrap.sh -o vps_bootstrap.sh
+chmod +x vps_bootstrap.sh
+./vps_bootstrap.sh hopefx.site you@example.com
+```
+
+Read the comment header at the top of the script for exactly what it checks
+and does, step by step. **Point your domain's DNS A record at the VPS first**
+— the script checks this and stops with a clear message if it's not ready yet,
+rather than failing confusingly at the certificate step.
+
+The rest of this document (sections 1–7) explains the same steps manually, for
+reference, troubleshooting, or if you'd rather do it by hand.
+
+---
+
 ## 1. One-time server setup (run these on the VPS over SSH)
 
 ```bash
