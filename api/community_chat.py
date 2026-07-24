@@ -497,10 +497,11 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
         _chat_user_id: str | None = None
         if token_param:
             try:
-                from api.auth import decode_access_token
+                from api.auth import _decode_token
 
-                _payload = decode_access_token(token_param)
-                _chat_user_id = str(_payload.get("sub", _payload.get("user_id", ""))) if _payload else None
+                # _decode_token returns a TokenPayload (Pydantic model), not a dict.
+                _payload = _decode_token(token_param)
+                _chat_user_id = str(getattr(_payload, "sub", "") or "") or None
             except Exception:
                 _chat_user_id = None
 

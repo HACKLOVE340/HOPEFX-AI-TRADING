@@ -28,9 +28,9 @@ def _get_copy_engine():
 
         engine = getattr(app_state, "copy_trading_engine", None)
         if engine is None:
-            from social.advanced_copy_trading import AdvancedCopyTrading
+            from social.copy_trading_engine import AdvancedCopyTradingEngine
 
-            engine = AdvancedCopyTrading()
+            engine = AdvancedCopyTradingEngine()
             app_state.copy_trading_engine = engine
         return engine
     except Exception as e:

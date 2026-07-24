@@ -284,10 +284,20 @@ async def get_logs(
     summary="Pause all automated trading",
 )
 async def pause_trading(user: TokenPayload = Depends(require_role("admin"))):
-    """Pause all trading. Requires: role >= 'admin'."""
-    if not app_state or not app_state.brain:
-        raise HTTPException(status_code=503, detail="Brain not available")
-    app_state.brain.pause()
+    """Pause all automated trading by activating the kill switch. Requires: role >= 'admin'.
+
+    Previously targeted app_state.brain, which is never set in the live startup
+    sequence (the registered component is `strategy_brain`, a different object) —
+    so this endpoint returned 503 unconditionally. It now uses the real kill
+    switch, which every trading pipeline respects (via the shared flag file/Redis).
+    """
+    try:
+        from kill_switch import KillSwitch
+
+        KillSwitch().activate(reason=f"Admin pause by {user.sub}")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("pause_trading: kill switch activate failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Trading pause unavailable") from exc
     log_activity(f"Trading paused by {user.sub}")
     return {"status": "paused"}
 
@@ -298,10 +308,23 @@ async def pause_trading(user: TokenPayload = Depends(require_role("admin"))):
     summary="Resume automated trading",
 )
 async def resume_trading(user: TokenPayload = Depends(require_role("admin"))):
-    """Resume trading. Requires: role >= 'admin'."""
-    if not app_state or not app_state.brain:
-        raise HTTPException(status_code=503, detail="Brain not available")
-    app_state.brain.resume()
+    """Resume automated trading by deactivating the kill switch. Requires: role >= 'admin'.
+
+    Deactivation requires HOPEFX_KILL_SWITCH_TOKEN to be configured (the kill
+    switch refuses to resume without it, by design).
+    """
+    try:
+        import os
+
+        from kill_switch import KillSwitch
+
+        KillSwitch().deactivate(token=os.environ.get("HOPEFX_KILL_SWITCH_TOKEN"))
+    except Exception as exc:
+        logger.error("resume_trading: kill switch deactivate failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Trading resume failed — verify HOPEFX_KILL_SWITCH_TOKEN is set.",
+        ) from exc
     log_activity(f"Trading resumed by {user.sub}")
     return {"status": "resumed"}
 
