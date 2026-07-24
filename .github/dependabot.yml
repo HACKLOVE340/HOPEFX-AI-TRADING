@@ -102,3 +102,20 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # npm (mobile-app) — was previously unmonitored: alerts had been piling up
+  # unaddressed (axios, js-yaml, brace-expansion, shell-quote, postcss,
+  # body-parser) with no Dependabot config watching this directory at all.
+  - package-ecosystem: "npm"
+    directory: "/mobile-app"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      mobile-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
