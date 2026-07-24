@@ -1,0 +1,61 @@
+# HOPEFX-AI-TRADING — Auto-deploy to a VPS over SSH
+# =============================================================================
+# On every push to main (and on manual dispatch), SSH into the VPS, pull the
+# latest main, and run deployments/deploy.sh (docker compose build + up + health
+# check).
+#
+# One-time setup on GitHub → Settings → Secrets and variables → Actions:
+#   VPS_HOST      your.server.ip.or.hostname
+#   VPS_USER      the deploy user (e.g. deploy)
+#   VPS_SSH_KEY   the PRIVATE SSH key whose public half is in the VPS's
+#                 ~/.ssh/authorized_keys for VPS_USER
+#   VPS_APP_DIR   absolute path to the cloned repo on the VPS
+#                 (e.g. /home/deploy/HOPEFX-AI-TRADING)
+#   VPS_PORT      (optional) SSH port; defaults to 22
+#
+# See deployments/DEPLOY_VPS.md for the full one-time server setup.
+# =============================================================================
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+    # Don't redeploy for docs-only changes.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "diagnostics/**"
+  workflow_dispatch: {}
+
+# Never run two deploys at once; let an in-flight deploy finish.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: SSH deploy
+    runs-on: ubuntu-latest
+    # Only deploy if the required secrets exist (skips cleanly on forks / before setup).
+    if: ${{ github.repository_owner != '' }}
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 30m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.VPS_APP_DIR }}"
+            echo "[ci] fetching latest main..."
+            git fetch --all --prune
+            git reset --hard origin/main
+            echo "[ci] running deploy script..."
+            bash deployments/deploy.sh
