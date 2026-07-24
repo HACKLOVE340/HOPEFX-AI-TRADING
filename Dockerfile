@@ -34,9 +34,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (cached unless requirements.txt changes)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
+# Install Python dependencies (cached unless requirements files change).
+# requirements-cpu.txt MUST be installed first: sentence-transformers (in
+# requirements.txt) pulls torch transitively, and a bare `pip install -r
+# requirements.txt` resolves the default CUDA build (torch + ~5GB of nvidia-*
+# wheels) — this container runs on CPU-only VPS hosts. Installing the CPU
+# wheel first satisfies that transitive dependency so the second install
+# finds torch already present and skips the CUDA wheels entirely.
+COPY requirements-cpu.txt requirements.txt ./
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu -r requirements-cpu.txt \
+    && pip install --no-cache-dir -r requirements.txt \
     # Verify critical runtime deps are present — fail the build if missing
     && python -c "import uvicorn; import aiohttp; print('uvicorn', uvicorn.__version__, '| aiohttp', aiohttp.__version__)"
 
