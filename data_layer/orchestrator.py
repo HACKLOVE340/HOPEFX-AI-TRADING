@@ -98,7 +98,11 @@ from data_layer.normalization.pipeline import (
 )
 from data_layer.quality.engine import DataQualityEngine, dqe
 from data_layer.replay.engine import MarketReplayEngine, market_replay_engine
-from data_layer.sentiment.engine import NewsSentimentEngine, news_sentiment_engine
+from data_layer.sentiment.engine import (  # noqa: F401 — FinBERTScorer re-exported for callers outside data_layer/
+    FinBERTScorer,
+    NewsSentimentEngine,
+    news_sentiment_engine,
+)
 from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
 
 logger = logging.getLogger(__name__)

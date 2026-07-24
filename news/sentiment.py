@@ -236,7 +236,7 @@ class FinancialSentimentAnalyzer:
         self._finbert = None
         if use_finbert:
             try:
-                from data_layer.sentiment.engine import FinBERTScorer
+                from data_layer.orchestrator import FinBERTScorer
 
                 self._finbert = FinBERTScorer()
             except Exception as exc:  # pragma: no cover - import guard

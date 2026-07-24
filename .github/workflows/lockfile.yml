@@ -30,6 +30,14 @@ jobs:
 
       - name: Regenerate requirements.lock
         run: |
+          # --output-file is required: without it, pip-compile defaults to an
+          # output filename derived from the input, which for an input already
+          # named requirements.txt resolves to requirements.txt itself — pip-compile
+          # then refuses with "input and output filenames must not be matched"
+          # (this is why this workflow failed on every run for months; the header
+          # comment below always documented --output-file correctly, it just never
+          # made it into this actual command).
+          pip-compile requirements.txt --output-file requirements.lock.tmp --no-header --quiet --strip-extras
           {
             echo "# requirements.lock — exact pinned versions for reproducible production builds"
             echo "#"
@@ -41,8 +49,9 @@ jobs:
             echo "#   pip install -r requirements.txt    # flexible install (development)"
             echo "#"
             echo "# Do NOT edit manually. Regenerate when upgrading dependencies."
+            cat requirements.lock.tmp
           } > requirements.lock
-          pip-compile requirements.txt --no-header --quiet --strip-extras >> requirements.lock
+          rm -f requirements.lock.tmp
 
       - name: Create Pull Request
         # Pinned to SHA for supply-chain safety (tag: v6)
