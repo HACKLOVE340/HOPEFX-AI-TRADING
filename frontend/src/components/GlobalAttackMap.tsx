@@ -1,7 +1,8 @@
 /**
  * GlobalAttackMap — world map showing live attack origins.
  *
- * Uses react-leaflet + OpenStreetMap tiles (no API key required).
+ * Uses Leaflet directly (imperative API via refs, not react-leaflet) +
+ * OpenStreetMap tiles (no API key required).
  * Each pin is coloured by intent severity:
  *   probe       → yellow
  *   bruteforce  → orange
