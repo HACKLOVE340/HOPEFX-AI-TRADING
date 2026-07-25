@@ -820,13 +820,14 @@ class TestCreateAlertRouter:
     def test_alert_router_has_routes(self):
         from fastapi import FastAPI
 
+        from core.router_registry import iter_api_routes
         from notifications.alert_engine import AlertEngine, create_alert_router
 
         engine = AlertEngine()
         router = create_alert_router(engine)
         app = FastAPI()
         app.include_router(router)
-        routes = [r.path for r in app.routes]
+        routes = [r.path for r in iter_api_routes(app.routes)]
         assert any("alerts" in p for p in routes)
 
 

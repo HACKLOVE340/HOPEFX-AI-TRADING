@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 from core.router_registry import register_routers
 
@@ -52,13 +52,16 @@ def test_register_routers_adds_routes():
 
 
 def test_register_routers_with_graphql_router():
+    # A bare MagicMock can no longer stand in for a router here: FastAPI's
+    # include_router() validates its argument and rejects anything that
+    # isn't a real APIRouter, so a real (empty) one is used instead.
     app = _make_app()
     flags = _make_flags()
-    mock_graphql = MagicMock()
+    fake_graphql = APIRouter()
     register_routers(
         app,
         flags,
-        graphql_router=mock_graphql,
+        graphql_router=fake_graphql,
         graphql_available=True,
     )
     assert len(app.routes) > 0
@@ -67,11 +70,11 @@ def test_register_routers_with_graphql_router():
 def test_register_routers_with_signals_router():
     app = _make_app()
     flags = _make_flags()
-    mock_signals = MagicMock()
+    fake_signals = APIRouter()
     register_routers(
         app,
         flags,
-        signals_router=mock_signals,
+        signals_router=fake_signals,
     )
     assert len(app.routes) > 0
 

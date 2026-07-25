@@ -72,6 +72,7 @@ import pytest
 # ---------------------------------------------------------------------------
 try:
     from api.auth import get_current_user, require_kyc, require_role
+    from core.router_registry import iter_api_routes
 
     _import_error: Exception | None = None
 except Exception as _exc:
@@ -170,7 +171,9 @@ WHITELIST: frozenset[str] = frozenset(
         # token from the request context.  Unauthenticated requests receive a
         # structured UNAUTHORIZED error response, not a 401 HTTP status.
         # See api/graphql_schema.py: _require_auth(), _get_current_user().
-        "/graphql",
+        # Registered path has a trailing slash (Strawberry's GraphQLRouter
+        # mounts its POST handler at "/" relative to the /graphql prefix).
+        "/graphql/",
     }
 )
 
@@ -341,6 +344,7 @@ def _is_auth_dep(dep) -> bool:
         "mobile.api_v2",
         "kill_switch",
         "api.tracing",
+        "api.superadmin._shared",
     }
     _AUTH_KEYWORDS = {"user", "role", "auth", "admin", "require", "token", "verify", "kyc"}
     if module in _AUTH_MODULES and any(kw in name.lower() for kw in _AUTH_KEYWORDS):
@@ -397,14 +401,10 @@ def test_all_mutating_routes_require_auth(app) -> None:
     Fix: add ``Depends(get_current_user)`` or ``Depends(require_role(...))``
     to the endpoint or its router, then re-run this test.
     """
-    from fastapi.routing import APIRoute
-
     MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
     violations: list[str] = []
 
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
+    for route in iter_api_routes(app.routes):
         methods = route.methods or set()
         if not (methods & MUTATING_METHODS):
             continue
@@ -443,10 +443,8 @@ def test_privileged_get_routes_require_auth(app) -> None:
     the endpoint or its router.  If the path is intentionally public, remove
     it from PRIVILEGED_GET_PATHS with a justification comment.
     """
-    from fastapi.routing import APIRoute
-
     registered = {
-        route.path: route for route in app.routes if isinstance(route, APIRoute) and "GET" in (route.methods or set())
+        route.path: route for route in iter_api_routes(app.routes) if "GET" in (route.methods or set())
     }
 
     violations: list[str] = []
@@ -556,9 +554,7 @@ def test_ws_auth_required_false_blocked_in_production() -> None:
 
 def test_whitelist_entries_are_registered(app) -> None:
     """Every path in WHITELIST must correspond to at least one registered route."""
-    from fastapi.routing import APIRoute
-
-    registered_paths = {route.path for route in app.routes if isinstance(route, APIRoute)}
+    registered_paths = {route.path for route in iter_api_routes(app.routes)}
     stale = [p for p in WHITELIST if p not in registered_paths]
 
     if stale:
@@ -570,10 +566,8 @@ def test_whitelist_entries_are_registered(app) -> None:
 
 def test_auth_endpoints_are_whitelisted(app) -> None:
     """Core auth endpoints that must be public are in both WHITELIST and the app."""
-    from fastapi.routing import APIRoute
-
     MUST_BE_PUBLIC = {"/api/auth/login", "/api/auth/register"}
-    registered_paths = {route.path for route in app.routes if isinstance(route, APIRoute)}
+    registered_paths = {route.path for route in iter_api_routes(app.routes)}
 
     for path in MUST_BE_PUBLIC:
         assert path in WHITELIST, f"{path} must be in WHITELIST — it is intentionally unauthenticated"
@@ -596,12 +590,9 @@ def test_route_count_has_not_regressed(app) -> None:
     Update _ROUTE_COUNT_BASELINE after intentional route removal with a
     justification comment.
     """
-    from fastapi.routing import APIRoute
-
-    total = sum(1 for r in app.routes if isinstance(r, APIRoute))
-    mutating = sum(
-        1 for r in app.routes if isinstance(r, APIRoute) and (r.methods or set()) & {"POST", "PUT", "PATCH", "DELETE"}
-    )
+    routes = list(iter_api_routes(app.routes))
+    total = len(routes)
+    mutating = sum(1 for r in routes if (r.methods or set()) & {"POST", "PUT", "PATCH", "DELETE"})
 
     print(
         f"\n[route-count] total={total}  mutating={mutating}  "
@@ -627,10 +618,8 @@ def test_route_count_has_not_regressed(app) -> None:
 
 def test_csrf_token_endpoint_is_registered(app) -> None:
     """The CSRF token issuance endpoint must be registered in the app."""
-    from fastapi.routing import APIRoute
-
     csrf_paths = {"/api/auth/csrf-token", "/api/csrf-token", "/csrf-token"}
-    registered = {r.path for r in app.routes if isinstance(r, APIRoute)}
+    registered = {r.path for r in iter_api_routes(app.routes)}
     found = csrf_paths & registered
 
     assert found, (
@@ -643,13 +632,9 @@ def test_csrf_token_endpoint_is_registered(app) -> None:
 
 def test_health_endpoints_are_public(app) -> None:
     """Health probe endpoints must NOT require authentication."""
-    from fastapi.routing import APIRoute
-
     HEALTH_PATHS = {"/api/health/live", "/api/health/ready"}
 
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
+    for route in iter_api_routes(app.routes):
         if route.path not in HEALTH_PATHS:
             continue
         if "GET" not in (route.methods or set()):

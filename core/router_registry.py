@@ -19,9 +19,11 @@ Usage
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,59 @@ logger = logging.getLogger(__name__)
 # Tracks (method, path) pairs already registered so that compat/alias routers
 # do not create duplicate routes that cause FastAPI to match the wrong handler.
 _registered_routes: set[tuple[str, str]] = set()
+
+
+def iter_api_routes(routes: Iterable[Any], _prefix: str = "") -> Iterator[APIRoute]:
+    """
+    Recursively yield every APIRoute reachable from *routes*, with `.path`
+    corrected to the true, fully-dispatchable path.
+
+    Starlette (as of the version this pins to) no longer flattens an included
+    router's routes onto app.routes at include_router() time — each inclusion
+    is instead recorded as an opaque ``_IncludedRouter`` wrapper holding the
+    original router on ``.original_router``, only expanded internally at
+    request-dispatch time. Any code that walks ``app.routes`` looking for
+    ``APIRoute`` instances (dedup bookkeeping, auth-coverage checks, route-count
+    tests, WHITELIST verification, …) must descend into that wrapper explicitly
+    or it will silently see almost nothing.
+
+    Worse, when a router is included into ANOTHER router that is itself later
+    included into the app (two or more inclusion levels — e.g. api/superadmin's
+    aggregate router including api/superadmin/nuclear_controls's router), each
+    ``APIRoute.path`` only reflects the prefix baked in by its OWN immediate
+    router — prefixes contributed by ancestor inclusions are tracked
+    separately, on each ``_IncludedRouter.include_context.prefix``, and are
+    NEVER applied to the leaf route's `.path` itself. Reading `.path` naively
+    on a multi-level-nested route therefore returns a path that is missing its
+    ancestors' prefixes entirely (e.g. "/nuclear/halt" instead of the real
+    "/api/superadmin/nuclear/halt") — confirmed by testing the real endpoint:
+    the short path 404s/405s while the fully-prefixed one correctly dispatches.
+    This function accumulates the prefix through the recursion and returns a
+    shallow copy of each route with `.path` corrected, so callers see the same
+    path FastAPI actually dispatches on. The original route objects (used for
+    real request routing) are never mutated.
+    """
+    import copy
+
+    for r in routes:
+        if isinstance(r, APIRoute):
+            full_path = _prefix.rstrip("/") + "/" + r.path.lstrip("/") if _prefix else r.path
+            if full_path == r.path:
+                yield r
+            else:
+                r2 = copy.copy(r)
+                r2.path = full_path
+                yield r2
+        else:
+            original = getattr(r, "original_router", None)
+            if original is not None and hasattr(original, "routes"):
+                ctx = getattr(r, "include_context", None)
+                sub_prefix = (getattr(ctx, "prefix", "") or "") if ctx is not None else ""
+                if _prefix and sub_prefix:
+                    combined = _prefix.rstrip("/") + "/" + sub_prefix.lstrip("/")
+                else:
+                    combined = _prefix or sub_prefix
+                yield from iter_api_routes(original.routes, combined)
 
 
 def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
@@ -42,27 +97,36 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     with the router's own prefix, to correctly handle routers that carry no
     built-in prefix (e.g. the nuclear router mounted at /api/nuclear).
     """
-    from fastapi.routing import APIRoute as _APIRoute
-
-    # The full effective prefix is the kwarg mount-prefix PLUS the router's
-    # own prefix.  Either may be empty — we combine both to get the real path
-    # that FastAPI will expose for each route.
     mount_prefix = kwargs.get("prefix", "") or ""
     router_prefix = getattr(router, "prefix", "") or ""
-    if mount_prefix and router_prefix:
-        effective_prefix = mount_prefix.rstrip("/") + "/" + router_prefix.lstrip("/")
-    else:
-        effective_prefix = mount_prefix or router_prefix
+
+    def _relative_path(route_path: str) -> str:
+        """Strip the router's own baked-in prefix from route_path, if present.
+
+        Newer FastAPI/Starlette bakes an APIRouter's own `prefix` into each
+        route's `.path` at route-definition time, rather than deferring that
+        to include_router() as older versions did. Detect and strip it so the
+        rest of this function can keep treating route paths as relative,
+        regardless of which behaviour the installed FastAPI version has.
+        """
+        if router_prefix and route_path.startswith(router_prefix):
+            return route_path[len(router_prefix) :] or "/"
+        return route_path
 
     def _full_path(route_path: str) -> str:
-        """Combine effective prefix with route path, normalising slashes."""
-        if not effective_prefix:
-            return route_path
-        return effective_prefix.rstrip("/") + "/" + route_path.lstrip("/")
+        """Combine mount prefix + router prefix + relative route path."""
+        rel = _relative_path(route_path)
+        if mount_prefix and router_prefix:
+            prefix = mount_prefix.rstrip("/") + "/" + router_prefix.lstrip("/")
+        else:
+            prefix = mount_prefix or router_prefix
+        if not prefix:
+            return rel
+        return prefix.rstrip("/") + "/" + rel.lstrip("/")
 
     skipped = 0
     for route in router.routes:
-        if not isinstance(route, _APIRoute):
+        if not isinstance(route, APIRoute):
             continue
         full = _full_path(route.path)
         for method in route.methods or {"GET"}:
@@ -86,7 +150,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
             default_response_class=router.default_response_class,
         )
         for route in router.routes:
-            if not isinstance(route, _APIRoute):
+            if not isinstance(route, APIRoute):
                 # Non-API routes (WebSocket, Mount, etc.) — always include
                 filtered.routes.append(route)
                 continue
@@ -95,7 +159,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
             if any((m.upper(), full) in _registered_routes for m in methods):
                 continue
             filtered.add_api_route(
-                route.path,
+                _relative_path(route.path),
                 route.endpoint,
                 methods=list(methods),
                 response_model=route.response_model,
@@ -111,11 +175,11 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     else:
         app.include_router(router, **kwargs)
 
-    # Record all routes now on the app (full paths as FastAPI stores them)
-    for route in app.routes:
-        if isinstance(route, _APIRoute):
-            for method in route.methods or {"GET"}:
-                _registered_routes.add((method.upper(), route.path))
+    # Record all routes now on the app (full paths as FastAPI stores them).
+    # Must descend into _IncludedRouter wrappers — see iter_api_routes().
+    for route in iter_api_routes(app.routes):
+        for method in route.methods or {"GET"}:
+            _registered_routes.add((method.upper(), route.path))
 
 
 def register_routers(
@@ -831,20 +895,20 @@ def register_routers(
     # and re-dispatches to the main app, so every /api/v1/<path> automatically
     # resolves to the equivalent /api/<path> handler without duplicating routes.
     try:
-        from fastapi import APIRouter
-        from fastapi.routing import APIRoute
-
-        _v1_router = APIRouter(prefix="/api/v1")
-
         # Collect all existing /api/* routes and re-register them under /v1.
         # We create lightweight forwarding entries rather than copying handlers,
         # keeping the route list in sync automatically via this loop.
-        for route in app.routes:
-            if isinstance(route, APIRoute) and route.path.startswith("/api/"):
+        #
+        # Must use iter_api_routes() rather than a flat `for route in app.routes`
+        # walk: with this FastAPI version, app.routes holds opaque
+        # _IncludedRouter wrappers for every included router, not flat
+        # APIRoute instances, so a naive isinstance() filter here found ~0
+        # matches and this alias mechanism was silently creating zero
+        # /api/v1/* routes despite logging a success message.
+        _v1_count = 0
+        for route in list(iter_api_routes(app.routes)):
+            if route.path.startswith("/api/") and "/v1/" not in route.path:
                 _v1_path = "/api/v1" + route.path[len("/api") :]
-                # Skip if already a v1 path (prevent infinite loop)
-                if "/v1/" in route.path:
-                    continue
                 app.add_api_route(
                     _v1_path,
                     route.endpoint,
@@ -856,10 +920,11 @@ def register_routers(
                     dependencies=list(route.dependencies) if route.dependencies else [],
                     include_in_schema=False,  # hide from OpenAPI to avoid duplicate docs
                 )
+                _v1_count += 1
 
         logger.info(
             "API v1 versioned routes registered (/api/v1/* aliases for /api/* — %d routes)",
-            sum(1 for r in app.routes if isinstance(r, APIRoute) and "/api/v1/" in r.path),
+            _v1_count,
         )
     except Exception as _v1_err:
         logger.warning("API v1 versioned routes not registered: %s", _v1_err)

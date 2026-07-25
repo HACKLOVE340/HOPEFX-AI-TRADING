@@ -199,13 +199,11 @@ def test_leaderboard_route_in_app(monkeypatch):
     import importlib
 
     import app as _app
+    from core.router_registry import iter_api_routes
 
     importlib.reload(_app)
 
-    all_paths = []
-    for route in _app.app.routes:
-        if hasattr(route, "path"):
-            all_paths.append(route.path)
+    all_paths = [route.path for route in iter_api_routes(_app.app.routes)]
 
     assert "/api/leaderboard" in all_paths, (
         f"/api/leaderboard not found in app routes. "
