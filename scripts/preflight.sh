@@ -40,10 +40,22 @@ fi
 ok "Python $(python3 --version | cut -d' ' -f2)"
 
 # ── 2. .env file ──────────────────────────────────────────────────────────────
+# docker-compose.yml's `env_file: .env` injects the HOST's .env as process
+# environment variables at container-start time — it does NOT copy or mount
+# the .env FILE itself into the container filesystem (correctly: a plaintext
+# secrets file has no business sitting inside a running container image/fs).
+# So inside a container, .env never exists on disk even though every var it
+# defines is already present in the environment. Treat "no file, but the
+# vars we actually need are already set" as success, not failure — step 3
+# below is what actually verifies every required var is present; this step
+# only needs to source a file for non-container/manual runs where nothing
+# has injected the vars yet.
 echo "[ 2/8 ] Environment file"
 if [ ! -f ".env" ]; then
-    if [ "${APP_ENV:-development}" = "production" ]; then
-        fail ".env not found in production. Copy .env.example and fill in all values."
+    if [ -n "${SECURITY_JWT_SECRET:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
+        ok "No .env file, but required vars already present in the environment (container env_file injection)"
+    elif [ "${APP_ENV:-development}" = "production" ]; then
+        fail ".env not found and required env vars are not set. Copy .env.example and fill in all values, or verify docker-compose's env_file injection."
     else
         warn ".env not found — running dev bootstrap"
         python3 scripts/bootstrap_dev.py || warn "Dev bootstrap failed (non-fatal in dev)"
