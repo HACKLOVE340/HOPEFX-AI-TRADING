@@ -1,7 +1,7 @@
 # =============================================================================
-# HOPEFX — docker-compose variant for Hostinger hPanel's YAML editor
+# HOPEFX - docker-compose variant for Hostinger hPanel's YAML editor
 # =============================================================================
-# GENERATED from docker-compose.yml. Do not hand-edit — regenerate instead.
+# GENERATED from docker-compose.yml. Do not hand-edit - regenerate instead.
 # For SSH + `docker compose` on a VPS use docker-compose.yml, NOT this file.
 #
 # hPanel's YAML editor rejects several constructs that are valid for real
@@ -9,7 +9,7 @@
 #
 #  * env_file: .env  (4 services)
 #      hPanel has no repo checkout, so no .env exists to read. Set the variables
-#      in the panel's Environment section instead — the names are in
+#      in the panel's Environment section instead - the names are in
 #      .env.production.example (122 of them). At minimum you MUST set:
 #      HOPEFX_DOMAIN, POSTGRES_PASSWORD, REDIS_PASSWORD, GRAFANA_ADMIN_PASSWORD,
 #      SECURITY_JWT_SECRET, CONFIG_ENCRYPTION_KEY, HOPEFX_MASTER_KEY,
@@ -31,7 +31,7 @@
 #      One unset required variable aborts parsing of the ENTIRE file, which is
 #      the "YAML file can't be processed" error. Relaxed so the file parses.
 #      CONSEQUENCE: a missing password now becomes a BLANK value instead of a
-#      loud error — verify the panel's Environment section is complete.
+#      loud error - verify the panel's Environment section is complete.
 #
 # Verified: valid YAML, and `docker compose config` exits 0 with NO .env
 # present (the panel's condition). The original docker-compose.yml fails that
