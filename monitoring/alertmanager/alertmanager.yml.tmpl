@@ -51,7 +51,7 @@ route:
   routes:
     # Critical alerts: Telegram + email + PagerDuty, no grouping delay.
     # Covers: drawdown breach, circuit breaker open, API down,
-    #         P&L reconciliation gate failed, P&L divergence > $5.
+    #         P&L reconciliation gate failed, P&L divergence over 5 USD.
     - matchers:
         - severity = critical
       receiver: 'critical'
@@ -61,7 +61,7 @@ route:
       continue: false
 
     # Warning alerts: email only, 5 min grouping.
-    # Covers: high latency, Redis/DB pressure, P&L divergence $1-$5,
+    # Covers: high latency, Redis/DB pressure, P&L divergence 1-5 USD,
     #         reconciliation stale.
     - matchers:
         - severity = warning
