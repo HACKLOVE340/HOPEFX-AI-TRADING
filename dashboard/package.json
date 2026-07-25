@@ -4,7 +4,7 @@
   "private": true,
   "dependencies": {
     "@tanstack/react-query": "^5.95.2",
-    "axios": "^1.15.2",
+    "axios": "^1.18.0",
     "date-fns": "^4.1.0",
     "lightweight-charts": "^5.1.0",
     "lucide-react": "^1.8.0",
