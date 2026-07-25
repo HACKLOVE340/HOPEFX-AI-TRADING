@@ -31,7 +31,7 @@ echo ""
 
 # ── 1. Python version ─────────────────────────────────────────────────────────
 # Dockerfile uses python:3.12-slim. Require 3.12+ in production to match.
-echo "[ 1/8 ] Python version"
+echo "[ 1/9 ] Python version"
 PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
 PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
 if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 12 ]; }; then
@@ -50,7 +50,7 @@ ok "Python $(python3 --version | cut -d' ' -f2)"
 # below is what actually verifies every required var is present; this step
 # only needs to source a file for non-container/manual runs where nothing
 # has injected the vars yet.
-echo "[ 2/8 ] Environment file"
+echo "[ 2/9 ] Environment file"
 if [ ! -f ".env" ]; then
     if [ -n "${SECURITY_JWT_SECRET:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
         ok "No .env file, but required vars already present in the environment (container env_file injection)"
@@ -72,7 +72,7 @@ if [ -f ".env" ]; then
 fi
 
 # ── 3. Required env vars ──────────────────────────────────────────────────────
-echo "[ 3/8 ] Required environment variables"
+echo "[ 3/9 ] Required environment variables"
 MISSING=()
 for VAR in SECURITY_JWT_SECRET DATABASE_URL REDIS_URL; do
     if [ -z "${!VAR:-}" ]; then
@@ -94,7 +94,7 @@ fi
 ok "All required env vars present"
 
 # ── 4. Python dependencies ────────────────────────────────────────────────────
-echo "[ 4/8 ] Python dependencies"
+echo "[ 4/9 ] Python dependencies"
 if ! python3 -c "import fastapi, sqlalchemy, alembic, uvicorn, redis, jwt, aiohttp" 2>/dev/null; then
     warn "Some dependencies missing — installing from requirements.txt"
     pip install -r requirements.txt --quiet || fail "pip install failed"
@@ -105,7 +105,7 @@ python3 -c "import aiohttp" 2>/dev/null || fail "aiohttp not installed — run: 
 ok "Core dependencies available (uvicorn + aiohttp confirmed)"
 
 # ── 5. Database connectivity + migrations ────────────────────────────────────
-echo "[ 5/8 ] Database"
+echo "[ 5/9 ] Database"
 DB_CHECK=$(python3 - <<'PYEOF'
 import sys, os
 try:
@@ -138,7 +138,7 @@ else
 fi
 
 # ── 6. Redis connectivity ─────────────────────────────────────────────────────
-echo "[ 6/8 ] Redis"
+echo "[ 6/9 ] Redis"
 REDIS_CHECK=$(python3 - <<'PYEOF'
 import sys, os
 try:
@@ -164,7 +164,7 @@ else
 fi
 
 # ── 7. Startup validator (Python-level checks) ────────────────────────────────
-echo "[ 7/8 ] Startup validator"
+echo "[ 7/9 ] Startup validator"
 python3 - <<'PYEOF'
 import sys
 try:
@@ -179,8 +179,37 @@ except Exception as e:
 PYEOF
 ok "Startup validator passed"
 
-# ── 8. Smoke tests (optional) ─────────────────────────────────────────────────
-echo "[ 8/8 ] Smoke tests"
+# ── 8. Frontend build ─────────────────────────────────────────────────────────
+# core/page_routes.py mounts the SPA from ./static, and falls back SILENTLY to
+# the committed legacy dashboard/dist (GodMode) and then to a "Build Required"
+# placeholder when static/index.html is absent. That silence is the problem: a
+# deploy whose frontend-builder stage never ran looks completely healthy — the
+# container is up, /api/* works, the health endpoint is green — while the public
+# site serves a different application entirely. That is exactly what happened on
+# the production VPS, where a stripped single-stage Dockerfile (no
+# `COPY --from=frontend-builder /build/static ./static`) shipped for days.
+#
+# Warn, do not fail: an API-only deployment is legitimate, and refusing to boot
+# over a missing UI would be a worse failure than serving one. The point is that
+# it can never again be silent.
+echo "[ 8/9 ] Frontend build"
+if [ -f "static/index.html" ]; then
+    if ls static/assets/LandingPage-*.js >/dev/null 2>&1; then
+        ok "React SPA present ($(ls static/assets 2>/dev/null | wc -l) assets)"
+    else
+        warn "static/index.html exists but no LandingPage chunk — build may be partial or stale"
+    fi
+elif [ -f "dashboard/dist/index.html" ]; then
+    warn "static/ is MISSING — the site will serve the LEGACY GodMode dashboard, not the real landing page."
+    warn "  The image was built without the frontend-builder stage. Check that Dockerfile"
+    warn "  still has: COPY --from=frontend-builder /build/static ./static   (expected size 3506 bytes)"
+    warn "  Diagnose from the host with: bash deployments/diagnose_served_page.sh"
+else
+    warn "No frontend build found — / will serve the 'Build Required' placeholder. API is unaffected."
+fi
+
+# ── 9. Smoke tests (optional) ─────────────────────────────────────────────────
+echo "[ 9/9 ] Smoke tests"
 if [ "${SKIP_TESTS:-false}" = "true" ]; then
     warn "SKIP_TESTS=true — skipping pytest"
 else
