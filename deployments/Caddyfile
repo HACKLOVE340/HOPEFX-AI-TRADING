@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# HOPEFX — Caddy reverse proxy, running on the VPS HOST (not in Compose)
+# ---------------------------------------------------------------------------
+# Install to /etc/caddy/Caddyfile:
+#
+#     sudo cp deployments/Caddyfile /etc/caddy/Caddyfile
+#     sudo sed -i 's/hopefx\.site/YOUR-DOMAIN/g' /etc/caddy/Caddyfile   # if different
+#     sudo caddy validate --config /etc/caddy/Caddyfile
+#     sudo systemctl reload caddy
+#
+# Caddy obtains and renews Let's Encrypt certificates automatically for every
+# domain named in a site block. Nothing else to configure — no certbot, no cron.
+# Requirements: the domain's DNS A record must already point at this VPS, and
+# ports 80 and 443 must be free (see "PORT 80" below).
+#
+# ── 127.0.0.1:8000, NOT app:8000 ───────────────────────────────────────────
+# Caddy runs on the host, outside the Compose network, so the Docker service
+# name `app` does not resolve — proxying to it fails with "dial tcp: lookup
+# app: no such host". The app service publishes 8000 on the host, so
+# 127.0.0.1:8000 is the correct upstream. (Only use `app:8000` if you move
+# Caddy INTO docker-compose.yml on the same network.)
+#
+# ── PORT 80 ────────────────────────────────────────────────────────────────
+# The bundled `nginx` service also publishes 80/443 and will fight Caddy for
+# them ("failed to bind host port 0.0.0.0:80/tcp: address already in use").
+# Start the stack with the Caddy override so nginx is excluded:
+#
+#     docker compose -f docker-compose.yml \
+#                    -f deployments/docker-compose.caddy.yml up -d
+#
+# Also make sure no HOST nginx is running — a distro nginx installed outside
+# Docker holds :80 just as effectively:
+#
+#     sudo systemctl disable --now nginx
+#
+# ── NO root / file_server ──────────────────────────────────────────────────
+# Deliberately absent. A `root * /var/www/html` + `file_server` here makes
+# Caddy answer from disk and never reach the container, which is exactly how a
+# stray placeholder page ends up on the public site while the real React
+# landing page sits unused inside the image. Everything is proxied; the app
+# serves the SPA itself from /app/static (see core/page_routes.py).
+# Diagnose with: bash deployments/diagnose_served_page.sh
+# ---------------------------------------------------------------------------
+
+hopefx.site, www.hopefx.site {
+	encode gzip zstd
+
+	# Everything goes to the app. It serves both /api/* and the React SPA.
+	#
+	# Caddy sets X-Forwarded-For / X-Forwarded-Proto / X-Forwarded-Host on
+	# reverse_proxy by default, so the app's rate limiter and audit log see the
+	# real client IP and scheme.
+	#
+	# WebSockets (/ws/live, /ws/public) are upgraded automatically — no explicit
+	# Upgrade/Connection header config needed, unlike nginx.
+	#
+	# No active health_uri check here on purpose: with a single upstream it turns
+	# a momentary app restart into a bare 502 from Caddy, hiding the app's own
+	# response. Use the health endpoint for uptime monitoring instead:
+	#   curl -fsS https://hopefx.site/api/health/live
+	reverse_proxy 127.0.0.1:8000
+}

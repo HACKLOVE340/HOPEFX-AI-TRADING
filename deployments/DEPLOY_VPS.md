@@ -124,14 +124,54 @@ Watch it under the repo's **Actions** tab.
 
 ## 5. Domain + HTTPS
 
-The `nginx` service publishes ports **80/443**. Point your domain's DNS `A`
-record at the VPS IP. For TLS, either:
+Point your domain's DNS `A` record at the VPS IP first, then pick **one** of the
+two TLS paths below. Both are supported; don't mix them, because both want
+ports 80/443.
 
-- put your certs where `nginx/nginx.conf` expects them, **or**
-- run Certbot on the host and mount the certs into the nginx container, **or**
-- front the VPS with Cloudflare (orange-cloud) for automatic edge TLS.
+### 5a. Caddy on the host (recommended — automatic certificates)
 
-(Tell me which you prefer and I'll wire the exact nginx/certbot config.)
+Caddy issues and renews Let's Encrypt certificates on its own. No certbot, no
+cron, no cert paths to get wrong.
+
+```bash
+sudo apt install -y caddy
+sudo systemctl disable --now nginx          # a HOST nginx also holds :80
+sudo cp deployments/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Then start the stack with the Caddy override, so the **bundled** nginx service
+(which also publishes 80/443) is excluded:
+
+```bash
+docker compose -f docker-compose.yml \
+               -f deployments/docker-compose.caddy.yml up -d
+```
+
+Set it once and plain `docker compose` picks both files up automatically:
+
+```bash
+echo 'COMPOSE_FILE=docker-compose.yml:deployments/docker-compose.caddy.yml' >> .env
+```
+
+Two things that bite here, both covered in the comments at the top of
+`deployments/Caddyfile`:
+
+- The upstream is **`127.0.0.1:8000`**, not `app:8000`. Caddy runs on the host,
+  outside the Compose network, so the service name doesn't resolve.
+- Never add `root`/`file_server` to the site block. That makes Caddy answer from
+  disk and never reach the container — which is how a stray placeholder page
+  ends up on the public site while the real React landing page sits unused
+  inside the image.
+
+### 5b. Bundled nginx + certbot
+
+Keep the `nginx` service (don't use the override) and either put your certs
+where `nginx/nginx.conf` expects them
+(`/etc/letsencrypt/live/$HOPEFX_DOMAIN/fullchain.pem`), or let
+`deployments/vps_bootstrap.sh` do the whole webroot-challenge dance for you.
+Fronting the VPS with Cloudflare (orange-cloud) for edge TLS also works.
 
 ---
 
@@ -168,6 +208,33 @@ bash deployments/deploy.sh
 ```bash
 python scripts/platform_doctor.py --log <(docker compose logs --no-color --tail=2000 app)
 ```
+
+---
+
+## 8. Troubleshooting: the site serves the wrong page
+
+If the public URL shows a page that isn't the real landing page, run:
+
+```bash
+bash deployments/diagnose_served_page.sh
+```
+
+It's read-only. It compares three layers — the app container on
+`127.0.0.1:8000`, the `static/` directory baked into the image, and the public
+URL — then names the one that's lying and prints the fix. The real landing page
+is `frontend/src/pages/LandingPage.tsx` (mounted at `/` in
+`frontend/src/App.tsx`); its fingerprints in the served HTML/JS are the title
+`HOPEFX — AI-Powered Gold & Forex Trading Platform` and the hero copy
+`HOPEFX combines machine learning`.
+
+The three failure modes it distinguishes:
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| App on :8000 is correct, public URL isn't | The proxy answers from disk (`root`/`file_server`) or a stray vhost | Replace `/etc/caddy/Caddyfile` with `deployments/Caddyfile`, reload Caddy |
+| Title says `HOPEFX GodMode v9.5` | `static/` is missing in the container, so `core/page_routes.py` fell back to the committed legacy `dashboard/dist/` | `docker compose build --no-cache app && docker compose up -d app` |
+| Title says `HOPEFX — Build Required` | No frontend build at all — the `frontend-builder` stage didn't land | same rebuild |
+| Both layers correct, browser still stale | The PWA service worker cached the old page | DevTools → Application → Service Workers → *Unregister*, then Clear site data |
 
 ---
 
