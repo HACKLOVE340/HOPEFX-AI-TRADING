@@ -176,9 +176,23 @@ cd "$APP_DIR"
 
 # ── helpers: read/write single KEY=VALUE lines in .env ───────────────────────
 env_get() { grep -E "^${1}=" .env 2>/dev/null | tail -1 | cut -d= -f2- ; }
+# APPENDS the key when it is absent from the template instead of doing nothing.
+# The previous replace-only version silently skipped any key not already present
+# in .env.production.example, so a value set here could never land in the file
+# (this is how APP_BASE_URL went unwritten, leaving email/billing links pointing
+# at localhost). Also skips comment lines so a '#' line can never be rewritten.
 env_set() {
   local key="$1" val="$2"
-  awk -v k="$key" -v v="$val" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' .env > .env.tmp && mv .env.tmp .env
+  awk -v k="$key" -v v="$val" '
+    BEGIN { FS = "="; found = 0 }
+    {
+      if (index($0, "#") == 1) { print; next }
+      if ($1 == k)             { print k "=" v; found = 1; next }
+      print
+    }
+    END { if (!found) print k "=" v }
+  ' .env > .env.tmp && mv .env.tmp .env
+  chmod 600 .env
 }
 # Generates a password guaranteed to satisfy scripts/create_superadmin.py's
 # policy: >=16 chars, at least one upper/lower/digit/special character.
@@ -214,6 +228,10 @@ else
   chmod 600 .env
   env_set HOPEFX_DOMAIN "$DOMAIN"
   env_set ALLOWED_ORIGINS "https://${DOMAIN}"
+  # Public origin embedded in outgoing links (email verification, password
+  # reset, Stripe redirects). Without this the app falls back to
+  # http://localhost:8000 / https://hopefx.io depending on the module.
+  env_set APP_BASE_URL "https://${DOMAIN}"
   _PG_PASS="$(openssl rand -hex 24)"
   env_set POSTGRES_PASSWORD "$_PG_PASS"
   # utils/config.py reads DB_PASSWORD on a legacy/alternate path — keep it

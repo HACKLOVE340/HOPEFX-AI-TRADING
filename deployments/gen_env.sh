@@ -51,15 +51,22 @@ chmod 600 .env
 # comment on that line is intentionally dropped: Docker Compose's env_file
 # parser keeps an inline comment as part of the value when the value is empty,
 # so leaving them attached to generated secrets risks contaminating them.
+# If the key is absent from the template this APPENDS it rather than doing
+# nothing. The previous replace-only version silently skipped any key missing
+# from .env.production.example — that is how APP_BASE_URL ended up never being
+# written despite being set here, leaving the app to fall back to
+# "http://localhost:8000" for email links. Appending makes that class of bug
+# impossible: a key set here always ends up in the file.
 env_set() {
   local key="$1" val="$2"
   awk -v k="$key" -v v="$val" '
-    BEGIN { FS = "=" }
+    BEGIN { FS = "="; found = 0 }
     {
-      if (index($0, "#") == 1) { print; next }          # keep comment lines verbatim
-      if ($1 == k)             { print k "=" v; next }  # replace target key
+      if (index($0, "#") == 1) { print; next }                    # comment lines verbatim
+      if ($1 == k)             { print k "=" v; found = 1; next } # replace target key
       print
     }
+    END { if (!found) print k "=" v }                             # append when absent
   ' .env > .env.tmp && mv .env.tmp .env
   chmod 600 .env
 }
