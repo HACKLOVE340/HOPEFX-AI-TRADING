@@ -117,12 +117,41 @@ def test_validate_warns_on_missing_recommended(monkeypatch):
     assert any("DATABASE_URL" in w for w in result.warnings)
 
 
-def test_validate_strict_treats_missing_recommended_as_error(monkeypatch):
+def test_validate_strict_keeps_optional_integrations_non_fatal(monkeypatch):
+    """strict must not abort production over a disabled optional integration.
+
+    Regression: strict=True previously promoted EVERY unset RECOMMENDED var to
+    a fatal error, so a paper-trading deploy with no SMTP/Telegram/OANDA/FIX
+    credentials could not boot — and because the abort is a sys.exit(1) inside
+    the startup task, it manifested as uvicorn's socket closing while the
+    container still reported itself healthy.
+    """
     monkeypatch.setenv("SECURITY_JWT_SECRET", "a" * 32)
     monkeypatch.setenv("CONFIG_ENCRYPTION_KEY", "b" * 32)
-    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("HOPEFX_KILL_SWITCH_TOKEN", "c" * 64)
+    for name in (
+        "DATABASE_URL",  # has a documented default — never fatal
+        "FIX_CONFIG_FILE",  # has a documented default — never fatal
+        "SMTP_HOST",
+        "OANDA_API_KEY",
+        "TELEGRAM_BOT_TOKEN",
+    ):
+        monkeypatch.delenv(name, raising=False)
     result = validate_environment(strict=True)
-    assert any("DATABASE_URL" in e for e in result.errors)
+    assert result.errors == [], f"optional integrations must not be fatal: {result.errors}"
+    for name in ("DATABASE_URL", "FIX_CONFIG_FILE", "SMTP_HOST", "OANDA_API_KEY", "TELEGRAM_BOT_TOKEN"):
+        assert any(name in w for w in result.warnings), f"{name} should be reported as a warning"
+
+
+def test_validate_strict_still_fatal_for_production_critical(monkeypatch):
+    """The kill-switch token is a risk control, not an integration — keep it fatal."""
+    monkeypatch.setenv("SECURITY_JWT_SECRET", "a" * 32)
+    monkeypatch.setenv("CONFIG_ENCRYPTION_KEY", "b" * 32)
+    monkeypatch.delenv("HOPEFX_KILL_SWITCH_TOKEN", raising=False)
+    result = validate_environment(strict=True)
+    assert any("HOPEFX_KILL_SWITCH_TOKEN" in e for e in result.errors)
+    # ...and it is only fatal under strict.
+    assert not any("HOPEFX_KILL_SWITCH_TOKEN" in e for e in validate_environment(strict=False).errors)
 
 
 # ── validate_and_report ───────────────────────────────────────────────────────
