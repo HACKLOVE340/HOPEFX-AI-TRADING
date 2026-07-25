@@ -221,7 +221,7 @@ jobs:
           BROKER_TYPE: paper
           PAPER_TRADING: "true"
         run: |
-          pytest tests/test_auth_coverage.py \
+          pytest tests/unit/test_auth_coverage.py \
             --asyncio-mode=auto \
             --timeout=120 \
             -v \
@@ -283,7 +283,7 @@ jobs:
 
       - name: Run env-var consistency gate
         run: |
-          pytest tests/test_env_consistency.py \
+          pytest tests/system/test_env_consistency.py \
             --noconftest \
             --timeout=30 \
             -v \
@@ -343,7 +343,7 @@ jobs:
 
       - name: Run docker-compose structural gate
         run: |
-          pytest tests/test_docker_smoke.py \
+          pytest tests/system/test_docker_smoke.py \
             --noconftest \
             --timeout=30 \
             -v \
@@ -399,7 +399,7 @@ jobs:
 
       - name: Run model accuracy gate
         run: |
-          pytest tests/test_model_accuracy_assertion.py \
+          pytest tests/unit/test_model_accuracy_assertion.py \
             --noconftest \
             --timeout=30 \
             -v \
@@ -456,7 +456,7 @@ jobs:
 
       - name: Run dead file detection gate
         run: |
-          pytest tests/test_dead_file_detection.py \
+          pytest tests/unit/test_dead_file_detection.py \
             --noconftest \
             --timeout=30 \
             -v \

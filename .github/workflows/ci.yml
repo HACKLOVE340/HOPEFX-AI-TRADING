@@ -266,7 +266,7 @@ jobs:
           if dead:
               print(f"\nERROR: {len(dead)} dead/unresolved Python file(s) in project root.")
               print("Resolution: wire into production, delete, or add to EXEMPTIONS")
-              print("in tests/test_dead_file_detection.py with a justification.\n")
+              print("in tests/unit/test_dead_file_detection.py with a justification.\n")
               for name, hits in dead:
                   print(f"  {name}")
                   for lineno, text in hits:
