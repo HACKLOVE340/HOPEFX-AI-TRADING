@@ -81,6 +81,13 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+# deployments/gen_env.sh and vps_bootstrap.sh move a previous .env aside before
+# writing a new one. Those backups hold REAL secrets — never let them be
+# committed. Covers .env.bak.<timestamp>, .env.old, and similar.
+.env.bak
+.env.bak.*
+.env.old
+.env.save
 !.env.example
 
 # Database
