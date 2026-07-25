@@ -24,6 +24,15 @@ psycopg2-binary>=2.9.0
 # and redis 8.x dropped the now-empty `asyncio` extra — so plain `redis` is
 # correct and avoids the "does not provide the extra 'asyncio'" pip warning.
 redis>=5.0.0
+# celery: REQUIRED in the runtime image, not optional. docker-compose.yml defines
+# celery-worker and celery-beat services whose command execs `celery -A celery_app
+# ...`, and celery_app.py (30KB of real task definitions for the ml/billing/risk/
+# infra queues) imports celery at module scope. It was listed ONLY in
+# requirements-ci.txt and commented out in requirements-optional.txt, so the
+# Dockerfile — which installs requirements.txt — never put it in the image, and
+# both services died at startup with:
+#   OCI runtime create failed: exec: "celery": executable file not found in $PATH
+celery[redis]>=5.4.0
 kubernetes-asyncio>=29.0.0   # K8s ConfigMap fallback for kill switch cross-pod propagation
 kubernetes>=29.0.0            # sync K8s client (used when no event loop is running)
 
