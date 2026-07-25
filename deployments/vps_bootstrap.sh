@@ -182,12 +182,24 @@ env_set() {
 }
 # Generates a password guaranteed to satisfy scripts/create_superadmin.py's
 # policy: >=16 chars, at least one upper/lower/digit/special character.
+#
+# The special-character set is deliberately restricted to '-_=+.,' — every one
+# of these is accepted by _validate_password's special-char class
+# ([!@#$%^&*()\-_=+\[\]{}|;:,.<>?]) AND is inert to the shell inside a bare
+# `VAR=value` line. The previous set ('!@#$%^&*') generated passwords that
+# BROKE scripts/preflight.sh, which does `set -a; source .env; set +a`:
+# an '&' backgrounded the assignment and truncated the password ("command not
+# found" on the remainder), '$' triggered variable expansion, '#' started a
+# comment, and '*' glob-expanded. The password stored in .env then silently
+# differed from the one the app parsed, so the seeded superadmin/admin logins
+# would not match the credentials printed at the end of bootstrap.
+# Reproduced directly before changing this.
 gen_password() {
   local upper lower digit special rest
   upper=$(tr -dc 'A-Z' < /dev/urandom | head -c3)
   lower=$(tr -dc 'a-z' < /dev/urandom | head -c3)
   digit=$(tr -dc '0-9' < /dev/urandom | head -c3)
-  special=$(tr -dc '!@#$%^&*' < /dev/urandom | head -c3)
+  special=$(tr -dc '\-_=+.,' < /dev/urandom | head -c3)
   rest=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c8)
   echo "${upper}${lower}${digit}${special}${rest}" | fold -w1 | shuf | tr -d '\n'
 }
@@ -202,13 +214,36 @@ else
   chmod 600 .env
   env_set HOPEFX_DOMAIN "$DOMAIN"
   env_set ALLOWED_ORIGINS "https://${DOMAIN}"
-  env_set POSTGRES_PASSWORD "$(openssl rand -hex 24)"
+  _PG_PASS="$(openssl rand -hex 24)"
+  env_set POSTGRES_PASSWORD "$_PG_PASS"
+  # utils/config.py reads DB_PASSWORD on a legacy/alternate path — keep it
+  # identical to POSTGRES_PASSWORD so both agree on the same database.
+  env_set DB_PASSWORD "$_PG_PASS"
   env_set REDIS_PASSWORD "$(openssl rand -hex 24)"
   env_set GRAFANA_ADMIN_PASSWORD "$(openssl rand -hex 16)"
   env_set SECURITY_JWT_SECRET "$(openssl rand -hex 32)"
   env_set CONFIG_ENCRYPTION_KEY "$(openssl rand -hex 32)"
   env_set HOPEFX_KILL_SWITCH_TOKEN "$(openssl rand -hex 24)"
   env_set CRYPTO_WEBHOOK_SECRET "$(openssl rand -hex 24)"
+  # ── App-internal secrets that were previously NOT generated here even though
+  # scripts/bootstrap_dev.py generates all of them for local dev. Every one is
+  # read by real app code, so a VPS deploy was silently running without them.
+  # CONFIG_SALT must be valid hex (config/config_manager.py raises otherwise).
+  env_set CONFIG_SALT "$(openssl rand -hex 16)"
+  # HOPEFX_MASTER_KEY / HOPEFX_ENCRYPTION_KEY must be padded base64 decoding to
+  # >=32 bytes — security/key_manager.py runs base64.urlsafe_b64decode() then
+  # rejects anything under 32 bytes, and raises SecurityError outright when a
+  # production key is required. Verified that token_urlsafe(32) (what
+  # bootstrap_dev.py uses) FAILS this with "Incorrect padding", so use padded
+  # base64 translated to the urlsafe alphabet instead.
+  env_set HOPEFX_MASTER_KEY "$(openssl rand -base64 32 | tr '+/' '-_')"
+  env_set HOPEFX_ENCRYPTION_KEY "$(openssl rand -base64 32 | tr '+/' '-_')"
+  env_set SECRET_KEY "$(openssl rand -hex 32)"
+  env_set JWT_SECRET "$(openssl rand -hex 32)"
+  env_set JWT_SECRET_KEY "$(openssl rand -hex 32)"
+  env_set LICENSE_SECRET "$(openssl rand -hex 32)"
+  env_set WHITELABEL_KEY_HASH_SECRET "$(openssl rand -hex 32)"
+  env_set TRADINGVIEW_WEBHOOK_SECRET "$(openssl rand -hex 32)"
   env_set BOOTSTRAP_SUPERADMIN_PASSWORD "$(gen_password)"
   env_set BOOTSTRAP_ADMIN_PASSWORD "$(gen_password)"
   env_set BOOTSTRAP_TRADER_PASSWORD "$(gen_password)"
