@@ -1,8 +1,6 @@
 # config/ultimate_config.yaml
-"""
-HOPEFX Ultimate Configuration
-Override your existing config with these advanced settings
-"""
+# HOPEFX Ultimate Configuration
+# Override your existing config with these advanced settings
 
 mcc:
   enable_gpu: true

@@ -1,8 +1,6 @@
 # deployment/k8s_config.yaml
-"""
-Kubernetes deployment configuration for HOPEFX Ultimate
-Production-ready with auto-scaling and high availability
-"""
+# Kubernetes deployment configuration for HOPEFX Ultimate
+# Production-ready with auto-scaling and high availability
 
 apiVersion: apps/v1
 kind: StatefulSet
