@@ -60,34 +60,39 @@ jobs:
       - name: Install pip-audit
         run: pip install --retries 5 --timeout 60 pip-audit
       - name: Dependency vulnerability scan
-        # Blocks on CRITICAL severity; HIGH and below are reported only.
+        # Blocks on any CVE that has a real, available fix version — pip-audit's
+        # own JSON schema has no severity field at all (a vuln's "aliases" are
+        # just a plain list of CVE/GHSA ID strings, e.g. ["CVE-2024-23342",
+        # "GHSA-wj6h-64fc-37mp"]), so a prior version of this script that tried
+        # to read `.get("severity")` off each alias entry crashed with
+        # AttributeError on every run that found anything ('str' object has no
+        # attribute 'get') — meaning this step has been failing unconditionally
+        # regardless of actual severity. There is no way to recover a CRITICAL-
+        # only distinction from pip-audit's own data without an extra API call
+        # per CVE, so this now blocks on the achievable, honest signal instead:
+        # a known vulnerability where upstream has actually shipped a fix.
         # To suppress a false-positive: pip-audit --ignore-vuln GHSA-xxxx-xxxx-xxxx
         run: |
           pip-audit --requirement=requirements.txt --desc \
             --vulnerability-service pypi \
             --format json --output pip-audit-report.json || true
-          # Exit non-zero if any CRITICAL CVEs are present
           python - <<'EOF'
           import json, sys
           try:
               data = json.load(open("pip-audit-report.json"))
           except Exception:
               sys.exit(0)  # no report = no vulns
-          criticals = [
+          fixable = [
               v for dep in data.get("dependencies", [])
               for v in dep.get("vulns", [])
-              if v.get("fix_versions") is not None  # exploitable, has fix
-              and any(
-                  "CRITICAL" in (a.get("severity", "") or "").upper()
-                  for a in v.get("aliases", [{"severity": ""}])
-              )
+              if v.get("fix_versions")  # non-empty list = a real fix exists
           ]
-          if criticals:
-              print(f"BLOCKED: {len(criticals)} CRITICAL CVE(s) found:")
-              for c in criticals:
-                  print(f"  {c['id']}: {c.get('description', '')[:120]}")
+          if fixable:
+              print(f"BLOCKED: {len(fixable)} CVE(s) with an available fix:")
+              for v in fixable:
+                  print(f"  {v['id']}: {v.get('description', '')[:120]}")
               sys.exit(1)
-          print("pip-audit: no CRITICAL CVEs found")
+          print("pip-audit: no fixable CVEs found")
           EOF
       - name: Upload pip-audit report
         if: always()
