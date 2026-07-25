@@ -204,6 +204,36 @@ if grep -qE '^[^A-Z_]' .env.paste.txt; then
 fi
 ok ".env.paste.txt written (${PASTE_N} KEY=VALUE lines, no comments)"
 
+# ── Minimal set ───────────────────────────────────────────────────────────────
+# 122 rows is impractical to type into a web form. This is the smallest set that
+# still boots, derived from the two things that actually hard-fail:
+#   * docker-compose.yml bare ${VAR} refs (POSTGRES_PASSWORD, REDIS_PASSWORD)
+#     plus GRAFANA_ADMIN_PASSWORD/HOPEFX_DOMAIN which compose validates up front
+#   * config/startup_validator.py error paths — SECURITY_JWT_SECRET,
+#     CONFIG_ENCRYPTION_KEY, HOPEFX_KILL_SWITCH_TOKEN, CRYPTO_WEBHOOK_SECRET,
+#     DATABASE_URL/REDIS_URL
+# plus HOPEFX_MASTER_KEY (security/key_manager.py raises SecurityError without
+# it), CONFIG_SALT, SKIP_TESTS (or the healthcheck kills the container), and the
+# BOOTSTRAP_* passwords so you have logins. Everything omitted has a working
+# default — add more later from .env.paste.txt if you need a specific feature.
+_MIN_KEYS="APP_ENV SKIP_TESTS HOPEFX_DOMAIN ALLOWED_ORIGINS APP_BASE_URL
+POSTGRES_USER POSTGRES_DB POSTGRES_PASSWORD DB_PASSWORD REDIS_PASSWORD
+GRAFANA_ADMIN_PASSWORD SECURITY_JWT_SECRET CONFIG_ENCRYPTION_KEY CONFIG_SALT
+HOPEFX_MASTER_KEY HOPEFX_ENCRYPTION_KEY HOPEFX_KILL_SWITCH_TOKEN
+CRYPTO_WEBHOOK_SECRET BROKER_TYPE PAPER_TRADING SIGNAL_ENGINE_AUTO_TRADE
+BOOTSTRAP_SUPERADMIN_PASSWORD BOOTSTRAP_ADMIN_PASSWORD BOOTSTRAP_TRADER_PASSWORD"
+: > .env.paste.min.txt
+for k in $_MIN_KEYS; do
+  line=$(grep -E "^${k}=" .env | head -1 || true)
+  [ -n "$line" ] && echo "$line" >> .env.paste.min.txt
+done
+chmod 600 .env.paste.min.txt
+MIN_N=$(wc -l < .env.paste.min.txt | tr -d ' ')
+if grep -qE '^[^A-Z_]' .env.paste.min.txt; then
+  die ".env.paste.min.txt contains a non-variable line — refusing to hand over a broken file."
+fi
+ok ".env.paste.min.txt written (${MIN_N} lines — minimum needed to boot)"
+
 echo "=============================================================="
 ok ".env generated successfully — mode $(stat -c '%a' .env 2>/dev/null || echo 600)"
 echo "=============================================================="
