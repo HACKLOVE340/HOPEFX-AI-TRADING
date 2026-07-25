@@ -7,7 +7,7 @@ WORKDIR /build/frontend
 
 # Install deps first (layer-cached unless package.json changes)
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --silent
+RUN npm ci
 
 # Copy source and build — output lands in /build/static (vite outDir: '../static')
 COPY frontend/ ./
