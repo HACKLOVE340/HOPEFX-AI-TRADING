@@ -171,8 +171,18 @@ RIVAL=0
 if command -v ss >/dev/null 2>&1; then
     for p in 3000 3001 4000 5000 5173 8080 8081; do
         if ss -ltn 2>/dev/null | grep -qE "127\.0\.0\.1:$p |\*:$p |0\.0\.0\.0:$p "; then
+            # A port owned by one of this project's own containers is expected —
+            # Grafana on 3000 is part of the stack, not a rival. Only flag ports
+            # that belong to something else.
+            OWNER=$(docker ps --format '{{.Names}}\t{{.Ports}}' 2>/dev/null \
+                    | grep ":$p->" | cut -f1 | head -1)
+            case "$OWNER" in
+                hopefx-*)
+                    pass ":$p is $OWNER (part of this stack — expected)"
+                    continue ;;
+            esac
             RIVAL=1
-            bad "something is listening on :$p"
+            bad "something is listening on :$p${OWNER:+ ($OWNER)}"
             ss -ltnp 2>/dev/null | grep ":$p " | sed 's/^/           /'
             curl -sS --max-time 8 -o "$TMP/p$p.html" "http://127.0.0.1:$p/" 2>/dev/null
             t=$(title_of "$TMP/p$p.html")
@@ -201,7 +211,13 @@ done
 [ "$FOUND" -eq 0 ] && pass "none found under /var/www /usr/share/caddy /usr/share/nginx /srv /opt"
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
+# Recap the two title lines here as well as in sections 1 and 3. On a phone or a
+# short scrollback the top of the output is gone by the time you read the
+# verdict, and those two titles are what makes it actionable.
 hdr "VERDICT"
+info "app:8000 served: $(title_of "$TMP/app.html" || true)"
+info "public   served: $(title_of "$TMP/pub.html" || true)"
+echo
 if [ "$APP_RC" -eq 1 ]; then
     bad "The app container did not answer on $APP_LOCAL at all."
     info "Nothing about the landing page can be concluded until it is up. Check:"
