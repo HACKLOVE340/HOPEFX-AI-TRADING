@@ -464,8 +464,18 @@ class TestSuperadminSystemHealthFixes:
     def test_pg_dump_subprocess_has_check_false(self):
         """subprocess.run for pg_dump must have check=False (PLW1510)."""
         src = _source("api/superadmin/system_health.py")
-        pg_dump_block = src[src.find("pg_dump") :]
-        first_run = pg_dump_block[: pg_dump_block.find(")") + 1]
+        # Locate the actual subprocess.run(...) call for pg_dump: find the
+        # quoted "pg_dump" list element, then look BACKWARDS for its
+        # enclosing subprocess.run(. A prior version searched forward from
+        # the first bare mention of "pg_dump" (which matches a preceding
+        # comment line, "# pg_dump") and stopped at the first ")" it saw —
+        # an unrelated os.path.join(...) call's closing paren — so it never
+        # actually reached the real call at all.
+        pg_dump_idx = src.find('"pg_dump"')
+        assert pg_dump_idx != -1, '"pg_dump" literal not found'
+        call_start = src.rfind("subprocess.run(", 0, pg_dump_idx)
+        assert call_start != -1, "subprocess.run(...) call for pg_dump not found"
+        first_run = src[call_start : src.find(")\n", call_start) + 1]
         assert "check=False" in first_run, "subprocess.run for pg_dump must have explicit check=False"
 
 

@@ -260,8 +260,15 @@ class _ASTAnalyzer(ast.NodeVisitor):
             # Honor an explicit reviewer escape for intentional null-object /
             # no-op stubs (e.g. fallback classes when an optional lib is absent),
             # consistent with the line-based checks' "# healer: ignore" support.
-            def_line = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
-            if "# healer: ignore" in def_line or "# noqa: healer" in def_line:
+            # Scan the whole signature span (node.lineno through the line
+            # before the body starts), not just node.lineno itself — a
+            # multi-line signature's closing "` -> None:  # healer: ignore`"
+            # line is where the marker is conventionally placed, and it is
+            # never on node.lineno (the `def foo(` line) in that case.
+            sig_end = node.body[0].lineno if node.body else node.lineno
+            header_lines = self.lines[max(0, node.lineno - 1) : max(node.lineno, sig_end - 1)]
+            header = "\n".join(header_lines)
+            if "# healer: ignore" in header or "# noqa: healer" in header:
                 return
             self._add(
                 node.lineno,
@@ -599,12 +606,17 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
             "scripts/e2e_production_validation.py",
             "scripts/e2e_hardening_audit.py",
         )
+        # Ignore marker may be on a later line of the same multi-line
+        # statement (e.g. a call's closing paren), not on `line` itself —
+        # look forward only, so an unrelated ignore comment above a prior
+        # finding can't falsely suppress this one.
+        _synthetic_forward_window = "\n".join(lines[i - 1 : min(len(lines), i + 3)])
         if (
             _SYNTHETIC_RE.search(line)
             and not is_test
             and not in_doc
             and "# smoke" not in line.lower()
-            and "# healer: ignore" not in line
+            and "# healer: ignore" not in _synthetic_forward_window
             and not _is_negation
             and not _is_log_diagnostic
             and not _is_self_referential
@@ -637,14 +649,21 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
             )
 
         # NaN leak — numeric aggregation without a NaN guard in the surrounding context
-        if _NAN_LEAK_RE.search(line) and not is_test and "# healer: ignore" not in line:
+        if _NAN_LEAK_RE.search(line) and not is_test:
             # Check a window of ±5 lines for a NaN guard
             window_start = max(0, i - 6)
             window_end = min(len(lines), i + 5)
             window = "\n".join(lines[window_start:window_end])
             # Also accept aliased nan_to_num calls (e.g. _torch.nan_to_num, _np.nan_to_num)
             _extended_guard = _NAN_GUARD_RE.search(window) or re.search(r"\.nan_to_num\(", window)
-            if not _extended_guard:
+            # The ignore marker is conventionally placed on the closing line of
+            # a multi-line expression, which can be a few lines AFTER the line
+            # the regex actually matched — not on `line` itself. Look forward
+            # only (never backward) so an unrelated ignore comment placed
+            # above a different, prior finding can't falsely suppress this one.
+            _forward_window = "\n".join(lines[i - 1 : min(len(lines), i + 3)])
+            _ignored = "# healer: ignore" in _forward_window
+            if not _extended_guard and not _ignored:
                 issues.append(
                     CodeIssue(
                         file=rel,
