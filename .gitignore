@@ -88,6 +88,9 @@ venv.bak/
 .env.bak.*
 .env.old
 .env.save
+# deployments/gen_env.sh also writes .env.paste.txt — the same secrets with
+# comments stripped, for pasting into a hosting panel's Environment form.
+.env.paste.txt
 !.env.example
 
 # Database

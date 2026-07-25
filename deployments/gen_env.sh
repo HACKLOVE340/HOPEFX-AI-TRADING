@@ -9,6 +9,15 @@
 # Example:
 #   bash deployments/gen_env.sh hopefx.site
 #
+# It also writes .env.paste.txt — the SAME values with every comment and blank
+# line stripped, i.e. nothing but KEY=VALUE lines. That file is for pasting into
+# a hosting control panel's "Environment variables" form (Hostinger hPanel and
+# similar). Those forms import the file line-by-line and try to treat EVERY line
+# as a variable name, so each '#' documentation line in .env.production.example
+# becomes a row that fails with "Invalid variable name" — dozens of them. The
+# stripped file has no such lines. .env.paste.txt contains live secrets and is
+# gitignored; delete it once pasted.
+#
 # This exists because the equivalent logic pasted as a long one-liner into a
 # terminal is fragile: shell function definitions chained with &&, backslash
 # line-continuations mangled by paste, and bracketed-paste mode can all silently
@@ -182,9 +191,27 @@ if [ "$FAIL" -ne 0 ]; then
   die "The generated .env has problems (listed above). Nothing was started."
 fi
 
+# ── Paste-ready copy for hosting control panels ──────────────────────────────
+# Same values, but ONLY 'KEY=VALUE' lines: no comments, no blanks. Panel forms
+# (Hostinger hPanel etc.) import line-by-line and treat every line as a variable
+# name, so a '#' documentation line becomes an "Invalid variable name" row.
+grep -E '^[A-Z_][A-Z0-9_]*=' .env > .env.paste.txt
+chmod 600 .env.paste.txt
+PASTE_N=$(wc -l < .env.paste.txt | tr -d ' ')
+# Guard: a '#' reaching this file is exactly the bug it exists to prevent.
+if grep -qE '^[^A-Z_]' .env.paste.txt; then
+  die ".env.paste.txt contains a non-variable line — refusing to hand over a broken paste file."
+fi
+ok ".env.paste.txt written (${PASTE_N} KEY=VALUE lines, no comments)"
+
 echo "=============================================================="
 ok ".env generated successfully — mode $(stat -c '%a' .env 2>/dev/null || echo 600)"
 echo "=============================================================="
+echo
+echo "  For a hosting PANEL (Hostinger hPanel) Environment form, paste this file"
+echo "  — it has no comment lines, so no \"Invalid variable name\" rows:"
+echo "      cat .env.paste.txt"
+echo "  Delete it once pasted:  rm .env.paste.txt"
 echo
 echo "  SAVE THESE LOGINS NOW — they are only in .env:"
 echo "    superadmin@hopefx.io   $(env_get BOOTSTRAP_SUPERADMIN_PASSWORD)"
