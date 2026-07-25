@@ -332,6 +332,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Resource limits — sized for an 8GB / 2-core VPS (Hostinger KVM 2). Without
+    # a cap here this is the one service most likely to grow unbounded under
+    # real trading load and OOM the box, taking the app/trading containers
+    # down with it — exactly what the app/trading limits below are meant to
+    # prevent, so leaving postgres uncapped defeated the point of having them.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 
   redis:
     image: redis:7-alpine
@@ -361,6 +374,17 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    # Docker-level backstop above redis's own --maxmemory 512mb (process
+    # overhead, connection buffers) — the internal cap governs the data set,
+    # this just stops the whole container from growing past that.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 640M
+        reservations:
+          cpus: "0.05"
+          memory: 128M
 
   prometheus:
     image: prom/prometheus:v2.51.0
@@ -384,6 +408,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 384M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
 
   alertmanager:
     build:
@@ -411,6 +443,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 96M
+        reservations:
+          cpus: "0.02"
+          memory: 32M
 
   grafana:
     image: grafana/grafana:10.4.0
@@ -435,6 +475,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 192M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
 
   nginx:
     build:
@@ -458,6 +506,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 32M
+        reservations:
+          cpus: "0.02"
+          memory: 16M
 
 volumes:
   postgres_data:
