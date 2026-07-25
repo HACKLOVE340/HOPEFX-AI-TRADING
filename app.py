@@ -38,6 +38,7 @@ Provides endpoints for:
 
 import asyncio
 import concurrent.futures as concurrent_futures
+import contextlib
 import logging
 import os
 import platform
@@ -550,11 +551,55 @@ async def lifespan(_app: FastAPI):
     # (FRED, CFTC, IMF, Yahoo, gold) to connect.  The server returns 503 on
     # data-dependent endpoints until app_state.initialized is True.
     _startup_task = asyncio.create_task(startup_event(), name="startup_event")
-    _startup_task.add_done_callback(
-        lambda t: (
-            logger.error("startup_event failed: %s", t.exception()) if not t.cancelled() and t.exception() else None
+
+    def _on_startup_task_done(task: "asyncio.Task[None]") -> None:
+        """Log a failed startup_event — and hard-exit if it demanded exit.
+
+        A BaseException that is not an Exception (SystemExit from a startup gate
+        such as core.env_validator.validate_and_report, or KeyboardInterrupt)
+        escapes this task, cancels the ASGI lifespan, and closes uvicorn's
+        listening socket. The process then does NOT exit: the 64-worker
+        ThreadPoolExecutor installed above and OpenTelemetry's
+        BatchSpanProcessor are non-daemon threads, so the interpreter blocks in
+        shutdown indefinitely.
+
+        The result is the worst possible failure mode — `docker ps` reports the
+        container as running, the process is alive, and nothing is listening on
+        the port. No shutdown message is logged either, because the JSON logging
+        setup replaces uvicorn's handlers. Production spent hours in exactly
+        that state before this was tracked down.
+
+        Honour the gate's intent (never serve a misconfigured trading system),
+        but make the failure terminal and visible: exit non-zero so the restart
+        policy applies and the container is reported as failed.
+        """
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is None:
+            return
+        logger.error("startup_event failed: %s", exc)
+        if isinstance(exc, Exception):
+            # An ordinary error — startup is degraded but the API stays up and
+            # StartupGateMiddleware keeps returning 503 on data endpoints.
+            return
+        code = exc.code if isinstance(exc, SystemExit) and isinstance(exc.code, int) else 1
+        logger.critical(
+            "STARTUP GATE DEMANDED EXIT (%r) — terminating the process. Without this the "
+            "container would stay 'running' with no listening socket. Fix the reported "
+            "configuration errors above and restart.",
+            exc,
         )
-    )
+        for _handler in logging.getLogger().handlers:
+            # Never let a flush error mask the exit — the log above is the only
+            # record of why the process died.
+            with contextlib.suppress(Exception):
+                _handler.flush()
+        # os._exit, not sys.exit: sys.exit only raises in this callback's frame
+        # and would leave the non-daemon threads blocking interpreter shutdown.
+        os._exit(code or 1)
+
+    _startup_task.add_done_callback(_on_startup_task_done)
     # Start Sharpe circuit breaker as a top-level lifespan task so it always
     # runs even if startup_event() raises before reaching the call inside it.
     # Mirrors the pattern used for Prometheus, WS broadcasters, and nuclear engine.
