@@ -1,0 +1,394 @@
+# =============================================================================
+# HOPEFX — docker-compose variant for Hostinger hPanel's YAML editor
+# =============================================================================
+# GENERATED from docker-compose.yml. Do not hand-edit — regenerate instead.
+# For SSH + `docker compose` on a VPS use docker-compose.yml, NOT this file.
+#
+# hPanel's YAML editor rejects several constructs that are valid for real
+# docker compose. Each is removed here, with the consequence stated:
+#
+#  * env_file: .env  (4 services)
+#      hPanel has no repo checkout, so no .env exists to read. Set the variables
+#      in the panel's Environment section instead — the names are in
+#      .env.production.example (122 of them). At minimum you MUST set:
+#      HOPEFX_DOMAIN, POSTGRES_PASSWORD, REDIS_PASSWORD, GRAFANA_ADMIN_PASSWORD,
+#      SECURITY_JWT_SECRET, CONFIG_ENCRYPTION_KEY, HOPEFX_MASTER_KEY,
+#      HOPEFX_ENCRYPTION_KEY, CONFIG_SALT, SKIP_TESTS=true.
+#
+#  * deploy.resources  (9 services)
+#      CPU/memory caps. CONSEQUENCE: on the VPS path these stop postgres or
+#      prometheus from OOM-ing the trading containers on an 8GB box. This
+#      variant has no such protection.
+#
+#  * nginx service + its /etc/letsencrypt and /var/www/certbot bind mounts
+#      nginx/nginx.conf lines 80-81 hard-require
+#      /etc/letsencrypt/live/$HOPEFX_DOMAIN/fullchain.pem, which only exists
+#      after certbot runs on a real VPS. Keeping nginx here would crash-loop it,
+#      so the whole service is removed. CONSEQUENCE: this variant does NOT
+#      terminate TLS. Hostinger's proxy must front the published app port (8000).
+#
+#  * ${VAR:?message} -> ${VAR}  (3 occurrences)
+#      One unset required variable aborts parsing of the ENTIRE file, which is
+#      the "YAML file can't be processed" error. Relaxed so the file parses.
+#      CONSEQUENCE: a missing password now becomes a BLANK value instead of a
+#      loud error — verify the panel's Environment section is complete.
+#
+# Verified: valid YAML, and `docker compose config` exits 0 with NO .env
+# present (the panel's condition). The original docker-compose.yml fails that
+# same check with "required variable GRAFANA_ADMIN_PASSWORD is missing".
+# =============================================================================
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+    - 8000:8000
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hopefx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hopefx}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-false}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-false}
+      APP_ENV: ${APP_ENV:-production}
+      API_HOST: 0.0.0.0
+      API_PORT: '8000'
+      HOPEFX_INVARIANT_MODE: ${HOPEFX_INVARIANT_MODE:-monitor}
+      HOPEFX_INVARIANT_ENFORCE_KINDS: ${HOPEFX_INVARIANT_ENFORCE_KINDS:-order_authorization,pre_trade}
+      HOPEFX_INVARIANT_FAIL_CLOSED: ${HOPEFX_INVARIANT_FAIL_CLOSED:-0}
+      RISK_MAX_TICK_STALENESS_S: ${RISK_MAX_TICK_STALENESS_S:-5.0}
+      RISK_HUMAN_APPROVAL_NOTIONAL_USD: ${RISK_HUMAN_APPROVAL_NOTIONAL_USD:-0}
+      RISK_MAX_SYMBOL_EXPOSURE_USD: ${RISK_MAX_SYMBOL_EXPOSURE_USD:-1000000.0}
+      RISK_APPROVED_VAR_USD: ${RISK_APPROVED_VAR_USD:-0}
+      LLM_BACKEND: ${LLM_BACKEND:-anthropic}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      OPENAI_MODEL: ${OPENAI_MODEL:-o4-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
+      LLM_SECURITY_MAX_TOKENS: ${LLM_SECURITY_MAX_TOKENS:-1024}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-3}
+      LLM_RETRY_BASE_DELAY: ${LLM_RETRY_BASE_DELAY:-1.0}
+      PAPER_TRADING: ${PAPER_TRADING:-true}
+      CME_ENABLED: ${CME_ENABLED:-false}
+      CME_FIX_HOST: ${CME_FIX_HOST:-127.0.0.1}
+      CME_FIX_PORT: ${CME_FIX_PORT:-9876}
+      CME_FIX_SENDER_ID: ${CME_FIX_SENDER_ID:-HOPEFX}
+      CME_FIX_TARGET_ID: ${CME_FIX_TARGET_ID:-CME}
+      CME_FIX_USERNAME: ${CME_FIX_USERNAME:-}
+      CME_FIX_PASSWORD: ${CME_FIX_PASSWORD:-}
+      CME_ACCOUNT: ${CME_ACCOUNT:-}
+      CME_IBKR_FALLBACK: ${CME_IBKR_FALLBACK:-true}
+      CME_PAPER_FALLBACK: ${CME_PAPER_FALLBACK:-true}
+      CME_LATENCY_WARN_MS: ${CME_LATENCY_WARN_MS:-50}
+      CPP_SHIM_ENABLED: ${CPP_SHIM_ENABLED:-false}
+      CPP_SHIM_ZMQ_CMD_ADDR: ${CPP_SHIM_ZMQ_CMD_ADDR:-tcp://127.0.0.1:6555}
+      CPP_SHIM_ZMQ_RESP_ADDR: ${CPP_SHIM_ZMQ_RESP_ADDR:-tcp://127.0.0.1:6556}
+      CPP_SHIM_TIMEOUT_MS: ${CPP_SHIM_TIMEOUT_MS:-5000}
+      CPP_SHIM_LATENCY_WARN_US: ${CPP_SHIM_LATENCY_WARN_US:-1000}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FLASHPOINT_API_KEY: ${FLASHPOINT_API_KEY:-}
+      FLASHPOINT_API_URL: ${FLASHPOINT_API_URL:-https://api.flashpoint.io/v1/iocs}
+      ARGOCD_ROLLBACK_WEBHOOK: ${ARGOCD_ROLLBACK_WEBHOOK:-}
+      BRAIN_SCAN_INTERVAL: ${BRAIN_SCAN_INTERVAL:-30}
+      BRAIN_HEAL_INTERVAL: ${BRAIN_HEAL_INTERVAL:-1800}
+      BRAIN_SEMANTIC_ENCODER: ${BRAIN_SEMANTIC_ENCODER:-false}
+      APP_BASE_URL: ${APP_BASE_URL:-https://localhost}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://${HOPEFX_DOMAIN:-localhost},https://www.${HOPEFX_DOMAIN:-localhost}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+    - ./ml/saved_models:/app/ml/saved_models:ro
+    - trading_state:/app/state
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8000/api/health/live
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+  trading:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+    - python
+    - -m
+    - core.main_loop
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hopefx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hopefx}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-false}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-false}
+      APP_ENV: ${APP_ENV:-production}
+      OANDA_PRACTICE: ${OANDA_PRACTICE:-true}
+      LLM_BACKEND: ${LLM_BACKEND:-anthropic}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      OPENAI_MODEL: ${OPENAI_MODEL:-o4-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
+      LLM_SECURITY_MAX_TOKENS: ${LLM_SECURITY_MAX_TOKENS:-1024}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-3}
+      LLM_RETRY_BASE_DELAY: ${LLM_RETRY_BASE_DELAY:-1.0}
+      PAPER_TRADING: ${PAPER_TRADING:-true}
+      CME_ENABLED: ${CME_ENABLED:-false}
+      CME_FIX_HOST: ${CME_FIX_HOST:-127.0.0.1}
+      CME_FIX_PORT: ${CME_FIX_PORT:-9876}
+      CME_FIX_SENDER_ID: ${CME_FIX_SENDER_ID:-HOPEFX}
+      CME_FIX_TARGET_ID: ${CME_FIX_TARGET_ID:-CME}
+      CME_FIX_USERNAME: ${CME_FIX_USERNAME:-}
+      CME_FIX_PASSWORD: ${CME_FIX_PASSWORD:-}
+      CME_ACCOUNT: ${CME_ACCOUNT:-}
+      CME_IBKR_FALLBACK: ${CME_IBKR_FALLBACK:-true}
+      CME_PAPER_FALLBACK: ${CME_PAPER_FALLBACK:-true}
+      CME_LATENCY_WARN_MS: ${CME_LATENCY_WARN_MS:-50}
+      CPP_SHIM_ENABLED: ${CPP_SHIM_ENABLED:-false}
+      CPP_SHIM_ZMQ_CMD_ADDR: ${CPP_SHIM_ZMQ_CMD_ADDR:-tcp://127.0.0.1:6555}
+      CPP_SHIM_ZMQ_RESP_ADDR: ${CPP_SHIM_ZMQ_RESP_ADDR:-tcp://127.0.0.1:6556}
+      CPP_SHIM_TIMEOUT_MS: ${CPP_SHIM_TIMEOUT_MS:-5000}
+      CPP_SHIM_LATENCY_WARN_US: ${CPP_SHIM_LATENCY_WARN_US:-1000}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FLASHPOINT_API_KEY: ${FLASHPOINT_API_KEY:-}
+      FLASHPOINT_API_URL: ${FLASHPOINT_API_URL:-https://api.flashpoint.io/v1/iocs}
+      ARGOCD_ROLLBACK_WEBHOOK: ${ARGOCD_ROLLBACK_WEBHOOK:-}
+      BRAIN_SCAN_INTERVAL: ${BRAIN_SCAN_INTERVAL:-30}
+      BRAIN_HEAL_INTERVAL: ${BRAIN_HEAL_INTERVAL:-1800}
+      BRAIN_SEMANTIC_ENCODER: ${BRAIN_SEMANTIC_ENCODER:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    volumes:
+    - ./ml/saved_models:/app/ml/saved_models:ro
+    - trading_state:/app/state
+    - fix_store:/app/fix_store
+    - fix_logs:/app/fix_logs
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - kill -0 1 2>/dev/null || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+    - celery
+    - -A
+    - celery_app
+    - worker
+    - --loglevel=info
+    - --concurrency=4
+    - --queues=ml,billing,risk,infra,celery
+    - --hostname=worker@%h
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hopefx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hopefx}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-false}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-false}
+      APP_ENV: ${APP_ENV:-production}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+      LLM_BACKEND: ${LLM_BACKEND:-anthropic}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      OPENAI_MODEL: ${OPENAI_MODEL:-o4-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-3}
+      LLM_RETRY_BASE_DELAY: ${LLM_RETRY_BASE_DELAY:-1.0}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OANDA_PRACTICE: ${OANDA_PRACTICE:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    volumes:
+    - ./ml/saved_models:/app/ml/saved_models
+    - trading_state:/app/state
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - celery -A celery_app inspect ping -d worker@$$HOSTNAME --timeout 5 2>/dev/null | grep -q pong || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+    - celery
+    - -A
+    - celery_app
+    - beat
+    - --loglevel=info
+    - --scheduler=celery.beat:PersistentScheduler
+    - --schedule=/app/state/celerybeat-schedule
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hopefx}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hopefx}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      IS_FORCE_TLS: ${IS_FORCE_TLS:-false}
+      REDIS_FORCE_TLS: ${REDIS_FORCE_TLS:-false}
+      APP_ENV: ${APP_ENV:-production}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_healthy
+    volumes:
+    - trading_state:/app/state
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - kill -0 1 2>/dev/null || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hopefx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-hopefx}
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${POSTGRES_USER:-hopefx} -d ${POSTGRES_DB:-hopefx}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: 'redis-server --save 60 1 --loglevel warning --maxmemory 512mb --maxmemory-policy allkeys-lru --tcp-keepalive 60 --timeout 300 --requirepass ${REDIS_PASSWORD}
+
+      '
+    volumes:
+    - redis_data:/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - redis-cli -a ${REDIS_PASSWORD} ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    restart: unless-stopped
+    ports:
+    - 127.0.0.1:9090:9090
+    volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - prometheus_data:/prometheus
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    - --storage.tsdb.path=/prometheus
+    - --storage.tsdb.retention.time=30d
+    - --web.enable-lifecycle
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://localhost:9090/-/healthy | grep -q 'Prometheus Server is Healthy'
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  alertmanager:
+    build:
+      context: ./monitoring/alertmanager
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ALERTMANAGER_TELEGRAM_BOT_TOKEN: ${ALERTMANAGER_TELEGRAM_BOT_TOKEN:-}
+      ALERTMANAGER_TELEGRAM_CHAT_ID: ${ALERTMANAGER_TELEGRAM_CHAT_ID:-0}
+      ALERTMANAGER_SMTP_FROM: ${ALERTMANAGER_SMTP_FROM:-alerts@hopefx.io}
+      ALERTMANAGER_SMTP_TO: ${ALERTMANAGER_SMTP_TO:-}
+      ALERTMANAGER_SMTP_HOST: ${ALERTMANAGER_SMTP_HOST:-localhost:587}
+      ALERTMANAGER_SMTP_USERNAME: ${ALERTMANAGER_SMTP_USERNAME:-}
+      ALERTMANAGER_SMTP_PASSWORD: ${ALERTMANAGER_SMTP_PASSWORD:-}
+    volumes:
+    - alertmanager_data:/alertmanager
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://localhost:9093/-/healthy | grep -q 'OK'
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+  grafana:
+    image: grafana/grafana:10.4.0
+    restart: unless-stopped
+    ports:
+    - 127.0.0.1:3000:3000
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_SERVER_ROOT_URL: '%(protocol)s://%(domain)s/grafana/'
+      GF_SERVER_SERVE_FROM_SUB_PATH: 'true'
+    volumes:
+    - grafana_data:/var/lib/grafana
+    - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - 'wget -qO- http://localhost:3000/api/health | grep -q ''"database": "ok"'''
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+volumes:
+  postgres_data: null
+  redis_data: null
+  prometheus_data: null
+  alertmanager_data: null
+  grafana_data: null
+  trading_state: null
+  fix_store: null
+  fix_logs: null
