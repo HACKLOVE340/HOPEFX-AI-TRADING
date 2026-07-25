@@ -61,6 +61,11 @@ ignore = [
     "PLR0912",
     "PLR0915",
     "PLR0911",
+    # PLR0917 (too-many-positional-arguments) graduated from preview to
+    # stable in ruff 0.16.0 and started firing repo-wide (314 findings) —
+    # same "too many function parameters" style complaint as PLR0913 above,
+    # already deliberately ignored here for the same reason.
+    "PLR0917",
     "N806",
     "N803",
     "N802",

@@ -746,7 +746,9 @@ def check_phase2_gate() -> tuple[bool, str]:
 
     start_str = _paper_run_start_utc()
     if not start_str:
-        return False, ("PAPER_RUN_START_UTC not set. Set to the ISO-8601 UTC timestamp when the paper run started (any broker).")
+        return False, (
+            "PAPER_RUN_START_UTC not set. Set to the ISO-8601 UTC timestamp when the paper run started (any broker)."
+        )
     try:
         start = datetime.fromisoformat(start_str)
         if start.tzinfo is None:
@@ -791,7 +793,9 @@ def check_phase3_gate() -> tuple[bool, str]:
     # Check elapsed days
     start_str = _paper_run_start_utc()
     if not start_str:
-        return False, ("PAPER_RUN_START_UTC not set. Set to the ISO-8601 UTC timestamp when the paper run started (any broker).")
+        return False, (
+            "PAPER_RUN_START_UTC not set. Set to the ISO-8601 UTC timestamp when the paper run started (any broker)."
+        )
     try:
         start = datetime.fromisoformat(start_str)
         if start.tzinfo is None:

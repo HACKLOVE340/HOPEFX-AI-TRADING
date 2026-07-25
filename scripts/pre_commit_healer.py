@@ -116,6 +116,15 @@ def check_file(path: Path) -> list[str]:
             # Skip pragma allowlist lines
             if "pragma: allowlist" in line or "nosec" in line:
                 continue
+            # The ignore marker may be a few lines below — e.g. ruff-format
+            # wraps a long tuple literal onto its own lines with the trailing
+            # comment on the closing paren — so this line itself is never
+            # the one carrying the marker in that case. Look forward only
+            # (never backward), so an ignore comment on a different, prior
+            # finding can't falsely suppress this one.
+            forward_window = "\n".join(lines[lineno - 1 : min(len(lines), lineno + 8)])
+            if "# healer: ignore" in forward_window or "# noqa: healer" in forward_window:
+                continue
             issues.append(f"{path}:{lineno}: hardcoded placeholder value: {stripped!r}")
 
     # ── Mock class definitions outside test files ─────────────────────────────
@@ -201,8 +210,17 @@ def check_file(path: Path) -> list[str]:
         if enclosing_class in _NULL_CLASS_NAMES:
             continue
 
-        # Bare pass body in non-test, non-abstract function
+        # Bare pass body in non-test, non-abstract function. Honor an
+        # explicit "# healer: ignore" escape for intentional null-object /
+        # no-op stubs, same as the other checks in this file — scanning the
+        # whole signature span (node.lineno through the line before the body
+        # starts), since a multi-line signature's closing
+        # "` -> None:  # healer: ignore`" line is never node.lineno itself.
         if not is_test and _body_is_only_pass(node.body):
+            sig_end = node.body[0].lineno if node.body else node.lineno
+            header = "\n".join(lines[max(0, node.lineno - 1) : max(node.lineno, sig_end - 1)])
+            if "# healer: ignore" in header or "# noqa: healer" in header:
+                continue
             issues.append(
                 f"{path}:{node.lineno}: bare `pass` body in {node.name}() — "
                 "implement the function or raise NotImplementedError with a clear message."

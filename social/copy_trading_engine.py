@@ -229,21 +229,14 @@ class AdvancedCopyTradingEngine:
                     "No copy orders will be placed until the kill switch is cleared.",
                     reason,
                 )
-                blocked = {
-                    f.follower_id: {"status": "blocked", "reason": f"kill_switch: {reason}"}
-                    for f in followers
-                }
+                blocked = {f.follower_id: {"status": "blocked", "reason": f"kill_switch: {reason}"} for f in followers}
                 return blocked
         except Exception as _ks_exc:
             logger.error(
-                "Copy trading kill switch check raised an exception — "
-                "blocking all copy trades as a safety measure: %s",
+                "Copy trading kill switch check raised an exception — blocking all copy trades as a safety measure: %s",
                 _ks_exc,
             )
-            return {
-                f.follower_id: {"status": "blocked", "reason": "kill_switch_check_error"}
-                for f in followers
-            }
+            return {f.follower_id: {"status": "blocked", "reason": "kill_switch_check_error"} for f in followers}
 
         results = {}
 

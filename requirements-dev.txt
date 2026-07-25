@@ -11,7 +11,11 @@ hypothesis>=6.100.0
 fakeredis>=2.20.0
 
 # Linting & Formatting
-ruff>=0.9.0,<0.10.0
+# No upper bound (matches requirements-ci.txt): the old <0.10.0 cap kept this
+# repo on ruff 0.9.x long after ruff 0.10+ removed UP038 (isinstance tuple ->
+# X | Y) as a rule the ruff project itself decided was often a regression —
+# staying pinned to 0.9.x meant CI kept enforcing a rule upstream abandoned.
+ruff>=0.9.0
 mypy>=1.14.0,<2.0.0
 pre-commit>=4.1.0,<5.0.0
 

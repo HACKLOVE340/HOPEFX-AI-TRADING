@@ -443,9 +443,7 @@ def test_privileged_get_routes_require_auth(app) -> None:
     the endpoint or its router.  If the path is intentionally public, remove
     it from PRIVILEGED_GET_PATHS with a justification comment.
     """
-    registered = {
-        route.path: route for route in iter_api_routes(app.routes) if "GET" in (route.methods or set())
-    }
+    registered = {route.path: route for route in iter_api_routes(app.routes) if "GET" in (route.methods or set())}
 
     violations: list[str] = []
     missing: list[str] = []

@@ -41,12 +41,10 @@ def require_superadmin_2fa(
     if not getattr(user, "two_factor_verified", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Superadmin nuclear operations require 2FA verification. "
-                "Log in again with a valid TOTP code."
-            ),
+            detail=("Superadmin nuclear operations require 2FA verification. Log in again with a valid TOTP code."),
         )
     return user
+
 
 # Report IDs must be UUID-format with an optional .json/.html/.csv extension.
 _REPORT_ID_RE = _re.compile(

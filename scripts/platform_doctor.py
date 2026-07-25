@@ -53,9 +53,7 @@ class Report:
         self.findings: list[dict] = []
 
     def add(self, area: str, status: str, title: str, detail: str = "", fix: str = "") -> None:
-        self.findings.append(
-            {"area": area, "status": status, "title": title, "detail": detail, "fix": fix}
-        )
+        self.findings.append({"area": area, "status": status, "title": title, "detail": detail, "fix": fix})
 
     # ── rendering ────────────────────────────────────────────────────────────
     def _counts(self) -> dict[str, int]:
@@ -66,24 +64,16 @@ class Report:
 
     def render(self) -> str:
         c = self._counts()
-        verdict = (
-            "🔴 ACTION REQUIRED" if c[FAIL]
-            else "🟡 RUNNING WITH WARNINGS" if c[WARN]
-            else "🟢 HEALTHY"
-        )
+        verdict = "🔴 ACTION REQUIRED" if c[FAIL] else "🟡 RUNNING WITH WARNINGS" if c[WARN] else "🟢 HEALTHY"
         lines: list[str] = []
         lines.append("# HOPEFX — Platform Health Report")
         lines.append("")
         lines.append(f"- **Generated:** {datetime.now(UTC).isoformat()}")
         lines.append(f"- **Verdict:** {verdict}")
-        lines.append(
-            f"- **Tally:** 🔴 {c[FAIL]} failures · 🟡 {c[WARN]} warnings · "
-            f"🟢 {c[OK]} ok · ℹ️ {c[INFO]} info"
-        )
+        lines.append(f"- **Tally:** 🔴 {c[FAIL]} failures · 🟡 {c[WARN]} warnings · 🟢 {c[OK]} ok · ℹ️ {c[INFO]} info")
         lines.append("")
         lines.append(
-            "> This report is read-only diagnostics. Nothing was changed. "
-            "Work the **Priority actions** top-down."
+            "> This report is read-only diagnostics. Nothing was changed. Work the **Priority actions** top-down."
         )
         lines.append("")
 
@@ -141,23 +131,34 @@ def check_environment(rep: Report) -> None:
     rep.add(area, INFO, "OS", f"{platform.system()} {platform.release()} ({platform.machine()})")
     rep.add(area, INFO, "Python", sys.version.split()[0])
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
-    rep.add(area, OK if in_venv else WARN, "Virtual environment",
-            "active" if in_venv else "NOT active — deps may be installed globally",
-            fix="" if in_venv else "Activate venv: Windows `venv\\Scripts\\activate`")
+    rep.add(
+        area,
+        OK if in_venv else WARN,
+        "Virtual environment",
+        "active" if in_venv else "NOT active — deps may be installed globally",
+        fix="" if in_venv else "Activate venv: Windows `venv\\Scripts\\activate`",
+    )
     pyver = sys.version_info
     if pyver[:2] != (3, 10):
-        rep.add(area, INFO, "Python version note",
-                f"Running {pyver.major}.{pyver.minor}; production target is 3.10 "
-                "(model pickles are built on 3.10).")
+        rep.add(
+            area,
+            INFO,
+            "Python version note",
+            f"Running {pyver.major}.{pyver.minor}; production target is 3.10 (model pickles are built on 3.10).",
+        )
 
 
 def check_env_file(rep: Report) -> None:
     area = "Config & secrets"
     env_path = ROOT / ".env"
     if not env_path.exists():
-        rep.add(area, FAIL, ".env missing",
-                "No .env file — the app falls back to defaults and many features are off.",
-                fix="Run: python scripts/bootstrap_dev.py")
+        rep.add(
+            area,
+            FAIL,
+            ".env missing",
+            "No .env file — the app falls back to defaults and many features are off.",
+            fix="Run: python scripts/bootstrap_dev.py",
+        )
         return
     rep.add(area, OK, ".env present", str(env_path))
     try:
@@ -180,18 +181,28 @@ def check_env_file(rep: Report) -> None:
     }
     for k, why in core.items():
         present = bool(kv.get(k))
-        rep.add(area, OK if present else WARN, f"{k}",
-                "set" if present else f"missing — {why}")
+        rep.add(area, OK if present else WARN, f"{k}", "set" if present else f"missing — {why}")
 
     # Data-feed / news API keys — missing ones explain 403 / timeout log noise.
-    feeds = ["FINNHUB_API_KEY", "TWELVE_API_KEY", "POLYGON_API_KEY", "ALPHA_VANTAGE_API_KEY",
-             "FMP_API_KEY", "NEWSAPI_KEY", "GOLDAPI_KEY"]
+    feeds = [
+        "FINNHUB_API_KEY",
+        "TWELVE_API_KEY",
+        "POLYGON_API_KEY",
+        "ALPHA_VANTAGE_API_KEY",
+        "FMP_API_KEY",
+        "NEWSAPI_KEY",
+        "GOLDAPI_KEY",
+    ]
     missing = [k for k in feeds if not kv.get(k)]
     if missing:
-        rep.add(area, WARN, "Data-feed API keys missing",
-                f"{', '.join(missing)} — these providers will 403/timeout and the app "
-                "rotates to free sources (yfinance). Expected if you haven't subscribed.",
-                fix="Add the keys to .env, or ignore if you rely on the free fallback.")
+        rep.add(
+            area,
+            WARN,
+            "Data-feed API keys missing",
+            f"{', '.join(missing)} — these providers will 403/timeout and the app "
+            "rotates to free sources (yfinance). Expected if you haven't subscribed.",
+            fix="Add the keys to .env, or ignore if you rely on the free fallback.",
+        )
     else:
         rep.add(area, OK, "Data-feed API keys", "all common provider keys present")
 
@@ -256,9 +267,13 @@ def check_backend_import(rep: Report) -> None:
             mod = importlib.import_module("app")
             app = getattr(mod, "app", None)
     except Exception as exc:
-        rep.add(area, FAIL, "Backend failed to import",
-                f"{type(exc).__name__}: {exc}",
-                fix="This blocks the whole API. Fix the import error above first.")
+        rep.add(
+            area,
+            FAIL,
+            "Backend failed to import",
+            f"{type(exc).__name__}: {exc}",
+            fix="This blocks the whole API. Fix the import error above first.",
+        )
         return
 
     if app is None:
@@ -276,10 +291,15 @@ def check_backend_import(rep: Report) -> None:
                 rep.add(area, WARN, "Router not registered", line.strip())
         # Confirm the superadmin surface is mounted (the page you've been hitting).
         sa = [r for r in routes if str(getattr(r, "path", "")).startswith("/api/superadmin")]
-        rep.add(area, OK if sa else FAIL, "SuperAdmin API",
-                f"{len(sa)} /api/superadmin routes mounted" if sa
-                else "no /api/superadmin routes — superadmin pages will have no backend",
-                fix="" if sa else "Check core/router_registry.py SuperAdmin registration.")
+        rep.add(
+            area,
+            OK if sa else FAIL,
+            "SuperAdmin API",
+            f"{len(sa)} /api/superadmin routes mounted"
+            if sa
+            else "no /api/superadmin routes — superadmin pages will have no backend",
+            fix="" if sa else "Check core/router_registry.py SuperAdmin registration.",
+        )
     except Exception as exc:
         rep.add(area, WARN, "Route introspection failed", f"{type(exc).__name__}: {exc}")
 
@@ -296,10 +316,14 @@ def check_services(rep: Report) -> None:
         with socket.create_connection((host, port), timeout=1.5):
             rep.add(area, OK, "Redis", f"reachable at {host}:{port}")
     except Exception:
-        rep.add(area, WARN, "Redis not reachable",
-                f"{host}:{port} refused/timeout — app uses in-memory/ring-buffer fallback "
-                "(fine for single-process dev; required for multi-process prod).",
-                fix="Start Redis, or `pip install fakeredis` to silence the noise locally.")
+        rep.add(
+            area,
+            WARN,
+            "Redis not reachable",
+            f"{host}:{port} refused/timeout — app uses in-memory/ring-buffer fallback "
+            "(fine for single-process dev; required for multi-process prod).",
+            fix="Start Redis, or `pip install fakeredis` to silence the noise locally.",
+        )
 
 
 def check_ml_models(rep: Report) -> None:
@@ -317,27 +341,36 @@ def check_ml_models(rep: Report) -> None:
         rep.add(area, FAIL, "registry.json invalid", f"{type(exc).__name__}: {exc}")
         return
     active = data.get("active_version")
-    rep.add(area, OK if active else WARN, "Active model",
-            f"{active}" if active else "no active_version set in registry")
+    rep.add(
+        area, OK if active else WARN, "Active model", f"{active}" if active else "no active_version set in registry"
+    )
     # Confirm the active artifact actually exists on disk.
     versions = data.get("versions", {})
     v = versions.get(active, {}) if active else {}
     artifact = v.get("path") or v.get("artifact") or v.get("file")
     if artifact:
-        ap = (md / Path(artifact).name)
+        ap = md / Path(artifact).name
         exists = ap.exists() or (md / artifact).exists()
-        rep.add(area, OK if exists else FAIL, "Active model artifact",
-                f"{artifact} {'present' if exists else 'MISSING on disk'}",
-                fix="" if exists else "Retrain or restore the model file; CI checksum-verifies it.")
+        rep.add(
+            area,
+            OK if exists else FAIL,
+            "Active model artifact",
+            f"{artifact} {'present' if exists else 'MISSING on disk'}",
+            fix="" if exists else "Retrain or restore the model file; CI checksum-verifies it.",
+        )
 
 
 def check_frontend(rep: Report) -> None:
     area = "Frontend"
     static_index = ROOT / "static" / "index.html"
     if not static_index.exists():
-        rep.add(area, FAIL, "Frontend not built",
-                "static/index.html missing — the server has no UI to serve (blank page).",
-                fix="Run: cd frontend && npm ci && npm run build  (or just `start.bat`).")
+        rep.add(
+            area,
+            FAIL,
+            "Frontend not built",
+            "static/index.html missing — the server has no UI to serve (blank page).",
+            fix="Run: cd frontend && npm ci && npm run build  (or just `start.bat`).",
+        )
         return
     rep.add(area, OK, "Frontend built", "static/index.html present")
 
@@ -354,21 +387,33 @@ def check_frontend(rep: Report) -> None:
     if build_commit_file.exists() and head:
         built = build_commit_file.read_text(encoding="utf-8", errors="ignore").strip()[:40]
         if built and built != head:
-            rep.add(area, WARN, "Frontend build is STALE",
-                    f"built from {built[:8]} but HEAD is {head[:8]} — the served UI is older "
-                    "than your code. This is the usual cause of blank/old pages.",
-                    fix="Rebuild: delete static/ then run start.bat (rebuilds), and hard-refresh "
-                        "the browser (Ctrl+Shift+R).")
+            rep.add(
+                area,
+                WARN,
+                "Frontend build is STALE",
+                f"built from {built[:8]} but HEAD is {head[:8]} — the served UI is older "
+                "than your code. This is the usual cause of blank/old pages.",
+                fix="Rebuild: delete static/ then run start.bat (rebuilds), and hard-refresh "
+                "the browser (Ctrl+Shift+R).",
+            )
         else:
             rep.add(area, OK, "Frontend build is current", f"matches HEAD {head[:8]}")
     else:
-        rep.add(area, INFO, "Frontend build provenance unknown",
-                "no static/.build-commit stamp — can't tell if the build matches HEAD.")
+        rep.add(
+            area,
+            INFO,
+            "Frontend build provenance unknown",
+            "no static/.build-commit stamp — can't tell if the build matches HEAD.",
+        )
 
     # node_modules (needed to rebuild)
     nm = ROOT / "frontend" / "node_modules"
-    rep.add(area, OK if nm.exists() else INFO, "frontend/node_modules",
-            "present" if nm.exists() else "absent — run `npm ci` before building")
+    rep.add(
+        area,
+        OK if nm.exists() else INFO,
+        "frontend/node_modules",
+        "present" if nm.exists() else "absent — run `npm ci` before building",
+    )
 
 
 def check_frontend_pages(rep: Report) -> None:
@@ -380,8 +425,12 @@ def check_frontend_pages(rep: Report) -> None:
     text = app_tsx.read_text(encoding="utf-8", errors="ignore")
     routes = re.findall(r'<Route\s+path="([^"]+)"', text)
     if routes:
-        rep.add(area, INFO, "Declared routes",
-                f"{len(routes)} client routes, e.g. " + ", ".join(routes[:12]) + (" …" if len(routes) > 12 else ""))
+        rep.add(
+            area,
+            INFO,
+            "Declared routes",
+            f"{len(routes)} client routes, e.g. " + ", ".join(routes[:12]) + (" …" if len(routes) > 12 else ""),
+        )
         for guard, label in (("superAdminOnly", "superadmin-only"), ("adminOnly", "admin-only")):
             if guard in text:
                 rep.add(area, OK, f"{label} guard wired", f"{guard}(...) present in App.tsx")
@@ -394,27 +443,60 @@ def check_frontend_pages(rep: Report) -> None:
 # matched first so they don't masquerade as "real" code errors.
 # ──────────────────────────────────────────────────────────────────────────────
 _LOG_RULES = [
-    (re.compile(r"KeyboardInterrupt|CancelledError|anyio\.WouldBlock|raise_signal\(captured_signal\)|Application shutdown"),
-     "shutdown", "Server shutdown/teardown noise (Ctrl+C cancelling in-flight work) — not a bug."),
-    (re.compile(r"Redis unavailable|Sync Redis connection failed|Redis connect failed|"
-                r"(?:connecting to|connection to).{0,40}6379|fakeredis not installed|"
-                r"using ring buffer|in-memory fallback|circuit OPEN"),
-     "redis", "Redis not running — app uses in-memory/ring-buffer fallback."),
-    (re.compile(r"empty DataFrame returned|not a Coinbase product"),
-     "feed", "Data source returned nothing (off-hours future / unsupported symbol) — expected."),
-    (re.compile(r"403, message='Forbidden'|HTTP 429|Too Many Requests|permanent error \(403|"
-                r"Connection timeout to host|FMP fetch_articles error|HTTP error attempt"),
-     "feed_api", "External data/news API auth/rate-limit/timeout."),
-    (re.compile(r"vaderSentiment not installed|geopolitical sources unavailable|stale cached events|"
-                r"ClamAV.{0,40}not reachable"),
-     "optional", "Optional capability degraded gracefully (missing dep / external service)."),
-    (re.compile(r"no signal for regime|Pipeline: 0 ticks|only 0 bars|Strategy decision timeout|"
-                r"stale \(\d+ s\) — rotating source|GoldFeedManager:.*circuit OPEN"),
-     "warmup", "Cold-start / market-closed: no bars / no signal yet — expected until data warms up."),
-    (re.compile(r"object has no attribute|takes no arguments|unexpected keyword argument|@ -\d+ ms|"
-                r"\bTypeError\b|\bKeyError\b|\bAttributeError\b|\bValueError\b|\bIndexError\b|"
-                r"\bNameError\b|\bImportError\b|\bModuleNotFoundError\b|\bUnboundLocalError\b"),
-     "real", "Possible real code error — investigate."),
+    (
+        re.compile(
+            r"KeyboardInterrupt|CancelledError|anyio\.WouldBlock|raise_signal\(captured_signal\)|Application shutdown"
+        ),
+        "shutdown",
+        "Server shutdown/teardown noise (Ctrl+C cancelling in-flight work) — not a bug.",
+    ),
+    (
+        re.compile(
+            r"Redis unavailable|Sync Redis connection failed|Redis connect failed|"
+            r"(?:connecting to|connection to).{0,40}6379|fakeredis not installed|"
+            r"using ring buffer|in-memory fallback|circuit OPEN"
+        ),
+        "redis",
+        "Redis not running — app uses in-memory/ring-buffer fallback.",
+    ),
+    (
+        re.compile(r"empty DataFrame returned|not a Coinbase product"),
+        "feed",
+        "Data source returned nothing (off-hours future / unsupported symbol) — expected.",
+    ),
+    (
+        re.compile(
+            r"403, message='Forbidden'|HTTP 429|Too Many Requests|permanent error \(403|"
+            r"Connection timeout to host|FMP fetch_articles error|HTTP error attempt"
+        ),
+        "feed_api",
+        "External data/news API auth/rate-limit/timeout.",
+    ),
+    (
+        re.compile(
+            r"vaderSentiment not installed|geopolitical sources unavailable|stale cached events|"
+            r"ClamAV.{0,40}not reachable"
+        ),
+        "optional",
+        "Optional capability degraded gracefully (missing dep / external service).",
+    ),
+    (
+        re.compile(
+            r"no signal for regime|Pipeline: 0 ticks|only 0 bars|Strategy decision timeout|"
+            r"stale \(\d+ s\) — rotating source|GoldFeedManager:.*circuit OPEN"
+        ),
+        "warmup",
+        "Cold-start / market-closed: no bars / no signal yet — expected until data warms up.",
+    ),
+    (
+        re.compile(
+            r"object has no attribute|takes no arguments|unexpected keyword argument|@ -\d+ ms|"
+            r"\bTypeError\b|\bKeyError\b|\bAttributeError\b|\bValueError\b|\bIndexError\b|"
+            r"\bNameError\b|\bImportError\b|\bModuleNotFoundError\b|\bUnboundLocalError\b"
+        ),
+        "real",
+        "Possible real code error — investigate.",
+    ),
 ]
 
 
@@ -441,9 +523,13 @@ def check_runtime_log(rep: Report, log_path: str | None) -> None:
     area = "Runtime log"
     path = _resolve_log(log_path)
     if not path:
-        rep.add(area, INFO, "No runtime log found",
-                "Pass --log <path>, or capture the server console to a file and re-run.",
-                fix="On Windows: python app.py > logs\\server.log 2>&1   (then re-run the doctor)")
+        rep.add(
+            area,
+            INFO,
+            "No runtime log found",
+            "Pass --log <path>, or capture the server console to a file and re-run.",
+            fix="On Windows: python app.py > logs\\server.log 2>&1   (then re-run the doctor)",
+        )
         return
     rep.add(area, INFO, "Analyzing log", str(path))
     try:
@@ -472,31 +558,48 @@ def check_runtime_log(rep: Report, log_path: str | None) -> None:
 
     env_parts = [f"{k}={cats[k]}" for k in ("shutdown", "redis", "feed", "warmup", "optional") if cats.get(k)]
     if env_parts:
-        rep.add(area, INFO, "Environmental / expected lines",
-                ", ".join(env_parts) + " — graceful fallbacks & shutdown noise, not code bugs.")
+        rep.add(
+            area,
+            INFO,
+            "Environmental / expected lines",
+            ", ".join(env_parts) + " — graceful fallbacks & shutdown noise, not code bugs.",
+        )
 
     if cats.get("feed_api"):
-        rep.add(area, WARN, f"External API failures ({cats['feed_api']})",
-                "; ".join(list(api_samples)[:5]),
-                fix="Add provider API keys to .env, or ignore (the free yfinance fallback is used).")
+        rep.add(
+            area,
+            WARN,
+            f"External API failures ({cats['feed_api']})",
+            "; ".join(list(api_samples)[:5]),
+            fix="Add provider API keys to .env, or ignore (the free yfinance fallback is used).",
+        )
 
     if cats.get("real"):
         top = sorted(real_samples.items(), key=lambda x: -x[1])[:8]
-        rep.add(area, WARN, f"Possible code errors in log ({cats['real']})",
-                " | ".join(f'"{k}" (x{v})' for k, v in top),
-                fix="If a line matches an already-fixed issue (e.g. \"object has no attribute 'get'\", "
-                    "\"@ -<n> ms\"), your running process is on OLD code — redeploy from main. "
-                    "Otherwise investigate the specific message.")
+        rep.add(
+            area,
+            WARN,
+            f"Possible code errors in log ({cats['real']})",
+            " | ".join(f'"{k}" (x{v})' for k, v in top),
+            fix="If a line matches an already-fixed issue (e.g. \"object has no attribute 'get'\", "
+            '"@ -<n> ms"), your running process is on OLD code — redeploy from main. '
+            "Otherwise investigate the specific message.",
+        )
     else:
         rep.add(area, OK, "No real code errors in log", "only environmental / shutdown noise detected")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="HOPEFX platform health diagnostic")
-    parser.add_argument("--output", "-o", default=str(ROOT / "diagnostics" / "HOPEFX_HEALTH_REPORT.md"),
-                        help="Path to write the markdown report")
-    parser.add_argument("--log", "-l", default=None,
-                        help="Path to a server log file to analyze (auto-detects logs/*.log if omitted)")
+    parser.add_argument(
+        "--output",
+        "-o",
+        default=str(ROOT / "diagnostics" / "HOPEFX_HEALTH_REPORT.md"),
+        help="Path to write the markdown report",
+    )
+    parser.add_argument(
+        "--log", "-l", default=None, help="Path to a server log file to analyze (auto-detects logs/*.log if omitted)"
+    )
     args = parser.parse_args()
 
     # Ensure the app package is importable.

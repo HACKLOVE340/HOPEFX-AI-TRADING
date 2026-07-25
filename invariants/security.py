@@ -27,7 +27,14 @@ _RULE = "No Compliance Breach"
 
 
 def verify_no_exposed_secret(
-    value: str, placeholder_markers: tuple[str, ...] = ("CHANGE_ME", "your_", "_here", "changeme", "replace_me")
+    value: str,
+    placeholder_markers: tuple[str, ...] = (
+        "CHANGE_ME",
+        "your_",
+        "_here",
+        "changeme",
+        "replace_me",
+    ),  # healer: ignore — these ARE the placeholder values this function detects, not a real secret
 ) -> list[Violation]:
     """A live secret slot must not contain a placeholder (and must be non-empty)."""
     if not value:

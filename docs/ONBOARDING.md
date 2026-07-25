@@ -1,7 +1,7 @@
 # HOPEFX Developer Onboarding Guide
 
-> Last updated: 2026-05-29  
-> This guide takes a new contributor from zero to running tests in one sitting.  
+> Last updated: 2026-05-29
+> This guide takes a new contributor from zero to running tests in one sitting.
 > Complements [`docs/QUICKSTART.md`](QUICKSTART.md) (end-user) and [`CONTRIBUTING.md`](../CONTRIBUTING.md) (PR process).
 
 ---
@@ -37,7 +37,7 @@
 | PostgreSQL (or Docker) | 15+ | Primary database |
 | Redis (or Docker) | 7+ | Cache, pub/sub, tick buffer |
 
-> **Tip — use Docker.**  Running `docker compose up` is the fastest path.  
+> **Tip — use Docker.**  Running `docker compose up` is the fastest path.
 > Pure local setup is described in §2 below for contributors who need breakpoint debugging.
 
 ---
@@ -455,6 +455,6 @@ python hopefx_engine.py --mode paper --symbol XAUUSD
 
 ---
 
-*For architecture deep-dives, see [`docs/architecture.md`](architecture.md).*  
-*For the API reference, see [`docs/API_REFERENCE.md`](API_REFERENCE.md).*  
+*For architecture deep-dives, see [`docs/architecture.md`](architecture.md).*
+*For the API reference, see [`docs/API_REFERENCE.md`](API_REFERENCE.md).*
 *For deployment, see [`DEPLOYMENT.md`](../DEPLOYMENT.md).*

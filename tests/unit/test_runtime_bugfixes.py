@@ -157,7 +157,9 @@ def test_ws_origin_allowed_logic():
     # Missing Origin (non-browser client) → allowed (JWT still gates)
     assert ws_live._ws_origin_allowed(_fake_ws(origin=None, allowed=allow)) is True
     # Same-origin (Origin host == Host) even if not explicitly listed
-    assert ws_live._ws_origin_allowed(_fake_ws(origin="https://app.hopefx.io", host="app.hopefx.io", allowed=[])) is True
+    assert (
+        ws_live._ws_origin_allowed(_fake_ws(origin="https://app.hopefx.io", host="app.hopefx.io", allowed=[])) is True
+    )
     # No allow-list configured → don't block (dev safety)
     assert ws_live._ws_origin_allowed(_fake_ws(origin="https://anything.example", allowed=[])) is True
 
