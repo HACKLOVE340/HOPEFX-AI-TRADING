@@ -140,16 +140,53 @@ else
     sed 's/^/  /' "$CADDYFILE"
     if grep -qE '^[[:space:]]*(root|file_server)' "$CADDYFILE"; then
         bad "This Caddyfile serves files from DISK (root/file_server), not the app."
-        info "That is the classic cause of a stray landing page: Caddy answers from"
-        info "a directory on the host and never touches the container."
+        info "That is one cause of a stray landing page: Caddy answers from a"
+        info "directory on the host and never touches the container."
+    fi
+    # A second upstream is the more common cause: /api/* goes to the app and
+    # everything else — including / — goes somewhere else entirely.
+    # Strip comment lines first — this repo's own Caddyfile documents the bad
+    # pattern in a comment, and matching that would be a false positive.
+    OTHER=$(grep -vE '^[[:space:]]*#' "$CADDYFILE" \
+            | grep -oE 'reverse_proxy[[:space:]]+[^ ]*:[0-9]+' \
+            | grep -oE '[0-9]+$' | grep -v '^8000$' | sort -u)
+    if [ -n "$OTHER" ]; then
+        for p in $OTHER; do
+            bad "Caddyfile proxies to port $p as well as 8000 — split upstream."
+            info "Only /api/* is likely reaching the app; / is served by :$p."
+            info "This app serves its own SPA. There must be ONE upstream: 8000."
+        done
+    fi
+    if grep -qE '^[[:space:]]*@[A-Za-z_]+[[:space:]]+path' "$CADDYFILE"; then
+        warn "A path matcher is present. Check it is not routing / away from 8000."
     fi
     if ! grep -q "$DOMAIN" "$CADDYFILE"; then
         bad "$DOMAIN has no site block — TLS/routing for it is undefined."
     fi
 fi
 
-# ── 6. stray HTML on the host containing the wrong copy ──────────────────────
-hdr "6. Stray HTML files on the host carrying the non-repo copy"
+# ── 6a. a rival web service the proxy might be pointed at ───────────────────
+hdr "6a. Other web servers listening on localhost"
+RIVAL=0
+if command -v ss >/dev/null 2>&1; then
+    for p in 3000 3001 4000 5000 5173 8080 8081; do
+        if ss -ltn 2>/dev/null | grep -qE "127\.0\.0\.1:$p |\*:$p |0\.0\.0\.0:$p "; then
+            RIVAL=1
+            bad "something is listening on :$p"
+            ss -ltnp 2>/dev/null | grep ":$p " | sed 's/^/           /'
+            curl -sS --max-time 8 -o "$TMP/p$p.html" "http://127.0.0.1:$p/" 2>/dev/null
+            t=$(title_of "$TMP/p$p.html")
+            info "  serves: ${t:-<no title>}"
+            if grep -qsF "$BAD_COPY" "$TMP/p$p.html" || grep -qsF "$BAD_COPY2" "$TMP/p$p.html"; then
+                bad "  ^ THIS is the stray landing page. Stop it (see VERDICT)."
+            fi
+        fi
+    done
+fi
+[ "$RIVAL" -eq 0 ] && pass "no rival web service on the usual dev ports"
+
+# ── 6b. stray HTML on the host containing the wrong copy ─────────────────────
+hdr "6b. Stray HTML files on the host carrying the non-repo copy"
 FOUND=0
 for d in /var/www /usr/share/caddy /usr/share/nginx /srv /opt; do
     [ -d "$d" ] || continue

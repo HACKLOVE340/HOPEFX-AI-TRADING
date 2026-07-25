@@ -58,5 +58,23 @@ hopefx.site, www.hopefx.site {
 	# a momentary app restart into a bare 502 from Caddy, hiding the app's own
 	# response. Use the health endpoint for uptime monitoring instead:
 	#   curl -fsS https://hopefx.site/api/health/live
+	#
+	# ── Do NOT split /api/* off to a second upstream ──────────────────────────
+	# A config of the shape
+	#     @api path /api/*
+	#     handle @api { reverse_proxy 127.0.0.1:8000 }
+	#     handle      { reverse_proxy 127.0.0.1:3000 }
+	# routes ONLY the API to this app and hands the entire site — /, /assets/*,
+	# /ws/*, /docs, /pricing, /godmode — to whatever is on :3000. That is a
+	# working API behind a completely different website, and it is exactly how
+	# a placeholder page ends up on the public domain. This app is not
+	# API-only; it serves its own SPA. One upstream, no path matcher.
 	reverse_proxy 127.0.0.1:8000
+}
+
+# Redirect the VPS's default hostname to the real domain, so the provider
+# hostname never serves a second copy of the site (duplicate content, and a
+# second certificate to keep alive). Edit or delete to match your host.
+srv1843143.hstgr.cloud {
+	redir https://hopefx.site{uri} permanent
 }
