@@ -104,16 +104,28 @@ async function login(page) {
     console.log(`${c.yellow}Most routes will redirect to /login, which is not a useful report.${c.off}\n`);
     return false;
   }
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
-  // Match by type rather than a brittle test id, so this keeps working as the
-  // login form is restyled.
-  await page.locator('input[type="email"], input[name="email"]').first().fill(USER);
-  await page.locator('input[type="password"]').first().fill(PASS);
-  await page.locator('button[type="submit"]').first().click();
+  // The identifier field accepts EITHER an email or a username (Login.tsx:195 is
+  // type="text" with autoComplete="username"), so matching input[type="email"]
+  // found nothing and timed out. Match on autocomplete first, then fall back
+  // through the plausible alternatives.
+  //
+  // Login failure must never be fatal either: this used to throw an uncaught
+  // TimeoutError that killed the whole sweep, when the correct behaviour is to
+  // carry on anonymously and audit whatever is publicly reachable.
   try {
+    await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+    const ident = page.locator(
+      'input[autocomplete="username"], input[name="username"], input[name="identifier"], ' +
+      'input[type="email"], input[name="email"], form input[type="text"]',
+    ).first();
+    await ident.waitFor({ state: 'visible', timeout: 15000 });
+    await ident.fill(USER);
+    await page.locator('input[type="password"]').first().fill(PASS);
+    await page.locator('button[type="submit"]').first().click();
     await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 20000 });
-  } catch {
-    console.log(`${c.red}Login did not navigate away from /login — check the credentials.${c.off}`);
+  } catch (e) {
+    console.log(`${c.red}Login failed:${c.off} ${String(e).split('\n')[0].slice(0, 140)}`);
+    console.log(`${c.yellow}Continuing anonymously — public pages will still be audited.${c.off}\n`);
     return false;
   }
   console.log(`${c.green}Logged in as ${USER}${c.off}\n`);
