@@ -374,7 +374,27 @@ class MultiSourceTickFeed:
             from .redis_tick_writer import RedisTickWriter
 
             self._tick_writer = RedisTickWriter(tick_key_ttl=self._tick_key_ttl)
-            await self._tick_writer.connect()
+            # start(), NOT connect(). connect() only acquires the Redis client;
+            # start() also launches the background worker that drains the write
+            # queue into Redis.
+            #
+            # With only connect(), RedisTickWriter.write() enqueued every tick
+            # and returned True — self._redis was set, so it reported success —
+            # while no worker existed to consume the queue. The queue filled to
+            # its maxsize and from then on each new tick evicted the oldest.
+            # Every tick the feed fetched was silently discarded, nothing was
+            # ever published to hopefx:tick, and the startup banner still logged
+            # "redis=connected" because self._tick_writer was truthy.
+            #
+            # Downstream that is: frozen prices in the UI (ws_live had nothing to
+            # broadcast), charts stuck on "Loading market data…", and
+            # "No OHLCV data available" on the indicator builder — one silent
+            # failure presenting as a dozen broken pages.
+            if not await self._tick_writer.start():
+                logger.warning(
+                    "MultiSourceTickFeed: RedisTickWriter did not start — ticks will NOT be "
+                    "persisted or broadcast. Check Redis connectivity (REDIS_URL/REDIS_PASSWORD)."
+                )
         except Exception as exc:
             logger.warning("MultiSourceTickFeed: RedisTickWriter init failed (non-fatal): %s", exc)
             self._tick_writer = None
