@@ -373,6 +373,41 @@ _SLASH_SYMBOL.update(
     }
 )
 
+
+def _to_slash(raw: str) -> str:
+    """Normalise a publisher's symbol to the slash form the frontend keys on.
+
+    The alias table above is hand-maintained and had drifted: USDCHF, AUDUSD,
+    USDCAD, NZDUSD and XPTUSD were all missing. Their ticks were published
+    unchanged as "USDCHF", while frontend/src/pages/Trade.tsx looks them up as
+    prices['USD/CHF'] — so the data arrived and landed under a key nothing
+    read, and the tile rendered "No feed" while the feed was in fact healthy.
+
+    Falling back to a rule instead of another list entry means the next symbol
+    added to config/multi_source_feed.yaml works without a matching edit here:
+
+      XAUUSD   -> XAU/USD      (6-char pair, split 3/3)
+      XAUUSD=X -> XAU/USD      (Yahoo FX suffix stripped first)
+      BTC-USD  -> BTC/USD      (dash form)
+      XAU/USD  -> XAU/USD      (already normalised)
+      US30     -> US30         (index — no pair structure, left alone)
+    """
+    if not raw:
+        return raw
+    if raw in _SLASH_SYMBOL:
+        return _SLASH_SYMBOL[raw]
+    if "/" in raw:
+        return raw
+    s = raw.upper()
+    if s.endswith("=X"):  # Yahoo FX/metal spot suffix
+        s = s[:-2]
+    if "-" in s:  # BTC-USD
+        base, _, quote = s.partition("-")
+        return f"{base}/{quote}" if base and quote else raw
+    if len(s) == 6 and s.isalpha():  # USDCHF -> USD/CHF
+        return f"{s[:3]}/{s[3:]}"
+    return raw  # indices, futures codes: no pair structure to infer
+
 _open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
 _prices_seeded = False
 
@@ -549,7 +584,7 @@ async def _eventbus_tick_broadcaster() -> None:
 
                 # 1. Normalise symbol to slash format (XAU/USD, EUR/USD …)
                 raw_symbol = msg.get("symbol", "XAU/USD")
-                symbol = _SLASH_SYMBOL.get(raw_symbol, raw_symbol)
+                symbol = _to_slash(raw_symbol)
 
                 # 2. Resolve mid from bid+ask or price field
                 raw_bid = msg.get("bid")
