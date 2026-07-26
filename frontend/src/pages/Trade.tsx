@@ -43,7 +43,7 @@ import { OrderEntryForm } from '../components/panels/OrderEntryForm';
 import { PositionsTable } from '../components/panels/PositionsTable';
 import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe } from '../lib/utils';
 import type { PriceTick } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -200,9 +200,9 @@ const AccountBar: React.FC = () => {
         },
         {
           label: 'Margin Level',
-          value: account.margin_level != null ? `${account.margin_level.toFixed(0)}%` : '—',
+          value: fmtMarginLevel(account.margin_level),
           color:
-            (account.margin_level ?? 300) > 200 ? 'text-[#00e676]' :
+            marginLevelIsSafe(account.margin_level) ? 'text-[#00e676]' :
             (account.margin_level ?? 300) > 100 ? 'text-[#ffb800]' : 'text-[#ff1744]',
         },
       ].map(({ label, value, color }) => (

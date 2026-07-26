@@ -81,6 +81,13 @@ export function useLivePriceFeed(symbol: string) {
   const addVolumeDelta = useChartBotStore((s) => s.addVolumeDelta);
 
   _useEffect(() => {
+    // Drop the previous symbol's tick immediately on switch. Without this the
+    // store keeps serving the old price until a tick for the NEW symbol
+    // arrives — and if that feed is slow or absent, it never does. The result
+    // is the header reading "XAG/USD  4,070.80": silver's label over gold's
+    // price, which looks like live data and is not.
+    setLiveTick(null);
+
     const unPrice = subscribe('price_tick', (tick: PriceTick) => {
       if (tick.symbol === symbol || tick.symbol === symbol.replace('/', '')) {
         setLiveTick(tick);

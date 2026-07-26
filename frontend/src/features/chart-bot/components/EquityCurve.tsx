@@ -14,6 +14,7 @@ import { useEquityCurve } from '../hooks/useChartData';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { COLORS, CHART_DIMS } from '../utils/design-tokens';
 import { formatPnl, formatPct, formatDateTime } from '../utils/formatters';
+import { fmtRatio } from '../../../lib/utils';
 import type { EquityPoint } from '../types';
 
 // ─── Period selector ──────────────────────────────────────────────────────────
@@ -33,8 +34,8 @@ interface Stats {
   totalReturn: number;
   totalReturnPct: number;
   maxDrawdown: number;
-  avgSharpe: number;
-  avgSortino: number;
+  avgSharpe: number | null;
+  avgSortino: number | null;
   winDays: number;
   lossDays: number;
   currentEquity: number;
@@ -54,8 +55,8 @@ const StatsBar = memo(({ stats }: { stats: Stats }) => (
     <StatPill label="Total Return" value={formatPnl(stats.totalReturn)} color={stats.totalReturn >= 0 ? COLORS.profit.base : COLORS.loss.base} />
     <StatPill label="Return %" value={formatPct(stats.totalReturnPct)} color={stats.totalReturnPct >= 0 ? COLORS.profit.base : COLORS.loss.base} />
     <StatPill label="Max DD" value={formatPct(stats.maxDrawdown)} color={COLORS.loss.base} />
-    <StatPill label="Sharpe" value={stats.avgSharpe.toFixed(2)} color={stats.avgSharpe >= 1 ? COLORS.profit.base : COLORS.neon.gold} />
-    <StatPill label="Sortino" value={stats.avgSortino.toFixed(2)} color={stats.avgSortino >= 1.5 ? COLORS.profit.base : COLORS.neon.gold} />
+    <StatPill label="Sharpe" value={fmtRatio(stats.avgSharpe)} color={(stats.avgSharpe ?? 0) >= 1 ? COLORS.profit.base : COLORS.neon.gold} />
+    <StatPill label="Sortino" value={fmtRatio(stats.avgSortino)} color={(stats.avgSortino ?? 0) >= 1.5 ? COLORS.profit.base : COLORS.neon.gold} />
     <StatPill label="Win Days" value={`${stats.winDays}`} color={COLORS.profit.base} />
     <StatPill label="Loss Days" value={`${stats.lossDays}`} color={COLORS.loss.base} />
   </div>
@@ -103,20 +104,30 @@ const EquityCurve: React.FC = () => {
   const stats = useMemo<Stats>(() => {
     if (!points.length) return {
       totalReturn: 0, totalReturnPct: 0, maxDrawdown: 0,
-      avgSharpe: 0, avgSortino: 0, winDays: 0, lossDays: 0,
+      avgSharpe: null, avgSortino: null, winDays: 0, lossDays: 0,
       currentEquity: 0, peakEquity: 0,
     };
     const first = points[0].equity;
     const last  = points[points.length - 1].equity;
     const peak  = Math.max(...points.map((p) => p.equity));
     const maxDD = Math.min(...points.map((p) => p.drawdown));
-    const avgSharpe  = points.reduce((a, p) => a + p.sharpe,  0) / points.length;
-    const avgSortino = points.reduce((a, p) => a + p.sortino, 0) / points.length;
+    // Average only over points that actually carry a finite ratio. A fresh
+    // account has no closed trades, so the backend cannot compute Sharpe or
+    // Sortino and omits them — and `undefined + 0` is NaN, which poisons the
+    // whole reduce and renders literally as "NaN" in the stats bar.
+    const finiteAvg = (pick: (p: EquityPoint) => number | null | undefined): number | null => {
+      const vals = points.map(pick).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+      return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
+    };
+    const avgSharpe  = finiteAvg((p) => p.sharpe);
+    const avgSortino = finiteAvg((p) => p.sortino);
     const winDays  = points.filter((p, i) => i > 0 && p.equity > points[i - 1].equity).length;
     const lossDays = points.filter((p, i) => i > 0 && p.equity < points[i - 1].equity).length;
     return {
       totalReturn:    last - first,
-      totalReturnPct: ((last - first) / first) * 100,
+      // first === 0 would give Infinity/NaN — a zero starting equity has no
+      // meaningful percentage return.
+      totalReturnPct: first !== 0 ? ((last - first) / first) * 100 : 0,
       maxDrawdown:    maxDD,
       avgSharpe, avgSortino, winDays, lossDays,
       currentEquity: last, peakEquity: peak,

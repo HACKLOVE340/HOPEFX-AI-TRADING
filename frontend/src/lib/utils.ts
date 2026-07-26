@@ -67,6 +67,36 @@ export function fmtRatio(value: number | null | undefined): string {
   return value.toFixed(2);
 }
 
+/**
+ * Margin level = equity / margin_used * 100.
+ *
+ * Three cases the raw number handles badly:
+ *   - No margin in use. The ratio is undefined (division by zero). Backends
+ *     report this as either 0.0 (api/trading.py) or the 9999.0 sentinel
+ *     (api/ws_live.py, which chose it precisely because the UI read 0.0 as a
+ *     margin call). Both mean "nothing at risk".
+ *   - Negligible margin in use. $0.81 against $10,000 equity is a true
+ *     1234568%, which is arithmetically correct and completely unreadable.
+ *   - Genuinely low margin level, which is the only case worth a number.
+ *
+ * Anything at or above MARGIN_LEVEL_SAFE is reported as ">999%": accurate,
+ * bounded, and unambiguous. Only the actionable range gets a precise figure.
+ */
+export const MARGIN_LEVEL_SAFE = 1000;
+
+export function fmtMarginLevel(value: number | null | undefined): string {
+  if (value == null || !isFinite(value)) return '—';
+  if (value <= 0) return '—';
+  if (value >= MARGIN_LEVEL_SAFE) return '>999%';
+  return `${value.toFixed(0)}%`;
+}
+
+/** True when the margin level represents a healthy account (or no exposure). */
+export function marginLevelIsSafe(value: number | null | undefined): boolean {
+  if (value == null || !isFinite(value)) return true;
+  return value <= 0 || value >= MARGIN_LEVEL_SAFE;
+}
+
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
 /** Returns Tailwind text class for a P&L value */

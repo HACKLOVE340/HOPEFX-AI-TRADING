@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { MetricTile } from '../ui/MetricTile';
-import { fmtPctRaw, fmtRatio, pnlColor } from '../../lib/utils';
+import { fmtPctRaw, fmtRatio, pnlColor, fmtMarginLevel, marginLevelIsSafe } from '../../lib/utils';
 import { notificationsApi } from '../../hooks/useApi';
 
 function NotificationBell() {
@@ -73,7 +73,7 @@ export function AccountBar() {
   }
 
   const marginColor =
-    account.margin_level > 200 ? '#00e676' :
+    marginLevelIsSafe(account.margin_level) ? '#00e676' :
     account.margin_level > 100 ? '#ffb800' : '#ff3b5c';
 
   return (
@@ -108,7 +108,7 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Margin"
-        value={`${account.margin_level.toFixed(0)}%`}
+        value={fmtMarginLevel(account.margin_level)}
         sub={`Used: $${account.margin_used.toFixed(0)}`}
         valueColor={marginColor}
         compact

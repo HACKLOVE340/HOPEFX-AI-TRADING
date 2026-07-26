@@ -11,7 +11,7 @@ import { Panel } from '../ui/Panel';
 import { MetricTile } from '../ui/MetricTile';
 import { StatusDot } from '../ui/StatusDot';
 import { ConfidenceBar } from '../ui/ConfidenceBar';
-import { fmtPrice, fmtPctRaw, fmtRatio, cn } from '../../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtRatio, cn, fmtMarginLevel, marginLevelIsSafe } from '../../lib/utils';
 
 // ── Kill switch indicator ─────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ export function RiskDashboard() {
 
   const marginLevel = account?.margin_level ?? 0;
   const marginColor =
-    marginLevel > 200 ? '#00e676' :
+    marginLevelIsSafe(marginLevel) ? '#00e676' :
     marginLevel > 100 ? '#ffb800' : '#ff3b5c';
 
   return (
@@ -137,7 +137,7 @@ export function RiskDashboard() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider">Margin Level</span>
             <span className="font-mono tabular-nums text-xs font-semibold" style={{ color: marginColor }}>
-              {account ? `${marginLevel.toFixed(0)}%` : '—'}
+              {account ? fmtMarginLevel(marginLevel) : '—'}
             </span>
           </div>
           <div className="h-1.5 bg-[#1e2d3d] rounded-full overflow-hidden">

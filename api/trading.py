@@ -27,6 +27,7 @@ UTC = timezone.utc
 from pathlib import Path as _Path
 from typing import Any
 
+from core.account_metrics import margin_level, margin_level as _margin_level
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -2075,7 +2076,7 @@ async def get_account(
             "equity": _equity,
             "margin_used": _margin_used,
             "margin_free": round(max(_equity - _margin_used, 0.0), 2),
-            "margin_level": round((_equity / _margin_used * 100) if _margin_used > 0 else 0.0, 2),
+            "margin_level": margin_level(_equity, _margin_used),
             "daily_pnl": _daily_pnl,
             "daily_pnl_pct": _daily_pnl_pct,
             "total_pnl": _total_pnl,
@@ -2114,7 +2115,7 @@ async def get_account(
     equity = _f(raw, "equity", "balance", "nav") or balance
     margin_used = _f(raw, "margin_used", "margin", "used_margin")
     margin_free = _f(raw, "margin_available", "free_margin", "available_margin") or max(equity - margin_used, 0.0)
-    margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
+    margin_level = _margin_level(equity, margin_used)
     unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
     daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
     daily_pnl_pct = round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4)
@@ -2225,7 +2226,7 @@ async def get_account(
             margin_used = round(_bnotional * _MARGIN_RATE, 2)
             equity = round(balance + unrealized, 2)
             margin_free = round(max(equity - margin_used, 0.0), 2)
-            margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
+            margin_level = _margin_level(equity, margin_used)
             open_risk_pct = round((_bnotional / equity * 100) if equity > 0 else 0.0, 2)
     except Exception as _exc:
         logger.debug("Broker position reconciliation (live branch) failed: %s", _exc)

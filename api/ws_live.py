@@ -64,6 +64,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+from core.account_metrics import margin_level as _margin_level
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
@@ -1287,11 +1288,10 @@ async def _account_update_broadcaster() -> None:
             equity = float(_acct_get("equity", balance))
             margin_used = float(_acct_get("margin_used", 0.0))
             margin_free = float(_acct_get("margin_free", equity - margin_used))
-            # When margin_used == 0 there are no open positions, so margin level
-            # is effectively infinite (no risk). Use 9999.0 as a sentinel so the
-            # frontend RiskDashboard does not interpret 0.0 as a margin call.
-            # This is the canonical fix for the original bug report (margin_level=0.0).
-            margin_level = (equity / margin_used * 100) if margin_used > 0 else 9999.0
+            # Shared definition — core/account_metrics.margin_level. api/trading.py
+            # used to return 0.0 for the same state, so a flat account read as
+            # "no risk" over this socket and "margin call" over REST.
+            margin_level = _margin_level(equity, margin_used)
             daily_pnl = float(_acct_get("daily_pnl", _acct_get("unrealized_pnl", 0.0)))
             daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
             total_pnl = float(_acct_get("total_pnl", _acct_get("realized_pnl", 0.0)))

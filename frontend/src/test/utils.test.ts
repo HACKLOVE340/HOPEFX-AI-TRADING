@@ -5,6 +5,9 @@
 
 import { describe, it, expect } from 'vitest';
 
+// Real implementations under test (the helpers below this are inline copies).
+import { fmtMarginLevel, marginLevelIsSafe } from '../lib/utils';
+
 // ─── Inline helpers (same logic as Dashboard) ─────────────────────────────────
 
 const fmt = (n: number, d = 2) =>
@@ -367,5 +370,46 @@ describe('GBM price simulation', () => {
   });
   it('dt=0 produces no change', () => {
     expect(gbmStep(2340, 0.01, 0)).toBeCloseTo(2340, 5);
+  });
+});
+
+// ── fmtMarginLevel ────────────────────────────────────────────────────────────
+//
+// Regression: the Trade page displayed "1234568%" for a $10,000 account with
+// $0.81 of margin in use. Arithmetically correct, completely unreadable. And a
+// flat account rendered as a margin-call warning, because api/trading.py
+// returned 0.0 while api/ws_live.py returned the 9999.0 sentinel for the very
+// same state — so the colour depended on which transport answered.
+
+describe('fmtMarginLevel', () => {
+  it('renders an actionable margin level precisely', () => {
+    expect(fmtMarginLevel(150)).toBe('150%');
+    expect(fmtMarginLevel(99.6)).toBe('100%');
+  });
+
+  it('bounds the unreadable end instead of printing it', () => {
+    expect(fmtMarginLevel(1234567.9)).toBe('>999%');   // $0.81 used vs $10,000
+    expect(fmtMarginLevel(9999)).toBe('>999%');        // NO_MARGIN_LEVEL sentinel
+    expect(fmtMarginLevel(1000)).toBe('>999%');
+    expect(fmtMarginLevel(999)).toBe('999%');
+  });
+
+  it('shows no value when there is nothing to report', () => {
+    expect(fmtMarginLevel(0)).toBe('—');
+    expect(fmtMarginLevel(null)).toBe('—');
+    expect(fmtMarginLevel(undefined)).toBe('—');
+    expect(fmtMarginLevel(NaN)).toBe('—');
+    expect(fmtMarginLevel(Infinity)).toBe('—');
+  });
+
+  it('treats a flat account as safe, not as a margin call', () => {
+    // Both backend sentinels, and the negligible-margin case, must be safe.
+    expect(marginLevelIsSafe(9999)).toBe(true);
+    expect(marginLevelIsSafe(1234567.9)).toBe(true);
+    expect(marginLevelIsSafe(0)).toBe(true);
+    expect(marginLevelIsSafe(null)).toBe(true);
+    // A genuinely low margin level is not safe.
+    expect(marginLevelIsSafe(80)).toBe(false);
+    expect(marginLevelIsSafe(150)).toBe(false);
   });
 });
