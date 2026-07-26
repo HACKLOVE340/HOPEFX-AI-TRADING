@@ -1330,8 +1330,34 @@ async def close_all_positions(
             detail="Broker not initialised — cannot close positions. The paper trading engine starts automatically on server startup.",
         )
 
-    closed = await _broker_call("close_all_positions")
-    logger.info("All positions closed: user=%s count=%s", user.sub, closed)
+    owned = _owned_position_ids(user)
+    if owned is None:
+        # Operator: close-all genuinely means the whole book.
+        closed = await _broker_call("close_all_positions")
+        logger.info("All positions closed by operator: user=%s count=%s", user.sub, closed)
+        return {"status": "success", "closed_positions": closed}
+
+    # Ordinary user: close only their own. app_state.broker is a single
+    # process-wide paper engine, so the broker's own close_all_positions()
+    # would liquidate every other trader's book as well — a destructive
+    # cross-user action reachable from the "Close All" button.
+    if not owned:
+        return {"status": "success", "closed_positions": 0}
+
+    closed = 0
+    failed: list[str] = []
+    for pos_id in owned:
+        try:
+            if await _broker_call("close_position", pos_id):
+                closed += 1
+            else:
+                failed.append(pos_id)
+        except Exception as exc:
+            failed.append(pos_id)
+            logger.warning("close_all: could not close position=%s for user=%s: %s", pos_id, user.sub, exc)
+    if failed:
+        logger.warning("close_all partially completed: user=%s closed=%d failed=%d", user.sub, closed, len(failed))
+    logger.info("Own positions closed: user=%s count=%d", user.sub, closed)
     return {"status": "success", "closed_positions": closed}
 
 
