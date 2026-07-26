@@ -309,3 +309,6 @@ paper_run_*.json
 -e
 # Auto-generated at runtime by security/antivirus.py
 security/yara_rules/
+
+# Playwright sweep session (contains a live token)
+frontend/.auth.json

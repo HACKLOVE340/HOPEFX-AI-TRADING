@@ -36,7 +36,7 @@
  */
 
 import { chromium } from '@playwright/test';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 
 const BASE = (process.env.HOPEFX_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 const USER = process.env.HOPEFX_USER || '';
@@ -45,6 +45,24 @@ const args = process.argv.slice(2);
 const HEADED = args.includes('--headed');
 const ONE = args.find((a) => a.startsWith('--route='))?.split('=')[1];
 const OUT = args.find((a) => a.startsWith('--out='))?.split('=')[1];
+
+// Session reuse. Log in once, keep the cookies and localStorage in a file, and
+// every later run starts already authenticated.
+//
+// This is deliberately NOT an auth bypass. A flag that lets the server skip
+// authentication is a backdoor in a live trading platform: it exists in
+// production, it is one config mistake away from being on, and it is the first
+// thing an attacker looks for. Reusing a real session is the same convenience
+// with none of that — the server's auth is never weakened, and the file can be
+// deleted or expire like any other login.
+//
+//   node scripts/page_sweep.mjs --save-auth        (log in, write .auth.json)
+//   node scripts/page_sweep.mjs                    (reuse it — no password needed)
+//
+// .auth.json holds a live session token. It is gitignored; treat it like a
+// password and delete it when you are done.
+const AUTH_FILE = args.find((a) => a.startsWith('--auth='))?.split('=')[1] || '.auth.json';
+const SAVE_AUTH = args.includes('--save-auth');
 
 // Every route from frontend/src/App.tsx, minus the ones a sweep must not touch:
 // auth flows that mutate state (/register, /reset-password), and /checkout,
@@ -128,6 +146,7 @@ const AUDIT_JS = `() => {
   };
   const out = { overflowX: null, offscreen: [], smallTargets: [], namelessControls: [],
                 truncated: [], brokenImages: [], duplicateIds: [], unlabelledInputs: [],
+                junkText: [], deadLinks: [], structure: [], seo: [], mixedContent: [],
                 blockingOverlay: null };
 
   // 1. Horizontal overflow — the page scrolls sideways. The single most common
@@ -203,7 +222,88 @@ const AUDIT_JS = `() => {
     if (!labelled && out.unlabelledInputs.length < 8) out.unlabelledInputs.push(desc(el));
   }
 
-  // 9. A full-viewport element sitting on top of the page. A backdrop that was
+  // 9. Junk text rendered to the user. This is the single highest-signal check
+  //    in the file: "NaN", "undefined", "[object Object]" and "Invalid Date"
+  //    are always bugs, they are always visible, and they are never caught by
+  //    a type checker because they are the STRING form of a broken value.
+  // Built with RegExp(...) rather than /literals/: this whole function lives in
+  // a template literal, where \\b is the BACKSPACE escape and silently corrupts
+  // every word boundary. Strings keep the patterns intact and readable.
+  const JUNK = [
+    'NaN', 'undefined', 'null', 'Invalid Date', 'Infinity',
+    'TODO', 'FIXME',
+  ].map((w) => new RegExp('\\\\b' + w + '\\\\b'))
+    .concat([
+      new RegExp('\\\\[object Object\\\\]'),
+      new RegExp('lorem ipsum', 'i'),
+      new RegExp('coming soon', 'i'),
+      new RegExp('placeholder text', 'i'),
+    ]);
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const t = (node.textContent || '').trim();
+    if (!t || t.length > 400) continue;
+    const el = node.parentElement;
+    if (!el || !visible(el)) continue;
+    for (const re of JUNK) {
+      if (re.test(t)) {
+        if (out.junkText.length < 10) out.junkText.push(desc(el) + ' → "' + t.slice(0, 60) + '"');
+        break;
+      }
+    }
+  }
+
+  // 10. Dead links — rendered as a link, goes nowhere.
+  for (const a of document.querySelectorAll('a')) {
+    if (!visible(a)) continue;
+    const h = (a.getAttribute('href') || '').trim();
+    if (h === '' || h === '#' || h.startsWith('javascript:')) {
+      if (out.deadLinks.length < 8) out.deadLinks.push(desc(a));
+    }
+  }
+
+  // 11. Document structure — one h1 per page, headings not skipping levels.
+  const heads = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(visible);
+  const h1s = heads.filter((h) => h.tagName === 'H1').length;
+  if (h1s === 0) out.structure.push('no <h1> on the page');
+  if (h1s > 1) out.structure.push(h1s + ' <h1> elements (should be one)');
+  let prev = 0;
+  for (const h of heads) {
+    const lvl = Number(h.tagName[1]);
+    if (prev && lvl > prev + 1) {
+      out.structure.push('heading jumps h' + prev + ' → h' + lvl + ' at ' + desc(h));
+      break;
+    }
+    prev = lvl;
+  }
+  if (!document.documentElement.lang) out.structure.push('<html> has no lang attribute');
+
+  // 12. SEO / sharing metadata.
+  const title = (document.title || '').trim();
+  if (!title) out.seo.push('no <title>');
+  else if (title.length < 10) out.seo.push('title suspiciously short: "' + title + '"');
+  const md = document.querySelector('meta[name="description"]');
+  if (!md || !(md.getAttribute('content') || '').trim()) out.seo.push('no meta description');
+
+  // 13. Mixed content — an http:// asset on an https:// page is blocked by the
+  //     browser and shows as a broken element with no obvious cause.
+  if (location.protocol === 'https:') {
+    for (const el of document.querySelectorAll('img[src],script[src],link[href],iframe[src]')) {
+      const u = el.getAttribute('src') || el.getAttribute('href') || '';
+      if (u.startsWith('http://')) {
+        if (out.mixedContent.length < 6) out.mixedContent.push(u.slice(0, 90));
+      }
+    }
+  }
+
+  // 14. A main region that rendered nothing — the page "works" but is empty.
+  const main = document.querySelector('main, [role="main"], #root > div');
+  if (main && (main.textContent || '').trim().length < 20) {
+    out.structure.push('main content region is empty');
+  }
+
+  // 15. A full-viewport element sitting on top of the page. A backdrop that was
   //    never dismissed looks like a working page but eats every click.
   const mid = document.elementFromPoint(Math.floor(vw / 2), Math.floor(vh / 2));
   if (mid) {
@@ -238,7 +338,25 @@ async function sweep(page, route) {
 
   const onConsole = (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 300)); };
   const onPageError = (e) => pageErrors.push(String(e).slice(0, 300));
+  const timings = [];
+  const hosts = new Set();
+  const seenCalls = new Map();
+  let bytes = 0;
+  const onRequestFinished = (req) => {
+    try {
+      const u = new URL(req.url());
+      if (u.host !== new URL(BASE).host) hosts.add(u.host);
+      const t = req.timing();
+      if (t && t.responseEnd > 0) timings.push({ path: u.pathname, ms: Math.round(t.responseEnd) });
+      if (u.pathname.startsWith('/api/')) {
+        const k = req.method() + ' ' + u.pathname + u.search;
+        seenCalls.set(k, (seenCalls.get(k) || 0) + 1);
+      }
+    } catch { /* opaque URL */ }
+  };
   const onResponse = (r) => {
+    const len = Number(r.headers()['content-length'] || 0);
+    if (len) bytes += len;
     if (r.status() >= 400) {
       const u = new URL(r.url());
       failedRequests.push(`${r.status()} ${r.request().method()} ${u.pathname}${u.search}`);
@@ -247,6 +365,7 @@ async function sweep(page, route) {
   page.on('console', onConsole);
   page.on('pageerror', onPageError);
   page.on('response', onResponse);
+  page.on('requestfinished', onRequestFinished);
 
   let navError = null;
   try {
@@ -270,6 +389,7 @@ async function sweep(page, route) {
   page.off('console', onConsole);
   page.off('pageerror', onPageError);
   page.off('response', onResponse);
+  page.off('requestfinished', onRequestFinished);
 
   const redirectedTo = new URL(page.url()).pathname;
   return {
@@ -281,6 +401,14 @@ async function sweep(page, route) {
     pageErrors: [...new Set(pageErrors)],
     consoleErrors: [...new Set(consoleErrors)],
     failedRequests: [...new Set(failedRequests)],
+    // A call fired more than once for the same page render is a double-fetch:
+    // usually a useEffect missing its dependency array, and it doubles load on
+    // the API for no benefit.
+    duplicateCalls: [...seenCalls.entries()].filter(([, n]) => n > 1).map(([k, n]) => `${n}× ${k}`),
+    slowRequests: timings.filter((t) => t.ms > 2000)
+      .sort((a, b) => b.ms - a.ms).slice(0, 5).map((t) => `${t.ms}ms ${t.path}`),
+    thirdPartyHosts: [...hosts],
+    transferredKB: Math.round(bytes / 1024),
     layout,
   };
 }
@@ -291,7 +419,8 @@ function layoutIssueCount(l) {
   return (l.overflowX ? 1 : 0) + (l.blockingOverlay ? 1 : 0) +
     l.offscreen.length + l.smallTargets.length + l.namelessControls.length +
     l.truncated.length + l.brokenImages.length + l.duplicateIds.length +
-    l.unlabelledInputs.length;
+    l.unlabelledInputs.length + (l.junkText || []).length + (l.deadLinks || []).length +
+    (l.structure || []).length + (l.seo || []).length + (l.mixedContent || []).length;
 }
 
 function printLayout(l, indent = '       ') {
@@ -313,6 +442,11 @@ function printLayout(l, indent = '       ') {
   list('broken images', l.brokenImages, c.red);
   list('duplicate DOM ids', l.duplicateIds);
   list('unlabelled inputs', l.unlabelledInputs);
+  list('junk text rendered to the user', l.junkText, c.red);
+  list('dead links', l.deadLinks);
+  list('document structure', l.structure);
+  list('SEO metadata', l.seo, c.dim);
+  list('mixed content (blocked on https)', l.mixedContent, c.red);
 }
 
 const results = [];
@@ -329,11 +463,23 @@ try {
   console.error('or point at an existing one:  PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome');
   process.exit(2);
 }
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const reuseAuth = !SAVE_AUTH && existsSync(AUTH_FILE);
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 900 },
+  ...(reuseAuth ? { storageState: JSON.parse(readFileSync(AUTH_FILE, 'utf8')) } : {}),
+});
+if (reuseAuth) console.log(`${c.green}Reusing the saved session from ${AUTH_FILE}${c.off}\n`);
 const page = await context.newPage();
 
 console.log(`${c.bold}Sweeping ${ROUTES.length} route(s) on ${BASE}${c.off}\n`);
-await login(page);
+if (!reuseAuth) {
+  const ok = await login(page);
+  if (ok && SAVE_AUTH) {
+    await context.storageState({ path: AUTH_FILE });
+    console.log(`${c.green}Session saved to ${AUTH_FILE} — later runs need no password.${c.off}`);
+    console.log(`${c.yellow}It contains a live token. Treat it like a password; delete it when done.${c.off}\n`);
+  }
+}
 
 for (const route of ROUTES) {
   // Functional pass at desktop width, then the same page re-laid-out at tablet
@@ -369,6 +515,9 @@ for (const route of ROUTES) {
   for (const e of r.pageErrors.slice(0, 3))     console.log(`       ${c.red}exception:${c.off} ${e}`);
   for (const e of r.consoleErrors.slice(0, 3))  console.log(`       ${c.red}console:${c.off} ${e}`);
   for (const e of r.failedRequests.slice(0, 6)) console.log(`       ${c.red}request:${c.off} ${e}`);
+  for (const e of r.duplicateCalls.slice(0, 4)) console.log(`       ${c.yellow}double-fetch:${c.off} ${e}`);
+  for (const e of r.slowRequests.slice(0, 3))    console.log(`       ${c.yellow}slow:${c.off} ${e}`);
+  if (r.thirdPartyHosts.length)                  console.log(`       ${c.dim}third-party: ${r.thirdPartyHosts.join(', ')}${c.off}`);
   for (const [vpName, l] of Object.entries(r.layouts)) {
     if (layoutIssueCount(l) === 0) continue;
     console.log(`       ${c.bold}[${vpName}]${c.off}`);
