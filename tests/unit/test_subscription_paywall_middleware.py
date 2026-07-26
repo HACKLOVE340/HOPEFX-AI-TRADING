@@ -69,9 +69,7 @@ def _auth(monkeypatch, role: str, active_sub: bool):
 
     import monetization.subscription as _sub_mod
 
-    monkeypatch.setattr(
-        _sub_mod.subscription_manager, "get_user_subscription", lambda _uid: _Sub(), raising=False
-    )
+    monkeypatch.setattr(_sub_mod.subscription_manager, "get_user_subscription", lambda _uid: _Sub(), raising=False)
 
 
 HDR = {"Authorization": "Bearer tok"}
