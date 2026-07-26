@@ -190,6 +190,29 @@ async def update_notification_prefs(
 # ── Mobile app config ─────────────────────────────────────────────────────────
 
 
+_APP_STORE_URL = "https://apps.apple.com/app/hopefx"
+_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=io.hopefx"
+
+
+def _qr_url(target: str) -> str:
+    """QR image URL for a public store link.
+
+    Rendered via api.qrserver.com, which core/middleware.py already allows in
+    the CSP img-src directive.
+
+    Safe here specifically because these are public app-store URLs — there is
+    nothing confidential to leak by asking a third party to draw them. That is
+    NOT true of the 2FA setup QR, whose otpauth:// URI embeds the TOTP shared
+    secret; that one must be rendered locally.
+    """
+    from urllib.parse import quote
+
+    return (
+        "https://api.qrserver.com/v1/create-qr-code/"
+        f"?size=200x200&data={quote(target, safe='')}&bgcolor=ffffff&color=0f172a&margin=8"
+    )
+
+
 @router.get("/config", summary="Mobile app configuration")
 async def get_mobile_config(user: TokenPayload = Depends(get_current_user)):
     """
@@ -203,8 +226,14 @@ async def get_mobile_config(user: TokenPayload = Depends(get_current_user)):
         "latest_version": "1.0.0",
         "api_base_url": _os.getenv("APP_BASE_URL", "http://localhost:8000"),
         "ws_url": _os.getenv("APP_BASE_URL", "http://localhost:8000").replace("http", "ws"),
-        "app_store_url": "https://apps.apple.com/app/hopefx",
-        "play_store_url": "https://play.google.com/store/apps/details?id=io.hopefx",
+        "app_store_url": _APP_STORE_URL,
+        "play_store_url": _PLAY_STORE_URL,
+        # frontend/src/pages/MobilePage.tsx renders config.qr_ios / qr_android.
+        # These were never returned, so `config?.qr_ios ?? ''` was always empty
+        # and the page showed its "QR code available after login" placeholder
+        # permanently — for every user, logged in or not.
+        "qr_ios": _qr_url(_APP_STORE_URL),
+        "qr_android": _qr_url(_PLAY_STORE_URL),
         "features": {
             "copy_trading": True,
             "push_notifications": True,
