@@ -108,6 +108,11 @@ export const FixApprovalQueue: React.FC = () => {
 
       {loading && fixes.length === 0 ? (
         <div style={emptyStyle}>Loading fixes…</div>
+      ) : error && fixes.length === 0 ? (
+        /* An empty list after a FAILED fetch is not an empty queue — it is an
+           unknown one. Rendering "system is clean" directly beneath the error
+           banner told the operator the opposite of what had happened. */
+        <div style={emptyStyle}>Queue unavailable — could not reach the server.</div>
       ) : fixes.length === 0 ? (
         <div style={emptyStyle}>No fixes queued — system is clean.</div>
       ) : (

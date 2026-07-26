@@ -235,35 +235,41 @@ const SecurityDashboard: React.FC = () => {
         <div style={errorBannerStyle}>{error}</div>
       )}
 
-      {/* KPI strip */}
+      {/* KPI strip
+          When the fetch failed these counters hold their initial values, which
+          are zeros — and a security panel rendering "0 threats · All systems go"
+          on data it never received is worse than rendering an error, because it
+          reads as an all-clear. Zero is a claim; unknown is the truth. While
+          `error` is set every tile shows an em dash and no reassuring subtitle. */}
       <div style={kpiGridStyle}>
         <MetricCard
           label="Total Threats"
-          value={totalAttacks}
-          delta={highSeverity > 0 ? `${highSeverity} high severity` : undefined}
+          value={error ? '—' : totalAttacks}
+          delta={error ? 'Data unavailable' : highSeverity > 0 ? `${highSeverity} high severity` : undefined}
           deltaPositive={false}
           icon="🌐"
           loading={loading}
         />
         <MetricCard
           label="Lockdown"
-          value={lockdown.lockdown_active ? 'ACTIVE' : 'Clear'}
-          delta={lockdown.lockdown_active ? 'Trading paused' : 'All systems go'}
-          deltaPositive={!lockdown.lockdown_active}
+          value={error ? '—' : lockdown.lockdown_active ? 'ACTIVE' : 'Clear'}
+          delta={error ? 'Status unknown' : lockdown.lockdown_active ? 'Trading paused' : 'All systems go'}
+          deltaPositive={!error && !lockdown.lockdown_active}
           icon="🔒"
           loading={loading}
         />
         <MetricCard
           label="Blocked IPs"
-          value={blockedIPs.length}
+          value={error ? '—' : blockedIPs.length}
+          delta={error ? 'Data unavailable' : undefined}
           icon="🚫"
           loading={loading}
         />
         <MetricCard
           label="Critical Alerts"
-          value={alerts.length}
-          delta={alerts.length > 0 ? 'Requires review' : undefined}
-          deltaPositive={alerts.length === 0}
+          value={error ? '—' : alerts.length}
+          delta={error ? 'Data unavailable' : alerts.length > 0 ? 'Requires review' : undefined}
+          deltaPositive={!error && alerts.length === 0}
           icon="🚨"
           loading={loading}
         />
