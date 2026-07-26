@@ -1102,11 +1102,56 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
     }
 
 
+def _owned_position_ids(user: TokenPayload) -> set[str] | None:
+    """IDs of the open positions belonging to *user*, or None for operators.
+
+    Returning None means "no filtering" and is reserved for admin/superadmin,
+    who are expected to see the whole book.
+
+    app_state.broker is a single process-wide paper engine shared by every
+    logged-in user, so its get_positions() returns EVERYONE's positions. Without
+    this filter each user saw every other user's open trades — sizes, entries
+    and P&L — on their own screen.
+
+    Fail closed: a broker position with no owning DB row is hidden from ordinary
+    users rather than shown to all of them. Unowned rows are logged so the gap
+    is visible instead of silently swallowing a user's own position.
+    """
+    if user.role in ("admin", "superadmin"):
+        return None
+    if app_state is None or getattr(app_state, "db_session_factory", None) is None:
+        # No database to establish ownership. Showing the shared book to an
+        # ordinary user would leak other traders' activity, so show nothing.
+        logger.warning(
+            "Position ownership cannot be established (no DB session factory) — "
+            "returning an empty book for user=%s rather than leaking the shared engine.",
+            user.sub,
+        )
+        return set()
+    try:
+        from database.models import Position as _Pos
+
+        with app_state.db_session_factory() as _db:
+            rows = _db.query(_Pos.id).filter(_Pos.user_id == user.sub).all()
+        return {str(r[0]) for r in rows}
+    except Exception as exc:
+        logger.warning(
+            "Position ownership lookup failed for user=%s (%s) — returning an empty book.",
+            user.sub,
+            exc,
+        )
+        return set()
+
+
 @router.get("/positions", response_model=list[PositionResponse])
 async def get_positions(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get all open positions. Requires: any authenticated user.
+    """Get the authenticated user's open positions.
+
+    Operators (admin/superadmin) see the whole book; everyone else sees only
+    the positions they own — see _owned_position_ids for why that filter is
+    necessary and why it fails closed.
 
     Returns an empty list when the broker is not yet initialised so the
     frontend positions table renders cleanly during cold-start.
@@ -1115,6 +1160,19 @@ async def get_positions(
         return []
 
     positions = await _broker_call("get_positions")
+
+    owned = _owned_position_ids(user)
+    if owned is not None:
+        total = len(positions)
+        positions = [p for p in positions if str(getattr(p, "id", "")) in owned]
+        if total != len(positions):
+            logger.debug(
+                "Positions filtered by ownership: user=%s visible=%d hidden=%d",
+                user.sub,
+                len(positions),
+                total - len(positions),
+            )
+
     result = []
     for p in positions:
         entry = float(getattr(p, "entry_price", 0) or 0)

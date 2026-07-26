@@ -451,6 +451,119 @@ def setup_startup_gate(app: FastAPI) -> None:
     logger.info("StartupGateMiddleware registered — data endpoints return 503 until initialized")
 
 
+# ── Paywall ───────────────────────────────────────────────────────────────────
+#
+# Paths reachable without an active subscription. Deliberately narrow: account
+# management, billing, auth, health, and the public/landing surface.
+#
+# Non-/api paths are not listed because they are allowed wholesale — the SPA
+# shell, its JS chunks and its assets must load for the app to be able to RENDER
+# the upgrade wall. Gating them would return raw JSON to a browser navigation.
+_PAYWALL_ALWAYS_ALLOW: tuple[str, ...] = (
+    "/api/auth",  # log in, register, refresh, /me — needed to reach checkout
+    "/api/health",
+    "/api/status",
+    "/api/billing",  # plans, checkout session, customer portal
+    "/api/pricing",  # public plan catalogue
+    "/api/public",  # unauthenticated landing-page data
+    "/api/webhooks",  # payment provider callbacks — never gate these
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/metrics",
+)
+
+
+class SubscriptionPaywallMiddleware(BaseHTTPMiddleware):
+    """Require an active subscription for every API route except the allowlist.
+
+    Enforced here rather than per-route on purpose. A dependency has to be
+    remembered on each new endpoint, and the one that is forgotten is the one
+    that leaks. Middleware is the only version of this that is closed by
+    default: a new route is gated the moment it exists.
+
+    This complements — it does not replace — the frontend SubscriptionGate.
+    That gate decides what to *render*; anyone can call the API directly, so
+    the server has to be the thing that actually says no.
+
+    Off unless HOPEFX_PAYWALL_ENABLED=true. Turning it on without a working
+    payment provider will lock out every non-operator account, since nobody
+    can complete a purchase — which is why it ships disabled.
+
+    Operators (admin/superadmin) are always exempt. That is also the safety
+    valve: if the monetization module is unavailable while the paywall is on,
+    everyone else is denied (an operator explicitly demanded payment, so
+    failing open would silently give the platform away), but an operator can
+    still log in and turn it off.
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if os.getenv("HOPEFX_PAYWALL_ENABLED", "false").lower() not in ("true", "1", "yes"):
+            return await call_next(request)
+
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)  # SPA shell + assets
+        if any(path.startswith(prefix) for prefix in _PAYWALL_ALWAYS_ALLOW):
+            return await call_next(request)
+
+        # Resolve the caller. An unauthenticated request is not the paywall's
+        # problem — let the route's own auth dependency return 401.
+        token = request.headers.get("authorization", "")
+        token = token[7:] if token.lower().startswith("bearer ") else request.cookies.get("hopefx_access_token", "")
+        if not token:
+            return await call_next(request)
+        try:
+            from api.auth import _decode_token
+
+            payload = _decode_token(token)
+        except Exception:
+            return await call_next(request)  # invalid token → let auth 401 it
+
+        if getattr(payload, "role", "") in ("admin", "superadmin"):
+            return await call_next(request)
+
+        try:
+            from monetization.subscription import subscription_manager
+
+            sub = subscription_manager.get_user_subscription(payload.sub)
+            if sub is not None and sub.is_active():
+                return await call_next(request)
+            current_plan = getattr(getattr(sub, "tier", None), "value", "free")
+        except ImportError:
+            logger.critical(
+                "PAYWALL ENABLED but the monetization module is unavailable — denying user=%s. "
+                "Operators are still exempt; set HOPEFX_PAYWALL_ENABLED=false to restore access.",
+                payload.sub,
+            )
+            current_plan = "unknown"
+        except Exception as exc:
+            logger.error("Paywall subscription lookup failed for user=%s: %s", payload.sub, exc)
+            current_plan = "unknown"
+
+        return JSONResponse(
+            status_code=402,  # Payment Required
+            content={
+                "error": "SUBSCRIPTION_REQUIRED",
+                "detail": "An active subscription is required to use HOPEFX.",
+                "current_plan": current_plan,
+                "checkout_url": "/pricing",
+            },
+        )
+
+
+def setup_paywall(app: FastAPI) -> None:
+    """Add the subscription paywall middleware (no-op unless enabled)."""
+    app.add_middleware(SubscriptionPaywallMiddleware)
+    if os.getenv("HOPEFX_PAYWALL_ENABLED", "false").lower() in ("true", "1", "yes"):
+        logger.warning(
+            "SubscriptionPaywallMiddleware ACTIVE — every API route outside the allowlist "
+            "requires an active subscription. Operators are exempt."
+        )
+    else:
+        logger.info("SubscriptionPaywallMiddleware registered but disabled (HOPEFX_PAYWALL_ENABLED=false)")
+
+
 def register_all(app: FastAPI) -> None:
     """Register all middleware on *app* in the correct order.
 
@@ -460,6 +573,7 @@ def register_all(app: FastAPI) -> None:
       startup_gate → CSRF → metrics → security headers → CORS (outermost)
     """
     setup_startup_gate(app)  # innermost — gate before CSRF so 503 beats 403
+    setup_paywall(app)  # after the startup gate: "still booting" beats "pay up"
     setup_csrf_middleware(app)
     setup_metrics_middleware(app)
     setup_security_headers(app)
