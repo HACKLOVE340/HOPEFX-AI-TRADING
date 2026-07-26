@@ -65,6 +65,18 @@ const ROUTES = ONE ? [ONE] : [
   '/pricing', '/upgrade', '/transparency', '/privacy', '/terms', '/risk-disclosure',
 ];
 
+// Real device widths, not arbitrary breakpoints: an iPhone 14, an iPad in
+// portrait, and a laptop. Override with --viewports=mobile,desktop to go faster.
+const ALL_VIEWPORTS = [
+  { name: 'desktop 1440', size: { width: 1440, height: 900 } },
+  { name: 'tablet 834',   size: { width: 834,  height: 1112 } },
+  { name: 'mobile 390',   size: { width: 390,  height: 844 } },
+];
+const vpFilter = args.find((a) => a.startsWith('--viewports='))?.split('=')[1];
+const VIEWPORTS = vpFilter
+  ? ALL_VIEWPORTS.filter((v) => vpFilter.split(',').some((f) => v.name.startsWith(f.trim())))
+  : ALL_VIEWPORTS;
+
 const SETTLE_MS = Number(process.env.SWEEP_SETTLE_MS || 3500);
 const c = { red: '\x1b[31m', yellow: '\x1b[33m', green: '\x1b[32m', dim: '\x1b[2m', bold: '\x1b[1m', off: '\x1b[0m' };
 
@@ -88,6 +100,135 @@ async function login(page) {
   }
   console.log(`${c.green}Logged in as ${USER}${c.off}\n`);
   return true;
+}
+
+/**
+ * Layout audit, run inside the page.
+ *
+ * Deliberately checks things a screenshot cannot tell you and a unit test will
+ * never catch, because they only exist once real content is laid out at a real
+ * width: content wider than the screen, controls too small to tap, buttons with
+ * no accessible name, text silently truncated, invisible overlays swallowing
+ * clicks. Every finding names the element so it is actionable.
+ */
+const AUDIT_JS = `() => {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const desc = (el) => {
+    const id = el.id ? '#' + el.id : '';
+    const cls = (el.className && typeof el.className === 'string')
+      ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+    const txt = (el.textContent || '').trim().slice(0, 30);
+    return el.tagName.toLowerCase() + id + cls + (txt ? ' "' + txt + '"' : '');
+  };
+  const visible = (el) => {
+    const s = getComputedStyle(el);
+    if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const out = { overflowX: null, offscreen: [], smallTargets: [], namelessControls: [],
+                truncated: [], brokenImages: [], duplicateIds: [], unlabelledInputs: [],
+                blockingOverlay: null };
+
+  // 1. Horizontal overflow — the page scrolls sideways. The single most common
+  //    mobile break, and invisible on desktop.
+  const docW = document.documentElement.scrollWidth;
+  if (docW > vw + 2) {
+    const culprits = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (!visible(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.right > vw + 2 && r.width <= docW) culprits.push(desc(el) + ' right=' + Math.round(r.right));
+      if (culprits.length >= 5) break;
+    }
+    out.overflowX = { pageWidth: docW, viewport: vw, culprits };
+  }
+
+  const interactive = [...document.querySelectorAll('button, a[href], input, select, textarea, [role="button"], [role="tab"]')]
+    .filter(visible);
+
+  for (const el of interactive) {
+    const r = el.getBoundingClientRect();
+    // 2. Off-screen but interactive — clipped out of reach.
+    if (r.right < 0 || r.left > vw || r.bottom < 0) {
+      if (out.offscreen.length < 8) out.offscreen.push(desc(el));
+    }
+    // 3. Touch target size. 44px is Apple's HIG minimum, 24px the WCAG 2.2 floor;
+    //    flag below 24 so this reports genuine problems, not stylistic ones.
+    if (r.width > 0 && (r.width < 24 || r.height < 24)) {
+      if (out.smallTargets.length < 8) {
+        out.smallTargets.push(desc(el) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+      }
+    }
+    // 4. Accessible name — icon-only controls a screen reader announces as "button".
+    const name = (el.textContent || '').trim() || el.getAttribute('aria-label') ||
+                 el.getAttribute('title') || el.getAttribute('alt') ||
+                 el.getAttribute('placeholder') || '';
+    if (!name && !el.querySelector('img[alt]:not([alt=""])')) {
+      if (out.namelessControls.length < 8) out.namelessControls.push(desc(el));
+    }
+  }
+
+  // 5. Text clipped by its container — a label that reads "Marg..." instead of
+  //    "Margin Level", or a number cut in half.
+  for (const el of document.querySelectorAll('body *')) {
+    if (!visible(el) || el.children.length) continue;
+    const s = getComputedStyle(el);
+    if (s.overflow === 'visible' && s.textOverflow !== 'ellipsis') continue;
+    if (el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 0) {
+      if (out.truncated.length < 8) out.truncated.push(desc(el));
+    }
+  }
+
+  // 6. Broken images — the icon that never loads.
+  for (const img of document.querySelectorAll('img')) {
+    if (img.complete && img.naturalWidth === 0) {
+      if (out.brokenImages.length < 8) out.brokenImages.push((img.getAttribute('src') || '(no src)').slice(0, 90));
+    }
+  }
+
+  // 7. Duplicate DOM ids — breaks label/aria wiring and querySelector in subtle ways.
+  const seen = new Set();
+  for (const el of document.querySelectorAll('[id]')) {
+    if (seen.has(el.id)) { if (out.duplicateIds.length < 8) out.duplicateIds.push(el.id); }
+    seen.add(el.id);
+  }
+
+  // 8. Inputs with no label at all.
+  for (const el of document.querySelectorAll('input:not([type="hidden"]), select, textarea')) {
+    if (!visible(el)) continue;
+    const labelled = el.getAttribute('aria-label') || el.getAttribute('placeholder') ||
+                     (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) ||
+                     el.closest('label');
+    if (!labelled && out.unlabelledInputs.length < 8) out.unlabelledInputs.push(desc(el));
+  }
+
+  // 9. A full-viewport element sitting on top of the page. A backdrop that was
+  //    never dismissed looks like a working page but eats every click.
+  const mid = document.elementFromPoint(Math.floor(vw / 2), Math.floor(vh / 2));
+  if (mid) {
+    const s = getComputedStyle(mid);
+    const r = mid.getBoundingClientRect();
+    if ((s.position === 'fixed' || s.position === 'absolute') &&
+        r.width >= vw * 0.95 && r.height >= vh * 0.95 && !mid.contains(document.activeElement)) {
+      out.blockingOverlay = desc(mid) + ' z=' + s.zIndex;
+    }
+  }
+  return out;
+}`;
+
+async function auditLayout(page) {
+  try {
+    // Invoked, not just evaluated: page.evaluate treats a string as an
+    // EXPRESSION, so passing the arrow function alone yields a function object
+    // that never runs — and every audit silently comes back empty.
+    return await page.evaluate(`(${AUDIT_JS})()`);
+  } catch (e) {
+    // Never swallow this. A silent audit failure reads as "no problems found",
+    // which is the most misleading output this tool could produce.
+    console.log(`       ${c.yellow}layout audit failed:${c.off} ${String(e).split('\n')[0].slice(0, 160)}`);
+    return null;
+  }
 }
 
 async function sweep(page, route) {
@@ -124,6 +265,8 @@ async function sweep(page, route) {
     stuck = /loading|fetching|awaiting|please wait/i.test(text) && text.length < 900;
   } catch { /* body unreadable — treated as blank below */ }
 
+  const layout = navError ? null : await auditLayout(page);
+
   page.off('console', onConsole);
   page.off('pageerror', onPageError);
   page.off('response', onResponse);
@@ -138,7 +281,38 @@ async function sweep(page, route) {
     pageErrors: [...new Set(pageErrors)],
     consoleErrors: [...new Set(consoleErrors)],
     failedRequests: [...new Set(failedRequests)],
+    layout,
   };
+}
+
+/** Count only the layout findings that are worth acting on. */
+function layoutIssueCount(l) {
+  if (!l) return 0;
+  return (l.overflowX ? 1 : 0) + (l.blockingOverlay ? 1 : 0) +
+    l.offscreen.length + l.smallTargets.length + l.namelessControls.length +
+    l.truncated.length + l.brokenImages.length + l.duplicateIds.length +
+    l.unlabelledInputs.length;
+}
+
+function printLayout(l, indent = '       ') {
+  if (!l) return;
+  if (l.overflowX) {
+    console.log(`${indent}${c.red}scrolls sideways:${c.off} page ${l.overflowX.pageWidth}px wide in a ${l.overflowX.viewport}px viewport`);
+    for (const x of l.overflowX.culprits) console.log(`${indent}  ↳ ${x}`);
+  }
+  if (l.blockingOverlay) console.log(`${indent}${c.red}overlay covering the page:${c.off} ${l.blockingOverlay}`);
+  const list = (label, arr, colour = c.yellow) => {
+    if (arr && arr.length) {
+      console.log(`${indent}${colour}${label} (${arr.length}):${c.off} ${arr.slice(0, 4).join(' | ')}`);
+    }
+  };
+  list('off-screen controls', l.offscreen, c.red);
+  list('tap targets under 24px', l.smallTargets);
+  list('controls with no accessible name', l.namelessControls);
+  list('truncated text', l.truncated);
+  list('broken images', l.brokenImages, c.red);
+  list('duplicate DOM ids', l.duplicateIds);
+  list('unlabelled inputs', l.unlabelledInputs);
 }
 
 const results = [];
@@ -162,11 +336,30 @@ console.log(`${c.bold}Sweeping ${ROUTES.length} route(s) on ${BASE}${c.off}\n`);
 await login(page);
 
 for (const route of ROUTES) {
+  // Functional pass at desktop width, then the same page re-laid-out at tablet
+  // and phone widths. Responsive breakage only exists at a real width — it
+  // cannot be found by reading the CSS or by looking at a desktop screenshot.
+  await page.setViewportSize(VIEWPORTS[0].size);
   const r = await sweep(page, route);
+
+  r.layouts = { [VIEWPORTS[0].name]: r.layout };
+  for (const vp of VIEWPORTS.slice(1)) {
+    await page.setViewportSize(vp.size);
+    try {
+      await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(Math.min(SETTLE_MS, 2500));
+      r.layouts[vp.name] = await auditLayout(page);
+    } catch {
+      r.layouts[vp.name] = null;
+    }
+  }
+  delete r.layout;
   results.push(r);
+
+  const layoutProblems = Object.values(r.layouts).reduce((n, l) => n + layoutIssueCount(l), 0);
   const problems =
     r.pageErrors.length + r.consoleErrors.length + r.failedRequests.length +
-    (r.navError ? 1 : 0) + (r.blank ? 1 : 0) + (r.stuck ? 1 : 0);
+    (r.navError ? 1 : 0) + (r.blank ? 1 : 0) + (r.stuck ? 1 : 0) + layoutProblems;
   const mark = problems === 0 ? `${c.green}ok  ${c.off}` : `${c.red}FAIL${c.off}`;
   const note = r.redirectedTo ? `${c.dim} → ${r.redirectedTo}${c.off}` : '';
   console.log(`${mark} ${route.padEnd(24)}${note}`);
@@ -176,6 +369,11 @@ for (const route of ROUTES) {
   for (const e of r.pageErrors.slice(0, 3))     console.log(`       ${c.red}exception:${c.off} ${e}`);
   for (const e of r.consoleErrors.slice(0, 3))  console.log(`       ${c.red}console:${c.off} ${e}`);
   for (const e of r.failedRequests.slice(0, 6)) console.log(`       ${c.red}request:${c.off} ${e}`);
+  for (const [vpName, l] of Object.entries(r.layouts)) {
+    if (layoutIssueCount(l) === 0) continue;
+    console.log(`       ${c.bold}[${vpName}]${c.off}`);
+    printLayout(l, '         ');
+  }
 }
 
 // ── Summary — the point of the whole exercise ────────────────────────────────
@@ -196,6 +394,29 @@ if (byEndpoint.size) {
   console.log(`${c.dim}One bad endpoint usually explains several "broken" pages — start here.${c.off}`);
   for (const [ep, n] of [...byEndpoint.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)) {
     console.log(`  ${String(n).padStart(3)}×  ${ep}`);
+  }
+}
+
+const byLayoutIssue = new Map();
+for (const r of results) {
+  for (const [vp, l] of Object.entries(r.layouts || {})) {
+    if (!l) continue;
+    const add = (k, n) => { if (n) byLayoutIssue.set(`${k} @ ${vp}`, (byLayoutIssue.get(`${k} @ ${vp}`) || 0) + 1); };
+    add('scrolls sideways', l.overflowX ? 1 : 0);
+    add('overlay blocking the page', l.blockingOverlay ? 1 : 0);
+    add('off-screen controls', l.offscreen.length);
+    add('tap targets under 24px', l.smallTargets.length);
+    add('controls with no accessible name', l.namelessControls.length);
+    add('truncated text', l.truncated.length);
+    add('broken images', l.brokenImages.length);
+    add('duplicate DOM ids', l.duplicateIds.length);
+    add('unlabelled inputs', l.unlabelledInputs.length);
+  }
+}
+if (byLayoutIssue.size) {
+  console.log(`\n${c.bold}Layout issues, by how many pages they affect${c.off}`);
+  for (const [k, n] of [...byLayoutIssue.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)) {
+    console.log(`  ${String(n).padStart(3)} pages  ${k}`);
   }
 }
 
