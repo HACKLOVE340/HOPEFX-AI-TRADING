@@ -18,6 +18,7 @@ POST /api/brain/chat               — free-form chat with the trading assistant
 from __future__ import annotations
 
 import logging
+import asyncio
 import os
 from datetime import datetime, timezone as _tz
 
@@ -59,6 +60,31 @@ def _detect_llm_backend() -> tuple[str | None, str | None]:
     if openai_key:
         return "openai", openai_key
 
+    return None, None
+
+
+_NO_BACKEND_DETAIL = "No LLM backend configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL."
+
+
+def _detect_llm_runtime() -> tuple[str | None, str | None]:
+    """Return (backend, model) for the raw-LLM endpoints below.
+
+    This is the display/config-safe counterpart to ``_detect_llm_backend()``,
+    which returns (backend, api_key). The two were conflated once — health,
+    complete and embed unpacked the tuple as (backend, model), which sent the
+    raw API key to the browser as the "model" field and passed it as the model
+    name on OpenAI calls. Never return a secret from this function.
+
+    Ollama is a fallback for local deployments: used only when neither cloud
+    key is set but OLLAMA_BASE_URL is configured.
+    """
+    backend, _api_key = _detect_llm_backend()
+    if backend == "anthropic":
+        return "anthropic", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+    if backend == "openai":
+        return "openai", os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    if os.getenv("OLLAMA_BASE_URL"):
+        return "ollama", os.getenv("OLLAMA_MODEL", "llama3")
     return None, None
 
 
@@ -511,33 +537,53 @@ async def deactivate_strategy(
 async def brain_health(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    """Return the detected LLM backend and whether it is reachable."""
-    backend, model = _detect_llm_backend()
+    """Return the detected LLM backend and whether it is reachable.
+
+    Response never contains credentials — ``model`` is the model name only.
+    Probe failures return generic detail strings for the same reason.
+    """
+    backend, model = _detect_llm_runtime()
     available = backend is not None
     detail: str | None = None
 
-    if backend == "openai":
+    if backend == "anthropic":
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(
+                    "https://api.anthropic.com/v1/models",
+                    headers={
+                        "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
+                        "anthropic-version": "2023-06-01",
+                    },
+                )
+            available = r.status_code == 200
+            if not available:
+                detail = f"Anthropic API returned HTTP {r.status_code}."
+        except Exception:
+            available = False
+            detail = "Anthropic API unreachable."
+    elif backend == "openai":
         try:
             import openai
 
-            openai.models.list()  # lightweight probe
-        except Exception as exc:
+            await asyncio.to_thread(openai.models.list)  # lightweight probe
+        except Exception:
             available = False
-            detail = str(exc)
+            detail = "OpenAI API unreachable."
     elif backend == "ollama":
         try:
             import httpx
 
-            r = httpx.get(
-                f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/tags",
-                timeout=3,
-            )
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                r = await client.get(f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/tags")
             available = r.status_code == 200
-        except Exception as exc:
+        except Exception:
             available = False
-            detail = str(exc)
+            detail = "Ollama server unreachable."
     else:
-        detail = "No LLM backend configured. Set OPENAI_API_KEY or OLLAMA_BASE_URL."
+        detail = _NO_BACKEND_DETAIL
 
     return {
         "available": available,
@@ -568,7 +614,43 @@ async def brain_complete(
     user: TokenPayload = Depends(get_current_user),
 ) -> CompleteResponse:
     """Send a raw prompt to the configured LLM backend and return the completion."""
-    backend, model = _detect_llm_backend()
+    backend, model = _detect_llm_runtime()
+
+    if backend == "anthropic":
+        try:
+            import httpx
+
+            payload: dict = {
+                "model": model,
+                "max_tokens": body.max_tokens,
+                "temperature": body.temperature,
+                "messages": [{"role": "user", "content": body.prompt}],
+            }
+            if body.system:
+                payload["system"] = body.system
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                r = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json=payload,
+                )
+            r.raise_for_status()
+            data = r.json()
+            text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+            usage = data.get("usage", {})
+            return CompleteResponse(
+                text=text,
+                backend="anthropic",
+                model=model,
+                prompt_tokens=usage.get("input_tokens"),
+                completion_tokens=usage.get("output_tokens"),
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
 
     if backend == "openai":
         try:
@@ -578,7 +660,8 @@ async def brain_complete(
             if body.system:
                 messages.append({"role": "system", "content": body.system})
             messages.append({"role": "user", "content": body.prompt})
-            resp = openai.chat.completions.create(
+            resp = await asyncio.to_thread(
+                openai.chat.completions.create,
                 model=model or "gpt-4o-mini",
                 messages=messages,
                 max_tokens=body.max_tokens,
@@ -599,10 +682,11 @@ async def brain_complete(
             import httpx
 
             base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            payload: dict = {"model": model, "prompt": body.prompt, "stream": False}
+            payload = {"model": model, "prompt": body.prompt, "stream": False}
             if body.system:
                 payload["system"] = body.system
-            r = httpx.post(f"{base}/api/generate", json=payload, timeout=120)
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                r = await client.post(f"{base}/api/generate", json=payload)
             r.raise_for_status()
             data = r.json()
             return CompleteResponse(
@@ -613,10 +697,7 @@ async def brain_complete(
         except Exception as exc:
             raise HTTPException(status_code=502, detail="LLM backend error.") from exc
 
-    raise HTTPException(
-        status_code=503,
-        detail="No LLM backend configured. Set OPENAI_API_KEY or OLLAMA_BASE_URL.",
-    )
+    raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
 
 
 class EmbedRequest(BaseModel):
@@ -635,16 +716,33 @@ async def brain_embed(
     body: EmbedRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> EmbedResponse:
-    """Generate embeddings for one or more texts using the configured LLM backend."""
+    """Generate embeddings for one or more texts using the configured LLM backend.
+
+    Anthropic has no embeddings API, so when it is the primary backend the
+    request falls through to OpenAI (if OPENAI_API_KEY is also set) or Ollama.
+    """
     texts = [body.input] if isinstance(body.input, str) else body.input
-    backend, model = _detect_llm_backend()
+    backend, model = _detect_llm_runtime()
+
+    if backend == "anthropic":
+        if os.getenv("OPENAI_API_KEY"):
+            backend = "openai"
+        elif os.getenv("OLLAMA_BASE_URL"):
+            backend, model = "ollama", os.getenv("OLLAMA_MODEL", "llama3")
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Anthropic has no embeddings API — set OPENAI_API_KEY or OLLAMA_BASE_URL to enable embeddings."
+                ),
+            )
 
     if backend == "openai":
         try:
             import openai
 
             embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-            resp = openai.embeddings.create(model=embed_model, input=texts)
+            resp = await asyncio.to_thread(openai.embeddings.create, model=embed_model, input=texts)
             vectors = [item.embedding for item in resp.data]
             return EmbedResponse(
                 embeddings=vectors,
@@ -662,14 +760,14 @@ async def brain_embed(
             base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             embed_model = os.getenv("OLLAMA_EMBED_MODEL", model or "nomic-embed-text")
             vectors = []
-            for text in texts:
-                r = httpx.post(
-                    f"{base}/api/embeddings",
-                    json={"model": embed_model, "prompt": text},
-                    timeout=30,
-                )
-                r.raise_for_status()
-                vectors.append(r.json().get("embedding", []))
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for text in texts:
+                    r = await client.post(
+                        f"{base}/api/embeddings",
+                        json={"model": embed_model, "prompt": text},
+                    )
+                    r.raise_for_status()
+                    vectors.append(r.json().get("embedding", []))
             return EmbedResponse(
                 embeddings=vectors,
                 backend="ollama",
@@ -679,10 +777,7 @@ async def brain_embed(
         except Exception as exc:
             raise HTTPException(status_code=502, detail="LLM embed error.") from exc
 
-    raise HTTPException(
-        status_code=503,
-        detail="No LLM backend configured. Set OPENAI_API_KEY or OLLAMA_BASE_URL.",
-    )
+    raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
 
 
 # ── Market Analysis & Insights ────────────────────────────────────────────────
