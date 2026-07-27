@@ -2569,6 +2569,13 @@ def build_component_registry(app, feature_flags):
         .register("config", F.init_config, required=True, deps=["env_check"])
         .register("secrets", F.init_secrets_manager, required=False, deps=["config"])
         .register("database", F.init_database, required=True, deps=["config"])
+        # auth_service starts immediately after the database: components run in
+        # registration order once their deps are met, and every second auth
+        # spends behind slower optional components (news, feeds, scanners) is a
+        # second in which POST /api/auth/login returns 503 "Auth service not
+        # initialised" after a restart. Users must be able to log in while the
+        # rest of the platform is still warming up.
+        .register("auth_service", F.init_auth, required=True, deps=["database"])
         # event_bus must connect before cache and broker so the degraded-mode
         # warning fires once at startup rather than mid-operation, and so that
         # components can publish events as soon as they initialise.
@@ -2602,11 +2609,9 @@ def build_component_registry(app, feature_flags):
             deps=["config"],
         )
         .register("news_router", _app(F.init_news_router), required=False, deps=["config"])
-        # ── Auth / risk / trading ─────────────────────────────────────────────
-        # auth_service is required=True: without it every auth endpoint returns
-        # 503 and no user can log in.  It depends on database (already required),
-        # so a DB failure will surface as a database error, not a silent auth skip.
-        .register("auth_service", F.init_auth, required=True, deps=["database"])
+        # ── Risk / trading ────────────────────────────────────────────────────
+        # (auth_service is registered further up, directly after the database,
+        # so login recovers as early as possible after a restart.)
         .register("risk_manager", F.init_risk_manager, required=False, deps=["config"])
         .register("broker", F.init_broker, required=False, deps=["database"])
         .register("price_engine", F.init_price_engine, required=False, deps=["broker"])

@@ -264,7 +264,7 @@ class TestBrainLLMErrorsNotLeaked:
         mock_openai.chat.completions.create.side_effect = RuntimeError(_INTERNAL_MSG)
 
         with (
-            patch.object(brain_mod, "_detect_llm_backend", return_value=("openai", "gpt-4")),
+            patch.object(brain_mod, "_detect_llm_runtime", return_value=("openai", "gpt-4")),
             patch.dict("sys.modules", {"openai": mock_openai}),
         ):
             resp = client.post("/api/brain/complete", json={"prompt": "hello"})
@@ -281,7 +281,7 @@ class TestBrainLLMErrorsNotLeaked:
         mock_httpx.post.side_effect = RuntimeError(_INTERNAL_MSG)
 
         with (
-            patch.object(brain_mod, "_detect_llm_backend", return_value=("ollama", "llama3")),
+            patch.object(brain_mod, "_detect_llm_runtime", return_value=("ollama", "llama3")),
             patch.dict("sys.modules", {"httpx": mock_httpx}),
         ):
             resp = client.post("/api/brain/complete", json={"prompt": "hello"})
@@ -298,7 +298,7 @@ class TestBrainLLMErrorsNotLeaked:
         mock_openai.embeddings.create.side_effect = RuntimeError(_INTERNAL_MSG)
 
         with (
-            patch.object(brain_mod, "_detect_llm_backend", return_value=("openai", "text-embedding-3-small")),
+            patch.object(brain_mod, "_detect_llm_runtime", return_value=("openai", "text-embedding-3-small")),
             patch.dict("sys.modules", {"openai": mock_openai}),
         ):
             resp = client.post("/api/brain/embed", json={"input": "test text"})
@@ -315,7 +315,7 @@ class TestBrainLLMErrorsNotLeaked:
         mock_httpx.post.side_effect = RuntimeError(_INTERNAL_MSG)
 
         with (
-            patch.object(brain_mod, "_detect_llm_backend", return_value=("ollama", "nomic-embed-text")),
+            patch.object(brain_mod, "_detect_llm_runtime", return_value=("ollama", "nomic-embed-text")),
             patch.dict("sys.modules", {"httpx": mock_httpx}),
         ):
             resp = client.post("/api/brain/embed", json={"input": "test text"})
