@@ -165,17 +165,15 @@ def _event_to_out(event: Any) -> EventOut:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-@router.get("/upcoming", response_model=list[EventOut])
-async def get_upcoming(
-    hours: int = Query(168, ge=1, le=720, description="Look-ahead window in hours"),
-    importance: str | None = Query(
-        None,
-        description="Filter: low|medium|high|critical",
-    ),
-    user: TokenPayload = Depends(get_current_user),
-) -> list[EventOut]:
-    """Return upcoming economic events within the specified window."""
+async def _upcoming_events(hours: int, importance: str | None = None) -> list[EventOut]:
+    """Shared implementation for the event-window endpoints.
 
+    Plain-value helper: endpoint functions must NOT call each other directly,
+    because unsupplied FastAPI parameter defaults stay as raw Query(...) marker
+    objects. get_today() used to call get_upcoming() that way — Query(None) is
+    truthy, so importance.lower() raised AttributeError and /calendar/today
+    returned 500 on every request it ever served.
+    """
     from news.economic_calendar import EventImportance
 
     try:
@@ -198,23 +196,36 @@ async def get_upcoming(
             min_imp = EventImportance(importance.lower())
         except ValueError:
             logger.warning(
-                "get_upcoming: unrecognised importance value %r — returning all events",
+                "_upcoming_events: unrecognised importance value %r — returning all events",
                 importance,
             )
     events = cal.get_upcoming_events(hours_ahead=hours, min_importance=min_imp)
     return [_event_to_out(e) for e in events]
 
 
+@router.get("/upcoming", response_model=list[EventOut])
+async def get_upcoming(
+    hours: int = Query(168, ge=1, le=720, description="Look-ahead window in hours"),
+    importance: str | None = Query(
+        None,
+        description="Filter: low|medium|high|critical",
+    ),
+    user: TokenPayload = Depends(get_current_user),
+) -> list[EventOut]:
+    """Return upcoming economic events within the specified window."""
+    return await _upcoming_events(hours=hours, importance=importance)
+
+
 @router.get("/today", response_model=list[EventOut])
 async def get_today(user: TokenPayload = Depends(get_current_user)) -> list[EventOut]:
     """Return today's economic events."""
-    return await get_upcoming(hours=24, user=user)
+    return await _upcoming_events(hours=24)
 
 
 @router.get("/high-impact", response_model=list[EventOut])
 async def get_high_impact(user: TokenPayload = Depends(get_current_user)) -> list[EventOut]:
     """Return HIGH and CRITICAL events in the next 48 hours."""
-    return await get_upcoming(hours=48, importance="high", user=user)
+    return await _upcoming_events(hours=48, importance="high")
 
 
 @router.post("/auto-pause", response_model=AutoPauseConfig)

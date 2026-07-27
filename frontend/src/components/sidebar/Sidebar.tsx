@@ -218,7 +218,12 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
     </span>
     {!collapsed && (
       <>
-        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', flex: 1 }}>
+        {/* ellipsis + title: long labels ("AI Chart Dashboard", "Copy Trading")
+            were hard-clipped mid-word by nowrap+hidden at every viewport width */}
+        <span
+          title={item.label}
+          style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}
+        >
           {item.label}
         </span>
         {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
