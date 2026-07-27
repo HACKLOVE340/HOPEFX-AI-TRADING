@@ -22,6 +22,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from functools import lru_cache
 
 UTC = timezone.utc
 from pathlib import Path as _Path
@@ -2400,18 +2401,30 @@ async def get_prices(
     # Path 3: yfinance real-time fallback (no broker required)
     # Maps internal symbol → yfinance ticker. Only used when no broker/engine
     # is running (API-only mode). Returns real market prices, not synthetic data.
+    # Tickers come from config/multi_source_feed.yaml so this path cannot drift
+    # from the feed config. Symbols configured with an empty ticker (spot metals
+    # and oil, whose Yahoo futures contracts are delisted) are dropped rather
+    # than substituted: the tracking ETFs quote a different number, and a
+    # plausible wrong price on XAUUSD is far more dangerous than no price.
     _YF_MAP = {
-        "XAUUSD": "GC=F",
-        "XAGUSD": "SI=F",
-        "EURUSD": "EURUSD=X",
-        "GBPUSD": "GBPUSD=X",
-        "USDJPY": "USDJPY=X",
-        "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD",
-        "USDCAD": "USDCAD=X",
-        "AUDUSD": "AUDUSD=X",
-        "USDCHF": "USDCHF=X",
-        "NZDUSD": "NZDUSD=X",
+        sym: ticker
+        for sym, ticker in (
+            (s, _yf_ticker_map().get(s, ""))
+            for s in (
+                "XAUUSD",
+                "XAGUSD",
+                "EURUSD",
+                "GBPUSD",
+                "USDJPY",
+                "BTCUSD",
+                "ETHUSD",
+                "USDCAD",
+                "AUDUSD",
+                "USDCHF",
+                "NZDUSD",
+            )
+        )
+        if ticker
     }
     _SPREAD_MAP = {
         "XAUUSD": 0.30,
@@ -2431,6 +2444,8 @@ async def get_prices(
         import yfinance as _yf
 
         tickers = list(_YF_MAP.values())
+        if not tickers:
+            raise RuntimeError("no yfinance tickers configured for any quoted symbol")
         data = await asyncio.wait_for(
             asyncio.to_thread(_yf.download, tickers, period="1d", interval="1m", progress=False, auto_adjust=True),
             timeout=10.0,
@@ -2533,6 +2548,51 @@ def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
         return []
 
 
+# Symbols that have no yfinance equivalent and are absent from
+# multi_source_feed.yaml. Kept empty deliberately: the futures contracts that
+# used to serve them (ES=F, BZ=F) are delisted on Yahoo alongside the rest
+# (see b439bef), and the tracking ETFs quote a different number entirely, so a
+# substitute would be worse than no quote. Real data must come from
+# twelve_data / alpha_vantage.
+_YF_TICKER_EXTRA: dict[str, str] = {"US500": "", "UKOIL": ""}
+
+
+class _NoYFinanceTicker(Exception):
+    """Symbol is configured with no yfinance ticker — skip the source, not an error."""
+
+
+@lru_cache(maxsize=1)
+def _yf_ticker_map() -> dict[str, str]:
+    """Canonical symbol → yfinance ticker, read from ``multi_source_feed.yaml``.
+
+    The mapping lives in the feed config so there is exactly one place where a
+    ticker can be wrong. A previous hand-maintained copy of this table in this
+    module silently kept serving Yahoo's delisted futures contracts (XAUUSD →
+    ``GC=F``) for every chart request long after the config had been corrected.
+
+    An empty string is meaningful and must be preserved: it means "Yahoo does
+    not serve this instrument, skip yfinance entirely" rather than "unknown".
+    """
+    mapping = dict(_YF_TICKER_EXTRA)
+    try:
+        import yaml
+
+        cfg_path = _Path(__file__).resolve().parent.parent / "config" / "multi_source_feed.yaml"
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+        symbols = (cfg.get("multi_source_feed") or {}).get("symbols") or {}
+        for sym, scfg in symbols.items():
+            if isinstance(scfg, dict) and "yfinance_ticker" in scfg:
+                mapping[str(sym).upper()] = str(scfg["yfinance_ticker"] or "")
+    except Exception as exc:
+        logger.warning(
+            "OHLCV: could not read yfinance tickers from multi_source_feed.yaml (%s) — "
+            "yfinance fallback limited to symbols whose ticker equals their name",
+            exc,
+        )
+    return mapping
+
+
 @router.get(
     "/ohlcv/{symbol:path}",
     response_model=list[OHLCVBar],
@@ -2596,25 +2656,6 @@ async def get_ohlcv(
     try:
         import yfinance as _yf
 
-        _YF_MAP = {
-            "XAUUSD": "GC=F",
-            "XAGUSD": "SI=F",
-            "XPTUSD": "PL=F",
-            "EURUSD": "EURUSD=X",
-            "GBPUSD": "GBPUSD=X",
-            "USDJPY": "JPY=X",
-            "USDCHF": "CHF=X",
-            "AUDUSD": "AUDUSD=X",
-            "NZDUSD": "NZDUSD=X",
-            "USDCAD": "CAD=X",
-            "BTCUSD": "BTC-USD",
-            "ETHUSD": "ETH-USD",
-            "US30": "YM=F",
-            "US500": "ES=F",
-            "NAS100": "NQ=F",
-            "USOIL": "CL=F",
-            "UKOIL": "BZ=F",
-        }
         # Map timeframe → (yfinance interval, fetch period).
         # Periods are capped to avoid slow downloads; 4h is resampled from 1h.
         # yfinance only provides 1h data for up to 730 days but fetching that
@@ -2629,7 +2670,12 @@ async def get_ohlcv(
             "1d": ("1d", "max"),  # full daily history (gold back to ~2000)
             "1w": ("1wk", "max"),  # full weekly history
         }
-        ticker_sym = _YF_MAP.get(symbol, symbol)
+        ticker_sym = _yf_ticker_map().get(symbol, symbol)
+        if not ticker_sym:
+            # Configured as "no Yahoo source" — skip the fetch rather than spend
+            # the 20s timeout on a ticker known to return nothing.
+            logger.info("OHLCV: no yfinance ticker configured for %s — skipping to next source", symbol)
+            raise _NoYFinanceTicker(symbol)
         interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
         resample_4h = timeframe == "4h"
 
@@ -2637,7 +2683,10 @@ async def get_ohlcv(
 
         def _fetch_yf() -> list:
             t = _yf.Ticker(ticker_sym)
-            df = t.history(period=period, interval=interval, auto_adjust=True, progress=False)
+            # NB: no `progress=` argument — that is a yf.download() parameter.
+            # Ticker.history() rejects it with TypeError before any network I/O,
+            # which silently disabled this entire fallback for every symbol.
+            df = t.history(period=period, interval=interval, auto_adjust=True)
             if df.empty:
                 return []
             # Resample 1h → 4h when requested
@@ -2674,6 +2723,8 @@ async def get_ohlcv(
         if bars:
             logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
             return bars
+    except _NoYFinanceTicker:
+        pass  # expected, already logged — not a failure
     except Exception as exc:
         logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
 
