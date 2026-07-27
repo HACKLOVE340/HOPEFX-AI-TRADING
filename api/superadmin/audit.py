@@ -73,7 +73,11 @@ async def export_audit_log(user: TokenPayload = Depends(_require_superadmin)):
     import csv
     import io
 
-    result = await get_audit_log(page=1, limit=500, user=user)
+    # Pass every filter explicitly. Omitting user_id/event_type would leave them
+    # as raw Query(None) marker objects (Query(None) is truthy), so get_audit_log
+    # would filter the query by marker objects and the export would silently
+    # return an empty CSV.
+    result = await get_audit_log(page=1, limit=500, user_id=None, event_type=None, user=user)
     buf = io.StringIO()
     writer = csv.DictWriter(
         buf,
