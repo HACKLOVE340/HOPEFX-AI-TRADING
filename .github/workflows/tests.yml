@@ -132,7 +132,7 @@ jobs:
     - name: Upload coverage to Codecov
       # continue-on-error: CODECOV_TOKEN is optional; upload is best-effort.
       continue-on-error: true
-      uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
+      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
       with:
         files: ./coverage.xml
         fail_ci_if_error: false
