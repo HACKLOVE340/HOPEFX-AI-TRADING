@@ -17,7 +17,7 @@ import { useStore } from '../store';
 import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import type { UserRole } from '../store';
 import { Eye, EyeOff, Activity, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, isSafeRedirectPath } from '../lib/utils';
 import AppBackground from '../components/AppBackground';
 
 // ── Error normaliser ──────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ const Login: React.FC = () => {
   }, []);
 
   function resolveDestination(role: UserRole): string {
-    if (requestedFrom && requestedFrom !== '/login') {
+    if (requestedFrom && requestedFrom !== '/login' && isSafeRedirectPath(requestedFrom)) {
       const isSuperAdminRoute = requestedFrom.startsWith('/superadmin');
       const isAdminRoute      = ['/audit', '/security', '/auto-heal', '/whitelabel'].some(
         (p) => requestedFrom.startsWith(p),
