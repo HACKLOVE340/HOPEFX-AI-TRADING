@@ -30,6 +30,26 @@ export function sameSymbol(a: string | null | undefined, b: string | null | unde
   return canonicalSymbol(a) === canonicalSymbol(b);
 }
 
+// ── Safe redirect validation ──────────────────────────────────────────────────
+/**
+ * True only for a same-origin, root-relative path safe to pass to navigate().
+ *
+ * The login page reads its post-auth destination from a user-controlled `?next=`
+ * param. Without this guard, `?next=//evil.com` (protocol-relative) or the
+ * backslash variants `/\evil.com` / `\\evil.com` are an open redirect — and the
+ * installed react-router has an unpatched advisory (GHSA open-redirect via
+ * backslash, CVE-2025-68470 bypass) that its own internal check does not stop.
+ * Validating here closes it regardless of the router version.
+ */
+export function isSafeRedirectPath(path: string | null | undefined): boolean {
+  if (!path || typeof path !== 'string') return false;
+  if (!path.startsWith('/')) return false;          // must be root-relative
+  if (path.startsWith('//')) return false;          // protocol-relative → external
+  if (path.includes('\\')) return false;            // backslash bypass tricks
+  if (/^\/[a-z][a-z0-9+.-]*:/i.test(path)) return false; // /javascript:, /data:, …
+  return true;
+}
+
 // ── Number formatting ─────────────────────────────────────────────────────────
 
 /** Format a price with fixed decimal places, e.g. 2345.67 → "2,345.67" */

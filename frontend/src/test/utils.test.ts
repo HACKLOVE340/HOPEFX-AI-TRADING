@@ -6,7 +6,39 @@
 import { describe, it, expect } from 'vitest';
 
 // Real implementations under test (the helpers below this are inline copies).
-import { fmtMarginLevel, marginLevelIsSafe, canonicalSymbol, sameSymbol } from '../lib/utils';
+import { fmtMarginLevel, marginLevelIsSafe, canonicalSymbol, sameSymbol, isSafeRedirectPath } from '../lib/utils';
+
+// ─── Open-redirect guard ──────────────────────────────────────────────────────
+// The login page redirects to a user-controlled ?next= param. These are the
+// payloads the guard must reject (open redirect / XSS) vs the internal paths
+// it must allow.
+describe('isSafeRedirectPath', () => {
+  it('allows root-relative internal paths', () => {
+    for (const p of ['/dashboard', '/superadmin', '/trade?symbol=XAUUSD', '/a/b/c']) {
+      expect(isSafeRedirectPath(p)).toBe(true);
+    }
+  });
+
+  it('rejects protocol-relative and absolute external URLs', () => {
+    for (const p of ['//evil.com', 'https://evil.com', 'http://evil.com', 'evil.com']) {
+      expect(isSafeRedirectPath(p)).toBe(false);
+    }
+  });
+
+  it('rejects the backslash bypass variants (CVE-2025-68470)', () => {
+    for (const p of ['/\\evil.com', '\\\\evil.com', '/\\/evil.com', '\\evil.com']) {
+      expect(isSafeRedirectPath(p)).toBe(false);
+    }
+  });
+
+  it('rejects scheme-in-path and empty/nullish', () => {
+    expect(isSafeRedirectPath('/javascript:alert(1)')).toBe(false);
+    expect(isSafeRedirectPath('/data:text/html,x')).toBe(false);
+    expect(isSafeRedirectPath('')).toBe(false);
+    expect(isSafeRedirectPath(null)).toBe(false);
+    expect(isSafeRedirectPath(undefined)).toBe(false);
+  });
+});
 
 // ─── Symbol normalisation ─────────────────────────────────────────────────────
 // Regression cover for the bug where a user's open position ("XAUUSD" canonical)
