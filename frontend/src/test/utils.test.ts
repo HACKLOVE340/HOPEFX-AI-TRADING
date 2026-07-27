@@ -6,7 +6,48 @@
 import { describe, it, expect } from 'vitest';
 
 // Real implementations under test (the helpers below this are inline copies).
-import { fmtMarginLevel, marginLevelIsSafe } from '../lib/utils';
+import { fmtMarginLevel, marginLevelIsSafe, canonicalSymbol, sameSymbol } from '../lib/utils';
+
+// ─── Symbol normalisation ─────────────────────────────────────────────────────
+// Regression cover for the bug where a user's open position ("XAUUSD" canonical)
+// vanished from a symbol-scoped panel filtering on the UI form ("XAU/USD"),
+// because the filter used === instead of a format-tolerant compare.
+describe('canonicalSymbol / sameSymbol', () => {
+  it('strips separators and upper-cases', () => {
+    expect(canonicalSymbol('XAU/USD')).toBe('XAUUSD');
+    expect(canonicalSymbol('xau_usd')).toBe('XAUUSD');
+    expect(canonicalSymbol('XAU-USD')).toBe('XAUUSD');
+    expect(canonicalSymbol('XAUUSD')).toBe('XAUUSD');
+  });
+
+  it('treats every formatting of the same instrument as equal', () => {
+    // The exact mismatch that hid open trades: slash form vs canonical.
+    expect(sameSymbol('XAU/USD', 'XAUUSD')).toBe(true);
+    expect(sameSymbol('XAU_USD', 'XAUUSD')).toBe(true);
+    expect(sameSymbol('xau/usd', 'XAUUSD')).toBe(true);
+    expect(sameSymbol('EUR/USD', 'EURUSD')).toBe(true);
+  });
+
+  it('does not conflate different instruments', () => {
+    expect(sameSymbol('XAU/USD', 'XAG/USD')).toBe(false);
+    expect(sameSymbol('EURUSD', 'GBPUSD')).toBe(false);
+  });
+
+  it('handles null / undefined / empty safely', () => {
+    expect(sameSymbol(null, 'XAUUSD')).toBe(false);
+    expect(sameSymbol(undefined, undefined)).toBe(true); // both empty
+    expect(canonicalSymbol(null)).toBe('');
+  });
+
+  it('models the fixed position filter: canonical positions match a UI-form filter', () => {
+    const positions = [
+      { symbol: 'XAUUSD' }, { symbol: 'EURUSD' }, { symbol: 'XAUUSD' },
+    ];
+    const uiSymbol = 'XAU/USD';
+    const shown = positions.filter((p) => sameSymbol(p.symbol, uiSymbol));
+    expect(shown).toHaveLength(2); // was 0 before the fix
+  });
+});
 
 // ─── Inline helpers (same logic as Dashboard) ─────────────────────────────────
 

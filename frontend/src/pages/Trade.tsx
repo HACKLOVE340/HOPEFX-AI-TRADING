@@ -43,7 +43,7 @@ import { OrderEntryForm } from '../components/panels/OrderEntryForm';
 import { PositionsTable } from '../components/panels/PositionsTable';
 import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol } from '../lib/utils';
 import type { PriceTick } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -310,7 +310,7 @@ function TradeHistoryTab() {
 const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
   const signals = useStore(selectSignals);
   const symSignals = signals
-    .filter((s) => s.symbol === symbol && s.status === 'active')
+    .filter((s) => sameSymbol(s.symbol, symbol) && s.status === 'active')
     .slice(0, 3);
 
   if (symSignals.length === 0) {

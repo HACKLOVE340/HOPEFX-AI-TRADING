@@ -11,6 +11,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// ── Symbol normalisation ──────────────────────────────────────────────────────
+// The UI shows instruments as "XAU/USD" but the backend validates every order
+// to canonical MT5 form ("XAUUSD"), and the WS/price feeds sometimes use
+// "XAU_USD". Comparing these with === silently fails: a position stored as
+// "XAUUSD" never matches a panel filtering on "XAU/USD", so the user's own
+// open trades and signals disappear from symbol-scoped views. Always compare
+// through these helpers, never with raw ===.
+
+/** Canonical, comparison-safe form of a symbol: uppercase, no separators. */
+export function canonicalSymbol(s: string | null | undefined): string {
+  if (!s) return '';
+  return s.replace(/[/_\-\s]/g, '').toUpperCase();
+}
+
+/** True when two symbols refer to the same instrument regardless of formatting. */
+export function sameSymbol(a: string | null | undefined, b: string | null | undefined): boolean {
+  return canonicalSymbol(a) === canonicalSymbol(b);
+}
+
 // ── Number formatting ─────────────────────────────────────────────────────────
 
 /** Format a price with fixed decimal places, e.g. 2345.67 → "2,345.67" */

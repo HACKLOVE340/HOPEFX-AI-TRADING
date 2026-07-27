@@ -352,7 +352,20 @@ const CoreChart: React.FC<CoreChartProps> = ({
   // ── Load historical bars ──────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!bars || !candleRef.current || !volRef.current) return;
+    if (!candleRef.current || !volRef.current) return;
+
+    // Depend on `symbol` too: on a symbol switch, useOHLCV's data goes undefined
+    // while the new key loads. Without this branch the effect early-returned and
+    // the PREVIOUS symbol's candles stayed painted under the new symbol's label —
+    // so the picker changed but the chart looked frozen, and worse, showed one
+    // instrument's price action as another's. Clear the series so the chart is
+    // honestly empty until the selected symbol's bars arrive.
+    if (!bars || bars.length === 0) {
+      barsRef.current = [];
+      candleRef.current.setData([]);
+      volRef.current.setData([]);
+      return;
+    }
     barsRef.current = bars;
 
     const candles: CandlestickData[] = bars.map(barToCandle);
@@ -366,7 +379,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
     volRef.current.setData(volumes);
     chartRef.current?.timeScale().fitContent();
     chartRef.current?.timeScale().scrollToRealTime();
-  }, [bars]);
+  }, [bars, symbol]);
 
   // ── Live tick updates ─────────────────────────────────────────────────────
 

@@ -18,7 +18,7 @@ import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError } from '../../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError, sameSymbol } from '../../lib/utils';
 import type { Position } from '../../types';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
@@ -167,8 +167,10 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
   const [error, setError]               = useState<string | null>(null);
   const [confirmCloseAll, setConfirmCloseAll] = useState(false);
 
+  // sameSymbol, not ===: the panel's `symbol` is UI form ("XAU/USD") while a
+  // position's symbol is canonical ("XAUUSD"). A raw === hid every open trade.
   const filtered = symbol
-    ? positions.filter((p) => p.symbol === symbol)
+    ? positions.filter((p) => sameSymbol(p.symbol, symbol))
     : positions;
 
   const totalPnl = filtered.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
