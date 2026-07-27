@@ -408,6 +408,7 @@ def _to_slash(raw: str) -> str:
         return f"{s[:3]}/{s[3:]}"
     return raw  # indices, futures codes: no pair structure to infer
 
+
 _open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
 _prices_seeded = False
 
