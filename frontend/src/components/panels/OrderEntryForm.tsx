@@ -294,6 +294,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
       setLimitPx('');
       qc.invalidateQueries({ queryKey: ['positions'] });
       qc.invalidateQueries({ queryKey: ['account'] });
+      qc.invalidateQueries({ queryKey: ['trades'] });
       onOrderPlaced?.();
     } catch (e: unknown) {
       const httpStatus = (e as { response?: { status?: number } })?.response?.status;

@@ -28,7 +28,7 @@ import {
 } from '../components/panels';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError, sameSymbol } from '../lib/utils';
 import type { PriceTick } from '../store';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -257,7 +257,17 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         if (controller.signal.aborted) return;
         const raw = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data: OHLCVCandle[] = Array.isArray(raw) ? raw : (raw.data ?? []);
-        if (!data.length) { setChartError('No OHLCV data for this symbol/timeframe'); return; }
+        if (!data.length) {
+          // Clear the previous symbol's candles — otherwise switching to a
+          // symbol with no feed leaves the old instrument's chart on screen
+          // under the new symbol's label, so the chart looks stuck.
+          candleRef.current?.setData([]);
+          volRef.current?.setData([]);
+          maRef.current?.setData([]);
+          setCandles([]);
+          setChartError('No OHLCV data for this symbol/timeframe');
+          return;
+        }
         setCandles(data);
         const sorted = [...data].sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
         candleRef.current!.setData(sorted.map((c) => ({
@@ -282,6 +292,12 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
+        // Same reason as the empty-data branch: never leave the old symbol's
+        // candles on screen when the new symbol's fetch fails.
+        candleRef.current?.setData([]);
+        volRef.current?.setData([]);
+        maRef.current?.setData([]);
+        setCandles([]);
         setChartError(extractApiError(err, 'Failed to load chart data'));
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -430,9 +446,7 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
 
 function SignalsSummaryPanel({ symbol }: { symbol: string }) {
   const signals  = useStore((s) => s.signals);
-  const filtered = signals.filter(
-    (sig) => sig.symbol === symbol || sig.symbol === symbol.replace('/', '_')
-  );
+  const filtered = signals.filter((sig) => sameSymbol(sig.symbol, symbol));
 
   if (!filtered.length) return (
     <div className="flex items-center justify-center h-24 text-slate-600 text-[12px]">No signals for {symbol}</div>
@@ -714,6 +728,7 @@ function EmergencyStopButton() {
       setDone(true); setConfirming(false);
       qc.invalidateQueries({ queryKey: ['account'] });
       qc.invalidateQueries({ queryKey: ['positions'] });
+      qc.invalidateQueries({ queryKey: ['trades'] });
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Emergency stop failed'));

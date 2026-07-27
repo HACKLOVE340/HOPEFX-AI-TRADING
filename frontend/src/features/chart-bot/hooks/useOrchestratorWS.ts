@@ -12,6 +12,7 @@
 
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { orchestratorWS, type EventMap } from '../services/orchestrator-ws';
+import { sameSymbol } from '../../../lib/utils';
 import { useStore } from '../../../store';
 
 // Re-export EventMap type for consumers
@@ -89,7 +90,7 @@ export function useLivePriceFeed(symbol: string) {
     setLiveTick(null);
 
     const unPrice = subscribe('price_tick', (tick: PriceTick) => {
-      if (tick.symbol === symbol || tick.symbol === symbol.replace('/', '')) {
+      if (sameSymbol(tick.symbol, symbol)) {
         setLiveTick(tick);
       }
     });

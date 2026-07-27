@@ -159,9 +159,10 @@ export function usePlaceOrder() {
   return useMutation({
     mutationFn: (order: TradeOrder) => placeOrder(order),
     onSuccess: () => {
-      // Invalidate positions and account after a trade
+      // Invalidate positions, account and trade history after a trade
       qc.invalidateQueries({ queryKey: ['positions'] });
       qc.invalidateQueries({ queryKey: ['account'] });
+      qc.invalidateQueries({ queryKey: ['trades'] });
     },
   });
 }
