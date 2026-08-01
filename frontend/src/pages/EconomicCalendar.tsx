@@ -67,6 +67,22 @@ const FLAG: Record<string, string> = {
   AU: '🇦🇺', NZ: '🇳🇿', CH: '🇨🇭', CN: '🇨🇳',
 };
 
+/**
+ * Minutes until an event, computed now.
+ *
+ * The API's `minutes_until` is a snapshot from the moment of the fetch. The page
+ * re-renders every 30 s, but re-rendering a constant changes nothing — the
+ * countdown sat on whatever it said when the data arrived, so "3m" could still
+ * read "3m" an hour after the release. Deriving it from `scheduled_time` makes
+ * the re-render meaningful. Falls back to the server's value if the timestamp
+ * is unparseable.
+ */
+function minutesUntil(ev: { scheduled_time: string; minutes_until: number }): number {
+  const at = Date.parse(ev.scheduled_time);
+  if (!Number.isFinite(at)) return ev.minutes_until;
+  return Math.round((at - Date.now()) / 60_000);
+}
+
 function formatCountdown(minutes: number): string {
   if (minutes <= 0) return 'Now';
   if (minutes < 60) return `${minutes}m`;
@@ -91,13 +107,14 @@ function formatDate(iso: string): string {
 const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = ({ event: ev, onPlanTrade }) => {
   const color = IMPORTANCE_COLOR[ev.importance] ?? '#64748b';
   const flag  = FLAG[ev.country] ?? '🌐';
+  const mins  = minutesUntil(ev);
   const isHighImpact = ev.importance === 'high' || ev.importance === 'critical';
 
   return (
     <div style={{ ...s.eventRow, borderLeft: `3px solid ${color}` }}>
       <div style={s.eventTime}>
         <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{formatTime(ev.scheduled_time)}</div>
-        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{formatCountdown(ev.minutes_until)}</div>
+        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{formatCountdown(mins)}</div>
       </div>
 
       <div style={s.eventMain}>
@@ -108,7 +125,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
         </div>
         <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
           {IMPORTANCE_LABEL[ev.importance]}
-          {ev.minutes_until <= 60 && ev.minutes_until > 0 && (
+          {mins <= 60 && mins > 0 && (
             <span style={{ color: '#f97316', marginLeft: 8 }}>⚠ Approaching</span>
           )}
         </div>
@@ -130,12 +147,31 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
         {ev.actual !== null && (
           <div style={s.dataItem}>
             <span style={s.dataLabel}>Actual</span>
-            <span style={{
-              ...s.dataValue,
-              color: ev.forecast !== null
-                ? ev.actual > ev.forecast ? '#4ade80' : '#f87171'
-                : '#f1f5f9',
-            }}>{ev.actual}</span>
+            {/* Direction vs forecast, not a verdict. Green-for-higher assumed
+                every indicator is bullish when it rises, which is wrong for
+                unemployment, jobless claims and most inflation prints — the
+                page was calling a bad number good. Whether a beat is bullish
+                depends on the indicator, so show the comparison and leave the
+                reading to the trader. */}
+            <span
+              style={{ ...s.dataValue, color: '#f1f5f9' }}
+              title={
+                ev.forecast === null
+                  ? undefined
+                  : ev.actual > ev.forecast
+                    ? `Above forecast (${ev.forecast})`
+                    : ev.actual < ev.forecast
+                      ? `Below forecast (${ev.forecast})`
+                      : `In line with forecast (${ev.forecast})`
+              }
+            >
+              {ev.actual}
+              {ev.forecast !== null && ev.actual !== ev.forecast && (
+                <span style={{ color: '#94a3b8', marginLeft: 4, fontSize: 11 }}>
+                  {ev.actual > ev.forecast ? '▲' : '▼'}
+                </span>
+              )}
+            </span>
           </div>
         )}
         {isHighImpact && onPlanTrade && (

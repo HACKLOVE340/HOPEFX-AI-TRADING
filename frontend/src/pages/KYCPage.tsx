@@ -45,6 +45,26 @@ const DOC_TYPES = [
   { id: 'selfie',           label: 'Selfie with ID',     desc: 'Clear photo of you holding your ID' },
 ];
 
+/**
+ * What the page has always told users it needs: a government-issued ID AND
+ * proof of address. The submit button only ever checked that *something* had
+ * been uploaded, so a single selfie satisfied it — the request went to review
+ * and came back rejected, with the requirement stated on screen the whole time.
+ */
+const IDENTITY_DOC_IDS = ['passport', 'national_id', 'drivers_license'];
+const PROOF_OF_ADDRESS_ID = 'proof_of_address';
+
+function missingRequiredDocs(uploaded: string[]): string[] {
+  const missing: string[] = [];
+  if (!uploaded.some(d => IDENTITY_DOC_IDS.includes(d))) {
+    missing.push('a government-issued ID (passport, national ID, or driver\'s licence)');
+  }
+  if (!uploaded.includes(PROOF_OF_ADDRESS_ID)) {
+    missing.push('proof of address');
+  }
+  return missing;
+}
+
 const STEPS = [
   { id: 1, label: 'Upload Documents' },
   { id: 2, label: 'Submit for Review' },
@@ -186,6 +206,10 @@ const KYCPage: React.FC = () => {
   const status = kycState?.status ?? 'not_started';
   const cfg    = STATUS_CONFIG[status];
   const canSubmit = status === 'not_started' || status === 'rejected';
+  // Enforce what the page already promises, rather than accepting one document
+  // and letting the review come back rejected.
+  const missing = missingRequiredDocs(uploadedDocs);
+  const canSubmitDocs = missing.length === 0;
 
   return (
     <div className="page-content">
@@ -393,14 +417,23 @@ const KYCPage: React.FC = () => {
                 </div>
               )}
 
+              {missing.length > 0 && uploadedDocs.length > 0 && (
+                <div style={{
+                  background: '#1e1b0b', border: '1px solid #78350f', borderRadius: 8,
+                  color: '#fbbf24', fontSize: 13, padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
+                }}>
+                  Still needed before you can submit: {missing.join(' and ')}.
+                </div>
+              )}
+
               <button
                 onClick={handleSubmit}
-                disabled={submitting || uploadedDocs.length === 0}
+                disabled={submitting || !canSubmitDocs}
                 style={{
-                  background: uploadedDocs.length > 0 ? '#1d4ed8' : '#1e293b',
-                  border: `1px solid ${uploadedDocs.length > 0 ? '#3b82f6' : '#334155'}`,
-                  borderRadius: 10, color: uploadedDocs.length > 0 ? '#fff' : '#475569',
-                  cursor: uploadedDocs.length > 0 ? 'pointer' : 'not-allowed',
+                  background: canSubmitDocs ? '#1d4ed8' : '#1e293b',
+                  border: `1px solid ${canSubmitDocs ? '#3b82f6' : '#334155'}`,
+                  borderRadius: 10, color: canSubmitDocs ? '#fff' : '#475569',
+                  cursor: canSubmitDocs ? 'pointer' : 'not-allowed',
                   fontSize: 14, fontWeight: 700, padding: '13px 28px',
                   marginTop: 18, width: '100%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,

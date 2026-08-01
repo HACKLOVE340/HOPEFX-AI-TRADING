@@ -13,8 +13,8 @@
  *   professional+: api-keys, trading
  */
 
-import React, { useState, Suspense, lazy } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
@@ -77,6 +77,11 @@ interface TabDef {
 interface TabGroup {
   label: string;
   tabs: TabDef[];
+}
+
+/** Every tab id that can appear in ?tab= — derived from the groups below. */
+function isKnownTab(value: string | null): value is SettingsTab {
+  return !!value && TAB_GROUPS.some((g) => g.tabs.some((t) => t.id === value));
 }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -227,7 +232,30 @@ const Settings: React.FC = () => {
   const plan       = superAdmin ? 'elite' : storePlan;
   const planRank   = PLAN_RANK[plan] ?? 0;
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  // Honour ?tab= deep links. KYCPage and MobilePage both link to
+  // /settings?tab=security, and the param was ignored entirely — both landed on
+  // Profile, so the "Security" shortcut went somewhere else without saying so.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    isKnownTab(requestedTab) ? requestedTab : 'profile',
+  );
+
+  // Keep the URL in step, so the tab survives a refresh or a shared link.
+  const selectTab = useCallback((tab: SettingsTab) => {
+    setActiveTab(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tab);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  // A later ?tab= change (e.g. clicking a cross-link while already on Settings)
+  // must move the panel too.
+  useEffect(() => {
+    if (isKnownTab(requestedTab) && requestedTab !== activeTab) setActiveTab(requestedTab);
+  }, [requestedTab, activeTab]);
   const [search, setSearch]       = useState('');
 
   const renderSection = () => {
@@ -370,7 +398,7 @@ const Settings: React.FC = () => {
                   ].map(({ id, label }) => (
                     <button
                       key={id}
-                      onClick={() => setActiveTab(id)}
+                      onClick={() => selectTab(id)}
                       style={{
                         padding: '4px 10px',
                         background: activeTab === id ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
@@ -416,7 +444,7 @@ const Settings: React.FC = () => {
                     return (
                       <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => selectTab(tab.id)}
                         style={{
                           ...S.tabBtn,
                           background: active ? '#1e293b' : 'transparent',
