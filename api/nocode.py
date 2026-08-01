@@ -15,11 +15,18 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from api.auth import TokenPayload, get_current_user
+from monetization.subscription import require_plan
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"])
+
+# The Strategy Builder is advertised as a professional-tier feature in the
+# frontend nav (navConfig: plan: 'professional'), but these routes only ever
+# checked *authentication*, so any logged-in free-tier user could deploy a live
+# strategy. The gate has to live here — the client-side one is a courtesy.
+_REQUIRES_PROFESSIONAL = require_plan("professional")
 
 
 # ── Request Models ───────────────────────────────────────────────────────────
@@ -47,15 +54,15 @@ class ValidateRequest(BaseModel):
 @router.get("/templates")
 async def list_templates(
     category: str | None = Query(None, description="Filter by category"),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(_REQUIRES_PROFESSIONAL),
 ):
     """
     List available no-code strategy templates.
     Templates include pre-built strategies that users can deploy with parameter overrides.
 
-    Requires authentication — templates are proprietary strategy IP and must
-    not be exposed to unauthenticated callers (deploy/validate already require
-    auth; this endpoint was previously open).
+    Requires a professional plan — templates are proprietary strategy IP and the
+    Strategy Builder is a professional-tier feature. Authentication alone is not
+    enough: it left every free-tier account able to read and deploy them.
     """
     try:
         from nocode.builder import NoCodeStrategyBuilder
@@ -114,11 +121,14 @@ async def list_templates(
 
 
 @router.post("/deploy")
-async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(get_current_user)):
+async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(_REQUIRES_PROFESSIONAL)):
     """
     Deploy a no-code strategy template as a live strategy.
     Compiles the template with provided parameters and registers it
     in the Dynamic Strategy Registry for activation.
+
+    Requires a professional plan — this activates a strategy against live
+    trading, so it is both a paid feature and a privileged action.
     """
     try:
         from nocode.builder import NoCodeStrategyBuilder
@@ -142,7 +152,10 @@ async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(g
             source_code=compiled["source_code"],
             symbol=request.symbol,
             timeframe=request.timeframe,
-            author_id="nocode_builder",
+            # Attribute the strategy to the account that deployed it. This was
+            # the constant "nocode_builder", so a live strategy could not be
+            # traced back to whoever activated it.
+            author_id=user.sub,
         )
 
         # Auto-activate the deployed strategy
@@ -162,7 +175,7 @@ async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(g
 
 
 @router.post("/validate")
-async def validate_strategy(request: ValidateRequest, user: TokenPayload = Depends(get_current_user)):
+async def validate_strategy(request: ValidateRequest, user: TokenPayload = Depends(_REQUIRES_PROFESSIONAL)):
     """
     Validate a no-code strategy definition (nodes + edges).
     Checks for: valid node types, proper connections, no cycles in execution flow,
@@ -184,10 +197,16 @@ async def validate_strategy(request: ValidateRequest, user: TokenPayload = Depen
 
 
 @router.get("/node-types")
-async def get_node_types():
+async def get_node_types(user: TokenPayload = Depends(get_current_user)):
     """
     Get all available node types for the visual strategy builder.
     Includes: indicators, conditions, actions, ML nodes, risk nodes.
+
+    Requires authentication. The node taxonomy describes the same proprietary
+    strategy surface that /templates was deliberately locked down to protect;
+    this endpoint previously had no auth dependency at all. It stays at
+    authentication rather than the professional gate so the builder UI can
+    render its palette for an upgrade preview.
     """
     node_types = {
         "indicators": [

@@ -23,6 +23,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Spinner } from '../components/Spinner';
 import { extractApiError, fmtPnl } from '../lib/utils';
+import { useConfirm } from '../components/ConfirmDialog';
 
 
 
@@ -42,7 +43,13 @@ interface Subscription {
   status: string;
   renewal_date: string | null;
   price_monthly: number | null;
-  features: string[];
+  /**
+   * Optional because the API omits it for some tiers. It was declared as a
+   * required `string[]`, so `subscription.features.length` type-checked and
+   * crashed the Subscription tab at runtime — the audit's root cause: `strict`
+   * can only enforce what the types claim.
+   */
+  features?: string[];
 }
 
 interface PaymentMethod {
@@ -146,6 +153,7 @@ const AmountForm: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Wallet: React.FC = () => {
+  const confirm = useConfirm();
   const [tab, setTab]                   = useState<WalletTab>('overview');
   const [balance, setBalance]           = useState(0);
   const [frozen, setFrozen]             = useState(0);
@@ -199,26 +207,59 @@ const Wallet: React.FC = () => {
     return () => ctrl.abort();
   }, []);
 
+  /**
+   * Fiat deposit.
+   *
+   * `POST /payments/deposit` returns wire instructions and a `DEP-…` reference,
+   * and — per its own docstring — persists nothing: no wallet_transactions row,
+   * no balance change. The old code discarded that response, announced "Deposit
+   * of $X initiated." and then refetched the balance, which cannot have moved.
+   * So the user was told money was on its way, shown an unchanged balance, and
+   * never given the reference they must quote on the transfer.
+   *
+   * Surface what the server actually said instead.
+   */
   const handleDeposit = useCallback(async (amount: string) => {
-    await api.post('/payments/deposit', { amount: parseFloat(amount) });
-    setActionMsg(`Deposit of $${amount} initiated.`);
+    const r = await api.post<{
+      reference?: string;
+      message?: string;
+      client_secret?: string;
+      instructions?: { bank_name?: string; account_number?: string; routing_number?: string };
+    }>('/payments/deposit', { amount: parseFloat(amount) });
+
+    const inst = r.data?.instructions;
+    const ref = r.data?.reference ?? '—';
+    setActionMsg(
+      inst
+        ? `To complete this deposit, transfer $${amount} to ${inst.bank_name ?? 'the settlement bank'}` +
+          ` · Acct ${inst.account_number ?? '—'} · Routing ${inst.routing_number ?? '—'}` +
+          ` · quote reference ${ref}. Your balance updates once the transfer is received.`
+        : r.data?.message ?? `Deposit reference ${ref} created. Your balance is unchanged until funds arrive.`,
+    );
     setActionMode(null);
-    // Refresh balance. Functional updates so the callback doesn't close over
-    // balance/frozen/pendingBal — keeps the memoised callback stable.
-    const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
-    setBalance(prev => r.data?.balance ?? prev);
-    setFrozen(prev => r.data?.frozen ?? prev);
-    setPendingBal(prev => r.data?.pending ?? prev);
+    // No balance refetch: this endpoint records nothing, so re-reading the
+    // balance would only redraw the same number and imply something happened.
   }, []);
 
+  /**
+   * Fiat withdrawal.
+   *
+   * Also not persisted — the reference exists only in the response body, and
+   * nothing is queued for disbursement. "Withdrawal of $X submitted." claimed
+   * otherwise, so say what is actually true.
+   */
   const handleWithdraw = useCallback(async (amount: string) => {
-    await api.post('/payments/withdraw', { amount: parseFloat(amount) });
-    setActionMsg(`Withdrawal of $${amount} submitted.`);
+    const r = await api.post<{ reference?: string; estimated_arrival?: string }>(
+      '/payments/withdraw', { amount: parseFloat(amount) },
+    );
+    const ref = r.data?.reference ?? '—';
+    setActionMsg(
+      `Withdrawal request received — reference ${ref}` +
+      `${r.data?.estimated_arrival ? ` (estimated ${r.data.estimated_arrival})` : ''}. ` +
+      'Your available balance is unchanged until the payout is processed; ' +
+      'quote this reference if you contact support about it.',
+    );
     setActionMode(null);
-    const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
-    setBalance(prev => r.data?.balance ?? prev);
-    setFrozen(prev => r.data?.frozen ?? prev);
-    setPendingBal(prev => r.data?.pending ?? prev);
   }, []);
 
   const totalDeposited = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
@@ -308,11 +349,13 @@ const Wallet: React.FC = () => {
         </div>
       </div>
 
-      {/* Action success message */}
+      {/* Action outcome. Deliberately informational, not green-for-success:
+          neither deposit nor withdrawal completes anything here, and a green
+          tick next to "your balance is unchanged" reads as a contradiction. */}
       {actionMsg && (
-        <div className="bg-green-950/40 border border-green-900 rounded-lg px-4 py-3 text-green-400 text-sm mb-4">
+        <div role="status" className="bg-blue-950/40 border border-blue-900 rounded-lg px-4 py-3 text-blue-200 text-sm mb-4">
           {actionMsg}
-          <button onClick={() => setActionMsg('')} className="ml-3 text-green-600 hover:text-green-400 bg-transparent border-0 cursor-pointer text-base leading-none">×</button>
+          <button onClick={() => setActionMsg('')} aria-label="Dismiss" className="ml-3 text-blue-400 hover:text-blue-200 bg-transparent border-0 cursor-pointer text-base leading-none">×</button>
         </div>
       )}
 
@@ -441,9 +484,9 @@ const Wallet: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {subscription.features.length > 0 && (
+              {(subscription.features?.length ?? 0) > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                  {subscription.features.map(f => (
+                  {subscription.features?.map(f => (
                     <div key={f} className="flex items-center gap-2 text-slate-400 text-sm">
                       <span className="text-green-400 flex-shrink-0">✓</span> {f}
                     </div>
@@ -458,7 +501,18 @@ const Wallet: React.FC = () => {
                 {subscription.status === 'active' && (
                   <button
                     onClick={async () => {
-                      if (!window.confirm('Cancel your subscription? You keep access until the end of the current billing period.')) return;
+                      // window.confirm is unstyled, unblockable by tests and
+                      // suppressible by the browser ("prevent additional
+                      // dialogs"), which would silently make this button dead.
+                      const ok = await confirm({
+                        title: 'Cancel your subscription?',
+                        description:
+                          'You keep access until the end of the current billing period. ' +
+                          'After that your account returns to the free tier.',
+                        confirmLabel: 'Cancel subscription',
+                        variant: 'danger',
+                      });
+                      if (!ok) return;
                       try {
                         await api.post('/billing/subscription/cancel');
                         const r = await api.get<Subscription>('/billing/subscription');
