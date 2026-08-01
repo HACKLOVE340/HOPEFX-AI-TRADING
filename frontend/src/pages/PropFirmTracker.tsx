@@ -15,7 +15,7 @@ import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 import { propFirmExtApi } from '../hooks/useApi';
 import { usePolling } from '../hooks/usePolling';
 import { useStore, selectIsAuth, useHasHydrated } from '../store';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPrice, fmtPctRaw, fmtPnl } from '../lib/utils';
 
 interface PropFirmStatus {
   daily_loss_pct: number;
@@ -297,14 +297,14 @@ const PropFirmTracker: React.FC = () => {
           {(historyQ.data ?? []).map(ch => (
             <div key={ch.challenge_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e293b' }}>
               <div>
-                <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>Phase {ch.phase} — ${ch.account_size.toLocaleString()}</div>
+                <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>Phase {ch.phase} — ${fmtPrice(ch.account_size, 0)}</div>
                 <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{new Date(ch.started_at).toLocaleDateString()} {ch.ended_at ? `→ ${new Date(ch.ended_at).toLocaleDateString()}` : '(active)'}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: ch.result === 'passed' ? '#4ade80' : ch.result === 'failed' ? '#f87171' : '#f59e0b' }}>
                   {ch.result.toUpperCase()}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>P&L: {ch.profit_pct >= 0 ? '+' : ''}{ch.profit_pct.toFixed(2)}% · DD: {ch.max_drawdown_pct.toFixed(2)}%</div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>P&L: {fmtPctRaw(ch.profit_pct)} · DD: {fmtPctRaw(ch.max_drawdown_pct)}</div>
               </div>
             </div>
           ))}
@@ -362,7 +362,7 @@ const PropFirmTracker: React.FC = () => {
           {(dailyQ.data ?? []).map(d => (
             <div key={d.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #1e293b', fontSize: 13 }}>
               <span style={{ color: '#94a3b8' }}>{d.date}</span>
-              <span style={{ color: d.pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{d.pnl >= 0 ? '+' : ''}${d.pnl.toFixed(2)}</span>
+              <span style={{ color: d.pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{fmtPnl(d.pnl)}</span>
               <span style={{ color: '#64748b' }}>{d.trades} trades</span>
               <span style={{ color: '#f87171' }}>DD: {d.drawdown_pct.toFixed(2)}%</span>
             </div>
@@ -448,7 +448,7 @@ const PropFirmTracker: React.FC = () => {
               fontSize: 16, fontWeight: 700,
               color: status.profit_target_amount >= 0 ? '#4ade80' : '#f87171',
             }}>
-              {status.profit_target_amount >= 0 ? '+' : ''}${status.profit_target_amount.toFixed(2)}
+              {fmtPnl(status.profit_target_amount)}
             </span>
           </div>
         </>

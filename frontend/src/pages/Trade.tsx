@@ -429,9 +429,14 @@ function BottomSection() {
 const KeyboardHints: React.FC = () => (
   <div className="flex flex-wrap gap-3 px-3 py-1.5 rounded bg-[#0a0f1a] border border-[#1e2d3d] text-[10px] text-slate-600">
     {[
-      ['1–6', 'Select symbol'],
-      ['B', 'Buy market'],
-      ['S', 'Sell market'],
+      // Digits select from SYMBOLS, of which only the first nine are reachable
+      // by a single keypress — the hint said 1–6 while twelve are listed.
+      ['1–9', 'Select symbol'],
+      // B and S pre-select a side in the order ticket. They do NOT place an
+      // order; labelling them "Buy market" on a live trading terminal claimed a
+      // keystroke would execute.
+      ['B', 'Pre-fill buy'],
+      ['S', 'Pre-fill sell'],
       ['Esc', 'Cancel / deselect'],
       ['Cmd+K', 'Command palette'],
     ].map(([key, desc]) => (
@@ -490,17 +495,20 @@ const Trade: React.FC = () => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      // 1–6: select symbol by index
+      // Digits 1–9 select a symbol by index. `parseInt` is deliberately bounded
+      // to a single character: without it, any key parsing as a number could
+      // index the list.
+      if (!/^[1-9]$/.test(e.key)) {
+        switch (e.key.toLowerCase()) {
+          case 'b': setPendingSide('buy');  break;
+          case 's': setPendingSide('sell'); break;
+          case 'escape': setPendingSide(null); break;
+        }
+        return;
+      }
       const idx = parseInt(e.key, 10) - 1;
       if (idx >= 0 && idx < SYMBOLS.length) {
         setSelectedSymbol(SYMBOLS[idx]);
-        return;
-      }
-
-      switch (e.key.toLowerCase()) {
-        case 'b': setPendingSide('buy');  break;
-        case 's': setPendingSide('sell'); break;
-        case 'escape': setPendingSide(null); break;
       }
     };
     window.addEventListener('keydown', handler);
