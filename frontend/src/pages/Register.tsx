@@ -155,13 +155,9 @@ const Register: React.FC = () => {
   const planInfo = plan ? PLAN_LABELS[plan] : undefined;
 
   useEffect(() => {
-    const id = 'hopefx-shimmer';
-    if (!document.getElementById(id)) {
-      const st = document.createElement('style');
-      st.id = id;
-      st.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
-      document.head.appendChild(st);
-    }
+    // The `shimmer` keyframes used to be injected into <head> here at runtime.
+    // index.css already defines them globally (audit #68) — as it does `spin` —
+    // so this was a third copy of a rule that was always present.
     document.title = 'Create Account — HOPEFX';
     return () => { document.title = 'HOPEFX'; };
   }, []);

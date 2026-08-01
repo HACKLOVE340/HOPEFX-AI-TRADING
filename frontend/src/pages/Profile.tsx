@@ -107,10 +107,14 @@ const Profile: React.FC = () => {
     finally { setFollowLoading(false); }
   };
 
-  if (loading) return <div style={s.page}><p style={{color:'#94a3b8'}}>Loading profile…</p></div>;
-  if (error)   return <div style={s.page}><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
+  // All four states use the app shell's `page-content` (audit #26). Loading,
+  // error and not-found each used to render inside `s.page` — its own 100vh
+  // box with its own background and padding — while only the success path used
+  // the shell, so the layout jumped on every visit as the profile resolved.
+  if (loading) return <div className="page-content"><p style={{color:'#94a3b8'}}>Loading profile…</p></div>;
+  if (error)   return <div className="page-content"><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
   if (!profile) return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={{ textAlign: 'center', padding: '60px 24px', color: '#64748b' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>👤</div>
         <div style={{ fontSize: 18, fontWeight: 600, color: '#f1f5f9', marginBottom: 8 }}>
@@ -265,7 +269,6 @@ const Profile: React.FC = () => {
 };
 
 const s: Record<string,React.CSSProperties> = {
-  page:{maxWidth:860,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'#f1f5f9',background:'#0f172a',minHeight:'100vh'},
   header:{display:'flex',gap:20,alignItems:'flex-start',marginBottom:28,background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:'24px'},
   avatarWrap:{position:'relative',flexShrink:0},
   avatar:{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'2px solid #334155'},

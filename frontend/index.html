@@ -155,11 +155,8 @@
         touch-action: manipulation;
       }
 
-      /* ── Shimmer animation for skeleton loaders ──────────────────────────── */
-      @keyframes shimmer {
-        0%   { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-      }
+      /* Shimmer keyframes live in index.css, unlayered — one definition, not
+         five (audit #68). */
 
       /* ── Safe-area padding helpers ───────────────────────────────────────── */
       .pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }

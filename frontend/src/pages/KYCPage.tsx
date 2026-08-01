@@ -191,9 +191,10 @@ const KYCPage: React.FC = () => {
     setSubmitMsg('');
     setSubmitOk(false);
     try {
-      const form = new FormData();
-      uploadedDocs.forEach(d => form.append('document_types[]', d));
-      await kycApi.submit(form);
+      // No body: the server derives the document list from what it stored.
+      // Sending document_types[] from the browser was a client-supplied claim
+      // about which documents exist, on a compliance flow (audit #58).
+      await kycApi.submit();
       setSubmitMsg('Documents submitted. Review typically takes 1–2 business days.');
       setSubmitOk(true);
       await loadStatus();

@@ -19,6 +19,7 @@ import { tutorialsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
+import { Modal } from '../components/Modal';
 import { PLAN_LABELS, PLAN_COLORS, type Plan } from '../lib/subscription';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -31,7 +32,8 @@ interface Episode {
   plan: Plan;
   status: string;
   summary: string;
-  chapters: string[];
+  /** Optional — the API omits it for unpublished episodes. */
+  chapters?: string[];
   thumbnail_text: string;
   locked: boolean;
   published: boolean;
@@ -131,27 +133,23 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
 
 // ── Detail modal ──────────────────────────────────────────────────────────────
 
+/**
+ * Episode detail dialog.
+ *
+ * Uses the shared `Modal` (audit #65/#66). This hand-rolled a second modal that
+ * declared `role="dialog" aria-modal="true"` while delivering none of the
+ * behaviour those attributes promise: the Escape handler sat on a non-focusable
+ * `<div>` with no tabIndex and nothing autofocusing it, so `onKeyDown` could
+ * never fire — the key looked implemented and did nothing. There was also no
+ * focus trap and no focus restore, and body scroll continued behind the
+ * overlay. `Modal` already provides all four, plus a portal.
+ */
 const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onClose }) => {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="academy-detail-title"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9000, display: 'flex',
-        alignItems: 'center', justifyContent: 'center', padding: 16,
-        background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-      }}
-    >
-      <div style={{
-        background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 14,
-        width: '100%', maxWidth: 760, maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-      }}>
+    <Modal open onClose={onClose} maxWidth={760}>
+      <div>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '18px 20px', borderBottom: '1px solid #1e2d3d' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 14, borderBottom: '1px solid #1e2d3d' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: '0.08em' }}>
               EPISODE {ep.episode.toString().padStart(2, '0')} · {ep.level} · {ep.duration_min} min
@@ -167,7 +165,7 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
         </div>
 
         {/* Player or preview */}
-        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {ep.published && ep.video_url ? (
             <div style={{ position: 'relative', paddingTop: '56.25%', background: '#000', borderRadius: 10, overflow: 'hidden' }}>
               <iframe
@@ -201,12 +199,18 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
               Chapters
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 8 }}>
-              {ep.chapters.map((c) => {
-                const [time, ...rest] = c.split(' ');
+              {(ep.chapters ?? []).map((c) => {
+                // Chapters arrive as "MM:SS Title". Splitting on the first space
+                // unconditionally meant a chapter without a leading timestamp
+                // lost its first word into the time column. Only treat the first
+                // token as a time when it looks like one.
+                const m = /^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.*)$/.exec(c.trim());
+                const time  = m ? m[1] : '';
+                const title = m ? m[2] : c.trim();
                 return (
                   <div key={c} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid #0f1a2a' }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{time}</span>
-                    <span style={{ fontSize: 12, color: '#cbd5e1' }}>{rest.join(' ')}</span>
+                    <span style={{ fontSize: 12, color: '#cbd5e1' }}>{title}</span>
                   </div>
                 );
               })}
@@ -214,7 +218,7 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

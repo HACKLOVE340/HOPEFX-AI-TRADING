@@ -234,7 +234,12 @@
   .app-shell {
     display: flex;
     flex-direction: column;
+    /* On iOS Safari 100vh exceeds the visible viewport, so the sidebar footer
+       and sign-out sat under the browser chrome — and `body.app-shell-active
+       { overflow: hidden }` made it unreachable by scrolling (audit #67).
+       The 100vh line stays as the fallback for browsers without dvh. */
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     /* Transparent so the fixed AppBackground shows through; z-index lifts all
        shell content above that backdrop (which sits at z-index 0). */
@@ -333,7 +338,7 @@
 
 @keyframes scanline {
   0%   { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
+  100% { transform: translateY(100dvh); }
 }
 
 @keyframes spin {
@@ -440,7 +445,8 @@
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  min-height: 100vh;
+  min-height: 100vh;   /* fallback */
+  min-height: 100dvh;  /* audit #67 */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

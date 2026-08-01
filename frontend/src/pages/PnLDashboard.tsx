@@ -482,14 +482,27 @@ const PnLDashboard: React.FC = () => {
   const summary   = summaryQ.data ?? null;
   const fills     = fillsQ.data ?? [];
   const positions = positionsQ.data ?? [];
-  const equityData = (equityQ.data ?? []).map((p) => ({
-    ts: p.timestamp ? new Date(p.timestamp).toLocaleDateString() : '',
-    v:  p.equity,
-  }));
-  const ddData = (drawdownQ.data ?? []).map((p) => ({
-    ts: p.timestamp ? new Date(p.timestamp).toLocaleDateString() : '',
-    dd: p.drawdown_pct,
-  }));
+  // Pass the raw ISO timestamp straight through (audit #50).
+  //
+  // These used to be formatted with toLocaleDateString() and then immediately
+  // re-parsed by toUT() via new Date(). Two losses, both silent:
+  //
+  //  1. Time-of-day was discarded, so every intraday equity point collapsed
+  //     onto the same x-value and the curve lost all intraday shape.
+  //  2. It was locale-dependent. In en-GB and most of Europe and Africa —
+  //     which this platform serves — toLocaleDateString() yields "31/07/2026",
+  //     and new Date() returns Invalid Date for that. NaN timestamps render a
+  //     blank chart.
+  //
+  // toUT() already accepts ISO strings and unix numbers, so the round-trip was
+  // pure loss. Points with no timestamp are dropped rather than mapped to '',
+  // which produced NaN times that lightweight-charts silently misplaces.
+  const equityData = (equityQ.data ?? [])
+    .filter((p) => p.timestamp)
+    .map((p) => ({ ts: p.timestamp, v: p.equity }));
+  const ddData = (drawdownQ.data ?? [])
+    .filter((p) => p.timestamp)
+    .map((p) => ({ ts: p.timestamp, dd: p.drawdown_pct }));
   const totalFills = summary?.total_fills ?? 0;
   const totalPages = Math.ceil(totalFills / PAGE_SIZE);
   const isLoading  = summaryQ.isLoading || fillsQ.isLoading;
