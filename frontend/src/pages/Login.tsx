@@ -91,13 +91,9 @@ const Login: React.FC = () => {
     || (location.state as { from?: { pathname: string } })?.from?.pathname;
 
   useEffect(() => {
-    const id = 'hopefx-shimmer';
-    if (!document.getElementById(id)) {
-      const st = document.createElement('style');
-      st.id = id;
-      st.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
-      document.head.appendChild(st);
-    }
+    // The `shimmer` keyframes used to be injected into <head> here at runtime.
+    // index.css already defines them globally (audit #68) — as it does `spin` —
+    // so this was a third copy of a rule that was always present.
     document.title = 'Sign In — HOPEFX';
     return () => { document.title = 'HOPEFX'; };
   }, []);
@@ -297,10 +293,6 @@ const Login: React.FC = () => {
           <a href="mailto:support@hopefx.io" style={s.link}>Support</a>
         </div>
       </div>
-      <style>{`
-        @keyframes spin    { to { transform: rotate(360deg); } }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-      `}</style>
     </div>
   );
 };

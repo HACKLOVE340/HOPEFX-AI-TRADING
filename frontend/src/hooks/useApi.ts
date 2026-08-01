@@ -1380,10 +1380,15 @@ export const copyTradingApi = {
 
 export const kycApi = {
   status:           ()                                        => api.get('/kyc/status'),
-  submit:           (formData: FormData)                      =>
-                      api.post('/kyc/submit', formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                      }),
+  /**
+   * Submit the KYC application.
+   *
+   * Takes no body (audit #58). The page used to send `document_types[]` built
+   * from React state — a client-supplied claim about which documents exist, on a
+   * compliance submission. The server ignores it and derives the list from what
+   * it actually stored, which is the only trustworthy source.
+   */
+  submit:           ()                                        => api.post('/kyc/submit'),
   documents:        ()                                        => api.get('/kyc/documents'),
   uploadDocument:   (formData: FormData)                      =>
                       api.post('/kyc/documents', formData, {

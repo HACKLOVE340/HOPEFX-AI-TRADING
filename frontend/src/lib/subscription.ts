@@ -134,20 +134,14 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   'elite':        'elite',   // Elite Hub: dedicated support, custom dev, account manager
 };
 
-/** Routes that require admin or above */
-export const ADMIN_ONLY_ROUTES = new Set([
-  '/admin',
-  '/audit',
-  '/security',
-  '/auto-heal',
-  '/whitelabel',
-]);
-
-/** Routes that require superadmin only */
-export const SUPERADMIN_ONLY_ROUTES = new Set([
-  '/superadmin',
-  '/master-control',
-]);
+// ADMIN_ONLY_ROUTES / SUPERADMIN_ONLY_ROUTES were removed (audit #71).
+//
+// They were exported and never imported anywhere, and they had already drifted:
+// App.tsx gates seven routes with adminOnly() — including /observability and
+// /ml-ops, which these sets never listed. A second, stale copy of the routing
+// rules is worse than none, because the next reader cannot tell which one is
+// authoritative. App.tsx's adminOnly()/superAdminOnly() wrappers are the single
+// source of truth; nav visibility comes from navConfig.
 
 // ── Role predicates ───────────────────────────────────────────────────────────
 
