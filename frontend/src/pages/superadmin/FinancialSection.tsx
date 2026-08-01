@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import { EmptyState } from '../../components/EmptyState';
+import { useConfirm } from '../../components/ConfirmDialog';
 import {
   SectionCard, ActionBtn, Select, Input, StatusBadge,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
@@ -51,8 +52,16 @@ function apiErr(e: unknown, fallback: string): string {
 
 // ── Inline Flash ──────────────────────────────────────────────────────────────
 
-const Flash: React.FC<{ msg: string; onClear: () => void }> = ({ msg, onClear }) => {
-  const isErr = /fail|error/i.test(msg);
+/**
+ * Result of an operator action.
+ *
+ * `ok` is explicit. This used to test /fail|error/i against the message, which
+ * is the server's `detail` — so a rejection worded without those words rendered
+ * green on the panel that resolves money disputes. Same defect as the eighteen
+ * superadmin banners, expressed as a regex instead of .includes().
+ */
+const Flash: React.FC<{ msg: string; ok: boolean; onClear: () => void }> = ({ msg, ok, onClear }) => {
+  const isErr = !ok;
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -105,7 +114,9 @@ const ChargebacksPanel: React.FC = () => {
   const [loading, setLoad]  = useState(true);
   const [error, setError]   = useState('');
   const [msg, setMsg]       = useState('');
+  const [msgOk, setMsgOk]   = useState(true);
   const [statusFilter, setSF] = useState('all');
+  const confirm = useConfirm();
   const [busy, setBusy]     = useState<string | null>(null);
 
   const mountedRef = useRef(true);
@@ -131,10 +142,26 @@ const ChargebacksPanel: React.FC = () => {
     setBusy(id);
     try {
       await superadminApi.updateChargeback(id, { status });
+      setMsgOk(true);
       setMsg(`Chargeback ${id.slice(-6)} → ${status}`);
       load();
-    } catch (e) { setMsg(apiErr(e, 'Update failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Update failed')); }
     finally { setBusy(null); }
+  };
+
+  /** Resolving a dispute is a money decision on adjacent buttons in a dense
+   *  table row, and there is no "reopen" in this UI. Name the amount first. */
+  const confirmAndUpdate = async (c: Chargeback, status: 'won' | 'lost') => {
+    const ok = await confirm({
+      title: `Mark chargeback as ${status}?`,
+      description:
+        `$${c.amount.toLocaleString()} — records the dispute outcome` +
+        (status === 'lost' ? ' and concedes the disputed amount.' : '.') +
+        ' This cannot be undone here.',
+      confirmLabel: `Mark ${status}`,
+      variant: status === 'lost' ? 'danger' : undefined,
+    });
+    if (ok) await update(c.chargeback_id, status);
   };
 
   const openCount  = items.filter(c => c.status === 'open').length;
@@ -162,7 +189,7 @@ const ChargebacksPanel: React.FC = () => {
         />
       }
     >
-      {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+      {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -189,8 +216,8 @@ const ChargebacksPanel: React.FC = () => {
                   <td style={{ padding: '10px 12px' }}>
                     {c.status === 'open' || c.status === 'pending_evidence' ? (
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <ActionBtn label="Won"  onClick={() => update(c.chargeback_id, 'won')}  variant="success" size="sm" loading={busy === c.chargeback_id} />
-                        <ActionBtn label="Lost" onClick={() => update(c.chargeback_id, 'lost')} variant="danger"  size="sm" loading={busy === c.chargeback_id} />
+                        <ActionBtn label="Won"  onClick={() => confirmAndUpdate(c, 'won')}  variant="success" size="sm" loading={busy === c.chargeback_id} />
+                        <ActionBtn label="Lost" onClick={() => confirmAndUpdate(c, 'lost')} variant="danger"  size="sm" loading={busy === c.chargeback_id} />
                       </div>
                     ) : (
                       <StatusBadge status={c.status === 'won' ? 'resolved' : c.status} size="sm" />
@@ -216,6 +243,7 @@ const TaxReportsPanel: React.FC = () => {
   const [loading, setLoad]    = useState(true);
   const [error, setError]     = useState('');
   const [msg, setMsg]         = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [busy, setBusy]       = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newPeriod, setNewPeriod]  = useState('');
@@ -242,9 +270,10 @@ const TaxReportsPanel: React.FC = () => {
     setBusy(id);
     try {
       await superadminApi.updateTaxReport(id, { status });
+      setMsgOk(true);
       setMsg(`Report ${id.slice(-6)} → ${status}`);
       load();
-    } catch (e) { setMsg(apiErr(e, 'Update failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Update failed')); }
     finally { setBusy(null); }
   };
 
@@ -253,10 +282,11 @@ const TaxReportsPanel: React.FC = () => {
     setBusy('create');
     try {
       await superadminApi.createTaxReport({ period: newPeriod, jurisdiction: newJurisdiction });
+      setMsgOk(true);
       setMsg('Tax report created');
       setCreating(false); setNewPeriod(''); setNewJurisdiction('');
       load();
-    } catch (e) { setMsg(apiErr(e, 'Create failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Create failed')); }
     finally { setBusy(null); }
   };
 
@@ -273,7 +303,7 @@ const TaxReportsPanel: React.FC = () => {
         <ActionBtn label="+ New Report" onClick={() => setCreating(v => !v)} variant="primary" size="sm" />
       }
     >
-      {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+      {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {creating && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 16, padding: '14px 16px', background: '#0f1f35', borderRadius: 8, border: '1px solid #1e3a5f' }}>
           <Input label="Period (e.g. 2025-Q1)" value={newPeriod} onChange={e => setNewPeriod(e.target.value)} placeholder="2025-Q1" />
@@ -337,6 +367,7 @@ const ReconciliationPanel: React.FC = () => {
   const [loading, setLoad]    = useState(true);
   const [error, setError]     = useState('');
   const [msg, setMsg]         = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [busy, setBusy]       = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [provider, setProvider] = useState('all');
@@ -365,9 +396,10 @@ const ReconciliationPanel: React.FC = () => {
     setRunBusy(true);
     try {
       await superadminApi.runReconciliation({ provider: provider !== 'all' ? provider : undefined });
+      setMsgOk(true);
       setMsg('Reconciliation run started — results will appear shortly');
       setTimeout(load, 3000);
-    } catch (e) { setMsg(apiErr(e, 'Reconciliation run failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Reconciliation run failed')); }
     finally { setRunBusy(false); }
   };
 
@@ -375,9 +407,10 @@ const ReconciliationPanel: React.FC = () => {
     setBusy(id);
     try {
       await superadminApi.resolveReconciliation(id, notes[id]);
+      setMsgOk(true);
       setMsg(`Record ${id.slice(-6)} resolved`);
       load();
-    } catch (e) { setMsg(apiErr(e, 'Resolve failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Resolve failed')); }
     finally { setBusy(null); }
   };
 
@@ -403,7 +436,7 @@ const ReconciliationPanel: React.FC = () => {
         </div>
       }
     >
-      {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+      {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -564,6 +597,7 @@ const FinancialSection: React.FC = () => {
   const [refundReason, setRefundReason] = useState('');
   const [busy, setBusy]         = useState(false);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -593,10 +627,11 @@ const FinancialSection: React.FC = () => {
     setBusy(true); setMsg('');
     try {
       await superadminApi.refundPayment(refundTarget.payment_id, refundReason);
+      setMsgOk(true);
       setMsg(`Refund issued for ${refundTarget.username} — ${fmtMoney(refundTarget.amount, refundTarget.currency)}`);
       setRefundTarget(null); setRefundReason('');
       load();
-    } catch (e) { setMsg(apiErr(e, 'Refund failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Refund failed')); }
     finally { setBusy(false); }
   };
 
@@ -659,7 +694,7 @@ const FinancialSection: React.FC = () => {
             <ActionBtn label="Export CSV" onClick={() => superadminApi.paymentHistory({ period, format: 'csv' })} icon="⬇️" size="sm" />
           </div>
 
-          {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+          {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
 
           {loading ? <LoadingRows rows={8} /> : error ? <ErrorState message={error} onRetry={load} /> : (
             <>

@@ -6,12 +6,17 @@ import { useToast } from '../../components/Toast';
 import type { ApiKey } from './types';
 import { Card, SectionHeader, Field, Input, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
-
-const SCOPE_OPTIONS = ['read', 'trade', 'admin'];
+import { ErrorBanner } from '../../components/ErrorBanner';
+import { useStore, selectUser } from '../../store';
 
 const ApiKeysSection: React.FC = () => {
   const confirm = useConfirm();
   const toast   = useToast();
+  const user    = useStore(selectUser);
+  // 'admin' is offered only to staff — and validated server-side regardless, so
+  // hiding the chip is convenience rather than the boundary.
+  const isOperator = user?.role === 'admin' || user?.role === 'superadmin';
+  const SCOPE_OPTIONS = isOperator ? ['read', 'trade', 'admin'] : ['read', 'trade'];
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -20,13 +25,25 @@ const ApiKeysSection: React.FC = () => {
   const [revealedKey, setRevealedKey] = useState<{ key_id: string; api_key: string } | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [createError, setCreateError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
+  const load = React.useCallback(() => {
+    setLoading(true);
+    setLoadError('');
     api.get<{ api_keys: ApiKey[] }>('/settings/api-keys')
-      .then((r) => setKeys(r.data.api_keys ?? []))
-      .catch((err: unknown) => console.warn('[Settings/ApiKeys] load:', err))
+      // Defence in depth: the server no longer returns revoked keys, but a
+      // revoked key must never be listed as active even against an older build.
+      .then((r) => setKeys((r.data.api_keys ?? []).filter((k) => !k.revoked)))
+      .catch((err: unknown) => {
+        console.warn('[Settings/ApiKeys] load:', err);
+        // "No keys yet" and "we couldn't check" are different answers, and only
+        // one of them means it is safe to assume nothing is live.
+        setLoadError(extractApiError(err, 'Could not load your API keys.'));
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const handleCreate = async () => {
     if (!newKeyName.trim()) { setCreateError('Key name is required.'); return; }
@@ -173,6 +190,8 @@ const ApiKeysSection: React.FC = () => {
         </h3>
         {loading ? (
           <div style={{ color: '#64748b', fontSize: 13 }}>Loading keys…</div>
+        ) : loadError ? (
+          <ErrorBanner message={`${loadError} This is not the same as having none — do not assume no keys are live.`} />
         ) : keys.length === 0 ? (
           <div style={{ color: '#64748b', fontSize: 13 }}>No API keys yet.</div>
         ) : (
