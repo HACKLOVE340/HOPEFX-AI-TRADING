@@ -29,6 +29,22 @@ export function canonicalSymbol(s: string | null | undefined): string {
 export function sameSymbol(a: string | null | undefined, b: string | null | undefined): boolean {
   return canonicalSymbol(a) === canonicalSymbol(b);
 }
+/**
+ * Convert a compact pair symbol to the slash form the price feed keys on:
+ * `XAUUSD` → `XAU/USD`. Already-slashed input is returned unchanged.
+ *
+ * Watchlist previously did this with a hardcoded chain of five .replace() calls
+ * while offering ten symbols, so ETHUSD, USDCAD, AUDUSD, USDCHF and NZDUSD never
+ * matched a feed key and showed no live price at all. Three other sites did it
+ * with `sym.slice(0,3) + '/' + sym.slice(3)`, which is the same rule written a
+ * fourth time and silently wrong for anything that is not six characters.
+ */
+export function toSlashSymbol(symbol: string): string {
+  if (!symbol || symbol.includes('/')) return symbol;
+  if (symbol.length !== 6) return symbol;
+  return `${symbol.slice(0, 3)}/${symbol.slice(3)}`;
+}
+
 
 // ── Safe redirect validation ──────────────────────────────────────────────────
 /**

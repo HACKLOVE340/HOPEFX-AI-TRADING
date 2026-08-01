@@ -12,7 +12,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { watchlistApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, toSlashSymbol } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -127,18 +127,12 @@ const WatchlistPage: React.FC = () => {
   }, [fetchWatchlist]);
 
   // Overlay live store prices for real-time feel.
-  // Store uses 'XAU/USD' format; watchlist uses 'XAUUSD' — normalise both ways.
+  // Store keys on 'XAU/USD'; the watchlist stores 'XAUUSD'. The mapping used to
+  // be a hardcoded chain of five .replace() calls against ten offered symbols,
+  // so half of them never matched a feed key and simply showed no live price.
   const enrichedItems: WatchlistItem[] = items.map((item) => {
-    const slashKey = item.symbol
-      .replace('XAUUSD', 'XAU/USD')
-      .replace('EURUSD', 'EUR/USD')
-      .replace('GBPUSD', 'GBP/USD')
-      .replace('USDJPY', 'USD/JPY')
-      .replace('BTCUSD', 'BTC/USD');
-    const tick = storePrices[slashKey] ?? storePrices[item.symbol];
+    const tick = storePrices[toSlashSymbol(item.symbol)] ?? storePrices[item.symbol];
     if (!tick) return item;
-    // Append the new mid to history so the sparkline reflects real ticks
-    const updatedHistory = [...item.history, tick.mid].slice(-60);
     return {
       ...item,
       bid: tick.bid,
@@ -146,7 +140,10 @@ const WatchlistPage: React.FC = () => {
       mid: tick.mid,
       change_pct: tick.change_pct,
       timestamp: tick.timestamp,
-      history: updatedHistory,
+      // Ticks accumulate in `tickHistory` below. Deriving them here appended to
+      // the server's snapshot on every render and threw the result away, so the
+      // sparkline redrew the same two points forever.
+      history: tickHistory[item.symbol] ?? item.history,
     };
   });
 
@@ -167,6 +164,26 @@ const WatchlistPage: React.FC = () => {
       setAdding(false);
     }
   };
+
+  // Live tick history per symbol, accumulated across renders. Capped at 60
+  // points, which is what the sparkline draws.
+  const [tickHistory, setTickHistory] = useState<Record<string, number[]>>({});
+
+  useEffect(() => {
+    setTickHistory((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const item of items) {
+        const tick = storePrices[toSlashSymbol(item.symbol)] ?? storePrices[item.symbol];
+        if (!tick || !Number.isFinite(tick.mid)) continue;
+        const series = next[item.symbol] ?? item.history ?? [];
+        if (series[series.length - 1] === tick.mid) continue;   // no new tick
+        next[item.symbol] = [...series, tick.mid].slice(-60);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [items, storePrices]);
 
   const handleRemove = async (symbol: string) => {
     try {
@@ -249,7 +266,7 @@ const WatchlistPage: React.FC = () => {
               </span>
               <span style={{ width: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <button
-                  onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol.slice(0, 3) + '/' + item.symbol.slice(3) } } })}
+                  onClick={() => navigate('/trade', { state: { signal: { symbol: toSlashSymbol(item.symbol) } } })}
                   style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 8px' }}
                   title={`Trade ${item.symbol}`}
                 >

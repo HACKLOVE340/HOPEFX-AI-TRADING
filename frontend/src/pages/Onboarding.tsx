@@ -9,8 +9,8 @@
  *   trader/user → /dashboard
  */
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
@@ -23,6 +23,23 @@ function resolvePostOnboardingPath(role: UserRole | undefined): string {
 }
 
 const STORAGE_KEY = 'hopefx_onboarding_step';
+const ANSWERS_KEY = 'hopefx_onboarding_answers';
+const COMPLETE_KEY = 'hopefx_onboarding_complete';
+
+/**
+ * Read the saved step defensively.
+ *
+ * `parseInt(localStorage.getItem(...) ?? '0', 10)` returns NaN for anything
+ * non-numeric, and `Math.min(NaN, 4)` is NaN — so every `step === n` check
+ * failed and the wizard rendered a header, a progress bar and no step at all.
+ * A returning user with a stale or corrupted key saw a blank page with no way
+ * forward.
+ */
+function readSavedStep(maxIndex: number): number {
+  const raw = Number.parseInt(localStorage.getItem(STORAGE_KEY) ?? '0', 10);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.min(Math.max(raw, 0), maxIndex);
+}
 
 type Broker        = 'oanda' | 'alpaca' | 'paper';
 type RiskLevel     = 'conservative' | 'moderate' | 'aggressive';
@@ -100,9 +117,11 @@ const Step1Broker: React.FC<{ state: WizardState; setState: (s: WizardState) => 
       </div>
       {state.broker === 'oanda' && (
         <div style={s.infoBox}>
-          Add <code style={s.code}>BROKER_OANDA_TOKEN</code> and{' '}
-          <code style={s.code}>BROKER_OANDA_ACCOUNT</code> to your{' '}
-          <code style={s.code}>.env</code> file.{' '}
+          {/* This used to instruct users to add env vars to a .env file — a
+              hosted customer has no filesystem and no such file. Credentials
+              belong in Settings → Broker, which stores them per account. */}
+          Connect your OANDA account under{' '}
+          <Link to="/settings?tab=broker" style={{ color: '#60a5fa' }}>Settings → Broker</Link>.{' '}
           <a href="https://www.oanda.com/us-en/trading/accounts/open-account/" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>
             Get a free practice account →
           </a>
@@ -155,7 +174,14 @@ const Step3PropFirm: React.FC<{ state: WizardState; setState: (s: WizardState) =
   return (
     <div>
       <h2 style={s.stepTitle}>Prop firm rules</h2>
-      <p style={s.stepSub}>HOPEFX will enforce these rules automatically — you can never accidentally breach them.</p>
+      {/* Was: "you can never accidentally breach them". Pre-trade limits reduce
+          breaches; they cannot eliminate them — gaps, slippage and overnight
+          moves all happen after the check. Promising the absolute on the
+          prop-firm page is the worst place to overstate it. */}
+      <p style={s.stepSub}>
+        HOPEFX applies these limits to every order before it is placed, and halts trading when one is hit.
+        Market gaps and slippage can still move an account beyond a limit after the fact.
+      </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {firms.map((f) => (
           <button key={f.id} onClick={() => setState({ ...state, propFirm: f.id })}
@@ -281,11 +307,27 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
 const Onboarding: React.FC = () => {
   const navigate  = useNavigate();
   const user      = useStore((s) => s.user);
-  const savedStep = parseInt(localStorage.getItem(STORAGE_KEY) ?? '0', 10);
-  const [step, setStep] = useState(Math.min(savedStep, STEPS.length - 1));
-  const [state, setState] = useState<WizardState>({
-    broker: null, riskLevel: null, propFirm: null, backtestDone: false, paperStarted: false,
+  const [step, setStep] = useState(() => readSavedStep(STEPS.length - 1));
+  // Answers are restored too. Only the step index was persisted, so resuming at
+  // step 4 replayed a wizard whose earlier answers were all null — every
+  // previously made choice appeared unmade, and canAdvance() blocked on steps
+  // the user had already completed.
+  const [state, setState] = useState<WizardState>(() => {
+    const blank: WizardState = {
+      broker: null, riskLevel: null, propFirm: null, backtestDone: false, paperStarted: false,
+    };
+    try {
+      const raw = localStorage.getItem(ANSWERS_KEY);
+      return raw ? { ...blank, ...(JSON.parse(raw) as Partial<WizardState>) } : blank;
+    } catch {
+      return blank;   // corrupt JSON must not blank the wizard either
+    }
   });
+
+  // Persist answers as they change, so a refresh mid-wizard loses nothing.
+  useEffect(() => {
+    try { localStorage.setItem(ANSWERS_KEY, JSON.stringify(state)); } catch { /* private mode */ }
+  }, [state]);
 
   const destination = resolvePostOnboardingPath(user?.role);
   const saveStep = (n: number) => { setStep(n); localStorage.setItem(STORAGE_KEY, String(n)); };
@@ -308,8 +350,25 @@ const Onboarding: React.FC = () => {
   };
 
   // Persist best-effort in the background — never block navigation on it.
-  const finish = () => { void persistOnboarding(); localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
-  const skip     = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
+  /**
+   * Completion is recorded under its own key.
+   *
+   * Both of these used to write the string 'done' into the STEP key, which the
+   * next visit read back through parseInt — giving NaN, and a wizard where no
+   * step matched and nothing rendered. So finishing onboarding was itself what
+   * produced the blank page; it was the normal path, not a corrupted-storage
+   * edge case. Nothing else in the app ever read that marker.
+   */
+  const markComplete = () => {
+    try {
+      localStorage.setItem(COMPLETE_KEY, new Date().toISOString());
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ANSWERS_KEY);
+    } catch { /* private mode — navigation must still happen */ }
+  };
+
+  const finish = () => { void persistOnboarding(); markComplete(); navigate(destination); };
+  const skip   = () => { markComplete(); navigate(destination); };
 
   const canAdvance = () => {
     if (step === 0) return state.broker !== null;
