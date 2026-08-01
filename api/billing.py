@@ -34,6 +34,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from monetization.activation import UnknownPlanError, activate_paid_plan, resolve_plan_price_usd
 
 logger = logging.getLogger(__name__)
 
@@ -320,7 +321,10 @@ async def stripe_config():
 
 
 class CreatePaymentIntentRequest(BaseModel):
-    amount_usd: float
+    # Defensive bounds on the charge amount. This route does not grant a plan —
+    # the Stripe checkout.session webhook does that — so the amount is not a
+    # pricing hole, but it was previously unbounded in both directions.
+    amount_usd: float = Field(..., gt=0, le=float(os.getenv("MAX_CHECKOUT_AMOUNT_USD", "1_000_000")))
     currency: str = "USD"
     description: str = "HopeFX subscription"
     metadata: dict | None = None
@@ -400,7 +404,10 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
         affiliate = mgr.create_affiliate(user_id=user.sub)
 
     base_url = os.getenv("APP_BASE_URL", "https://hopefx.io")
-    ref_url = f"{base_url}/signup?ref={affiliate.code}"
+    # /signup is not a route — the SPA registers /register. A link to /signup hits
+    # the catch-all, redirects to /login, and the ref code is lost, so the referral
+    # is never attributed.
+    ref_url = f"{base_url}/register?ref={affiliate.code}"
 
     return {
         "url": ref_url,
@@ -416,7 +423,15 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
 
 
 class FreeTierBody(BaseModel):
-    user_id: str
+    """Body for POST /auth/activate-free-tier.
+
+    `user_id` is deliberately absent: it was client-supplied on an
+    UNAUTHENTICATED route that both creates subscriptions and attributes
+    affiliate referrals, so a caller could farm commissions against any user id
+    they could enumerate. The account is now taken from the bearer token, which
+    is what every other route in this file already does.
+    """
+
     ref_code: str | None = None  # optional referral code from signup URL
 
 
@@ -424,7 +439,10 @@ _TRIAL_DAYS: int = int(os.getenv("NEW_USER_TRIAL_DAYS", "14"))
 
 
 @router.post("/auth/activate-free-tier", status_code=status.HTTP_201_CREATED)
-async def activate_free_tier(body: FreeTierBody):
+async def activate_free_tier(
+    body: FreeTierBody,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Called immediately after successful registration.
 
@@ -441,7 +459,7 @@ async def activate_free_tier(body: FreeTierBody):
 
     mgr = _get_subscription_manager()
 
-    existing = mgr.get_user_subscription(body.user_id)
+    existing = mgr.get_user_subscription(user.sub)
     if existing:
         tier_val = existing.tier.value if hasattr(existing.tier, "value") else str(existing.tier)
         return {
@@ -454,11 +472,20 @@ async def activate_free_tier(body: FreeTierBody):
     # Create a STARTER trial — gives access to journal, performance, alerts, wallet
     # without requiring a credit card.  Reverts to FREE after _TRIAL_DAYS.
     sub = mgr.create_subscription(
-        body.user_id,
+        user.sub,
         SubscriptionTier.STARTER,
         duration_days=_TRIAL_DAYS,
     )
-    # Mark as TRIAL so the billing page shows the correct status badge
+    # Mark as TRIAL so the billing page shows the correct status badge.
+    #
+    # This bare assignment IS the write: the manager keeps subscriptions in a
+    # module-level dict holding this same object, and there is no
+    # save_subscription/update_subscription to call.
+    #
+    # It is therefore not durable. User.plan (database/user_models.py) is the only
+    # persisted record of a plan and it has no concept of a trial, so after a
+    # restart a trial reads as whatever `plan` says, with no expiry. Making trials
+    # genuinely expire needs a real subscriptions table.
     sub.status = SubscriptionStatus.TRIAL
 
     if body.ref_code:
@@ -466,7 +493,7 @@ async def activate_free_tier(body: FreeTierBody):
             aff_mgr = _get_affiliate_manager()
             aff_mgr.create_referral(
                 affiliate_code=body.ref_code,
-                referred_user_id=body.user_id,
+                referred_user_id=user.sub,
             )
         except Exception as exc:
             logger.debug("Referral tracking skipped: %s", exc)
@@ -487,16 +514,24 @@ async def activate_free_tier(body: FreeTierBody):
 
 
 class FlutterwaveInitBody(BaseModel):
-    # Defensive upper bound on the client-supplied charge amount. Rejects
-    # absurd / overflow inputs before they reach the payment provider; the
-    # generous default does not constrain real subscription charges.
-    amount: float = Field(..., gt=0, le=float(os.getenv("MAX_CHECKOUT_AMOUNT_USD", "1_000_000")))
+    """Body for POST /payments/flutterwave/init.
+
+    `amount` is deliberately absent: the client set its own price and `plan` was
+    accepted, echoed back, and never used to validate it. The charge is now
+    derived from `plan` against the catalogue.
+    """
+
     currency: str = Field("USD", max_length=3)
     plan: str = Field("professional", description="Subscription plan name")
 
 
 class FlutterwaveVerifyBody(BaseModel):
     tx_ref: str
+    # Which plan the transaction was for — needed to grant it on verify. Validated
+    # against the catalogue before anything is granted. Once flutterwave_init
+    # persists a payment row this should be read back from the stored tx_ref
+    # instead of being supplied by the client.
+    plan: str = Field("professional", description="Plan purchased")
 
 
 @router.post("/payments/flutterwave/init")
@@ -514,17 +549,23 @@ async def flutterwave_init(
     that retrying the same checkout does not create a second payment session.
     The client should pass the returned tx_ref to /verify after payment.
     """
+    # Server-derived price — never a client-supplied amount.
+    try:
+        amount = resolve_plan_price_usd(body.plan)
+    except UnknownPlanError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
     # Deterministic tx_ref — same user+plan+amount+currency always maps to the
     # same reference, so a network retry cannot create a duplicate charge.
     idempotent_tx_ref = (
-        "FLW-" + hashlib.sha256(f"{user.sub}:{body.plan}:{body.amount}:{body.currency}".encode()).hexdigest()[:24]
+        "FLW-" + hashlib.sha256(f"{user.sub}:{body.plan}:{amount}:{body.currency}".encode()).hexdigest()[:24]
     )
 
     try:
         flw = _get_flutterwave()
         result = flw.initialize_payment(
             user_id=user.sub,
-            amount=Decimal(str(body.amount)),
+            amount=Decimal(str(amount)),
             currency=body.currency,
             tx_ref=idempotent_tx_ref,
         )
@@ -586,7 +627,26 @@ async def flutterwave_verify(
                     )
             except Exception as _persist_exc:
                 logger.warning("flutterwave_verify: failed to persist idempotency record: %s", _persist_exc)
-            return {"verified": True, "tx_ref": body.tx_ref, "status": "verified"}
+
+            # Deliver what was paid for. This function's docstring has always
+            # claimed it activates the subscription; until now it verified,
+            # cached an idempotency record, and returned. The customer paid and
+            # stayed on Free.
+            #
+            # activate_paid_plan never raises: the idempotency record above means
+            # a 5xx here would be retried, short-circuited, and the grant lost.
+            activated = activate_paid_plan(
+                user.sub,
+                body.plan,
+                source="flutterwave",
+                reference=body.tx_ref,
+            )
+            return {
+                "verified": True,
+                "tx_ref": body.tx_ref,
+                "status": "verified",
+                "subscription_activated": activated,
+            }
         return {
             "verified": False,
             "tx_ref": body.tx_ref,
@@ -863,18 +923,22 @@ async def process_refund(
     except Exception as exc:
         logger.warning("process_refund: Stripe direct refund failed: %s", exc)
 
-    # Fallback — log for manual processing
-    logger.info(
-        "process_refund: payment %s not found in processor; queued for manual review (reason=%s)",
+    # Do not report success for work that was never queued. There is no review
+    # queue behind this branch — returning ok:true left an operator believing a
+    # refund was in flight when nothing existed anywhere.
+    logger.error(
+        "process_refund: payment %s not found in processor and Stripe not configured — NO refund issued (reason=%s)",
         payment_id,
         reason,
     )
-    return {
-        "ok": True,
-        "payment_id": payment_id,
-        "status": "refund_queued",
-        "note": "Payment not found in processor — queued for manual review in Stripe Dashboard",
-    }
+    raise HTTPException(
+        status_code=422,
+        detail=(
+            f"Payment {payment_id} was not found in the payment processor and Stripe is not "
+            "configured. No refund has been issued — this must be handled manually in the "
+            "processor dashboard."
+        ),
+    )
 
 
 async def get_affiliate_stats(user=None) -> dict:

@@ -179,22 +179,48 @@ class TestFlutterwave:
 class TestFreeTierActivation:
     """Tests for POST /api/auth/activate-free-tier."""
 
+    #: The account this route acts on comes from the token, never the body.
+    CALLER = "authenticated-caller"
+
     @pytest.fixture
-    def client(self):
+    def app(self):
         try:
             from fastapi import FastAPI
-            from fastapi.testclient import TestClient
 
             from api.billing import router
 
             app = FastAPI()
             app.include_router(router)
-            return TestClient(app, raise_server_exceptions=False)
+            return app
         except Exception:
             pytest.skip("Billing router not importable")
 
+    @pytest.fixture
+    def client(self, app):
+        from fastapi.testclient import TestClient
+
+        from api.auth import TokenPayload, get_current_user
+
+        app.dependency_overrides[get_current_user] = lambda: TokenPayload(sub=self.CALLER, role="user")
+        return TestClient(app, raise_server_exceptions=False)
+
+    def test_requires_authentication(self, app):
+        """Unauthenticated callers are rejected.
+
+        This route was previously open while creating subscriptions AND
+        attributing affiliate referrals from a body-supplied user_id, so anyone
+        could farm commissions against enumerated user ids.
+        """
+        from fastapi.testclient import TestClient
+
+        res = TestClient(app, raise_server_exceptions=False).post(
+            "/api/billing/auth/activate-free-tier",
+            json={},
+        )
+        assert res.status_code in (401, 403)
+
     def test_activate_free_tier_new_user(self, client):
-        """New user should get FREE tier assigned."""
+        """New user should get a trial subscription assigned."""
         mock_mgr = MagicMock()
         mock_mgr.get_user_subscription.return_value = None
         mock_sub = MagicMock()
@@ -202,11 +228,31 @@ class TestFreeTierActivation:
         mock_mgr.create_subscription.return_value = mock_sub
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
+            res = client.post("/api/billing/auth/activate-free-tier", json={})
+            assert res.status_code in (200, 201)
+
+        # The subscription is created for the token subject.
+        assert mock_mgr.create_subscription.call_args.args[0] == self.CALLER
+
+    def test_body_supplied_user_id_is_ignored(self, client):
+        """A user_id in the body must not redirect the grant or the referral."""
+        mock_mgr = MagicMock()
+        mock_mgr.get_user_subscription.return_value = None
+        mock_mgr.create_subscription.return_value = MagicMock()
+        mock_aff = MagicMock()
+
+        with (
+            patch("api.billing._get_subscription_manager", return_value=mock_mgr),
+            patch("api.billing._get_affiliate_manager", return_value=mock_aff),
+        ):
             res = client.post(
                 "/api/billing/auth/activate-free-tier",
-                json={"user_id": "brand-new-user"},
+                json={"user_id": "somebody-else", "ref_code": "REF123"},
             )
             assert res.status_code in (200, 201)
+
+        assert mock_mgr.create_subscription.call_args.args[0] == self.CALLER
+        assert mock_aff.create_referral.call_args.kwargs["referred_user_id"] == self.CALLER
 
     def test_activate_free_tier_existing_user_idempotent(self, client):
         """Existing subscription must not be duplicated."""
@@ -216,9 +262,6 @@ class TestFreeTierActivation:
         mock_mgr.get_user_subscription.return_value = existing
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
-            res = client.post(
-                "/api/billing/auth/activate-free-tier",
-                json={"user_id": "existing-user"},
-            )
+            res = client.post("/api/billing/auth/activate-free-tier", json={})
             assert res.status_code in (200, 201)
             mock_mgr.create_subscription.assert_not_called()

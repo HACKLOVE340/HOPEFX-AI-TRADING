@@ -369,8 +369,10 @@ export const authApi = {
   restoreSession: (): Promise<string | null> => _silentRefresh(),
   register: (payload: { email: string; username: string; password: string }) =>
     api.post('/auth/register', payload),
-  activateFreeTier: (userId: string, refCode?: string) =>
-    api.post('/auth/activate-free-tier', { user_id: userId, ref_code: refCode }),
+  /** Grants the new-user trial. The account comes from the bearer token — call
+   *  this only after setAuth(), and never pass a user id. */
+  activateFreeTier: (refCode?: string) =>
+    api.post('/auth/activate-free-tier', { ref_code: refCode }),
   /** Request a password reset email. Always returns 200 (prevents enumeration). */
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),

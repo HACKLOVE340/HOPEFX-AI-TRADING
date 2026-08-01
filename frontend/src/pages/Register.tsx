@@ -191,9 +191,8 @@ const Register: React.FC = () => {
         password,
       });
 
-      // Auto-login immediately after registration so we have the real user.id
-      // (UUID) needed for activateFreeTier. The register endpoint only returns
-      // {message} — it does not expose the user ID.
+      // Auto-login immediately after registration so the session is established
+      // before activateFreeTier, which now takes the account from the token.
       try {
         const loginRes = await authApi.login({ email: email.trim().toLowerCase(), password });
         const { access_token, user } = loginRes.data;
@@ -202,9 +201,10 @@ const Register: React.FC = () => {
         // Store access token in Zustand memory — axios interceptor reads it from there.
         setAuth(access_token, user);
 
-        // Activate free tier using the real UUID from the login response.
+        // Activate the trial. setAuth() above put the token in the store, so the
+        // server resolves the account itself.
         try {
-          await authApi.activateFreeTier(user.id, refCode || undefined);
+          await authApi.activateFreeTier(refCode || undefined);
         } catch (tierErr: unknown) {
           console.warn('[Register] Free tier activation failed (non-fatal):', tierErr);
         }
