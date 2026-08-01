@@ -152,7 +152,13 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
       </div>
       {!isFree && annual && plan.price_usd_annual > 0 && (
         <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 4 }}>
-          Billed ${(plan.price_usd_annual ?? 0).toLocaleString()}/yr — 2 months free
+          {/* The saving comes from the catalogue (audit #70). `annual_savings_pct`
+              was declared on PlanData and never read, while this line asserted
+              "2 months free" — a commercial claim hardcoded in the UI that is
+              only true while the backend keeps the discount at ~17%.
+              LandingPage already renders the live figure. */}
+          Billed ${(plan.price_usd_annual ?? 0).toLocaleString()}/yr
+          {plan.annual_savings_pct != null && ` — save ${plan.annual_savings_pct}%`}
         </div>
       )}
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 20 }}>
