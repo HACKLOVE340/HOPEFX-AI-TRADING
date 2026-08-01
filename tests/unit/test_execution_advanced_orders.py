@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from types import ModuleType
 from unittest.mock import AsyncMock
@@ -388,3 +390,136 @@ class TestAdvancedOrderManager:
         assert manager.get_active_orders() == [active.to_dict()]
         assert manager.get_active_orders("pos-2") == []
         assert get_advanced_order_manager() is get_advanced_order_manager()
+
+
+class MonitoredBroker:
+    """No native stop-limit support, so the in-memory monitor path is used."""
+
+    def __init__(self) -> None:
+        self.orders: list[dict[str, object]] = []
+
+    async def place_order(self, **kwargs: object) -> dict[str, object]:
+        self.orders.append(kwargs)
+        return {"status": "filled", **kwargs}
+
+
+def _resting_stop_limit(**overrides: object) -> StopLimitOrder:
+    defaults: dict[str, object] = {
+        "order_id": "stop-1",
+        "position_id": "pos-1",
+        "symbol": "XAU/USD",
+        "side": "BUY",
+        "quantity": 1.0,
+        "stop_price": 2100.0,
+        "limit_price": 2100.5,
+        "state": AdvancedOrderState.ACTIVE,
+    }
+    defaults.update(overrides)
+    return StopLimitOrder(**defaults)  # type: ignore[arg-type]
+
+
+class TestStopLimitRestsUntilFillable:
+    """A stop-limit that gaps past its limit must keep waiting, not die silently.
+
+    Execution used to be attempted only inside ``if not order.triggered`` in
+    ``_check_stop_limit_orders``. On the triggering tick the flag was set, and if
+    price was already past the limit ``_execute_stop_limit`` logged "waiting" and
+    returned. Nothing re-checked it: the order stayed ACTIVE for ever, was still
+    reported by ``get_active_orders()`` as live protection, and could not fill
+    even once price came back inside the limit — the gap this order type exists
+    to handle.
+    """
+
+    @staticmethod
+    def _manager(broker: MonitoredBroker) -> AdvancedOrderManager:
+        manager = AdvancedOrderManager()
+        manager._adapter = BrokerOrderAdapter(broker)
+        return manager
+
+    @pytest.mark.asyncio
+    async def test_gapped_order_fills_when_price_returns_inside_the_limit(self):
+        broker = MonitoredBroker()
+        manager = self._manager(broker)
+        order = _resting_stop_limit()
+        manager._stop_limit_orders = {order.order_id: order}
+
+        manager._latest_prices["XAU/USD"] = 2101.0  # gapped past the limit
+        await manager._check_stop_limit_orders()
+        assert order.triggered is True
+        assert order.state == AdvancedOrderState.ACTIVE
+        assert broker.orders == [], "filled above the limit price"
+
+        manager._latest_prices["XAU/USD"] = 2100.25  # back inside the limit
+        await manager._check_stop_limit_orders()
+
+        assert order.state == AdvancedOrderState.FILLED
+        assert order.fill_price == 2100.25
+        assert len(broker.orders) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_sell_stop_limit_also_rests_until_fillable(self):
+        broker = MonitoredBroker()
+        manager = self._manager(broker)
+        order = _resting_stop_limit(side="SELL", stop_price=1900.0, limit_price=1899.5)
+        manager._stop_limit_orders = {order.order_id: order}
+
+        manager._latest_prices["XAU/USD"] = 1899.0  # below the limit — cannot sell here
+        await manager._check_stop_limit_orders()
+        assert order.state == AdvancedOrderState.ACTIVE
+
+        manager._latest_prices["XAU/USD"] = 1899.75
+        await manager._check_stop_limit_orders()
+
+        assert order.state == AdvancedOrderState.FILLED
+
+    @pytest.mark.asyncio
+    async def test_a_resting_order_never_fills_outside_its_limit(self):
+        """Re-checking must not become "fill at any price"."""
+        broker = MonitoredBroker()
+        manager = self._manager(broker)
+        order = _resting_stop_limit()
+        manager._stop_limit_orders = {order.order_id: order}
+
+        for price in (2101.0, 2102.0, 2105.0):
+            manager._latest_prices["XAU/USD"] = price
+            await manager._check_stop_limit_orders()
+
+        assert broker.orders == []
+        assert order.state == AdvancedOrderState.ACTIVE
+
+    @pytest.mark.asyncio
+    async def test_a_resting_order_still_expires(self):
+        """Resting must not outlive the order's own expiry."""
+        broker = MonitoredBroker()
+        manager = self._manager(broker)
+        order = _resting_stop_limit(expires_at=datetime.now(UTC) + timedelta(milliseconds=40))
+        manager._stop_limit_orders = {order.order_id: order}
+
+        manager._latest_prices["XAU/USD"] = 2101.0
+        await manager._check_stop_limit_orders()
+        assert order.state == AdvancedOrderState.ACTIVE
+
+        await asyncio.sleep(0.05)
+        await manager._check_stop_limit_orders()
+
+        assert order.state == AdvancedOrderState.EXPIRED
+        assert broker.orders == []
+
+    @pytest.mark.asyncio
+    async def test_the_past_limit_warning_is_logged_once_not_per_tick(self, caplog):
+        """The monitor runs ~10x/second; a resting order must not flood the log."""
+        manager = self._manager(MonitoredBroker())
+        order = _resting_stop_limit()
+        manager._stop_limit_orders = {order.order_id: order}
+        manager._latest_prices["XAU/USD"] = 2101.0
+
+        with caplog.at_level(logging.WARNING, logger="execution.advanced_orders"):
+            for _ in range(5):
+                await manager._check_stop_limit_orders()
+
+        past_limit = [r for r in caplog.records if "past limit" in r.getMessage()]
+        assert len(past_limit) == 1, f"warning repeated {len(past_limit)} times"
+
+    def test_the_warning_guard_is_not_part_of_the_api_payload(self):
+        """It is runtime bookkeeping, not order state."""
+        assert "limit_warning_logged" not in _resting_stop_limit().to_dict()
