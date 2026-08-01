@@ -4,6 +4,7 @@ import { api } from '../../hooks/useApi';
 import type { PrivacySettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: PrivacySettings = {
   share_performance: false,
@@ -23,13 +24,24 @@ const PrivacySection: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<PrivacySettings>('/settings/privacy')
       .then((r) => setForm({ ...DEFAULT, ...r.data }))
-      .catch((err: unknown) => console.warn('[Settings/Privacy] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Privacy] load:', err);
+        // These are consent and data-sharing choices. Rendering DEFAULT after a
+        // failed GET and then saving would silently rewrite what the user agreed
+        // to share.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<PrivacySettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -64,6 +76,16 @@ const PrivacySection: React.FC = () => {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading privacy settings…
+    </div>
+  );
+
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="🔏" title="Privacy & Data" description="Control what you share with other traders and the platform." />
+      <ErrorBanner message="Couldn't load your privacy settings. Nothing has been changed — saving now would overwrite your data-sharing choices with defaults." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 
