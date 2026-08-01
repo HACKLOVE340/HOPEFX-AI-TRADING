@@ -72,6 +72,12 @@ interface TabDef {
   superAdminOnly?: boolean;
   danger?: boolean;
   minPlan?: string;
+  /**
+   * Extra search terms, so a tab is findable by the word the user actually
+   * types: "2FA" for Two-Factor, "card" for Billing, "webhook" for
+   * Integrations. Optional — the filter's `?? ''` keeps untagged tabs working.
+   */
+  keywords?: string;
 }
 
 interface TabGroup {
@@ -88,27 +94,27 @@ const TAB_GROUPS: TabGroup[] = [
   {
     label: 'Account',
     tabs: [
-      { id: 'profile',       label: 'Profile',        icon: '👤' },
-      { id: 'security',      label: 'Security',       icon: '🔒' },
-      { id: 'billing',       label: 'Billing',        icon: '💳' },
-      { id: 'api-keys',      label: 'API Keys',       icon: '🔑', minPlan: 'professional' },
+      { id: 'profile',       label: 'Profile',        icon: '👤', keywords: 'name username avatar bio timezone language' },
+      { id: 'security',      label: 'Security',       icon: '🔒', keywords: '2fa two-factor mfa password sessions devices login' },
+      { id: 'billing',       label: 'Billing',        icon: '💳', keywords: 'card payment invoice subscription plan upgrade receipt' },
+      { id: 'api-keys',      label: 'API Keys',       icon: '🔑', minPlan: 'professional', keywords: 'token secret credentials developer' },
     ],
   },
   {
     label: 'Trading',
     tabs: [
-      { id: 'broker',        label: 'Broker',         icon: '🏦' },
-      { id: 'trading',       label: 'Trading',        icon: '📈', minPlan: 'professional' },
-      { id: 'integrations',  label: 'Integrations',   icon: '🔌', minPlan: 'starter' },
+      { id: 'broker',        label: 'Broker',         icon: '🏦', keywords: 'oanda alpaca paper account connection live' },
+      { id: 'trading',       label: 'Trading',        icon: '📈', minPlan: 'professional', keywords: 'risk drawdown lot leverage kill switch limits' },
+      { id: 'integrations',  label: 'Integrations',   icon: '🔌', minPlan: 'starter', keywords: 'webhook tradingview mt4 mt5 ctrader zapier sheets' },
     ],
   },
   {
     label: 'Preferences',
     tabs: [
-      { id: 'appearance',    label: 'Appearance',     icon: '🎨' },
-      { id: 'notifications', label: 'Notifications',  icon: '🔔' },
-      { id: 'accessibility', label: 'Accessibility',  icon: '♿' },
-      { id: 'privacy',       label: 'Privacy & Data', icon: '🔏' },
+      { id: 'appearance',    label: 'Appearance',     icon: '🎨', keywords: 'theme dark light colour color font display' },
+      { id: 'notifications', label: 'Notifications',  icon: '🔔', keywords: 'alerts email discord slack telegram webhook' },
+      { id: 'accessibility', label: 'Accessibility',  icon: '♿', keywords: 'contrast motion screen reader colour blind text size' },
+      { id: 'privacy',       label: 'Privacy & Data', icon: '🔏', keywords: 'gdpr export delete consent sharing leaderboard retention' },
     ],
   },
   {
@@ -418,11 +424,16 @@ const Settings: React.FC = () => {
 
             {TAB_GROUPS.map((group) => {
               const visibleTabs = group.tabs.filter((t) => {
-                if (t.superAdminOnly) return superAdmin;
-                if (t.adminOnly)      return admin;
-                // Filter by search
-                if (search) return t.label.toLowerCase().includes(search.toLowerCase());
-                return true;
+                // Two independent passes: visibility, THEN the query (audit #23).
+                // The role checks used to `return` outright, so the search box
+                // never applied to admin or superadmin tabs — leaving it useless
+                // for the only people who have 39 tabs across 11 groups.
+                if (t.superAdminOnly && !superAdmin) return false;
+                if (t.adminOnly && !admin)           return false;
+                if (!search) return true;
+                const q = search.toLowerCase();
+                return t.label.toLowerCase().includes(q)
+                  || (t.keywords ?? '').toLowerCase().includes(q);
               });
               if (visibleTabs.length === 0) return null;
 

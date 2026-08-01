@@ -620,7 +620,7 @@ const AppShell: React.FC = () => {
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
             <Route path="/observability" element={wrap(adminOnly(<Observability />))} />
             <Route path="/ml-ops"        element={wrap(adminOnly(<MLDashboard />))} />
-            <Route path="/strategy-builder" element={wrap(<StrategyBuilder />)} />
+            <Route path="/strategy-builder" element={wrap(gated('strategy-builder', <StrategyBuilder />))} />
             <Route path="/transparency"  element={wrap(<Transparency />)} />
             <Route path="/news"          element={wrap(<NewsSentiment />)} />
             <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />

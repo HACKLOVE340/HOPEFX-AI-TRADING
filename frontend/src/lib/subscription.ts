@@ -112,6 +112,7 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   geopolitical:   'professional',   // geopolitical risk intelligence
   'ai-strategy':  'professional',
   'copy-trading': 'professional',
+  'strategy-builder': 'professional',   // no-code builder; api/nocode.py enforces the same gate
   'prop-firm':    'professional',
   correlation:    'professional',
   indicators:          'professional',
