@@ -59,6 +59,11 @@ jobs:
     if: ${{ needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # continue-on-error: the deploy-pages action requires GitHub Pages to be
+    # enabled in repo settings (Settings → Pages → Source: GitHub Actions).
+    # Until Pages is enabled this step returns 404; continue-on-error prevents
+    # that from blocking other CI checks.
+    continue-on-error: true
     permissions:
       pages: write
       id-token: write
