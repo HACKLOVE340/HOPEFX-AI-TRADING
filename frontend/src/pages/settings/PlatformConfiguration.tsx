@@ -2431,6 +2431,13 @@ const PlatformConfiguration: React.FC = () => {
   const [savedHealer, setSavedHealer]   = useState(false);
   const [healerSaveError, setHealerSaveError] = useState('');
   const [actionMsg, setActionMsg]  = useState('');
+  // handleSave PUTs the FULL config — all 200+ fields. If the GET failed, `cfg`
+  // is still DEFAULT_PLATFORM, so one save would overwrite every platform
+  // setting with a default. Same for the healer config. Refuse to render an
+  // editable form we could not populate (audit S7/S8).
+  const [cfgLoadFailed, setCfgLoadFailed] = useState(false);
+  const [healerLoadFailed, setHealerLoadFailed] = useState(false);
+  const [validateErrMsg, setValidateErrMsg] = useState('');
 
   const setHealer = useCallback((patch: Partial<HealerConfig>) =>
     setHealerState((prev) => ({ ...prev, ...patch })), []);
@@ -2441,11 +2448,13 @@ const PlatformConfiguration: React.FC = () => {
   // Load platform config
   const loadConfig = useCallback(async () => {
     setLoading(true);
+    setCfgLoadFailed(false);
     try {
       const res = await superadminApi.platformConfig();
       setCfg((prev) => ({ ...prev, ...res.data }));
     } catch (e) {
       console.warn('[PlatformConfig] load failed:', e);
+      setCfgLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -2459,11 +2468,19 @@ const PlatformConfiguration: React.FC = () => {
         superadminApi.autoHealStatus(),
         superadminApi.autoHealTestIndex(),
       ]);
-      if (cfgRes.status === 'fulfilled') setHealerState((prev) => ({ ...prev, ...cfgRes.value.data }));
+      if (cfgRes.status === 'fulfilled') {
+        setHealerState((prev) => ({ ...prev, ...cfgRes.value.data }));
+        setHealerLoadFailed(false);
+      } else {
+        // DEFAULT_HEALER has self-healing enabled. Saving it after a failed read
+        // would arm automated patching of the live platform.
+        setHealerLoadFailed(true);
+      }
       if (statusRes.status === 'fulfilled') setHealerStatus(statusRes.value.data);
       if (idxRes.status === 'fulfilled') setTestIndex(idxRes.value.data);
     } catch (e) {
       console.warn('[PlatformConfig] healer load failed:', e);
+      setHealerLoadFailed(true);
     }
   }, []);
 
@@ -2507,8 +2524,10 @@ const PlatformConfiguration: React.FC = () => {
     try {
       const res = await superadminApi.validatePlatformConfig();
       setValidationResult(res.data);
+      setValidateErrMsg('');
     } catch (e) {
-      console.warn('[PlatformConfig] validate failed:', e);
+      // A missing result used to be indistinguishable from "nothing to report".
+      setValidateErrMsg(extractApiError(e, 'Validation could not be run'));
     } finally { setValidating(false); }
   };
 
@@ -2545,6 +2564,22 @@ const PlatformConfiguration: React.FC = () => {
     </div>
   );
 
+  if (cfgLoadFailed) return (
+    <div>
+      <SectionHeader icon="⚙️" title="Platform Configuration" desc="Every platform setting, parameter, threshold and flag." />
+      <ActionBanner
+        message={
+          'Couldn\'t load the platform configuration. Nothing has been changed — but saving from ' +
+          'here would PUT all 200+ fields at their default values over the live configuration.'
+        }
+        ok={false}
+      />
+      <div style={{ marginTop: 14 }}>
+        <Button onClick={loadConfig} variant="secondary">Retry</Button>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -2559,6 +2594,7 @@ const PlatformConfiguration: React.FC = () => {
       </div>
 
       {/* Validation result banner */}
+      {validateErrMsg && <ActionBanner message={validateErrMsg} ok={false} onDismiss={() => setValidateErrMsg('')} />}
       {validationResult && (
         <div style={{
           marginBottom: 16, padding: '12px 16px', borderRadius: 10,
@@ -2619,7 +2655,21 @@ const PlatformConfiguration: React.FC = () => {
       {activeTab === 'prop_firm'     && <><PropFirmConfigTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'position_sizing' && <><PositionSizingTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
       {activeTab === 'killswitch'  && <><KillSwitchTab cfg={cfg} set={set} /><SaveBar onSave={handleSave} saving={saving} saved={saved} error={saveError} /></>}
-      {activeTab === 'healing'    && (
+      {activeTab === 'healing' && healerLoadFailed && (
+        <div>
+          <ActionBanner
+            message={
+              'Couldn\'t load the self-healer configuration. Nothing has been changed — saving from ' +
+              'here would post DEFAULT_HEALER, which has self-healing enabled, over the real config.'
+            }
+            ok={false}
+          />
+          <div style={{ marginTop: 14 }}>
+            <Button onClick={loadHealer} variant="secondary">Retry</Button>
+          </div>
+        </div>
+      )}
+      {activeTab === 'healing' && !healerLoadFailed && (
         <HealingTab
           healer={healer} setHealer={setHealer}
           healerStatus={healerStatus} testIndex={testIndex}

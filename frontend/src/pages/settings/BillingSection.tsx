@@ -1,9 +1,11 @@
 // settings/BillingSection.tsx — Subscription plan, billing info, transactions
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, pricingApi } from '../../hooks/useApi';
 import type { BillingInfo } from './types';
 import { Card, SectionHeader, Button, StatusBadge, Divider } from './ui';
+import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 interface Transaction {
   id: string;
@@ -61,17 +63,31 @@ const BillingSection: React.FC = () => {
   const [plans, setPlans] = useState<DisplayPlan[]>(FALLBACK_PLANS);
   const [loading, setLoading] = useState(true);
   const [txLoading, setTxLoading] = useState(true);
+  // This panel is read-only, so a failed load costs no data — but it does make
+  // false statements to a paying customer: "No subscription found. Choose a
+  // plan" and "No transactions yet".
+  const [billingErr, setBillingErr] = useState('');
+  const [txErr, setTxErr] = useState('');
+
+  const loadBilling = useCallback(() => {
+    setLoading(true);
+    api.get<BillingInfo>('/billing/subscription')
+      .then((r) => { setBilling(r.data); setBillingErr(''); })
+      .catch((err: unknown) => setBillingErr(extractApiError(err, 'Could not load your subscription')))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const loadTransactions = useCallback(() => {
+    setTxLoading(true);
+    api.get<{ transactions: Transaction[] }>('/billing/transactions')
+      .then((r) => { setTransactions(r.data.transactions ?? []); setTxErr(''); })
+      .catch((err: unknown) => setTxErr(extractApiError(err, 'Could not load your transaction history')))
+      .finally(() => setTxLoading(false));
+  }, []);
 
   useEffect(() => {
-    api.get<BillingInfo>('/billing/subscription')
-      .then((r) => setBilling(r.data))
-      .catch((err: unknown) => console.warn('[Settings/Billing] subscription:', err))
-      .finally(() => setLoading(false));
-
-    api.get<{ transactions: Transaction[] }>('/billing/transactions')
-      .then((r) => setTransactions(r.data.transactions ?? []))
-      .catch((err: unknown) => console.warn('[Settings/Billing] transactions:', err))
-      .finally(() => setTxLoading(false));
+    loadBilling();
+    loadTransactions();
 
     // Source live pricing from the canonical catalogue so this panel never
     // drifts from the real plan prices; fall back to a static list on error.
@@ -92,7 +108,7 @@ const BillingSection: React.FC = () => {
         })));
       })
       .catch((err: unknown) => console.warn('[Settings/Billing] plans:', err));
-  }, []);
+  }, [loadBilling, loadTransactions]);
 
   const planColor = billing ? (PLAN_COLORS[billing.plan?.toLowerCase()] ?? '#3b82f6') : '#3b82f6';
 
@@ -104,6 +120,13 @@ const BillingSection: React.FC = () => {
       <Card>
         {loading ? (
           <div style={{ color: '#64748b', fontSize: 13 }}>Loading subscription…</div>
+        ) : billingErr ? (
+          <div>
+            <ErrorBanner message={`${billingErr}. If you have an active plan it is unaffected — this is a display problem.`} />
+            <div style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={loadBilling}>Retry</Button>
+            </div>
+          </div>
         ) : billing ? (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -219,6 +242,13 @@ const BillingSection: React.FC = () => {
         </h3>
         {txLoading ? (
           <div style={{ color: '#64748b', fontSize: 13 }}>Loading transactions…</div>
+        ) : txErr ? (
+          <div>
+            <ErrorBanner message={txErr} />
+            <div style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={loadTransactions}>Retry</Button>
+            </div>
+          </div>
         ) : transactions.length === 0 ? (
           <div style={{ color: '#64748b', fontSize: 13 }}>No transactions yet.</div>
         ) : (

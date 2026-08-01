@@ -32,26 +32,39 @@ const SecuritySection: React.FC = () => {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // 2FA
-  const [is2FA, setIs2FA] = useState(false);
+  // 2FA. Tri-state on purpose (audit S7): a failed status fetch used to render
+  // as `false`, i.e. "Disabled" — telling a user with 2FA on that their account
+  // is unprotected. That is a security claim, not a form default, and we do not
+  // get to guess it.
+  const [is2FA, setIs2FA] = useState<boolean | null>(null);
   const [twoFALoading, setTwoFALoading] = useState(true);
+  const [twoFAErr, setTwoFAErr] = useState('');
 
   // Sessions
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsErr, setSessionsErr] = useState('');
+  const [revokeErr, setRevokeErr] = useState('');
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load2FA = React.useCallback(() => {
+    setTwoFALoading(true);
     api.get<{ enabled: boolean }>('/2fa/status')
-      .then((r) => setIs2FA(r.data.enabled ?? false))
-      .catch((err: unknown) => console.warn('[Settings/Security] 2FA status:', err))
+      .then((r) => { setIs2FA(r.data.enabled ?? false); setTwoFAErr(''); })
+      .catch((err: unknown) => setTwoFAErr(extractApiError(err, 'Could not read two-factor status')))
       .finally(() => setTwoFALoading(false));
+  }, []);
 
+  const loadSessions = React.useCallback(() => {
+    setSessionsLoading(true);
     api.get<{ sessions: SessionInfo[] }>('/auth/sessions')
-      .then((r) => setSessions(r.data.sessions ?? []))
-      .catch((err: unknown) => console.warn('[Settings/Security] sessions:', err))
+      .then((r) => { setSessions(r.data.sessions ?? []); setSessionsErr(''); })
+      // An empty list here would read as "nobody else is signed in".
+      .catch((err: unknown) => setSessionsErr(extractApiError(err, 'Could not load your active sessions')))
       .finally(() => setSessionsLoading(false));
   }, []);
+
+  useEffect(() => { load2FA(); loadSessions(); }, [load2FA, loadSessions]);
 
   const handlePasswordChange = async () => {
     if (pwForm.next !== pwForm.confirm) {
@@ -83,8 +96,11 @@ const SecuritySection: React.FC = () => {
     try {
       await withCsrfRetry(() => api.delete(`/auth/sessions/${sessionId}`));
       setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+      setRevokeErr('');
     } catch (err: unknown) {
-      console.warn('[Settings/Security] revoke session:', err);
+      // The row used to disappear only on success but the failure was silent, so
+      // a failed revoke looked exactly like a completed one.
+      setRevokeErr(extractApiError(err, 'Could not revoke that session — it is still active.'));
     } finally {
       setRevokingId(null);
     }
@@ -103,8 +119,7 @@ const SecuritySection: React.FC = () => {
       setSessions((prev) => prev.filter((s) => s.current));
       toast.success('All other sessions revoked.');
     } catch (err: unknown) {
-      toast.error('Failed to revoke sessions.');
-      console.warn('[Settings/Security] revoke all sessions:', err);
+      toast.error(extractApiError(err, 'Failed to revoke sessions.'));
     }
   };
 
@@ -171,15 +186,35 @@ const SecuritySection: React.FC = () => {
           </div>
           {twoFALoading
             ? <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+            : is2FA === null
+            ? <StatusBadge status="warning" label="Unknown" />
             : <StatusBadge status={is2FA ? 'ok' : 'warning'} label={is2FA ? 'Enabled' : 'Disabled'} />
           }
         </div>
+        {twoFAErr && (
+          <div
+            role="alert"
+            style={{
+              marginTop: 12, padding: '10px 14px', borderRadius: 8,
+              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 13,
+            }}
+          >
+            {twoFAErr} — the status above is unknown, not necessarily off.{' '}
+            <button
+              onClick={load2FA}
+              style={{ background: 'none', border: 0, color: '#fca5a5', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
         <Divider />
         <Button
           variant={is2FA ? 'secondary' : 'primary'}
           onClick={() => navigate('/2fa-setup')}
+          disabled={is2FA === null}
         >
-          {is2FA ? 'Manage 2FA' : 'Enable 2FA'}
+          {is2FA === null ? 'Status unavailable' : is2FA ? 'Manage 2FA' : 'Enable 2FA'}
         </Button>
       </Card>
 
@@ -196,8 +231,36 @@ const SecuritySection: React.FC = () => {
           )}
         </div>
 
+        {revokeErr && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 12, padding: '10px 14px', borderRadius: 8,
+              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 13,
+            }}
+          >
+            {revokeErr}
+          </div>
+        )}
+
         {sessionsLoading ? (
           <div style={{ color: '#64748b', fontSize: 13 }}>Loading sessions…</div>
+        ) : sessionsErr ? (
+          <div
+            role="alert"
+            style={{
+              padding: '10px 14px', borderRadius: 8,
+              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 13,
+            }}
+          >
+            {sessionsErr}. This is not the same as having no other sessions.{' '}
+            <button
+              onClick={loadSessions}
+              style={{ background: 'none', border: 0, color: '#fca5a5', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
+            >
+              Retry
+            </button>
+          </div>
         ) : sessions.length === 0 ? (
           <div style={{ color: '#64748b', fontSize: 13 }}>No active sessions found.</div>
         ) : (

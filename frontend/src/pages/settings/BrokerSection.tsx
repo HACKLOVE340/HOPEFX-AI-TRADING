@@ -4,6 +4,7 @@ import { api } from '../../hooks/useApi';
 import type { BrokerSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: BrokerSettings = {
   type: 'paper', api_key: '', account_id: '', practice: true, connected: false,
@@ -29,13 +30,17 @@ const BrokerSection: React.FC = () => {
   // Last-4 of the API key already saved server-side ('' = none). The full key
   // is never sent to the client.
   const [keyOnFile, setKeyOnFile] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [statusErr, setStatusErr] = useState('');
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     // Hydrate the SAVED broker config so non-secret fields (type/account_id/
     // practice) survive a reload instead of resetting to defaults. The API key
     // is never returned raw — the field stays blank and the user re-enters it
     // only to change it (a blank save keeps the stored key, server-side).
-    api.get<{ type: string; account_id: string; practice: boolean; api_key_set: boolean; api_key_last4: string }>(
+    const cfg = api.get<{ type: string; account_id: string; practice: boolean; api_key_set: boolean; api_key_last4: string }>(
       '/settings/broker')
       .then((r) => {
         setForm((prev) => ({
@@ -46,19 +51,32 @@ const BrokerSection: React.FC = () => {
         }));
         if (r.data.api_key_set) setKeyOnFile(r.data.api_key_last4 || '••••');
       })
-      .catch(() => { /* no saved config yet — keep defaults */ });
+      .catch((err: unknown) => {
+        // A 404 genuinely means "no broker configured yet" and DEFAULT is the
+        // right starting point. Anything else means we could not read the saved
+        // config, and rendering DEFAULT would show a live OANDA account as
+        // 'paper' with a blank account_id — one save away from silently
+        // reverting the broker.
+        if ((err as { response?: { status?: number } })?.response?.status === 404) return;
+        console.warn('[Settings/Broker] config:', err);
+        setLoadFailed(true);
+      });
 
     // Load live connection status from the broker endpoint.
-    api.get<{ connected: boolean; balance?: number; currency?: string; broker?: string }>('/broker/status')
+    const status = api.get<{ connected: boolean; balance?: number; currency?: string; broker?: string }>('/broker/status')
       .then((r) => {
         setBrokerStatus(r.data);
+        setStatusErr('');
         if (r.data.broker) {
           setForm((prev) => ({ ...prev, type: r.data.broker as BrokerSettings['type'], connected: r.data.connected }));
         }
       })
-      .catch((err: unknown) => console.warn('[Settings/Broker] status:', err))
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => setStatusErr(extractApiError(err, 'Could not read live broker status')));
+
+    void Promise.allSettled([cfg, status]).then(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<BrokerSettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -111,9 +129,26 @@ const BrokerSection: React.FC = () => {
     </div>
   );
 
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="🏦" title="Broker Connection" description="Connect your live or paper trading account." />
+      <ErrorBanner message="Couldn't load your saved broker configuration. Nothing has been changed — saving now would post default values over it." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <SectionHeader icon="🏦" title="Broker Connection" description="Connect your live or paper trading account." />
+
+      {statusErr && (
+        <ErrorBanner
+          message={`${statusErr}. The connection state below is unknown, not necessarily disconnected.`}
+          onDismiss={() => setStatusErr('')}
+        />
+      )}
 
       {/* Live status card */}
       {brokerStatus && (

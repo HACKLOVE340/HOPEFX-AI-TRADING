@@ -4,6 +4,7 @@ import { api } from '../../hooks/useApi';
 import type { NotificationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: NotificationSettings = {
   discord_enabled: false, discord_webhook_url: '',
@@ -49,20 +50,31 @@ const NotificationsSection: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveErr, setSaveErr] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [testStatus, setTestStatus] = useState<Record<string, TestState>>({
     discord: 'idle', slack: 'idle', telegram: 'idle',
   });
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<NotificationSettings>('/settings/notifications')
       .then((r) => {
         const merged = { ...DEFAULT, ...r.data };
         setSettings(merged);
         cacheLocalPrefs(merged);
       })
-      .catch((err: unknown) => console.warn('[Settings/Notifications] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Notifications] load:', err);
+        // DEFAULT has every alert off and every webhook URL blank. Saving after a
+        // failed GET posts the whole object, which turns the user's alerts off
+        // and drops their Discord/Slack/Telegram endpoints.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<NotificationSettings>) =>
     setSettings((prev) => ({ ...prev, ...patch })), []);
@@ -114,6 +126,16 @@ const NotificationsSection: React.FC = () => {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading notification settings…
+    </div>
+  );
+
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="🔔" title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
+      <ErrorBanner message="Couldn't load your notification settings. Nothing has been changed — saving now would turn your alerts off and clear your webhook endpoints." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 

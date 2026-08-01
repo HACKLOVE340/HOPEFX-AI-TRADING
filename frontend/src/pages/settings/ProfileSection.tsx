@@ -5,8 +5,9 @@ import { api } from '../../hooks/useApi';
 import { useStore } from '../../store';
 import type { ProfileSettings } from './types';
 import { TIMEZONES, LANGUAGES } from './types';
-import { Field, Input, Select, Toggle, Card, SectionHeader, SaveBar } from './ui';
+import { Field, Input, Select, Toggle, Card, SectionHeader, SaveBar, Button } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: ProfileSettings = {
   username: '', email: '', bio: '', avatar_url: '',
@@ -25,8 +26,11 @@ const ProfileSection: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [avatarPreview, setAvatarPreview] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<ProfileSettings>('/profiles/me')
       .then((r) => {
         const data = { ...DEFAULT, ...r.data };
@@ -34,14 +38,17 @@ const ProfileSection: React.FC = () => {
         setAvatarPreview(data.avatar_url || '');
       })
       .catch((err: unknown) => {
-        // Seed from store if API unavailable
-        if (user) {
-          setForm((prev) => ({ ...prev, username: user.username, email: user.email }));
-        }
         console.warn('[Settings/Profile] load failed:', err);
+        // Seeding username/email from the store used to make this look like a
+        // loaded profile while bio, website and avatar_url stayed at DEFAULT.
+        // Save posts those four fields, so the user's bio and website would be
+        // blanked and is_public reset.
+        setLoadFailed(true);
       })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<ProfileSettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -81,6 +88,16 @@ const ProfileSection: React.FC = () => {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading profile…
+    </div>
+  );
+
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="👤" title="Profile" description="Your public identity and account preferences." />
+      <ErrorBanner message="Couldn't load your profile. Nothing has been changed — saving now would clear your bio, website and avatar." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 

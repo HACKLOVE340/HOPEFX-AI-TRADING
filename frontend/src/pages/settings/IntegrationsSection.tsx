@@ -5,6 +5,7 @@ import { api } from '../../hooks/useApi';
 import type { IntegrationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: IntegrationSettings = {
   tradingview_enabled: false, tradingview_webhook_secret: '',
@@ -22,15 +23,27 @@ const IntegrationsSection: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [webhookTestResult, setWebhookTestResult] = useState<'ok' | 'fail' | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<IntegrationSettings>('/settings/integrations')
       .then((r) => setForm({ ...DEFAULT, ...r.data }))
-      .catch((err: unknown) => console.warn('[Settings/Integrations] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Integrations] load:', err);
+        // DEFAULT blanks every credential on this form — MT4/MT5 passwords,
+        // cTrader client secret, webhook secrets. Saving after a failed GET
+        // would post those empty strings over the stored values and break the
+        // live connections. Refuse to render a form we could not populate.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<IntegrationSettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -60,6 +73,16 @@ const IntegrationsSection: React.FC = () => {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading integrations…
+    </div>
+  );
+
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="🔌" title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
+      <ErrorBanner message="Couldn't load your integration settings. Nothing has been changed — saving now would overwrite your stored credentials with blanks." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 

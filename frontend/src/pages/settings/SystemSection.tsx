@@ -4,6 +4,7 @@ import { api } from '../../hooks/useApi';
 import type { SystemSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: SystemSettings = {
   data_refresh_interval: 30,
@@ -28,17 +29,29 @@ const SystemSection: React.FC = () => {
   const [backupRunning, setBackupRunning] = useState(false);
   const [backupMsg, setBackupMsg] = useState('');
   const [healthData, setHealthData] = useState<Record<string, unknown> | null>(null);
+  const [healthErr, setHealthErr] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<SystemSettings>('/admin/settings/system')
       .then((r) => setForm({ ...DEFAULT, ...r.data }))
-      .catch((err: unknown) => console.warn('[Settings/System] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/System] load:', err);
+        // Platform-wide settings, saved wholesale. DEFAULT carries
+        // enable_live_trading: false and max_open_positions: 10 — a failed GET
+        // followed by any edit would push those over the real configuration.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
 
     api.get<Record<string, unknown>>('/health')
-      .then((r) => setHealthData(r.data))
-      .catch(() => {/* non-fatal */});
+      .then((r) => { setHealthData(r.data); setHealthErr(''); })
+      .catch((err: unknown) => setHealthErr(extractApiError(err, 'Health check unavailable')));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<SystemSettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -70,11 +83,22 @@ const SystemSection: React.FC = () => {
     </div>
   );
 
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="⚙️" title="System" description="Platform-wide configuration. Changes affect all users." />
+      <ErrorBanner message="Couldn't load the system configuration. Nothing has been changed — saving now would push default values, including disabling live trading, over the real settings." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <SectionHeader icon="⚙️" title="System" description="Platform-wide configuration. Changes affect all users." />
 
       {/* Health overview */}
+      {healthErr && <ErrorBanner message={healthErr} onDismiss={() => setHealthErr('')} />}
       {healthData && (
         <Card>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 14 }}>System Health</h3>
