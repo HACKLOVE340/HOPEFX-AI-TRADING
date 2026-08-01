@@ -349,6 +349,7 @@ jobs:
       # here and reused by the per-package gates below — no re-runs needed.
       - name: Run tests with coverage (full suite, 70% baseline)
         env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # pragma: allowlist secret
@@ -386,6 +387,7 @@ jobs:
       # in this environment) is surfaced as a warning, not a hard failure.
       - name: Runtime invariant check (output invariants)
         env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # pragma: allowlist secret
