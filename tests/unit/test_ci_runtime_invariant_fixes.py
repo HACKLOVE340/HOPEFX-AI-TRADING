@@ -18,13 +18,18 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _ci_job_steps() -> dict[str, dict]:
     workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    return {step["name"]: step for step in workflow["jobs"]["test"]["steps"] if isinstance(step, dict) and "name" in step}
+    return {
+        step["name"]: step for step in workflow["jobs"]["test"]["steps"] if isinstance(step, dict) and "name" in step
+    }
 
 
 def test_ci_runtime_steps_export_database_url() -> None:
     steps = _ci_job_steps()
 
-    for step_name in ("Run tests with coverage (full suite, 70% baseline)", "Runtime invariant check (output invariants)"):
+    for step_name in (
+        "Run tests with coverage (full suite, 70% baseline)",
+        "Runtime invariant check (output invariants)",
+    ):
         env = steps[step_name]["env"]
         assert env["DATABASE_URL"] == env["DB_URL"]
 
