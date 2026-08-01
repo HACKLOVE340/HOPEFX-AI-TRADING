@@ -280,10 +280,10 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
           })));
         }
         if (maRef.current) {
-          const maData = sorted.map((_, i, arr) => {
+          const maData = sorted.map((bar, i, arr) => {
             if (i < 19) return null;
             const avg = arr.slice(i - 19, i + 1).reduce((s, x) => s + x.close, 0) / 20;
-            return { time: toUTC(arr[i].timestamp), value: avg };
+            return { time: toUTC(bar.timestamp), value: avg };
           }).filter(Boolean) as { time: UTCTimestamp; value: number }[];
           maRef.current.setData(maData);
         }
@@ -305,10 +305,10 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   }, [symbol, timeframe, hydrated, isAuth]);
 
   useEffect(() => {
-    if (!tick || !candleRef.current || !candles.length) return;
     // Align the live tick to the current bar's open time so it updates the
     // existing candle rather than creating a phantom future candle.
-    const last = candles[candles.length - 1]!;
+    const last = candles[candles.length - 1];
+    if (!tick || !candleRef.current || !last) return;
     const barTime = toUTC(last.timestamp);
     const mid = (tick.bid + tick.ask) / 2;
     candleRef.current.update({
@@ -324,8 +324,10 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   useEffect(() => { maRef.current?.applyOptions({ visible: showMA }); }, [showMA]);
 
   const stats = useMemo(() => {
-    if (!candles.length) return null;
     const last = candles[candles.length - 1];
+    // Bind then guard: `candles.length` being non-zero does not narrow
+    // `candles[n]` for the compiler (audit #38).
+    if (!last) return null;
     const prev = candles[candles.length - 2];
     const chg  = prev ? ((last.close - prev.close) / prev.close) * 100 : 0;
     const high = Math.max(...candles.slice(-20).map((c) => c.high));

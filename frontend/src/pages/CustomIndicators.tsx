@@ -60,7 +60,7 @@ function highlightFormula(formula: string): React.ReactNode[] {
       continue;
     }
     // Operator / punctuation
-    const ch = formula[i];
+    const ch = formula[i] ?? '';
     const opColor = '+-*/()'.includes(ch) ? '#a78bfa' : '#94a3b8';
     tokens.push(<span key={i} style={{ color: opColor }}>{ch}</span>);
     i++;

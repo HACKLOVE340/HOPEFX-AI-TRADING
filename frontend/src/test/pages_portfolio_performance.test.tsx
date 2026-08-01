@@ -483,7 +483,7 @@ describe('Performance page', () => {
     await renderPerformance();
     // Use the first weekly button (the tab button in the nav strip)
     const weeklyBtns = screen.getAllByRole('button', { name: /weekly/i });
-    fireEvent.click(weeklyBtns[0]);
+    fireEvent.click(weeklyBtns[0]!);
     await waitFor(() => {
       // Page renders "Weekly Performance Report" as h3 heading
       expect(document.body.textContent).toMatch(/weekly performance report/i);

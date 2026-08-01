@@ -222,8 +222,9 @@ const SubAccounts: React.FC = () => {
       const teams    = teamRes.data.teams ?? [];
       setAccounts(accounts);
       setTeams(teams);
-      if (teams.length > 0 && !selectedTeam) {
-        setSelectedTeam(teams[0]!);
+      const firstTeam = teams[0];
+      if (firstTeam && !selectedTeam) {
+        setSelectedTeam(firstTeam);
       }
     } catch (e: unknown) {
       if (!mountedRef.current) return;

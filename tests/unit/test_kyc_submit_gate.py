@@ -38,14 +38,12 @@ def client(monkeypatch):
     """Mount the KYC alias router over an in-memory store."""
     store: dict[str, dict] = {}
 
-    import api.db_store as db_store
+    from api import db_store
 
     monkeypatch.setattr(db_store, "db_get", lambda k: store.get(k))
-    monkeypatch.setattr(
-        db_store, "db_set", lambda k, v, **kw: store.__setitem__(k, v), raising=False
-    )
+    monkeypatch.setattr(db_store, "db_set", lambda k, v, **kw: store.__setitem__(k, v), raising=False)
 
-    import api.kyc as kyc
+    from api import kyc
 
     app = FastAPI()
     app.include_router(kyc.kyc_alias_router)
@@ -150,7 +148,7 @@ def test_a_failed_write_does_not_report_success(client, monkeypatch):
     c, store = client
     store[f"kyc:{USER}"] = _docs("passport", "proof_of_address")
 
-    import api.db_store as db_store
+    from api import db_store
 
     def _boom(*_a, **_kw):
         raise RuntimeError("store unavailable")

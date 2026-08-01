@@ -507,9 +507,10 @@ const Trade: React.FC = () => {
         return;
       }
       const idx = parseInt(e.key, 10) - 1;
-      if (idx >= 0 && idx < SYMBOLS.length) {
-        setSelectedSymbol(SYMBOLS[idx]);
-      }
+      const sym = SYMBOLS[idx];
+      // Bind then guard: the bounds check does not narrow SYMBOLS[idx] for the
+      // compiler (audit #38).
+      if (sym) setSelectedSymbol(sym);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);

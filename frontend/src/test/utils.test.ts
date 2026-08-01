@@ -357,7 +357,7 @@ describe('equity history', () => {
   });
   it('first point is oldest date', () => {
     const pts = generateEquityHistory();
-    expect(new Date(pts[0].time) < new Date(pts[pts.length - 1].time)).toBe(true);
+    expect(new Date(pts[0]?.time ?? 0) < new Date(pts[pts.length - 1]?.time ?? 0)).toBe(true);
   });
   it('all values are positive', () => {
     const pts = generateEquityHistory();
@@ -365,7 +365,7 @@ describe('equity history', () => {
   });
   it('time format is YYYY-MM-DD', () => {
     const pts = generateEquityHistory();
-    expect(pts[0].time).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(pts[0]?.time).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
   it('values are finite numbers', () => {
     const pts = generateEquityHistory();
@@ -374,8 +374,8 @@ describe('equity history', () => {
   it('starting value is near startBalance', () => {
     const pts = generateEquityHistory(100_000);
     // First value should be within 5% of start
-    expect(pts[0].value).toBeGreaterThan(90_000);
-    expect(pts[0].value).toBeLessThan(110_000);
+    expect(pts[0]?.value).toBeGreaterThan(90_000);
+    expect(pts[0]?.value).toBeLessThan(110_000);
   });
 });
 

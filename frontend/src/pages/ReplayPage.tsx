@@ -20,6 +20,13 @@ import { replayApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
 // Playback speed options (ms between auto-step ticks)
+/** 1× — the speed used if an index somehow falls outside SPEED_OPTIONS. */
+const DEFAULT_SPEED_MS = 500;
+
+/** Interval for a speed index. The callers all clamp their index, but the
+    compiler cannot see that under noUncheckedIndexedAccess (audit #38). */
+const speedMs = (i: number): number => SPEED_OPTIONS[i]?.ms ?? DEFAULT_SPEED_MS;
+
 const SPEED_OPTIONS: { label: string; ms: number }[] = [
   { label: '0.25×', ms: 2000 },
   { label: '0.5×',  ms: 1000 },
@@ -233,13 +240,13 @@ const ReplayPage: React.FC = () => {
   const toggleAutoPlay = useCallback(() => {
     if (!selected) return;
     if (autoPlay) { stopAutoPlay(); }
-    else { startAutoPlay(SPEED_OPTIONS[speedIdx].ms); }
+    else { startAutoPlay(speedMs(speedIdx)); }
   }, [autoPlay, selected, speedIdx, startAutoPlay, stopAutoPlay]);
 
   // When speed changes mid-play, restart interval at new speed
   const handleSpeedChange = useCallback((idx: number) => {
     setSpeedIdx(idx);
-    if (autoPlay) { startAutoPlay(SPEED_OPTIONS[idx].ms); }
+    if (autoPlay) { startAutoPlay(speedMs(idx)); }
   }, [autoPlay, startAutoPlay]);
 
   // Keyboard navigation: Space=play/pause, →=step, ←=nothing (no rewind), Esc=close
@@ -258,9 +265,9 @@ const ReplayPage: React.FC = () => {
         stopAutoPlay();
         setSelected(null);
       } else if (e.key === '+' || e.key === '=') {
-        setSpeedIdx(i => { const n = Math.min(i + 1, SPEED_OPTIONS.length - 1); if (autoPlay) startAutoPlay(SPEED_OPTIONS[n].ms); return n; });
+        setSpeedIdx(i => { const n = Math.min(i + 1, SPEED_OPTIONS.length - 1); if (autoPlay) startAutoPlay(speedMs(n)); return n; });
       } else if (e.key === '-') {
-        setSpeedIdx(i => { const n = Math.max(i - 1, 0); if (autoPlay) startAutoPlay(SPEED_OPTIONS[n].ms); return n; });
+        setSpeedIdx(i => { const n = Math.max(i - 1, 0); if (autoPlay) startAutoPlay(speedMs(n)); return n; });
       }
     };
     window.addEventListener('keydown', handler);

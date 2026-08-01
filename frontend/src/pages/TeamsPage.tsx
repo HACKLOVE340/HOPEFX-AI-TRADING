@@ -56,15 +56,19 @@ interface TeamPerformance {
 
 // ── Role badge ────────────────────────────────────────────────────────────────
 
+/** Fallback for an unrecognised role, named so it is not itself an index
+    access (audit #38). Value unchanged — same as `viewer`. */
+const ROLE_COLORS_DEFAULT = { bg: '#64748b22', color: '#94a3b8' };
+
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   owner:   { bg: '#f59e0b22', color: '#f59e0b' },
   manager: { bg: '#8b5cf622', color: '#8b5cf6' },
   trader:  { bg: '#3b82f622', color: '#3b82f6' },
-  viewer:  { bg: '#64748b22', color: '#94a3b8' },
+  viewer:  ROLE_COLORS_DEFAULT,
 };
 
 function RoleBadge({ role }: { role: string }) {
-  const c = ROLE_COLORS[role] ?? ROLE_COLORS.viewer;
+  const c = ROLE_COLORS[role] ?? ROLE_COLORS_DEFAULT;
   return (
     <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
       background: c.bg, color: c.color, textTransform: 'capitalize' }}>

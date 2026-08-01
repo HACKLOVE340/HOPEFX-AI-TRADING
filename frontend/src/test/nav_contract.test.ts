@@ -22,12 +22,12 @@ const APP_TSX = readFileSync(join(SRC, 'App.tsx'), 'utf8');
 
 /** Every `path="..."` registered in App.tsx. */
 function registeredPaths(): string[] {
-  return [...APP_TSX.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]!);
+  return [...APP_TSX.matchAll(/<Route\s+path="([^"]+)"/g)]?.map((m) => m[1]!);
 }
 
 /** Every `gated('key', …)` feature key used in App.tsx. */
 function gatedFeatureKeys(): string[] {
-  return [...APP_TSX.matchAll(/gated\(\s*'([^']+)'/g)].map((m) => m[1]!);
+  return [...APP_TSX.matchAll(/gated\(\s*'([^']+)'/g)]?.map((m) => m[1]!);
 }
 
 /** Static internal link targets across the pages tree, ignoring template vars. */
@@ -58,7 +58,7 @@ describe('routes', () => {
     const counts = new Map<string, number>();
     for (const p of registeredPaths()) counts.set(p, (counts.get(p) ?? 0) + 1);
 
-    const duplicates = [...counts.entries()].filter(([, n]) => n > 1).map(([p]) => p);
+    const duplicates = [...counts.entries()]?.filter(([, n]) => n > 1).map(([p]) => p);
     expect(
       duplicates,
       'A path registered twice is matched by whichever <Routes> group comes ' +
@@ -92,7 +92,7 @@ describe('internal links', () => {
       if (staticPaths.has(to)) return false;
       if (to.endsWith('/:param')) return !paramPrefixes.has(to.slice(0, -'/:param'.length));
       // Nested static path under a registered parent, e.g. /settings/foo.
-      return ![...staticPaths].some((p) => p !== '/' && to.startsWith(`${p}/`));
+      return ![...staticPaths]?.some((p) => p !== '/' && to.startsWith(`${p}/`));
     });
 
     expect(

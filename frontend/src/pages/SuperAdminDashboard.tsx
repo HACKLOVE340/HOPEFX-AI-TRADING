@@ -52,8 +52,12 @@ const SA_CROSS_LINKS = [
 ];
 interface TabDef { id: SuperAdminTab; label: string; icon: string; description: string; accent: string; group: 'core'|'compliance'|'risk'|'ops'; }
 
+/** The tab shown when `activeTab` matches nothing. Named so the fallback is not
+    itself an index access (audit #38). */
+const OVERVIEW_TAB: TabDef = { id: 'overview', label: 'Overview', icon: '🌐', description: 'Platform health & KPIs', accent: '#3b82f6', group: 'core' };
+
 const TABS: TabDef[] = [
-  { id: 'overview',          label: 'Overview',       icon: '🌐', description: 'Platform health & KPIs',          accent: '#3b82f6', group: 'core' },
+  OVERVIEW_TAB,
   { id: 'users',             label: 'Users',          icon: '👥', description: 'User management & roles',         accent: '#22c55e', group: 'core' },
   { id: 'platform',          label: 'Platform',       icon: '⚙️', description: 'Config, maintenance, banners',    accent: '#8b5cf6', group: 'core' },
   { id: 'ml-ai',             label: 'ML / AI',        icon: '🧠', description: 'Models, RL agent, metrics',       accent: '#a78bfa', group: 'core' },
@@ -284,7 +288,7 @@ const SuperAdminDashboard: React.FC = () => {
   }
   if (!isSuperAdmin(user.role)) return null;
 
-  const activeTabDef = TABS.find(t => t.id === activeTab) ?? TABS[0]!;
+  const activeTabDef = TABS.find(t => t.id === activeTab) ?? OVERVIEW_TAB;
   const killSwitchActive = engineStatusConfirmed && (engineHealth?.kill_switch_active ?? false);
   const navCtx = { navigateTo: setActiveTab };
 

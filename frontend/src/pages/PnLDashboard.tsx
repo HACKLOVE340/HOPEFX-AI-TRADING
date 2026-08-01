@@ -158,7 +158,10 @@ function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
   const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
   const rafRef       = useRef<number>(0);
 
-  const up    = data.length >= 2 && data[data.length - 1].v >= data[0].v;
+  // `data.length >= 2` does not narrow data[n] for the compiler (audit #38).
+  const sparkLast  = data[data.length - 1];
+  const sparkFirst = data[0];
+  const up = sparkLast !== undefined && sparkFirst !== undefined && sparkLast.v >= sparkFirst.v;
   const color = up ? '#00e676' : '#ff1744';
 
   useEffect(() => {
@@ -319,8 +322,11 @@ const TradeHistogram: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
     count: 0,
   }));
   for (const v of values) {
-    const idx = Math.min(Math.floor((v - min) / binSize), BINS - 1);
-    bins[idx]!.count++;
+    const idx = Math.min(Math.max(Math.floor((v - min) / binSize), 0), BINS - 1);
+    // The audit cites this exact line: `bins[idx]!.count` read as safe because
+    // noUncheckedIndexedAccess was off, so the assertion passed review (#38).
+    const bin = bins[idx];
+    if (bin) bin.count++;
   }
   const maxCount = Math.max(...bins.map((b) => b.count), 1);
   const W = 400; const H = 60;

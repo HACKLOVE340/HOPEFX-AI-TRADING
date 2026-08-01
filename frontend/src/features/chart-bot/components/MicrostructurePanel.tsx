@@ -32,7 +32,7 @@ const SpreadGauge = memo(({ spread, spreadPct, history }: { spread: number; spre
             <line
               key={i}
               x1={`${((i - 1) / (arr.length - 1)) * 100}%`}
-              y1={28 - clamp(arr[i - 1] / max, 0, 1) * 24}
+              y1={28 - clamp((arr[i - 1] ?? v) / max, 0, 1) * 24}
               x2={`${x}%`}
               y2={y}
               stroke={color}
@@ -131,6 +131,9 @@ TradePressureGauge.displayName = 'TradePressureGauge';
 
 const VolumeDeltaHeatmap = memo(({ bars }: { bars: VolumeDeltaBar[] }) => {
   const recent = bars.slice(-40);
+  // Bind once: `recent.length > 0` does not narrow recent[n] (audit #38), and
+  // this was indexed three times in the same JSX expression.
+  const latestCumDelta = recent[recent.length - 1]?.cumDelta;
   if (!recent.length) return (
     <div style={s.heatmapCard}>
       <div style={s.gaugeTitle}>VOLUME DELTA</div>
@@ -165,16 +168,16 @@ const VolumeDeltaHeatmap = memo(({ bars }: { bars: VolumeDeltaBar[] }) => {
         })}
       </div>
       {/* Cumulative delta */}
-      {recent.length > 0 && (
+      {latestCumDelta !== undefined && (
         <div style={s.cumDelta}>
           <span style={s.gaugeTitle}>CUM Δ</span>
           <span style={{
             fontFamily: '"JetBrains Mono", monospace',
             fontSize: 12,
             fontWeight: 700,
-            color: recent[recent.length - 1].cumDelta >= 0 ? COLORS.profit.base : COLORS.loss.base,
+            color: latestCumDelta >= 0 ? COLORS.profit.base : COLORS.loss.base,
           }}>
-            {recent[recent.length - 1].cumDelta >= 0 ? '+' : ''}{recent[recent.length - 1].cumDelta.toFixed(0)}
+            {latestCumDelta >= 0 ? '+' : ''}{latestCumDelta.toFixed(0)}
           </span>
         </div>
       )}

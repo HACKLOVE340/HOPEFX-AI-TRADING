@@ -36,6 +36,9 @@ interface StrengthResult {
   color: string;
 }
 
+/** The zero-score entry, named so the fallback is not itself an index access. */
+const NO_STRENGTH: StrengthResult = { score: 0, label: '', color: '#334155' };
+
 function measureStrength(pw: string): StrengthResult {
   if (!pw) return { score: 0, label: '', color: '#334155' };
   let score = 0;
@@ -46,13 +49,15 @@ function measureStrength(pw: string): StrengthResult {
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   score = Math.min(score, 4);
   const map: StrengthResult[] = [
-    { score: 0, label: '',          color: '#334155' },
+    NO_STRENGTH,
     { score: 1, label: 'Weak',      color: '#ef4444' },
     { score: 2, label: 'Fair',      color: '#f59e0b' },
     { score: 3, label: 'Good',      color: '#3b82f6' },
     { score: 4, label: 'Strong',    color: '#22c55e' },
   ];
-  return map[score];
+  // Clamp rather than index blind: an out-of-range score reports the
+  // weakest rating, never `undefined` (audit #38).
+  return map[Math.min(Math.max(score, 0), map.length - 1)] ?? NO_STRENGTH;
 }
 
 function PasswordStrengthBar({ password }: { password: string }) {

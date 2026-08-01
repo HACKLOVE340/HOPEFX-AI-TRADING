@@ -10,9 +10,14 @@ import type { LogEntry } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
 
+/** Fallback for an unrecognised key. Named so it is not itself an
+    index access, which `noUncheckedIndexedAccess` types as possibly
+    undefined (audit #38). Value is unchanged. */
+const LEVEL_COLORS_DEFAULT = { color: '#60a5fa', bg: '#0c1a2e' };
+
 const LEVEL_COLORS: Record<string, { color: string; bg: string }> = {
   DEBUG:    { color: '#94a3b8', bg: '#1e293b' },
-  INFO:     { color: '#60a5fa', bg: '#0c1a2e' },
+  INFO: LEVEL_COLORS_DEFAULT,
   WARNING:  { color: '#fbbf24', bg: '#1c1200' },
   ERROR:    { color: '#f87171', bg: '#1a0000' },
   CRITICAL: { color: '#fca5a5', bg: '#2d0000' },
@@ -197,7 +202,7 @@ const LogsSection: React.FC = () => {
               <div style={{ padding: 20, color: '#475569' }}>No log entries match the current filters.</div>
             ) : (
               filteredLogs.map((l, i) => {
-                const lc = LEVEL_COLORS[l.level] ?? LEVEL_COLORS.INFO;
+                const lc = LEVEL_COLORS[l.level] ?? LEVEL_COLORS_DEFAULT;
                 return (
                   <div key={i} style={{
                     display: 'flex', gap: 0, padding: '3px 0',

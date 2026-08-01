@@ -260,8 +260,9 @@ const ChartContainer: React.FC<{ onChartClick: (ctx: ChartClickContext) => void 
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setDims({ width, height });
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      setDims({ width: rect.width, height: rect.height });
     });
     ro.observe(containerRef.current);
     return () => ro.disconnect();

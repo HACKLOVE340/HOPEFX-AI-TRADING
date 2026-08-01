@@ -125,7 +125,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 
     // Add new series
     series.forEach((s, i) => {
-      const color = s.color ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length]!;
+      const color = s.color ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length] ?? '#3b82f6';
       const ls = chartRef.current!.addSeries(LineSeries, {
         color,
         lineWidth: 2,

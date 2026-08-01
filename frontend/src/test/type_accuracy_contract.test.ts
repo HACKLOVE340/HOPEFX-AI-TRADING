@@ -21,7 +21,7 @@
  * user hits the missing field in production.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SRC = join(__dirname, '..');
@@ -121,5 +121,50 @@ describe('positionSide normalises the side/direction split in one place', () => 
     ] as const) {
       expect(read(...seg), `${seg.join('/')} should use positionSide()`).toContain('positionSide');
     }
+  });
+});
+
+describe('noUncheckedIndexedAccess stays on (#38)', () => {
+  it('is enabled in tsconfig', () => {
+    // Without it, `array[i]` is typed as always-defined, so `bins[idx]!.count`
+    // reads as safe and non-null assertions pass review unchallenged. Turning it
+    // back off would silently re-admit that whole class of bug — and the 100+
+    // guards added alongside it would look like redundant noise to the next
+    // reader.
+    const tsconfig = readFileSync(join(__dirname, '..', '..', 'tsconfig.json'), 'utf8');
+    expect(tsconfig).toMatch(/"noUncheckedIndexedAccess"\s*:\s*true/);
+    expect(tsconfig).toMatch(/"strict"\s*:\s*true/);
+  });
+
+  it('production code does not silence index access with a non-null assertion', () => {
+    // `!` is tolerated in test files, where the failure mode is a failing test.
+    // In production it re-creates the crash with extra steps.
+    const dirs = ['pages', 'components', 'lib', 'hooks', 'features', 'types'];
+    const offenders: string[] = [];
+
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) { walk(full); continue; }
+        if (!/\.tsx?$/.test(entry.name)) continue;
+        readFileSync(full, 'utf8')
+          // Strip comments first: the fixes document themselves by quoting the
+          // assertion they replaced.
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/^\s*\/\/.*$/gm, '')
+          .split('\n')
+          .forEach((line, i) => {
+            // `something[expr]!` — a bang directly after an index access.
+            if (/\[[^\]]*\]!/.test(line)) offenders.push(`${full}:${i + 1}  ${line.trim().slice(0, 90)}`);
+          });
+      }
+    };
+    for (const d of dirs) walk(join(SRC, d));
+
+    expect(
+      offenders,
+      'Guard the access (?? fallback, bind-then-check, or a named constant) ' +
+        'instead of asserting it is present:\n' + offenders.join('\n'),
+    ).toEqual([]);
   });
 });

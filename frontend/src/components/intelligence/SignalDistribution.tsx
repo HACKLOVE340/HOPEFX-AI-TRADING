@@ -30,10 +30,17 @@ const Bar: React.FC<{ label: string; value: number; max: number; color: string }
 );
 
 const STRENGTH_ORDER = ['very_strong', 'strong', 'moderate', 'weak', 'very_weak'] as const;
-const STRENGTH_COLOR: Record<string, string> = {
+// Keyed by the actual unions rather than `string`, so indexing with a member of
+// STRENGTH_ORDER / the direction tuple is definite. Under
+// noUncheckedIndexedAccess (audit #38) a `Record<string, T>` lookup is
+// `T | undefined` even when the key is provably one of the declared ones.
+type StrengthTier = (typeof STRENGTH_ORDER)[number];
+type Direction    = 'buy' | 'sell' | 'hold';
+
+const STRENGTH_COLOR: Record<StrengthTier, string> = {
   very_strong: '#22c55e', strong: '#4ade80', moderate: '#fbbf24', weak: '#fb923c', very_weak: '#f87171',
 };
-const DIR_COLOR: Record<string, string> = { buy: '#22c55e', sell: '#f87171', hold: '#94a3b8' };
+const DIR_COLOR: Record<Direction, string> = { buy: '#22c55e', sell: '#f87171', hold: '#94a3b8' };
 
 export const SignalDistribution: React.FC<{ analytics: SignalAnalyticsReport }> = ({ analytics }) => {
   const strengthMax = Math.max(1, ...Object.values(analytics.signals_by_strength ?? {}));

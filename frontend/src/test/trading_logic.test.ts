@@ -113,7 +113,7 @@ describe('Kelly criterion', () => {
 
 describe('drawdown calculations', () => {
   const maxDrawdown = (equity: number[]) => {
-    let peak = equity[0];
+    let peak = equity[0] ?? 0;
     let maxDD = 0;
     for (const val of equity) {
       if (val > peak) peak = val;

@@ -75,7 +75,9 @@ const ChatPage: React.FC = () => {
         const d = res.data as ChatRoom[] | { rooms?: ChatRoom[] };
         const r = Array.isArray(d) ? d : (d.rooms ?? []);
         setRooms(r);
-        if (r.length > 0) setActiveRoom(r[0]);
+        // Bind rather than index: r.length > 0 does not narrow r[0] (audit #38).
+        const firstRoom = r[0];
+        if (firstRoom) setActiveRoom(firstRoom);
       } catch { if (mounted) setRooms([]); }
       finally { if (mounted) setLoadingRooms(false); }
     })();

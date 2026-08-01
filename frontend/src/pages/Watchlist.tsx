@@ -58,7 +58,8 @@ const Sparkline: React.FC<{ history: number[] }> = ({ history }) => {
 
   const last  = history[history.length - 1];
   const first = history[0];
-  const up    = last >= first;
+  // An empty history renders flat rather than throwing (audit #38).
+  const up    = last !== undefined && first !== undefined ? last >= first : true;
   const color = up ? '#4ade80' : '#f87171';
 
   const min   = Math.min(...history);

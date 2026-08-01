@@ -79,7 +79,7 @@ const StepIndicator: React.FC<{ current: number; total: number }> = ({ current, 
             color: done ? '#0f172a' : active ? '#fbbf24' : '#475569',
             flexShrink: 0,
           }}>
-            {done ? '✓' : STEPS[i].icon}
+            {done ? '✓' : STEPS[i]?.icon ?? ''}
           </div>
           {i < total - 1 && (
             <div style={{ flex: 1, height: 2, background: i < current ? '#f59e0b' : '#334155' }} />

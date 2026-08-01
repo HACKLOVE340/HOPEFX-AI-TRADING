@@ -55,8 +55,12 @@ const INTENT_COLOUR: Record<string, string> = {
   ddos: '#dc2626',        // crimson
 };
 
+/** Fallback for an unrecognised intent, named so it is not itself an index
+    access (audit #38). Value unchanged. */
+const INTENT_COLOUR_DEFAULT = '#94a3b8';
+
 function intentColour(intent: string): string {
-  return INTENT_COLOUR[intent] ?? INTENT_COLOUR.unknown;
+  return INTENT_COLOUR[intent] ?? INTENT_COLOUR_DEFAULT;
 }
 
 // ── Leaflet dynamic import (avoids SSR issues) ────────────────────────────────

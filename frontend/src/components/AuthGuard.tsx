@@ -36,7 +36,11 @@ const ROLE_RANK: Record<import('../store').UserRole, number> = {
 function isTokenExpired(token: string | null): boolean {
   if (!token) return false; // null token = not restored yet, not expired
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')));
+    const claims = token.split('.')[1];
+    // A token without a payload segment is malformed — treat it as expired
+    // rather than asserting the segment exists.
+    if (!claims) return true;
+    const payload = JSON.parse(atob(claims.replace(/-/g, '+').replace(/_/g, '/')));
     return typeof payload.exp === 'number' && payload.exp * 1000 < Date.now();
   } catch {
     return true;

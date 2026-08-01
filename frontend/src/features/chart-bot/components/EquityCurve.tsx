@@ -107,8 +107,9 @@ const EquityCurve: React.FC = () => {
       avgSharpe: null, avgSortino: null, winDays: 0, lossDays: 0,
       currentEquity: 0, peakEquity: 0,
     };
-    const first = points[0].equity;
-    const last  = points[points.length - 1].equity;
+    // `points.length` being non-zero does not narrow points[n] (audit #38).
+    const first = points[0]?.equity ?? 0;
+    const last  = points[points.length - 1]?.equity ?? first;
     const peak  = Math.max(...points.map((p) => p.equity));
     const maxDD = Math.min(...points.map((p) => p.drawdown));
     // Average only over points that actually carry a finite ratio. A fresh
@@ -121,8 +122,8 @@ const EquityCurve: React.FC = () => {
     };
     const avgSharpe  = finiteAvg((p) => p.sharpe);
     const avgSortino = finiteAvg((p) => p.sortino);
-    const winDays  = points.filter((p, i) => i > 0 && p.equity > points[i - 1].equity).length;
-    const lossDays = points.filter((p, i) => i > 0 && p.equity < points[i - 1].equity).length;
+    const winDays  = points.filter((p, i) => i > 0 && p.equity > (points[i - 1]?.equity ?? p.equity)).length;
+    const lossDays = points.filter((p, i) => i > 0 && p.equity < (points[i - 1]?.equity ?? p.equity)).length;
     return {
       totalReturn:    last - first,
       // first === 0 would give Infinity/NaN — a zero starting equity has no

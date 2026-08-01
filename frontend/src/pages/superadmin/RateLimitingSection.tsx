@@ -229,24 +229,28 @@ const RateLimitingSection: React.FC = () => {
               </thead>
               <tbody>
                 {rules.map(rule => {
-                  const isEditing = !!editing[rule.rule_id];
+                  // Bind the draft row instead of re-indexing: `isEditing`
+                  // being true does not narrow `editing[id]` for the compiler
+                  // (audit #38), and the updater below spread a possibly-absent
+                  // row, which would have written a partial record.
+                  const draft = editing[rule.rule_id];
                   return (
                     <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                       <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: '#60a5fa' }}>{rule.endpoint}</td>
                       <td style={{ padding: '10px 16px' }}>
-                        {isEditing ? (
+                        {draft ? (
                           <div style={{ display: 'flex', gap: 6 }}>
                             <input
                               type="number"
-                              value={editing[rule.rule_id].limit}
-                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...p[rule.rule_id], limit: e.target.value } }))}
+                              value={draft.limit}
+                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, limit: e.target.value } }))}
                               style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#f8fafc', padding: '3px 6px', fontSize: 12 }}
                             />
                             <span style={{ color: '#475569', alignSelf: 'center' }}>/</span>
                             <input
                               type="number"
-                              value={editing[rule.rule_id].window_seconds}
-                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...p[rule.rule_id], window_seconds: e.target.value } }))}
+                              value={draft.window_seconds}
+                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, window_seconds: e.target.value } }))}
                               style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#f8fafc', padding: '3px 6px', fontSize: 12 }}
                             />
                             <span style={{ color: '#475569', alignSelf: 'center', fontSize: 11 }}>s</span>
@@ -275,7 +279,7 @@ const RateLimitingSection: React.FC = () => {
                       </td>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          {isEditing ? (
+                          {draft ? (
                             <>
                               <ActionBtn label="Save" onClick={() => saveEdit(rule.rule_id)} loading={busy === rule.rule_id} accent="#22c55e" size="sm" />
                               <ActionBtn label="Cancel" onClick={() => setEditing(p => { const n = { ...p }; delete n[rule.rule_id]; return n; })} accent="#64748b" size="sm" />
