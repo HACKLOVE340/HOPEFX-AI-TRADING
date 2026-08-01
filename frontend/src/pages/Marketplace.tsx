@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPctRaw } from '../lib/utils';
 
 interface Strategy {
   strategy_id: string; name: string; description: string; creator_id: string;
@@ -26,6 +26,12 @@ const Stars: React.FC<{rating: number; size?: number}> = ({rating, size=14}) => 
   const full = Math.floor(r); const half = r - full >= 0.5;
   return <span style={{fontSize:size,lineHeight:1}}>{'★'.repeat(full)}{half ? '½' : ''}{'☆'.repeat(Math.max(0, 5-full-(half?1:0)))}</span>;
 };
+/**
+ * `positive` defaults to true, so a caller that forgets it renders green. Every
+ * return figure therefore passes it explicitly, derived from the number.
+ * A strategy returning -15% used to display a green `+-15.0%`: the sign was
+ * hardcoded into the string and the colour never consulted the value.
+ */
 const PerfBadge: React.FC<{label:string;value:string;positive?:boolean}> = ({label,value,positive}) => (
   <div style={st.perfBadge}><div style={{...st.perfValue,color:positive===false?'#f87171':'#4ade80'}}>{value}</div><div style={st.perfLabel}>{label}</div></div>
 );
@@ -40,7 +46,7 @@ const StrategyCard: React.FC<{strategy:Strategy;onSelect:(s:Strategy)=>void}> = 
       </div>
       <h3 style={st.cardTitle}>{strategy.name}</h3>
       <p style={st.cardDesc}>{strategy.description}</p>
-      {p&&<div style={st.perfRow}>{p.total_return_pct!=null&&<PerfBadge label="Return" value={`+${fmt(p.total_return_pct)}%`}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe" value={fmt(p.sharpe_ratio)}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max DD" value={`-${fmt(p.max_drawdown_pct)}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
+      {p&&<div style={st.perfRow}>{p.total_return_pct!=null&&<PerfBadge label="Return" value={fmtPctRaw(p.total_return_pct, 1)} positive={p.total_return_pct>=0}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe" value={fmt(p.sharpe_ratio)} positive={p.sharpe_ratio>=0}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max DD" value={`-${fmt(Math.abs(p.max_drawdown_pct))}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
       <div style={st.cardFooter}><div style={{display:'flex',alignItems:'center',gap:6}}><Stars rating={strategy.rating}/><span style={{fontSize:13,color:'#94a3b8'}}>{fmt(strategy.rating)} ({strategy.review_count})</span></div><span style={{fontSize:12,color:'#64748b'}}>{strategy.subscriber_count} subscribers</span></div>
     </div>
   );
@@ -84,7 +90,7 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
           <div style={st.modalPrice}>{strategy.price===0?<span style={{color:'#4ade80',fontSize:28,fontWeight:800}}>Free</span>:<><span style={{fontSize:32,fontWeight:800,color:'#f8fafc'}}>${strategy.price}</span><span style={{color:'#64748b',fontSize:14}}>/{strategy.license_type==='one_time'?'one-time':'mo'}</span></>}</div>
         </div>
         <p style={{color:'#94a3b8',fontSize:15,lineHeight:1.7,marginBottom:20}}>{strategy.description}</p>
-        {p&&<div style={{...st.perfRow,marginBottom:24}}>{p.total_return_pct!=null&&<PerfBadge label="Total return" value={`+${fmt(p.total_return_pct)}%`}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe ratio" value={fmt(p.sharpe_ratio)}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max drawdown" value={`-${fmt(p.max_drawdown_pct)}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
+        {p&&<div style={{...st.perfRow,marginBottom:24}}>{p.total_return_pct!=null&&<PerfBadge label="Total return" value={fmtPctRaw(p.total_return_pct, 1)} positive={p.total_return_pct>=0}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe ratio" value={fmt(p.sharpe_ratio)} positive={p.sharpe_ratio>=0}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max drawdown" value={`-${fmt(Math.abs(p.max_drawdown_pct))}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
         <div style={{display:'flex',gap:10,marginBottom:16}}>
           <button onClick={()=>onSubscribe(strategy)} disabled={subscribed} style={{...st.subscribeBtn,flex:1,opacity:subscribed?0.6:1}}>{subscribed?'✅ Subscribed':strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</button>
           {subscribed&&<button onClick={onReview} style={{...st.subscribeBtn,background:'#334155',flex:'0 0 auto',padding:'14px 16px'}}>✍ Review</button>}
