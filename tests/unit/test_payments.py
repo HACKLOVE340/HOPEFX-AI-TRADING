@@ -373,7 +373,9 @@ class TestPaymentStatusAutoExpiry:
 
         expired_payment = {
             "payment_id": "PAY_expired_001",
-            "user_id": "user_1",
+            # Must match the authenticated subject above — only the payer may
+            # poll their own payment.
+            "user_id": "test_user",
             "plan_id": "basic",
             "currency": "BTC",
             "network": "BTC",
@@ -400,6 +402,43 @@ class TestPaymentStatusAutoExpiry:
         data = response.json()
         assert data["status"] == "expired"
         mock_update.assert_called_once_with("PAY_expired_001", status="expired")
+
+    @pytest.mark.asyncio
+    async def test_another_users_payment_is_not_readable(self):
+        """Polling someone else's payment_id returns 404, not their payment.
+
+        The route previously loaded any payment id and returned its status,
+        amount and tx_hash to any authenticated caller.
+        """
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.auth import TokenPayload, get_current_user
+        from api.payments import router
+
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_current_user] = lambda: TokenPayload(sub="attacker", role="user")
+        client = TestClient(app)
+
+        someone_elses = {
+            "payment_id": "PAY_victim_001",
+            "user_id": "victim",
+            "currency": "BTC",
+            "amount_crypto": 0.5,
+            "status": "complete",
+            "confirmations": 3,
+            "confirmations_required": 3,
+            "tx_hash": "0xdeadbeef",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        }
+
+        with patch("api.payments._load_payment", return_value=someone_elses):
+            response = client.get("/api/payments/crypto/status/PAY_victim_001")
+
+        # 404 rather than 403 — a 403 would confirm the payment id exists.
+        assert response.status_code == 404
+        assert "0xdeadbeef" not in response.text
 
 
 class TestPaymentRatesEndpoint:

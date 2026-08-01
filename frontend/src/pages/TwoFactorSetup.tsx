@@ -15,16 +15,16 @@
  *   GET  /api/2fa/backup-codes — generate one-time backup codes
  *   GET  /api/2fa/status       — check enabled state + codes remaining
  *
- * QR code is rendered inline via the otpauth_uri returned by the backend,
- * using the api.qrserver.com public service (same as backend). No external
- * library dependency required.
+ * The QR code is generated locally in the browser from the otpauth_uri. That
+ * URI carries the TOTP shared secret, so it must not leave the client.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, prefetchCsrfToken, resetCsrfCache } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import QRCode from '../components/QRCode';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { extractApiError } from '../lib/utils';
 
@@ -62,15 +62,6 @@ interface StatusData {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-
-/** Build QR image URL from the otpauth URI returned by the backend. */
-function buildQRUrl(otpauthUri: string): string {
-  return (
-    'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
-    encodeURIComponent(otpauthUri) +
-    '&bgcolor=1e293b&color=f1f5f9&margin=10'
-  );
-}
 
 /** Download backup codes as a plain-text file. */
 function downloadBackupCodes(codes: string[], userId: string): void {
@@ -151,9 +142,7 @@ const TwoFactorSetup: React.FC = () => {
   const [error, setError]             = useState('');
   const [loading, setLoading]         = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
-  const [qrError, setQrError]         = useState(false);
   const [featureDisabled, setFeatureDisabled] = useState(false);
-  const qrRef = useRef<HTMLImageElement>(null);
 
   // Fetch 2FA status on mount
   useEffect(() => {
@@ -169,7 +158,6 @@ const TwoFactorSetup: React.FC = () => {
   const handleSetup = async () => {
     setLoading(true);
     setError('');
-    setQrError(false);
     try {
       const res = await withCsrfRetry(() => api.post<SetupData>('/2fa/setup'));
       setSetupData(res.data);
@@ -370,29 +358,28 @@ const TwoFactorSetup: React.FC = () => {
             Open your authenticator app and scan this QR code, or enter the secret manually.
           </p>
 
-          {/* QR code */}
+          {/* QR code — generated locally. The otpauth URI contains the TOTP
+              shared secret, so it must never be sent to a third-party image
+              service: anyone able to read those requests can generate the
+              user's codes, which defeats the second factor entirely. */}
           <div style={s.qrContainer}>
-            {!qrError ? (
-              <img
-                ref={qrRef}
-                src={buildQRUrl(setupData.otpauth_uri)}
-                alt="TOTP QR Code — scan with your authenticator app"
-                style={{ width: 200, height: 200, borderRadius: 8, display: 'block' }}
-                onError={() => setQrError(true)}
-              />
-            ) : (
-              /* Fallback: show the otpauth URI as text when image fails */
-              <div style={{
-                width: 200, height: 200, background: '#0f172a', border: '1px solid #334155',
-                borderRadius: 8, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
-              }}>
-                <span style={{ fontSize: 32 }}>📷</span>
-                <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center' }}>
-                  QR image unavailable — use manual entry below
+            <QRCode
+              value={setupData.otpauth_uri}
+              size={200}
+              alt="TOTP QR Code — scan with your authenticator app"
+              fallback={
+                <div style={{
+                  width: 200, height: 200, background: '#0f172a', border: '1px solid #334155',
+                  borderRadius: 8, display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
+                }}>
+                  <span style={{ fontSize: 32 }}>📷</span>
+                  <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center' }}>
+                    QR image unavailable — use manual entry below
+                  </div>
                 </div>
-              </div>
-            )}
+              }
+            />
           </div>
 
           {/* Manual secret */}

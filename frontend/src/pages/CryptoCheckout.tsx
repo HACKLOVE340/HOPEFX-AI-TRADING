@@ -22,8 +22,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { useStore, selectUser } from '../store';
 import { PageHeader } from '../components/PageHeader';
+import QRCode from '../components/QRCode';
+import { useRefreshPlan } from '../hooks/usePlan';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { PLAN_COLORS } from '../lib/subscription';
 import { extractApiError } from '../lib/utils';
@@ -90,16 +91,6 @@ const fmtCrypto = (amount: number, currency: CryptoOption) => {
   const decimals = currency === 'BTC' ? 8 : currency === 'ETH' ? 6 : 2;
   return amount.toFixed(decimals) + ' ' + currency;
 };
-
-function buildQRUrl(text: string): string {
-  return (
-    'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' +
-    encodeURIComponent(text) +
-    '&bgcolor=1e293b&color=f1f5f9&margin=10'
-  );
-}
-
-
 
 async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {
@@ -214,8 +205,8 @@ const ExpiryCountdown: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CryptoCheckout: React.FC = () => {
-  const currentUser   = useStore(selectUser);
   const navigate      = useNavigate();
+  const refreshPlan   = useRefreshPlan();
   const [searchParams] = useSearchParams();
 
   // URL params: ?plan=starter&billing=monthly
@@ -234,11 +225,9 @@ const CryptoCheckout: React.FC = () => {
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [addressError, setAddressError]     = useState<string | null>(null);
   const [copied, setCopied]                 = useState(false);
-  const [qrError, setQrError]               = useState(false);
   const [paymentStatus, setPaymentStatus]   = useState<PaymentStatus | null>(null);
   const [liveRates, setLiveRates]           = useState<Record<CryptoOption, number>>({ BTC: 0, ETH: 0, USDT: 1 });
   const [ratesErr, setRatesErr]             = useState<string | null>(null);
-  const [showFlutterwave, setShowFlutterwave] = useState(false);
   const [flwLoading, setFlwLoading]         = useState(false);
   const [flwEnabled, setFlwEnabled]         = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -279,10 +268,10 @@ const CryptoCheckout: React.FC = () => {
       .then(r => setFlwEnabled(r.data.enabled))
       .catch(() => {});
 
-    fetch('https://ipapi.co/json/')
-      .then(r => r.json())
-      .then((d: { continent_code?: string }) => { if (d.continent_code === 'AF') setShowFlutterwave(true); })
-      .catch(() => {});
+    // Flutterwave used to be offered based on a call to ipapi.co, which sent the
+    // customer's IP to a third party on checkout mount, with no consent, purely
+    // to pick a button. Our own backend already knows the request IP; until it
+    // exposes a region hint, offer the provider whenever it is enabled.
   }, []);
 
   // Cleanup polling on unmount
@@ -291,15 +280,14 @@ const CryptoCheckout: React.FC = () => {
   const fetchDepositAddress = useCallback(async () => {
     setLoadingAddress(true);
     setAddressError(null);
-    setQrError(false);
     try {
       const network = selectedCrypto === 'USDT' ? usdtNetwork : undefined;
+      // The price is derived from plan_id server-side and the payer comes from
+      // the session. Sending either meant the client set its own price.
       const res = await api.post<DepositAddress>('/payments/crypto/address', {
         currency: selectedCrypto,
         network,
         plan_id: selectedPlan.id,
-        amount_usd: selectedPlan.price_usd,
-        user_id: currentUser?.id ?? '',
       });
       setDepositInfo(res.data);
       setStep('address');
@@ -308,7 +296,7 @@ const CryptoCheckout: React.FC = () => {
     } finally {
       setLoadingAddress(false);
     }
-  }, [selectedCrypto, usdtNetwork, selectedPlan, currentUser]);
+  }, [selectedCrypto, usdtNetwork, selectedPlan]);
 
   /** Start real polling against GET /api/payments/crypto/status/{id} */
   const startPolling = useCallback((paymentId: string) => {
@@ -321,6 +309,10 @@ const CryptoCheckout: React.FC = () => {
           clearInterval(pollRef.current!);
           pollRef.current = null;
           setStep('complete');
+          // Re-read the plan so the new tier is live immediately. Without this
+          // the success screen says the subscription is active while every gated
+          // feature stays locked until a hard reload.
+          void refreshPlan();
         } else if (res.data.status === 'expired' || res.data.status === 'failed') {
           clearInterval(pollRef.current!);
           pollRef.current = null;
@@ -331,7 +323,7 @@ const CryptoCheckout: React.FC = () => {
         // Non-fatal — keep polling
       }
     }, POLL_INTERVAL_MS);
-  }, []);
+  }, [refreshPlan]);
 
   const handleConfirmSent = () => {
     if (!depositInfo) return;
@@ -419,7 +411,7 @@ const CryptoCheckout: React.FC = () => {
           )}
         </section>
 
-        {showFlutterwave && flwEnabled && (
+        {flwEnabled && (
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
             padding: '20px 24px', marginBottom: 20 }}>
             <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>Pay with Flutterwave</div>
@@ -484,22 +476,25 @@ const CryptoCheckout: React.FC = () => {
             </div>
           </div>
 
-          {/* QR code */}
+          {/* QR code — generated locally. This encodes the deposit address, so
+              it must never be built by a third-party image service: whoever
+              controls that response controls where the funds go. */}
           <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
-            {!qrError ? (
-              <img src={buildQRUrl(depositInfo.address)} alt="Payment QR code"
-                style={{ width: 180, height: 180, borderRadius: 8, display: 'block' }}
-                onError={() => setQrError(true)} />
-            ) : (
-              <div style={{ width: 180, height: 180, background: '#0f172a', border: '1px solid #334155',
-                borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                justifyContent: 'center', gap: 8 }}>
-                <span style={{ fontSize: 32 }}>📷</span>
-                <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', padding: '0 12px' }}>
-                  QR unavailable — copy address below
+            <QRCode
+              value={depositInfo.address}
+              size={180}
+              alt={`Payment QR code for ${selectedCrypto} deposit address ${depositInfo.address}`}
+              fallback={
+                <div style={{ width: 180, height: 180, background: '#0f172a', border: '1px solid #334155',
+                  borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 32 }}>📷</span>
+                  <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', padding: '0 12px' }}>
+                    QR unavailable — copy address below
+                  </div>
                 </div>
-              </div>
-            )}
+              }
+            />
           </div>
 
           {/* Address */}

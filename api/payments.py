@@ -30,6 +30,7 @@ UTC = timezone.utc
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from api.auth import TokenPayload, get_current_user, require_kyc
+from monetization.activation import UnknownPlanError, activate_paid_plan, resolve_plan_price_usd
 
 # ── Withdrawal rate limit ─────────────────────────────────────────────────────
 # Enforced via Depends() on the /withdraw route so it appears in OpenAPI docs
@@ -74,11 +75,18 @@ _WEBHOOK_SECRET = os.getenv("CRYPTO_WEBHOOK_SECRET", "")
 
 
 class AddressRequest(BaseModel):
+    """Request body for generating a deposit address.
+
+    `amount_usd` and `user_id` are deliberately absent. The price is derived from
+    `plan_id` server-side and the payer comes from the auth token. Accepting the
+    first let a caller set their own price; the second was already ignored in
+    favour of `user.sub` but stayed declared, which reads as though it were
+    honoured.
+    """
+
     currency: str = Field(..., description="BTC | ETH | USDT")
     network: str | None = Field(None, description="For USDT: TRC20 | ERC20 | BEP20")
-    plan_id: str
-    amount_usd: float = Field(..., gt=0)
-    user_id: str
+    plan_id: str = Field(..., description="Plan being purchased — determines the charge amount")
 
 
 class AddressResponse(BaseModel):
@@ -91,6 +99,7 @@ class AddressResponse(BaseModel):
     confirmations_required: int
     expires_at: str
     rate_usd: float
+    amount_usd: float  # echo the server-derived price so the client can display it
 
 
 class PaymentStatusResponse(BaseModel):
@@ -214,6 +223,13 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
     if currency not in _CONFIRMATIONS_REQUIRED:
         raise HTTPException(status_code=400, detail=f"Unsupported currency: {currency}")
 
+    # Resolve the price from the catalogue BEFORE any other work, so an invalid
+    # plan fails fast and never reaches address generation.
+    try:
+        amount_usd = resolve_plan_price_usd(req.plan_id)
+    except UnknownPlanError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
     # Fetch live rate
     try:
         rates = await get_rates()
@@ -224,7 +240,7 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
         logger.error("Rate fetch failed: %s", exc)
         raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from None
 
-    amount_crypto = req.amount_usd / rate_usd
+    amount_crypto = amount_usd / rate_usd
     network = (req.network or currency).upper()
     now = datetime.now(UTC)
     expires_at = (now + timedelta(minutes=ADDRESS_TTL_MINUTES)).isoformat()
@@ -249,7 +265,7 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
         "network": network,
         "address": address,
         "amount_crypto": amount_crypto,
-        "amount_usd": req.amount_usd,
+        "amount_usd": amount_usd,
         "rate_usd": rate_usd,
         "plan_id": req.plan_id,
         "user_id": user.sub,
@@ -262,9 +278,21 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
 
     _save_payment(payment)
 
+    logger.info(
+        "Deposit address issued: payment_id=%s user_id=%s plan_id=%s amount_usd=%.2f currency=%s",
+        payment_id,
+        user.sub,
+        req.plan_id,
+        amount_usd,
+        currency,
+    )
+
     return AddressResponse(
         payment_id=payment_id,
         address=address,
+        # `qr_code` carries the address for the CLIENT to encode locally. Do not
+        # send this value to a third-party QR image service: whoever controls
+        # that response controls where the customer's funds go.
         qr_code=address,
         network=network,
         amount_crypto=round(amount_crypto, 8),
@@ -272,6 +300,7 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
         confirmations_required=_CONFIRMATIONS_REQUIRED[currency],
         expires_at=expires_at,
         rate_usd=round(rate_usd, 2),
+        amount_usd=round(amount_usd, 2),
     )
 
 
@@ -280,6 +309,11 @@ async def get_payment_status(payment_id: str, user: TokenPayload = Depends(get_c
     """Poll confirmation status for a pending crypto payment."""
     p = _load_payment(payment_id)
     if p is None:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    # Only the payer may poll their own payment. 404 rather than 403 so the route
+    # cannot be used to confirm that a payment id exists.
+    if p.get("user_id") and p["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Payment not found")
 
     # Auto-expire
@@ -419,6 +453,11 @@ async def payment_webhook(
     # Idempotency guard: if the payment is already in a terminal state
     # (complete / failed / expired), do not re-process.  Duplicate webhook
     # delivery is common — payment processors retry on non-2xx or timeouts.
+    #
+    # This guard is also why activate_paid_plan must never raise. If activation
+    # threw and we returned 5xx, the processor would retry, the row would already
+    # be terminal, and the retry would skip activation entirely — losing the
+    # grant silently.
     _terminal_states = {"complete", "failed", "expired"}
     if p.get("status") in _terminal_states:
         logger.info(
@@ -440,15 +479,33 @@ async def payment_webhook(
 
     _update_payment(payment_id, **update_kwargs)
 
+    # Deliver what was paid for. Until this existed, completion updated the
+    # payment row and nothing else: the customer sent real cryptocurrency, saw
+    # "your subscription is now active", and stayed on the Free tier.
+    activated: bool | None = None
+    if new_status == "complete":
+        activated = activate_paid_plan(
+            p.get("user_id", ""),
+            p.get("plan_id", ""),
+            source="crypto",
+            reference=payment_id,
+        )
+
     logger.info(
-        "Webhook processed: payment_id=%s status=%s confirmations=%d tx_hash=%s",
+        "Webhook processed: payment_id=%s status=%s confirmations=%d tx_hash=%s activated=%s",
         payment_id,
         new_status,
         confirmations,
         tx_hash,
+        activated,
     )
 
-    return {"received": True, "payment_id": payment_id, "status": new_status}
+    return {
+        "received": True,
+        "payment_id": payment_id,
+        "status": new_status,
+        **({"subscription_activated": activated} if activated is not None else {}),
+    }
 
 
 # ── Address generation helpers ────────────────────────────────────────────────
@@ -510,9 +567,14 @@ async def fiat_deposit(
     """
     Initiate a fiat (USD) deposit.
 
-    Creates a pending deposit record and returns wire / card instructions.
-    Real-money processing requires an external payment provider (Stripe / bank)
-    configured via STRIPE_SECRET_KEY or FIAT_PROVIDER env vars.
+    Returns wire / card instructions and a `DEP-…` reference.
+
+    WARNING — NOT YET PERSISTED. Despite the reference it generates, this creates
+    no deposit record: nothing is written to `wallet_transactions`, so
+    `/billing/transactions` will not show it and no balance changes. The customer
+    is told where to send money and the system will not recognise it arriving.
+    Making this real is tracked separately; until then do not present it as a
+    completed action in the UI.
     """
 
     # Re-import here to avoid circular at module load time
@@ -524,7 +586,12 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
     # UUID-based reference prevents collision when two deposits are initiated
     # in the same second (e.g. double-tap, network retry).
     reference = f"DEP-{uuid.uuid4().hex[:16].upper()}"
-    logger.info("Fiat deposit initiated: amount=%.2f method=%s ref=%s", req.amount, req.method, reference)
+    logger.info(
+        "Fiat deposit initiated (NOT PERSISTED): amount=%.2f method=%s ref=%s",
+        req.amount,
+        req.method,
+        reference,
+    )
 
     if provider == "stripe":
         try:
@@ -577,9 +644,12 @@ async def fiat_withdraw(
     """
     Initiate a fiat (USD) withdrawal to bank account or card.
 
-    Creates a pending withdrawal record.  Minimum withdrawal and KYC
-    verification are enforced server-side.  Actual disbursement requires
-    the FIAT_PROVIDER to be configured.
+    Minimum withdrawal and KYC verification are enforced server-side.
+
+    WARNING — NOT YET PERSISTED. No withdrawal record is created and nothing is
+    queued: the response reports `status: "pending"` against a reference that
+    exists only in this response body. Actual disbursement additionally requires
+    FIAT_PROVIDER to be configured.
     """
     min_withdrawal = float(os.getenv("FIAT_MIN_WITHDRAWAL_USD", "10.0"))
     if req.amount < min_withdrawal:
@@ -590,7 +660,7 @@ async def fiat_withdraw(
 
     reference = f"WDR-{uuid.uuid4().hex[:16].upper()}"
     logger.info(
-        "Fiat withdrawal initiated: amount=%.2f dest=%s ref=%s",
+        "Fiat withdrawal initiated (NOT PERSISTED): amount=%.2f dest=%s ref=%s",
         req.amount,
         req.destination,
         reference,
