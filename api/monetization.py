@@ -73,9 +73,15 @@ class PricingTierResponse(BaseModel):
 
 
 class SubscribeRequest(BaseModel):
-    """Subscribe request"""
+    """Subscribe request.
 
-    user_id: str = Field(..., description="User ID")
+    `user_id` is deliberately absent: the subscriber is always the authenticated
+    caller. Accepting it from the body let anyone create or overwrite another
+    account's subscription — `create_subscription` replaces
+    `_user_subscriptions[user_id]` unconditionally, so a paying customer could be
+    silently downgraded by a stranger.
+    """
+
     tier: str = Field(..., description="Subscription tier")
     billing_cycle: str = Field(default="monthly", description="Billing cycle")
 
@@ -91,9 +97,12 @@ class SubscribeResponse(BaseModel):
 
 
 class ActivateCodeRequest(BaseModel):
-    """Activate access code request"""
+    """Activate access code request.
 
-    user_id: str = Field(..., description="User ID")
+    `user_id` is deliberately absent — a code is always redeemed onto the
+    authenticated caller's account.
+    """
+
     code: str = Field(..., description="Access code")
 
 
@@ -107,9 +116,12 @@ class ActivateCodeResponse(BaseModel):
 
 
 class AffiliateSignupRequest(BaseModel):
-    """Affiliate signup request"""
+    """Affiliate signup request.
 
-    user_id: str = Field(..., description="User ID")
+    `user_id` is deliberately absent — an affiliate account is always created for
+    the authenticated caller.
+    """
+
     payment_email: EmailStr | None = None
     custom_code: str | None = None
 
@@ -125,16 +137,24 @@ class AffiliateResponse(BaseModel):
 
 
 class ReferralRequest(BaseModel):
-    """Create referral tracking request"""
+    """Create referral tracking request.
+
+    `referred_user_id` is deliberately absent. The handler has always used
+    `user.sub`; leaving the field declared implied it was honoured, which is the
+    kind of trap that gets "fixed" back into a vulnerability later.
+    """
 
     affiliate_code: str = Field(..., description="Affiliate referral code")
-    referred_user_id: str = Field(..., description="ID of referred user")
 
 
 class StrategyListRequest(BaseModel):
-    """List strategy in marketplace request"""
+    """List strategy in marketplace request.
 
-    creator_id: str
+    `creator_id` is deliberately absent — the lister is the authenticated caller.
+    Accepting it let anyone publish a strategy under another creator's name, and
+    creator identity is what routes revenue-split payouts.
+    """
+
     name: str
     description: str
     category: str
@@ -145,9 +165,12 @@ class StrategyListRequest(BaseModel):
 
 
 class StrategyPurchaseRequest(BaseModel):
-    """Purchase strategy request"""
+    """Purchase strategy request.
 
-    buyer_id: str
+    `buyer_id` is deliberately absent — the buyer is the authenticated caller.
+    Same IDOR class as the crypto-address one already fixed in api/payments.py.
+    """
+
     strategy_id: str
     # Stripe customer ID — created server-side when absent; callers may
     # supply an existing ID to reuse a Stripe customer record.
@@ -157,9 +180,13 @@ class StrategyPurchaseRequest(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    """Add review request"""
+    """Add review request.
 
-    user_id: str = ""
+    `user_id` is deliberately absent — reviews are attributed to the
+    authenticated caller. Accepting it allowed reviews to be posted in another
+    user's name on listings that drive purchases.
+    """
+
     strategy_id: str = ""
     rating: int = Field(..., ge=1, le=5)
     title: str = ""
@@ -187,6 +214,47 @@ class WhiteLabelRequest(BaseModel):
     secondary_color: str
     custom_domain: str | None = None
     support_email: str | None = None
+
+
+# ==========================
+# Ownership guards
+# ==========================
+#
+# Every route in this module authenticates. Several then went on to act on an
+# identity taken from the request body or the path instead of the token, which
+# authenticates the caller and authorises nobody. The helpers below are the
+# authorisation half.
+#
+# They raise 404 rather than 403 on a mismatch so the routes cannot be used to
+# enumerate which affiliate or creator ids exist.
+
+_OPERATOR_ROLES = frozenset({"admin", "superadmin"})
+
+
+def _is_operator(user: TokenPayload) -> bool:
+    """True when the caller holds a staff role and may act across accounts."""
+    return user.role in _OPERATOR_ROLES
+
+
+def _assert_self_or_operator(target_user_id: str, user: TokenPayload) -> None:
+    """Allow access only to the caller's own records, unless they are staff."""
+    if _is_operator(user) or target_user_id == user.sub:
+        return
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+
+def _assert_affiliate_owner(affiliate_id: str, user: TokenPayload) -> None:
+    """Reject actions on an affiliate account the caller does not own.
+
+    Commission balances, payout destinations and withdrawals all key off
+    `affiliate_id`, which is guessable and was previously accepted from the path
+    with no ownership check at all.
+    """
+    if _is_operator(user):
+        return
+    affiliate = affiliate_manager.get_affiliate(affiliate_id)
+    if affiliate is None or getattr(affiliate, "user_id", None) != user.sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Affiliate account not found")
 
 
 # ==========================
@@ -262,7 +330,7 @@ async def subscribe(request: SubscribeRequest, user: TokenPayload = Depends(get_
     # Free tier - no payment needed
     if tier == SubscriptionTier.FREE:
         subscription = subscription_manager.create_subscription(
-            user_id=request.user_id,
+            user_id=user.sub,
             tier=tier,
             duration_days=365,  # 1 year free trial
             auto_renew=False,
@@ -277,10 +345,11 @@ async def subscribe(request: SubscribeRequest, user: TokenPayload = Depends(get_
             billing_cycle=billing_cycle.value,
         )
 
-    # Create Stripe customer
+    # Create Stripe customer. Prefer the email claim on the token — the synthetic
+    # "{user_id}@hopefx.ai" address is a placeholder that reaches nobody.
     customer = stripe_integration.create_customer(
-        user_id=request.user_id,
-        email=f"{request.user_id}@hopefx.ai",  # Would use real email
+        user_id=user.sub,
+        email=user.email or f"{user.sub}@hopefx.ai",
     )
 
     # Create checkout session
@@ -293,7 +362,7 @@ async def subscribe(request: SubscribeRequest, user: TokenPayload = Depends(get_
     # Create pending subscription
     duration_days = 365 if billing_cycle == BillingCycle.ANNUAL else 30
     subscription = subscription_manager.create_subscription(
-        user_id=request.user_id,
+        user_id=user.sub,
         tier=tier,
         duration_days=duration_days,
         auto_renew=True,
@@ -313,6 +382,7 @@ async def get_user_limits(user_id: str, user: TokenPayload = Depends(get_current
     """
     Get usage limits for a user based on their subscription.
     """
+    _assert_self_or_operator(user_id, user)
     limits = subscription_manager.get_user_limits(user_id)
     return limits
 
@@ -322,6 +392,7 @@ async def get_subscription(user_id: str, user: TokenPayload = Depends(get_curren
     """
     Get user's current subscription.
     """
+    _assert_self_or_operator(user_id, user)
     subscription = subscription_manager.get_user_subscription(user_id)
     if not subscription:
         return {
@@ -337,7 +408,18 @@ async def get_subscription(user_id: str, user: TokenPayload = Depends(get_curren
 async def cancel_subscription(subscription_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Cancel a subscription.
+
+    Only the subscriber (or staff) may cancel. Without this check any
+    authenticated caller could cancel another customer's paid subscription.
     """
+    existing = subscription_manager.get_subscription(subscription_id)
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subscription not found",
+        )
+    _assert_self_or_operator(existing.user_id, user)
+
     success = subscription_manager.cancel_subscription(subscription_id)
     if not success:
         raise HTTPException(
@@ -367,9 +449,9 @@ async def activate_code(request: ActivateCodeRequest, user: TokenPayload = Depen
     if not access_code:
         return ActivateCodeResponse(success=False, message="Code not found")
 
-    # Create subscription from code
+    # Create subscription from code — always for the authenticated caller.
     subscription = subscription_manager.create_subscription(
-        user_id=request.user_id,
+        user_id=user.sub,
         tier=access_code.tier,
         duration_days=access_code.duration_days,
         access_code=request.code,
@@ -379,7 +461,7 @@ async def activate_code(request: ActivateCodeRequest, user: TokenPayload = Depen
     # Mark code as used
     access_code_generator.activate_code(
         request.code,
-        request.user_id,
+        user.sub,
         subscription.subscription_id,
     )
 
@@ -419,7 +501,7 @@ async def affiliate_signup(request: AffiliateSignupRequest, user: TokenPayload =
         payment_details["email"] = request.payment_email
 
     affiliate = affiliate_manager.create_affiliate(
-        user_id=request.user_id,
+        user_id=user.sub,
         payment_details=payment_details,
         custom_code=request.custom_code,
     )
@@ -453,6 +535,8 @@ async def get_affiliate_referrals(
     """
     Get all referrals for an affiliate.
     """
+    _assert_affiliate_owner(affiliate_id, user)
+
     from monetization import ReferralStatus
 
     status_enum = None
@@ -477,7 +561,11 @@ async def get_affiliate_referrals(
 async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
     Get affiliate account for a user, including metrics and monthly breakdown.
+
+    Self-or-staff only: the response carries the payout email and full commission
+    figures, which no other customer should be able to read.
     """
+    _assert_self_or_operator(user_id, user)
     affiliate = affiliate_manager.get_user_affiliate(user_id)
     if not affiliate:
         return {"has_affiliate_account": False}
@@ -559,7 +647,7 @@ async def list_strategy(request: StrategyListRequest, user: TokenPayload = Depen
         ) from None
 
     strategy = strategy_marketplace.list_strategy(
-        creator_id=request.creator_id,
+        creator_id=user.sub,
         name=request.name,
         description=request.description,
         category=category,
@@ -667,7 +755,9 @@ async def purchase_strategy(request: StrategyPurchaseRequest, user: TokenPayload
 
     # 2. Create pending purchase record
     purchase = strategy_marketplace.purchase_strategy(
-        buyer_id=request.buyer_id,
+        # Use the AUTHENTICATED user, never a body-supplied buyer_id — the same
+        # IDOR already fixed in api/payments.py::generate_deposit_address.
+        buyer_id=user.sub,
         strategy_id=request.strategy_id,
     )
     if not purchase:
@@ -684,7 +774,7 @@ async def purchase_strategy(request: StrategyPurchaseRequest, user: TokenPayload
             currency=request.currency.lower(),
             metadata={
                 "purchase_id": purchase.purchase_id,
-                "buyer_id": request.buyer_id,
+                "buyer_id": user.sub,
                 "strategy_id": request.strategy_id,
             },
         )
@@ -712,7 +802,7 @@ async def add_review(request: ReviewRequest, user: TokenPayload = Depends(get_cu
     Add a review for a purchased strategy.
     """
     review = strategy_marketplace.add_review(
-        user_id=request.user_id,
+        user_id=user.sub,
         strategy_id=request.strategy_id,
         rating=request.rating,
         title=request.title,
@@ -736,7 +826,7 @@ async def add_review_by_strategy(
 ):
     """Add a review for a strategy — alias matching frontend URL pattern."""
     review = strategy_marketplace.add_review(
-        user_id=request.user_id or user.sub,
+        user_id=user.sub,
         strategy_id=strategy_id,
         rating=request.rating,
         title=request.title,
@@ -1054,7 +1144,12 @@ from monetization.revenue_split import TransactionType, revenue_engine
 
 
 class SubmitStrategyRequest(BaseModel):
-    creator_id: str
+    """Submit a strategy for marketplace review.
+
+    `creator_id` is deliberately absent — the submitter is the authenticated
+    caller, and creator identity is what later routes payout revenue.
+    """
+
     name: str = Field(..., min_length=3, max_length=100)
     description: str = Field(..., min_length=100)
     strategy_code: str = Field(..., min_length=10)
@@ -1066,7 +1161,12 @@ class SubmitStrategyRequest(BaseModel):
 
 
 class ManualReviewRequest(BaseModel):
-    reviewer_id: str
+    """Approve/reject a submission.
+
+    `reviewer_id` is deliberately absent — the reviewer recorded in the audit
+    trail is the authenticated admin, not whoever the body names.
+    """
+
     notes: str = ""
 
 
@@ -1080,7 +1180,7 @@ async def submit_strategy(request: SubmitStrategyRequest, user: TokenPayload = D
     Rejected strategies can be manually approved by an admin.
     """
     sub = submission_manager.submit(
-        creator_id=request.creator_id,
+        creator_id=user.sub,
         name=request.name,
         description=request.description,
         strategy_code=request.strategy_code,
@@ -1103,16 +1203,22 @@ async def list_pending_submissions(user: TokenPayload = Depends(require_role("ad
 @router.get("/marketplace/submissions/creator/{creator_id}")
 async def list_creator_submissions(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """List all submissions by a creator."""
+    _assert_self_or_operator(creator_id, user)
     subs = submission_manager.list_by_creator(creator_id)
     return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
 
 
 @router.get("/marketplace/submissions/{submission_id}")
 async def get_submission(submission_id: str, user: TokenPayload = Depends(get_current_user)):
-    """Get a strategy submission and its audit report."""
+    """Get a strategy submission and its audit report.
+
+    A pending submission carries unpublished pricing and rejection reasons, so
+    it is readable by its creator and staff only.
+    """
     sub = submission_manager.get(submission_id)
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
+    _assert_self_or_operator(sub.creator_id, user)
     return sub.to_dict()
 
 
@@ -1123,7 +1229,7 @@ async def approve_submission(
     user: TokenPayload = Depends(require_role("admin")),
 ):
     """Manually approve a strategy submission (admin only)."""
-    ok = submission_manager.manual_approve(submission_id, body.reviewer_id, body.notes)
+    ok = submission_manager.manual_approve(submission_id, user.sub, body.notes)
     if not ok:
         raise HTTPException(status_code=404, detail="Submission not found")
     return {"approved": True, "submission_id": submission_id}
@@ -1136,7 +1242,7 @@ async def reject_submission(
     user: TokenPayload = Depends(require_role("admin")),
 ):
     """Manually reject a strategy submission (admin only)."""
-    ok = submission_manager.manual_reject(submission_id, body.reviewer_id, body.notes)
+    ok = submission_manager.manual_reject(submission_id, user.sub, body.notes)
     if not ok:
         raise HTTPException(status_code=404, detail="Submission not found")
     return {"rejected": True, "submission_id": submission_id}
@@ -1148,6 +1254,13 @@ async def reject_submission(
 
 
 class RecordSaleRequest(BaseModel):
+    """Record a marketplace sale (operator-only — see the route).
+
+    Every field here is an accounting input: `creator_id` decides who gets paid
+    and `gross_amount` decides how much. This is not a self-service shape, which
+    is why the route requires the admin role.
+    """
+
     strategy_id: str
     creator_id: str
     buyer_id: str
@@ -1158,17 +1271,28 @@ class RecordSaleRequest(BaseModel):
 
 
 class RegisterStripeAccountRequest(BaseModel):
-    creator_id: str
+    """Link a Stripe Connect account for payouts.
+
+    `creator_id` is deliberately absent — a creator may only link a payout
+    account to themselves. Accepting it meant any authenticated user could point
+    another creator's payouts at their own Stripe account.
+    """
+
     stripe_account_id: str
 
 
 @router.post("/marketplace/sales")
-async def record_sale(request: RecordSaleRequest, user: TokenPayload = Depends(get_current_user)):
+async def record_sale(request: RecordSaleRequest, user: TokenPayload = Depends(require_role("admin"))):
     """
-    Record a marketplace sale and compute the revenue split.
+    Record a marketplace sale and compute the revenue split (admin only).
 
     Platform takes 20%, creator receives 80%.
     Creator's pending balance is credited immediately.
+
+    Operator-gated: this credits an arbitrary `creator_id` with an arbitrary
+    `gross_amount` against a live payout system, so it is an accounting entry
+    point, not a customer-facing one. It previously accepted any authenticated
+    caller, which let anyone mint their own creator earnings.
     """
     try:
         txn_type = TransactionType(request.transaction_type)
@@ -1190,6 +1314,7 @@ async def record_sale(request: RecordSaleRequest, user: TokenPayload = Depends(g
 @router.get("/marketplace/creators/{creator_id}/balance")
 async def get_creator_balance(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """Get a creator's pending payout balance and earnings summary."""
+    _assert_self_or_operator(creator_id, user)
     bal = revenue_engine.get_creator_balance(creator_id)
     return {
         "creator_id": bal.creator_id,
@@ -1205,6 +1330,7 @@ async def get_creator_balance(creator_id: str, user: TokenPayload = Depends(get_
 @router.get("/marketplace/creators/{creator_id}/transactions")
 async def get_creator_transactions(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """List all sale transactions for a creator."""
+    _assert_self_or_operator(creator_id, user)
     txns = revenue_engine.get_creator_transactions(creator_id)
     return {"transactions": [t.to_dict() for t in txns], "total": len(txns)}
 
@@ -1212,6 +1338,7 @@ async def get_creator_transactions(creator_id: str, user: TokenPayload = Depends
 @router.get("/marketplace/creators/{creator_id}/payouts")
 async def get_creator_payouts(creator_id: str, user: TokenPayload = Depends(get_current_user)):
     """List all payout records for a creator."""
+    _assert_self_or_operator(creator_id, user)
     payouts = revenue_engine.get_creator_payouts(creator_id)
     return {"payouts": [p.to_dict() for p in payouts], "total": len(payouts)}
 
@@ -1221,9 +1348,15 @@ async def register_stripe_account(
     request: RegisterStripeAccountRequest,
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Link a creator's Stripe Connect account for payouts."""
-    revenue_engine.register_stripe_account(request.creator_id, request.stripe_account_id)
-    return {"linked": True, "creator_id": request.creator_id}
+    """Link the caller's Stripe Connect account for payouts.
+
+    The creator is the authenticated caller. Taking `creator_id` from the body
+    let any authenticated user redirect another creator's payouts to their own
+    Stripe account — the weekly payout job would then pay the attacker.
+    """
+    revenue_engine.register_stripe_account(user.sub, request.stripe_account_id)
+    logger.info("payout.stripe_account_linked creator=%s", user.sub)
+    return {"linked": True, "creator_id": user.sub}
 
 
 @router.post("/marketplace/payouts/process")
@@ -1257,6 +1390,7 @@ async def get_affiliate_commissions(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
     """Return commission records for an affiliate."""
+    _assert_affiliate_owner(affiliate_id, user)
     try:
         commissions = affiliate_manager.get_commissions(affiliate_id)
         items = [c.to_dict() if hasattr(c, "to_dict") else dict(c) for c in commissions]
@@ -1273,7 +1407,13 @@ async def withdraw_affiliate_commission(
     request: dict,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    """Request a commission withdrawal for an affiliate."""
+    """Request a commission withdrawal for an affiliate.
+
+    Owner-only: this moves commission money, and `affiliate_id` came straight
+    from the path with no ownership check.
+    """
+    _assert_affiliate_owner(affiliate_id, user)
+
     amount = float(request.get("amount", 0.0))
     if amount <= 0:
         raise HTTPException(status_code=400, detail="amount must be > 0")
@@ -1296,7 +1436,11 @@ async def update_affiliate_payment_method(
     request: dict,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    """Update payment method for affiliate payouts."""
+    """Update payment method for affiliate payouts.
+
+    Owner-only: this sets where commission money is sent.
+    """
+    _assert_affiliate_owner(affiliate_id, user)
     try:
         affiliate_manager.update_payment_method(affiliate_id, request)
         return {"ok": True, "affiliate_id": affiliate_id}
