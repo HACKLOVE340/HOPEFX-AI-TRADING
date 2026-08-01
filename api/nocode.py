@@ -26,7 +26,11 @@ router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"])
 # frontend nav (navConfig: plan: 'professional'), but these routes only ever
 # checked *authentication*, so any logged-in free-tier user could deploy a live
 # strategy. The gate has to live here — the client-side one is a courtesy.
-_REQUIRES_PROFESSIONAL = require_plan("professional")
+#
+# Written out at each route rather than bound to a module-level alias:
+# scripts/ci/gate_a_auth_coverage.py reads the dependency statically and
+# recognises `require_plan`, but cannot follow an alias, so an alias reads to
+# the gate as an unauthenticated mutating endpoint.
 
 
 # ── Request Models ───────────────────────────────────────────────────────────
@@ -54,7 +58,7 @@ class ValidateRequest(BaseModel):
 @router.get("/templates")
 async def list_templates(
     category: str | None = Query(None, description="Filter by category"),
-    user: TokenPayload = Depends(_REQUIRES_PROFESSIONAL),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     List available no-code strategy templates.
@@ -121,7 +125,10 @@ async def list_templates(
 
 
 @router.post("/deploy")
-async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(_REQUIRES_PROFESSIONAL)):
+async def deploy_template(
+    request: DeployRequest,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
     """
     Deploy a no-code strategy template as a live strategy.
     Compiles the template with provided parameters and registers it
@@ -175,7 +182,10 @@ async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(_
 
 
 @router.post("/validate")
-async def validate_strategy(request: ValidateRequest, user: TokenPayload = Depends(_REQUIRES_PROFESSIONAL)):
+async def validate_strategy(
+    request: ValidateRequest,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
     """
     Validate a no-code strategy definition (nodes + edges).
     Checks for: valid node types, proper connections, no cycles in execution flow,

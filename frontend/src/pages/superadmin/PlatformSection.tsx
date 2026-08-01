@@ -110,7 +110,10 @@ const PlatformSection: React.FC = () => {
         setMsgOk(true);
         setMsg('✅ Configuration is valid');
       } else {
-        setMsgOk(true);
+        // The call succeeded; the configuration did not. Reporting an invalid
+        // config as a green banner is the exact failure-renders-as-success bug
+        // this sweep exists to remove.
+        setMsgOk(false);
         setMsg('⚠️ Validation errors: ' + (d.errors?.join('; ') ?? 'Unknown errors'));
       }
     } catch (e: unknown) {

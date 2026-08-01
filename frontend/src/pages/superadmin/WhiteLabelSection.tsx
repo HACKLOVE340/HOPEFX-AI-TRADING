@@ -72,7 +72,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
     setSaving(true); setMsg('');
     try {
       await superadminApi.updateTenant(tenant.tenant_id, form);
-      setMsgOk(false);
+      setMsgOk(true);
       setMsg('Tenant updated');
       onRefresh();
     } catch (e: unknown) {

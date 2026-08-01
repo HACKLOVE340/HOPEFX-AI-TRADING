@@ -128,11 +128,11 @@ const SecurityInfraSection: React.FC = () => {
     try {
       if (type === 'integrity') {
         await superadminApi.triggerIntegrityScan();
-        setMsgOk(false);
+        setMsgOk(true);
         setMsg('File integrity scan started');
       } else {
         await superadminApi.triggerAvScan();
-        setMsgOk(false);
+        setMsgOk(true);
         setMsg('Antivirus scan started');
       }
     } catch (e: unknown) {

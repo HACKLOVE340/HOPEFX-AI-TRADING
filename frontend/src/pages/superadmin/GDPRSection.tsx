@@ -92,7 +92,7 @@ const GDPRSection: React.FC = () => {
     setBusy(id); setMsg('');
     try {
       await superadminApi.processGdprRequest(id, action);
-      setMsgOk(false);
+      setMsgOk(true);
       setMsg(`Request ${action === 'approve' ? 'approved' : 'rejected'}`);
       await load();
     } catch (e: unknown) {
