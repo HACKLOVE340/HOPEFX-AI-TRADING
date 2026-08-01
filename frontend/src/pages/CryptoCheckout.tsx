@@ -220,6 +220,7 @@ const CryptoCheckout: React.FC = () => {
 
   const [plans, setPlans]                   = useState<Plan[]>(FALLBACK_PLANS);
   const [plansLoading, setPlansLoading]     = useState(true);
+  const [catalogueErr, setCatalogueErr]     = useState('');
   const [step, setStep]                     = useState<CheckoutStep>('select');
   const [selectedPlan, setSelectedPlan]     = useState<Plan>(
     FALLBACK_PLANS.find(p => p.id === urlPlanId) ?? DEFAULT_PLAN
@@ -256,7 +257,15 @@ const CryptoCheckout: React.FC = () => {
         }
       })
       .catch(() => {
-        // Keep FALLBACK_PLANS; apply URL selection
+        // Keep FALLBACK_PLANS so the page still renders, but say so: these are
+        // a compiled-in copy of the price table (audit #59) and the amount
+        // actually charged is resolved server-side from the live catalogue. A
+        // silent fallback can quote a customer a price we will not charge them.
+        setCatalogueErr(
+          'Live pricing is unavailable, so the prices below may be out of date. '
+          + 'The amount charged is always the current published price — please '
+          + 'reload before paying.',
+        );
         const match = FALLBACK_PLANS.find(p => p.id === urlPlanId);
         if (match) setSelectedPlan(match);
       })
@@ -376,6 +385,7 @@ const CryptoCheckout: React.FC = () => {
           breadcrumbs={breadcrumbs}
           actions={<Link to="/upgrade" style={st.headerLink}>← All Plans</Link>}
         />
+        {catalogueErr && <div style={st.warnBox} role="alert">{catalogueErr}</div>}
         {ratesErr && <div style={st.warnBox}>{ratesErr}</div>}
         {addressError && <div style={st.errorBox}>{addressError}</div>}
 

@@ -157,8 +157,36 @@ describe('PricingPage', () => {
     await waitFor(() => screen.getByText(/annual/i));
     fireEvent.click(screen.getByText(/annual/i));
     await waitFor(() => {
-      // Multiple plan cards may each show "2 months free" — at least one must be present
-      expect(screen.getAllByText(/2 months free/i).length).toBeGreaterThan(0);
+      // Each paid card shows what it is billed annually. It used to assert
+      // "2 months free" — a commercial claim hardcoded in the UI (audit #70),
+      // true only while the backend keeps the discount at ~17%.
+      expect(screen.getAllByText(/Billed \$[\d,]+\/yr/i).length).toBeGreaterThan(0);
+    });
+    // The fixture states no annual_savings_pct, so no saving may be claimed.
+    expect(screen.queryByText(/save \d+%/i)).toBeNull();
+    expect(screen.queryByText(/months free/i)).toBeNull();
+  });
+
+  it('shows the saving the catalogue states, not a hardcoded one', async () => {
+    // The API is the source of truth for the discount (audit #70).
+    // Cast to the loose shape the other mocks in this file use — the component
+    // only reads `.data`.
+    vi.mocked(useApiModule.pricingApi.getPlans).mockResolvedValue({
+      data: {
+        plans: [{
+          id: 'starter', name: 'Starter', price_usd_monthly: 1800,
+          price_usd_annual: 16200, annual_savings_pct: 25, commission_rate: 0.005,
+          features: ['live_trading'],
+          limits: { signals_per_day: 20, backtests_per_month: 10, live_accounts: 1, max_strategies: 3, max_brokers: 1 },
+        }],
+      },
+    } as Awaited<ReturnType<typeof useApiModule.pricingApi.getPlans>>);
+    const PricingPage = (await import('../pages/PricingPage')).default;
+    render(wrap(<PricingPage />));
+    await waitFor(() => screen.getByText(/annual/i));
+    fireEvent.click(screen.getByText(/annual/i));
+    await waitFor(() => {
+      expect(screen.getByText(/save 25%/i)).toBeInTheDocument();
     });
   });
 });

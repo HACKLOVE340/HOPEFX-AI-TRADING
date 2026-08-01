@@ -211,14 +211,10 @@ export const PLAN_COLORS: Record<Plan, string> = {
   elite:        '#f59e0b',
 };
 
-/** Monthly prices in USD — matches backend monetization/pricing.py */
-export const PLAN_PRICES: Record<Plan, number> = {
-  free:         0,
-  starter:      1800,
-  professional: 4500,
-  enterprise:   7500,
-  elite:        10000,
-};
+// PLAN_PRICES was removed (audit #59). It was exported and never read — a
+// fourth copy of the price table with nothing keeping it in step with
+// api/billing.py::_PLANS, which is canonical. Prices reach the UI from
+// GET /billing/plans; the amount charged is resolved server-side.
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   user:       'User',

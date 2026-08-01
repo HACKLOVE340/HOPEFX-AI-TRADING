@@ -19,13 +19,23 @@ import AppBackground from '../components/AppBackground';
 
 // ── Plan badge ────────────────────────────────────────────────────────────────
 
+/**
+ * The badge names the plan the visitor arrived from; it does not quote a price
+ * (audit #59).
+ *
+ * It used to read "Starter — $1,800/mo" from a hardcoded table — a third copy
+ * of prices whose canonical source is api/billing.py::_PLANS, with nothing
+ * keeping it in step. Registration is free and the real price is shown at
+ * checkout, sourced from the catalogue and charged server-side, so quoting a
+ * figure here could only ever be redundant or wrong.
+ */
 const PLAN_LABELS: Record<string, { label: string; color: string }> = {
-  starter:      { label: 'Starter — $1,800/mo',      color: '#22c55e' },
-  professional: { label: 'Professional — $4,500/mo', color: '#3b82f6' },
+  starter:      { label: 'Starter plan',      color: '#22c55e' },
+  professional: { label: 'Professional plan', color: '#3b82f6' },
   // legacy alias kept for URL backward-compat (?plan=pro)
-  pro:          { label: 'Professional — $4,500/mo', color: '#3b82f6' },
-  enterprise:   { label: 'Enterprise — $7,500/mo',   color: '#06b6d4' },
-  elite:        { label: 'Elite — $10,000/mo',        color: '#a855f7' },
+  pro:          { label: 'Professional plan', color: '#3b82f6' },
+  enterprise:   { label: 'Enterprise plan',   color: '#06b6d4' },
+  elite:        { label: 'Elite plan',        color: '#a855f7' },
 };
 
 // ── Password strength ─────────────────────────────────────────────────────────
