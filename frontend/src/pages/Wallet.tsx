@@ -266,6 +266,14 @@ const Wallet: React.FC = () => {
   const totalWithdrawn = Math.abs(transactions.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0));
   const totalFees      = Math.abs(transactions.filter(t => ['subscription','copy_fee'].includes(t.type)).reduce((s, t) => s + t.amount, 0));
 
+  // /billing/transactions reads Stripe charges and subscription events only — it
+  // has no withdrawal source at all, and no deposit source unless Stripe is
+  // configured. So these two totals are structurally $0.00 for anyone who used
+  // the Deposit/Withdraw buttons above. Report "—" rather than a confident zero
+  // that reads as "you have never deposited".
+  const hasDepositRows    = transactions.some(t => t.type === 'deposit');
+  const hasWithdrawalRows = transactions.some(t => t.type === 'withdrawal');
+
   const TABS: { id: WalletTab; label: string; icon: string }[] = [
     { id: 'overview',         label: 'Overview',         icon: '📊' },
     { id: 'transactions',     label: 'Transactions',     icon: '📋' },
@@ -312,8 +320,13 @@ const Wallet: React.FC = () => {
       <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
+            {/* Audit #14: this figure is the BROKER account balance and "frozen"
+                is margin_used — GET /billing/balance reads both straight off the
+                broker (api/billing.py::get_balance). Calling it "Available
+                Balance" beside Deposit/Withdraw buttons presented paper-trading
+                equity as spendable cash. */}
             <div className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
-              Available Balance
+              Trading Account Balance
             </div>
             {balanceLoading ? (
               <div className="flex items-center gap-3">
@@ -326,8 +339,11 @@ const Wallet: React.FC = () => {
                   ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-slate-500 text-xs mt-1.5 flex gap-3 flex-wrap">
-                  <span>Frozen: <span className="text-slate-400">${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
+                  <span>Margin used: <span className="text-slate-400">${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
                   <span>Pending: <span className="text-slate-400">${pendingBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
+                </div>
+                <div className="text-slate-600 text-2xs mt-1">
+                  Reported by your connected broker — not a cash wallet balance.
                 </div>
               </>
             )}
@@ -388,17 +404,30 @@ const Wallet: React.FC = () => {
 
       {/* ── Overview ── */}
       {tab === 'overview' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <MetricCard icon="↓" label="Total Deposited"
-            value={`$${totalDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
-            accent="green" />
-          <MetricCard icon="↑" label="Total Withdrawn"
-            value={`$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
-            accent="red" />
-          <MetricCard icon="💸" label="Total Fees Paid"
-            value={`$${totalFees.toFixed(2)}`}
-            accent="amber" />
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <MetricCard icon="↓" label="Total Deposited"
+              value={hasDepositRows
+                ? `$${totalDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                : '—'}
+              accent="green" />
+            <MetricCard icon="↑" label="Total Withdrawn"
+              value={hasWithdrawalRows
+                ? `$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                : '—'}
+              accent="red" />
+            <MetricCard icon="💸" label="Total Fees Paid"
+              value={`$${totalFees.toFixed(2)}`}
+              accent="amber" />
+          </div>
+          {(!hasDepositRows || !hasWithdrawalRows) && (
+            <p className="text-slate-600 text-xs mt-3 mb-0">
+              Deposit and withdrawal totals cover transfers recorded by the payment
+              processor. Bank transfers made against a reference appear once they are
+              reconciled.
+            </p>
+          )}
+        </>
       )}
 
       {/* ── Transactions ── */}
@@ -568,7 +597,11 @@ const Wallet: React.FC = () => {
             </div>
           )}
           {!pmLoading && (
-            <Link to="/checkout"
+            // /checkout is CryptoCheckout — a crypto *plan purchase* flow, not a
+            // payment-method form. "Add Payment Method" sent users to buy a
+            // subscription. Cards are attached via Stripe.js on the billing
+            // settings panel, which is where this now points.
+            <Link to="/settings?tab=billing"
               className="inline-block px-4 py-2.5 bg-blue-950 border border-blue-500/40 text-blue-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-900/40 transition-colors no-underline">
               + Add Payment Method
             </Link>

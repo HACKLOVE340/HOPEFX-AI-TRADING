@@ -43,7 +43,7 @@ def client(monkeypatch):
     """Mount the nocode router with a caller of the requested plan."""
 
     def _build(user_id: str, role: str = "user") -> TestClient:
-        import api.nocode as nocode
+        from api import nocode
 
         app = FastAPI()
         app.include_router(nocode.router)
@@ -62,9 +62,7 @@ def client(monkeypatch):
 @pytest.fixture(autouse=True)
 def _subscriptions():
     """Give PRO_USER an active professional subscription; FREE_USER none."""
-    sub = subscription_manager.create_subscription(
-        PRO_USER, SubscriptionTier.PROFESSIONAL, duration_days=30
-    )
+    sub = subscription_manager.create_subscription(PRO_USER, SubscriptionTier.PROFESSIONAL, duration_days=30)
     # create_subscription opens a *paid* tier as PENDING — only activation marks
     # it ACTIVE, and require_plan reads `sub.is_active()`. Mirror what
     # monetization.activation.activate_paid_plan does on a successful payment.
@@ -143,7 +141,7 @@ def test_node_types_requires_authentication(client):
     stays at authentication rather than the professional gate so the builder can
     render its palette for an upgrade preview.
     """
-    import api.nocode as nocode
+    from api import nocode
 
     app = FastAPI()
     app.include_router(nocode.router)

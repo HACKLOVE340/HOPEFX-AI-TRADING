@@ -13,7 +13,7 @@ import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
 import { MetricTile } from '../ui/MetricTile';
-import { fmtPct, fmtRatio, fmtPrice, pnlColor } from '../../lib/utils';
+import { fmtPct, fmtPctRaw, fmtRatio, fmtPrice, pnlColor } from '../../lib/utils';
 import type { EquityPoint } from '../../types';
 
 type Range = '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL';
@@ -216,11 +216,11 @@ export function EquityCurveChart() {
 
           {perf && (
             <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[#1e2d3d] shrink-0">
-              <MetricTile label="Win Rate"      value={Number.isFinite(perf.win_rate) ? `${perf.win_rate.toFixed(1)}%` : '—'} valueColor="#00e676" compact />
+              <MetricTile label="Win Rate"      value={fmtPctRaw(perf.win_rate, 1)} valueColor="#00e676" compact />
               <MetricTile label="Profit Factor" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
-              <MetricTile label="Total Trades"  value={perf.total_trades.toString()}            compact />
+              <MetricTile label="Total Trades"  value={perf.total_trades?.toString() ?? '—'}            compact />
               <MetricTile label="Avg Trade"     value={fmtPrice(perf.avg_trade_pnl, 2)}        valueColor={pnlColor(perf.avg_trade_pnl)} compact />
-              <MetricTile label="CVaR 95%"      value={Number.isFinite(perf.cvar_95) ? `${(perf.cvar_95 * 100).toFixed(1)}%` : '—'} valueColor="#ff3b5c" compact />
+              <MetricTile label="CVaR 95%"      value={fmtPct(perf.cvar_95, 1)} valueColor="#ff3b5c" compact />
             </div>
           )}
         </div>

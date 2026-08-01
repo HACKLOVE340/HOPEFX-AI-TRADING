@@ -25,7 +25,7 @@ import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { pnlApi } from '../hooks/useApi';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
-import { fmtPrice, fmtPctRaw, fmtDateTime, extractApiError } from '../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtDateTime, extractApiError, positionSide } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ interface FillEntry {
   order_id:       string;
   signal_id:      string;
   symbol:         string;
-  direction:      string;
+  direction?:     string;
   quantity:       number;
   fill_price:     number;
   expected_price: number;
@@ -63,7 +63,12 @@ interface FillEntry {
 
 interface OpenPosition {
   symbol:         string;
-  direction:      string;
+  /**
+   * Optional: the API omits it on some endpoints, which is what made
+   * `pos.direction.toLowerCase()` a crash vector (audit #40). Declaring it
+   * required did not make the server send it.
+   */
+  direction?:     string;
   quantity:       number;
   entry_price:    number;
   current_price:  number | null;
@@ -653,15 +658,17 @@ const PnLDashboard: React.FC = () => {
               </thead>
               <tbody>
                 {positions.map((pos, i) => {
-                  const isLong = pos.direction.toLowerCase().includes('long') || pos.direction.toLowerCase() === 'buy';
+                  const side = positionSide(pos);
                   return (
                     <tr key={i} className="border-b border-[#1e2d3d]/50 hover:bg-[#1e2d3d]/30">
                       <td className="px-4 py-3 font-mono text-amber-400">{pos.symbol}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          isLong ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                          side === null ? 'bg-slate-500/20 text-slate-400'
+                            : side === 'long' ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-red-500/20 text-red-400'
                         }`}>
-                          {pos.direction.toUpperCase()}
+                          {side ? side.toUpperCase() : '—'}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono">{fmtNum(pos.quantity, 4)}</td>
@@ -733,9 +740,11 @@ const PnLDashboard: React.FC = () => {
                       <td className="px-4 py-3 font-mono text-amber-400">{f.symbol}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          f.direction === 'long' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                          positionSide(f) === null ? 'bg-slate-500/20 text-slate-400'
+                            : positionSide(f) === 'long' ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-red-500/20 text-red-400'
                         }`}>
-                          {f.direction.toUpperCase()}
+                          {positionSide(f)?.toUpperCase() ?? '—'}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono">{fmtNum(f.quantity, 4)}</td>

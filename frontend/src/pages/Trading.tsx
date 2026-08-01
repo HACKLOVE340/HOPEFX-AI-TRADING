@@ -153,7 +153,7 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
         <div className="flex items-center gap-4 text-[11px]">
           <span className="text-slate-500">Balance <span className="text-slate-300 font-semibold">${fmtPrice(account.balance)}</span></span>
           <span className="text-slate-500">Equity <span className="text-slate-300 font-semibold">${fmtPrice(account.equity)}</span></span>
-          <span className="text-slate-500">P&L <span className={cn('font-semibold', account.daily_pnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>{fmtPnl(account.daily_pnl)}</span></span>
+          <span className="text-slate-500">P&L <span className={cn('font-semibold', (account.daily_pnl ?? 0) >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>{fmtPnl(account.daily_pnl)}</span></span>
         </div>
       )}
 

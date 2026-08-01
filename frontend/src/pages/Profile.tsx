@@ -6,15 +6,21 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { extractApiError, fmtPctRaw } from '../lib/utils';
+import { extractApiError, fmtPct, fmtPctRaw } from '../lib/utils';
 
 interface TraderProfile {
   user_id: string; username: string; display_name: string; bio: string;
   avatar_url: string | null; country: string | null; joined_at: string;
   followers_count: number; following_count: number; is_following: boolean;
-  stats: { total_trades: number; win_rate: number; avg_pnl: number; sharpe_ratio: number; total_return_pct: number; };
-  strategies: { strategy_id: string; name: string; subscribers: number; rating: number; }[];
-  recent_signals: { signal_id: string; symbol: string; direction: string; confidence: number; pnl: number; created_at: string; }[];
+  /**
+   * Optional (audit #37). This file already wrote `profile.stats ?? {zeros}`
+   * below while declaring the field required — the author knew the type was
+   * wrong and worked around it instead of correcting it, then did not apply the
+   * same care to `sig.confidence` and `sig.pnl` forty lines later.
+   */
+  stats?: { total_trades?: number; win_rate?: number; avg_pnl?: number; sharpe_ratio?: number; total_return_pct?: number; };
+  strategies?: { strategy_id: string; name: string; subscribers?: number; rating?: number; }[];
+  recent_signals?: { signal_id: string; symbol: string; direction?: string; confidence?: number; pnl?: number; created_at?: string; }[];
 }
 
 interface EditForm extends Record<string, unknown> { display_name: string; bio: string; country: string; }
@@ -209,7 +215,7 @@ const Profile: React.FC = () => {
           {label:'Win Rate',     value:`${st.win_rate?.toFixed(1) ?? '—'}%`, positive: (st.win_rate ?? 0) >= 50},
           {label:'Avg P&L',      value:`$${st.avg_pnl?.toFixed(2) ?? '—'}`, positive: (st.avg_pnl ?? 0) >= 0},
           {label:'Sharpe Ratio', value:st.sharpe_ratio?.toFixed(2) ?? '—', positive: (st.sharpe_ratio ?? 0) >= 1},
-          {label:'Total P&L',    value:`${st.total_return_pct >= 0 ? '+' : ''}${st.total_return_pct?.toFixed(1) ?? '—'}%`, positive: (st.total_return_pct ?? 0) >= 0},
+          {label:'Total P&L',    value:fmtPctRaw(st.total_return_pct, 1), positive: (st.total_return_pct ?? 0) >= 0},
         ].map(({label,value,positive})=>(
           <div key={label} style={s.statCard}>
             <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>{label}</div>
@@ -226,8 +232,8 @@ const Profile: React.FC = () => {
             {profile.strategies?.map(str=>(
               <div key={str.strategy_id} style={s.stratRow}>
                 <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
-                <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers} subscribers</span>
-                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
+                <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers ?? 0} subscribers</span>
+                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(str.rating != null && Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {str.rating != null && Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
               </div>
             ))}
           </div>
@@ -241,13 +247,13 @@ const Profile: React.FC = () => {
           <table style={s.table}>
             <thead><tr><th style={s.th}>Symbol</th><th style={s.th}>Direction</th><th style={s.th}>Confidence</th><th style={s.th}>P&L</th><th style={s.th}>Date</th></tr></thead>
             <tbody>
-              {profile.recent_signals.map(sig=>(
+              {(profile.recent_signals ?? []).map(sig=>(
                 <tr key={sig.signal_id} style={s.tr}>
                   <td style={s.td}>{sig.symbol}</td>
                   <td style={s.td}><span style={{color:sig.direction==='BUY'?'#4ade80':'#f87171',fontWeight:600}}>{sig.direction}</span></td>
-                  <td style={s.td}>{(sig.confidence*100).toFixed(0)}%</td>
-                  <td style={{...s.td,color:sig.pnl>=0?'#4ade80':'#f87171',fontWeight:600}}>{fmtPctRaw(sig.pnl, 2)}</td>
-                  <td style={s.td}>{new Date(sig.created_at).toLocaleDateString()}</td>
+                  <td style={s.td}>{fmtPct(sig.confidence, 0)}</td>
+                  <td style={{...s.td,color:sig.pnl==null?'#94a3b8':sig.pnl>=0?'#4ade80':'#f87171',fontWeight:600}}>{fmtPctRaw(sig.pnl, 2)}</td>
+                  <td style={s.td}>{sig.created_at ? new Date(sig.created_at).toLocaleDateString() : '—'}</td>
                 </tr>
               ))}
             </tbody>

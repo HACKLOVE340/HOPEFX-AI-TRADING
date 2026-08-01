@@ -196,8 +196,9 @@ const RiskCalculator: React.FC = () => {
 
   // Auto-populate balance from live account data
   useEffect(() => {
-    if (account?.balance && account.balance > 0) {
-      setState((prev) => ({ ...prev, accountBalance: account.balance.toFixed(2) }));
+    const bal = account?.balance;
+    if (bal != null && Number.isFinite(bal) && bal > 0) {
+      setState((prev) => ({ ...prev, accountBalance: bal.toFixed(2) }));
     }
   }, [account?.balance]);
 
