@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { MetricTile } from '../ui/MetricTile';
-import { fmtPctRaw, fmtRatio, pnlColor, fmtMarginLevel, marginLevelIsSafe } from '../../lib/utils';
+import { fmtPctRaw, fmtPct, fmtRatio, pnlColor, fmtMarginLevel, marginLevelIsSafe, fmtPrice, fmtPnl } from '../../lib/utils';
 import { notificationsApi } from '../../hooks/useApi';
 
 function NotificationBell() {
@@ -72,21 +72,24 @@ export function AccountBar() {
     );
   }
 
+  // Account statistics are absent on a new account and before the first
+  // evaluation cycle (audit #37). The shared fmt* helpers already render '—'
+  // for null/undefined — this file just wasn't using them for every field.
   const marginColor =
     marginLevelIsSafe(account.margin_level) ? '#00e676' :
-    account.margin_level > 100 ? '#ffb800' : '#ff3b5c';
+    (account.margin_level ?? 0) > 100 ? '#ffb800' : '#ff3b5c';
 
   return (
     <div className="flex items-center gap-6 px-5 py-2.5 bg-[#0d1421] border-b border-[#1e2d3d] overflow-x-auto scrollbar-terminal shrink-0">
       <MetricTile
         label="Balance"
-        value={`$${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+        value={`$${fmtPrice(account.balance)}`}
         compact
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Equity"
-        value={`$${account.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+        value={`$${fmtPrice(account.equity)}`}
         valueColor="#00d4ff"
         compact
       />
@@ -94,14 +97,14 @@ export function AccountBar() {
       <MetricTile
         label="Daily P&L"
         value={fmtPctRaw(account.daily_pnl_pct)}
-        sub={`$${account.daily_pnl >= 0 ? '+' : ''}${account.daily_pnl.toFixed(2)}`}
-        valueColor={account.daily_pnl >= 0 ? '#00e676' : '#ff1744'}
+        sub={fmtPnl(account.daily_pnl)}
+        valueColor={(account.daily_pnl ?? 0) >= 0 ? '#00e676' : '#ff1744'}
         compact
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Total P&L"
-        value={`$${account.total_pnl >= 0 ? '+' : ''}${account.total_pnl.toFixed(2)}`}
+        value={fmtPnl(account.total_pnl)}
         valueColor={pnlColor(account.total_pnl)}
         compact
       />
@@ -109,21 +112,21 @@ export function AccountBar() {
       <MetricTile
         label="Margin"
         value={fmtMarginLevel(account.margin_level)}
-        sub={`Used: $${account.margin_used.toFixed(0)}`}
+        sub={`Used: $${fmtPrice(account.margin_used, 0)}`}
         valueColor={marginColor}
         compact
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Win Rate"
-        value={`${(account.win_rate * 100).toFixed(1)}%`}
+        value={fmtPct(account.win_rate, 1)}
         valueColor="#00e676"
         compact
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Max DD"
-        value={`${(account.max_drawdown * 100).toFixed(1)}%`}
+        value={fmtPct(account.max_drawdown, 1)}
         valueColor="#ff3b5c"
         compact
       />
@@ -148,7 +151,7 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Open Trades"
-        value={account.open_trades.toString()}
+        value={account.open_trades?.toString() ?? '—'}
         compact
       />
       {account.kill_switch && (

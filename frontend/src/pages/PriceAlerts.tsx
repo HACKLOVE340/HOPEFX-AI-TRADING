@@ -33,7 +33,8 @@ interface Alert {
   conditions: AlertCondition[];
   status: 'active' | 'triggered' | 'paused' | 'expired' | 'cancelled';
   priority: string;
-  notification_channels: string[];
+  /** Optional — absent on alerts created before channels existed (audit #40). */
+  notification_channels?: string[];
   created_at: string;
   trigger_count: number;
 }
@@ -283,7 +284,7 @@ const PriceAlerts: React.FC = () => {
               <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>{alert.name}</div>
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
                 {alert.symbol} · {(alert.conditions ?? []).map((c) => `${CONDITION_LABELS[c.type] ?? c.type} ${c.threshold}`).join(', ')}
-                {' · '}{alert.notification_channels.join(', ')}
+                {(alert.notification_channels?.length ?? 0) > 0 && <>{' · '}{alert.notification_channels!.join(', ')}</>}
               </div>
             </div>
             <div style={{ fontSize: 12, color: '#475569', marginRight: 12 }}>

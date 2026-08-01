@@ -45,6 +45,18 @@ const fmtUSD = (n: number) =>
 
 const fmtPct = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 
+/**
+ * Statistical account fields are absent on a new account and before the first
+ * evaluation cycle (audit #37/#39). On a trading dashboard "no data yet" and
+ * "exactly zero" are very different claims, so render an em-dash rather than a
+ * confident 0.00 the user could mistake for a measured result.
+ *
+ * `??` would be wrong here for the same reason: a fabricated zero Sharpe reads
+ * as a real, terrible Sharpe.
+ */
+const has = (n: number | undefined): n is number => typeof n === 'number' && Number.isFinite(n);
+const orDash = (n: number | undefined, render: (v: number) => string) => (has(n) ? render(n) : '—');
+
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
 interface StatCardProps {
@@ -667,14 +679,20 @@ const Dashboard: React.FC = () => {
         <PanelSkeleton rows={3} />
       ) : (
         <div style={s.statsGrid}>
-          <StatCard label="Balance"     value={'$' + fmt(acc.balance)} />
-          <StatCard label="Equity"      value={'$' + fmt(acc.equity)} highlight />
-          <StatCard label="Daily P&L"   value={fmtUSD(acc.daily_pnl)} positive={acc.daily_pnl >= 0} sub={fmtPct(acc.daily_pnl_pct)} />
-          <StatCard label="Total P&L"   value={fmtUSD(acc.total_pnl)} positive={acc.total_pnl >= 0} />
-          <StatCard label="Win Rate"    value={(acc.win_rate * 100).toFixed(1) + '%'} positive={acc.win_rate >= 0.55} />
-          <StatCard label="Sharpe"      value={acc.sharpe_ratio.toFixed(2)} positive={acc.sharpe_ratio >= 1.5} />
-          <StatCard label="Account DD"  value={(acc.max_drawdown * 100).toFixed(2) + '%'} positive={acc.max_drawdown < 0.1} />
-          <StatCard label="Open Trades" value={String(acc.open_trades)} />
+          <StatCard label="Balance"     value={orDash(acc.balance, v => '$' + fmt(v))} />
+          <StatCard label="Equity"      value={orDash(acc.equity, v => '$' + fmt(v))} highlight />
+          <StatCard label="Daily P&L"   value={orDash(acc.daily_pnl, fmtUSD)}
+            positive={has(acc.daily_pnl) ? acc.daily_pnl >= 0 : undefined}
+            sub={orDash(acc.daily_pnl_pct, fmtPct)} />
+          <StatCard label="Total P&L"   value={orDash(acc.total_pnl, fmtUSD)}
+            positive={has(acc.total_pnl) ? acc.total_pnl >= 0 : undefined} />
+          <StatCard label="Win Rate"    value={orDash(acc.win_rate, v => (v * 100).toFixed(1) + '%')}
+            positive={has(acc.win_rate) ? acc.win_rate >= 0.55 : undefined} />
+          <StatCard label="Sharpe"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))}
+            positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= 1.5 : undefined} />
+          <StatCard label="Account DD"  value={orDash(acc.max_drawdown, v => (v * 100).toFixed(2) + '%')}
+            positive={has(acc.max_drawdown) ? acc.max_drawdown < 0.1 : undefined} />
+          <StatCard label="Open Trades" value={orDash(acc.open_trades, String)} />
         </div>
       )}
 
@@ -682,7 +700,7 @@ const Dashboard: React.FC = () => {
         <div style={s.cardHeader}>
           <span style={s.cardTitle}>Live Equity Curve</span>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            {acc && (
+            {has(acc?.total_pnl) && (
               <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
                 {fmtUSD(acc.total_pnl)}
               </span>

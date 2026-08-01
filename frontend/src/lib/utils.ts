@@ -30,6 +30,25 @@ export function sameSymbol(a: string | null | undefined, b: string | null | unde
   return canonicalSymbol(a) === canonicalSymbol(b);
 }
 /**
+ * Normalise a position's direction to 'long' | 'short' | null.
+ *
+ * The API is inconsistent: some endpoints return `side`, others `direction`, and
+ * either may be absent — which is why `pos.direction.toLowerCase()` crashed
+ * PnLDashboard (audit #37/#40) while three other call sites each wrote their own
+ * slightly different comparison. `null` means "not reported", which callers must
+ * render as unknown rather than defaulting to short.
+ */
+export function positionSide(
+  pos: { side?: string | null; direction?: string | null } | null | undefined,
+): 'long' | 'short' | null {
+  const raw = (pos?.side ?? pos?.direction ?? '').toString().trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === 'long' || raw === 'buy' || raw === 'b') return 'long';
+  if (raw === 'short' || raw === 'sell' || raw === 's') return 'short';
+  return null;
+}
+
+/**
  * Convert a compact pair symbol to the slash form the price feed keys on:
  * `XAUUSD` → `XAU/USD`. Already-slashed input is returned unchanged.
  *

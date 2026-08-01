@@ -40,7 +40,7 @@ import { PositionsTable } from '../components/panels/PositionsTable';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { tradingApi } from '../hooks/useApi';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, positionSide } from '../lib/utils';
 import type { PerformanceSummary } from '../types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -466,7 +466,7 @@ const SymbolPnLSparklines: React.FC = () => {
   const bySymbol: Record<string, { pnl: number; side: string }[]> = {};
   for (const p of positions) {
     if (!bySymbol[p.symbol]) bySymbol[p.symbol] = [];
-    bySymbol[p.symbol]!.push({ pnl: p.unrealized_pnl, side: p.side });
+    bySymbol[p.symbol]!.push({ pnl: p.unrealized_pnl, side: positionSide(p) ?? 'unknown' });
   }
 
   // Largest absolute per-symbol P&L, used to scale the mini bars against each

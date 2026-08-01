@@ -21,12 +21,13 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/** Every limit is optional — the catalogue omits them for some plans (audit #40). */
 interface PlanLimits {
-  signals_per_day: number;
-  backtests_per_month: number;
-  live_accounts: number;
-  max_strategies: number;
-  max_brokers: number;
+  signals_per_day?: number;
+  backtests_per_month?: number;
+  live_accounts?: number;
+  max_strategies?: number;
+  max_brokers?: number;
 }
 
 interface PlanData {
@@ -42,7 +43,7 @@ interface PlanData {
   cta?: string;
   cta_href?: string;
   features: Record<string, boolean> | string[];
-  limits: PlanLimits;
+  limits?: PlanLimits;
   highlights?: string[];
 }
 
@@ -85,7 +86,9 @@ const PLAN_BADGES: Record<string, string | null> = {
   elite:        'Best Value',
 };
 
-function fmtLimit(v: number): string {
+/** `-1` means unlimited; absent means the catalogue did not state a limit. */
+function fmtLimit(v: number | undefined): string {
+  if (v == null) return '—';
   return v === -1 ? 'Unlimited' : v.toString();
 }
 
@@ -165,11 +168,11 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
       </button>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
         {([
-          ['Signals / day',     fmtLimit(plan.limits.signals_per_day)],
-          ['Backtests / month', fmtLimit(plan.limits.backtests_per_month)],
-          ['Live accounts',     fmtLimit(plan.limits.live_accounts)],
-          ['Strategies',        fmtLimit(plan.limits.max_strategies)],
-          ['Brokers',           fmtLimit(plan.limits.max_brokers)],
+          ['Signals / day',     fmtLimit(plan.limits?.signals_per_day)],
+          ['Backtests / month', fmtLimit(plan.limits?.backtests_per_month)],
+          ['Live accounts',     fmtLimit(plan.limits?.live_accounts)],
+          ['Strategies',        fmtLimit(plan.limits?.max_strategies)],
+          ['Brokers',           fmtLimit(plan.limits?.max_brokers)],
         ] as [string, string][]).map(([label, val]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: '#64748b' }}>{label}</span>
@@ -252,7 +255,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
               {plans.map(p => (
                 <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
                   color: '#e2e8f0', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>
-                  {fmtLimit(p.limits[key])}
+                  {fmtLimit(p.limits?.[key])}
                 </td>
               ))}
             </tr>

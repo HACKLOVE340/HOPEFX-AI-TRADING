@@ -11,7 +11,7 @@ import { Panel } from '../ui/Panel';
 import { MetricTile } from '../ui/MetricTile';
 import { StatusDot } from '../ui/StatusDot';
 import { ConfidenceBar } from '../ui/ConfidenceBar';
-import { fmtPrice, fmtPctRaw, fmtRatio, cn, fmtMarginLevel, marginLevelIsSafe } from '../../lib/utils';
+import { fmtPrice, fmtPct, fmtPctRaw, fmtRatio, cn, fmtMarginLevel, marginLevelIsSafe } from '../../lib/utils';
 
 // ── Kill switch indicator ─────────────────────────────────────────────────────
 
@@ -107,23 +107,23 @@ export function RiskDashboard() {
           {[
             {
               label: 'Balance',
-              value: account ? `$${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—',
+              value: `$${fmtPrice(account?.balance)}`,
               color: '#e2e8f0',
             },
             {
               label: 'Equity',
-              value: account ? `$${account.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—',
+              value: `$${fmtPrice(account?.equity)}`,
               color: '#00d4ff',
             },
             {
               label: 'Daily P&L',
               value: account ? fmtPctRaw(account.daily_pnl_pct) : '—',
-              color: account ? (account.daily_pnl >= 0 ? '#00e676' : '#ff1744') : '#475569',
+              color: account?.daily_pnl == null ? '#475569' : account.daily_pnl >= 0 ? '#00e676' : '#ff1744',
             },
             {
               label: 'Total P&L',
               value: account ? fmtPrice(account.total_pnl) : '—',
-              color: account ? (account.total_pnl >= 0 ? '#00e676' : '#ff1744') : '#475569',
+              color: account?.total_pnl == null ? '#475569' : account.total_pnl >= 0 ? '#00e676' : '#ff1744',
             },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-[#0d1421] px-4 py-3">
@@ -165,13 +165,13 @@ export function RiskDashboard() {
           />
           <MetricTile
             label="Max Drawdown"
-            value={account ? `${(account.max_drawdown * 100).toFixed(1)}%` : '—'}
+            value={fmtPct(account?.max_drawdown, 1)}
             valueColor="#ff3b5c"
             compact
           />
           <MetricTile
             label="Win Rate"
-            value={account ? `${(account.win_rate * 100).toFixed(1)}%` : '—'}
+            value={fmtPct(account?.win_rate, 1)}
             valueColor="#00e676"
             compact
           />

@@ -18,7 +18,7 @@ import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError, sameSymbol } from '../../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError, sameSymbol, positionSide } from '../../lib/utils';
 import type { Position } from '../../types';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
@@ -73,8 +73,17 @@ function PnlBadge({ value }: { value: number }) {
 
 // ── Side badge ────────────────────────────────────────────────────────────────
 
-function SideBadge({ side }: { side: string }) {
-  const isLong = side === 'long' || side === 'buy';
+function SideBadge({ side }: { side: 'long' | 'short' | null }) {
+  if (side === null) {
+    // Not reported by the API. Defaulting to Short would state the opposite of
+    // the truth half the time (audit #37).
+    return (
+      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-500/10 text-slate-400">
+        —
+      </span>
+    );
+  }
+  const isLong = side === 'long';
   return (
     <span
       className={cn(
@@ -303,7 +312,7 @@ function PositionRow({
         {pos.symbol}
       </td>
       <td className="px-3 py-2.5">
-        <SideBadge side={pos.side} />
+        <SideBadge side={positionSide(pos)} />
       </td>
       <td className="px-3 py-2.5 tabular-nums text-slate-300">
         {pos.size}

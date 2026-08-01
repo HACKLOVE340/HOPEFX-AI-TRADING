@@ -183,7 +183,13 @@ export interface ComponentHealth {
 export interface Position {
   readonly id:             string;
   readonly symbol:         string;
-  readonly side:           Direction;
+  /**
+   * Some endpoints return `direction` rather than `side`, and either may be
+   * absent — which is why `pos.direction.toLowerCase()` crashed PnLDashboard
+   * (audit #37/#40).
+   */
+  readonly side?:          Direction;
+  readonly direction?:     Direction | string;
   readonly size:           number;
   readonly entry_price:    number;
   readonly current_price:  number;
@@ -285,20 +291,38 @@ export interface SignalAnalyticsReport {
 
 // ── Account metrics ───────────────────────────────────────────────────────────
 
+/**
+ * Account metrics from GET /api/account.
+ *
+ * Statistical fields are OPTIONAL by design: they are computed from closed
+ * trades and are absent on a new account or before the first evaluation cycle.
+ * Declaring them required (audit #37) is precisely what let
+ * `acc.sharpe_ratio.toFixed(2)` compile in Dashboard.tsx and then blank the
+ * landing screen behind the ErrorBoundary when the server legitimately omitted
+ * them. `strict` was doing its job — it was faithfully enforcing an optimistic
+ * description of the API.
+ *
+ * Dashboard.tsx's own MlAccuracyCard already defended against exactly this,
+ * with a comment reading "all numeric fields may be absent on first
+ * evaluation". The knowledge was in the file; it just wasn't in the type.
+ */
 export interface AccountMetrics {
-  readonly balance:        number;
-  readonly equity:         number;
-  readonly margin_used:    number;
-  readonly margin_free:    number;
-  readonly margin_level:   number;
-  readonly daily_pnl:      number;
-  readonly daily_pnl_pct:  number;
-  readonly total_pnl:      number;
-  readonly win_rate:       number;
-  readonly sharpe_ratio:   number;
+  readonly balance?:       number;
+  readonly equity?:        number;
+  readonly margin_used?:   number;
+  readonly margin_free?:   number;
+  readonly margin_level?:  number;
+  readonly daily_pnl?:     number;
+  readonly daily_pnl_pct?: number;
+  readonly total_pnl?:     number;
+  /** Absent until at least one trade has closed. */
+  readonly win_rate?:      number;
+  /** Absent until enough closed trades exist to compute it. */
+  readonly sharpe_ratio?:  number;
   readonly sortino_ratio?: number;
-  readonly max_drawdown:   number;
-  readonly open_trades:    number;
+  /** Absent on a new account. */
+  readonly max_drawdown?:  number;
+  readonly open_trades?:   number;
   readonly open_risk_pct?: number;   // % of equity at risk across open positions
   readonly cvar_95?:       number;   // Conditional Value at Risk 95%
   readonly kill_switch?:   boolean;
@@ -313,20 +337,21 @@ export interface EquityPoint {
   readonly balance?:   number;
 }
 
+/** Every field is derived from closed trades — absent before the first close (audit #37). */
 export interface PerformanceSummary {
-  readonly total_return_pct:  number;
-  readonly sharpe_ratio:      number;
-  readonly sortino_ratio:     number;
-  readonly max_drawdown_pct:  number;
+  readonly total_return_pct?: number;
+  readonly sharpe_ratio?:     number;
+  readonly sortino_ratio?:    number;
+  readonly max_drawdown_pct?: number;
   /** Win rate as a percentage 0–100 (e.g. 62.5). API sends it pre-multiplied. */
-  readonly win_rate:          number;
-  readonly profit_factor:     number;
-  readonly total_trades:      number;
-  readonly avg_trade_pnl:     number;
-  readonly best_trade:        number;
-  readonly worst_trade:       number;
+  readonly win_rate?:         number;
+  readonly profit_factor?:    number;
+  readonly total_trades?:     number;
+  readonly avg_trade_pnl?:    number;
+  readonly best_trade?:       number;
+  readonly worst_trade?:      number;
   /** CVaR as a fraction 0–1 (e.g. 0.025 = 2.5%). Multiply by 100 to display. */
-  readonly cvar_95:           number;
+  readonly cvar_95?:          number;
 }
 
 // ── Order book ────────────────────────────────────────────────────────────────

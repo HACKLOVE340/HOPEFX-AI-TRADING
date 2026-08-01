@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 
 // Real implementations under test (the helpers below this are inline copies).
-import { fmtMarginLevel, marginLevelIsSafe, canonicalSymbol, sameSymbol, isSafeRedirectPath } from '../lib/utils';
+import { fmtMarginLevel, marginLevelIsSafe, canonicalSymbol, sameSymbol, isSafeRedirectPath, positionSide } from '../lib/utils';
 
 // ─── Open-redirect guard ──────────────────────────────────────────────────────
 // The login page redirects to a user-controlled ?next= param. These are the
@@ -484,5 +484,46 @@ describe('fmtMarginLevel', () => {
     // A genuinely low margin level is not safe.
     expect(marginLevelIsSafe(80)).toBe(false);
     expect(marginLevelIsSafe(150)).toBe(false);
+  });
+});
+
+// ─── positionSide ─────────────────────────────────────────────────────────────
+// The API returns `side` on some endpoints and `direction` on others, and either
+// may be absent. Four call sites each wrote their own comparison; one of them
+// (`pos.direction.toLowerCase()`) crashed PnLDashboard outright (audit #37/#40).
+describe('positionSide', () => {
+  it('reads either field', () => {
+    expect(positionSide({ side: 'long' })).toBe('long');
+    expect(positionSide({ direction: 'long' })).toBe('long');
+    expect(positionSide({ side: 'short' })).toBe('short');
+    expect(positionSide({ direction: 'short' })).toBe('short');
+  });
+
+  it('accepts the broker spellings', () => {
+    expect(positionSide({ side: 'BUY' })).toBe('long');
+    expect(positionSide({ direction: 'Sell' })).toBe('short');
+    expect(positionSide({ side: ' LONG ' })).toBe('long');
+    expect(positionSide({ side: 'b' })).toBe('long');
+    expect(positionSide({ side: 's' })).toBe('short');
+  });
+
+  it('prefers side when both are present', () => {
+    expect(positionSide({ side: 'long', direction: 'short' })).toBe('long');
+  });
+
+  it('returns null rather than guessing', () => {
+    // Defaulting to short would state the opposite of the truth half the time,
+    // and every previous call site did exactly that via a falsy else-branch.
+    expect(positionSide({})).toBeNull();
+    expect(positionSide(null)).toBeNull();
+    expect(positionSide(undefined)).toBeNull();
+    expect(positionSide({ side: '' })).toBeNull();
+    expect(positionSide({ side: '   ' })).toBeNull();
+    expect(positionSide({ direction: 'sideways' })).toBeNull();
+  });
+
+  it('does not throw on an absent field — the original crash', () => {
+    expect(() => positionSide({ direction: undefined })).not.toThrow();
+    expect(() => positionSide({ side: null })).not.toThrow();
   });
 });
