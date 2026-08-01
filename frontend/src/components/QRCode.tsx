@@ -15,6 +15,7 @@
  * (~20 KB) onto a canvas.
  */
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import QR from 'qrcode';
 
 interface QRCodeProps {
@@ -29,7 +30,7 @@ interface QRCodeProps {
   /** Accessible label; describe what scanning it does. */
   alt: string;
   /** Rendered instead of the canvas if encoding fails. */
-  fallback?: React.ReactNode;
+  fallback?: ReactNode;
 }
 
 export default function QRCode({

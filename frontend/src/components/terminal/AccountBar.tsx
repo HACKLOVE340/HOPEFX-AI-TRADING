@@ -98,7 +98,7 @@ export function AccountBar() {
         label="Daily P&L"
         value={fmtPctRaw(account.daily_pnl_pct)}
         sub={fmtPnl(account.daily_pnl)}
-        valueColor={(account.daily_pnl ?? 0) >= 0 ? '#00e676' : '#ff1744'}
+        valueColor={account.daily_pnl == null ? '#64748b' : account.daily_pnl >= 0 ? '#00e676' : '#ff1744'}
         compact
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />

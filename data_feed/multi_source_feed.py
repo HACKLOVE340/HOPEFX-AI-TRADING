@@ -75,7 +75,7 @@ _FALLBACK_ORDER = ["yfinance", "alpha_vantage", "twelve_data"]
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _resolve_env(v: Any, _depth: int = 0) -> str:
+def _resolve_env(v: Any, _depth: int = 0) -> Any:
     """Expand ``${VAR:default}`` placeholders in YAML string values.
 
     The default may itself be a placeholder — the feed config uses
