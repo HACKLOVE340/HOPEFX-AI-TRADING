@@ -7,6 +7,7 @@ import {
   ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 interface PlatformConfig {
   platform_name: string;
@@ -41,6 +42,7 @@ const PlatformSection: React.FC = () => {
   const [testingSmtp, setTestingSmtp] = useState(false);
   const [error, setError]           = useState('');
   const [msg, setMsg]               = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]       = useState<string | null>(null);
   const [broadcast, setBroadcast]   = useState({ title: '', body: '', type: 'info' });
   const [smtpTest, setSmtpTest]     = useState({ host: '', port: 587, user: '', password: '', from_addr: '', tls: true });
@@ -78,8 +80,10 @@ const PlatformSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.updatePlatformConfig(cfg);
+      setMsgOk(true);
       setMsg('Configuration saved');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
@@ -89,8 +93,10 @@ const PlatformSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.savePlatformConfigFull(cfg);
+      setMsgOk(true);
       setMsg('Full configuration saved and applied');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Full save failed'));
     } finally { setSaving(false); }
   };
@@ -101,11 +107,14 @@ const PlatformSection: React.FC = () => {
       const res = await superadminApi.validatePlatformConfig();
       const d = res.data as { valid?: boolean; errors?: string[] };
       if (d.valid) {
+        setMsgOk(true);
         setMsg('✅ Configuration is valid');
       } else {
+        setMsgOk(true);
         setMsg('⚠️ Validation errors: ' + (d.errors?.join('; ') ?? 'Unknown errors'));
       }
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Validation failed'));
     } finally { setValidating(false); }
   };
@@ -114,8 +123,10 @@ const PlatformSection: React.FC = () => {
     setTestingSmtp(true); setMsg('');
     try {
       await superadminApi.testSmtpConfig(smtpTest);
+      setMsgOk(true);
       setMsg('✅ SMTP connection successful');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'SMTP test failed'));
     } finally { setTestingSmtp(false); }
   };
@@ -126,8 +137,10 @@ const PlatformSection: React.FC = () => {
     try {
       await superadminApi.maintenanceMode(!cfg.maintenance_mode, cfg.maintenance_message);
       setCfg(c => c ? { ...c, maintenance_mode: !c.maintenance_mode } : c);
+      setMsgOk(true);
       setMsg(`Maintenance mode ${!cfg.maintenance_mode ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Failed'));
     } finally { setSaving(false); setConfirm(null); }
   };
@@ -136,9 +149,11 @@ const PlatformSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.broadcastMessage(broadcast);
+      setMsgOk(true);
       setMsg('Broadcast sent to all active users');
       setBroadcast({ title: '', body: '', type: 'info' });
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Broadcast failed'));
     } finally { setSaving(false); }
   };
@@ -314,16 +329,7 @@ const PlatformSection: React.FC = () => {
         />
       </SectionCard>
 
-      {msg && (
-        <div style={{
-          padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: msg.includes('failed') || msg.includes('Failed') || msg.includes('⚠️') ? '#450a0a' : '#052e16',
-          color: msg.includes('failed') || msg.includes('Failed') || msg.includes('⚠️') ? '#f87171' : '#4ade80',
-          fontSize: 13, fontWeight: 600,
-        }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
     </div>
   );
 };

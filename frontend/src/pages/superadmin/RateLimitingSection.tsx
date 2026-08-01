@@ -9,6 +9,7 @@ import {
 } from './ui';
 import type { RateLimitRule } from './types';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -35,6 +36,7 @@ const RateLimitingSection: React.FC = () => {
   const [error, setError]           = useState('');
   const [busy, setBusy]             = useState<string | null>(null);
   const [msg, setMsg]               = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [tab, setTab]               = useState<'rules' | 'violations'>('rules');
   const [showCreate, setShowCreate] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -85,6 +87,7 @@ const RateLimitingSection: React.FC = () => {
       await superadminApi.updateRateLimitRule(rule.rule_id, { enabled: !rule.enabled });
       setRules(prev => prev.map(r => r.rule_id === rule.rule_id ? { ...r, enabled: !r.enabled } : r));
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Toggle failed'));
     } finally { setBusy(null); }
   };
@@ -102,8 +105,10 @@ const RateLimitingSection: React.FC = () => {
         ? { ...r, limit: parseInt(edit.limit), window_seconds: parseInt(edit.window_seconds) }
         : r));
       setEditing(prev => { const n = { ...prev }; delete n[ruleId]; return n; });
+      setMsgOk(true);
       setMsg('Rule updated');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Update failed'));
     } finally { setBusy(null); }
   };
@@ -123,8 +128,10 @@ const RateLimitingSection: React.FC = () => {
       setRules(prev => [...prev, res.data?.rule ?? res.data]);
       setNewRule({ endpoint: '', limit: '100', window_seconds: '60', scope: 'per_user' });
       setShowCreate(false);
+      setMsgOk(true);
       setMsg('Rule created');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Create failed'));
     } finally { setBusy(null); }
   };
@@ -134,8 +141,10 @@ const RateLimitingSection: React.FC = () => {
     try {
       await superadminApi.deleteRateLimitRule(ruleId);
       setRules(prev => prev.filter(r => r.rule_id !== ruleId));
+      setMsgOk(true);
       setMsg('Rule deleted');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(null); }
   };
@@ -161,18 +170,7 @@ const RateLimitingSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{
-          background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)',
-          border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`,
-          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
-          color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon="🔒" accent="#60a5fa" />

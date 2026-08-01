@@ -9,6 +9,7 @@ import {
 } from './ui';
 import type { SecurityEvent } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 interface BlockedIP { ip: string; reason: string; blocked_at: string; blocked_by: string }
 interface Session   { session_id: string; user_id: string; username: string; ip: string; device: string; created_at: string; last_active: string }
@@ -37,6 +38,7 @@ const SecuritySection: React.FC = () => {
   const [newIPReason, setNewIPReason] = useState('');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]   = useState<{ type: string; id: string; label: string } | null>(null);
 
   const mountedRef = useRef(true);
@@ -71,10 +73,12 @@ const SecuritySection: React.FC = () => {
     setBusy('block-ip'); setMsg('');
     try {
       await superadminApi.blockIP(newIP, newIPReason || 'Manual block');
+      setMsgOk(true);
       setMsg(`IP ${newIP} blocked`);
       setNewIP(''); setNewIPReason('');
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Block failed'));
     } finally { setBusy(null); }
   };
@@ -83,9 +87,11 @@ const SecuritySection: React.FC = () => {
     setBusy(`unblock-${ip}`); setMsg('');
     try {
       await superadminApi.unblockIP(ip);
+      setMsgOk(true);
       setMsg(`IP ${ip} unblocked`);
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Unblock failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -94,9 +100,11 @@ const SecuritySection: React.FC = () => {
     setBusy(`revoke-${sessionId}`); setMsg('');
     try {
       await superadminApi.revokeSession(sessionId);
+      setMsgOk(true);
       setMsg('Session revoked');
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Revoke failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -105,9 +113,11 @@ const SecuritySection: React.FC = () => {
     setBusy(`revoke-all-${userId}`); setMsg('');
     try {
       await superadminApi.revokeAllSessions(userId);
+      setMsgOk(true);
       setMsg('All sessions revoked for user');
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Revoke failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -288,16 +298,7 @@ const SecuritySection: React.FC = () => {
         </div>
       </SectionCard>
 
-      {msg && (
-        <div style={{
-          padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: msg.includes('failed') || msg.includes('Failed') ? '#450a0a' : '#052e16',
-          color: msg.includes('failed') || msg.includes('Failed') ? '#f87171' : '#4ade80',
-          fontSize: 13, fontWeight: 600,
-        }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
     </div>
   );
 };

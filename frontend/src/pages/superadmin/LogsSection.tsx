@@ -8,6 +8,7 @@ import {
 } from './ui';
 import type { LogEntry } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const LEVEL_COLORS: Record<string, { color: string; bg: string }> = {
   DEBUG:    { color: '#94a3b8', bg: '#1e293b' },
@@ -28,6 +29,7 @@ const LogsSection: React.FC = () => {
   const [logLevels, setLogLevels] = useState<Record<string, string>>({});
   const [savingLevel, setSavingLevel] = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -68,8 +70,10 @@ const LogsSection: React.FC = () => {
     try {
       await superadminApi.setLogLevel(logger, level);
       setLogLevels(prev => ({ ...prev, [logger]: level }));
+      setMsgOk(true);
       setMsg(`Log level for ${logger} set to ${level}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Failed to set log level'));
     } finally { setSavingLevel(null); }
   };
@@ -84,7 +88,7 @@ const LogsSection: React.FC = () => {
       const a = document.createElement('a');
       a.href = url; a.download = `hopefx-logs-${Date.now()}.txt`;
       a.click(); URL.revokeObjectURL(url);
-    } catch { setMsg('Export failed'); }
+    } catch { setMsgOk(false); setMsg('Export failed'); }
   };
 
   const filteredLogs = logs.filter(l => {
@@ -128,9 +132,7 @@ const LogsSection: React.FC = () => {
               </div>
             ))}
           </div>
-          {msg && (
-            <div style={{ marginTop: 10, fontSize: 12, color: msg.includes('failed') ? '#f87171' : '#4ade80' }}>{msg}</div>
-          )}
+          <ActionBanner message={msg} ok={msgOk} />
         </SectionCard>
       )}
 

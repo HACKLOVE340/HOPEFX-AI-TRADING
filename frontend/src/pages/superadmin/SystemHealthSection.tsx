@@ -10,6 +10,7 @@ import {
 } from './ui';
 import type { ServiceStatus, BackupRecord, ScheduledJob } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -46,6 +47,7 @@ const SystemHealthSection: React.FC = () => {
   const [error, setError]         = useState('');
   const [busy, setBusy]           = useState<string | null>(null);
   const [msg, setMsg]             = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [tab, setTab]             = useState<'services' | 'backups' | 'jobs' | 'apikeys'>('services');
   const [backupType, setBackupType] = useState<'full' | 'incremental' | 'snapshot'>('incremental');
   const [revokeConfirm, setRevokeConfirm] = useState<string | null>(null);
@@ -81,9 +83,11 @@ const SystemHealthSection: React.FC = () => {
     setBusy('backup'); setMsg('');
     try {
       await superadminApi.infraTriggerBackup(backupType);
+      setMsgOk(true);
       setMsg(`${backupType} backup triggered`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Backup trigger failed'));
     } finally { setBusy(null); }
   };
@@ -94,9 +98,11 @@ const SystemHealthSection: React.FC = () => {
       if (action === 'trigger') await superadminApi.triggerJob(jobId);
       else if (action === 'pause') await superadminApi.pauseJob(jobId);
       else await superadminApi.resumeJob(jobId);
+      setMsgOk(true);
       setMsg(`Job ${jobId} ${action}d`);
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, `Job ${action} failed`));
     } finally { setBusy(null); }
   };
@@ -106,8 +112,10 @@ const SystemHealthSection: React.FC = () => {
     try {
       await superadminApi.infraRevokeApiKey(keyId, 'Revoked by superadmin');
       setApiKeys(prev => prev.map(k => k.key_id === keyId ? { ...k, active: false } : k));
+      setMsgOk(true);
       setMsg('API key revoked');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Revoke failed'));
     } finally { setBusy(null); setRevokeConfirm(null); }
   };
@@ -134,18 +142,7 @@ const SystemHealthSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{
-          background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)',
-          border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`,
-          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
-          color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KpiTile label="Healthy Services" value={`${healthyServices}/${services.length}`} icon="✅" accent={downServices > 0 ? '#f87171' : '#22c55e'} />

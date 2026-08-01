@@ -198,64 +198,87 @@ class TradingPrefsBody(BaseModel):
     default_leverage: int = 50
 
 
+def _kill_switch_active() -> bool:
+    """Report whether the app-level kill switch is currently engaged.
+
+    Read-only. Returns False when no kill switch is wired up, which matches the
+    behaviour of every other read path.
+    """
+    try:
+        import sys as _sys
+
+        _ks = getattr(_sys.modules.get("app"), "kill_switch", None)
+        if _ks is not None and callable(getattr(_ks, "is_active", None)):
+            return bool(_ks.is_active())
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.debug("kill switch status unavailable: %s", exc)
+    return False
+
+
 @router.get("/api/settings/trading", summary="Get trading preferences")
 async def get_trading_prefs(user: TokenPayload = Depends(get_current_user)):
-    """Return trading preferences for the authenticated user."""
+    """Return trading preferences for the authenticated user.
+
+    `kill_switch_enabled` reflects the LIVE kill switch, not a stored preference.
+    It used to be read back from whatever was last saved, so the settings page
+    could report trading as halted when it was running, or running when it was
+    halted.
+    """
     uid = user.sub
-    return _load(uid, "trading", TradingPrefsBody().model_dump())
+    prefs = _load(uid, "trading", TradingPrefsBody().model_dump())
+    prefs["kill_switch_enabled"] = _kill_switch_active()
+    return prefs
 
 
 @router.post("/api/settings/trading", summary="Save trading preferences")
 async def save_trading_prefs(body: TradingPrefsBody, user: TokenPayload = Depends(get_current_user)):
-    """Persist trading preferences and sync kill switch with the risk engine."""
+    """Persist trading preferences.
+
+    This endpoint does NOT touch the kill switch, in either direction.
+
+    It used to. `kill_switch_enabled` defaults to False on this model, so any
+    save that omitted the field — a user changing their lot size — took the
+    "user explicitly disabled the kill switch" branch and called
+    `risk_manager.resume_trading()`, whose own docstring reads "requires explicit
+    operator action". A halt raised by a drawdown circuit breaker could be
+    cleared by any authenticated user, at any plan tier, saving an unrelated
+    preference.
+
+    It also attempted `kill_switch.deactivate()` with no token, bypassing both
+    the admin role check on `POST /api/admin/resume` and the
+    HOPEFX_KILL_SWITCH_TOKEN requirement that exists so trading cannot resume
+    unattended. That call raised and was swallowed by a debug-level except, so
+    the bypass left no trace.
+
+    Halting and resuming live trading belong to the operator endpoints:
+    `POST /api/trading/emergency-stop`, `POST /api/admin/pause`,
+    `POST /api/admin/resume` and `/api/nuclear/kill_switch/*` — all admin-gated.
+    """
     uid = user.sub
-    _save(uid, "trading", body.model_dump())
 
-    if body.kill_switch_enabled:
-        try:
-            # Activate the app-level kill switch singleton directly so the halt
-            # reaches the running risk manager and all subsystems.  Creating a
-            # new RiskManager() instance would apply the halt to a throwaway
-            # object that has no effect on the live trading engine.
-            import sys as _sys
+    # Never persist the kill switch as a user preference: it is global engine
+    # state, and storing it invites the next reader to sync from it.
+    prefs = body.model_dump()
+    requested_halt = prefs.pop("kill_switch_enabled", False)
+    _save(uid, "trading", prefs)
 
-            _app = _sys.modules.get("app")
-            _ks = getattr(_app, "kill_switch", None)
-            if _ks is not None and callable(getattr(_ks, "activate", None)):
-                if not _ks.is_active():
-                    _ks.activate(reason="user settings")
-                    logger.warning("Kill switch activated via user settings for user %s", uid)
-            else:
-                # Fallback: reach the live risk manager via app_state
-                from core.app_state import app_state as _state
+    if requested_halt and not _kill_switch_active():
+        # Someone reached the halt through a door that no longer opens it. Say so
+        # loudly rather than returning a bare success the caller reads as "halted".
+        logger.warning(
+            "settings/trading: user=%s sent kill_switch_enabled=true — ignored. "
+            "Use POST /api/trading/emergency-stop (admin) to halt trading.",
+            uid,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Trading preferences cannot engage the kill switch. "
+                "Use the emergency stop control — it requires an administrator."
+            ),
+        )
 
-                _rm = getattr(_state, "risk_manager", None)
-                if _rm is not None and callable(getattr(_rm, "_halt_trading", None)):
-                    _rm._halt_trading("user settings")
-                    logger.warning("RiskManager halted via user settings for user %s", uid)
-        except Exception as exc:
-            logger.debug("Kill switch propagation failed: %s", exc)
-
-    elif not body.kill_switch_enabled:
-        # User explicitly disabled the kill switch — resume trading if halted.
-        try:
-            import sys as _sys
-
-            _app = _sys.modules.get("app")
-            _ks = getattr(_app, "kill_switch", None)
-            if _ks is not None and _ks.is_active():
-                _ks.deactivate()
-                logger.info("Kill switch deactivated via user settings for user %s", uid)
-            # Also resume the live risk manager if it was halted.
-            from core.app_state import app_state as _state
-
-            _rm = getattr(_state, "risk_manager", None)
-            if _rm is not None and callable(getattr(_rm, "resume_trading", None)):
-                _rm.resume_trading()
-        except Exception as exc:
-            logger.debug("Kill switch deactivation failed: %s", exc)
-
-    return {"status": "saved"}
+    return {"status": "saved", "kill_switch_enabled": _kill_switch_active()}
 
 
 # ── Broker settings ───────────────────────────────────────────────────────────

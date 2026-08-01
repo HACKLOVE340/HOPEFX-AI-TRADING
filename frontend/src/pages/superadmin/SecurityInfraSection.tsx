@@ -8,6 +8,7 @@ import {
   ConfirmDialog,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -70,6 +71,7 @@ const SecurityInfraSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [rotateConfirm, setRotateConfirm] = useState<string | null>(null);
   const [tab, setTab]           = useState<'healer' | 'av' | 'hsm' | 'log' | 'threat'>('healer');
 
@@ -126,12 +128,15 @@ const SecurityInfraSection: React.FC = () => {
     try {
       if (type === 'integrity') {
         await superadminApi.triggerIntegrityScan();
+        setMsgOk(false);
         setMsg('File integrity scan started');
       } else {
         await superadminApi.triggerAvScan();
+        setMsgOk(false);
         setMsg('Antivirus scan started');
       }
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Scan trigger failed'));
     } finally { setBusy(null); }
   };
@@ -140,9 +145,11 @@ const SecurityInfraSection: React.FC = () => {
     setBusy(keyId); setMsg('');
     try {
       await superadminApi.hsmRotateKey(keyId);
+      setMsgOk(true);
       setMsg(`Key ${keyId} rotated successfully`);
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Key rotation failed'));
     } finally { setBusy(null); setRotateConfirm(null); }
   };
@@ -164,18 +171,7 @@ const SecurityInfraSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{
-          background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)',
-          border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`,
-          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
-          color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KpiTile label="Self-Healer" value={healer?.status ?? 'unknown'} icon="🔧" accent={STATUS_COLOR(healer?.status ?? '')} />

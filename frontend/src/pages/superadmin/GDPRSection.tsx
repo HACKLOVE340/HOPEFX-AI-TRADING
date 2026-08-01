@@ -10,6 +10,7 @@ import {
 } from './ui';
 import type { DataSubjectRequest } from './types';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -37,6 +38,7 @@ const GDPRSection: React.FC = () => {
   const [typeFilter, setTypeFilter]     = useState('');
   const [busy, setBusy]             = useState<string | null>(null);
   const [msg, setMsg]               = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]       = useState<{ id: string; action: 'approve' | 'reject'; label: string } | null>(null);
   const [eraseUserId, setEraseUserId] = useState('');
   const [eraseReason, setEraseReason] = useState('');
@@ -90,9 +92,11 @@ const GDPRSection: React.FC = () => {
     setBusy(id); setMsg('');
     try {
       await superadminApi.processGdprRequest(id, action);
+      setMsgOk(false);
       setMsg(`Request ${action === 'approve' ? 'approved' : 'rejected'}`);
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Action failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -102,10 +106,12 @@ const GDPRSection: React.FC = () => {
     setBusy('erase'); setMsg('');
     try {
       await superadminApi.gdprEraseUser(eraseUserId.trim(), eraseReason || 'Superadmin GDPR erasure');
+      setMsgOk(true);
       setMsg(`User ${eraseUserId} erased — PII anonymised`);
       setEraseUserId(''); setEraseReason('');
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Erasure failed'));
     } finally { setBusy(null); setEraseConfirm(false); }
   };
@@ -114,8 +120,10 @@ const GDPRSection: React.FC = () => {
     setBusy(`export-${userId}`); setMsg('');
     try {
       await superadminApi.gdprExportUser(userId);
+      setMsgOk(true);
       setMsg(`Export queued for ${userId} — user will receive download link`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(null); }
   };
@@ -126,10 +134,12 @@ const GDPRSection: React.FC = () => {
     setBusy(`policy-${dataType}`); setMsg('');
     try {
       await superadminApi.updateRetentionPolicy({ data_type: dataType, retention_days: days });
+      setMsgOk(true);
       setMsg(`Retention for "${dataType}" updated to ${days} days`);
       // Update local state
       setPolicies(prev => prev.map(p => p.data_type === dataType ? { ...p, retention_days: days } : p));
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Update failed'));
     } finally { setBusy(null); }
   };
@@ -166,12 +176,7 @@ const GDPRSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{ background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)', border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80', display: 'flex', justifyContent: 'space-between' }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KpiTile label="Pending Requests"  value={pending}           icon="⏳" accent={pending > 0 ? '#fbbf24' : '#22c55e'} />

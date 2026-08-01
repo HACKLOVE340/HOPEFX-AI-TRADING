@@ -13,6 +13,7 @@ import type {
   PropBreach, DrawdownStats,
 } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtMoney = (n: number, cur = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
@@ -52,6 +53,7 @@ const RiskManagementSection: React.FC = () => {
   const [error, setError]         = useState('');
   const [busy, setBusy]           = useState<string | null>(null);
   const [msg, setMsg]             = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]     = useState<{ name: string; action: string } | null>(null);
   const [breachFilter, setBreachFilter] = useState('');
 
@@ -88,9 +90,11 @@ const RiskManagementSection: React.FC = () => {
     setBusy(`reset-${name}`); setMsg('');
     try {
       await superadminApi.resetCircuitBreaker(name);
+      setMsgOk(true);
       setMsg(`Circuit breaker "${name}" reset to CLOSED`);
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Reset failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -99,9 +103,11 @@ const RiskManagementSection: React.FC = () => {
     setBusy(`open-${name}`); setMsg('');
     try {
       await superadminApi.forceOpenBreaker(name);
+      setMsgOk(true);
       setMsg(`Circuit breaker "${name}" force-opened`);
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Force-open failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -110,9 +116,11 @@ const RiskManagementSection: React.FC = () => {
     setBusy(`stress-${scenario}`); setMsg('');
     try {
       await superadminApi.runStressTest(scenario);
+      setMsgOk(true);
       setMsg(`Stress test "${scenario}" queued — results will appear shortly`);
       setTimeout(load, 3000);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Stress test failed'));
     } finally { setBusy(null); }
   };
@@ -430,11 +438,7 @@ const RiskManagementSection: React.FC = () => {
         </SectionCard>
       )}
 
-      {msg && (
-        <div style={{ padding: '12px 16px', borderRadius: 8, marginTop: 4, background: msg.includes('failed') ? '#450a0a' : '#052e16', color: msg.includes('failed') ? '#f87171' : '#4ade80', fontSize: 13, fontWeight: 600 }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
     </div>
   );
 };

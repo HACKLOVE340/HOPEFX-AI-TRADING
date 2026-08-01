@@ -9,6 +9,7 @@ import {
 import type { PlatformOverview } from './types';
 import { useSuperAdminNav } from './types';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 // ── Infra detail types ────────────────────────────────────────────────────────
 interface InfraHealth {
@@ -120,8 +121,10 @@ const OverviewSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [infraMsg, setInfraMsg] = useState('');
+  const [infraMsgOk, setInfraMsgOk] = useState(true);
   const [actionBusy, setActionBusy] = useState<'kill-switch' | 'maintenance' | null>(null);
   const [actionMsg, setActionMsg]   = useState('');
+  const [actionMsgOk, setActionMsgOk] = useState(true);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -168,9 +171,11 @@ const OverviewSection: React.FC = () => {
     setFlushing(true); setInfraMsg('');
     try {
       await superadminApi.flushCache();
+      setInfraMsgOk(true);
       setInfraMsg('Cache flushed successfully');
       setTimeout(loadInfra, 800);
     } catch (e: unknown) {
+      setInfraMsgOk(false);
       setInfraMsg(extractApiError(e, 'Cache flush failed'));
     } finally { setFlushing(false); }
   };
@@ -182,9 +187,11 @@ const OverviewSection: React.FC = () => {
     setActionBusy('kill-switch'); setActionMsg('');
     try {
       await superadminApi.killSwitch(enabling);
+      setActionMsgOk(true);
       setActionMsg(enabling ? '🛑 Kill switch activated — trading halted' : '▶️ Kill switch deactivated — trading resumed');
       load(true);
     } catch (e: unknown) {
+      setActionMsgOk(false);
       setActionMsg(extractApiError(e, 'Kill-switch toggle failed'));
     } finally { if (mountedRef.current) setActionBusy(null); }
   };
@@ -196,9 +203,11 @@ const OverviewSection: React.FC = () => {
     setActionBusy('maintenance'); setActionMsg('');
     try {
       await superadminApi.maintenanceMode(enabling, enabling ? 'Maintenance started from Overview' : undefined);
+      setActionMsgOk(true);
       setActionMsg(enabling ? '🔧 Maintenance mode enabled' : '✅ Maintenance mode disabled');
       load(true);
     } catch (e: unknown) {
+      setActionMsgOk(false);
       setActionMsg(extractApiError(e, 'Maintenance toggle failed'));
     } finally { if (mountedRef.current) setActionBusy(null); }
   };
@@ -304,15 +313,7 @@ const OverviewSection: React.FC = () => {
       {/* Quick actions */}
       <SectionCard title="Quick Actions" icon="⚡" accent="#ef4444"
         subtitle="Immediate platform controls — use with caution">
-        {actionMsg && (
-          <div style={{
-            padding: '8px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13, fontWeight: 600,
-            background: actionMsg.includes('failed') ? '#450a0a' : '#052e16',
-            color: actionMsg.includes('failed') ? '#f87171' : '#4ade80',
-          }}>
-            {actionMsg}
-          </div>
-        )}
+        <ActionBanner message={actionMsg} ok={actionMsgOk} />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           <ActionBtn label="View All Users"     onClick={() => navigateTo('users')}           icon="👥" variant="primary" />
           <ActionBtn label="Feature Flags"      onClick={() => navigateTo('feature-flags')}   icon="🚩" variant="primary" />
@@ -341,13 +342,7 @@ const OverviewSection: React.FC = () => {
         }>
         {infraLoading ? <LoadingRows rows={3} /> : (
           <>
-            {infraMsg && (
-              <div style={{ padding: '8px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13, fontWeight: 600,
-                background: infraMsg.includes('failed') ? '#450a0a' : '#052e16',
-                color: infraMsg.includes('failed') ? '#f87171' : '#4ade80' }}>
-                {infraMsg}
-              </div>
-            )}
+            <ActionBanner message={infraMsg} ok={infraMsgOk} />
 
             {/* Server Resources */}
             {infra.health && (
