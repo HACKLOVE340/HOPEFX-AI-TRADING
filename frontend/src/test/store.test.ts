@@ -122,7 +122,7 @@ describe('price slice', () => {
       useStore.getState().setPrice(tick('XAU/USD', 2340 + i));
     }
     const history = useStore.getState().priceHistory['XAU/USD']!;
-    expect(history[history.length - 1].mid).toBe(2340 + 209);
+    expect(history[history.length - 1]?.mid).toBe(2340 + 209);
   });
 
   it('price history is per-symbol', () => {
@@ -186,7 +186,7 @@ describe('position slice', () => {
     const updated = { ...pos('1'), unrealized_pnl: 500 };
     useStore.getState().upsertPosition(updated);
     expect(useStore.getState().positions).toHaveLength(1);
-    expect(useStore.getState().positions[0].unrealized_pnl).toBe(500);
+    expect(useStore.getState().positions[0]?.unrealized_pnl).toBe(500);
   });
 
   it('upsertPosition adds multiple positions', () => {
@@ -199,7 +199,7 @@ describe('position slice', () => {
     useStore.getState().setPositions([pos('1'), pos('2')]);
     useStore.getState().removePosition('1');
     expect(useStore.getState().positions).toHaveLength(1);
-    expect(useStore.getState().positions[0].id).toBe('2');
+    expect(useStore.getState().positions[0]?.id).toBe('2');
   });
 
   it('removePosition with unknown id is safe', () => {
@@ -211,7 +211,7 @@ describe('position slice', () => {
   it('position side can be short', () => {
     const short = { ...pos('1'), side: 'short' as const };
     useStore.getState().upsertPosition(short);
-    expect(useStore.getState().positions[0].side).toBe('short');
+    expect(useStore.getState().positions[0]?.side).toBe('short');
   });
 });
 
@@ -236,7 +236,7 @@ describe('signal slice', () => {
   it('addSignal prepends to list', () => {
     useStore.getState().setSignals([sig('1')]);
     useStore.getState().addSignal(sig('2'));
-    expect(useStore.getState().signals[0].id).toBe('2');
+    expect(useStore.getState().signals[0]?.id).toBe('2');
   });
 
   it('addSignal caps at 50', () => {
@@ -246,17 +246,17 @@ describe('signal slice', () => {
 
   it('signal direction can be short', () => {
     useStore.getState().addSignal({ ...sig('1'), direction: 'short' });
-    expect(useStore.getState().signals[0].direction).toBe('short');
+    expect(useStore.getState().signals[0]?.direction).toBe('short');
   });
 
   it('signal direction can be neutral', () => {
     useStore.getState().addSignal({ ...sig('1'), direction: 'neutral' });
-    expect(useStore.getState().signals[0].direction).toBe('neutral');
+    expect(useStore.getState().signals[0]?.direction).toBe('neutral');
   });
 
   it('signal status can be triggered', () => {
     useStore.getState().addSignal({ ...sig('1'), status: 'triggered' });
-    expect(useStore.getState().signals[0].status).toBe('triggered');
+    expect(useStore.getState().signals[0]?.status).toBe('triggered');
   });
 
   it('setSignals with empty array clears', () => {

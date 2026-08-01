@@ -150,15 +150,20 @@ export const StatusBadge: React.FC<{ status: string; size?: 'sm' | 'md' }> = ({ 
 
 // ── Severity Badge ────────────────────────────────────────────────────────────
 
+/** Fallback for an unrecognised key. Named so it is not itself an
+    index access, which `noUncheckedIndexedAccess` types as possibly
+    undefined (audit #38). Value is unchanged. */
+const SEV_COLORS_DEFAULT = { bg: '#1e293b', color: '#94a3b8' };
+
 const SEV_COLORS: Record<string, { bg: string; color: string }> = {
-  low:      { bg: '#1e293b', color: '#94a3b8' },
+  low: SEV_COLORS_DEFAULT,
   medium:   { bg: '#78350f', color: '#fbbf24' },
   high:     { bg: '#7c2d12', color: '#fb923c' },
   critical: { bg: '#450a0a', color: '#f87171' },
 };
 
 export const SeverityBadge: React.FC<{ severity: string }> = ({ severity }) => {
-  const s = SEV_COLORS[severity.toLowerCase()] ?? SEV_COLORS.low;
+  const s = SEV_COLORS[severity.toLowerCase()] ?? SEV_COLORS_DEFAULT;
   return (
     <span style={{
       display: 'inline-block',

@@ -116,7 +116,7 @@ const ProfileSection: React.FC = () => {
             {avatarPreview
               ? <img src={avatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setAvatarPreview('')} />
               : <span style={{ fontSize: 28, color: '#475569' }}>
-                  {form.username ? form.username[0].toUpperCase() : '?'}
+                  {form.username?.[0]?.toUpperCase() ?? '?'}
                 </span>
             }
           </div>

@@ -331,7 +331,10 @@ export const CommandPalette: React.FC = () => {
             </div>
           ) : (
             Object.entries(groups).map(([cat, items]) => {
-              const globalIdx = filtered.indexOf(items[0]);
+              // A group only exists because it has at least one item, but the
+              // compiler cannot see that (audit #38).
+              const firstItem = items[0];
+              const globalIdx = firstItem ? filtered.indexOf(firstItem) : -1;
               return (
                 <div key={cat}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 16px 4px' }}>

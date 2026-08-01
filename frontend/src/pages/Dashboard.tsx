@@ -150,7 +150,8 @@ function toChartPoints(curve: EquityPoint[]): ChartPoint[] {
     }))
     // Deduplicate by time key (keep last) — duplicate timestamps crash the chart
     .reduce<ChartPoint[]>((acc, pt) => {
-      if (acc.length > 0 && acc[acc.length - 1]!.time === pt.time) {
+      const prev = acc[acc.length - 1];
+      if (prev && prev.time === pt.time) {
         acc[acc.length - 1] = pt;
       } else {
         acc.push(pt);

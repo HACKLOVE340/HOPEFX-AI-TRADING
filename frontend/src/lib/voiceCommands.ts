@@ -85,7 +85,7 @@ export function parseVoiceCommand(raw: string): VoiceIntent {
     let qty = tradeMatch[2] ? resolveQuantity(tradeMatch[2]) : null;
     if (qty === null) {
       const after = low.slice(tradeMatch.index ?? 0).match(/\b([\d.]+)\s*lots?\b/);
-      if (after) qty = resolveQuantity(after[1]);
+      if (after?.[1]) qty = resolveQuantity(after[1]);
     }
     if (symbol && qty && qty > 0) {
       return { kind: 'trade', side, quantity: qty, symbol, privileged: true };

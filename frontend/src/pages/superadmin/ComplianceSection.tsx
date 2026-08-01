@@ -36,8 +36,13 @@ const apiErr = (e: unknown, fallback: string) => {
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
+/** Fallback for an unrecognised key. Named so it is not itself an
+    index access, which `noUncheckedIndexedAccess` types as possibly
+    undefined (audit #38). Value is unchanged. */
+const KYC_STATUS_COLORS_DEFAULT = { color: '#64748b', bg: '#1e293b' };
+
 const KYC_STATUS_COLORS: Record<string, { color: string; bg: string }> = {
-  unverified:   { color: '#64748b', bg: '#1e293b' },
+  unverified: KYC_STATUS_COLORS_DEFAULT,
   pending:      { color: '#fbbf24', bg: '#78350f' },
   submitted:    { color: '#60a5fa', bg: '#1e3a5f' },
   under_review: { color: '#c084fc', bg: '#2e1065' },
@@ -199,7 +204,7 @@ const ComplianceSection: React.FC = () => {
             </thead>
             <tbody>
               {kyc.map(k => {
-                const sc = KYC_STATUS_COLORS[k.kyc_status] ?? KYC_STATUS_COLORS.unverified;
+                const sc = KYC_STATUS_COLORS[k.kyc_status] ?? KYC_STATUS_COLORS_DEFAULT;
                 return (
                   <tr key={k.user_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                     <td style={{ padding: '10px 12px' }}>

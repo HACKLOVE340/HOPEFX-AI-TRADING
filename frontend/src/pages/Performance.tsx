@@ -74,13 +74,19 @@ function EquityCurveChart({ points }: { points: { t: number; v: number }[] }) {
     y: H - ((p.v - minV) / rangeV) * H,
   }));
 
+  const lastPoint = points[points.length - 1];
   const linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
   const fillPath = `${linePath} L${W},${H} L0,${H} Z`;
-  const up = values[values.length - 1] >= values[0];
+  // `points` is guaranteed non-empty by the early return above, but
+  // noUncheckedIndexedAccess (audit #38) cannot see that. Bind once rather than
+  // asserting, so an empty array degrades to a flat curve instead of throwing.
+  const firstV = values[0] ?? 0;
+  const lastV  = values[values.length - 1] ?? firstV;
+  const up = lastV >= firstV;
   const color = up ? '#00e676' : '#ff1744';
 
   const dd = computeDrawdown(values);
-  const ddCoords = dd.map((d, i) => ({ x: coords[i].x, y: H - Math.abs(d) * H * 0.4 }));
+  const ddCoords = dd.map((d, i) => ({ x: coords[i]?.x ?? 0, y: H - Math.abs(d) * H * 0.4 }));
   const ddPath = ddCoords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
 
   return (
@@ -105,7 +111,7 @@ function EquityCurveChart({ points }: { points: { t: number; v: number }[] }) {
         </span>
         <span style={{ fontSize: 10, color: '#475569', fontStyle: 'italic' }}>— — drawdown</span>
         <span style={{ fontSize: 10, color: '#475569' }}>
-          {points[points.length - 1] ? new Date(points[points.length - 1].t * 1000).toLocaleDateString() : ''}
+          {lastPoint ? new Date(lastPoint.t * 1000).toLocaleDateString() : ''}
         </span>
       </div>
     </div>
@@ -166,9 +172,13 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
 
   const bySymbol: Record<string, { count: number; pnl: number }> = {};
   for (const t of closed) {
-    if (!bySymbol[t.symbol]) bySymbol[t.symbol] = { count: 0, pnl: 0 };
-    bySymbol[t.symbol].count++;
-    bySymbol[t.symbol].pnl += t.realized_pnl;
+    // Bind the row rather than re-indexing three times: the compiler cannot
+    // carry the "just inserted it" knowledge across statements, and this reads
+    // better anyway.
+    const row = bySymbol[t.symbol] ?? { count: 0, pnl: 0 };
+    row.count++;
+    row.pnl += t.realized_pnl;
+    bySymbol[t.symbol] = row;
   }
   const symbolRows = Object.entries(bySymbol).sort((a, b) => b[1].pnl - a[1].pnl);
   const maxAbsPnl = Math.max(...symbolRows.map(([, d]) => Math.abs(d.pnl ?? 0)), 1);
@@ -302,6 +312,16 @@ const Performance: React.FC = () => {
   const equity = (equityQ.data ?? [])
     .filter((p) => p.time > 0 && p.value > 0 && p.time >= _cutoff)
     .map((p) => ({ t: p.time, v: p.value }));
+  // Period change over the equity curve. Computed once rather than indexing
+  // equity[0] and equity[length-1] five times inside JSX, where the
+  // `equity.length > 1` guard could not be carried through (audit #38).
+  const equityChange = (() => {
+    const first = equity[0];
+    const last  = equity[equity.length - 1];
+    if (!first || !last || !Number.isFinite(first.v) || first.v === 0) return null;
+    return { pct: ((last.v - first.v) / first.v) * 100 };
+  })();
+
   const trades = tradesQ.data?.trades ?? [];
   const filteredTrades = trades.filter((t) => {
     if (tradeSymbol && !t.symbol.includes(tradeSymbol.toUpperCase())) return false;
@@ -408,9 +428,9 @@ const Performance: React.FC = () => {
           <div style={s.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={s.cardTitle}>Equity Curve</h3>
-              {equity.length > 1 && Number.isFinite(equity[0].v) && equity[0].v !== 0 && (
-                <span style={{ fontSize: 12, fontWeight: 600, color: equity[equity.length-1].v >= equity[0].v ? '#00e676' : '#ff1744' }}>
-                  {equity[equity.length-1].v >= equity[0].v ? '+' : ''}{(((equity[equity.length-1].v - equity[0].v) / equity[0].v) * 100).toFixed(2)}%
+              {equityChange && (
+                <span style={{ fontSize: 12, fontWeight: 600, color: equityChange.pct >= 0 ? '#00e676' : '#ff1744' }}>
+                  {equityChange.pct >= 0 ? '+' : ''}{equityChange.pct.toFixed(2)}%
                 </span>
               )}
             </div>

@@ -761,7 +761,7 @@ describe('TradeJournal page', () => {
 
   it('switches to Mistakes tab', async () => {
     await renderTradeJournal();
-    fireEvent.click(screen.getAllByText(/mistakes/i)[0]);
+    fireEvent.click(screen.getAllByText(/mistakes/i)[0]!);
     await waitFor(() => {
       expect(screen.getAllByText(/no rule deviations/i).length).toBeGreaterThan(0);
     }, { timeout: 3000 });

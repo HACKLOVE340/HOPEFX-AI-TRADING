@@ -728,7 +728,7 @@ describe('Trading page', () => {
   it('switching to signals tab shows signals panel', async () => {
     await renderTrading();
     const sigBtns = screen.getAllByRole('button', { name: /^signals$/i });
-    fireEvent.click(sigBtns[0]);
+    fireEvent.click(sigBtns[0]!);
     expect(screen.getByText(/no signals for/i)).toBeInTheDocument();
   });
 

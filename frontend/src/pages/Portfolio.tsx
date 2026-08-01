@@ -381,7 +381,7 @@ const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: num
   // A slice covering the whole circle has identical start and end points, and an
   // SVG arc from a point to itself renders nothing — so a single-position
   // portfolio drew an empty ring. Two half-arcs describe a full circle instead.
-  const isSingleFullSlice = slices.length === 1 && slices[0]!.pct >= 99.99;
+  const isSingleFullSlice = slices.length === 1 && (slices[0]?.pct ?? 0) >= 99.99;
 
   const paths = slices.map((s, i) => {
     const angle = (s.pct / 100) * 2 * Math.PI;
@@ -394,7 +394,7 @@ const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: num
     const d = isSingleFullSlice
       ? `M${CX},${CY - R} A${R},${R} 0 1,1 ${CX - 0.01},${CY - R} Z`
       : `M${CX},${CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`;
-    return { d, color: PIE_COLORS[i % PIE_COLORS.length]!, label: s.label, pct: s.pct };
+    return { d, color: PIE_COLORS[i % PIE_COLORS.length] ?? '#64748b', label: s.label, pct: s.pct };
   });
 
   return (
@@ -422,13 +422,14 @@ const DrawdownChart: React.FC<{ equityPoints: { t: number; v: number }[] }> = ({
   );
   const W = 600; const H = 80;
   // Compute running max and drawdown %
-  let peak = equityPoints[0]!.v;
+  // `equityPoints.length < 2` returned above, but that does not narrow [0].
+  let peak = equityPoints[0]?.v ?? 0;
   const dd = equityPoints.map((p) => {
     if (p.v > peak) peak = p.v;
     return { t: p.t, dd: peak > 0 ? ((p.v - peak) / peak) * 100 : 0 };
   });
   const minDd = Math.min(...dd.map((d) => d.dd));
-  const minT  = dd[0]!.t; const maxT = dd[dd.length - 1]!.t; const rangeT = maxT - minT || 1;
+  const minT  = dd[0]?.t ?? 0; const maxT = dd[dd.length - 1]?.t ?? minT; const rangeT = maxT - minT || 1;
   const coords = dd.map((d) => ({
     x: ((d.t - minT) / rangeT) * W,
     y: minDd < 0 ? (d.dd / minDd) * H : 0,
@@ -466,7 +467,7 @@ const SymbolPnLSparklines: React.FC = () => {
   const bySymbol: Record<string, { pnl: number; side: string }[]> = {};
   for (const p of positions) {
     if (!bySymbol[p.symbol]) bySymbol[p.symbol] = [];
-    bySymbol[p.symbol]!.push({ pnl: p.unrealized_pnl, side: positionSide(p) ?? 'unknown' });
+    (bySymbol[p.symbol] ??= []).push({ pnl: p.unrealized_pnl, side: positionSide(p) ?? 'unknown' });
   }
 
   // Largest absolute per-symbol P&L, used to scale the mini bars against each
@@ -531,10 +532,10 @@ const AllocationBreakdown: React.FC = () => {
 
   const bySymbol: Record<string, { long: number; short: number }> = {};
   for (const p of positions) {
-    if (!bySymbol[p.symbol]) bySymbol[p.symbol] = { long: 0, short: 0 };
+    const row = (bySymbol[p.symbol] ??= { long: 0, short: 0 });
     const notional = p.size * p.current_price;
-    if (p.side === 'long') bySymbol[p.symbol]!.long  += notional;
-    else                   bySymbol[p.symbol]!.short += notional;
+    if (p.side === 'long') row.long  += notional;
+    else                   row.short += notional;
   }
 
   const totalNotional = Object.values(bySymbol).reduce((acc, v) => acc + v.long + v.short, 0);

@@ -21,14 +21,24 @@ const fmtPct = (n: number) => `${n.toFixed(2)}%`;
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
+/** Fallback for an unrecognised key. Named so it is not itself an
+    index access, which `noUncheckedIndexedAccess` types as possibly
+    undefined (audit #38). Value is unchanged. */
+const CB_COLORS_DEFAULT = { color: '#4ade80', bg: '#052e16' };
+
 const CB_COLORS: Record<string, { color: string; bg: string }> = {
-  closed:    { color: '#4ade80', bg: '#052e16' },
+  closed: CB_COLORS_DEFAULT,
   open:      { color: '#f87171', bg: '#450a0a' },
   half_open: { color: '#fbbf24', bg: '#78350f' },
 };
 
+/** Fallback for an unrecognised key. Named so it is not itself an
+    index access, which `noUncheckedIndexedAccess` types as possibly
+    undefined (audit #38). Value is unchanged. */
+const BREACH_SEVERITY_COLORS_DEFAULT = { color: '#fbbf24', bg: '#78350f' };
+
 const BREACH_SEVERITY_COLORS: Record<string, { color: string; bg: string }> = {
-  warning:      { color: '#fbbf24', bg: '#78350f' },
+  warning: BREACH_SEVERITY_COLORS_DEFAULT,
   breach:       { color: '#f87171', bg: '#450a0a' },
   disqualified: { color: '#dc2626', bg: '#7f1d1d' },
 };
@@ -226,7 +236,7 @@ const RiskManagementSection: React.FC = () => {
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
             {breakers.map(b => {
-              const sc = CB_COLORS[b.state] ?? CB_COLORS.closed;
+              const sc = CB_COLORS[b.state] ?? CB_COLORS_DEFAULT;
               return (
                 <div key={b.name} style={{ background: '#1e293b', borderRadius: 10, padding: '14px 16px', border: `1px solid ${sc.color}33` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -355,7 +365,7 @@ const RiskManagementSection: React.FC = () => {
                 </thead>
                 <tbody>
                   {filteredBreaches.map(b => {
-                    const sev = BREACH_SEVERITY_COLORS[b.severity] ?? BREACH_SEVERITY_COLORS.warning;
+                    const sev = BREACH_SEVERITY_COLORS[b.severity] ?? BREACH_SEVERITY_COLORS_DEFAULT;
                     return (
                       <tr key={b.breach_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                         <td style={{ padding: '10px 12px' }}>

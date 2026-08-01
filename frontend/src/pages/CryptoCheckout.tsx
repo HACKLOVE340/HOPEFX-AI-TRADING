@@ -67,8 +67,13 @@ interface PaymentStatus {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Fallback plan list used only while /api/billing/plans is loading. */
+/** The plan shown when neither the URL nor the catalogue names one. Declared
+    separately so it is not an index into FALLBACK_PLANS, which
+    noUncheckedIndexedAccess types as possibly undefined (audit #38). */
+const DEFAULT_PLAN: Plan = { id: 'starter', name: 'Starter', price_usd: 1800, features: ['3 strategies', '1 broker', 'Live trading'] };
+
 const FALLBACK_PLANS: Plan[] = [
-  { id: 'starter',      name: 'Starter',      price_usd: 1800,  features: ['3 strategies', '1 broker', 'Live trading'] },
+  DEFAULT_PLAN,
   { id: 'professional', name: 'Professional', price_usd: 4500,  features: ['7 strategies', '3 brokers', 'AI signals', 'Backtesting'] },
   { id: 'enterprise',   name: 'Enterprise',   price_usd: 7500,  features: ['Unlimited strategies', 'All brokers', 'White-label'] },
   { id: 'elite',        name: 'Elite',        price_usd: 10000, features: ['Everything in Enterprise', 'Dedicated support'] },
@@ -217,7 +222,7 @@ const CryptoCheckout: React.FC = () => {
   const [plansLoading, setPlansLoading]     = useState(true);
   const [step, setStep]                     = useState<CheckoutStep>('select');
   const [selectedPlan, setSelectedPlan]     = useState<Plan>(
-    FALLBACK_PLANS.find(p => p.id === urlPlanId) ?? FALLBACK_PLANS[0]
+    FALLBACK_PLANS.find(p => p.id === urlPlanId) ?? DEFAULT_PLAN
   );
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoOption>('BTC');
   const [usdtNetwork, setUsdtNetwork]       = useState<USDTNetwork>('TRC20');
@@ -247,7 +252,7 @@ const CryptoCheckout: React.FC = () => {
           // Re-apply URL plan selection against live data
           const match = fetched.find(p => p.id === urlPlanId);
           if (match) setSelectedPlan(match);
-          else setSelectedPlan(fetched[0]);
+          else if (fetched[0]) setSelectedPlan(fetched[0]);
         }
       })
       .catch(() => {

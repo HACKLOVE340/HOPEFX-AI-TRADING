@@ -91,10 +91,10 @@ function confColor(c: number): string {
 }
 
 function computeMA(candles: OHLCVCandle[], period: number): { time: UTCTimestamp; value: number }[] {
-  return candles.flatMap((_, i, arr) => {
+  return candles.flatMap((candle, i, arr) => {
     if (i < period - 1) return [];
     const avg = arr.slice(i - period + 1, i + 1).reduce((s, x) => s + x.close, 0) / period;
-    return [{ time: toUTC(arr[i].timestamp), value: avg }];
+    return [{ time: toUTC(candle.timestamp), value: avg }];
   });
 }
 
@@ -272,10 +272,10 @@ export function AIChart({
   // ── Live tick update — updates the current candle's close in real time ───
 
   useEffect(() => {
-    if (!tick || !candleRef.current || !candles.length) return;
     // Use the last historical bar's open time so the tick updates the current
     // candle rather than creating a phantom future candle.
-    const last = candles[candles.length - 1]!;
+    const last = candles[candles.length - 1];
+    if (!tick || !candleRef.current || !last) return;
     const barTime = toUTC(last.timestamp);
     const mid = tick.mid ?? ((tick.bid + tick.ask) / 2);
     candleRef.current.update({
@@ -364,8 +364,9 @@ export function AIChart({
   // ── OHLC stats from latest candle ─────────────────────────────────────────
 
   const stats = useMemo(() => {
-    if (!candles.length) return null;
     const last = candles[candles.length - 1];
+    // Bind then guard: a non-zero length does not narrow candles[n] (audit #38).
+    if (!last) return null;
     const prev = candles.length > 1 ? candles[candles.length - 2] : null;
     const chg  = prev ? ((last.close - prev.close) / prev.close) * 100 : 0;
     return { last, chg };

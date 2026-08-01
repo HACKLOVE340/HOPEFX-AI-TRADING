@@ -108,8 +108,10 @@ export function useVoice(lang = 'en-US'): UseVoice {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interim += r[0].transcript;
+        const alt = r?.[0];
+        if (!alt) continue;
+        if (r.isFinal) finalText += alt.transcript;
+        else interim += alt.transcript;
       }
       setTranscript((finalText || interim).trim());
       if (finalText && onFinalRef.current) onFinalRef.current(finalText.trim());

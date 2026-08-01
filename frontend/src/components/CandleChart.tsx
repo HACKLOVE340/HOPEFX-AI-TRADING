@@ -142,8 +142,8 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   // Real-time tick update — align to the current bar's open time so the tick
   // updates the existing candle rather than creating a phantom future candle.
   useEffect(() => {
-    if (!tick || !seriesRef.current || data.length === 0) return;
-    const last = data[data.length - 1]!;
+    const last = data[data.length - 1];
+    if (!tick || !seriesRef.current || !last) return;
     const mid  = (tick.bid + tick.ask) / 2;
     seriesRef.current.update({
       time:  last.time as UTCTimestamp,

@@ -10,6 +10,9 @@ import { Activity, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff, ArrowLeft } 
 import { authApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
+/** The zero-score entry, named so the fallback is not itself an index access. */
+const NO_STRENGTH = { score: 0, label: '', color: '#334155' };
+
 function measureStrength(pw: string): { score: number; label: string; color: string } {
   if (!pw) return { score: 0, label: '', color: '#334155' };
   let score = 0;
@@ -20,13 +23,15 @@ function measureStrength(pw: string): { score: number; label: string; color: str
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   score = Math.min(score, 4);
   const map = [
-    { score: 0, label: '',       color: '#334155' },
+    NO_STRENGTH,
     { score: 1, label: 'Weak',   color: '#ef4444' },
     { score: 2, label: 'Fair',   color: '#f59e0b' },
     { score: 3, label: 'Good',   color: '#3b82f6' },
     { score: 4, label: 'Strong', color: '#22c55e' },
   ];
-  return map[score];
+  // Clamp rather than index blind: an out-of-range score reports the
+  // weakest rating, never `undefined` (audit #38).
+  return map[Math.min(Math.max(score, 0), map.length - 1)] ?? NO_STRENGTH;
 }
 
 const ResetPassword: React.FC = () => {

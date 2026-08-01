@@ -242,7 +242,7 @@ describe('StrategyBuilder page', () => {
     fireEvent.click(await screen.findByText('Momentum'));
     fireEvent.click(await screen.findByText('🚀 Deploy Strategy'));
     await waitFor(() => expect(mocks.nocodeApi.deploy).toHaveBeenCalledTimes(1));
-    expect(mocks.nocodeApi.deploy.mock.calls[0][0]).toMatchObject({ template_id: 'tpl-momentum', symbol: 'XAUUSD', timeframe: 'M15' });
+    expect(mocks.nocodeApi.deploy.mock.calls[0]?.[0]).toMatchObject({ template_id: 'tpl-momentum', symbol: 'XAUUSD', timeframe: 'M15' });
     expect(await screen.findByText('Strategy deployed.')).toBeInTheDocument();
   });
 
