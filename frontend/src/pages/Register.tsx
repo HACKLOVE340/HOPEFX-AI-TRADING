@@ -124,7 +124,11 @@ function humaniseError(raw: string | undefined): string {
 const Register: React.FC = () => {
   const navigate       = useNavigate();
   const [params]       = useSearchParams();
-  const plan           = params.get('plan') ?? 'starter';
+  // No default. Arriving at /register with no ?plan= used to fall back to
+  // 'starter', so the page read "Create your free account" with a green
+  // "Starter — $1,800/mo" badge directly beneath it. Registration is free; the
+  // badge is only meaningful when the visitor actually came from a plan link.
+  const plan           = params.get('plan');
   const refCode        = params.get('ref') ?? '';
   const setAuth        = useStore((s) => s.setAuth);
 
@@ -139,7 +143,7 @@ const Register: React.FC = () => {
   const [loading,   setLoading]   = useState(false);
   const [focusField, setFocusField] = useState<string | null>(null);
 
-  const planInfo = PLAN_LABELS[plan] ?? PLAN_LABELS.starter;
+  const planInfo = plan ? PLAN_LABELS[plan] : undefined;
 
   useEffect(() => {
     const id = 'hopefx-shimmer';
@@ -244,10 +248,12 @@ const Register: React.FC = () => {
         </Link>
         <p style={s.tagline}>Create your free account</p>
 
-        {/* Plan badge */}
-        <div style={{ ...s.planBadge, border: `1px solid ${planInfo.color}`, color: planInfo.color }}>
-          {planInfo.label}
-        </div>
+        {/* Plan badge — only when the visitor arrived from a plan link. */}
+        {planInfo && (
+          <div style={{ ...s.planBadge, border: `1px solid ${planInfo.color}`, color: planInfo.color }}>
+            {planInfo.label}
+          </div>
+        )}
 
         {success ? (
           <div style={s.successBox}>

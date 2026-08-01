@@ -378,6 +378,11 @@ const PIE_COLORS = ['#3b82f6','#00e676','#f59e0b','#a78bfa','#f87171','#38bdf8',
 const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: number }[] }> = ({ slices }) => {
   const R = 60; const CX = 80; const CY = 80;
   let cumAngle = -Math.PI / 2;
+  // A slice covering the whole circle has identical start and end points, and an
+  // SVG arc from a point to itself renders nothing — so a single-position
+  // portfolio drew an empty ring. Two half-arcs describe a full circle instead.
+  const isSingleFullSlice = slices.length === 1 && slices[0]!.pct >= 99.99;
+
   const paths = slices.map((s, i) => {
     const angle = (s.pct / 100) * 2 * Math.PI;
     const x1 = CX + R * Math.cos(cumAngle);
@@ -386,7 +391,10 @@ const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: num
     const x2 = CX + R * Math.cos(cumAngle);
     const y2 = CY + R * Math.sin(cumAngle);
     const large = angle > Math.PI ? 1 : 0;
-    return { d: `M${CX},${CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`, color: PIE_COLORS[i % PIE_COLORS.length]!, label: s.label, pct: s.pct };
+    const d = isSingleFullSlice
+      ? `M${CX},${CY - R} A${R},${R} 0 1,1 ${CX - 0.01},${CY - R} Z`
+      : `M${CX},${CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`;
+    return { d, color: PIE_COLORS[i % PIE_COLORS.length]!, label: s.label, pct: s.pct };
   });
 
   return (
@@ -402,15 +410,6 @@ const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: num
           {slices.length} pos
         </text>
       </svg>
-      <div className="flex flex-col gap-1.5">
-        {paths.map((p, i) => (
-          <div key={i} className="flex items-center gap-2 text-[11px]">
-            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: p.color }} />
-            <span className="text-slate-300 font-medium w-16">{p.label}</span>
-            <span className="text-slate-500 tabular-nums">{p.pct.toFixed(1)}%</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };
@@ -470,6 +469,15 @@ const SymbolPnLSparklines: React.FC = () => {
     bySymbol[p.symbol]!.push({ pnl: p.unrealized_pnl, side: p.side });
   }
 
+  // Largest absolute per-symbol P&L, used to scale the mini bars against each
+  // other rather than against a fixed dollar figure.
+  const maxAbsPnl = Math.max(
+    ...Object.values(bySymbol).map((entries) =>
+      Math.abs(entries.reduce((sum, e) => sum + e.pnl, 0)),
+    ),
+    0,
+  );
+
   return (
     <Panel title="Open Positions — P&L by Symbol">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -491,12 +499,16 @@ const SymbolPnLSparklines: React.FC = () => {
                   </span>
                 ))}
               </div>
-              {/* Mini P&L bar */}
+              {/* Mini P&L bar. Scaled against the largest absolute P&L on the
+                  page, so the bars compare positions to each other. The
+                  denominator used to be a hardcoded $100, which pegged every
+                  position over $100 at full width — on a real account that is
+                  all of them, and the bar carried no information. */}
               <div className="h-1 rounded bg-[#1e2d3d] overflow-hidden mt-1">
                 <div
                   className="h-1 rounded transition-all"
                   style={{
-                    width: `${Math.min(Math.abs(totalPnl) / 100 * 100, 100)}%`,
+                    width: `${maxAbsPnl > 0 ? Math.min((Math.abs(totalPnl) / maxAbsPnl) * 100, 100) : 0}%`,
                     background: isPos ? '#00e676' : '#ff1744',
                     marginLeft: isPos ? 0 : 'auto',
                   }}

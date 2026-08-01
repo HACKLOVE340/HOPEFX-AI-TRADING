@@ -673,7 +673,11 @@ const App: React.FC = () => (
                 {/* /pricing = public marketing pricing page for unauthenticated visitors */}
                 {/* /upgrade = authenticated plan upgrade page (inside AppShell) */}
                 <Route path="/pricing"         element={<PricingPage />} />
-                <Route path="/docs"            element={<DocsPage />} />
+                {/* /docs is NOT registered here. It was, and this outer group
+                    matches first, so it shadowed the AppShell registration
+                    below and logged-in users never got the sidebar the comment
+                    there promises. AppShell's own /docs route sits above its 404
+                    fallback, so anonymous visitors still reach the page. */}
                 <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
                 <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
                 <Route path="/privacy"         element={<PrivacyPolicy />} />

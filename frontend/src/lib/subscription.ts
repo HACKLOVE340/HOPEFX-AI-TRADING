@@ -55,6 +55,17 @@ function aliasRank(alias: PlanAlias): number {
   return PLAN_RANK[normalisePlan(alias)];
 }
 
+/**
+ * Rank of any plan string, normalising aliases and unknown values first.
+ *
+ * Use this rather than indexing PLAN_RANK directly with a `string` — Settings
+ * kept its own untyped copy of the table specifically to avoid that friction,
+ * which is how a second source of truth got created.
+ */
+export function planRank(plan: string | null | undefined): number {
+  return PLAN_RANK[normalisePlan(plan ?? 'free')];
+}
+
 export const ROLE_RANK: Record<UserRole, number> = {
   user:       0,
   trader:     1,

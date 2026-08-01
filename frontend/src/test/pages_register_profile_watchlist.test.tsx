@@ -359,9 +359,11 @@ describe('Register page', () => {
     expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument();
   });
 
-  it('shows starter plan badge by default', async () => {
+  it('shows no plan badge when the visitor did not come from a plan link', async () => {
+    // The page says "Create your free account". Defaulting the badge to
+    // "Starter — $1,800/mo" put a real price point directly under that.
     await renderRegister();
-    expect(screen.getByText(/starter/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\$1,800\/mo/)).not.toBeInTheDocument();
   });
 
   it('shows professional plan badge when ?plan=professional', async () => {
