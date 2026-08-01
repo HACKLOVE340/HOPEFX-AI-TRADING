@@ -334,6 +334,7 @@ const TradingEngineSection: React.FC = () => {
 const DecisionEnginePanel: React.FC = () => {
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadErr, setLoadErr] = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -344,7 +345,10 @@ const DecisionEnginePanel: React.FC = () => {
       const res = await superadminApi.engineStatus();
       if (!mountedRef.current) return;
       setStatus(res.data);
-    } catch { /* non-fatal */ }
+      setLoadErr('');
+    } catch (e) {
+      if (mountedRef.current) setLoadErr(extractApiError(e, 'Failed to load decision-engine status'));
+    }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -373,6 +377,7 @@ const DecisionEnginePanel: React.FC = () => {
             {loading ? '…' : '↻'}
           </button>
         </div>
+        {loadErr && <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {phases.map(p => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
@@ -400,12 +405,14 @@ const DecisionEnginePanel: React.FC = () => {
 
       <SectionCard title="Gatekeeper Checks (11)" icon="🛡️" accent="#22c55e">
         <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
-          All 11 checks must pass before any trade is executed. Failures are logged to the audit trail.
+          Reference list of the checks the gatekeeper applies — all 11 must pass before any trade is
+          executed, and failures are logged to the audit trail. This panel does not report live check
+          state; see the engine status above.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
           {gatekeeperChecks.map((check, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b' }}>
-              <span style={{ color: '#22c55e', fontSize: 14 }}>✓</span>
+              <span style={{ color: '#475569', fontSize: 14 }}>•</span>
               <span style={{ fontSize: 12, color: '#94a3b8' }}>{check}</span>
             </div>
           ))}

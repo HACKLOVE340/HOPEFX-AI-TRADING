@@ -119,6 +119,11 @@ function humaniseError(raw: string | undefined): string {
   return raw.length > 120 ? 'Registration failed. Please check your details and try again.' : raw;
 }
 
+/** Affiliate code stashed by LandingPage when the visitor arrived via `/?ref=`. */
+function readStoredRef(): string {
+  try { return sessionStorage.getItem('hopefx_ref') ?? ''; } catch { return ''; }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const Register: React.FC = () => {
@@ -129,7 +134,10 @@ const Register: React.FC = () => {
   // "Starter — $1,800/mo" badge directly beneath it. Registration is free; the
   // badge is only meaningful when the visitor actually came from a plan link.
   const plan           = params.get('plan');
-  const refCode        = params.get('ref') ?? '';
+  // Accept the code from the URL, or from the landing page's sessionStorage
+  // capture — links already shared in the wild point at `/?ref=CODE`, which lands
+  // on LandingPage rather than here.
+  const refCode        = params.get('ref') ?? readStoredRef();
   const setAuth        = useStore((s) => s.setAuth);
 
   const [email,     setEmail]     = useState('');
@@ -142,6 +150,7 @@ const Register: React.FC = () => {
   const [success,   setSuccess]   = useState('');
   const [loading,   setLoading]   = useState(false);
   const [focusField, setFocusField] = useState<string | null>(null);
+  const [trialWarning, setTrialWarning] = useState('');
 
   const planInfo = plan ? PLAN_LABELS[plan] : undefined;
 
@@ -210,7 +219,14 @@ const Register: React.FC = () => {
         try {
           await authApi.activateFreeTier(refCode || undefined);
         } catch (tierErr: unknown) {
-          console.warn('[Register] Free tier activation failed (non-fatal):', tierErr);
+          // Non-fatal for navigation, but not invisible: without the trial the
+          // user lands on a dashboard where every gated feature shows an upgrade
+          // wall, and nothing explains why — they were never told a trial existed.
+          console.warn('[Register] Free tier activation failed:', tierErr);
+          setTrialWarning(
+            "Your account was created, but we couldn't start your free trial. " +
+            'Contact support and we will activate it.'
+          );
         }
 
         // Warm CSRF cache before navigating so the first POST after registration
@@ -379,6 +395,22 @@ const Register: React.FC = () => {
               <div style={s.error} role="alert">
                 <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {/* The account exists but the trial did not start — say so rather
+                than dropping the user on a dashboard of upgrade walls. */}
+            {trialWarning && (
+              <div
+                role="status"
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                  background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
+                  padding: '10px 14px', color: '#fbbf24', fontSize: 13, marginBottom: 16,
+                }}
+              >
+                <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{trialWarning}</span>
               </div>
             )}
 

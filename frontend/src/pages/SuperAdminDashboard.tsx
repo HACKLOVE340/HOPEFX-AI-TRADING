@@ -83,7 +83,9 @@ const GROUP_LABELS: Record<string, string> = {
 };
 
 const REFRESH_INTERVAL = 30;
-const KillSwitchConfirm: React.FC<{ currentlyActive: boolean; onConfirm: () => void; onCancel: () => void; }> = ({ currentlyActive, onConfirm, onCancel }) => {
+const KillSwitchConfirm: React.FC<{
+  currentlyActive: boolean; statusUnknown?: boolean; onConfirm: () => void; onCancel: () => void;
+}> = ({ currentlyActive, statusUnknown = false, onConfirm, onCancel }) => {
   const [typed, setTyped] = useState('');
   const required = currentlyActive ? 'RESUME TRADING' : 'KILL SWITCH';
   useEffect(() => {
@@ -106,6 +108,13 @@ const KillSwitchConfirm: React.FC<{ currentlyActive: boolean; onConfirm: () => v
             ? 'This will re-enable the trading engine and allow new positions to be opened.'
             : 'This will immediately halt all trading activity, close open positions, and block new orders.'}
         </div>
+        {statusUnknown && (
+          <div className="bg-amber-950/50 border border-amber-700 rounded-lg px-3 py-2 mb-4 text-amber-300 text-xs leading-relaxed" role="alert">
+            The engine status could not be read, so the current kill-switch state is unknown. This
+            action will <strong>halt</strong> trading — the safe direction. Resume is unavailable until
+            status can be confirmed.
+          </div>
+        )}
         <div className="bg-terminal-bg border border-terminal-border rounded-lg px-3 py-3 mb-4">
           <div className="text-slate-500 text-xs mb-2">
             Type <strong className={`font-mono ${currentlyActive ? 'text-green-400' : 'text-red-400'}`}>{required}</strong> to confirm:
@@ -176,15 +185,32 @@ interface EngineHealth {
   mode: string; positions_open: number; heartbeat_ok: boolean;
 }
 
-function useEngineHealth(): EngineHealth | null {
+/**
+ * Engine health for the header badge.
+ *
+ * The badge drives an operator's mental model of whether the engine is running
+ * and whether the kill switch is on, so a failed poll must never keep rendering
+ * as a confirmed green state. We expose the fetch error and the timestamp of the
+ * last *successful* read, and the badge degrades to "unconfirmed" on failure.
+ */
+function useEngineHealth(): {
+  health: EngineHealth | null; error: string; okAt: number | null; refresh: () => Promise<void>;
+} {
   const [health, setHealth] = useState<EngineHealth | null>(null);
+  const [error, setError] = useState('');
+  const [okAt, setOkAt] = useState<number | null>(null);
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const fetchHealth = useCallback(async () => {
     try {
       const res = await superadminApi.engineStatus();
-      if (mountedRef.current) setHealth(res.data as EngineHealth);
-    } catch { /* non-fatal */ }
+      if (!mountedRef.current) return;
+      setHealth(res.data as EngineHealth);
+      setOkAt(Date.now());
+      setError('');
+    } catch (e) {
+      if (mountedRef.current) setError(extractApiError(e, 'Engine status unreachable'));
+    }
   }, []);
   useEffect(() => { fetchHealth(); }, [fetchHealth]);
   useEffect(() => {
@@ -194,7 +220,7 @@ function useEngineHealth(): EngineHealth | null {
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
   }, [fetchHealth]);
-  return health;
+  return { health, error, okAt, refresh: fetchHealth };
 }
 const SuperAdminDashboard: React.FC = () => {
   const user = useStore(selectUser);
@@ -207,7 +233,15 @@ const SuperAdminDashboard: React.FC = () => {
   const [togglingKill, setTogglingKill]   = useState(false);
   const [killErr, setKillErr]             = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const engineHealth = useEngineHealth();
+  const {
+    health: engineHealth,
+    error: engineHealthErr,
+    okAt: engineHealthOkAt,
+    refresh: refreshEngineHealth,
+  } = useEngineHealth();
+  // "Confirmed" means the most recent poll succeeded. Anything else is unknown,
+  // not "off".
+  const engineStatusConfirmed = engineHealth != null && !engineHealthErr;
 
   useEffect(() => { setSectionLoadedAt(new Date()); setCountdown(REFRESH_INTERVAL); }, [activeTab]);
 
@@ -225,13 +259,17 @@ const SuperAdminDashboard: React.FC = () => {
   const handleKillSwitch = async () => {
     setTogglingKill(true); setKillErr('');
     try {
-      if (engineHealth?.kill_switch_active) {
+      // Resume only on a *confirmed* active kill switch. If the last status read
+      // failed we do not know the current state, and the safe direction under
+      // uncertainty is always to halt — never to resume trading on a stale read.
+      if (engineStatusConfirmed && engineHealth?.kill_switch_active) {
         await superadminApi.resumeTrading?.();
       } else {
         await superadminApi.killSwitch?.(true);
       }
       setShowKillConfirm(false);
-    } catch { setKillErr('Kill switch toggle failed'); }
+      await refreshEngineHealth();
+    } catch (e) { setKillErr(extractApiError(e, 'Kill switch toggle failed')); }
     finally { setTogglingKill(false); }
   };
 
@@ -247,7 +285,7 @@ const SuperAdminDashboard: React.FC = () => {
   if (!isSuperAdmin(user.role)) return null;
 
   const activeTabDef = TABS.find(t => t.id === activeTab) ?? TABS[0]!;
-  const killSwitchActive = engineHealth?.kill_switch_active ?? false;
+  const killSwitchActive = engineStatusConfirmed && (engineHealth?.kill_switch_active ?? false);
   const navCtx = { navigateTo: setActiveTab };
 
   const renderSection = () => {
@@ -326,6 +364,7 @@ const SuperAdminDashboard: React.FC = () => {
       {showKillConfirm && (
         <KillSwitchConfirm
           currentlyActive={killSwitchActive}
+          statusUnknown={!engineStatusConfirmed}
           onConfirm={() => void handleKillSwitch()}
           onCancel={() => setShowKillConfirm(false)}
         />
@@ -367,7 +406,7 @@ const SuperAdminDashboard: React.FC = () => {
 
             {/* Right: engine health + live indicator */}
             <div className="flex items-center gap-2 flex-wrap">
-              {engineHealth ? (
+              {engineHealth && !engineHealthErr ? (
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs ${
                   killSwitchActive
                     ? 'bg-red-950/60 border-red-700'
@@ -388,6 +427,21 @@ const SuperAdminDashboard: React.FC = () => {
                       · {engineHealth.mode} · {engineHealth.positions_open} pos
                     </span>
                   )}
+                </div>
+              ) : engineHealthErr ? (
+                /* Never show a confirmed-looking state we could not confirm. */
+                <div
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-700 bg-amber-950/60 text-xs"
+                  role="alert"
+                  title={engineHealthErr}
+                >
+                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-amber-400 animate-pulse" />
+                  <span className="font-bold text-amber-300">ENGINE STATUS UNKNOWN</span>
+                  <span className="text-amber-500/80 hidden sm:inline">
+                    · {engineHealthOkAt
+                      ? `last confirmed ${new Date(engineHealthOkAt).toLocaleTimeString()}`
+                      : 'never reached'}
+                  </span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-terminal-border bg-terminal-raised text-xs text-slate-500">

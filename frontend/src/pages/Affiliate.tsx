@@ -119,7 +119,7 @@ const Affiliate:React.FC=()=>{
 
   const copyLink=()=>{
     if(!account)return;
-    navigator.clipboard.writeText(`${window.location.origin}/?ref=${account.code}`).then(()=>{setCopied(true);if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);});
+    navigator.clipboard.writeText(referralLink).then(()=>{setCopied(true);if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);});
   };
 
   if(!userId)return(<div className="page-content"><p style={{color:'#94a3b8'}}>Please log in to view your affiliate dashboard.</p></div>);
@@ -138,7 +138,10 @@ const Affiliate:React.FC=()=>{
     </div>
   );
 
-  const referralLink=`${window.location.origin}/?ref=${account.code}`;
+  // /register?ref= is the only URL that attributes without relying on the landing
+  // page to forward the code. The backend's generate_referral_link now emits the
+  // same shape.
+  const referralLink=`${window.location.origin}/register?ref=${account.code}`;
   return(
     <div className="page-content">
       <div style={st.pageHeader}>

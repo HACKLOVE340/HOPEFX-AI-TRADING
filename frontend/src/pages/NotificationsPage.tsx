@@ -12,7 +12,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase, fmtDateTime } from '../lib/utils';
+import { getWsBase, fmtDateTime, extractApiError } from '../lib/utils';
+import { ActionBanner } from '../components/ActionBanner';
 import { useVoice } from '../hooks/useVoice';
 import { useVoiceAlerts } from '../lib/voicePrefs';
 
@@ -46,6 +47,9 @@ const NotificationsPage: React.FC = () => {
   const [hasMore, setHasMore]     = useState(false);
   const [filter, setFilter]       = useState<'all' | 'unread'>('all');
   const [markingAll, setMarkingAll] = useState(false);
+  // A failed list load must not render as "No notifications", and a failed
+  // mark-read/delete must not look like a no-op click.
+  const [err, setErr] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
   const token = useStore(s => s.token);
@@ -65,7 +69,10 @@ const NotificationsPage: React.FC = () => {
       setItems(pg === 1 ? notifs : prev => [...prev, ...notifs]);
       setHasMore(more);
       setPage(pg);
-    } catch { /* non-fatal */ }
+      setErr('');
+    } catch (e) {
+      if (mountedRef.current) setErr(extractApiError(e, 'Could not load notifications'));
+    }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -94,7 +101,10 @@ const NotificationsPage: React.FC = () => {
     try {
       await notificationsApi.markRead(id);
       setItems(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    } catch { /* non-fatal */ }
+      setErr('');
+    } catch (e) {
+      setErr(extractApiError(e, 'Could not mark that notification as read'));
+    }
   };
 
   const markAllRead = async () => {
@@ -102,7 +112,10 @@ const NotificationsPage: React.FC = () => {
     try {
       await notificationsApi.markAllRead();
       setItems(prev => prev.map(n => ({ ...n, read: true })));
-    } catch { /* non-fatal */ }
+      setErr('');
+    } catch (e) {
+      setErr(extractApiError(e, 'Could not mark all notifications as read'));
+    }
     finally { setMarkingAll(false); }
   };
 
@@ -110,7 +123,10 @@ const NotificationsPage: React.FC = () => {
     try {
       await notificationsApi.delete(id);
       setItems(prev => prev.filter(n => n.id !== id));
-    } catch { /* non-fatal */ }
+      setErr('');
+    } catch (e) {
+      setErr(extractApiError(e, 'Could not delete that notification'));
+    }
   };
 
   const unreadCount = items.filter(n => !n.read).length;
@@ -172,11 +188,13 @@ const NotificationsPage: React.FC = () => {
         </div>
       </div>
 
+      <ActionBanner message={err} ok={false} onDismiss={() => setErr('')} />
+
       {/* List */}
       {loading && page === 1 && (
         <div style={{ textAlign: 'center', color: '#64748b', padding: 48 }}>Loading…</div>
       )}
-      {!loading && items.length === 0 && (
+      {!loading && items.length === 0 && !err && (
         <div style={{ textAlign: 'center', color: '#475569', padding: 64 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔔</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: '#64748b' }}>No notifications</div>

@@ -8,6 +8,7 @@ import {
   StatusBadge, Divider, SaveBar,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2062,6 +2063,9 @@ const InfrastructureTab: React.FC = () => {
   const [flushPattern, setFlushPattern] = React.useState('');
   const [flushing, setFlushing]       = React.useState(false);
   const [msg, setMsg]                 = React.useState('');
+  const [msgOk, setMsgOk]             = React.useState(false);
+  const [loadErr, setLoadErr]         = React.useState('');
+  const [confirmFlushAll, setConfirmFlushAll] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -2072,24 +2076,36 @@ const InfrastructureTab: React.FC = () => {
         superadminApi.dbStats(),
         superadminApi.queueStats(),
       ]);
-      if (h.status === 'fulfilled') setInfraHealth(h.value.data);
-      if (c.status === 'fulfilled') setCacheStats(c.value.data);
-      if (d.status === 'fulfilled') setDbStats(d.value.data);
-      if (q.status === 'fulfilled') setQueueStats(q.value.data);
-    } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+      const failed: string[] = [];
+      if (h.status === 'fulfilled') setInfraHealth(h.value.data); else failed.push('infrastructure health');
+      if (c.status === 'fulfilled') setCacheStats(c.value.data); else failed.push('cache stats');
+      if (d.status === 'fulfilled') setDbStats(d.value.data); else failed.push('database stats');
+      if (q.status === 'fulfilled') setQueueStats(q.value.data); else failed.push('queue stats');
+      // An absent panel means "could not read", not "nothing to report".
+      setLoadErr(failed.length ? `Could not load: ${failed.join(', ')}.` : '');
+    } finally { setLoading(false); }
   }, []);
 
   React.useEffect(() => { load(); }, [load]);
 
   const flushCache = async () => {
-    setFlushing(true); setMsg('');
+    setFlushing(true); setMsg(''); setConfirmFlushAll(false);
     try {
       await superadminApi.flushCache(flushPattern || undefined);
       setMsg(`Cache flushed${flushPattern ? ` (pattern: ${flushPattern})` : ' (all keys)'}`);
+      setMsgOk(true);
       setTimeout(load, 500);
-    } catch { setMsg('Cache flush failed'); }
+    } catch (e) {
+      setMsg(extractApiError(e, 'Cache flush failed'));
+      setMsgOk(false);
+    }
     finally { setFlushing(false); }
+  };
+
+  /** Flushing every key is unscoped and unrecoverable — make it a two-step action. */
+  const requestFlush = () => {
+    if (flushPattern.trim()) { void flushCache(); return; }
+    setConfirmFlushAll(true);
   };
 
   const statusColor = (s: string) =>
@@ -2104,6 +2120,7 @@ const InfrastructureTab: React.FC = () => {
             {loading ? '…' : '↻ Refresh'}
           </Button>
         </div>
+        {loadErr && <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />}
         {infraHealth && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
             {Object.entries(infraHealth as Record<string, { status?: string; latency_ms?: number; detail?: string }>).map(([key, val]) => {
@@ -2160,11 +2177,34 @@ const InfrastructureTab: React.FC = () => {
               onChange={(e) => setFlushPattern(e.target.value)}
             />
           </Field>
-          <Button onClick={flushCache} disabled={flushing} variant="danger" style={{ marginBottom: 20 }}>
+          <Button onClick={requestFlush} disabled={flushing} variant="danger" style={{ marginBottom: 20 }}>
             {flushing ? 'Flushing…' : '🗑️ Flush Cache'}
           </Button>
         </div>
-        {msg && <div style={{ fontSize: 13, color: '#94a3b8', padding: '8px 12px', background: '#1e293b', borderRadius: 6 }}>{msg}</div>}
+        {confirmFlushAll && (
+          <div
+            role="alertdialog"
+            aria-label="Confirm full cache flush"
+            style={{
+              background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8,
+              padding: '12px 14px', marginBottom: 12,
+            }}
+          >
+            <div style={{ fontSize: 13, color: '#fecaca', marginBottom: 10 }}>
+              No pattern set — this will evict <strong>every key</strong> in Redis, including live
+              sessions and cached market data. Continue?
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={flushCache} disabled={flushing} variant="danger" size="sm">
+                {flushing ? 'Flushing…' : 'Yes, flush all keys'}
+              </Button>
+              <Button onClick={() => setConfirmFlushAll(false)} variant="secondary" size="sm">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+        <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
       </Card>
 
       <Card>
@@ -2206,12 +2246,18 @@ const DiagnosticsTab: React.FC = () => {
   const [running, setRunning] = React.useState(false);
   const [remediating, setRemediating] = React.useState(false);
   const [msg, setMsg] = React.useState('');
+  const [msgOk, setMsgOk] = React.useState(false);
+  const [summaryErr, setSummaryErr] = React.useState('');
+  const [confirmRemediate, setConfirmRemediate] = React.useState(false);
 
   const loadSummary = React.useCallback(async () => {
     try {
       const res = await superadminApi.diagnosticsSummary();
       setSummary(res.data);
-    } catch { /* non-fatal */ }
+      setSummaryErr('');
+    } catch (e) {
+      setSummaryErr(extractApiError(e, 'Failed to load the diagnostics summary'));
+    }
   }, []);
 
   React.useEffect(() => { loadSummary(); }, [loadSummary]);
@@ -2221,23 +2267,41 @@ const DiagnosticsTab: React.FC = () => {
     try {
       await superadminApi.diagnosticsRun();
       setMsg('Diagnostic run started — polling for results…');
-      setTimeout(async () => {
-        const res = await superadminApi.diagnosticsReport();
-        setReport(res.data);
-        loadSummary();
-        setMsg('');
+      setMsgOk(true);
+      setTimeout(() => {
+        // The fetch of the finished report can fail on its own; without this the
+        // banner sits on "polling for results…" forever and the rejection is
+        // unhandled.
+        void (async () => {
+          try {
+            const res = await superadminApi.diagnosticsReport();
+            setReport(res.data);
+            await loadSummary();
+            setMsg('');
+          } catch (e) {
+            setMsg(extractApiError(e, 'Diagnostics ran, but the report could not be fetched'));
+            setMsgOk(false);
+          }
+        })();
       }, 4000);
-    } catch { setMsg('Failed to start diagnostic run'); }
+    } catch (e) {
+      setMsg(extractApiError(e, 'Failed to start diagnostic run'));
+      setMsgOk(false);
+    }
     finally { setRunning(false); }
   };
 
   const remediate = async () => {
-    setRemediating(true); setMsg('');
+    setRemediating(true); setMsg(''); setConfirmRemediate(false);
     try {
       const res = await superadminApi.diagnosticsRemediate();
       setMsg(`Remediation complete — ${res.data.actions_taken} action(s) taken`);
+      setMsgOk(true);
       loadSummary();
-    } catch { setMsg('Remediation failed'); }
+    } catch (e) {
+      setMsg(extractApiError(e, 'Remediation failed'));
+      setMsgOk(false);
+    }
     finally { setRemediating(false); }
   };
 
@@ -2253,10 +2317,34 @@ const DiagnosticsTab: React.FC = () => {
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
           <Button onClick={runDiag} disabled={running}>{running ? 'Running…' : '▶ Run Full Diagnostics'}</Button>
-          <Button onClick={remediate} disabled={remediating} variant="secondary">{remediating ? 'Remediating…' : '🔧 Auto-Remediate'}</Button>
+          <Button onClick={() => setConfirmRemediate(true)} disabled={remediating} variant="secondary">{remediating ? 'Remediating…' : '🔧 Auto-Remediate'}</Button>
           <Button onClick={loadSummary} variant="secondary">↻ Refresh</Button>
         </div>
-        {msg && <div style={{ padding: '8px 12px', borderRadius: 6, background: '#1e293b', color: '#94a3b8', fontSize: 13, marginBottom: 12 }}>{msg}</div>}
+        {confirmRemediate && (
+          <div
+            role="alertdialog"
+            aria-label="Confirm auto-remediation"
+            style={{
+              background: '#451a03', border: '1px solid #d97706', borderRadius: 8,
+              padding: '12px 14px', marginBottom: 12,
+            }}
+          >
+            <div style={{ fontSize: 13, color: '#fed7aa', marginBottom: 10 }}>
+              Auto-remediation applies corrective actions to live platform state without a preview.
+              Run it now?
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={remediate} disabled={remediating} size="sm">
+                {remediating ? 'Remediating…' : 'Yes, remediate'}
+              </Button>
+              <Button onClick={() => setConfirmRemediate(false)} variant="secondary" size="sm">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+        {summaryErr && <ActionBanner message={summaryErr} ok={false} onDismiss={() => setSummaryErr('')} />}
+        <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
         {summary && (
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {[
