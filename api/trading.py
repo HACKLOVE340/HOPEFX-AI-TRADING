@@ -2557,10 +2557,6 @@ def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
 _YF_TICKER_EXTRA: dict[str, str] = {"US500": "", "UKOIL": ""}
 
 
-class _NoYFinanceTicker(Exception):
-    """Symbol is configured with no yfinance ticker — skip the source, not an error."""
-
-
 @lru_cache(maxsize=1)
 def _yf_ticker_map() -> dict[str, str]:
     """Canonical symbol → yfinance ticker, read from ``multi_source_feed.yaml``.
@@ -2653,80 +2649,84 @@ async def get_ohlcv(
 
     # ── Direct yfinance fallback ──────────────────────────────────────────────
     # Used when price engine is unavailable or returns flat bars.
-    try:
-        import yfinance as _yf
+    #
+    # The ticker is resolved *before* the try block on purpose. An empty mapping
+    # entry means "Yahoo does not serve this instrument" — a configured fact, not
+    # a failure — so it must not travel through the `except Exception` below,
+    # which would log it as a fallback error. `_yf_ticker_map` handles its own
+    # I/O errors and always returns a dict, so this lookup cannot raise.
+    ticker_sym = _yf_ticker_map().get(symbol, symbol)
+    if not ticker_sym:
+        # Skip the fetch rather than spend the 20s timeout on a ticker known to
+        # return nothing; fall through to the CSV history / 503 below.
+        logger.info("OHLCV: no yfinance ticker configured for %s — skipping to next source", symbol)
+    else:
+        try:
+            import yfinance as _yf
 
-        # Map timeframe → (yfinance interval, fetch period).
-        # Periods are capped to avoid slow downloads; 4h is resampled from 1h.
-        # yfinance only provides 1h data for up to 730 days but fetching that
-        # much is slow — cap at 60d which gives ~1440 bars (enough for any chart).
-        _TF_MAP = {
-            "1m": ("1m", "7d"),
-            "5m": ("5m", "60d"),
-            "15m": ("15m", "60d"),
-            "30m": ("30m", "60d"),
-            "1h": ("1h", "60d"),  # ~1440 bars — fast, plenty of history
-            "4h": ("1h", "60d"),  # fetch 1h then resample → 4h
-            "1d": ("1d", "max"),  # full daily history (gold back to ~2000)
-            "1w": ("1wk", "max"),  # full weekly history
-        }
-        ticker_sym = _yf_ticker_map().get(symbol, symbol)
-        if not ticker_sym:
-            # Configured as "no Yahoo source" — skip the fetch rather than spend
-            # the 20s timeout on a ticker known to return nothing.
-            logger.info("OHLCV: no yfinance ticker configured for %s — skipping to next source", symbol)
-            raise _NoYFinanceTicker(symbol)
-        interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
-        resample_4h = timeframe == "4h"
+            # Map timeframe → (yfinance interval, fetch period).
+            # Periods are capped to avoid slow downloads; 4h is resampled from 1h.
+            # yfinance only provides 1h data for up to 730 days but fetching that
+            # much is slow — cap at 60d which gives ~1440 bars (enough for any chart).
+            _TF_MAP = {
+                "1m": ("1m", "7d"),
+                "5m": ("5m", "60d"),
+                "15m": ("15m", "60d"),
+                "30m": ("30m", "60d"),
+                "1h": ("1h", "60d"),  # ~1440 bars — fast, plenty of history
+                "4h": ("1h", "60d"),  # fetch 1h then resample → 4h
+                "1d": ("1d", "max"),  # full daily history (gold back to ~2000)
+                "1w": ("1wk", "max"),  # full weekly history
+            }
+            interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
+            resample_4h = timeframe == "4h"
 
-        loop = asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()
 
-        def _fetch_yf() -> list:
-            t = _yf.Ticker(ticker_sym)
-            # NB: no `progress=` argument — that is a yf.download() parameter.
-            # Ticker.history() rejects it with TypeError before any network I/O,
-            # which silently disabled this entire fallback for every symbol.
-            df = t.history(period=period, interval=interval, auto_adjust=True)
-            if df.empty:
-                return []
-            # Resample 1h → 4h when requested
-            if resample_4h:
-                df = (
-                    df.resample("4h")
-                    .agg(
+            def _fetch_yf() -> list:
+                t = _yf.Ticker(ticker_sym)
+                # NB: no `progress=` argument — that is a yf.download() parameter.
+                # Ticker.history() rejects it with TypeError before any network I/O,
+                # which silently disabled this entire fallback for every symbol.
+                df = t.history(period=period, interval=interval, auto_adjust=True)
+                if df.empty:
+                    return []
+                # Resample 1h → 4h when requested
+                if resample_4h:
+                    df = (
+                        df.resample("4h")
+                        .agg(
+                            {
+                                "Open": "first",
+                                "High": "max",
+                                "Low": "min",
+                                "Close": "last",
+                                "Volume": "sum",
+                            }
+                        )
+                        .dropna(subset=["Open", "Close"])
+                    )
+                df = df.tail(limit)
+                bars = []
+                for ts, row in df.iterrows():
+                    bars.append(
                         {
-                            "Open": "first",
-                            "High": "max",
-                            "Low": "min",
-                            "Close": "last",
-                            "Volume": "sum",
+                            "timestamp": int(ts.timestamp()),
+                            "open": round(float(row["Open"]), 5),
+                            "high": round(float(row["High"]), 5),
+                            "low": round(float(row["Low"]), 5),
+                            "close": round(float(row["Close"]), 5),
+                            "volume": round(float(row.get("Volume", 0)), 2),
                         }
                     )
-                    .dropna(subset=["Open", "Close"])
-                )
-            df = df.tail(limit)
-            bars = []
-            for ts, row in df.iterrows():
-                bars.append(
-                    {
-                        "timestamp": int(ts.timestamp()),
-                        "open": round(float(row["Open"]), 5),
-                        "high": round(float(row["High"]), 5),
-                        "low": round(float(row["Low"]), 5),
-                        "close": round(float(row["Close"]), 5),
-                        "volume": round(float(row.get("Volume", 0)), 2),
-                    }
-                )
-            return bars
+                return bars
 
-        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=20.0)
-        if bars:
-            logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
-            return bars
-    except _NoYFinanceTicker:
-        pass  # expected, already logged — not a failure
-    except Exception as exc:
-        logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
+            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=20.0)
+            if bars:
+                logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
+                return bars
+        except Exception as exc:
+            logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
 
     # ── Bundled deep-history CSV fallback (gold daily/weekly) ─────────────────
     # When live feeds and yfinance are both unavailable, serve real gold history
