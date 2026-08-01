@@ -1,0 +1,7 @@
+# React Router advisories below only affect React Server Components / server-side
+# action handling paths. This repository's dashboard/ and frontend/ apps are
+# client-only Vite SPAs and do not expose React Router server-runtime manifest
+# endpoints or RSC action execution surfaces, so these findings are not
+# reachable in production for this codebase.
+CVE-2026-55685
+GHSA-qwww-vcr4-c8h2
