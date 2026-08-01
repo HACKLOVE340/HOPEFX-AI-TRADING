@@ -59,6 +59,39 @@ describe('operator action banners', () => {
     ).toEqual([]);
   });
 
+  it('never swallow a failed fetch on an operator surface', () => {
+    // A discarded rejection on these screens does not degrade to "no data" — it
+    // degrades to a confident-looking empty panel. "No active prop firm breaches
+    // detected", an empty quarantine list and a blank drift log all render
+    // identically whether the system is clean or the request never landed.
+    //
+    // Legitimate exemptions, both of which recover to a defined value rather than
+    // dropping information: JSON.parse fallbacks and localStorage reads.
+    const EXEMPT = [/JSON\.parse/, /localStorage/];
+    const offenders: string[] = [];
+
+    for (const dir of [SUPERADMIN_DIR, SETTINGS_DIR]) {
+      for (const file of tsxFilesIn(dir)) {
+        const src = readFileSync(join(dir, file), 'utf8');
+        const lines = src.split('\n');
+        lines.forEach((line, i) => {
+          // An empty catch block, with or without a comment inside it.
+          if (!/\}\s*catch\s*(\([^)]*\))?\s*\{\s*(\/\*.*?\*\/|\/\/.*)?\s*\}/.test(line)) return;
+          const context = lines.slice(Math.max(0, i - 4), i + 1).join('\n');
+          if (EXEMPT.some((re) => re.test(context))) return;
+          offenders.push(`${file}:${i + 1}  ${line.trim().slice(0, 100)}`);
+        });
+      }
+    }
+
+    expect(
+      offenders,
+      'Record the failure in state and render it (ActionBanner / ErrorState) instead ' +
+        'of discarding it. An empty panel is indistinguishable from a healthy one:\n' +
+        offenders.join('\n'),
+    ).toEqual([]);
+  });
+
   it('keep the kill switch out of bulk settings saves', () => {
     // A settings object is POSTed wholesale. Including a kill switch field means
     // a stale or defaulted value can resume trading as a side effect of saving

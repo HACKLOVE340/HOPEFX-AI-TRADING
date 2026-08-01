@@ -10,6 +10,7 @@ import {
   ErrorState, LoadingRows, ConfirmDialog, Spinner,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1000,6 +1001,12 @@ const AutoHealingSection: React.FC = () => {
   const [driftLoading, setDriftLoading]       = useState(false);
   const [patchLoading, setPatchLoading]       = useState(false);
   const [quarLoading, setQuarLoading]         = useState(false);
+  // Same reasoning as `approvalFailed`: an empty drift/patch/quarantine list on a
+  // failed load is not evidence that nothing happened.
+  const [driftFailed, setDriftFailed]         = useState(false);
+  const [patchFailed, setPatchFailed]         = useState(false);
+  const [quarFailed, setQuarFailed]           = useState(false);
+  const [statusFailed, setStatusFailed]       = useState(false);
   const [approvalLoading, setApprovalLoading] = useState(false);
 
   const mountedRef = useRef(true);
@@ -1039,7 +1046,10 @@ const AutoHealingSection: React.FC = () => {
         last_run_passed:  t.last_run_passed ?? null,
         last_run_failed:  t.last_run_failed ?? null,
       });
-    } catch { /* silent poll */ }
+      setStatusFailed(false);
+    } catch {
+      if (mountedRef.current) setStatusFailed(true);
+    }
   }, []);
 
   const loadDrift = useCallback(async () => {
@@ -1048,7 +1058,10 @@ const AutoHealingSection: React.FC = () => {
       const res = await superadminApi.autoHealDrift(200);
       if (!mountedRef.current) return;
       setDriftEvents(res.data.events ?? []);
-    } catch { /* silent */ } finally { if (mountedRef.current) setDriftLoading(false); }
+      setDriftFailed(false);
+    } catch {
+      if (mountedRef.current) setDriftFailed(true);
+    } finally { if (mountedRef.current) setDriftLoading(false); }
   }, []);
 
   const loadPatches = useCallback(async () => {
@@ -1057,7 +1070,10 @@ const AutoHealingSection: React.FC = () => {
       const res = await superadminApi.autoHealPatches(100);
       if (!mountedRef.current) return;
       setPatchHistory(res.data.patches ?? []);
-    } catch { /* silent */ } finally { if (mountedRef.current) setPatchLoading(false); }
+      setPatchFailed(false);
+    } catch {
+      if (mountedRef.current) setPatchFailed(true);
+    } finally { if (mountedRef.current) setPatchLoading(false); }
   }, []);
 
   const loadQuarantine = useCallback(async () => {
@@ -1066,7 +1082,10 @@ const AutoHealingSection: React.FC = () => {
       const res = await superadminApi.autoHealQuarantine();
       if (!mountedRef.current) return;
       setQuarantine(res.data.entries ?? []);
-    } catch { /* silent */ } finally { if (mountedRef.current) setQuarLoading(false); }
+      setQuarFailed(false);
+    } catch {
+      if (mountedRef.current) setQuarFailed(true);
+    } finally { if (mountedRef.current) setQuarLoading(false); }
   }, []);
 
   const loadApproval = useCallback(async () => {
@@ -1252,6 +1271,13 @@ const AutoHealingSection: React.FC = () => {
       )}
 
       {/* Live status card */}
+      {statusFailed && (
+        <ActionBanner
+          message="Healer status is unreachable — the figures below are from the last successful poll and may be stale."
+          ok={false}
+          onDismiss={() => setStatusFailed(false)}
+        />
+      )}
       <LiveStatusCard
         status={liveStatus}
         testIndex={testIndex}
@@ -1350,25 +1376,46 @@ const AutoHealingSection: React.FC = () => {
         {/* Tab content */}
         <div style={{ padding: '16px 20px' }}>
           {activeTab === 'drift' && (
-            <DriftLogPanel
-              events={driftEvents}
-              loading={driftLoading}
-              onRefresh={loadDrift}
-            />
+            driftFailed ? (
+              <ErrorState
+                message="Couldn't load the drift log. An empty log here would be indistinguishable from no drift — treat the current state as unknown."
+                onRetry={loadDrift}
+              />
+            ) : (
+              <DriftLogPanel
+                events={driftEvents}
+                loading={driftLoading}
+                onRefresh={loadDrift}
+              />
+            )
           )}
           {activeTab === 'patches' && (
-            <PatchHistoryPanel
-              patches={patchHistory}
-              loading={patchLoading}
-              onRefresh={loadPatches}
-            />
+            patchFailed ? (
+              <ErrorState
+                message="Couldn't load patch history. Patches may have been applied that are not shown here."
+                onRetry={loadPatches}
+              />
+            ) : (
+              <PatchHistoryPanel
+                patches={patchHistory}
+                loading={patchLoading}
+                onRefresh={loadPatches}
+              />
+            )
           )}
           {activeTab === 'quarantine' && (
-            <QuarantinePanel
-              entries={quarantine}
-              loading={quarLoading}
-              onRefresh={loadQuarantine}
-            />
+            quarFailed ? (
+              <ErrorState
+                message="Couldn't load the quarantine list. This is NOT the same as an empty quarantine — files may be quarantined without appearing here."
+                onRetry={loadQuarantine}
+              />
+            ) : (
+              <QuarantinePanel
+                entries={quarantine}
+                loading={quarLoading}
+                onRefresh={loadQuarantine}
+              />
+            )
           )}
           {activeTab === 'approval' && (
             approvalFailed ? (

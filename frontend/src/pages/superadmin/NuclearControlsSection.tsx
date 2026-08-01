@@ -50,7 +50,7 @@ const NuclearControlsSection: React.FC = () => {
   const [haltReason, setHaltReason] = useState('');
   const [hedgeRatio, setHedgeRatio] = useState('1.0');
   const [riskFraction, setRiskFraction] = useState('0.5');
-  const [confirm, setConfirm]   = useState<{ action: string; label: string; danger?: boolean } | null>(null);
+  const [confirm, setConfirm]   = useState<{ action: string; label: string; message?: string; danger?: boolean } | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -76,6 +76,23 @@ const NuclearControlsSection: React.FC = () => {
   usePolling(load, 15_000);
 
   const act = async (action: string) => {
+    // Validate BEFORE setBusy, so an early return cannot leave the button spinning.
+    // The inputs carry min/max attributes, but those do not constrain a pasted or
+    // programmatic value, and an empty field parses to NaN — which was previously
+    // sent straight to the API.
+    if (action === 'hedge_activate') {
+      const ratio = parseFloat(hedgeRatio);
+      if (!Number.isFinite(ratio) || ratio <= 0 || ratio > 1) {
+        setMsgOk(false); setMsg('Hedge ratio must be between 0 and 1.'); setConfirm(null); return;
+      }
+    }
+    if (action === 'risk_override') {
+      const frac = parseFloat(riskFraction);
+      if (!Number.isFinite(frac) || frac <= 0 || frac > 1) {
+        setMsgOk(false); setMsg('Max risk fraction must be between 0 and 1.'); setConfirm(null); return;
+      }
+    }
+
     setBusy(action); setMsg('');
     try {
       if (action === 'halt') {
@@ -117,9 +134,9 @@ const NuclearControlsSection: React.FC = () => {
       {confirm && (
         <ConfirmDialog
           title={confirm.label}
-          message={confirm.danger
+          message={confirm.message ?? (confirm.danger
             ? 'This will immediately halt ALL trading activity across the entire platform. Are you absolutely sure?'
-            : 'Confirm this action?'}
+            : 'Confirm this action?')}
           confirmLabel={confirm.label}
           danger={confirm.danger}
           onConfirm={() => act(confirm.action)}
@@ -192,14 +209,25 @@ const NuclearControlsSection: React.FC = () => {
           {!status?.hedge_active ? (
             <ActionBtn
               label="Activate Hedge"
-              onClick={() => act('hedge_activate')}
+              onClick={() => setConfirm({
+                action: 'hedge_activate',
+                label: `Activate ${hedgeRatio}x hedge`,
+                message: `This opens counter-positions in XAUUSD across the platform at a ${hedgeRatio}x ratio.`,
+              })}
               loading={busy === 'hedge_activate'}
               accent="#fbbf24"
             />
           ) : (
             <ActionBtn
               label="Deactivate Hedge"
-              onClick={() => act('hedge_deactivate')}
+              onClick={() => setConfirm({
+                action: 'hedge_deactivate',
+                label: 'Deactivate hedge',
+                // Closing the hedge re-exposes every open position — arguably as
+                // consequential as the halt, and it was one unguarded click.
+                message: 'This closes the hedge. Every open position is immediately re-exposed to market risk.',
+                danger: true,
+              })}
               loading={busy === 'hedge_deactivate'}
               accent="#94a3b8"
             />
@@ -222,7 +250,12 @@ const NuclearControlsSection: React.FC = () => {
           </div>
           <ActionBtn
             label="Apply Override"
-            onClick={() => act('risk_override')}
+            onClick={() => setConfirm({
+              action: 'risk_override',
+              label: `Set max risk to ${(parseFloat(riskFraction) * 100 || 0).toFixed(0)}%`,
+              message: `This changes the maximum risk fraction for ALL new positions platform-wide.`,
+              danger: parseFloat(riskFraction) > 0.5,
+            })}
             loading={busy === 'risk_override'}
             accent="#f97316"
           />
@@ -278,6 +311,10 @@ const PropFirmBreachPanel: React.FC = () => {
   const [breaches, setBreaches] = useState<Array<Record<string, unknown>>>([]);
   const [drawdown, setDrawdown] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading]   = useState(false);
+  // "No breaches" and "we could not check" are different answers, and only one of
+  // them means it is safe to look away. This panel asserted the first when the
+  // fetch failed.
+  const [loadErr, setLoadErr]   = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -290,9 +327,20 @@ const PropFirmBreachPanel: React.FC = () => {
         superadminApi.drawdownStats(),
       ]);
       if (!mountedRef.current) return;
-      if (b.status === 'fulfilled') setBreaches(b.value.data.breaches ?? b.value.data ?? []);
+      // Promise.allSettled never rejects, so the outer catch only fires on a real
+      // bug — the per-promise rejections were dropped silently, which is what made
+      // a failed breach fetch render as "no breaches".
+      if (b.status === 'fulfilled') {
+        setBreaches(b.value.data.breaches ?? b.value.data ?? []);
+        setLoadErr('');
+      } else {
+        setLoadErr('Breach data unavailable — this list may be incomplete.');
+      }
       if (d.status === 'fulfilled') setDrawdown(d.value.data);
-    } catch { /* non-fatal */ }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setLoadErr(extractApiError(err, 'Breach data unavailable — this list may be incomplete.'));
+    }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -326,7 +374,16 @@ const PropFirmBreachPanel: React.FC = () => {
         </div>
       )}
 
-      {breaches.length === 0 && !loading && (
+      {loadErr && (
+        <div style={{
+          background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#f87171',
+        }} role="alert">
+          ⚠️ {loadErr}
+        </div>
+      )}
+
+      {breaches.length === 0 && !loading && !loadErr && (
         <div style={{ textAlign: 'center', color: '#475569', fontSize: 13, padding: '16px 0' }}>
           ✅ No active prop firm breaches detected
         </div>

@@ -267,6 +267,7 @@ const MLSubsystemsPanel: React.FC = () => {
   const [driftStatus, setDriftStatus]   = useState<Record<string, unknown> | null>(null);
   const [sharpeStatus, setSharpeStatus] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading]           = useState(false);
+  const [loadErr, setLoadErr]           = useState('');
   const [tab, setTab]                   = useState<'filter' | 'online' | 'drift' | 'features'>('filter');
 
   const mountedRef = useRef(true);
@@ -282,12 +283,15 @@ const MLSubsystemsPanel: React.FC = () => {
         superadminApi.mlSharpeCircuitBreaker(),
       ]);
       if (!mountedRef.current) return;
-      if (f.status === 'fulfilled') setFilterStats(f.value.data);
-      if (o.status === 'fulfilled') setOnlineStatus(o.value.data);
-      if (d.status === 'fulfilled') setDriftStatus(d.value.data);
-      if (s.status === 'fulfilled') setSharpeStatus(s.value.data);
-    } catch { /* non-fatal */ }
-    finally { if (mountedRef.current) setLoading(false); }
+      // Each subsystem is reported independently: a blank drift tab must not be
+      // mistaken for "no drift detected".
+      const failed: string[] = [];
+      if (f.status === 'fulfilled') setFilterStats(f.value.data); else failed.push('signal filter');
+      if (o.status === 'fulfilled') setOnlineStatus(o.value.data); else failed.push('online learner');
+      if (d.status === 'fulfilled') setDriftStatus(d.value.data); else failed.push('drift monitor');
+      if (s.status === 'fulfilled') setSharpeStatus(s.value.data); else failed.push('Sharpe circuit breaker');
+      setLoadErr(failed.length ? `Status unavailable for: ${failed.join(', ')}. Figures below may be stale or missing.` : '');
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -314,6 +318,8 @@ const MLSubsystemsPanel: React.FC = () => {
           {loading ? '…' : '↻'}
         </button>
       </div>
+
+      {loadErr && <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />}
 
       {tab === 'filter' && filterStats && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>

@@ -4,6 +4,7 @@ import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
 import { asArray, extractApiError } from '../../lib/utils';
 import { Card, SectionHeader, Button, StatusBadge } from '../settings/ui';
+import { ActionBanner } from '../../components/ActionBanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -145,6 +146,10 @@ const HealthEnginePanel: React.FC = () => {
   const [customUrl, setCustomUrl] = useState('');
   const [customName, setCustomName] = useState('');
   const [registerMsg, setRegisterMsg] = useState('');
+  // Operator actions on this panel used to fail silently: the spinner stopped and
+  // nothing else happened, which reads as success.
+  const [panelMsg, setPanelMsg] = useState('');
+  const [panelOk, setPanelOk]   = useState(true);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -161,7 +166,19 @@ const HealthEnginePanel: React.FC = () => {
       if (r.status === 'fulfilled') setReport(r.value.data as HeReport);
       if (p.status === 'fulfilled') setProbes((p.value.data as { probes: string[] }).probes ?? []);
       if (h.status === 'fulfilled') setHistory((h.value.data as { entries: HeReport[] }).entries ?? []);
-    } catch { /* non-fatal */ }
+      // allSettled never rejects, so a failed sub-fetch would otherwise leave the
+      // panel showing stale or empty data as though it were current.
+      if (r.status === 'rejected' || p.status === 'rejected' || h.status === 'rejected') {
+        setPanelOk(false);
+        setPanelMsg('Some health data could not be loaded — this view may be incomplete.');
+      } else {
+        setPanelMsg('');
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setPanelOk(false);
+      setPanelMsg(extractApiError(err, 'Could not load health engine status.'));
+    }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -172,7 +189,11 @@ const HealthEnginePanel: React.FC = () => {
     try {
       const res = await superadminApi.healthEngineRunProbe(name);
       setProbeResult(res.data as HeProbe);
-    } catch { /* non-fatal */ }
+      setPanelMsg('');
+    } catch (err) {
+      setPanelOk(false);
+      setPanelMsg(extractApiError(err, `Probe "${name}" did not run.`));
+    }
     finally { setProbing(null); }
   };
 
@@ -181,7 +202,10 @@ const HealthEnginePanel: React.FC = () => {
     try {
       await superadminApi.healthEngineRun([]);
       await load();
-    } catch { /* non-fatal */ }
+    } catch (err) {
+      setPanelOk(false);
+      setPanelMsg(extractApiError(err, 'Probes did not run — results below are unchanged.'));
+    }
     finally { setLoading(false); }
   };
 
@@ -193,7 +217,10 @@ const HealthEnginePanel: React.FC = () => {
       setRegisterMsg(`Probe "${customName}" registered`);
       setCustomName(''); setCustomUrl('');
       load();
-    } catch { setRegisterMsg('Registration failed'); }
+    } catch (err) {
+      setPanelOk(false);
+      setRegisterMsg(extractApiError(err, 'Registration failed'));
+    }
   };
 
   const statusColor = (s: string) =>
@@ -333,6 +360,7 @@ const HealthEnginePanel: React.FC = () => {
               <Button onClick={registerProbe} disabled={!customName.trim() || !customUrl.trim()} size="sm">Register</Button>
             </div>
             {registerMsg && <div style={{ fontSize: 12, color: '#94a3b8' }}>{registerMsg}</div>}
+            <ActionBanner message={panelMsg} ok={panelOk} onDismiss={() => setPanelMsg('')} />
           </div>
         </>
       )}
@@ -353,6 +381,9 @@ const DiagnosticsPanel: React.FC = () => {
   const [runningCheck, setRunningCheck] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<Record<string, unknown> | null>(null);
   const [msg, setMsg]         = useState('');
+  // Outcome tracked explicitly — this banner rendered the same neutral grey for a
+  // completed remediation and a failed one.
+  const [msgOk, setMsgOk]     = useState(true);
   const [tab, setTab]         = useState<'summary' | 'report' | 'checks' | 'results' | 'remediation'>('summary');
 
   const mountedRef = useRef(true);
@@ -374,15 +405,24 @@ const DiagnosticsPanel: React.FC = () => {
         const d = results.value.data as { results?: Record<string, unknown>[] } | Record<string, unknown>[];
         setLatestResults(Array.isArray(d) ? d : (d as { results?: Record<string, unknown>[] }).results ?? []);
       }
-    } catch { /* non-fatal */ }
+      if ([s, c, r, results].some((x) => x.status === 'rejected')) {
+        setMsgOk(false);
+        setMsg('Some diagnostics could not be loaded — this view may be incomplete.');
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setMsgOk(false);
+      setMsg(extractApiError(err, 'Could not load diagnostics.'));
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const runFull = async () => {
-    setRunning(true); setMsg('');
+    setRunning(true); setMsg(''); setMsgOk(true);
     try {
       await superadminApi.diagnosticsRun();
+      setMsgOk(true);
       setMsg('Diagnostic run started — fetching results in 5s…');
       setTimeout(async () => {
         const res = await superadminApi.diagnosticsReport();
@@ -390,17 +430,24 @@ const DiagnosticsPanel: React.FC = () => {
         load();
         setMsg('');
       }, 5000);
-    } catch { setMsg('Failed to start diagnostic run'); }
+    } catch (err) {
+      setMsgOk(false);
+      setMsg(extractApiError(err, 'Failed to start diagnostic run'));
+    }
     finally { setRunning(false); }
   };
 
   const remediate = async () => {
-    setRemediating(true); setMsg('');
+    setRemediating(true); setMsg(''); setMsgOk(true);
     try {
       const res = await superadminApi.diagnosticsRemediate();
+      setMsgOk(true);
       setMsg(`Remediation complete — ${res.data.actions_taken} action(s) taken`);
       load();
-    } catch { setMsg('Remediation failed'); }
+    } catch (err) {
+      setMsgOk(false);
+      setMsg(extractApiError(err, 'Remediation failed — no actions were taken.'));
+    }
     finally { setRemediating(false); }
   };
 
@@ -409,7 +456,11 @@ const DiagnosticsPanel: React.FC = () => {
     try {
       const res = await superadminApi.diagnosticsRunCheck(name);
       setCheckResult(res.data);
-    } catch { /* non-fatal */ }
+      setMsgOk(true);
+    } catch (err) {
+      setMsgOk(false);
+      setMsg(extractApiError(err, `Check "${name}" did not run.`));
+    }
     finally { setRunningCheck(null); }
   };
 
@@ -435,7 +486,7 @@ const DiagnosticsPanel: React.FC = () => {
         </div>
       </div>
 
-      {msg && <div style={{ padding: '8px 12px', borderRadius: 6, background: '#1e293b', color: '#94a3b8', fontSize: 13, marginBottom: 12 }}>{msg}</div>}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       {/* Sub-tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -603,6 +654,8 @@ const RoutesPanel: React.FC = () => {
   const [routes, setRoutes] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter]   = useState('');
+  // An empty route list and an unreachable endpoint looked identical.
+  const [loadErr, setLoadErr] = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -612,8 +665,12 @@ const RoutesPanel: React.FC = () => {
     try {
       const res = await superadminApi.reliabilityRoutes();
       if (!mountedRef.current) return;
+      setLoadErr('');
       setRoutes(asArray(res.data, 'routes'));
-    } catch { /* non-fatal */ }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setLoadErr(extractApiError(err, 'Could not load the route inventory.'));
+    }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -639,6 +696,7 @@ const RoutesPanel: React.FC = () => {
         <SectionHeader icon="🗺️" title="API Route Inventory" />
         <Button onClick={load} disabled={loading} variant="secondary" size="sm">{loading ? '…' : '↻'}</Button>
       </div>
+      <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />
       <div style={{ marginBottom: 12 }}>
         <input
           type="text" value={filter} onChange={e => setFilter(e.target.value)}
@@ -681,6 +739,9 @@ const ValidatePanel: React.FC = () => {
   const [toggleExpected, setToggleExpected] = useState('');
   const [toggleResult, setToggleResult] = useState<Record<string, unknown> | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
+  // A failed validation returned no result and no message, which reads as "no
+  // problems found" on a panel whose whole job is to report problems.
+  const [validateErr, setValidateErr] = useState('');
 
   const validate = async () => {
     if (!key.trim()) return;
@@ -688,7 +749,10 @@ const ValidatePanel: React.FC = () => {
     try {
       const res = await superadminApi.reliabilityValidate(key.trim());
       setResult(res.data);
-    } catch { /* non-fatal */ }
+      setValidateErr('');
+    } catch (err) {
+      setValidateErr(extractApiError(err, `Could not validate "${key.trim()}" — no result was returned.`));
+    }
     finally { setLoading(false); }
   };
 
@@ -700,7 +764,10 @@ const ValidatePanel: React.FC = () => {
       try { parsed = JSON.parse(toggleExpected); } catch { /* keep as string */ }
       const res = await superadminApi.reliabilityValidateToggle(toggleKey.trim(), parsed);
       setToggleResult(res.data);
-    } catch { /* non-fatal */ }
+      setValidateErr('');
+    } catch (err) {
+      setValidateErr(extractApiError(err, `Could not validate toggle "${toggleKey.trim()}".`));
+    }
     finally { setToggleLoading(false); }
   };
 
@@ -718,6 +785,7 @@ const ValidatePanel: React.FC = () => {
         <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
           Verify that a config key is correctly persisted across Redis, config store, and app state.
         </p>
+        <ActionBanner message={validateErr} ok={false} onDismiss={() => setValidateErr('')} />
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Config Key</label>
@@ -812,6 +880,12 @@ const SystemReliabilitySection: React.FC = () => {
   const [envAudit, setEnvAudit] = useState<Record<string, unknown> | null>(null);
   const [statusHistory, setStatusHistory] = useState<Record<string, unknown>[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  // Load failures are kept per-panel: an empty list because the fetch failed must
+  // never render as an empty list because there is nothing to show.
+  const [tracesErr, setTracesErr] = useState('');
+  const [metricsErr, setMetricsErr] = useState('');
+  const [envErr, setEnvErr] = useState('');
+  const [historyErr, setHistoryErr] = useState('');
   const [diagnosticsResults, setDiagnosticsResults] = useState<Record<string, unknown>[] | null>(null);
   const [activeTab, setActiveTab] = useState<'components' | 'health-engine' | 'traces' | 'selftest' | 'env' | 'metrics' | 'diagnostics' | 'routes' | 'validate' | 'history'>('components');
   const [error, setError] = useState<string | null>(null);
@@ -850,8 +924,9 @@ const SystemReliabilitySection: React.FC = () => {
       const res = await superadminApi.reliabilityTraces(50);
       if (!mountedRef.current) return;
       setTraces(res.data.spans || []);
-    } catch {
-      // non-fatal
+      setTracesErr('');
+    } catch (e) {
+      if (mountedRef.current) setTracesErr(extractApiError(e, 'Failed to load trace spans'));
     } finally {
       if (mountedRef.current) setTracesLoading(false);
     }
@@ -862,8 +937,9 @@ const SystemReliabilitySection: React.FC = () => {
       const res = await superadminApi.reliabilityMetrics();
       if (!mountedRef.current) return;
       setMetrics(res.data);
-    } catch {
-      // non-fatal
+      setMetricsErr('');
+    } catch (e) {
+      if (mountedRef.current) setMetricsErr(extractApiError(e, 'Failed to load metrics'));
     }
   }, []);
 
@@ -872,8 +948,9 @@ const SystemReliabilitySection: React.FC = () => {
       const res = await superadminApi.reliabilityEnv();
       if (!mountedRef.current) return;
       setEnvAudit(res.data);
-    } catch {
-      // non-fatal
+      setEnvErr('');
+    } catch (e) {
+      if (mountedRef.current) setEnvErr(extractApiError(e, 'Failed to load environment audit'));
     }
   }, []);
 
@@ -883,8 +960,9 @@ const SystemReliabilitySection: React.FC = () => {
       const res = await superadminApi.reliabilityHistory(100);
       if (!mountedRef.current) return;
       setStatusHistory(res.data.history || []);
-    } catch {
-      // non-fatal
+      setHistoryErr('');
+    } catch (e) {
+      if (mountedRef.current) setHistoryErr(extractApiError(e, 'Failed to load status history'));
     } finally {
       if (mountedRef.current) setHistoryLoading(false);
     }
@@ -1081,6 +1159,7 @@ const SystemReliabilitySection: React.FC = () => {
               </Button>
             </div>
           </div>
+          {tracesErr && <ActionBanner message={tracesErr} ok={false} onDismiss={() => setTracesErr('')} />}
           {traceTestResult && (
             <div style={{ background: '#052e16', border: '1px solid #16a34a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12 }}>
               ✅ Test trace emitted — trace_id: <code style={{ color: '#86efac' }}>{String(traceTestResult.trace_id)}</code>
@@ -1097,7 +1176,7 @@ const SystemReliabilitySection: React.FC = () => {
             }}>
               <span>Span Name</span><span>Status</span><span>Duration</span><span>Time</span>
             </div>
-            {traces.length === 0 && (
+            {traces.length === 0 && !tracesErr && (
               <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 13 }}>
                 No spans recorded yet. Emit a test trace or make API calls.
               </div>
@@ -1177,8 +1256,11 @@ const SystemReliabilitySection: React.FC = () => {
               onClick={async () => {
                 try {
                   await superadminApi.reliabilityHistoryRecord();
+                  setHistoryErr('');
                   await fetchHistory();
-                } catch { /* non-fatal */ }
+                } catch (e) {
+                  setHistoryErr(extractApiError(e, 'Failed to record a status snapshot'));
+                }
               }}
               size="sm"
               variant="secondary"
@@ -1186,7 +1268,8 @@ const SystemReliabilitySection: React.FC = () => {
               📸 Snapshot Now
             </Button>
           </div>
-          {statusHistory.length === 0 && !historyLoading && (
+          {historyErr && <ActionBanner message={historyErr} ok={false} onDismiss={() => setHistoryErr('')} />}
+          {statusHistory.length === 0 && !historyLoading && !historyErr && (
             <div style={{ color: '#64748b', fontSize: 13, padding: '16px 0' }}>
               No history yet. Trigger a status poll or click "Snapshot Now".
             </div>
@@ -1257,6 +1340,7 @@ const SystemReliabilitySection: React.FC = () => {
           <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
             Shows presence/absence of environment variables. Values are never exposed.
           </p>
+          {envErr && <ActionBanner message={envErr} ok={false} onDismiss={() => setEnvErr('')} />}
           {envAudit && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {Object.entries((envAudit.groups ?? {}) as Record<string, Record<string, { set: boolean; required: boolean }>>).map(([group, vars]) => (
@@ -1314,6 +1398,7 @@ const SystemReliabilitySection: React.FC = () => {
       {activeTab === 'metrics' && (
         <Card>
           <SectionHeader icon="📊" title="System Metrics" />
+          {metricsErr && <ActionBanner message={metricsErr} ok={false} onDismiss={() => setMetricsErr('')} />}
           {metrics && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 12 }}>
               {Object.entries(metrics.system as Record<string, number> ?? {}).map(([key, val]) => (
