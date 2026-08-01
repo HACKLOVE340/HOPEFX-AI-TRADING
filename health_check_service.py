@@ -156,11 +156,18 @@ async def _check_database() -> ComponentStatus:
         if engine is None:
             return ComponentStatus(status="degraded", latency_ms=0.0, detail="DB engine not initialised")
 
-        async def _query():
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
+        connect_ctx = engine.connect()
+        if hasattr(connect_ctx, "__aenter__"):
+            async with connect_ctx as conn:
+                await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=_TIMEOUT_S)
+        else:
+            loop = asyncio.get_running_loop()
 
-        await asyncio.wait_for(_query(), timeout=_TIMEOUT_S)
+            def _query_sync() -> None:
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+
+            await asyncio.wait_for(loop.run_in_executor(None, _query_sync), timeout=_TIMEOUT_S)
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="SELECT 1 OK")
     except TimeoutError:

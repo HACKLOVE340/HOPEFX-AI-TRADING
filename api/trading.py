@@ -3775,12 +3775,16 @@ async def get_regime_status(
         "NAS100": "NQ=F",
     }
     ticker_sym = _YF_MAP.get(symbol_norm, "GC=F")
+    app_env = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "")).lower()
+    allow_remote_market_fetch = app_env not in {"ci", "test", "testing"}
 
     closes: list[float] = []
     highs: list[float] = []
     lows: list[float] = []
 
     try:
+        if not allow_remote_market_fetch:
+            raise RuntimeError("remote market-data fetch disabled in CI/test environment")
         import yfinance as _yf
 
         loop = asyncio.get_running_loop()
