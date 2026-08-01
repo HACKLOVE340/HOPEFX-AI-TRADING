@@ -8,6 +8,7 @@ import {
   ConfirmDialog, Input,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -45,6 +46,7 @@ const NuclearControlsSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [haltReason, setHaltReason] = useState('');
   const [hedgeRatio, setHedgeRatio] = useState('1.0');
   const [riskFraction, setRiskFraction] = useState('0.5');
@@ -78,22 +80,28 @@ const NuclearControlsSection: React.FC = () => {
     try {
       if (action === 'halt') {
         await superadminApi.nuclearHalt(haltReason || 'Superadmin emergency halt');
+        setMsgOk(true);
         setMsg('Emergency halt activated — all trading stopped');
       } else if (action === 'resume') {
         await superadminApi.nuclearResume();
+        setMsgOk(true);
         setMsg('Trading resumed');
       } else if (action === 'hedge_activate') {
         await superadminApi.activateHedge({ hedge_ratio: parseFloat(hedgeRatio), instrument: 'XAUUSD' });
+        setMsgOk(true);
         setMsg(`Hedge activated at ${hedgeRatio}x ratio`);
       } else if (action === 'hedge_deactivate') {
         await superadminApi.deactivateHedge();
+        setMsgOk(true);
         setMsg('Hedge deactivated');
       } else if (action === 'risk_override') {
         await superadminApi.maxRiskOverride({ max_risk_fraction: parseFloat(riskFraction), reason: 'Superadmin override' });
+        setMsgOk(true);
         setMsg(`Max risk set to ${(parseFloat(riskFraction) * 100).toFixed(0)}%`);
       }
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, `Action "${action}" failed`));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -119,18 +127,7 @@ const NuclearControlsSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{
-          background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)',
-          border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`,
-          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
-          color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       {/* Status KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>

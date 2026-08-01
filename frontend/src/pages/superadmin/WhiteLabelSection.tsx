@@ -10,6 +10,7 @@ import {
 } from './ui';
 import type { Tenant } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -32,6 +33,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
   const [saving, setSaving]   = useState(false);
   const [busy, setBusy]       = useState<string | null>(null);
   const [msg, setMsg]         = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [suspendConfirm, setSuspendConfirm] = useState(false);
 
@@ -70,9 +72,11 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
     setSaving(true); setMsg('');
     try {
       await superadminApi.updateTenant(tenant.tenant_id, form);
+      setMsgOk(false);
       setMsg('Tenant updated');
       onRefresh();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
@@ -81,9 +85,11 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
     setBusy('activate'); setMsg('');
     try {
       await superadminApi.activateTenant(tenant.tenant_id);
+      setMsgOk(true);
       setMsg('Tenant activated');
       onRefresh();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Activate failed'));
     } finally { setBusy(null); }
   };
@@ -92,10 +98,12 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
     setBusy('suspend'); setMsg('');
     try {
       await superadminApi.suspendTenant(tenant.tenant_id);
+      setMsgOk(true);
       setMsg('Tenant suspended');
       setSuspendConfirm(false);
       onRefresh();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Suspend failed'));
     } finally { setBusy(null); }
   };
@@ -104,10 +112,12 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
     setBusy('delete'); setMsg('');
     try {
       await superadminApi.deleteTenant(tenant.tenant_id);
+      setMsgOk(true);
       setMsg('Tenant deleted');
       onRefresh();
       setTimeout(onClose, 600);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(false); }
   };
@@ -116,6 +126,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
     setBusy('rotate'); setMsg('');
     try {
       await superadminApi.rotateTenantKey(tenant.tenant_id);
+      setMsgOk(true);
       setMsg('API key rotated — new key active');
       // Reload keys
       setKeysLoading(true);
@@ -124,6 +135,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
         .catch(() => {})
         .finally(() => setKeysLoading(false));
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Key rotation failed'));
     } finally { setBusy(null); }
   };
@@ -276,11 +288,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
           </div>
         )}
 
-        {msg && (
-          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: msg.includes('fail') ? '#450a0a' : '#052e16', color: msg.includes('fail') ? '#f87171' : '#4ade80', fontSize: 12, fontWeight: 600 }}>
-            {msg}
-          </div>
-        )}
+        <ActionBanner message={msg} ok={msgOk} />
       </div>
     </>
   );

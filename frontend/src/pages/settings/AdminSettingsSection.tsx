@@ -4,6 +4,7 @@ import { api } from '../../hooks/useApi';
 import type { AdminSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: AdminSettings = {
   allow_new_registrations: true,
@@ -34,13 +35,25 @@ const AdminSettingsSection: React.FC = () => {
   const [smtpTesting, setSmtpTesting] = useState(false);
   const [smtpTestResult, setSmtpTestResult] = useState<'ok' | 'fail' | null>(null);
   const [killSwitchConfirm, setKillSwitchConfirm] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<AdminSettings>('/admin/settings')
       .then((r) => setForm({ ...DEFAULT, ...r.data }))
-      .catch((err: unknown) => console.warn('[Settings/Admin] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Admin] load:', err);
+        // Never leave DEFAULT on screen looking like saved configuration. This
+        // form is saved wholesale, and DEFAULT reports global_kill_switch as
+        // false — so a failed GET plus one unrelated edit could resume trading
+        // platform-wide while the page looked entirely normal throughout.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<AdminSettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -48,7 +61,11 @@ const AdminSettingsSection: React.FC = () => {
   const handleSave = async () => {
     setSaving(true); setError('');
     try {
-      await api.post('/admin/settings', form);
+      // The kill switch is deliberately NOT part of this payload. It has its own
+      // endpoint and its own confirmation; saving a settings object must never be
+      // able to flip the control that halts trading as a side effect.
+      const { global_kill_switch: _killSwitch, ...payload } = form;
+      await api.post('/admin/settings', payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
@@ -94,6 +111,19 @@ const AdminSettingsSection: React.FC = () => {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading admin settings…
+    </div>
+  );
+
+  // Refuse to render an editable form we could not populate. Showing defaults
+  // here is worse than showing nothing: they are indistinguishable from real
+  // configuration, and saving replaces the real values with them.
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="🔧" title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
+      <ErrorBanner message="Couldn't load admin settings. Nothing has been changed — reload to try again." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 

@@ -8,6 +8,7 @@ import {
 } from './ui';
 import type { MLModel } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -62,6 +63,7 @@ const MLAISection: React.FC = () => {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
   const [actionMsg, setActionMsg] = useState('');
+  const [actionMsgOk, setActionMsgOk] = useState(true);
   const [busy, setBusy]           = useState<string | null>(null);
   const [confirm, setConfirm]     = useState<{ model: string; action: string } | null>(null);
   const [deployTarget, setDeployTarget] = useState<{ model: string; version: string } | null>(null);
@@ -99,9 +101,11 @@ const MLAISection: React.FC = () => {
       if (action === 'retrain')  await superadminApi.retrainModel(model);
       if (action === 'rollback') await superadminApi.rollbackModel(model);
       if (action === 'deploy' && version) await superadminApi.deployModel(model, version);
+      setActionMsgOk(true);
       setActionMsg(`${action} triggered for ${model}`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
+      setActionMsgOk(false);
       setActionMsg(extractApiError(e, `${action} failed`));
     } finally { setBusy(null); setConfirm(null); setDeployTarget(null); }
   };
@@ -110,9 +114,11 @@ const MLAISection: React.FC = () => {
     setBusy(`rl-${action}`); setActionMsg('');
     try {
       await superadminApi.rlAgentControl(action);
+      setActionMsgOk(true);
       setActionMsg(`RL agent ${action} triggered`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
+      setActionMsgOk(false);
       setActionMsg(extractApiError(e, 'RL control failed'));
     } finally { setBusy(null); }
   };
@@ -245,16 +251,7 @@ const MLAISection: React.FC = () => {
         </div>
       </SectionCard>
 
-      {actionMsg && (
-        <div style={{
-          padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: actionMsg.includes('failed') ? '#450a0a' : '#052e16',
-          color: actionMsg.includes('failed') ? '#f87171' : '#4ade80',
-          fontSize: 13, fontWeight: 600,
-        }}>
-          {actionMsg}
-        </div>
-      )}
+      <ActionBanner message={actionMsg} ok={actionMsgOk} />
 
       {/* ── Advanced ML Subsystems ── */}
       <MLSubsystemsPanel />

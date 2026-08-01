@@ -7,6 +7,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 interface EngineConfig {
   paper_trading_mode: boolean;
@@ -58,6 +59,7 @@ const TradingEngineSection: React.FC = () => {
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState('');
   const [msg, setMsg]         = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
@@ -91,8 +93,10 @@ const TradingEngineSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.updateEngineConfig(cfg);
+      setMsgOk(true);
       setMsg('Engine configuration saved');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
@@ -103,8 +107,10 @@ const TradingEngineSection: React.FC = () => {
     try {
       await superadminApi.killSwitch(!cfg.kill_switch_active);
       setCfg(c => c ? { ...c, kill_switch_active: !c.kill_switch_active } : c);
+      setMsgOk(true);
       setMsg(`Kill switch ${!cfg.kill_switch_active ? 'ACTIVATED — all trading halted' : 'deactivated — trading resumed'}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Kill switch failed'));
     } finally { setSaving(false); setConfirm(null); }
   };
@@ -114,9 +120,11 @@ const TradingEngineSection: React.FC = () => {
     try {
       if (action === 'pause') await superadminApi.pauseTrading('Superadmin manual pause');
       else                    await superadminApi.resumeTrading();
+      setMsgOk(true);
       setMsg(`Trading ${action === 'pause' ? 'paused' : 'resumed'}`);
       setTimeout(load, 1000);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, `${action} failed`));
     } finally { setSaving(false); setConfirm(null); }
   };
@@ -313,16 +321,7 @@ const TradingEngineSection: React.FC = () => {
         </div>
       </SectionCard>
 
-      {msg && (
-        <div style={{
-          padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: msg.includes('failed') || msg.includes('ACTIVATED') ? '#450a0a' : '#052e16',
-          color: msg.includes('failed') || msg.includes('ACTIVATED') ? '#f87171' : '#4ade80',
-          fontSize: 13, fontWeight: 600,
-        }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
 
       {/* ── Decision Engine & Gatekeeper Status ── */}
       <DecisionEnginePanel />

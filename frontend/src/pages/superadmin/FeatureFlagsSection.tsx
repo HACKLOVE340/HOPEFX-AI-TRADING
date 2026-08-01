@@ -8,6 +8,7 @@ import {
 } from './ui';
 import type { FeatureFlag } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 interface UserOverride { flag: string; enabled: boolean }
 
@@ -17,10 +18,12 @@ const FeatureFlagsSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [userIdInput, setUserIdInput] = useState('');
   const [userOverrides, setUserOverrides] = useState<UserOverride[]>([]);
   const [overrideLoading, setOverrideLoading] = useState(false);
   const [overrideMsg, setOverrideMsg] = useState('');
+  const [overrideMsgOk, setOverrideMsgOk] = useState(true);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -46,8 +49,10 @@ const FeatureFlagsSection: React.FC = () => {
     try {
       await superadminApi.setFeatureFlag(name, enabled);
       setFlags(prev => prev.map(f => f.name === name ? { ...f, enabled } : f));
+      setMsgOk(true);
       setMsg(`Flag "${name}" ${enabled ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Toggle failed'));
     } finally { setBusy(null); }
   };
@@ -59,6 +64,7 @@ const FeatureFlagsSection: React.FC = () => {
       const res = await superadminApi.userFlagOverrides(userIdInput.trim());
       setUserOverrides(asArray(res.data, 'overrides'));
     } catch (e: unknown) {
+      setOverrideMsgOk(false);
       setOverrideMsg(extractApiError(e, 'Failed to load overrides'));
     } finally { setOverrideLoading(false); }
   };
@@ -72,8 +78,10 @@ const FeatureFlagsSection: React.FC = () => {
         if (exists) return prev.map(o => o.flag === flag ? { ...o, enabled } : o);
         return [...prev, { flag, enabled }];
       });
+      setOverrideMsgOk(true);
       setOverrideMsg(`Override for "${flag}" set to ${enabled ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
+      setOverrideMsgOk(false);
       setOverrideMsg(extractApiError(e, 'Override failed'));
     } finally { setBusy(null); }
   };
@@ -170,16 +178,7 @@ const FeatureFlagsSection: React.FC = () => {
         {flags.length === 0 && (
           <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No feature flags configured.</div>
         )}
-        {msg && (
-          <div style={{
-            marginTop: 12, padding: '10px 14px', borderRadius: 8,
-            background: msg.includes('failed') ? '#450a0a' : '#052e16',
-            color: msg.includes('failed') ? '#f87171' : '#4ade80',
-            fontSize: 12, fontWeight: 600,
-          }}>
-            {msg}
-          </div>
-        )}
+        <ActionBanner message={msg} ok={msgOk} />
       </SectionCard>
 
       {/* Per-user overrides */}
@@ -250,16 +249,7 @@ const FeatureFlagsSection: React.FC = () => {
           </div>
         )}
 
-        {overrideMsg && (
-          <div style={{
-            marginTop: 12, padding: '10px 14px', borderRadius: 8,
-            background: overrideMsg.includes('failed') ? '#450a0a' : '#052e16',
-            color: overrideMsg.includes('failed') ? '#f87171' : '#4ade80',
-            fontSize: 12, fontWeight: 600,
-          }}>
-            {overrideMsg}
-          </div>
-        )}
+        <ActionBanner message={overrideMsg} ok={overrideMsgOk} />
       </SectionCard>
     </div>
   );

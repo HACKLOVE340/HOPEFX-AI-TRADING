@@ -4,8 +4,9 @@ import { api } from '../../hooks/useApi';
 import { useStore } from '../../store';
 import type { TradingPreferences } from './types';
 import { SYMBOLS, TIMEFRAMES } from './types';
-import { Card, SectionHeader, Field, Input, Select, Toggle, SaveBar } from './ui';
+import { Card, SectionHeader, Field, Input, Select, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 const DEFAULT: TradingPreferences = {
   default_symbol: 'XAU_USD',
@@ -26,13 +27,27 @@ const TradingSection: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [killSwitchBusy, setKillSwitchBusy] = useState(false);
+  const [killSwitchError, setKillSwitchError] = useState('');
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<TradingPreferences>('/settings/trading')
       .then((r) => setForm({ ...DEFAULT, ...r.data }))
-      .catch((err: unknown) => console.warn('[Settings/Trading] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Trading] load:', err);
+        // Never render DEFAULT as though it were saved configuration. These are
+        // risk limits: a failed GET followed by any edit would save
+        // max_risk_per_trade and max_daily_drawdown back to defaults, and report
+        // the kill switch as off.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<TradingPreferences>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -41,11 +56,11 @@ const TradingSection: React.FC = () => {
     setSaving(true);
     setError('');
     try {
-      await api.post('/settings/trading', form);
-      // If kill switch changed, sync with trading engine
-      if (form.kill_switch_enabled) {
-        await api.post('/trading/emergency-stop').catch(() => {/* non-fatal */});
-      }
+      // The kill switch is deliberately NOT in this payload — it has its own
+      // control below. Bulk-saving it meant a stale or defaulted value could
+      // silently disengage the halt while the user was editing a lot size.
+      const { kill_switch_enabled: _killSwitch, ...payload } = form;
+      await api.post('/settings/trading', payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
@@ -55,10 +70,52 @@ const TradingSection: React.FC = () => {
     }
   };
 
+  /**
+   * Engage the kill switch as its own explicit, immediate action.
+   *
+   * Not part of Save, and the engine call is no longer swallowed: this halts
+   * live trading, so "it didn't work" has to reach whoever asked for it. Both
+   * halting and resuming are administrator actions, so a non-admin gets a clear
+   * message rather than a green tick over nothing.
+   */
+  const engageKillSwitch = async () => {
+    if (!window.confirm(
+      'Halt all automated trading now?\n\n' +
+      'This engages the kill switch across the trading engine. ' +
+      'Resuming requires an administrator.'
+    )) return;
+
+    setKillSwitchBusy(true);
+    setKillSwitchError('');
+    try {
+      await api.post('/trading/emergency-stop');
+      update({ kill_switch_enabled: true });
+    } catch (err: unknown) {
+      setKillSwitchError(extractApiError(
+        err,
+        'Could not halt trading — automated trading is still running. Contact an administrator.',
+      ));
+    } finally {
+      setKillSwitchBusy(false);
+    }
+  };
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading trading preferences…
+    </div>
+  );
+
+  // Refuse to render an editable form we could not populate — these are risk
+  // limits, and defaults are indistinguishable from saved values.
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon="📈" title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
+      <ErrorBanner message="Couldn't load your trading preferences. Nothing has been changed — reload to try again." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 
@@ -187,21 +244,31 @@ const TradingSection: React.FC = () => {
           checked={form.auto_trade_enabled}
           onChange={(v) => update({ auto_trade_enabled: v })}
         />
-        <Toggle
-          id="kill-switch"
-          label="Kill switch"
-          description="Immediately halt all automated trading and close open positions."
-          checked={form.kill_switch_enabled}
-          onChange={(v) => update({ kill_switch_enabled: v })}
-        />
-        {form.kill_switch_enabled && (
-          <div style={{
-            marginTop: 8, padding: '10px 14px', background: '#450a0a',
-            border: '1px solid #7f1d1d', borderRadius: 8, fontSize: 13, color: '#f87171',
-          }}>
-            ⚠️ Kill switch is active. All automated trading is halted.
+        {/* Not a form field. This is engine state, applied immediately and
+            reported from the server — never saved along with lot size. */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 2 }}>Kill switch</div>
+          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10 }}>
+            Immediately halt all automated trading. Resuming requires an administrator.
           </div>
-        )}
+          {form.kill_switch_enabled ? (
+            <div style={{
+              padding: '10px 14px', background: '#450a0a',
+              border: '1px solid #7f1d1d', borderRadius: 8, fontSize: 13, color: '#f87171',
+            }}>
+              ⚠️ Kill switch is active. All automated trading is halted.
+            </div>
+          ) : (
+            <Button variant="danger" onClick={engageKillSwitch} disabled={killSwitchBusy}>
+              {killSwitchBusy ? 'Halting…' : 'Halt all automated trading'}
+            </Button>
+          )}
+          {killSwitchError && (
+            <div style={{ marginTop: 10 }}>
+              <ErrorBanner message={killSwitchError} onDismiss={() => setKillSwitchError('')} />
+            </div>
+          )}
+        </div>
       </Card>
 
       <SaveBar onSave={handleSave} saving={saving} saved={saved} error={error} />

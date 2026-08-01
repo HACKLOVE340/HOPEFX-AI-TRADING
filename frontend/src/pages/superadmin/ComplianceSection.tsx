@@ -9,6 +9,7 @@ import {
 } from './ui';
 import type { KYCRecord, AMLAlert, SanctionsHit } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 interface RegulatoryReport {
   report_id: string;
@@ -55,6 +56,7 @@ const ComplianceSection: React.FC = () => {
   const [kycFilter, setKycFilter] = useState('pending');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]   = useState<{ id: string; action: string; label: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [tab, setTab]           = useState<'kyc' | 'aml' | 'sanctions' | 'reports' | 'consent'>('kyc');
@@ -92,6 +94,7 @@ const ComplianceSection: React.FC = () => {
       setConsentLog(asArray(res.data, 'entries'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
+      setMsgOk(false);
       setMsg(apiErr(e, 'Failed to load consent log'));
     }
   }, [consentUserId]);
@@ -106,10 +109,12 @@ const ComplianceSection: React.FC = () => {
     try {
       if (action === 'approve') await superadminApi.approveKyc(userId);
       else                      await superadminApi.rejectKyc(userId, reason ?? 'Does not meet requirements');
+      setMsgOk(true);
       setMsg(`KYC ${action}d for user ${userId}`);
       setConfirm(null); setRejectReason('');
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, `KYC ${action} failed`));
     } finally { setBusy(null); }
   };
@@ -118,9 +123,11 @@ const ComplianceSection: React.FC = () => {
     setBusy(`aml-${alertId}`); setMsg('');
     try {
       await superadminApi.updateAmlAlert(alertId, status);
+      setMsgOk(true);
       setMsg(`AML alert ${alertId} marked as ${status}`);
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'AML update failed'));
     } finally { setBusy(null); }
   };
@@ -129,9 +136,11 @@ const ComplianceSection: React.FC = () => {
     setBusy(`sanction-${hitId}`); setMsg('');
     try {
       await superadminApi.clearSanctionsHit(hitId);
+      setMsgOk(true);
       setMsg(`Sanctions hit ${hitId} marked as ${status}`);
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Sanctions update failed'));
     } finally { setBusy(null); }
   };
@@ -328,7 +337,9 @@ const ComplianceSection: React.FC = () => {
             <ActionBtn
               key={r.endpoint}
               label={`Generate ${r.label}`}
-              onClick={() => superadminApi.triggerRegReport(r.endpoint, new Date().toISOString().slice(0, 7)).then(() => setMsg(`${r.label} generation queued`)).catch(() => setMsg('Report generation failed'))}
+              onClick={() => superadminApi.triggerRegReport(r.endpoint, new Date().toISOString().slice(0, 7))
+                .then(() => { setMsgOk(true); setMsg(`${r.label} generation queued`); })
+                .catch(() => { setMsgOk(false); setMsg('Report generation failed'); })}
               variant="primary"
               icon="📄"
             />
@@ -336,11 +347,7 @@ const ComplianceSection: React.FC = () => {
         </div>
       </SectionCard>
 
-      {msg && (
-        <div style={{ padding: '12px 16px', borderRadius: 8, marginTop: 8, background: msg.includes('failed') ? '#450a0a' : '#052e16', color: msg.includes('failed') ? '#f87171' : '#4ade80', fontSize: 13, fontWeight: 600 }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
     </div>
   );
 };

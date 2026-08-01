@@ -9,6 +9,7 @@ import {
 } from './ui';
 import type { BrokerHealth, TCAMetric } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -53,6 +54,7 @@ const BrokerManagementSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [editRouting, setEditRouting] = useState(false);
   const [routingDraft, setRoutingDraft] = useState<RoutingRule[]>([]);
 
@@ -85,9 +87,11 @@ const BrokerManagementSection: React.FC = () => {
     setBusy(`reconnect-${brokerId}`); setMsg('');
     try {
       await superadminApi.reconnectBroker(brokerId);
+      setMsgOk(true);
       setMsg(`Reconnect triggered for broker ${brokerId}`);
       setTimeout(load, 2000);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Reconnect failed'));
     } finally { setBusy(null); }
   };
@@ -96,9 +100,11 @@ const BrokerManagementSection: React.FC = () => {
     setBusy(`disconnect-${brokerId}`); setMsg('');
     try {
       await superadminApi.disconnectBroker(brokerId);
+      setMsgOk(true);
       setMsg(`Broker ${brokerId} disconnected`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Disconnect failed'));
     } finally { setBusy(null); }
   };
@@ -109,8 +115,10 @@ const BrokerManagementSection: React.FC = () => {
       await superadminApi.updateBrokerRouting({ rules: routingDraft });
       setRouting(routingDraft);
       setEditRouting(false);
+      setMsgOk(true);
       setMsg('Routing configuration saved');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Save routing failed'));
     } finally { setBusy(null); }
   };
@@ -223,11 +231,7 @@ const BrokerManagementSection: React.FC = () => {
         </div>
       </SectionCard>
 
-      {msg && (
-        <div style={{ padding: '12px 16px', borderRadius: 8, marginTop: 4, background: msg.includes('failed') ? '#450a0a' : '#052e16', color: msg.includes('failed') ? '#f87171' : '#4ade80', fontSize: 13, fontWeight: 600 }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
     </div>
   );
 };

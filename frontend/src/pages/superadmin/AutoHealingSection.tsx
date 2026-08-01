@@ -128,7 +128,10 @@ const STRATEGY_OPTIONS = [
 ];
 
 const DEFAULT_CONFIG: HealingConfig = {
-  enabled: true,
+  // Defaults to OFF so that any path which mishandles this object fails closed.
+  // Autonomous patching of a live trading platform is not a safe default, and
+  // this object is what the form falls back to when the config cannot be read.
+  enabled: false,
   scan_interval_sec: 120,
   patch_interval_sec: 60,
   max_patch_bytes: 65536,
@@ -977,6 +980,9 @@ const AutoHealingSection: React.FC = () => {
   const [testRunBusy, setTestRunBusy]   = useState(false);
   const [confirmNuclear, setConfirmNuclear] = useState(false);
   const [pendingCfg, setPendingCfg]     = useState<HealingConfig | null>(null);
+  const [configLoadFailed, setConfigLoadFailed] = useState(false);
+  const [approvalFailed, setApprovalFailed]     = useState(false);
+  const [confirmEnable, setConfirmEnable]       = useState(false);
   const [activeTab, setActiveTab]       = useState<LiveTab>('drift');
   const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
 
@@ -1069,7 +1075,15 @@ const AutoHealingSection: React.FC = () => {
       const res = await superadminApi.autoHealPendingApproval();
       if (!mountedRef.current) return;
       setPendingApproval(res.data.patches ?? []);
-    } catch { /* silent */ } finally { if (mountedRef.current) setApprovalLoading(false); }
+      setApprovalFailed(false);
+    } catch {
+      // "Unavailable" and "nothing pending" are different answers. Failing
+      // silently here renders an empty approvals queue, and a superadmin
+      // concludes no patches are waiting when some may be queued against
+      // production.
+      if (!mountedRef.current) return;
+      setApprovalFailed(true);
+    } finally { if (mountedRef.current) setApprovalLoading(false); }
   }, []);
 
   const loadConfig = useCallback(async () => {
@@ -1077,7 +1091,16 @@ const AutoHealingSection: React.FC = () => {
       const res = await superadminApi.autoHealConfig();
       if (!mountedRef.current) return;
       setCfg({ ...DEFAULT_CONFIG, ...res.data });
-    } catch { /* use defaults */ }
+      setConfigLoadFailed(false);
+    } catch {
+      // Do NOT fall back to defaults and carry on. This form is saved wholesale,
+      // so rendering a plausible default configuration after a failed read lets
+      // a superadmin change one unrelated toggle, hit Save, and switch on
+      // automated patching, quarantine and rollback of a live trading system
+      // that was deliberately off.
+      if (!mountedRef.current) return;
+      setConfigLoadFailed(true);
+    }
   }, []);
 
   const load = useCallback(async () => {
@@ -1161,6 +1184,12 @@ const AutoHealingSection: React.FC = () => {
     if (toSave.aggressiveness === 'nuclear' && !overrideCfg) {
       setPendingCfg(toSave); setConfirmNuclear(true); return;
     }
+    // Turning autonomous patching ON deserves the same confirmation as nuclear
+    // mode — it is the switch that lets the system modify production code
+    // without a human in the loop.
+    if (toSave.enabled && !overrideCfg) {
+      setPendingCfg(toSave); setConfirmEnable(true); return;
+    }
     setSaving(true);
     try {
       await superadminApi.autoHealSaveConfig(toSave);
@@ -1177,6 +1206,14 @@ const AutoHealingSection: React.FC = () => {
 
   if (loading) return <><LoadingRows rows={8} /></>;
   if (error)   return <><ErrorState message={error} onRetry={load} /></>;
+  // An editable configuration we could not read is worse than none: it looks
+  // like the real one and saving it applies it to the live healing engine.
+  if (configLoadFailed) return (
+    <ErrorState
+      message="Couldn't load the auto-healing configuration. Nothing has been changed — retry before making any edits."
+      onRetry={load}
+    />
+  );
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
@@ -1196,6 +1233,21 @@ const AutoHealingSection: React.FC = () => {
           variant="danger"
           onConfirm={() => { setConfirmNuclear(false); handleSave(pendingCfg); setPendingCfg(null); }}
           onCancel={() => { setConfirmNuclear(false); setPendingCfg(null); }}
+        />
+      )}
+
+      {confirmEnable && pendingCfg && (
+        <ConfirmDialog
+          title="⚠️ Enable autonomous self-healing"
+          message={
+            'This lets the healer patch production code, quarantine components and roll back changes ' +
+            'on the live trading platform without a human in the loop. Only categories listed under ' +
+            'approval gates will still require sign-off. Enable it?'
+          }
+          confirmLabel="Enable self-healing"
+          variant="danger"
+          onConfirm={() => { setConfirmEnable(false); handleSave(pendingCfg); setPendingCfg(null); }}
+          onCancel={() => { setConfirmEnable(false); setPendingCfg(null); }}
         />
       )}
 
@@ -1319,13 +1371,20 @@ const AutoHealingSection: React.FC = () => {
             />
           )}
           {activeTab === 'approval' && (
-            <PendingApprovalPanel
-              patches={pendingApproval}
-              loading={approvalLoading}
-              onRefresh={loadApproval}
-              onApprove={handleApprove}
-              approvingIdx={approvingIdx}
-            />
+            approvalFailed ? (
+              <ErrorState
+                message="Couldn't load pending approvals. This is NOT the same as none pending — patches may be queued against production."
+                onRetry={loadApproval}
+              />
+            ) : (
+              <PendingApprovalPanel
+                patches={pendingApproval}
+                loading={approvalLoading}
+                onRefresh={loadApproval}
+                onApprove={handleApprove}
+                approvingIdx={approvingIdx}
+              />
+            )
           )}
         </div>
       </div>
