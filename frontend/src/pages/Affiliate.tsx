@@ -17,6 +17,9 @@ type Tab = 'overview'|'referrals'|'commissions'|'leaderboard';
 
 const LEVEL_COLORS: Record<string,string> = { bronze:'#cd7f32', silver:'#94a3b8', gold:'#f59e0b', platinum:'#a78bfa' };
 const LEVEL_RATES: Record<string,string>  = { bronze:'10%', silver:'15%', gold:'20%', platinum:'25%' };
+/** Stated on the panel and now enforced before the request is sent. */
+const MIN_WITHDRAWAL = 50;
+
 const fmt = (n:number|null|undefined,d=2) => (n == null || !Number.isFinite(n)) ? '—' : n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtUSD = (n:number|null|undefined) => (n == null || !Number.isFinite(n)) ? '—' : '$'+fmt(n);
 
@@ -42,6 +45,9 @@ const Affiliate:React.FC=()=>{
   const [withdrawAmt,setWithdrawAmt]=useState('');
   const [withdrawing,setWithdrawing]=useState(false);
   const [withdrawMsg,setWithdrawMsg]=useState('');
+  // Explicit, not sniffed: this banner tested withdrawMsg.includes('success'),
+  // so any failure phrased without that word rendered green.
+  const [withdrawOk,setWithdrawOk]=useState(true);
 
   // Cleanup copy timer on unmount
   React.useEffect(()=>()=>{if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);},[]);
@@ -87,13 +93,27 @@ const Affiliate:React.FC=()=>{
   const handleWithdraw=async()=>{
     if(!account||!withdrawAmt)return;
     const amount=parseFloat(withdrawAmt);
-    if(isNaN(amount)||amount<=0){setWithdrawMsg('Enter a valid amount.');return;}
+    if(isNaN(amount)||amount<=0){setWithdrawOk(false);setWithdrawMsg('Enter a valid amount.');return;}
+    // The panel has always stated a $50 minimum; nothing enforced it, so a $5
+    // request was submitted and rejected downstream.
+    if(amount<MIN_WITHDRAWAL){
+      setWithdrawOk(false);
+      setWithdrawMsg(`Minimum withdrawal is ${fmtUSD(MIN_WITHDRAWAL)}.`);
+      return;
+    }
+    const available=metrics?.pending_commissions??0;
+    if(amount>available){
+      setWithdrawOk(false);
+      setWithdrawMsg(`You have ${fmtUSD(available)} available to withdraw.`);
+      return;
+    }
     setWithdrawing(true); setWithdrawMsg('');
     try{
       await affiliateApi.withdraw(account.affiliate_id,amount);
+      setWithdrawOk(true);
       setWithdrawMsg(`Withdrawal of ${fmtUSD(amount)} requested successfully.`);
       setWithdrawAmt(''); await loadData();
-    }catch(err){setWithdrawMsg(extractApiError(err,'Withdrawal failed.'));}
+    }catch(err){setWithdrawOk(false);setWithdrawMsg(extractApiError(err,'Withdrawal failed.'));}
     finally{setWithdrawing(false);}
   };
 
@@ -158,12 +178,12 @@ const Affiliate:React.FC=()=>{
           </div>
           <div style={st.card}>
             <h3 style={st.cardTitle}>Request Commission Withdrawal</h3>
-            <p style={{color:'#64748b',fontSize:13,marginBottom:12}}>Minimum withdrawal: <strong style={{color:'#94a3b8'}}>$50.00</strong></p>
+            <p style={{color:'#64748b',fontSize:13,marginBottom:12}}>Minimum withdrawal: <strong style={{color:'#94a3b8'}}>{fmtUSD(MIN_WITHDRAWAL)}</strong></p>
             <div style={{display:'flex',gap:10,alignItems:'center'}}>
-              <input type="number" min="0" step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)" style={st.input}/>
+              <input type="number" min={MIN_WITHDRAWAL} step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)" style={st.input}/>
               <button onClick={handleWithdraw} disabled={withdrawing||!withdrawAmt} style={{...st.primaryBtn,opacity:withdrawing||!withdrawAmt?0.6:1}}>{withdrawing?'Processing…':'Withdraw'}</button>
             </div>
-            {withdrawMsg&&<div style={{marginTop:10,fontSize:13,color:withdrawMsg.includes('success')?'#4ade80':'#f87171'}}>{withdrawMsg}</div>}
+            {withdrawMsg&&<div style={{marginTop:10,fontSize:13,color:withdrawOk?'#4ade80':'#f87171'}}>{withdrawMsg}</div>}
           </div>
           <div style={st.card}>
             <h3 style={st.cardTitle}>How commissions work</h3>

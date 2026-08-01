@@ -68,7 +68,7 @@ const PodiumCard: React.FC<{ trader: Trader; tall?: boolean }> = ({ trader, tall
           🔁 Copy
         </Link>
         {trader.user_id && (
-          <Link to={`/trader/${trader.user_id}`}
+          <Link to={`/profile/${trader.user_id}`}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold no-underline border border-terminal-border text-slate-400 hover:border-slate-500 transition-colors">
             Profile
           </Link>
@@ -237,7 +237,7 @@ const Leaderboard: React.FC = () => {
               <tbody>
                 {sorted.map((trader) => {
                   const copyTo = trader.user_id ? `/copy-trading?trader=${trader.user_id}` : '/copy-trading';
-                  const profileTo = trader.user_id ? `/trader/${trader.user_id}` : null;
+                  const profileTo = trader.user_id ? `/profile/${trader.user_id}` : null;
                   return (
                     <tr key={trader.rank} className="border-t border-terminal-border/60 hover:bg-terminal-raised/40 transition-colors">
                       <td className="px-3 sm:px-4 py-3">
@@ -245,7 +245,11 @@ const Leaderboard: React.FC = () => {
                           {trader.rank <= 3
                             ? <span className="text-base sm:text-lg">{MEDAL[trader.rank]}</span>
                             : <span className="text-slate-500 text-sm">#{trader.rank}</span>}
-                          {trader.rank <= 5 && <span className="text-2xs text-green-400 font-bold">▲</span>}
+                          {/* A green ▲ used to appear for every trader in the top
+                              five, which reads as "moved up" — nothing here
+                              measures movement, and the API returns no previous
+                              rank. Showing a trend we do not have is worse than
+                              showing none. */}
                           {trader.rank > 10 && trader.rank <= 15 && <span className="text-2xs text-red-400 font-bold">▼</span>}
                         </div>
                       </td>

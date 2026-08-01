@@ -16,7 +16,7 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
-import { isAdmin, isSuperAdmin } from '../lib/subscription';
+import { isAdmin, isSuperAdmin, planRank } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
 
 // ── User-facing sections ──────────────────────────────────────────────────────
@@ -216,9 +216,9 @@ const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => 
   </div>
 );
 
-const PLAN_RANK: Record<string, number> = {
-  free: 0, starter: 1, professional: 2, enterprise: 3, elite: 4,
-};
+// Plan ranking comes from lib/subscription — this file used to declare a
+// second, identical copy. Two tables mean two things to keep in step, and the
+// one that drifts silently gates the wrong tabs.
 
 // ── Settings page ─────────────────────────────────────────────────────────────
 
@@ -230,7 +230,7 @@ const Settings: React.FC = () => {
 
   const storePlan  = useStore((s) => s.plan) ?? 'free';
   const plan       = superAdmin ? 'elite' : storePlan;
-  const planRank   = PLAN_RANK[plan] ?? 0;
+  const userPlanRank = planRank(plan);
 
   // Honour ?tab= deep links. KYCPage and MobilePage both link to
   // /settings?tab=security, and the param was ignored entirely — both landed on
@@ -261,7 +261,7 @@ const Settings: React.FC = () => {
   const renderSection = () => {
     const gate = (minPlan: string, node: React.ReactNode) => {
       if (superAdmin || admin) return node;
-      if (planRank >= (PLAN_RANK[minPlan] ?? 0)) return node;
+      if (userPlanRank >= planRank(minPlan)) return node;
       return <UpgradeNotice requiredPlan={minPlan} />;
     };
 
@@ -434,7 +434,7 @@ const Settings: React.FC = () => {
                     const isSA     = !!tab.superAdminOnly;
                     const isDanger = !!tab.danger;
                     const locked   = !superAdmin && !admin && tab.minPlan
-                      ? (PLAN_RANK[plan] ?? 0) < (PLAN_RANK[tab.minPlan] ?? 0)
+                      ? userPlanRank < planRank(tab.minPlan)
                       : false;
 
                     const activeColor   = isDanger || isSA ? '#fca5a5' : '#60a5fa';
