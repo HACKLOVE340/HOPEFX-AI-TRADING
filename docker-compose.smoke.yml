@@ -43,7 +43,7 @@
 
 services:
 
-  # ── Override Redis: plain TCP, no TLS, no password required ─────────────────
+  # ── Override Redis: plain TCP, no TLS, lightweight CI auth ──────────────────
   redis:
     command: >
       redis-server
@@ -51,11 +51,12 @@ services:
       --loglevel warning
       --maxmemory 128mb
       --maxmemory-policy allkeys-lru
+      --requirepass ci-smoke-redis-password
     environment:
-      # No password in CI — simplifies connection strings across all services
-      REDIS_PASSWORD: ""
+      # Keep auth enabled so the production startup validator still passes.
+      REDIS_PASSWORD: "ci-smoke-redis-password"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a ci-smoke-redis-password ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -67,13 +68,14 @@ services:
       # Disable Redis TLS so the app connects to the plain-TCP CI Redis
       IS_FORCE_TLS: "false"
       REDIS_FORCE_TLS: "false"
-      REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://:ci-smoke-redis-password@redis:6379/0"
       # Minimal required secrets — safe placeholder values for CI only
       POSTGRES_PASSWORD: "ci_smoke_password"
-      REDIS_PASSWORD: ""
+      REDIS_PASSWORD: "ci-smoke-redis-password"
       SECURITY_JWT_SECRET: "ci-smoke-test-jwt-secret-minimum-32-chars!!"
       CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      CRYPTO_WEBHOOK_SECRET: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       HOPEFX_KILL_SWITCH_TOKEN: "ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!"
       BOOTSTRAP_SUPERADMIN_PASSWORD: "ci-smoke-superadmin-pw"
       BOOTSTRAP_ADMIN_PASSWORD: "ci-smoke-admin-pw"
