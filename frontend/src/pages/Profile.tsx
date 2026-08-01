@@ -6,7 +6,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPctRaw } from '../lib/utils';
 
 interface TraderProfile {
   user_id: string; username: string; display_name: string; bio: string;
@@ -246,7 +246,7 @@ const Profile: React.FC = () => {
                   <td style={s.td}>{sig.symbol}</td>
                   <td style={s.td}><span style={{color:sig.direction==='BUY'?'#4ade80':'#f87171',fontWeight:600}}>{sig.direction}</span></td>
                   <td style={s.td}>{(sig.confidence*100).toFixed(0)}%</td>
-                  <td style={{...s.td,color:sig.pnl>=0?'#4ade80':'#f87171',fontWeight:600}}>{sig.pnl>=0?'+':''}{sig.pnl.toFixed(2)}%</td>
+                  <td style={{...s.td,color:sig.pnl>=0?'#4ade80':'#f87171',fontWeight:600}}>{fmtPctRaw(sig.pnl, 2)}</td>
                   <td style={s.td}>{new Date(sig.created_at).toLocaleDateString()}</td>
                 </tr>
               ))}

@@ -348,23 +348,42 @@ const TradeHistogram: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
   );
 };
 
-// ── MAE/MFE analysis ──────────────────────────────────────────────────────────
+// ── Execution quality ─────────────────────────────────────────────────────────
 
-const MAEMFEPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
+/**
+ * Fill-quality statistics.
+ *
+ * Sign convention, from execution/hopefx_engine.py: a long fill is
+ * `(fill - ask) / ask` and a short is `(bid - fill) / bid`, so in both
+ * directions POSITIVE slippage means a worse fill and NEGATIVE means price
+ * improvement.
+ *
+ * This panel had it backwards. `Math.min(...)` — the most negative value, i.e.
+ * the BEST fill of the set — was labelled "MAE (worst slippage)" and warned when
+ * it dropped below -5, so the page raised a warning on the best execution it had
+ * achieved while calling the worst one favourable. The stat card and the
+ * histogram elsewhere on this page already used the correct convention, so the
+ * two halves contradicted each other on the same screen.
+ *
+ * Renamed as well: MAE/MFE conventionally mean Maximum Adverse/Favourable
+ * Excursion of an open position, which is a different measurement entirely.
+ * These are fill-quality extremes.
+ */
+const ExecutionQualityPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
   if (fills.length === 0) return null;
 
   const slippages = fills.map((f) => f.slippage_bps);
   const latencies = fills.map((f) => f.latency_ms);
 
-  const mae = Math.min(...slippages);  // worst adverse slippage
-  const mfe = Math.max(...slippages);  // best favorable slippage
+  const worstSlip = Math.max(...slippages);  // most positive = most adverse
+  const bestSlip  = Math.min(...slippages);  // most negative = best improvement
   const avgSlip = slippages.reduce((a, b) => a + b, 0) / slippages.length;
   const avgLat  = latencies.reduce((a, b) => a + b, 0) / latencies.length;
   const p95Lat  = [...latencies].sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)] ?? 0;
 
   const metrics = [
-    { label: 'MAE (worst slippage)', value: `${mae.toFixed(2)} bps`, warn: mae < -5 },
-    { label: 'MFE (best slippage)',  value: `${mfe.toFixed(2)} bps`, warn: false },
+    { label: 'Worst fill',           value: `${worstSlip.toFixed(2)} bps`, warn: worstSlip > 5 },
+    { label: 'Best fill',            value: `${bestSlip.toFixed(2)} bps`,  warn: false },
     { label: 'Avg Slippage',         value: `${avgSlip.toFixed(2)} bps`, warn: avgSlip > 3 },
     { label: 'Avg Latency',          value: `${avgLat.toFixed(1)} ms`, warn: avgLat > 100 },
     { label: 'P95 Latency',          value: `${p95Lat.toFixed(1)} ms`, warn: p95Lat > 200 },
@@ -774,7 +793,7 @@ const PnLDashboard: React.FC = () => {
         {fills.length > 0 && (
           <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
             <h3 className="text-[13px] font-semibold text-slate-200 mb-3">MAE / MFE Analysis</h3>
-            <MAEMFEPanel fills={fills} />
+            <ExecutionQualityPanel fills={fills} />
           </div>
         )}
 

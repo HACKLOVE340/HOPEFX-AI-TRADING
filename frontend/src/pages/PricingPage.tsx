@@ -10,6 +10,7 @@
  */
 
 import React, { useState } from 'react';
+import { fmtPctRaw } from '../lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, pricingApi } from '../hooks/useApi';
@@ -148,11 +149,11 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
       </div>
       {!isFree && annual && plan.price_usd_annual > 0 && (
         <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 4 }}>
-          Billed ${plan.price_usd_annual.toLocaleString()}/yr — 2 months free
+          Billed ${(plan.price_usd_annual ?? 0).toLocaleString()}/yr — 2 months free
         </div>
       )}
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 20 }}>
-        {(plan.commission_rate * 100).toFixed(1)}% commission per trade
+        {fmtPctRaw((plan.commission_rate ?? 0) * 100, 1)} commission per trade
       </div>
       <button onClick={onSelect} style={{
         width: '100%', padding: '11px 0', borderRadius: 8, fontSize: 14, fontWeight: 700,
@@ -295,7 +296,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
             {plans.map(p => (
               <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
                 color: '#e2e8f0', fontWeight: 700, borderBottom: '1px solid #1e293b' }}>
-                {(p.commission_rate * 100).toFixed(1)}%
+                {fmtPctRaw((p.commission_rate ?? 0) * 100, 1)}
               </td>
             ))}
           </tr>
