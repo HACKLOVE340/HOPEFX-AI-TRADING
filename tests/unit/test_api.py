@@ -894,11 +894,11 @@ class TestMonetizationModels:
         assert r.monthly_price == 1800.0
 
     def test_subscribe_request_defaults(self):
-        r = SubscribeRequest(user_id="u1", tier="starter")
+        r = SubscribeRequest(tier="starter")
         assert r.billing_cycle == "monthly"
 
     def test_subscribe_request_annual(self):
-        r = SubscribeRequest(user_id="u1", tier="professional", billing_cycle="annual")
+        r = SubscribeRequest(tier="professional", billing_cycle="annual")
         assert r.billing_cycle == "annual"
 
     def test_subscribe_response(self):
@@ -913,7 +913,7 @@ class TestMonetizationModels:
         assert r.checkout_url is not None
 
     def test_activate_code_request(self):
-        r = ActivateCodeRequest(user_id="u1", code="HOPE-TEST-CODE")
+        r = ActivateCodeRequest(code="HOPE-TEST-CODE")
         assert r.code == "HOPE-TEST-CODE"
 
     def test_activate_code_response_success(self):
@@ -931,14 +931,13 @@ class TestMonetizationModels:
 
     def test_affiliate_signup_request(self):
         r = AffiliateSignupRequest(
-            user_id="u1",
             payment_email="pay@test.com",
             custom_code="MY_CODE",
         )
         assert r.custom_code == "MY_CODE"
 
     def test_affiliate_signup_request_minimal(self):
-        r = AffiliateSignupRequest(user_id="u2")
+        r = AffiliateSignupRequest()
         assert r.payment_email is None
         assert r.custom_code is None
 
@@ -954,12 +953,11 @@ class TestMonetizationModels:
         assert r.commission_rate == 0.10
 
     def test_referral_request(self):
-        r = ReferralRequest(affiliate_code="CODE123", referred_user_id="newuser")
+        r = ReferralRequest(affiliate_code="CODE123")
         assert r.affiliate_code == "CODE123"
 
     def test_strategy_list_request_defaults(self):
         r = StrategyListRequest(
-            creator_id="c1",
             name="My Strategy",
             description="desc",
             category="scalping",
@@ -970,12 +968,11 @@ class TestMonetizationModels:
         assert r.tags is None
 
     def test_strategy_purchase_request(self):
-        r = StrategyPurchaseRequest(buyer_id="b1", strategy_id="strat_001", stripe_customer_id="cus_test")
-        assert r.buyer_id == "b1"
+        r = StrategyPurchaseRequest(strategy_id="strat_001", stripe_customer_id="cus_test")
+        assert r.strategy_id == "strat_001"
 
     def test_review_request_valid(self):
         r = ReviewRequest(
-            user_id="u1",
             strategy_id="strat_001",
             rating=5,
             title="Excellent",
@@ -988,7 +985,6 @@ class TestMonetizationModels:
 
         with pytest.raises(ValidationError):
             ReviewRequest(
-                user_id="u1",
                 strategy_id="strat_001",
                 rating=6,  # out of range
                 title="T",

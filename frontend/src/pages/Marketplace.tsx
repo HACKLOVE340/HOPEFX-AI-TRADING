@@ -188,7 +188,8 @@ const Marketplace: React.FC = () => {
   const handleSubscribe = async (s: Strategy) => {
     setPurchaseError(null);
     try {
-      await marketplaceApi.purchase({ buyer_id: currentUser?.id ?? '', strategy_id: s.strategy_id });
+      // The server takes the buyer from the session; sending an id here was an IDOR.
+      await marketplaceApi.purchase({ strategy_id: s.strategy_id });
       setSubscribed(prev => new Set([...prev, s.strategy_id]));
     } catch (err) { setPurchaseError(extractApiError(err,'Purchase failed. Check your payment method.')); }
   };
