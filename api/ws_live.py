@@ -334,24 +334,89 @@ def get_live_manager() -> LiveConnectionManager:
 
 # Symbol config: vol and spread used only when no live price is available.
 # Keys use the slash format the frontend expects (XAU/USD etc.).
+# Seed price + quoted spread per symbol.
+#
+# This dict is the BASE broadcast set, not the whole of it — the broadcaster
+# unions it with whatever the price engine actually carries (see
+# `_broadcastable_symbols`). It must, however, cover everything the frontend
+# offers, because a symbol absent from both sources is never ticked at all.
+#
+# It used to hold six entries while config/multi_source_feed.yaml configured
+# twelve and Trade.tsx let you select all twelve. The other six were fetched,
+# validated and cached by the feed, then never broadcast: selecting XPT/USD,
+# USD/CHF, AUD/USD, USD/CAD, NZD/USD or ETH/USD showed "No feed" for ever, and
+# Watchlist showed live prices for five of its ten symbols for the same reason.
+#
+# `price` is only a pre-feed seed; every broadcast value comes from
+# `_get_live_price`. `spread` is the quoted bid/ask width around the mid.
 _SYMBOLS: dict[str, dict[str, float]] = {
-    "XAU/USD": {"price": 3300.0, "vol": 0.012, "spread": 0.30},
-    "XAG/USD": {"price": 33.0, "vol": 0.018, "spread": 0.03},
-    "EUR/USD": {"price": 1.0820, "vol": 0.006, "spread": 0.0001},
-    "GBP/USD": {"price": 1.2940, "vol": 0.007, "spread": 0.0002},
-    "USD/JPY": {"price": 149.50, "vol": 0.006, "spread": 0.02},
-    "BTC/USD": {"price": 85000.0, "vol": 0.025, "spread": 10.0},
+    # ── Precious metals ──────────────────────────────────────────────────────
+    "XAU/USD": {"price": 3300.0, "spread": 0.30},
+    "XAG/USD": {"price": 33.0, "spread": 0.03},
+    "XPT/USD": {"price": 1000.0, "spread": 0.50},
+    # ── Majors ───────────────────────────────────────────────────────────────
+    "EUR/USD": {"price": 1.0820, "spread": 0.0001},
+    "GBP/USD": {"price": 1.2940, "spread": 0.0002},
+    "USD/JPY": {"price": 149.50, "spread": 0.02},
+    "USD/CHF": {"price": 0.8800, "spread": 0.0002},
+    "AUD/USD": {"price": 0.6500, "spread": 0.0002},
+    "USD/CAD": {"price": 1.3700, "spread": 0.0002},
+    "NZD/USD": {"price": 0.6000, "spread": 0.0002},
+    # ── Crypto ───────────────────────────────────────────────────────────────
+    "BTC/USD": {"price": 85000.0, "spread": 10.0},
+    "ETH/USD": {"price": 3000.0, "spread": 1.0},
 }
 
+
+def _broadcastable_symbols() -> list[str]:
+    """Symbols to publish on the 'prices' channel this cycle.
+
+    The base set (`_SYMBOLS`) unioned with whatever the price engine is
+    actually carrying, normalised to the slash form the frontend keys on.
+
+    The broadcaster used to iterate `_SYMBOLS` alone. That made this dict the
+    real limit on what the UI could ever show, independently of the feed: a
+    symbol added to config/multi_source_feed.yaml was fetched and cached and
+    then silently never sent. Reading the engine's own symbol list means the
+    YAML stays the single place a symbol is declared.
+    """
+    symbols = set(_SYMBOLS)
+    try:
+        from core.app_state import app_state
+
+        pe = getattr(app_state, "price_engine", None)
+        for raw in getattr(pe, "symbols", None) or ():
+            slash = _to_slash(str(raw))
+            if slash:
+                symbols.add(slash)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("_broadcastable_symbols: %s", exc)
+    return sorted(symbols)
+
+
+def _spread_for(symbol: str, mid: float) -> float:
+    """Quoted spread for a symbol, falling back to 2 bps of the mid.
+
+    The fallback matters for symbols that reach us from the price engine
+    without a `_SYMBOLS` entry — they are still broadcast rather than dropped.
+    """
+    cfg = _SYMBOLS.get(symbol)
+    if cfg and cfg.get("spread"):
+        return float(cfg["spread"])
+    return max(mid * 0.0002, 1e-5)
+
+
 # Slash → no-slash lookup for broker.market_prices keys
-_BROKER_KEY: dict[str, str] = {
-    "XAU/USD": "XAUUSD",
-    "XAG/USD": "XAGUSD",
-    "EUR/USD": "EURUSD",
-    "GBP/USD": "GBPUSD",
-    "USD/JPY": "USDJPY",
-    "BTC/USD": "BTC/USD",
-}
+# Only needed where the broker key is NOT simply the slash stripped out;
+# `_get_live_price` falls back to `symbol.replace("/", "")` for everything else,
+# which is correct for every pair the feed configures.
+#
+# "BTC/USD" used to map to "BTC/USD" — keeping the slash, unlike every other
+# entry. Levels 1 and 2 look up `price_engine.get_last_price(key)` and
+# `broker.market_prices[key]`, both of which key on "BTCUSD" (the name used in
+# config/multi_source_feed.yaml), so Bitcoin missed the two freshest sources
+# and fell through to Redis or yfinance.
+_BROKER_KEY: dict[str, str] = {}
 
 # Reverse map: broker/no-slash symbol → frontend slash format
 _SLASH_SYMBOL: dict[str, str] = {v: k for k, v in _BROKER_KEY.items()}
@@ -517,16 +582,20 @@ def _make_tick(symbol: str) -> dict | None:
     no_live_feed status message instead of fabricating prices.
     """
     _seed_from_broker()
-    cfg = _SYMBOLS[symbol]
 
     live = _get_live_price(symbol)
     if live is None:
         return None
 
     mid = live
+    # `_SYMBOLS[symbol]` was a hard index, so a symbol reaching us from the
+    # price engine without a seed entry raised KeyError inside the broadcast
+    # loop instead of being ticked.
+    cfg = _SYMBOLS.setdefault(symbol, {"price": mid, "spread": _spread_for(symbol, mid)})
     cfg["price"] = mid
 
-    half = cfg["spread"] / 2
+    spread = _spread_for(symbol, mid)
+    half = spread / 2
     prev = _open_prices.get(symbol, mid)
     change = (mid - prev) / prev * 100 if prev > 0 else 0.0
     return {
@@ -536,7 +605,7 @@ def _make_tick(symbol: str) -> dict | None:
             "bid": round(mid - half, 5),
             "ask": round(mid + half, 5),
             "mid": round(mid, 5),
-            "spread": cfg["spread"],
+            "spread": spread,
             "timestamp": int(datetime.now(UTC).timestamp() * 1000),
             "change_pct": round(change, 3),
         },
@@ -911,7 +980,7 @@ async def _price_broadcaster_live_only() -> None:
         if not _prices_seeded:
             _seed_from_broker()
         any_live = False
-        for symbol in _SYMBOLS:
+        for symbol in _broadcastable_symbols():
             tick = _make_tick(symbol)
             if tick is not None:
                 any_live = True
@@ -961,13 +1030,25 @@ async def _price_broadcaster_live_only() -> None:
             await asyncio.sleep(9)
 
 
+# Last-resort fallback only — the real feed (twelve_data / alpha_vantage /
+# broker) is preferred at all four levels above this.
+#
+# XPT/USD is deliberately absent: config/multi_source_feed.yaml records that
+# Yahoo no longer serves spot platinum, and that quoting an ETF or a futures
+# contract in its place "would be far worse than no quote at all". It reaches
+# the UI via twelve_data / alpha_vantage, or shows no feed.
 _YF_SYMBOL_MAP: dict[str, str] = {
     "XAU/USD": "GC=F",
     "XAG/USD": "SI=F",
     "EUR/USD": "EURUSD=X",
     "GBP/USD": "GBPUSD=X",
     "USD/JPY": "USDJPY=X",
+    "USD/CHF": "CHF=X",
+    "AUD/USD": "AUDUSD=X",
+    "USD/CAD": "CAD=X",
+    "NZD/USD": "NZDUSD=X",
     "BTC/USD": "BTC-USD",
+    "ETH/USD": "ETH-USD",
 }
 
 # Cache last yfinance prices so we can broadcast change_pct correctly
