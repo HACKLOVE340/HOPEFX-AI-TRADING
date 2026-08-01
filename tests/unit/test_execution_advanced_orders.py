@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
 from types import ModuleType
@@ -492,14 +491,17 @@ class TestStopLimitRestsUntilFillable:
         """Resting must not outlive the order's own expiry."""
         broker = MonitoredBroker()
         manager = self._manager(broker)
-        order = _resting_stop_limit(expires_at=datetime.now(UTC) + timedelta(milliseconds=40))
+        order = _resting_stop_limit(expires_at=datetime.now(UTC) + timedelta(hours=1))
         manager._stop_limit_orders = {order.order_id: order}
 
         manager._latest_prices["XAU/USD"] = 2101.0
         await manager._check_stop_limit_orders()
         assert order.state == AdvancedOrderState.ACTIVE
 
-        await asyncio.sleep(0.05)
+        # Move the deadline into the past rather than sleeping up to it. A
+        # wall-clock wait of a few tens of milliseconds is the kind of thing that
+        # passes locally and fails on a loaded runner.
+        order.expires_at = datetime.now(UTC) - timedelta(seconds=1)
         await manager._check_stop_limit_orders()
 
         assert order.state == AdvancedOrderState.EXPIRED
