@@ -449,7 +449,7 @@ const Trade: React.FC = () => {
   const location    = useLocation();
   const signalState = (location.state as { signal?: {
     symbol?: string; direction?: string;
-    entry_price?: number; stop_loss?: number; take_profit?: number;
+    entry_price?: number; stop_loss?: number; take_profit?: number; quantity?: number;
   } } | null)?.signal;
 
   const [selectedSymbol, setSelectedSymbol] = useState(signalState?.symbol ?? 'XAU/USD');
@@ -589,6 +589,7 @@ const Trade: React.FC = () => {
           defaultLimitPx={signalState?.entry_price ? String(signalState.entry_price) : undefined}
           defaultSl={signalState?.stop_loss ? String(signalState.stop_loss) : undefined}
           defaultTp={signalState?.take_profit ? String(signalState.take_profit) : undefined}
+          defaultQty={signalState?.quantity ? signalState.quantity.toFixed(2) : undefined}
           onOrderPlaced={() => {
             setPendingSide(null);
             void qc.invalidateQueries({ queryKey: ['positions'] });

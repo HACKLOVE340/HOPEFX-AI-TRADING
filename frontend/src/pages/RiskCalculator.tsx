@@ -16,7 +16,7 @@ import { riskCalcApi } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface CalcState {
+export interface CalcState {
   symbol: string;
   accountBalance: string;
   riskPercent: string;
@@ -26,7 +26,7 @@ interface CalcState {
   leverage: string;
 }
 
-interface CalcResult {
+export interface CalcResult {
   rrRatio: number;
   riskAmount: number;
   rewardAmount: number;
@@ -55,18 +55,30 @@ interface SavedCalc {
 
 // ─── Symbol config ────────────────────────────────────────────────────────────
 
-const SYMBOLS: Record<string, { pipSize: number; contractSize: number; label: string }> = {
-  'XAU/USD': { pipSize: 0.01,    contractSize: 100,    label: 'Gold (XAU/USD)' },
-  'EUR/USD': { pipSize: 0.0001,  contractSize: 100000, label: 'EUR/USD' },
-  'GBP/USD': { pipSize: 0.0001,  contractSize: 100000, label: 'GBP/USD' },
-  'USD/JPY': { pipSize: 0.01,    contractSize: 100000, label: 'USD/JPY' },
-  'BTC/USD': { pipSize: 1,       contractSize: 1,      label: 'Bitcoin (BTC/USD)' },
-  'ETH/USD': { pipSize: 0.01,    contractSize: 1,      label: 'Ethereum (ETH/USD)' },
+/**
+ * `quoteIsUsd` says whether a pip is already worth its face value in dollars.
+ *
+ * A pip is worth `pipSize * contractSize` **in the quote currency**. For every
+ * pair here except USD/JPY the quote currency is USD, so that figure is the
+ * dollar value directly. USD/JPY is quoted in yen: one pip on a standard lot is
+ * ¥1,000, which at ~150 ¥/$ is about $6.67 — not $1,000.
+ *
+ * Treating it as dollars overstated pip value by roughly 150×, and since lot
+ * size is derived by dividing risk by it, the suggested position was ~150×
+ * too small. On a position-sizing tool that is the whole output.
+ */
+const SYMBOLS: Record<string, { pipSize: number; contractSize: number; quoteIsUsd: boolean; label: string }> = {
+  'XAU/USD': { pipSize: 0.01,    contractSize: 100,    quoteIsUsd: true,  label: 'Gold (XAU/USD)' },
+  'EUR/USD': { pipSize: 0.0001,  contractSize: 100000, quoteIsUsd: true,  label: 'EUR/USD' },
+  'GBP/USD': { pipSize: 0.0001,  contractSize: 100000, quoteIsUsd: true,  label: 'GBP/USD' },
+  'USD/JPY': { pipSize: 0.01,    contractSize: 100000, quoteIsUsd: false, label: 'USD/JPY' },
+  'BTC/USD': { pipSize: 1,       contractSize: 1,      quoteIsUsd: true,  label: 'Bitcoin (BTC/USD)' },
+  'ETH/USD': { pipSize: 0.01,    contractSize: 1,      quoteIsUsd: true,  label: 'Ethereum (ETH/USD)' },
 };
 
 // ─── Calculation logic ────────────────────────────────────────────────────────
 
-function calculate(state: CalcState): CalcResult | null {
+export function calculate(state: CalcState): CalcResult | null {
   const balance  = parseFloat(state.accountBalance);
   const riskPct  = parseFloat(state.riskPercent) / 100;
   const entry    = parseFloat(state.entryPrice);
@@ -89,8 +101,12 @@ function calculate(state: CalcState): CalcResult | null {
   const riskAmount   = balance * riskPct;
   const rewardAmount = riskAmount * rrRatio;
 
-  // pip value per lot = pipSize * contractSize (in quote currency, assume USD quote)
-  const pipValuePerLot = sym.pipSize * sym.contractSize;
+  // Pip value per lot, converted to USD. `pipSize * contractSize` is denominated
+  // in the QUOTE currency; for a USD-quoted pair that is already dollars. For
+  // USD/JPY the quote is yen and the price IS the USD/JPY rate, so dividing by
+  // it converts ¥ to $.
+  const pipValueQuoteCcy = sym.pipSize * sym.contractSize;
+  const pipValuePerLot   = sym.quoteIsUsd ? pipValueQuoteCcy : pipValueQuoteCcy / entry;
   const lotSize        = stopPips > 0 && pipValuePerLot > 0 ? riskAmount / (stopPips * pipValuePerLot) : 0;
   const pipValue       = pipValuePerLot * lotSize;
 
@@ -412,6 +428,12 @@ const RiskCalculator: React.FC = () => {
                   signal: {
                     symbol: state.symbol,
                     direction: parseFloat(state.takeProfit) > parseFloat(state.entryPrice) ? 'BUY' : 'SELL',
+                    // Entry price and the sized position carry across too. Without
+                    // them the trade ticket kept the stop and target that were
+                    // calculated against THIS entry, then filled at a different
+                    // one — so the risk the user just sized disappeared silently.
+                    entry_price: parseFloat(state.entryPrice),
+                    quantity: result.lotSize,
                     stop_loss: parseFloat(state.stopLoss),
                     take_profit: parseFloat(state.takeProfit),
                   }

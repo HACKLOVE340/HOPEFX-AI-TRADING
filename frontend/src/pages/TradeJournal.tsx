@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { journalApi } from '../hooks/useApi';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtPnl } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -328,8 +328,10 @@ const TradeJournal: React.FC = () => {
             <StatCard label="Total Trades" value={String(stats.total_trades)} />
             <StatCard label="Win Rate" value={`${fmt(stats.win_rate, 0)}%`} positive={stats.win_rate >= 50} />
             <StatCard label="Avg P&L" value={`$${fmt(stats.avg_pnl)}`} positive={stats.avg_pnl >= 0} />
-            <StatCard label="Best Trade" value={`+$${fmt(stats.best_trade_pnl)}`} positive />
-            <StatCard label="Worst Trade" value={`$${fmt(stats.worst_trade_pnl)}`} positive={false} />
+            {/* The best trade in a losing run is still a loss — the sign and the colour
+                both have to come from the number. */}
+            <StatCard label="Best Trade" value={fmtPnl(stats.best_trade_pnl)} positive={stats.best_trade_pnl >= 0} />
+            <StatCard label="Worst Trade" value={fmtPnl(stats.worst_trade_pnl)} positive={stats.worst_trade_pnl >= 0} />
             <StatCard label="Rule Deviations" value={String(stats.rule_deviation_count)} positive={stats.rule_deviation_count === 0} />
           </div>
 

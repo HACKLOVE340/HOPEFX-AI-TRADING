@@ -75,10 +75,19 @@ export function fmtPctRaw(value: number | null | undefined, decimals = 2): strin
   return `${sign}${value.toFixed(decimals)}%`;
 }
 
-/** Format P&L with sign and currency symbol */
+/**
+ * Format P&L with sign and currency symbol, e.g. 50 → "+$50.00", -50 → "-$50.00".
+ *
+ * The sign is placed before the currency symbol, which is why the magnitude is
+ * formatted separately. The negative branch previously produced an empty sign
+ * while still taking Math.abs, so every loss rendered as a positive number —
+ * a -$500 position read as "$500.00" in the positions table, the portfolio
+ * summary and the performance page. Colour usually carried the meaning; the
+ * number did not.
+ */
 export function fmtPnl(value: number | null | undefined, decimals = 2): string {
   if (value == null || !isFinite(value)) return '—';
-  const sign = value >= 0 ? '+' : '';
+  const sign = value < 0 ? '-' : '+';
   return `${sign}$${Math.abs(value).toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

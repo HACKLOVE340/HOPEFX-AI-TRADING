@@ -11,7 +11,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
-import { extractApiError, fmtPrice, fmtPnl } from '../lib/utils';
+import { extractApiError, fmtPrice, fmtPnl, fmtPctRaw } from '../lib/utils';
+import { ActionBanner } from '../components/ActionBanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,11 +26,21 @@ interface Leader {
   // These are not yet returned by GET /leaderboard — normalized with safe
   // defaults on load so cards and allocation math never render NaN/undefined.
   aum: number;
-  fee: number;
+  /** Performance fee %. `null` when the API did not return one — NOT zero.
+   *  Defaulting it to 0 quoted "$0.00 estimated monthly fee" over real capital
+   *  on a screen whose purpose is deciding how much to allocate. */
+  fee: number | null;
   win_rate: number;
   trades_per_week: number;
   avg_trade_duration: string;
 }
+
+const MIN_ALLOCATION = 1000;
+const MAX_ALLOCATION = 100000;
+
+/** Keep the typed value inside the same range the slider offers. */
+const clampAllocation = (n: number): number =>
+  Number.isFinite(n) ? Math.min(MAX_ALLOCATION, Math.max(MIN_ALLOCATION, Math.round(n))) : MIN_ALLOCATION;
 
 function normalizeLeader(l: Partial<Leader> & { id: string; name: string }): Leader {
   return {
@@ -40,7 +51,7 @@ function normalizeLeader(l: Partial<Leader> & { id: string; name: string }): Lea
     max_dd: l.max_dd ?? 0,
     followers: l.followers ?? 0,
     aum: l.aum ?? 0,
-    fee: l.fee ?? 0,
+    fee: l.fee ?? null,
     win_rate: l.win_rate ?? 0,
     trades_per_week: l.trades_per_week ?? 0,
     avg_trade_duration: l.avg_trade_duration ?? '—',
@@ -83,8 +94,10 @@ const LeaderCard: React.FC<{
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 24, fontWeight: 700, color: '#4ade80' }}>
-          +{leader.return_3m}%
+        {/* Sign and colour both from the number: a trader down 12% used to be
+            shown as a green "+-12%" at the top of their card. */}
+        <div style={{ fontSize: 24, fontWeight: 700, color: leader.return_3m >= 0 ? '#4ade80' : '#f87171' }}>
+          {fmtPctRaw(leader.return_3m, 1)}
         </div>
         <div style={{ fontSize: 11, color: '#475569' }}>3M Return</div>
       </div>
@@ -96,7 +109,7 @@ const LeaderCard: React.FC<{
         <div style={s.metricLbl}>Sharpe</div>
       </div>
       <div style={s.metric}>
-        <div style={{ ...s.metricVal, color: '#f87171' }}>{leader.max_dd}%</div>
+        <div style={{ ...s.metricVal, color: '#f87171' }}>-{Math.abs(leader.max_dd)}%</div>
         <div style={s.metricLbl}>Max DD</div>
       </div>
       <div style={s.metric}>
@@ -110,7 +123,7 @@ const LeaderCard: React.FC<{
         AUM: <strong>${(leader.aum / 1_000_000).toFixed(2)}M</strong>
       </span>
       <span style={{ fontSize: 13, color: '#94a3b8' }}>
-        Fee: <strong>{leader.fee}%</strong>
+        Fee: <strong>{leader.fee != null ? `${leader.fee}%` : 'not published'}</strong>
       </span>
     </div>
   </div>
@@ -128,6 +141,10 @@ const CopyTrading: React.FC = () => {
   const [sortBy, setSortBy]             = useState<'return' | 'sharpe' | 'followers'>('return');
   const [copying, setCopying]           = useState(false);
   const [copyMsg, setCopyMsg]           = useState('');
+  // Explicit, not inferred from the text. This banner used to test
+  // copyMsg.startsWith('Failed'), so any failure phrased differently rendered
+  // green next to the capital the user had just allocated.
+  const [copyOk, setCopyOk]             = useState(true);
   const [sessions, setSessions]         = useState<ActiveSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [stoppingId, setStoppingId]     = useState<string | null>(null);
@@ -182,16 +199,35 @@ const CopyTrading: React.FC = () => {
 
   const handleStartCopy = async () => {
     if (!selected) return;
+
+    // Allocating capital to another trader is not an undoable click. Name the
+    // amount, the trader, and the drawdown they have historically taken.
+    const ddPct = selectedLeader ? Math.abs(selectedLeader.max_dd) : 0;
+    const worstCase = Number.isFinite(allocation * ddPct / 100)
+      ? `$${(allocation * ddPct / 100).toFixed(0)}`
+      : 'an unknown amount';
+    const ok = window.confirm(
+      `Allocate $${allocation.toLocaleString()} to ${selectedLeader?.name ?? 'this trader'}?\n\n` +
+      `Their worst historical drawdown is ${ddPct.toFixed(1)}%, which on this ` +
+      `allocation would be ${worstCase}.\n\n` +
+      'Your account will begin mirroring their trades immediately.'
+    );
+    if (!ok) return;
+
     setCopying(true);
     setCopyMsg('');
     try {
       await copyTradingApi.startCopy(selected, { allocation_amount: allocation });
+      setCopyOk(true);
       setCopyMsg(`Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()}`);
       setSelected(null);
       await loadSessions();
       setActiveTab('active');
     } catch (e: unknown) {
-      setCopyMsg(`Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`);
+      // extractApiError reads the server's `detail`; the raw Error message is
+      // usually just "Request failed with status code 400".
+      setCopyOk(false);
+      setCopyMsg(extractApiError(e, 'Could not start copying. No capital has been allocated.'));
     }
     setCopying(false);
   };
@@ -201,7 +237,14 @@ const CopyTrading: React.FC = () => {
     try {
       await copyTradingApi.stopCopy(traderId);
       await loadSessions();
-    } catch { /* non-fatal */ }
+      setCopyOk(true);
+      setCopyMsg('Stopped copying.');
+    } catch (e: unknown) {
+      // Not "non-fatal": if this failed, the account is still mirroring their
+      // trades while the user believes it has stopped.
+      setCopyOk(false);
+      setCopyMsg(extractApiError(e, 'Could not stop copying — your account may still be mirroring this trader.'));
+    }
     finally { setStoppingId(null); }
   };
 
@@ -213,13 +256,20 @@ const CopyTrading: React.FC = () => {
       await copyTradingApi.updateAllocation(traderId, amount);
       await loadSessions();
       setEditAlloc(prev => { const n = { ...prev }; delete n[traderId]; return n; });
-    } catch { /* non-fatal */ }
+      setCopyOk(true);
+      setCopyMsg('Allocation updated.');
+    } catch (e: unknown) {
+      // The input clears on success, so silence here read as "applied".
+      setCopyOk(false);
+      setCopyMsg(extractApiError(e, 'Could not update the allocation — it is unchanged.'));
+    }
     finally { setUpdatingId(null); }
   };
 
-  const estimatedMonthlyFee = selectedLeader
-    ? (allocation * (selectedLeader.fee / 100) / 12).toFixed(2)
-    : '0.00';
+  const estimatedMonthlyFee =
+    selectedLeader && selectedLeader.fee != null
+      ? `$${(allocation * (selectedLeader.fee / 100) / 12).toFixed(2)}`
+      : 'Not published';
 
   return (
     <div className="page-content">
@@ -252,6 +302,13 @@ const CopyTrading: React.FC = () => {
       {/* ── Active Sessions Tab ── */}
       {activeTab === 'active' && (
         <div>
+          {/* Stop and Update act from this tab, so their outcome has to be
+              visible here — the allocation card's banner is not on screen. */}
+          {copyMsg && (
+            <div style={{ marginBottom: 12 }}>
+              <ActionBanner message={copyMsg} ok={copyOk} onDismiss={() => setCopyMsg('')} />
+            </div>
+          )}
           {sessionsLoading && <p style={{ color: '#64748b' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
@@ -385,10 +442,15 @@ const CopyTrading: React.FC = () => {
                   onChange={(e) => setAllocation(Number(e.target.value))}
                   style={{ flex: 1 }}
                 />
+                {/* The slider was bounded 1k–100k; the number box next to it was
+                    not, so any figure could be typed straight past the range. */}
                 <input
                   type="number"
+                  min={MIN_ALLOCATION}
+                  max={MAX_ALLOCATION}
+                  step={1000}
                   value={allocation}
-                  onChange={(e) => setAllocation(Number(e.target.value))}
+                  onChange={(e) => setAllocation(clampAllocation(Number(e.target.value)))}
                   style={{ ...s.input, width: 120 }}
                 />
               </div>
@@ -397,7 +459,7 @@ const CopyTrading: React.FC = () => {
             <div style={s.summaryBox}>
               <div style={s.summaryRow}>
                 <span style={s.summaryLabel}>Estimated Monthly Fee</span>
-                <span style={s.summaryVal}>${estimatedMonthlyFee}</span>
+                <span style={s.summaryVal}>{estimatedMonthlyFee}</span>
               </div>
               <div style={s.summaryRow}>
                 <span style={s.summaryLabel}>Max Drawdown Stop</span>
@@ -430,7 +492,7 @@ const CopyTrading: React.FC = () => {
           {copyMsg && (
             <div style={{
               marginTop: 12, fontSize: 14,
-              color: copyMsg.startsWith('Failed') ? '#f87171' : '#4ade80',
+              color: copyOk ? '#4ade80' : '#f87171',
             }}>
               {copyMsg}
             </div>

@@ -272,7 +272,9 @@ const OverviewSection: React.FC = () => {
       {/* KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14, marginBottom: 24 }}>
         <KpiTile label="Total Users"        value={fmt(data.total_users)}          icon="👥" accent="#3b82f6" sub="all time" />
-        <KpiTile label="Active (24h)"       value={fmt(data.active_users_24h)}     icon="🟢" accent="#22c55e" trend="up" trendValue={`+${data.new_users_7d} this week`} />
+        {/* trend was hardcoded "up", so a week with no signups still rendered an
+            upward arrow next to "+0 this week". */}
+        <KpiTile label="Active (24h)"       value={fmt(data.active_users_24h)}     icon="🟢" accent="#22c55e" trend={data.new_users_7d > 0 ? "up" : data.new_users_7d < 0 ? "down" : undefined} trendValue={`${data.new_users_7d >= 0 ? "+" : ""}${data.new_users_7d} this week`} />
         <KpiTile label="Revenue MTD"        value={fmtMoney(data.revenue_mtd, data.revenue_currency)} icon="💰" accent="#f59e0b" />
         <KpiTile label="Trades Today"       value={fmt(data.total_trades_today)}   icon="📊" accent="#8b5cf6" />
         <KpiTile label="Open Positions"     value={data.open_positions}            icon="📈" accent="#06b6d4" />

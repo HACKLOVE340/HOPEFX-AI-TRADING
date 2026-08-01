@@ -132,12 +132,18 @@ const ProgressBar: React.FC<{
   amount?: string;
   invert?: boolean;
 }> = ({ label, value, limit, amount, invert = false }) => {
-  const pct    = Math.min((value / limit) * 100, 100);
-  const danger = invert ? pct >= 100 : pct >= 95;
-  const warn   = !invert && pct >= 80;
+  const pct = Math.min((value / limit) * 100, 100);
 
-  const barColor = danger ? '#ef4444' : warn ? '#f59e0b' : invert ? '#22c55e' : '#3b82f6';
-  const labelColor = danger ? '#f87171' : warn ? '#fbbf24' : '#cbd5e1';
+  // `invert` means higher is better — this is the profit target, not a loss
+  // limit. Reaching 100% there is passing the challenge, and it used to share
+  // the `danger` branch with a blown drawdown limit: the single best moment in
+  // the challenge rendered in the same red as failing it.
+  const achieved = invert && pct >= 100;
+  const danger   = !invert && pct >= 95;
+  const warn     = !invert && pct >= 80;
+
+  const barColor   = achieved ? '#22c55e' : danger ? '#ef4444' : warn ? '#f59e0b' : invert ? '#22c55e' : '#3b82f6';
+  const labelColor = achieved ? '#4ade80' : danger ? '#f87171' : warn ? '#fbbf24' : '#cbd5e1';
 
   return (
     <div style={{ marginBottom: 20 }}>
