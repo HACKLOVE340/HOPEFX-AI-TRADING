@@ -26,24 +26,47 @@ const DangerSection: React.FC = () => {
 
   const [exportLoading, setExportLoading] = useState(false);
   const [emergencyLoading, setEmergencyLoading] = useState(false);
-  const [emergencyDone, setEmergencyDone] = useState(false);
+  // Server-reported halt state, not local optimism. A sticky local flag meant
+  // that once the button was pressed the page read "✅ Trading halted" for the
+  // rest of the session and the control disappeared — so if trading resumed
+  // (supervisor restart, another operator, partial failure) the screen kept
+  // asserting a halt that no longer held, with no way to retry.
+  const [tradingHalted, setTradingHalted] = useState<boolean | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
+  /** Read the live kill-switch state. GET /settings/trading reports the engine,
+   *  not a stored preference, so this is authoritative for a normal user. */
+  const refreshHaltState = React.useCallback(async () => {
+    try {
+      const res = await api.get<{ kill_switch_enabled?: boolean }>('/settings/trading');
+      setTradingHalted(res.data.kill_switch_enabled ?? false);
+    } catch {
+      // Unknown, and shown as unknown — never as "not halted".
+      setTradingHalted(null);
+    }
+  }, []);
+
+  React.useEffect(() => { void refreshHaltState(); }, [refreshHaltState]);
+
   const handleExportData = async () => {
     setExportLoading(true);
     try {
-      const res = await api.get('/admin/audit-log/export', { responseType: 'blob' });
+      // Was '/admin/audit-log/export' — an admin route behind a button in the
+      // user's own Danger Zone, so every non-admin got a 403 and a "try again"
+      // toast that could never work. This endpoint is user-scoped via the token
+      // and scrubs broker secrets before returning.
+      const res = await api.get('/settings/privacy/export', { responseType: 'blob' });
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `hopefx-data-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `hopefx-data-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Data export downloaded.');
     } catch (err: unknown) {
-      toast.error('Export failed. Try again.');
+      toast.error(extractApiError(err, 'Export failed. Try again.'));
       console.warn('[Settings/Danger] export:', err);
     } finally {
       setExportLoading(false);
@@ -61,13 +84,15 @@ const DangerSection: React.FC = () => {
     setEmergencyLoading(true);
     try {
       await withCsrfRetry(() => api.post('/trading/emergency-stop'));
-      setEmergencyDone(true);
       toast.success('Emergency stop activated — all trading halted.');
     } catch (err: unknown) {
-      toast.error('Emergency stop failed. Contact support immediately.');
+      toast.error(extractApiError(err, 'Emergency stop failed. Contact support immediately.'));
       console.warn('[Settings/Danger] emergency stop:', err);
     } finally {
       setEmergencyLoading(false);
+      // Read the outcome back rather than assuming it. A halt is the one thing
+      // on this page you must not merely believe happened.
+      void refreshHaltState();
     }
   };
 
@@ -98,10 +123,15 @@ const DangerSection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginBottom: 4 }}>Export your data</div>
-            <div style={{ fontSize: 13, color: '#64748b' }}>Download a CSV of your audit log, trades, and account activity.</div>
+            {/* Describes what the endpoint actually returns. It previously promised
+                audit log, trades and account activity; /settings/privacy/export
+                carries privacy, integration and accessibility settings only.
+                Widening the export is follow-up work — the copy must not run
+                ahead of it. */}
+            <div style={{ fontSize: 13, color: '#64748b' }}>Download a JSON copy of your privacy, integration, and accessibility settings.</div>
           </div>
           <Button variant="secondary" onClick={handleExportData} loading={exportLoading}>
-            Export CSV
+            Export JSON
           </Button>
         </div>
       </Card>
@@ -115,13 +145,20 @@ const DangerSection: React.FC = () => {
               Immediately halt all automated trading and close all open positions.
             </div>
           </div>
-          {emergencyDone ? (
-            <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 600 }}>✅ Trading halted</span>
-          ) : (
+          {/* The control stays available whatever the state says — losing it is
+              how an operator ends up unable to retry a halt that silently
+              lapsed. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {tradingHalted === true && (
+              <span style={{ fontSize: 13, color: '#f87171', fontWeight: 600 }}>🛑 Trading halted</span>
+            )}
+            {tradingHalted === null && (
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>Status unavailable</span>
+            )}
             <Button variant="danger" onClick={handleEmergencyStop} loading={emergencyLoading}>
-              Emergency stop
+              {tradingHalted === true ? 'Halt again' : 'Emergency stop'}
             </Button>
-          )}
+          </div>
         </div>
       </Card>
 
@@ -144,7 +181,21 @@ const DangerSection: React.FC = () => {
                 variant: 'danger',
               });
               if (!ok) return;
-              await api.delete('/auth/sessions').catch(() => {});
+              // The one action on this page whose entire purpose is security —
+              // a user reaches for it after losing a laptop. Swallowing the
+              // failure told them it had worked while the other sessions stayed
+              // live. It was also the only destructive action here not wrapped
+              // in withCsrfRetry, so a stale CSRF token 403'd it, which is the
+              // most likely way it failed.
+              try {
+                await withCsrfRetry(() => api.delete('/auth/sessions'));
+              } catch (err: unknown) {
+                toast.error(extractApiError(
+                  err,
+                  'Could not revoke your other sessions — they may still be signed in. Please try again.',
+                ));
+                return;   // stay signed in: the safer failure
+              }
               clearAuth();
               navigate('/login');
             }}
