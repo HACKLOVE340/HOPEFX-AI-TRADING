@@ -115,7 +115,9 @@ def test_only_the_unconfigured_source_is_named(monkeypatch, tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="data_feed.multi_source_feed"):
         feed._build_sources()
 
-    joined = " ".join(r.getMessage() for r in caplog.records)
+    # WARNING+ only: the constructor also logs an INFO line listing every
+    # enabled source, which contains "twelve_data" and is not what we assert on.
+    joined = " ".join(r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
     assert "alpha_vantage" in joined
     assert "twelve_data" not in joined
     assert "ALPHA_VANTAGE_KEY" in joined
@@ -131,10 +133,13 @@ def test_a_disabled_source_is_not_reported(monkeypatch, tmp_path, caplog):
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
 
-@pytest.mark.parametrize("source_cls,name", [
-    ("AlphaVantageSource", "alpha_vantage"),
-    ("TwelveDataSource", "twelve_data"),
-])
+@pytest.mark.parametrize(
+    "source_cls,name",
+    [
+        ("AlphaVantageSource", "alpha_vantage"),
+        ("TwelveDataSource", "twelve_data"),
+    ],
+)
 async def test_keyless_source_returns_none_without_calling_out(source_cls, name):
     """The skip must be a clean None, not a doomed HTTP request per tick."""
     import importlib
@@ -142,9 +147,7 @@ async def test_keyless_source_returns_none_without_calling_out(source_cls, name)
     mod = importlib.import_module(f"data_feed.sources.{name}")
     cls = getattr(mod, source_cls)
 
-    result = await cls(api_key="").fetch(
-        "XAUUSD", {"alpha_vantage_symbol": "XAU", "twelve_data_symbol": "XAU/USD"}
-    )
+    result = await cls(api_key="").fetch("XAUUSD", {"alpha_vantage_symbol": "XAU", "twelve_data_symbol": "XAU/USD"})
     assert result is None
 
 
@@ -179,6 +182,7 @@ def test_metals_have_no_yfinance_fallback_in_the_real_config():
 # `apikey=${ALPHA_VANTAGE_API_KEY:}` upstream — one guaranteed-failing request
 # per symbol per cycle.
 
+
 def test_nested_placeholder_resolves_to_empty_when_nothing_is_set(monkeypatch):
     from data_feed.multi_source_feed import _resolve_env
 
@@ -209,12 +213,15 @@ def test_primary_name_wins_over_the_fallback(monkeypatch):
     assert _resolve_env("${ALPHA_VANTAGE_KEY:${ALPHA_VANTAGE_API_KEY:}}") == "from-primary"
 
 
-@pytest.mark.parametrize(("template", "expected"), [
-    ("${NO_SUCH_VAR:plain-default}", "plain-default"),
-    ("${NO_SUCH_VAR:}", ""),
-    ("${NO_SUCH_VAR}", ""),
-    ("literal-value", "literal-value"),
-])
+@pytest.mark.parametrize(
+    ("template", "expected"),
+    [
+        ("${NO_SUCH_VAR:plain-default}", "plain-default"),
+        ("${NO_SUCH_VAR:}", ""),
+        ("${NO_SUCH_VAR}", ""),
+        ("literal-value", "literal-value"),
+    ],
+)
 def test_simple_placeholder_forms_are_unchanged(monkeypatch, template, expected):
     """The single-level behaviour callers already rely on must not regress."""
     from data_feed.multi_source_feed import _resolve_env
@@ -242,9 +249,9 @@ def test_the_real_config_resolves_to_empty_without_env(monkeypatch):
     for var in ("ALPHA_VANTAGE_KEY", "ALPHA_VANTAGE_API_KEY", "TWELVE_API_KEY"):
         monkeypatch.delenv(var, raising=False)
 
-    cfg = yaml.safe_load(
-        (Path(__file__).resolve().parents[2] / "config" / "multi_source_feed.yaml").read_text()
-    )["multi_source_feed"]
+    cfg = yaml.safe_load((Path(__file__).resolve().parents[2] / "config" / "multi_source_feed.yaml").read_text())[
+        "multi_source_feed"
+    ]
 
     for source in ("alpha_vantage", "twelve_data"):
         raw = cfg.get(source, {}).get("api_key", "")
