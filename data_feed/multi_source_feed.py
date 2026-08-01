@@ -75,15 +75,39 @@ _FALLBACK_ORDER = ["yfinance", "alpha_vantage", "twelve_data"]
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _resolve_env(v: Any) -> str:
-    """Expand ``${VAR:default}`` placeholders in YAML string values."""
+def _resolve_env(v: Any, _depth: int = 0) -> str:
+    """Expand ``${VAR:default}`` placeholders in YAML string values.
+
+    The default may itself be a placeholder — the feed config uses
+    ``"${ALPHA_VANTAGE_KEY:${ALPHA_VANTAGE_API_KEY:}}"`` to accept either
+    variable name. This used to `partition(":")` once and return the default
+    verbatim, so with neither variable set it produced the *literal string*
+    ``"${ALPHA_VANTAGE_API_KEY:}"``.
+
+    That string is truthy, which had three consequences: the `or os.getenv(...)`
+    fallbacks after it were never reached, an unset key looked configured, and
+    AlphaVantageSource sent ``apikey=${ALPHA_VANTAGE_API_KEY:}`` upstream on
+    every fetch — a request guaranteed to fail, once per symbol per cycle.
+
+    Resolving recursively returns "" when nothing is set, which is what the
+    callers already treat as "not configured".
+    """
     if not isinstance(v, str):
         return v
-    if v.startswith("${") and v.endswith("}"):
-        inner = v[2:-1]
-        var, _, default = inner.partition(":")
-        return os.environ.get(var.strip(), default)
-    return v
+    if not (v.startswith("${") and v.endswith("}")):
+        return v
+    if _depth > 8:  # pathological nesting — do not spin
+        logger.warning("_resolve_env: placeholder nested too deeply, giving up: %r", v)
+        return ""
+
+    inner = v[2:-1]
+    var, sep, default = inner.partition(":")
+    resolved = os.environ.get(var.strip())
+    if resolved:
+        return resolved
+    if not sep:
+        return ""
+    return _resolve_env(default, _depth + 1)
 
 
 def _load_config(path: Path = _CONFIG_PATH) -> dict:
@@ -323,7 +347,38 @@ class MultiSourceTickFeed:
                 timeout=self._timeout_s,
                 session=self._session,
             )
+
+        self._warn_unusable_sources(av_key=av_key, td_key=td_key)
         return sources
+
+    def _warn_unusable_sources(self, *, av_key: str, td_key: str) -> None:
+        """Log, once at startup, any source that is enabled but cannot be used.
+
+        A keyed source with no key skips every fetch and returns None, at DEBUG
+        level — so at normal log levels an unset key is indistinguishable from
+        an upstream outage, and both look like "no data" in the UI.
+
+        This matters most for the metals. XAUUSD, XAGUSD and XPTUSD have no
+        yfinance ticker on purpose (Yahoo delisted spot, and quoting GLD against
+        spot gold would be far worse than quoting nothing), so they can ONLY be
+        priced by alpha_vantage or twelve_data. Without a key there is no spot
+        gold price on a platform whose primary instrument is gold.
+        """
+        keyed = {"alpha_vantage": av_key, "twelve_data": td_key}
+        unusable = [name for name, key in keyed.items() if self._source_enabled.get(name, True) and not key]
+        if not unusable:
+            return
+
+        # Symbols that depend entirely on the keyed sources.
+        keyless_only = sorted(sym for sym, cfg in self._symbol_cfgs.items() if not (cfg or {}).get("yfinance_ticker"))
+        logger.warning(
+            "Data feed: %s enabled but no API key configured — every fetch from "
+            "%s will be skipped. Set %s. Affected symbols (no yfinance fallback): %s",
+            ", ".join(unusable),
+            "them" if len(unusable) > 1 else "it",
+            " / ".join({"alpha_vantage": "ALPHA_VANTAGE_KEY", "twelve_data": "TWELVE_API_KEY"}[n] for n in unusable),
+            ", ".join(keyless_only) or "none",
+        )
 
     # ── Subscription ──────────────────────────────────────────────────────────
 
