@@ -212,6 +212,18 @@ fi
 echo "[ 9/9 ] Smoke tests"
 if [ "${SKIP_TESTS:-false}" = "true" ]; then
     warn "SKIP_TESTS=true — skipping pytest"
+elif ! python3 -c "import pytest, pytest_asyncio, pytest_timeout" >/dev/null 2>&1; then
+    # pytest, pytest-asyncio and pytest-timeout are declared in
+    # requirements-ci.txt / requirements-dev.txt only — the production image
+    # installs requirements.txt, so the test toolchain is deliberately absent.
+    #
+    # This step used to run pytest regardless. tests/fixtures/db.py imports
+    # pytest_asyncio at module scope as a registered plugin, so collection
+    # aborted before a single test ran, `fail` exited 1, and because the
+    # container runs `preflight.sh && python app.py` the `&&` short-circuited
+    # and the app never started. A test toolchain that is absent by design is
+    # a property of the image, not a reason to refuse to boot.
+    warn "test toolchain not installed — skipping smoke tests (expected in the production image)"
 else
     python3 -m pytest tests/ -q --tb=short \
         -m "not slow and not integration" \
