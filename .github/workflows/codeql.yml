@@ -39,6 +39,22 @@ jobs:
         include:
         - language: python
           build-mode: none
+        # `actions` analyses the workflow files themselves. It is here because
+        # main already has an /language:actions configuration registered, so
+        # analysing python alone made every pull request report
+        #
+        #     1 configuration present on refs/heads/main was not found:
+        #     /language:actions
+        #
+        # and conclude `failure` — regardless of whether it found anything. A
+        # check that is red on every PR is a check nobody reads, which is how a
+        # backlog of real alerts went unnoticed.
+        #
+        # Adding it makes PR and main analyse the same set, so the check turns
+        # on findings again. It also means workflow files are scanned before
+        # they merge rather than only afterwards.
+        - language: actions
+          build-mode: none
 
     steps:
     - name: Checkout repository
