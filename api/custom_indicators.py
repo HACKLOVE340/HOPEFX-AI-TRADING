@@ -259,13 +259,21 @@ async def preview_indicator(
         )
 
     # Evaluate formula — support SMA(close, N), EMA(close, N), RSI(close, N)
+    #
+    # The three patterns below are anchored (re.match, not re.search) and use a
+    # bounded {0,64} argument repeat rather than an unbounded `[^,]*`. Each
+    # branch is already guarded by a startswith on the same prefix, so anchoring
+    # matches at the only position that could ever hit — while removing the
+    # "retry at every offset" factor that makes an unbounded `[^,]*` followed by
+    # a literal quadratic on a long non-matching input. The max_length=200 on
+    # the field caps the damage; this removes the shape entirely.
     formula = body.formula.strip().upper()
     result: list[float] = []
     try:
         if formula.startswith("SMA("):
             import re
 
-            m = re.search(r"SMA\([^,]*,\s*(\d+)\)", formula)
+            m = re.match(r"SMA\([^,]{0,64},\s*(\d{1,5})\)", formula)
             period = int(m.group(1)) if m else 20
             for i in range(len(closes)):
                 if i < period - 1:
@@ -275,7 +283,7 @@ async def preview_indicator(
         elif formula.startswith("EMA("):
             import re
 
-            m = re.search(r"EMA\([^,]*,\s*(\d+)\)", formula)
+            m = re.match(r"EMA\([^,]{0,64},\s*(\d{1,5})\)", formula)
             period = int(m.group(1)) if m else 20
             k = 2 / (period + 1)
             ema = closes[0]
@@ -285,7 +293,7 @@ async def preview_indicator(
         elif formula.startswith("RSI("):
             import re
 
-            m = re.search(r"RSI\([^,]*,\s*(\d+)\)", formula)
+            m = re.match(r"RSI\([^,]{0,64},\s*(\d{1,5})\)", formula)
             period = int(m.group(1)) if m else 14
             gains, losses = [], []
             for i in range(1, len(closes)):

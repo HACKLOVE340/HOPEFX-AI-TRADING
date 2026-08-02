@@ -16,6 +16,8 @@ Register with:
 """
 
 import logging
+import os
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -25,6 +27,20 @@ from fastapi.staticfiles import StaticFiles
 logger = logging.getLogger(__name__)
 
 _TEMPLATES = Path(__file__).parent.parent / "templates"
+
+# Shape of a servable static asset path, e.g. "assets/index-a1b2c3.js",
+# "favicon.svg", "images/logo.png".
+#
+# Every segment must begin with an alphanumeric. That single rule is what makes
+# traversal unspellable: "." and ".." can never BE a segment, so there is no
+# input that climbs out of the build directory for the confinement check to
+# catch. Backslashes, NUL, and a leading "/" are excluded by the character
+# class.
+_ASSET_PATH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*(?:/[A-Za-z0-9][A-Za-z0-9_.\-]*)*")
+
+# Length bound applied before matching, so a pathological URL never reaches the
+# regex or the filesystem. Comfortably above any real Vite asset path.
+_MAX_ASSET_PATH_LEN = 255
 
 
 def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
@@ -131,6 +147,9 @@ def register_page_routes(app: FastAPI) -> None:
 
     if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
         _index_html = _frontend_dist / "index.html"
+        # Resolved once here so the catch-all below can confine every asset
+        # lookup to this directory without re-resolving on each request.
+        _frontend_dist_resolved = _frontend_dist.resolve()
 
         # ── SPA catch-all: serve index.html for every React Router path ──────
         #
@@ -259,9 +278,39 @@ def register_page_routes(app: FastAPI) -> None:
                 for p in _passthrough_prefixes
             ):
                 return Response(status_code=404)
-            # Serve real static assets (JS/CSS/images) from the build output
-            _asset = _frontend_dist / full_path
-            if _asset.exists() and _asset.is_file():
+            # Serve real static assets (JS/CSS/images) from the build output.
+            #
+            # `full_path` is the raw catch-all segment. `Path / "x"` applies no
+            # traversal check of its own, and the passthrough list above only
+            # screens known route prefixes, so nothing here stopped a segment
+            # climbing out of the build directory.
+            #
+            # Two independent guards, in the order the rest of the codebase uses
+            # (security/antivirus.py, api/backtesting.py, ml/online_learner.py):
+            #
+            #   1. Allowlist. Every segment must begin with an alphanumeric, so
+            #      "." and ".." cannot BE a segment — traversal is unspellable
+            #      rather than merely detected. No backslashes, no NUL, no
+            #      leading "/". The path is then rebuilt from the match output,
+            #      so the tainted string never reaches path construction.
+            #   2. Confinement. Resolve and prove the result is still inside the
+            #      build output, in case the allowlist is ever loosened.
+            #
+            # A path failing either check is not an asset, so it falls through
+            # to index.html like any other unknown route — the response does not
+            # distinguish "escaped" from "not found".
+            _is_asset = False
+            _asset: Path | None = None
+            _m = _ASSET_PATH_RE.fullmatch(full_path) if len(full_path) <= _MAX_ASSET_PATH_LEN else None
+            if _m is not None:
+                _safe_rel: str = _m.group(0)  # untainted — output of a pattern match
+                try:
+                    _asset = Path(os.path.join(str(_frontend_dist_resolved), _safe_rel)).resolve()
+                    _asset.relative_to(_frontend_dist_resolved)
+                    _is_asset = _asset.is_file()
+                except (ValueError, OSError):
+                    _is_asset = False
+            if _is_asset and _asset is not None:
                 return FileResponse(str(_asset))
             # Everything else is a React Router path → serve index.html
             return FileResponse(str(_index_html))
