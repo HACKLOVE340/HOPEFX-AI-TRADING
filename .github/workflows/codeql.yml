@@ -47,7 +47,7 @@ jobs:
         persist-credentials: false
 
     - name: Initialize CodeQL
-      # Pinned to SHA for supply-chain safety (tag: v3)
+      # Pinned to SHA for supply-chain safety (tag: v4.37.3)
       uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
       continue-on-error: true
       with:
@@ -55,7 +55,7 @@ jobs:
         build-mode: ${{ matrix.build-mode }}
 
     - name: Perform CodeQL Analysis
-      # Pinned to SHA for supply-chain safety (tag: v3)
+      # Pinned to SHA for supply-chain safety (tag: v4.37.3)
       # continue-on-error: repos without GitHub Advanced Security (GHAS) will
       # fail the SARIF upload step; this prevents that from blocking CI.
       uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
