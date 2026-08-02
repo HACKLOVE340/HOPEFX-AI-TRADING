@@ -131,6 +131,9 @@ def register_page_routes(app: FastAPI) -> None:
 
     if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
         _index_html = _frontend_dist / "index.html"
+        # Resolved once here so the catch-all below can confine every asset
+        # lookup to this directory without re-resolving on each request.
+        _frontend_dist_resolved = _frontend_dist.resolve()
 
         # ── SPA catch-all: serve index.html for every React Router path ──────
         #
@@ -259,9 +262,22 @@ def register_page_routes(app: FastAPI) -> None:
                 for p in _passthrough_prefixes
             ):
                 return Response(status_code=404)
-            # Serve real static assets (JS/CSS/images) from the build output
-            _asset = _frontend_dist / full_path
-            if _asset.exists() and _asset.is_file():
+            # Serve real static assets (JS/CSS/images) from the build output.
+            #
+            # `full_path` is the raw catch-all segment, so it must be confined to
+            # the build directory before it reaches the filesystem: `Path / "x"`
+            # applies no traversal check of its own, and the passthrough list
+            # above only screens known route prefixes. Resolve first, then prove
+            # the result is still inside the build output — a path that escapes
+            # is not an asset, so it falls through to index.html like any other
+            # unknown route rather than leaking a 404-vs-403 distinction.
+            try:
+                _asset = (_frontend_dist / full_path).resolve()
+                _asset.relative_to(_frontend_dist_resolved)
+                _is_asset = _asset.is_file()
+            except (ValueError, OSError):
+                _is_asset = False
+            if _is_asset:
                 return FileResponse(str(_asset))
             # Everything else is a React Router path → serve index.html
             return FileResponse(str(_index_html))

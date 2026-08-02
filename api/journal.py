@@ -24,6 +24,7 @@ Falls back to in-memory dict when DB is unavailable.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -39,6 +40,11 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
+
+# Everything outside this class is replaced before a value is used to build a
+# filename — path separators, "..", NUL, and anything else the filesystem or a
+# downstream URL would interpret.
+_SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]")
 
 router = APIRouter(prefix="/api/journal", tags=["Trade Journal"])
 
@@ -647,7 +653,14 @@ async def upload_screenshot(
     ext = (file.filename or "screenshot.png").rsplit(".", 1)[-1].lower()
     if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
         ext = "png"
-    filename = f"{user.sub}_{trade_id}.{ext}"
+    # `user.sub` (JWT subject) and `trade_id` (path parameter) both reach the
+    # filesystem here. The ownership query above proves the entry belongs to
+    # this caller; it does not constrain the *characters* in either value, and
+    # `os.path.join` treats a leading "/" as an absolute path and "../" as a
+    # traversal. Reduce both to a filename-safe alphabet before joining.
+    _safe_sub = _SAFE_NAME_RE.sub("_", user.sub)[:64] or "user"
+    _safe_trade = _SAFE_NAME_RE.sub("_", trade_id)[:64] or "entry"
+    filename = f"{_safe_sub}_{_safe_trade}.{ext}"
     save_dir = _os2.path.join("static", "screenshots")
     url: str
     try:
