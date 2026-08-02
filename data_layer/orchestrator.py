@@ -305,6 +305,16 @@ class _WebSocketBroadcaster:
         }
 
 
+# Spellings that all denote spot gold. The orchestrator wraps a gold-only feed,
+# so these are the only symbols its in-memory path can legitimately answer.
+_GOLD_SYMBOL_ALIASES = frozenset({"XAUUSD", "XAU_USD", "XAU/USD", "XAU-USD", "GOLD"})
+
+
+def _is_gold_symbol(symbol: str) -> bool:
+    """True when `symbol` denotes spot gold, in any spelling callers use."""
+    return (symbol or "").strip().upper() in _GOLD_SYMBOL_ALIASES
+
+
 class MarketDataOrchestrator:
     """
     Central coordinator for all market data.
@@ -731,8 +741,18 @@ class MarketDataOrchestrator:
                         exc,
                     )
 
-        # Fall back to in-memory
-        if self._gold_feed:
+        # Fall back to in-memory.
+        #
+        # `_gold_feed.get_latest_tick()` takes no symbol — it always returns the
+        # gold tick. This branch used to run for *any* symbol, so a request for
+        # EUR_USD or BTC_USD that missed the Redis cache was answered with the
+        # gold price, relabelled as the requested symbol and tagged "live".
+        #
+        # The public ticker showed one identical number for all eight of its
+        # symbols because of this, and api/risk_calculator.py and
+        # api/pnl_dashboard.py read the same value as that symbol's price.
+        # No price is recoverable by a caller; a confidently wrong price is not.
+        if self._gold_feed and _is_gold_symbol(symbol):
             tick = self._gold_feed.get_latest_tick()
             if tick:
                 # Normalise and cache
