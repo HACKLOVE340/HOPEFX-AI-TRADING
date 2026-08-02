@@ -25,8 +25,10 @@ already guarded and only looked untracked to the analyser.
 
 from __future__ import annotations
 
+import os
 import re
 import time
+from pathlib import Path
 
 import pytest
 
@@ -43,39 +45,79 @@ pytestmark = pytest.mark.unit
         "../../etc/passwd",
         "assets/../../.env",
         "./../../config/config_manager.py",
+        "/etc/passwd",
+        "..",
+        ".",
+        ".env",
+        "assets/..",
+        "assets\\..\\..\\app.py",
+        "assets/main.js\x00.png",
     ],
 )
-def test_the_spa_catchall_confines_asset_lookups_to_the_build_dir(tmp_path, escape):
-    """Reproduces the check the route performs, over a real directory tree."""
+def test_the_allowlist_rejects_anything_that_could_leave_the_build_dir(escape):
+    """First guard: every segment must start alphanumeric, so ".." is unspellable."""
+    from core.page_routes import _ASSET_PATH_RE
+
+    assert _ASSET_PATH_RE.fullmatch(escape) is None, f"{escape!r} passed the allowlist"
+
+
+@pytest.mark.parametrize(
+    "asset",
+    [
+        "assets/index-a1b2c3.js",
+        "favicon.svg",
+        "images/logo.png",
+        "assets/vendor.min.css",
+        "a",
+    ],
+)
+def test_the_allowlist_still_admits_real_build_output(asset):
+    """Rejecting traversal must not reject the assets Vite actually emits."""
+    from core.page_routes import _ASSET_PATH_RE
+
+    assert _ASSET_PATH_RE.fullmatch(asset) is not None, f"{asset!r} was rejected"
+
+
+def test_confinement_still_holds_if_the_allowlist_were_loosened(tmp_path):
+    """Second guard, checked independently of the first."""
     dist = tmp_path / "static"
     (dist / "assets").mkdir(parents=True)
     (dist / "index.html").write_text("<!doctype html>", encoding="utf-8")
     (dist / "assets" / "main.js").write_text("console.log(1)", encoding="utf-8")
-    secret = tmp_path / ".env"
-    secret.write_text("SECURITY_JWT_SECRET=real", encoding="utf-8")
+    (tmp_path / ".env").write_text("SECURITY_JWT_SECRET=real", encoding="utf-8")
 
     dist_resolved = dist.resolve()
 
-    def is_servable_asset(full_path: str) -> bool:
+    def confined(rel: str) -> bool:
         try:
-            asset = (dist / full_path).resolve()
+            asset = Path(os.path.join(str(dist_resolved), rel)).resolve()
             asset.relative_to(dist_resolved)
             return asset.is_file()
         except (ValueError, OSError):
             return False
 
-    assert is_servable_asset("assets/main.js"), "a real asset must still be served"
-    assert not is_servable_asset(escape), f"{escape!r} escaped the build directory"
+    assert confined("assets/main.js")
+    assert not confined("../.env")
+    assert not confined("assets/../../.env")
 
 
-def test_page_routes_still_resolves_the_dist_dir_for_confinement():
-    """Guards the wiring: the confinement root has to exist to be used."""
-    from pathlib import Path
+def test_a_pathological_length_is_rejected_before_the_regex():
+    from core.page_routes import _MAX_ASSET_PATH_LEN
 
+    hostile = "a" * (_MAX_ASSET_PATH_LEN + 1)
+
+    assert len(hostile) > _MAX_ASSET_PATH_LEN
+
+
+def test_page_routes_wires_both_guards():
+    """Guards the wiring: an allowlist unused is not a guard."""
     src = (Path(__file__).resolve().parents[2] / "core" / "page_routes.py").read_text(encoding="utf-8")
 
     assert "_frontend_dist_resolved = _frontend_dist.resolve()" in src
+    assert "_ASSET_PATH_RE.fullmatch(full_path)" in src
     assert "_asset.relative_to(_frontend_dist_resolved)" in src
+    # The tainted value must not reach path construction directly.
+    assert "(_frontend_dist / full_path)" not in src
 
 
 # ── 2. Screenshot filename sanitisation ───────────────────────────────────────
@@ -158,4 +200,4 @@ def test_custom_indicators_uses_the_anchored_bounded_patterns():
 
     for fn in ("SMA", "EMA", "RSI"):
         assert rf'm = re.match(r"{fn}\([^,]{{0,64}},\s*(\d{{1,5}})\)", formula)' in src, fn
-    assert "re.search(r\"SMA" not in src, "unbounded search pattern still present"
+    assert 're.search(r"SMA' not in src, "unbounded search pattern still present"
