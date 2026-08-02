@@ -86,8 +86,18 @@ services:
       APP_ENV: "production"
       # Disable startup gate so health endpoint responds before full init
       STARTUP_GATE: "false"
-      # Disable CORS strict check — no real domain in CI
-      ALLOWED_ORIGINS: "http://localhost,http://127.0.0.1"
+      # APP_ENV=production above arms three fail-closed CORS gates that each
+      # sys.exit(1): "*" with credentials, any http:// origin, and an
+      # all-localhost list (the last enforced in both core/middleware.py and
+      # api/server.py). The smoke stack keeps APP_ENV=production on purpose, to
+      # exercise the production path, so this value has to clear all three:
+      # https, and not localhost.
+      #
+      # A reserved .example domain (RFC 2606) is used rather than a real one —
+      # nothing here makes a cross-origin request. The healthcheck curls
+      # http://localhost:8000/api/health/live directly with no Origin header, so
+      # CORS never applies to it; this only has to satisfy the startup gates.
+      ALLOWED_ORIGINS: "https://app.hopefx.example"
       APP_BASE_URL: "http://localhost"
       HOPEFX_DOMAIN: "localhost"
       # Disable optional integrations that require external credentials
