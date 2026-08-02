@@ -62,7 +62,10 @@ def test_the_two_config_layers_agree(monkeypatch):
 @pytest.mark.parametrize(
     ("url", "expected"),
     [
-        ("postgresql+asyncpg://u:pw@h:5432/d", "postgresql+psycopg2://u:pw@h:5432/d"),
+        (
+            "postgresql+asyncpg://u:pw@h:5432/d",  # pragma: allowlist secret
+            "postgresql+psycopg2://u:pw@h:5432/d",  # pragma: allowlist secret
+        ),
         ("sqlite+aiosqlite:///hopefx.db", "sqlite:///hopefx.db"),
     ],
 )
@@ -86,4 +89,4 @@ def test_an_unset_or_blank_url_falls_back_to_the_configured_fields(monkeypatch):
     # an empty connection string.
     monkeypatch.setenv("DATABASE_URL", "   ")
     cfg = DatabaseConfig(db_type="postgresql", username="u", password="pw", host="h", database="d")
-    assert cfg.get_connection_string().startswith("postgresql://u:pw@h:5432/d")
+    assert cfg.get_connection_string().startswith("postgresql://u:pw@h:5432/d")  # pragma: allowlist secret
