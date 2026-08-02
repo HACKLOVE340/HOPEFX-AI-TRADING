@@ -151,6 +151,51 @@ def test_a_nested_index_html_is_still_not_cached():
     assert "no-store" in _asset_cache_headers("some/nested/index.html")["Cache-Control"]
 
 
+def test_the_hash_check_is_linear_on_a_hostile_path():
+    """The first version of this was a regex, and it was quadratic.
+
+    `.+-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$` looks reasonable, but `.+` and the
+    character class can both match '-', so a non-matching input has to be split
+    between them every possible way. Measured on "-a" repeated: 4 k chars 10 ms,
+    8 k 39 ms, 16 k 163 ms — quadratic, and reachable because
+    `_CachingStaticFiles` passes the raw request path with no length bound.
+    CodeQL caught it (alert 24773). Replaced with a single-pass scan.
+    """
+    import time
+
+    from core.page_routes import _asset_cache_headers
+
+    hostile = "-a" * 100_000
+
+    t0 = time.perf_counter()
+    _asset_cache_headers(hostile)
+    elapsed = time.perf_counter() - t0
+
+    assert elapsed < 0.05, f"hash detection took {elapsed:.3f}s on a 200 kB path — still backtracking"
+
+
+@pytest.mark.parametrize(
+    ("name", "hashed"),
+    [
+        ("app-analytics-DUbayt-I.js", True),  # hash contains a '-'
+        ("index-BOwIQe82.js", True),
+        ("vendor-react-EndrQkTQ.js", True),
+        ("style-a_b-c_d1.css", True),  # hash contains '_'
+        ("favicon.ico", False),
+        ("manifest.json", False),
+        ("app-short.js", False),  # suffix too short to be a hash
+        ("noextension", False),
+        ("trailing.", False),
+        ("-BOwIQe82.js", False),  # no name before the separator
+        ("", False),
+    ],
+)
+def test_content_hash_detection_boundaries(name, hashed):
+    from core.page_routes import _has_content_hash
+
+    assert _has_content_hash(name) is hashed
+
+
 # ── nginx configuration ───────────────────────────────────────────────────────
 
 

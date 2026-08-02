@@ -62,9 +62,32 @@ _NO_CACHE = "no-cache, no-store, must-revalidate"
 
 _INDEX_CACHE_HEADERS = {"Cache-Control": _NO_CACHE}
 
-# A Vite content hash: 8+ chars of base64url between the last '-' and the
-# extension. Only files carrying one are safe to treat as immutable.
-_HASHED_ASSET_RE = re.compile(r".+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$")
+# Vite's content hash: `<name>-<hash>.<ext>`, where the hash is 8 characters of
+# the base64url alphabet. Only files carrying one are safe to treat as immutable.
+#
+# Deliberately not a regex. The obvious pattern for this —
+# `.+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$` — is quadratic, because `.+` and the
+# character class can both match '-' and have to be split between them: on a
+# non-matching input of "-a" repeated, 4 k chars took 10 ms, 8 k took 39 ms,
+# 16 k took 163 ms. `_CachingStaticFiles` calls this with the raw request path
+# and no length bound, so that was reachable from a URL.
+#
+# The scan below is a single pass with no backtracking.
+_HASH_LEN = 8
+_HASH_ALPHABET = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+
+
+def _has_content_hash(name: str) -> bool:
+    """True when *name* ends in Vite's `-<8-char hash>.<ext>` form."""
+    stem, dot, ext = name.rpartition(".")
+    if not dot or not ext or not ext.isalnum():
+        return False
+    # Room for at least one name character, the separator, and the hash.
+    if len(stem) < _HASH_LEN + 2:
+        return False
+    if stem[-(_HASH_LEN + 1)] != "-":
+        return False
+    return all(c in _HASH_ALPHABET for c in stem[-_HASH_LEN:])
 
 
 def _asset_cache_headers(rel_path: str) -> dict[str, str]:
@@ -72,7 +95,7 @@ def _asset_cache_headers(rel_path: str) -> dict[str, str]:
     name = rel_path.rsplit("/", 1)[-1]
     if name == "index.html":
         return {"Cache-Control": _NO_CACHE}
-    if _HASHED_ASSET_RE.match(name):
+    if _has_content_hash(name):
         return {"Cache-Control": _IMMUTABLE_CACHE}
     # No hash in the name (favicon.ico, manifest.json, robots.txt): the URL is
     # stable across deploys, so it has to be revalidated to pick up changes.
