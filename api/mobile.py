@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
 from mobile.push_notifications import push_manager
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/mobile", tags=["Mobile"])
@@ -310,4 +311,4 @@ async def revoke_mobile_session(
             db.close()
     except Exception as exc:
         logger.debug("Mobile session revoke failed: %s", exc)
-        return {"revoked": False, "error": str(exc)}
+        return {"revoked": False, "error": safe_error(exc)}

@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -411,7 +412,7 @@ async def run_stress_test(
         }
     except Exception as exc:
         logger.error("Stress test run error: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
 
 
 # ── Prop Firm Breaches ────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from api.auth import TokenPayload, get_current_user
 from monetization.subscription import require_plan
 from pydantic import BaseModel, Field
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -175,10 +176,12 @@ async def deploy_template(
             "message": f"Template '{request.template_id}' deployed and activated.",
         }
     except ValueError as e:
+        # Deliberate: the compiler raises ValueError to say *why* a template is
+        # invalid, and that message is the response's whole purpose. It is our
+        # own copy, not an arbitrary library's, so it passes through unchanged.
         raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Template deployment failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Deployment failed: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Deployment failed: {safe_error(e, 'nocode deploy')}") from e
 
 
 @router.post("/validate")
@@ -198,10 +201,12 @@ async def validate_strategy(
         result = engine.validate_graph(nodes=request.nodes, edges=request.edges)
         return result
     except Exception as e:
-        logger.error(f"Validation failed: {e}")
+        # Genuine validation findings come back inside `result` above. Reaching
+        # here means the engine itself failed, so this is an internal error
+        # wearing a validation response's shape — not something to quote back.
         return {
             "valid": False,
-            "errors": [str(e)],
+            "errors": [safe_error(e, "nocode graph validation")],
             "warnings": [],
         }
 

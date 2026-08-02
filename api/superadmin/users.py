@@ -22,6 +22,7 @@ from ._shared import (
     _log_superadmin_action,
     _require_superadmin,
 )
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -482,7 +483,7 @@ async def bulk_ban_users(body: BulkUserBody, user: TokenPayload = Depends(_requi
                 u.status = "banned"
                 succeeded.append(uid)
             except Exception as exc:
-                failed.append({"user_id": uid, "reason": str(exc)})
+                failed.append({"user_id": uid, "reason": safe_error(exc)})
         db.commit()
         _log_superadmin_action(user, "bulk_ban", f"count={len(succeeded)} reason={body.reason}")
         return {"succeeded": succeeded, "failed": failed, "total": len(body.user_ids)}
@@ -507,7 +508,7 @@ async def bulk_unban_users(body: BulkUserBody, user: TokenPayload = Depends(_req
                 u.status = "active"
                 succeeded.append(uid)
             except Exception as exc:
-                failed.append({"user_id": uid, "reason": str(exc)})
+                failed.append({"user_id": uid, "reason": safe_error(exc)})
         db.commit()
         _log_superadmin_action(user, "bulk_unban", f"count={len(succeeded)}")
         return {"succeeded": succeeded, "failed": failed, "total": len(body.user_ids)}

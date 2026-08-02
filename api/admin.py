@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, require_role
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
@@ -1592,4 +1593,4 @@ async def test_smtp(
         return {"ok": True, "sent_to": recipient}
     except Exception as exc:
         logger.warning("SMTP test failed: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}

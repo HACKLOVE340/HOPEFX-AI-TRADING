@@ -37,6 +37,7 @@ from pydantic import BaseModel
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -81,7 +82,7 @@ async def _probe_database() -> dict[str, Any]:
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         return {"status": "ok", "latency_ms": latency_ms, "detail": "SELECT 1 succeeded"}
     except Exception as exc:
-        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": safe_error(exc)}
 
 
 async def _probe_redis() -> dict[str, Any]:
@@ -114,7 +115,7 @@ async def _probe_redis() -> dict[str, Any]:
             "mode": mode,
         }
     except Exception as exc:
-        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": safe_error(exc)}
 
 
 async def _probe_broker() -> dict[str, Any]:
@@ -196,7 +197,11 @@ async def _probe_ml_engine() -> dict[str, Any]:
             "detail": f"predictor ready={ready}",
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_trading_engine() -> dict[str, Any]:
@@ -252,7 +257,11 @@ async def _probe_self_healer() -> dict[str, Any]:
             "baseline_files": baseline,
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_websocket_server() -> dict[str, Any]:
@@ -297,7 +306,11 @@ async def _probe_otel_tracing() -> dict[str, Any]:
             "sampling_rate": _SAMPLING_RATE,
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_data_feed() -> dict[str, Any]:
@@ -361,7 +374,11 @@ async def _probe_risk_manager() -> dict[str, Any]:
             "detail": f"risk_manager active={active}",
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_kill_switch() -> dict[str, Any]:
@@ -378,7 +395,7 @@ async def _probe_kill_switch() -> dict[str, Any]:
             "kill_switch_active": active,
         }
     except Exception as exc:
-        return {"status": "ok", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {"status": "ok", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": safe_error(exc)}
 
 
 async def _probe_env_vars() -> dict[str, Any]:
@@ -463,7 +480,7 @@ async def _probe_event_bus() -> dict[str, Any]:
         return {
             "status": "warning",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -487,7 +504,7 @@ async def _probe_config_store() -> dict[str, Any]:
         return {
             "status": "error",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -547,7 +564,7 @@ async def _probe_signal_engine() -> dict[str, Any]:
         return {
             "status": "warning",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -568,7 +585,7 @@ async def _probe_api_server() -> dict[str, Any]:
         return {
             "status": "error",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -687,7 +704,7 @@ async def get_reliability_status(
         except TimeoutError:
             results_raw[name] = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
         except Exception as exc:
-            results_raw[name] = {"status": "error", "latency_ms": 0, "detail": str(exc)}
+            results_raw[name] = {"status": "error", "latency_ms": 0, "detail": safe_error(exc)}
 
     now = _utcnow().isoformat()
     components = []
@@ -760,7 +777,7 @@ async def run_probe(
     except TimeoutError:
         result = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
     except Exception as exc:
-        result = {"status": "error", "latency_ms": 0, "detail": str(exc)}
+        result = {"status": "error", "latency_ms": 0, "detail": safe_error(exc)}
 
     return {
         "component": body.component,
@@ -782,7 +799,7 @@ async def get_recent_traces(
         spans = list(_SPAN_BUFFER)[-limit:]
         return {"count": len(spans), "spans": list(reversed(spans))}
     except Exception as exc:
-        return {"count": 0, "spans": [], "error": str(exc)}
+        return {"count": 0, "spans": [], "error": safe_error(exc)}
 
 
 @router.post("/reliability/trace/test")
@@ -834,7 +851,7 @@ async def emit_test_trace(
             "message": "End-to-end test trace emitted",
         }
     except Exception as exc:
-        return {"error": str(exc), "timestamp": _utcnow().isoformat()}
+        return {"error": safe_error(exc), "timestamp": _utcnow().isoformat()}
 
 
 @router.get("/reliability/validate/{setting_key}")
@@ -864,7 +881,7 @@ async def validate_setting_persisted(
         else:
             results["redis"] = {"found": False, "error": "Redis unavailable"}
     except Exception as exc:
-        results["redis"] = {"found": False, "error": str(exc)}
+        results["redis"] = {"found": False, "error": safe_error(exc)}
 
     # Check config store
     try:
@@ -873,7 +890,7 @@ async def validate_setting_persisted(
         val = config_store.get(setting_key)
         results["config_store"] = {"found": val is not None, "value": val}
     except Exception as exc:
-        results["config_store"] = {"found": False, "error": str(exc)}
+        results["config_store"] = {"found": False, "error": safe_error(exc)}
 
     results["consistent"] = results.get("redis", {}).get("found", False) or results.get("config_store", {}).get(
         "found", False
@@ -927,7 +944,7 @@ async def get_route_inventory(
                 )
         return {"total": len(routes), "routes": sorted(routes, key=lambda r: r["path"])}
     except Exception as exc:
-        return {"total": 0, "routes": [], "error": str(exc)}
+        return {"total": 0, "routes": [], "error": safe_error(exc)}
 
 
 @router.post("/reliability/self-test")
@@ -958,7 +975,7 @@ async def run_self_test(
                 "test": name,
                 "passed": False,
                 "status": "error",
-                "detail": str(exc),
+                "detail": safe_error(exc),
                 "duration_ms": round((time.perf_counter() - t) * 1000, 2),
             }
 
@@ -1029,7 +1046,7 @@ async def validate_toggle_persisted(
         else:
             results["layers"]["redis"] = {"found": False, "error": "Redis unavailable"}
     except Exception as exc:
-        results["layers"]["redis"] = {"found": False, "error": str(exc)}
+        results["layers"]["redis"] = {"found": False, "error": safe_error(exc)}
 
     # Layer 2: Core config store
     try:
@@ -1042,7 +1059,7 @@ async def validate_toggle_persisted(
             "match": val == expected or (val is not None and str(val) == str(expected)),
         }
     except Exception as exc:
-        results["layers"]["config_store"] = {"found": False, "error": str(exc)}
+        results["layers"]["config_store"] = {"found": False, "error": safe_error(exc)}
 
     # Layer 3: Live app_state (for engine-level settings)
     try:

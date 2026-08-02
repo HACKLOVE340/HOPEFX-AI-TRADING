@@ -25,6 +25,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.superadmin._shared import TokenPayload, _require_superadmin
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -128,7 +129,7 @@ async def get_history(
                 logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         return {"entries": entries, "count": len(entries)}
     except Exception as exc:
-        return {"entries": [], "count": 0, "error": str(exc)}
+        return {"entries": [], "count": 0, "error": safe_error(exc)}
 
 
 @router.post("/health-engine/register")
@@ -165,7 +166,7 @@ async def register_url_probe(
                 "latency_ms": latency_ms,
             }
         except Exception as exc:
-            return {"status": "error", "detail": str(exc)}
+            return {"status": "error", "detail": safe_error(exc)}
 
     engine = _get_engine()
     engine.register(name, label, _url_probe)

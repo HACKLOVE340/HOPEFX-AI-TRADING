@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -224,7 +225,7 @@ async def erase_user_data(
             db.close()
     except Exception as exc:
         logger.error("GDPR erase error: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "gdpr_user_erase", {"user_id": user_id, "reason": reason})
     return {"ok": True, "erased": erased, "user_id": user_id}
 
@@ -311,6 +312,6 @@ async def update_retention_policies(
             policies.update({k: v for k, v in body.items() if isinstance(v, int)})
             rc.set(_RETENTION_KEY, json.dumps(policies), ex=86400 * 365)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "gdpr_retention_update", body)
     return {"ok": True}

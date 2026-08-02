@@ -23,6 +23,7 @@ from ._shared import (
     _require_superadmin,
     _utcnow,
 )
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -875,7 +876,7 @@ async def test_smtp_config(
         return {"ok": True, "host": host, "port": port}
     except (smtplib.SMTPException, OSError) as exc:
         _log_superadmin_action(user, "smtp_test_failed", f"host={host}:{port} err={exc}")
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
 
 
 @router.get("/platform/config/validate")

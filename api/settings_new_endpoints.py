@@ -49,6 +49,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user, require_role
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -681,7 +682,7 @@ def get_performance_metrics(user: TokenPayload = Depends(require_role("admin")))
             "ops_per_sec": _info.get("instantaneous_ops_per_sec", 0),
         }
     except Exception as exc:
-        result["redis"] = {"connected": False, "error": str(exc)}
+        result["redis"] = {"connected": False, "error": safe_error(exc)}
 
     # ── DB pool health ────────────────────────────────────────────────────────
     try:

@@ -44,6 +44,7 @@ from pydantic import BaseModel
 
 from api.auth import TokenPayload
 from ._shared import _log_superadmin_action, _require_superadmin, _utcnow
+from api.error_details import safe_error
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
@@ -295,7 +296,7 @@ async def trigger_remediation(
             "actions_taken": 0,
             "actions": [],
             "triggered_at": _utcnow().isoformat(),
-            "error": str(exc),
+            "error": safe_error(exc),
         }
 
 
@@ -388,7 +389,7 @@ async def run_single_check(
         logger.warning("diagnostics: single check %s failed: %s", check_name, exc)
         return {
             "check_name": check_name,
-            "error": str(exc),
+            "error": safe_error(exc),
             "ran_at": _utcnow().isoformat(),
         }
 
