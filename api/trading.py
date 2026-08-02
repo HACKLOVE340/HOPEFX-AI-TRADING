@@ -3985,14 +3985,84 @@ def _ohlcv_to_df(ohlcv_list: list):
 
 
 async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
-    """Fetch OHLCV bars from the price engine for a given symbol."""
+    """Fetch OHLCV bars for a symbol: price engine, then yfinance, then gold CSV.
+
+    Used by /patterns and /levels. This previously asked the price engine and
+    nothing else, returning [] on any miss — so both endpoints reported "no
+    patterns" / "no levels" whenever the engine simply had no data for that
+    symbol, which is a very different statement. /ohlcv already had the full
+    fallback chain; these two never used it.
+
+    Note the symbol form. Callers arrive via `_normalise_symbol` (OANDA style,
+    `XAU_USD`) while `_yf_ticker_map` is keyed on the compact form used in
+    config/multi_source_feed.yaml (`XAUUSD`), so the ticker lookup is done on
+    the compact spelling. Passing the OANDA form straight through would miss
+    every entry and silently disable the fallback again.
+    """
     try:
         from core.app_state import app_state
 
         if app_state and app_state.price_engine:
-            return await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
+            bars = await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
+            if bars:
+                return bars
     except Exception as exc:
         logger.debug("Price engine OHLCV fetch failed for %s: %s", symbol, exc)
+
+    compact = symbol.replace("/", "").replace("_", "").upper()
+
+    # yfinance — same ticker table and "" == no Yahoo source convention as /ohlcv.
+    ticker_sym = _yf_ticker_map().get(compact, compact)
+    if ticker_sym:
+        try:
+            import yfinance as _yf
+
+            interval, period = {
+                "1m": ("1m", "7d"),
+                "5m": ("5m", "60d"),
+                "15m": ("15m", "60d"),
+                "30m": ("30m", "60d"),
+                "1h": ("1h", "60d"),
+                "4h": ("1h", "60d"),
+                "1d": ("1d", "max"),
+                "1w": ("1wk", "max"),
+            }.get(timeframe, ("1h", "60d"))
+
+            def _fetch() -> list:
+                df = _yf.Ticker(ticker_sym).history(period=period, interval=interval, auto_adjust=True)
+                if df.empty:
+                    return []
+                if timeframe == "4h":
+                    df = (
+                        df.resample("4h")
+                        .agg({"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"})
+                        .dropna(subset=["Open", "Close"])
+                    )
+                return [
+                    {
+                        "timestamp": int(ts.timestamp()),
+                        "open": round(float(row["Open"]), 5),
+                        "high": round(float(row["High"]), 5),
+                        "low": round(float(row["Low"]), 5),
+                        "close": round(float(row["Close"]), 5),
+                        "volume": round(float(row.get("Volume", 0)), 2),
+                    }
+                    for ts, row in df.tail(limit).iterrows()
+                ]
+
+            loop = asyncio.get_running_loop()
+            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=20.0)
+            if bars:
+                return bars
+        except Exception as exc:
+            logger.debug("yfinance OHLCV fallback failed for %s: %s", compact, exc)
+
+    # Bundled deep-history gold CSV — the last real source, as in /ohlcv.
+    if compact == "XAUUSD":
+        csv_bars = _load_gold_history_csv(timeframe, limit)
+        if csv_bars:
+            return csv_bars
+
     return []
 
 

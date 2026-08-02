@@ -28,6 +28,16 @@ interface PatternResponse {
   patterns: DetectedPattern[];
   symbol: string;
   count: number;
+  /**
+   * Set by the backend only when detection could not run — no OHLCV bars for
+   * this symbol/timeframe, or fewer than the ~20 needed. Absent on a genuine
+   * negative result. The two are completely different statements and must not
+   * render the same way: "no patterns above 50%" reads as a confident finding,
+   * and showing it when nothing was ever analysed is a failure dressed as a fact.
+   */
+  note?: string;
+  /** Bars actually available, when the backend reports too few. */
+  bars?: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -304,14 +314,30 @@ const PatternDetector: React.FC = () => {
         </div>
       ) : data ? (
         (data.patterns ?? []).length === 0 ? (
-          <div style={s.center}>
-            <span style={{ fontSize: 32, marginBottom: 12 }}>🔍</span>
-            <p style={{ color: '#64748b', fontSize: 14, textAlign: 'center', maxWidth: 420, lineHeight: 1.7 }}>
-              No patterns detected above{' '}
-              <strong style={{ color: '#94a3b8' }}>{Math.round(minConf * 100)}%</strong>{' '}
-              confidence threshold. Try lowering the threshold or switching timeframe.
-            </p>
-          </div>
+          data.note ? (
+            /* Detection never ran — say so, rather than reporting a clean negative. */
+            <div style={s.center}>
+              <span style={{ fontSize: 32, marginBottom: 12 }}>📉</span>
+              <p style={{ color: '#facc15', fontSize: 14, textAlign: 'center', maxWidth: 460, lineHeight: 1.7 }}>
+                No price history available for{' '}
+                <strong style={{ color: '#fde68a' }}>{data.symbol}</strong> / {timeframe}
+                {typeof data.bars === 'number' ? ` — only ${data.bars} bar${data.bars === 1 ? '' : 's'}` : ''}.
+              </p>
+              <p style={{ color: '#64748b', fontSize: 13, textAlign: 'center', maxWidth: 460, lineHeight: 1.7 }}>
+                {data.note}
+              </p>
+              <button onClick={scan} style={s.retryBtn}>Retry</button>
+            </div>
+          ) : (
+            <div style={s.center}>
+              <span style={{ fontSize: 32, marginBottom: 12 }}>🔍</span>
+              <p style={{ color: '#64748b', fontSize: 14, textAlign: 'center', maxWidth: 420, lineHeight: 1.7 }}>
+                No patterns detected above{' '}
+                <strong style={{ color: '#94a3b8' }}>{Math.round(minConf * 100)}%</strong>{' '}
+                confidence threshold. Try lowering the threshold or switching timeframe.
+              </p>
+            </div>
+          )
         ) : (
           <div>
             <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
