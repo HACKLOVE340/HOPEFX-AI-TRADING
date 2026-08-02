@@ -310,8 +310,14 @@ class _WebSocketBroadcaster:
 _GOLD_SYMBOL_ALIASES = frozenset({"XAUUSD", "XAU_USD", "XAU/USD", "XAU-USD", "GOLD"})
 
 
-def _is_gold_symbol(symbol: str) -> bool:
-    """True when `symbol` denotes spot gold, in any spelling callers use."""
+def _is_gold_symbol(symbol: str | None) -> bool:
+    """True when `symbol` denotes spot gold, in any spelling callers use.
+
+    Accepts None: callers reach this from `get_latest_tick(symbol)`, whose
+    argument arrives from request payloads and config, and an absent symbol is
+    simply "not gold" rather than an error. The annotation says so rather than
+    leaving the body's tolerance undeclared.
+    """
     return (symbol or "").strip().upper() in _GOLD_SYMBOL_ALIASES
 
 
