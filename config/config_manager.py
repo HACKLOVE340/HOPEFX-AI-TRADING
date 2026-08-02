@@ -164,6 +164,30 @@ class DatabaseConfig:
         return self.db_type in ("sqlite", "postgresql", "mysql")
 
     def get_connection_string(self) -> str:
+        # DATABASE_URL is the deployment's source of truth for the database, and
+        # every other consumer already reads it: database/connection.py resolves
+        # the engine from it, docker-compose.yml sets it on every service, and
+        # core.startup_factories._ConfigDatabaseDefaults returns it verbatim.
+        #
+        # Without this, a container with DATABASE_URL=postgresql://…@postgres/…
+        # ran two databases at once: database/connection.py on Postgres, and
+        # everything built from this config — the session factory behind auth,
+        # the outbox relay, the alembic run — on the dataclass defaults, i.e. a
+        # container-local sqlite:///hopefx.db. That file is wiped on every
+        # rebuild, and the failure was quiet: /health/ready reported db_pool
+        # down, auth returned "Auth service not initialised", and the outbox
+        # relay logged "no such table: outbox_events", none of which name the
+        # database as the cause.
+        env_url = os.getenv("DATABASE_URL", "").strip()
+        if env_url:
+            # Normalise async driver prefixes — callers pass this to the sync
+            # create_engine, which cannot use aiosqlite or asyncpg.
+            if env_url.startswith("sqlite+aiosqlite://"):
+                return env_url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+            if env_url.startswith("postgresql+asyncpg://"):
+                return env_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+            return env_url
+
         if self.db_type == "sqlite":
             return f"sqlite:///{self.database}"
         if self.db_type == "postgresql":
