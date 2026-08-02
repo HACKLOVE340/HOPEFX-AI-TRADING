@@ -115,7 +115,10 @@ async def test_the_price_engine_still_wins_when_it_has_data(monkeypatch):
 
     class _Engine:
         async def get_ohlcv(self, *a, **kw):
-            return [{"timestamp": 1, "close": 1.2345, "source": "engine"}]
+            return [
+                {"timestamp": 1, "close": 1.2345, "source": "engine"},
+                {"timestamp": 2, "close": 1.2360, "source": "engine"},
+            ]
 
     monkeypatch.setattr(app_state, "price_engine", _Engine(), raising=False)
 
@@ -124,13 +127,65 @@ async def test_the_price_engine_still_wins_when_it_has_data(monkeypatch):
     assert bars[0]["source"] == "engine"
 
 
+async def test_placeholder_bars_from_the_engine_do_not_suppress_the_fallback(monkeypatch):
+    """A flat run is the paper engine's placeholder, not analysable history.
+
+    Returning it would let /patterns and /levels report findings drawn from a
+    line — and would keep the real sources from ever being asked.
+    """
+    from api import trading
+    from core.app_state import app_state
+
+    class _FlatEngine:
+        async def get_ohlcv(self, *a, **kw):
+            return [{"timestamp": i, "close": 1.1000} for i in range(50)]
+
+    monkeypatch.setattr(app_state, "price_engine", _FlatEngine(), raising=False)
+    monkeypatch.setattr(trading, "_yf_ticker_map", lambda: {"EURUSD": ""})
+
+    # No Yahoo source and not gold, so the chain runs out — the point is that it
+    # got past the engine at all.
+    assert await trading._get_ohlcv_for_symbol("EUR_USD", "1h", 200) == []
+
+
+async def test_a_stalled_price_engine_does_not_hang_the_endpoint(monkeypatch):
+    """/patterns and /levels must not outlast /ohlcv's 25s engine timeout."""
+    import asyncio
+
+    from api import trading
+    from core.app_state import app_state
+
+    class _StalledEngine:
+        async def get_ohlcv(self, *a, **kw):
+            await asyncio.sleep(3600)
+
+    monkeypatch.setattr(app_state, "price_engine", _StalledEngine(), raising=False)
+    monkeypatch.setattr(trading, "_yf_ticker_map", lambda: {"EURUSD": ""})
+
+    real_wait_for = asyncio.wait_for
+    seen: dict = {}
+
+    async def _spy(aw, timeout):
+        seen["timeout"] = timeout
+        return await real_wait_for(aw, 0.05)
+
+    monkeypatch.setattr(trading.asyncio, "wait_for", _spy)
+
+    assert await trading._get_ohlcv_for_symbol("EUR_USD", "1h", 200) == []
+    assert seen["timeout"] == 25.0, "engine call is unbounded"
+
+
 def test_the_pattern_page_distinguishes_no_data_from_no_patterns():
     """A scan that never ran must not render as a confident negative."""
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "PatternDetector.tsx").read_text()
+    src = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "PatternDetector.tsx").read_text(
+        encoding="utf-8"
+    )
 
     assert "data.note ?" in src, "the backend's note is never rendered"
-    assert "No price history available" in src, "no distinct no-data state"
+    # Covers both no-bars and too-few-bars; "no price history" would misdescribe
+    # the latter, which is the case the `data.bars` count exists to report.
+    assert "Insufficient price history" in src, "no distinct no-data state"
     # The confident-negative copy must still exist, for the genuine case.
     assert "No patterns detected above" in src
