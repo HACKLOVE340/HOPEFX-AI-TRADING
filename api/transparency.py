@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from api.error_details import safe_error
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
@@ -235,7 +236,7 @@ async def client_statement() -> dict[str, Any]:
             "checker_errors": s.get("counters", {}).get("checker_errors"),
         }
     except Exception as exc:  # never let one section sink the statement
-        statement["governance"] = {"error": str(exc)}
+        statement["governance"] = {"error": safe_error(exc)}
 
     # 2. Active model + honest metrics.
     statement["model"] = _active_model_summary()
@@ -246,7 +247,7 @@ async def client_statement() -> dict[str, Any]:
         decisions = list(store) if store else []
         statement["decisions"] = _compute_stats(decisions)
     except Exception as exc:
-        statement["decisions"] = {"available": False, "reason": str(exc)}
+        statement["decisions"] = {"available": False, "reason": safe_error(exc)}
 
     # 4. Audit-trail availability.
     statement["audit_trail"] = {

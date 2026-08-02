@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
 from api.db_store import db_get, db_set
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
@@ -512,7 +513,7 @@ async def test_indicator(
         return {
             "indicator_id": indicator_id,
             "passed": False,
-            "error": str(exc),
+            "error": safe_error(exc),
             "sample_values": [],
         }
 

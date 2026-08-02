@@ -36,6 +36,7 @@ from fastapi.responses import StreamingResponse
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -111,7 +112,7 @@ async def approve_kyc(
         return {"ok": True}
     except Exception as exc:
         logger.error("KYC approve error: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
 
 
 @router.post("/compliance/kyc/{user_id}/reject")
@@ -141,7 +142,7 @@ async def reject_kyc(
         return {"ok": True}
     except Exception as exc:
         logger.error("KYC reject error: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
 
 
 # ── AML Alerts ────────────────────────────────────────────────────────────────

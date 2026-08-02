@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -58,7 +59,7 @@ def _probe_service(name: str, check_fn) -> dict[str, Any]:
             "status": "down",
             "latency_ms": latency_ms,
             "last_check": _utcnow().isoformat(),
-            "error": str(exc),
+            "error": safe_error(exc),
         }
 
 
@@ -476,7 +477,7 @@ async def revoke_system_api_key(
                     k["revoked_by"] = user.sub
             rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id})
     return {"ok": True}
 

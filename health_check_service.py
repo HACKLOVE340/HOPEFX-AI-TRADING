@@ -61,6 +61,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,7 @@ async def _check_redis() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_database() -> ComponentStatus:
@@ -175,7 +176,7 @@ async def _check_database() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_data_feed() -> ComponentStatus:
@@ -222,7 +223,7 @@ async def _check_data_feed() -> ComponentStatus:
         )
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_broker() -> ComponentStatus:
@@ -255,7 +256,7 @@ async def _check_broker() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_event_bus() -> ComponentStatus:
@@ -275,7 +276,7 @@ async def _check_event_bus() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_kill_switch() -> ComponentStatus:
@@ -314,7 +315,7 @@ async def _check_disk() -> ComponentStatus:
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail=detail)
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 # ── Aggregation ───────────────────────────────────────────────────────────────
@@ -394,7 +395,7 @@ async def invariants_health() -> dict[str, Any]:
         data = _inv_status()
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("invariants health endpoint error: %s", exc)
-        raise HTTPException(status_code=503, detail={"ok": False, "error": str(exc)}) from exc
+        raise HTTPException(status_code=503, detail={"ok": False, "error": safe_error(exc)}) from exc
 
     if not data.get("engine_healthy"):
         raise HTTPException(status_code=503, detail=data)
@@ -460,7 +461,7 @@ def _ledger_snapshot() -> dict[str, Any]:
         }
     except Exception as exc:
         logger.debug("ledger snapshot unavailable: %s", exc)
-        return {"status": "unavailable", "reason": str(exc)[:200]}
+        return {"status": "unavailable", "reason": safe_error(exc)}
 
 
 @health_router.get(

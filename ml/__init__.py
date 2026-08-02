@@ -86,6 +86,7 @@ import json as _json
 import logging as _logging
 from pathlib import Path as _Path
 from typing import Any as _Any
+from api.error_details import safe_error
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
@@ -915,7 +916,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                 "model_count": len(models),
             }
         except Exception as exc:
-            return {"status": "unavailable", "error": str(exc)}
+            return {"status": "unavailable", "error": safe_error(exc)}
 
     @router.post("/rl/train")
     async def trigger_rl_train(payload: dict = None):

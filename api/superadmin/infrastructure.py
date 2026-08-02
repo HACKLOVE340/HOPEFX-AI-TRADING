@@ -22,6 +22,7 @@ from ._shared import (
     _require_superadmin,
     _utcnow,
 )
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) ->
     except Exception as exc:
         results["database"] = {
             "status": "error",
-            "detail": str(exc),
+            "detail": safe_error(exc),
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
         }
 
@@ -85,7 +86,7 @@ async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) ->
     except Exception as exc:
         results["redis"] = {
             "status": "error",
-            "detail": str(exc),
+            "detail": safe_error(exc),
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
         }
 
@@ -102,7 +103,7 @@ async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) ->
     except Exception as exc:
         results["broker"] = {
             "status": "error",
-            "detail": str(exc),
+            "detail": safe_error(exc),
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
         }
 
@@ -147,7 +148,7 @@ async def get_cache_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
             "redis_version": info.get("redis_version", "unknown"),
         }
     except Exception as exc:
-        return {"available": False, "error": str(exc)}
+        return {"available": False, "error": safe_error(exc)}
 
 
 @router.post("/infra/cache/flush")
@@ -162,7 +163,7 @@ async def flush_cache(user: TokenPayload = Depends(_require_superadmin)) -> dict
         logger.warning("Cache flushed by superadmin %s", user.sub)
         return {"ok": True, "flushed_at": _utcnow()}
     except Exception as exc:
-        return {"ok": False, "detail": str(exc)}
+        return {"ok": False, "detail": safe_error(exc)}
 
 
 @router.get("/infra/db")
@@ -207,7 +208,7 @@ async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dic
         finally:
             db.close()
     except Exception as exc:
-        return {"error": str(exc), "active_connections": 0, "size_mb": 0}
+        return {"error": safe_error(exc), "active_connections": 0, "size_mb": 0}
 
 
 @router.get("/infra/queues")

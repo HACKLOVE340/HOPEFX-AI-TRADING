@@ -17,6 +17,7 @@ import contextlib
 from infrastructure.health import HealthStatus, get_health_checker
 from infrastructure.logging import get_logger
 from infrastructure.metrics import get_metrics_registry
+from api.error_details import safe_error
 
 logger = get_logger(__name__)
 
@@ -407,7 +408,7 @@ def _register_probe_routes(app, trading_app, health_checker):
             return JSONResponse(content=data, status_code=200 if data.get("engine_healthy") else 503)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("invariants health endpoint error: %s", exc)
-            return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=503)
+            return JSONResponse(content={"ok": False, "error": safe_error(exc)}, status_code=503)
 
 
 def _register_account_routes(app: Any, trading_app: Any, get_current_user: Any) -> None:

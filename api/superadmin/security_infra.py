@@ -35,6 +35,7 @@ from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -71,7 +72,7 @@ def _check_cert_expiry(hostname: str, port: int = 443) -> dict[str, Any]:
             "expires_at": None,
             "days_remaining": -1,
             "status": "unknown",
-            "error": str(exc),
+            "error": safe_error(exc),
         }
 
 
@@ -317,7 +318,7 @@ async def add_waf_rule(
             rules.append(rule)
             rc.set(_WAF_RULES_KEY, json.dumps(rules), ex=86400 * 30)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "waf_rule_add", {"rule_id": rule_id})
     return {"ok": True, "rule": rule}
 
@@ -364,7 +365,7 @@ async def revoke_api_key(
                     k["revoke_reason"] = reason
             rc.set(_API_KEYS_KEY, json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id, "reason": reason})
     return {"ok": True}
 
@@ -531,7 +532,7 @@ async def trigger_antivirus_scan(
         result["error"] = "ClamAV not installed"
     except Exception as exc:
         result["status"] = "error"
-        result["error"] = str(exc)
+        result["error"] = safe_error(exc)
 
     try:
         from cache.redis_client import get_sync_redis_client
