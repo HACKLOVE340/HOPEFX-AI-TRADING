@@ -44,7 +44,7 @@ class _StubGoldFeed:
 
 
 def _orchestrator(monkeypatch, gold_tick):
-    """A DataLayerOrchestrator with no Redis and a stubbed gold feed."""
+    """A MarketDataOrchestrator with no Redis and a stubbed gold feed."""
     from data_layer.orchestrator import MarketDataOrchestrator
 
     orch = MarketDataOrchestrator.__new__(MarketDataOrchestrator)
@@ -132,4 +132,4 @@ def test_is_gold_symbol_rejects_lookalikes():
     assert not _is_gold_symbol("XAG_USD")
     assert not _is_gold_symbol("XPT_USD")
     assert not _is_gold_symbol("")
-    assert not _is_gold_symbol(None)  # type: ignore[arg-type]
+    assert not _is_gold_symbol(None)
