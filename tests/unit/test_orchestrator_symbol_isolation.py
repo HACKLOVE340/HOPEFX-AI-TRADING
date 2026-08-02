@@ -133,3 +133,101 @@ def test_is_gold_symbol_rejects_lookalikes():
     assert not _is_gold_symbol("XPT_USD")
     assert not _is_gold_symbol("")
     assert not _is_gold_symbol(None)
+
+
+# ── Redis tick key resolution ─────────────────────────────────────────────────
+# Stopping non-gold symbols from being served the gold price (above) is only
+# half the job: they then have to get their *own* price. The multi-source feed
+# writes all twelve configured symbols to Redis under the compact spelling the
+# feed config uses (`hopefx:dl:tick:EURUSD`), while callers ask in the
+# underscore form (`EUR_USD`). Every read missed, so live ticks were collected
+# and discarded for everything except gold — which resolved only because
+# cache/market_data_cache.py writes the literal `XAU_USD`.
+
+
+class _FakeRedisStore:
+    """RedisStore with a dict standing in for Redis."""
+
+    def __init__(self, stored: dict[str, str]):
+        from data_layer.cache.redis_store import DataLayerRedisStore as RedisStore
+
+        self._store = stored
+        self.gets: list[str] = []
+        self._safe_get = self._fake_get
+        self._key = RedisStore._key.__get__(self)
+        self.get_tick = RedisStore.get_tick.__get__(self)
+        self._r = None
+
+    def _fake_get(self, key: str):
+        self.gets.append(key)
+        return self._store.get(key)
+
+
+def test_a_tick_written_by_the_feed_is_found_from_the_underscore_form():
+    """The reported symptom: EUR_USD never resolved to the feed's EURUSD tick."""
+    import json
+
+    store = _FakeRedisStore({"hopefx:dl:tick:EURUSD": json.dumps({"mid": 1.0921})})
+
+    assert store.get_tick("EUR_USD") == {"mid": 1.0921}
+
+
+def test_the_slash_form_resolves_too():
+    import json
+
+    store = _FakeRedisStore({"hopefx:dl:tick:BTCUSD": json.dumps({"mid": 61000.0})})
+
+    assert store.get_tick("BTC/USD") == {"mid": 61000.0}
+
+
+def test_an_exact_key_is_never_shadowed_by_the_normalised_one():
+    """Gold has both spellings written by different writers; the caller's wins."""
+    import json
+
+    store = _FakeRedisStore(
+        {
+            "hopefx:dl:tick:XAU_USD": json.dumps({"mid": 4000.0, "writer": "market_data_cache"}),
+            "hopefx:dl:tick:XAUUSD": json.dumps({"mid": 4001.0, "writer": "multi_source_feed"}),
+        }
+    )
+
+    assert store.get_tick("XAU_USD")["writer"] == "market_data_cache"
+
+
+def test_the_compact_form_costs_no_extra_lookup():
+    """A caller already using the feed's spelling must not pay for a fallback."""
+    store = _FakeRedisStore({})
+
+    store.get_tick("EURUSD")
+
+    assert store.gets == ["hopefx:dl:tick:EURUSD"]
+
+
+def test_a_genuine_miss_still_returns_none():
+    store = _FakeRedisStore({})
+
+    assert store.get_tick("EUR_USD") is None
+    assert store.gets == ["hopefx:dl:tick:EUR_USD", "hopefx:dl:tick:EURUSD"]
+
+
+def test_every_configured_feed_symbol_is_reachable_from_the_public_spelling():
+    """End to end over the real config: each feed symbol resolves from EUR_USD form."""
+    import json
+    import re
+    from pathlib import Path
+
+    cfg = (Path(__file__).resolve().parents[2] / "config" / "multi_source_feed.yaml").read_text()
+    feed_symbols = re.findall(r"^    ([A-Z]{6,8}):", cfg, re.M)
+    assert feed_symbols, "no symbols parsed from multi_source_feed.yaml"
+
+    # Redis as the feed leaves it: compact keys only.
+    stored = {f"hopefx:dl:tick:{s}": json.dumps({"symbol": s}) for s in feed_symbols}
+    store = _FakeRedisStore(stored)
+
+    unresolved = []
+    for s in feed_symbols:
+        underscore = f"{s[:3]}_{s[3:]}" if len(s) == 6 else s
+        if store.get_tick(underscore) is None:
+            unresolved.append(underscore)
+
+    assert not unresolved, f"feed writes these but callers cannot read them: {unresolved}"

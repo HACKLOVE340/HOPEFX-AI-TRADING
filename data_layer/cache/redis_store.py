@@ -79,6 +79,19 @@ _VOLUME_DELTA_MAX = int(os.getenv("DL_VOLUME_DELTA_MAX", "1000"))
 
 _PREFIX = "hopefx:dl:"
 
+
+def _tick_key_candidates(symbol: str) -> tuple[str, ...]:
+    """Symbol spellings to try when reading a tick, most specific first.
+
+    `EUR_USD` and `EUR/USD` both also resolve to `EURUSD`, which is the form the
+    multi-source feed writes. Order matters: the caller's own spelling wins, so
+    an exact existing key is never shadowed by the normalised one.
+    """
+    given = (symbol or "").strip().upper()
+    compact = given.replace("_", "").replace("/", "").replace("-", "")
+    return (given,) if compact == given else (given, compact)
+
+
 # Pub/sub channel names
 CHANNEL_TICKS = "hopefx:dl:pubsub:ticks"
 CHANNEL_ORDERBOOK = "hopefx:dl:pubsub:orderbook"
@@ -364,12 +377,35 @@ class DataLayerRedisStore:
             self._safe_publish(CHANNEL_TICKS, json.dumps({"symbol": symbol, **tick_dict}))
 
     def get_tick(self, symbol: str) -> dict[str, Any] | None:
-        raw = self._safe_get(self._key("tick", symbol))
-        if raw:
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                return None
+        """Latest cached tick for `symbol`, tolerant of separator spelling.
+
+        Two writers populate this keyspace with different conventions:
+
+          data_feed/redis_tick_writer.py  ->  hopefx:dl:tick:EURUSD
+          cache/market_data_cache.py      ->  hopefx:dl:tick:XAU_USD
+
+        The multi-source feed takes its symbols from multi_source_feed.yaml,
+        which uses the compact form, while callers (api/ws_public.py,
+        api/risk_calculator.py, api/pnl_dashboard.py) ask in the underscore
+        form. The `hopefx:dl:tick:` prefix was added to the writer expressly as
+        a data_layer compatibility key, so the two halves were meant to meet —
+        only the separator kept them apart.
+
+        The effect was that all twelve configured symbols were fetched,
+        validated and written to Redis every cycle, and every read missed.
+        Gold resolved only because market_data_cache writes the literal
+        `XAU_USD`, so exactly one spelling happened to line up.
+
+        Reads therefore try the spelling as given, then the compact form. It is
+        one extra GET on a miss, and only on a miss.
+        """
+        for candidate in _tick_key_candidates(symbol):
+            raw = self._safe_get(self._key("tick", candidate))
+            if raw:
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    return None
         return None
 
     def get_tick_history(self, symbol: str, limit: int = 500) -> list[dict[str, Any]]:
