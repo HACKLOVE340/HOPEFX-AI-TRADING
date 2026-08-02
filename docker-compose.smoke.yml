@@ -100,6 +100,14 @@ services:
       ALLOWED_ORIGINS: "https://app.hopefx.example"
       APP_BASE_URL: "http://localhost"
       HOPEFX_DOMAIN: "localhost"
+      # The data-layer orchestrator starts nine feeds (FRED, CFTC, IMF, WGC,
+      # Yahoo…), each capped at ORCHESTRATOR_FEED_TIMEOUT_S, and the whole
+      # start() is wrapped in a 60s ORCHESTRATOR_STARTUP_TIMEOUT_S budget. None
+      # of those hosts is reachable from CI, so at the 15s default the feeds
+      # alone exhaust the budget, start() is cancelled before it sets _started,
+      # and /health/ready reports orchestrator down forever. Each feed injects
+      # neutral series on timeout, so a short cap costs nothing here.
+      ORCHESTRATOR_FEED_TIMEOUT_S: "5"
       # Disable optional integrations that require external credentials
       BRAIN_SEMANTIC_ENCODER: "false"
       CME_ENABLED: "false"

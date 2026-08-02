@@ -224,6 +224,25 @@ jobs:
           " || FAIL=1
           fi
 
+          # ── Wait for startup to finish ──────────────────────────────────────
+          # app.py runs startup_event() as a background task so the lifespan
+          # yields immediately — the app answers /health/live long before the
+          # component registry, the async DB pool and the auth service exist.
+          # curl_retry only retries on a connection failure (000), so a 503 from
+          # a half-initialised app counts as an answer and every assertion below
+          # ran against it: readiness 503, login 503 "Auth service not
+          # initialised". Wait for readiness to actually go green first.
+          echo "--- Waiting for /api/health/ready (max 120s) ---"
+          for i in $(seq 1 24); do
+            CODE=$(curl -s -o /tmp/smoke_body -w "%{http_code}" "${BASE}/api/health/ready" 2>/dev/null)
+            if [ "$CODE" = "200" ]; then
+              echo "Ready after ~$((i * 5))s."
+              break
+            fi
+            echo "  attempt ${i}/24: HTTP ${CODE} — $(head -c 220 /tmp/smoke_body)"
+            sleep 5
+          done
+
           # ── 2. Readiness probe ──────────────────────────────────────────────
           echo "--- Test 2: GET /api/health/ready ---"
           CODE=$(curl_retry "${BASE}/api/health/ready")
@@ -242,7 +261,11 @@ jobs:
 
           # ── 3. Register a test user ─────────────────────────────────────────
           echo "--- Test 3: POST /api/auth/register ---"
-          SMOKE_USER="smoke_$(date +%s)@ci.hopefx.test"
+          # Not a .test/.invalid/.local domain: email-validator rejects the
+          # RFC 6761 special-use names outright, so registration 422s before
+          # the endpoint is exercised at all. example.com is reserved by
+          # RFC 2606 and accepted by the validator.
+          SMOKE_USER="smoke_$(date +%s)@ci-smoke.example.com"
           SMOKE_PASS="SmokeTest@CI2025!"
           REG_BODY=$(cat <<JSON
           {"email":"${SMOKE_USER}","username":"smoke_ci_$(date +%s)","password":"${SMOKE_PASS}","full_name":"CI Smoke"}
