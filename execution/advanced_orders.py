@@ -254,6 +254,10 @@ class StopLimitOrder:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     native_broker_support: bool = False
+    # Guards the "price past limit" warning so a resting order logs it once
+    # rather than on every monitor tick. Runtime bookkeeping, not order state,
+    # so it is deliberately absent from to_dict().
+    limit_warning_logged: bool = field(default=False, repr=False, compare=False)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -842,17 +846,23 @@ class AdvancedOrderManager:
 
                 # Check if stop price is reached
                 if not order.triggered:
-                    triggered = False
                     if order.side.upper() in ("BUY", "LONG"):
-                        if price >= order.stop_price:
-                            triggered = True
-                    elif price <= order.stop_price:
-                        triggered = True
+                        order.triggered = price >= order.stop_price
+                    else:
+                        order.triggered = price <= order.stop_price
 
-                    if triggered:
-                        order.triggered = True
-                        # Now check if limit price is achievable
-                        await self._execute_stop_limit(order, price)
+                # A triggered order stays live until it fills or expires, so it
+                # is re-attempted on every tick rather than only on the tick that
+                # triggered it. Execution was previously attempted inside the
+                # `if not order.triggered` branch above: an order that gapped
+                # straight past its limit logged "waiting" once and was then
+                # never looked at again, because `triggered` was already True.
+                # It stayed ACTIVE for ever, still listed by get_active_orders()
+                # as live protection, and could not fill even when price came
+                # back inside the limit — which is the gap this order type exists
+                # to handle.
+                if order.triggered:
+                    await self._execute_stop_limit(order, price)
 
     # ── Execution ─────────────────────────────────────────────────────────────
 
@@ -969,10 +979,16 @@ class AdvancedOrderManager:
                         )
                         order.state = AdvancedOrderState.FAILED
                     await asyncio.sleep(_RETRY_DELAY_S)
-        elif not can_fill:
-            # Price moved past limit — order cannot be filled at desired price
+        elif not can_fill and not order.limit_warning_logged:
+            # Price moved past limit — the order rests until price comes back
+            # inside it or it expires. Logged once rather than on every monitor
+            # tick: the loop runs ~10x/second, so a resting order would otherwise
+            # emit hundreds of identical warnings a minute.
+            order.limit_warning_logged = True
             logger.warning(
-                "Stop-limit triggered but price %.5f past limit %.5f — waiting",
+                "Stop-limit %s triggered but price %.5f is past limit %.5f — "
+                "holding until price returns inside the limit or the order expires",
+                order.order_id,
                 price,
                 order.limit_price,
             )

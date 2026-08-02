@@ -54,7 +54,7 @@ services:
       --requirepass ci-smoke-redis-password
     environment:
       # Keep auth enabled so the production startup validator still passes.
-      REDIS_PASSWORD: "ci-smoke-redis-password"
+      REDIS_PASSWORD: "ci-smoke-redis-password"  # pragma: allowlist secret
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a ci-smoke-redis-password ping | grep -q PONG"]
       interval: 5s
@@ -70,16 +70,16 @@ services:
       REDIS_FORCE_TLS: "false"
       REDIS_URL: "redis://:ci-smoke-redis-password@redis:6379/0"
       # Minimal required secrets — safe placeholder values for CI only
-      POSTGRES_PASSWORD: "ci_smoke_password"
-      REDIS_PASSWORD: "ci-smoke-redis-password"
-      SECURITY_JWT_SECRET: "ci-smoke-test-jwt-secret-minimum-32-chars!!"
-      CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      POSTGRES_PASSWORD: "ci_smoke_password"  # pragma: allowlist secret
+      REDIS_PASSWORD: "ci-smoke-redis-password"  # pragma: allowlist secret
+      SECURITY_JWT_SECRET: "ci-smoke-test-jwt-secret-minimum-32-chars!!"  # pragma: allowlist secret
+      CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # pragma: allowlist secret
       CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-      CRYPTO_WEBHOOK_SECRET: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      CRYPTO_WEBHOOK_SECRET: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"  # pragma: allowlist secret
       HOPEFX_KILL_SWITCH_TOKEN: "ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!"
-      BOOTSTRAP_SUPERADMIN_PASSWORD: "ci-smoke-superadmin-pw"
-      BOOTSTRAP_ADMIN_PASSWORD: "ci-smoke-admin-pw"
-      BOOTSTRAP_TRADER_PASSWORD: "ci-smoke-trader-pw"
+      BOOTSTRAP_SUPERADMIN_PASSWORD: "ci-smoke-superadmin-pw"  # pragma: allowlist secret
+      BOOTSTRAP_ADMIN_PASSWORD: "ci-smoke-admin-pw"  # pragma: allowlist secret
+      BOOTSTRAP_TRADER_PASSWORD: "ci-smoke-trader-pw"  # pragma: allowlist secret
       # Paper trading — no live broker credentials needed
       BROKER_TYPE: "paper"
       PAPER_TRADING: "true"
@@ -106,7 +106,7 @@ services:
   # ── Override postgres: inject password matching app override above ───────────
   postgres:
     environment:
-      POSTGRES_PASSWORD: "ci_smoke_password"
+      POSTGRES_PASSWORD: "ci_smoke_password"  # pragma: allowlist secret
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopefx} -d ${POSTGRES_DB:-hopefx}"]
       interval: 5s
