@@ -3984,6 +3984,31 @@ def _ohlcv_to_df(ohlcv_list: list):
         return None
 
 
+def _bars_are_usable(bars) -> bool:
+    """True when `bars` carry enough varying closes to be worth analysing.
+
+    Mirrors the guardrail `/ohlcv` applies to price-engine output: at least two
+    bars, with some movement between them. A flat run is the paper engine's
+    placeholder, and handing it to the pattern/level detectors yields
+    confident-looking output derived from data that says nothing — so it is
+    treated as a miss, letting the yfinance/CSV fallbacks take their turn.
+
+    Accepts both the attribute-style bars the price engine yields and the
+    dict-style bars the fallbacks build. Bars with no readable close are
+    unusable too: `_ohlcv_to_df` consumers index `df["close"]` directly.
+    """
+    if not bars or len(bars) < 2:
+        return False
+    closes: list[float] = []
+    for bar in bars:
+        value = bar.get("close") if isinstance(bar, dict) else getattr(bar, "close", None)
+        try:
+            closes.append(float(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return False
+    return max(closes) - min(closes) > 0.0
+
+
 async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
     """Fetch OHLCV bars for a symbol: price engine, then yfinance, then gold CSV.
 
@@ -3998,14 +4023,28 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
     config/multi_source_feed.yaml (`XAUUSD`), so the ticker lookup is done on
     the compact spelling. Passing the OANDA form straight through would miss
     every entry and silently disable the fallback again.
+
+    The price-engine call carries the same timeout and usability check `/ohlcv`
+    applies, so `/patterns` and `/levels` cannot hang longer than `/ohlcv` on a
+    stalled engine, and placeholder bars do not suppress the fallbacks.
     """
     try:
         from core.app_state import app_state
 
         if app_state and app_state.price_engine:
-            bars = await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
-            if bars:
+            bars = await asyncio.wait_for(
+                app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
+                timeout=25.0,
+            )
+            if _bars_are_usable(bars):
                 return bars
+            logger.debug(
+                "Price engine returned %d unusable bar(s) for %s — trying yfinance",
+                len(bars or []),
+                symbol,
+            )
+    except TimeoutError:
+        logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
     except Exception as exc:
         logger.debug("Price engine OHLCV fetch failed for %s: %s", symbol, exc)
 

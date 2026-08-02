@@ -319,7 +319,7 @@ const PatternDetector: React.FC = () => {
             <div style={s.center}>
               <span style={{ fontSize: 32, marginBottom: 12 }}>📉</span>
               <p style={{ color: '#facc15', fontSize: 14, textAlign: 'center', maxWidth: 460, lineHeight: 1.7 }}>
-                No price history available for{' '}
+                Insufficient price history for{' '}
                 <strong style={{ color: '#fde68a' }}>{data.symbol}</strong> / {timeframe}
                 {typeof data.bars === 'number' ? ` — only ${data.bars} bar${data.bars === 1 ? '' : 's'}` : ''}.
               </p>
