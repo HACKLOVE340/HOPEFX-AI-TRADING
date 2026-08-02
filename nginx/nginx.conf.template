@@ -38,9 +38,13 @@ http {
     gzip_vary on;
     gzip_proxied any;
     gzip_comp_level 6;
-    gzip_types text/plain text/css text/xml application/json
+    # text/javascript is what nginx's own mime.types maps .js to (since 1.21.1).
+    # Listing only application/javascript left every SPA chunk uncompressed —
+    # ~2.8 MB of JS shipping raw on a cold load.
+    gzip_types text/plain text/css text/xml text/javascript application/json
                application/javascript application/xml+rss
-               application/atom+xml image/svg+xml;
+               application/atom+xml image/svg+xml application/wasm;
+    gzip_min_length 1024;
 
     # ── Rate limiting ─────────────────────────────────────────────────────────
     # Auth endpoints: 10 req/min per IP

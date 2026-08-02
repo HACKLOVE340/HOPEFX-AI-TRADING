@@ -85,6 +85,34 @@ def _build_csp(allowed_origins: list[str]) -> str:
     )
 
 
+# ── Response compression ──────────────────────────────────────────────────────
+
+
+def setup_compression(app: FastAPI) -> None:
+    """Gzip responses above a size floor.
+
+    The SPA ships ~2.8 MB of JavaScript across its chunks, the largest single
+    one being ~415 kB. Uncompressed that is the dominant cost of a cold page
+    load, and nothing was compressing it:
+
+    - The app itself had no compression middleware at all. Starlette's
+      `StaticFiles` does not gzip.
+    - docker-compose publishes the app on `8000:8000`, so anyone hitting the
+      host directly bypasses nginx entirely and gets the raw bytes.
+    - Even through nginx, `gzip_types` listed `application/javascript` but not
+      `text/javascript`, which is what nginx's own mime.types has mapped `.js`
+      to since 1.21.1. The JS chunks were falling outside the type list.
+
+    Registered ahead of the other middleware so it wraps their responses too.
+    The 1 kB floor skips payloads where the compression round-trip costs more
+    than it saves; small JSON API responses are unaffected either way.
+    """
+    from starlette.middleware.gzip import GZipMiddleware
+
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+    logger.info("Response compression enabled (gzip, min 1 kB)")
+
+
 # ── CORS ──────────────────────────────────────────────────────────────────────
 
 
@@ -570,11 +598,14 @@ def register_all(app: FastAPI) -> None:
     Order matters — Starlette applies middleware in reverse registration order
     (last registered = outermost = first to process the request).
     We want:
-      startup_gate → CSRF → metrics → security headers → CORS (outermost)
+      startup_gate → CSRF → metrics → security headers → gzip → CORS (outermost)
     """
     setup_startup_gate(app)  # innermost — gate before CSRF so 503 beats 403
     setup_paywall(app)  # after the startup gate: "still booting" beats "pay up"
     setup_csrf_middleware(app)
     setup_metrics_middleware(app)
     setup_security_headers(app)
+    # Outside the security-header middleware so it compresses the final body,
+    # but inside CORS so preflight responses are not needlessly wrapped.
+    setup_compression(app)
     setup_cors(app)  # outermost — handles preflight first
