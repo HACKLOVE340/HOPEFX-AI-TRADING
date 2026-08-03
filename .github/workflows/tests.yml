@@ -36,6 +36,28 @@ jobs:
         python-version: ["3.11", "3.12"]
 
     services:
+      # Postgres is here to match ci.yml. Without it this workflow ran the same
+      # suite against no database at all, so every DB-backed branch was skipped
+      # or took its fallback path — and the resulting coverage came out ~2 points
+      # lower than ci.yml's, on an identical .coveragerc and an identical 70%
+      # gate: 69.6% here against 71.53% there.
+      #
+      # The gate was therefore unreachable by construction, and this workflow
+      # failed on every commit to main. A check that can never pass is a check
+      # nobody reads.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres  # pragma: allowlist secret
+          POSTGRES_DB: hopefx
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
       redis:
         image: redis:7
         ports:
@@ -79,6 +101,10 @@ jobs:
         CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}
         CONFIG_SALT: ${{ secrets.CONFIG_SALT || 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }}
         SECURITY_JWT_SECRET: ${{ secrets.SECURITY_JWT_SECRET || 'ci-test-secret-key-minimum-32-characters-long' }}  # pragma: allowlist secret
+        # Must match ci.yml, or the two workflows measure different code paths
+        # and disagree on an identical coverage gate. See the services block.
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
+        DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
         OANDA_API_KEY: ci-placeholder  # pragma: allowlist secret
