@@ -86,6 +86,21 @@ services:
       APP_ENV: "production"
       # Disable startup gate so health endpoint responds before full init
       STARTUP_GATE: "false"
+      # APP_ENV=production defaults REQUIRE_EMAIL_VERIFICATION to true, which is
+      # correct for a real deployment and correct behaviour when the smoke test
+      # hit it: registration returned 201, then login returned
+      #   401 {"detail":"Please verify your email before logging in."}
+      #
+      # There is no SMTP in CI and no inbox to click a link in, so that login
+      # can never succeed and tests 4-8 (login, /me, signals, logout) were all
+      # skipped for want of a token. Turning verification off here buys back
+      # coverage of the whole authenticated path.
+      #
+      # Same shape as STARTUP_GATE above: a CI-only override of a gate that
+      # needs an out-of-band step the runner cannot perform. Everything the
+      # production path *can* exercise here — the CORS gates, the startup
+      # validators — stays armed.
+      REQUIRE_EMAIL_VERIFICATION: "false"
       # APP_ENV=production above arms three fail-closed CORS gates that each
       # sys.exit(1): "*" with credentials, any http:// origin, and an
       # all-localhost list (the last enforced in both core/middleware.py and
