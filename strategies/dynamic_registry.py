@@ -203,6 +203,27 @@ class ASTSafetyValidator(ast.NodeVisitor):
             self.errors.append(f"Line {node.lineno}: forbidden attribute access '.{node.attr}'")
         self.generic_visit(node)
 
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        """Catch the same names reached by subscript instead of attribute.
+
+        `visit_Attribute` only sees `ast.Attribute` nodes, so it caught
+        `x.__subclasses__` but not `x.__dict__['__subclasses__']` — a subscript
+        whose key is a plain string constant. That gap was a working bypass:
+
+            type.__dict__['__subclasses__'](object)
+
+        passed validation and reached the entire loaded type hierarchy, 715
+        classes, from inside the restricted namespace.
+
+        `__dict__` itself is deliberately not on the forbidden list — strategies
+        legitimately introspect their own config — so the check belongs on the
+        key rather than on the attribute that produced the mapping.
+        """
+        key = node.slice
+        if isinstance(key, ast.Constant) and isinstance(key.value, str) and key.value in _FORBIDDEN_ATTRIBUTES:
+            self.errors.append(f"Line {node.lineno}: forbidden attribute access via subscript '[{key.value!r}]'")
+        self.generic_visit(node)
+
 
 class DynamicStrategyRegistry:
     """
@@ -421,6 +442,53 @@ class DynamicStrategyRegistry:
 
         Returns the strategy class instance (not the class itself).
         The namespace provides access to allowed imports only.
+
+        Trust boundary — read before changing anything here
+        ---------------------------------------------------
+        This executes caller-supplied Python. `ASTSafetyValidator` above is a
+        genuine denylist — it blocks the textbook escapes, including
+        `().__class__.__bases__[0].__subclasses__()`, `object.__subclasses__()`
+        and `__globals__` — and `allowed_globals` below withholds the dangerous
+        builtins. Together they raise the cost considerably. **But it is a
+        denylist on a Turing-complete language, so it is defence in depth, not
+        a boundary, and must not be described as a sandbox.**
+
+        The concrete reason to believe that: `type.__dict__['__subclasses__']`
+        reached the entire loaded type hierarchy — 715 classes — and passed
+        validation, because `visit_Attribute` never sees a subscript.
+        `visit_Subscript` now closes that specific hole. The point is not that
+        one hole existed; it is that finding it took ten minutes, and nobody
+        can prove the next one is not there.
+
+        So the actual control is **who can reach this**, not what the namespace
+        contains:
+
+        - `api/dynamic_strategies.py::register_strategy` — `_require_admin()`
+        - `api/nocode.py::deploy_template` — `require_plan("professional")`,
+          and it compiles from a vetted template rather than raw source
+
+        An admin can already stop the engine, move funds through the broker
+        adapters, and rewrite risk limits. Code execution adds nothing to an
+        account that holds those. That is the boundary this feature sits on,
+        and it is deliberate: custom strategies are the product.
+
+        What this means in practice:
+
+        - Do **not** relax `_require_admin()` on the register endpoint, or
+          expose `_compile_strategy` on any route reachable by a lower tier.
+          The gate is the security control; the namespace is not.
+        - Do **not** add convenience entries to `allowed_globals` — anything
+          holding a reference to a module, a file, or a class hierarchy widens
+          the escape surface with no compensating benefit.
+        - Real isolation would mean executing in a separate process with
+          dropped privileges, a seccomp profile and no network, communicating
+          over a pipe. That is a design change, not a patch here, and it is the
+          only thing that would let this endpoint be opened to non-admins.
+
+        CodeQL flags this line as code injection (alert #24744). The finding is
+        accurate as far as it goes — this *is* `exec` on caller input. It is
+        accepted on the strength of the admin gate above, not on the strength
+        of the namespace restriction.
         """
         # Provide a restricted set of allowed modules
         import numpy as np
