@@ -43,6 +43,81 @@ _ASSET_PATH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*(?:/[A-Za-z0-9][A-Za-z0
 _MAX_ASSET_PATH_LEN = 255
 
 
+# ── Caching ───────────────────────────────────────────────────────────────────
+#
+# Vite emits content-hashed filenames — `app-analytics-DUbayt-I.js`. The hash
+# changes whenever the contents change, so the file at a given URL is immutable
+# by construction and can be cached for as long as the browser will keep it.
+#
+# Nothing was setting Cache-Control, so the browser fell back to revalidating
+# on every navigation: roughly fifteen conditional requests, each a full round
+# trip, before any page could paint. On a distant VPS that is most of the
+# perceived load time even when every response is a 304.
+#
+# index.html is the opposite case and must never be cached — it is the document
+# that names the current hashed bundles. Caching it pins the browser to a stale
+# build after a deploy, and the assets it references may no longer exist.
+_IMMUTABLE_CACHE = "public, max-age=31536000, immutable"
+_NO_CACHE = "no-cache, no-store, must-revalidate"
+
+_INDEX_CACHE_HEADERS = {"Cache-Control": _NO_CACHE}
+
+# Vite's content hash: `<name>-<hash>.<ext>`, where the hash is 8 characters of
+# the base64url alphabet. Only files carrying one are safe to treat as immutable.
+#
+# Deliberately not a regex. The obvious pattern for this —
+# `.+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$` — is quadratic, because `.+` and the
+# character class can both match '-' and have to be split between them: on a
+# non-matching input of "-a" repeated, 4 k chars took 10 ms, 8 k took 39 ms,
+# 16 k took 163 ms. `_CachingStaticFiles` calls this with the raw request path
+# and no length bound, so that was reachable from a URL.
+#
+# The scan below is a single pass with no backtracking.
+_HASH_LEN = 8
+_HASH_ALPHABET = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+
+
+def _has_content_hash(name: str) -> bool:
+    """True when *name* ends in Vite's `-<8-char hash>.<ext>` form."""
+    stem, dot, ext = name.rpartition(".")
+    if not dot or not ext or not ext.isalnum():
+        return False
+    # Room for at least one name character, the separator, and the hash.
+    if len(stem) < _HASH_LEN + 2:
+        return False
+    if stem[-(_HASH_LEN + 1)] != "-":
+        return False
+    return all(c in _HASH_ALPHABET for c in stem[-_HASH_LEN:])
+
+
+def _asset_cache_headers(rel_path: str) -> dict[str, str]:
+    """Immutable for content-hashed files, revalidate for everything else."""
+    name = rel_path.rsplit("/", 1)[-1]
+    if name == "index.html":
+        return {"Cache-Control": _NO_CACHE}
+    if _has_content_hash(name):
+        return {"Cache-Control": _IMMUTABLE_CACHE}
+    # No hash in the name (favicon.ico, manifest.json, robots.txt): the URL is
+    # stable across deploys, so it has to be revalidated to pick up changes.
+    return {"Cache-Control": "public, max-age=0, must-revalidate"}
+
+
+class _CachingStaticFiles(StaticFiles):
+    """StaticFiles that applies the same cache policy as the catch-all above.
+
+    The mount serves most asset requests in practice; without this the policy
+    would only apply on the catch-all's fallback path, which is not where the
+    hot requests go.
+    """
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):  # type: ignore[override]
+        response = super().file_response(full_path, stat_result, scope, status_code=status_code)
+        rel = scope.get("path", "").lstrip("/")
+        for header, value in _asset_cache_headers(rel).items():
+            response.headers[header] = value
+        return response
+
+
 def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
     """Return the named template file, or *fallback_html* if missing."""
     path = _TEMPLATES / name
@@ -311,13 +386,13 @@ def register_page_routes(app: FastAPI) -> None:
                 except (ValueError, OSError):
                     _is_asset = False
             if _is_asset and _asset is not None:
-                return FileResponse(str(_asset))
+                return FileResponse(str(_asset), headers=_asset_cache_headers(_safe_rel))
             # Everything else is a React Router path → serve index.html
-            return FileResponse(str(_index_html))
+            return FileResponse(str(_index_html), headers=_INDEX_CACHE_HEADERS)
 
         app.mount(
             "/",
-            StaticFiles(directory=str(_frontend_dist), html=True),
+            _CachingStaticFiles(directory=str(_frontend_dist), html=True),
             name="frontend_spa",
         )
         logger.info("Main React app mounted at / (static/)")
