@@ -115,7 +115,26 @@ async def _get_db_engine():
     without blocking the event loop.
     """
     global _db_engine, _db_engine_url, _db_engine_lock
-    db_url = os.getenv("DATABASE_URL", "")
+    # `create_async_engine` below needs an async driver, but DATABASE_URL is the
+    # sync DSN — docker-compose.yml sets `postgresql://…`, and passing that
+    # straight in fails with "The asyncio extension requires an async driver".
+    #
+    # That failure was invisible until the database wiring was fixed (#249):
+    # readiness was already 503 for larger reasons, so one more warning changed
+    # nothing. With the rest working, this is what keeps /health/ready red — the
+    # `database` component reports down on a database that is perfectly healthy.
+    #
+    # `_resolve_async_db_url` is the existing translation used by
+    # database/async_connection.py. Reused rather than reimplemented so the two
+    # cannot drift, and so ASYNC_DATABASE_URL is honoured here as well.
+    if not os.getenv("DATABASE_URL", "") and not os.getenv("ASYNC_DATABASE_URL", ""):
+        return None, None
+    try:
+        from database.async_connection import _resolve_async_db_url
+
+        db_url = _resolve_async_db_url()
+    except Exception:  # pragma: no cover — import guard only
+        db_url = os.getenv("DATABASE_URL", "")
     if not db_url:
         return None, None
     # Fast path — already initialised for the current URL.
