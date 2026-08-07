@@ -535,6 +535,21 @@ class HOPEFXDecisionEngine:
                 return None
 
             result.approved_size = float(sizing.recommended_size)
+            # Carry the risk-approval token issued by size_order() through to
+            # execution. It is the proof this order passed the risk gate; when
+            # it was dropped here, TradeExecutor manufactured a constant in its
+            # place and the No Unauthorized Trade invariant became
+            # unfalsifiable. See docs/HARDENING_BACKLOG.md S1-05.
+            self._risk_approval_token = str(getattr(sizing, "risk_approval_token", "") or "")
+            if not self._risk_approval_token:
+                logger.warning(
+                    "Phase3: sizing returned no risk_approval_token for %s — "
+                    "blocking, since execution cannot verify this order passed risk.",
+                    ctx.symbol,
+                )
+                result.outcome = DecisionOutcome.SIZING_REJECTED
+                result.gate_reason = "missing_risk_approval_token"
+                return None
             return result.approved_size
 
         except Exception as exc:
@@ -565,6 +580,9 @@ class HOPEFXDecisionEngine:
             "take_profit": result.take_profit,
             "confidence": result.ml_probability,
             "decision_id": ctx.decision_id,
+            # Proof this order passed the risk gate — stamped by size_order()
+            # and verified by TradeExecutor / the OMS (S1-05).
+            "risk_approval_token": getattr(self, "_risk_approval_token", ""),
         }
 
         try:

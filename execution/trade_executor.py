@@ -327,8 +327,30 @@ class TradeExecutor:
         # risk-approval token + decision id, then verify before the broker call so
         # this path carries the same No Unauthorized Trade / No Hidden Decision
         # guarantee as the OMS and smart-router paths. MONITOR logs; ENFORCE refuses.
-        signal["risk_approval_token"] = signal.get("risk_approval_token") or f"rat-{signal.get('signal_id', 'te')}"
-        signal["decision_id"] = signal.get("decision_id") or signal.get("signal_id") or signal["risk_approval_token"]
+        # Do NOT manufacture a token. It is issued by RiskManager.size_order()
+        # as proof the order passed the risk gate; minting one here made the
+        # No Unauthorized Trade invariant — a truthiness check — pass on a
+        # constant, so it could never detect the thing it exists to detect,
+        # not even with HOPEFX_INVARIANT_MODE=enforce.
+        # See docs/HARDENING_BACKLOG.md S1-05.
+        _token = signal.get("risk_approval_token")
+        if not _token:
+            logger.critical(
+                "TradeExecutor BLOCKED order | symbol=%s reason=missing risk_approval_token "
+                "(order did not come from RiskManager.size_order)",
+                symbol,
+            )
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.REJECTED,
+                message="[UNAUTHORIZED] missing risk_approval_token — order did not pass the risk gate",
+                latency_ms=0,
+            )
+        signal["decision_id"] = signal.get("decision_id") or signal.get("signal_id") or _token
         try:
             from invariants.enforcement import enforce_order_authorization
 
@@ -386,6 +408,21 @@ class TradeExecutor:
                 take_profit=signal.get("take_profit"),
             )
             await self.position_tracker.add_position(position)
+
+            # Tell the RiskManager a position opened. Without this the
+            # _MAX_OPEN_POSITIONS gate in size_order() reads a counter that is
+            # never incremented on this path (it was written only by the
+            # standalone hopefx_engine.py), so it compares 0 >= 3 forever and
+            # the decision engine can open unbounded concurrent positions.
+            # See docs/HARDENING_BACKLOG.md S1-04.
+            try:
+                self.risk_manager.notify_position_opened(symbol)
+            except Exception as _notify_exc:  # never fail an executed order on bookkeeping
+                logger.error(
+                    "TradeExecutor: notify_position_opened failed for %s: %s — open-position count is now understated",
+                    symbol,
+                    _notify_exc,
+                )
 
             # A market order that only partially filled leaves an unfilled
             # remainder that is NOT resubmitted here. Surface it explicitly so
@@ -493,6 +530,18 @@ class TradeExecutor:
 
         if success and closed_position:
             realized_pnl = closed_position.realized_pnl
+
+            # Mirror of the open notification (S1-04). Without this the
+            # open-position counter only ever grows, and the position cap
+            # eventually blocks all trading with no positions actually open.
+            try:
+                self.risk_manager.notify_position_closed(getattr(closed_position, "symbol", position_id))
+            except Exception as _notify_exc:
+                logger.error(
+                    "TradeExecutor: notify_position_closed failed for %s: %s — open-position count is now overstated",
+                    position_id,
+                    _notify_exc,
+                )
 
             # Update risk manager equity. Increment from CURRENT equity, not the
             # day's starting equity — otherwise each close clobbers the realised
