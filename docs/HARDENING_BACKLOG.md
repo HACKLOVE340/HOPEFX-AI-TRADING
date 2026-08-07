@@ -2021,6 +2021,7 @@ why 467 test files did not catch a single Round 3 finding.
 | S12-03 | MEDIUM | 156 skip markers/calls | `tests/` |
 | S12-04 | **CRITICAL** | SL/TP monitor never sends the closing order: `place_order` is invoked but never awaited | `execution/sl_tp_monitor.py:322` |
 | S12-04a | **CRITICAL** | Same bug at 3 more sites; the margin gate was inert (fail-open) against every async broker | `execution/engine.py` |
+| S12-04b | **CRITICAL** | Equity never reached the risk manager, so the drawdown circuit breaker could not trip | `hopefx_engine.py` |
 
 ### S12-04 — The stop-loss never reached the broker (CRITICAL) — FIXED
 
@@ -2135,6 +2136,48 @@ mapped IBKR's vocabulary onto the canonical fields — `NetLiquidation` → `equ
 gained an AST guard that fails if any module under `brokers/` defines
 `AccountInfo` again, plus a test running `assess_risk`'s exact call against the
 IBKR return type.
+
+#### S12-04b — The drawdown circuit breaker could not trip (CRITICAL) — FIXED
+
+Fourth instance of the same family, and the worst placed. Found by an AST sweep
+for async broker calls whose result is dereferenced without being awaited — a
+*different shape* from S12-04/S12-04a, which the `run_in_executor` guard could
+not see. `hopefx_engine.py::_update_equity`:
+
+```python
+info = self._broker.get_account_info()   # async def on every broker
+equity = float(info.get("equity", 0))    # AttributeError on a coroutine
+```
+
+The `AttributeError` was caught by the method's own
+`except Exception: logger.warning("Equity update failed: %s", exc)` — confirmed
+verbatim in the test output — so it failed silently on every cycle.
+
+`RiskManager.update_equity()` is not bookkeeping. It recomputes peak equity,
+current drawdown and daily drawdown, and **auto-halts trading when the drawdown
+limit is breached** (`risk/manager.py:1289`). Never calling it means all three
+stay at their initial values, so **the drawdown circuit breaker cannot trip no
+matter how much the account loses**.
+
+Three sibling broker calls in the same file were already correctly guarded with
+`inspect.isawaitable`; this one was not — the same "fix applied to one of N
+copies" mechanism S13-01 documents, this time within a single function's
+neighbours.
+
+**Fix:** routed through `execution.broker_call.call_broker`, plus an
+`_acct_field()` helper so both the `AccountInfo` dataclass and the plain-dict
+connector responses are read correctly.
+
+`tests/unit/test_broker_calls_are_awaited.py` gained a second AST guard for this
+shape — an assignment from a bare async broker call whose bound name is
+dereferenced on the next line — and `hopefx_engine.py` was added to the
+money-path list. Verified to fail when the fix is reverted.
+
+**Scope note, stated plainly.** A codebase-wide sweep flags ~333 call sites of
+this general shape. Most are false positives: sync brokers, results awaited by a
+caller, or correct helpers like `brain/brain.py`'s `_await_or_return`. The four
+confirmed instances were on the money path and are fixed; a full triage of the
+remainder is a separate piece of work, not something this round completed.
 
 ### S12-01 — Tests that name a safety property and verify nothing (HIGH)
 
@@ -2475,6 +2518,62 @@ of the four CRITICALs.
 ---
 
 ## Round 3 — new finding raised while fixing S1-06
+
+### S1-13 / S1-14 — The configured position cap was never enforced (HIGH) — FIXED
+
+Found by installing `hypothesis` and running `tests/unit/test_property_based.py`,
+which had **never executed** in this environment — see the verification note
+below.
+
+**S1-13.** `size_order` and `calculate_position_size` clamped notional with the
+module global `_MAX_POSITION_PCT` (`RISK_MAX_POSITION_PCT`, default 0.05) and
+never read `self._config.max_position_size_pct`. A caller constructing
+`RiskManager(config=RiskConfig(max_position_size_pct=0.02))` got 5% applied, not
+the 2% it asked for — a risk limit accepted, stored, reported back through
+`get_limits()`, and silently not enforced. The property test caught it as:
+
+    Dollar risk 215.00 exceeds max 200.00 (equity=10000 size=5.0 sl_dist=43.00)
+
+Fixed by clamping with `min(_MAX_POSITION_PCT, config.max_position_size_pct)` —
+config may tighten the environment ceiling, never loosen it. Both directions are
+asserted.
+
+**S1-14.** Nothing capped *loss at the stop*, only notional (exposure). Added a
+risk-at-stop clamp for callers that supply a stop. Its reach is narrow and worth
+stating precisely rather than overclaiming: it only binds when
+`stop_distance > entry_price`, which is impossible for a long (the notional cap
+already implies the risk cap there) and reachable only for a short whose stop
+sits further above entry than the entry price itself. In that case it pulls
+notional below the minimum and the trade is refused, which is correct.
+
+**On causation — the honest sequence.** Neither defect was introduced this
+round, and neither was newly *created* by S1-06 or S1-12. They were **masked**:
+S1-06 had Kelly bounded by `_MAX_POSITION_PCT`, so it saturated at 0.05 for
+every signal and sizing never came close to either cap. The property test was
+passing for the wrong reason. Fixing Kelly removed the accident that was hiding
+a real breach.
+
+**Verification note — a genuine gap in this round's earlier claims.** The
+"zero new failures against the audit baseline" statements on the preceding
+commits were true for the tests that *ran*, and 30 test files never collected in
+this container for want of `hypothesis`, `scipy`, `scikit-learn`, `matplotlib`,
+`joblib`, `websockets` and `fakeredis` — all of which are declared in
+`requirements-ci.txt`, so CI would have caught this. Two of the uncollected
+files (`test_property_based.py`, `test_risk_properties.py`) target
+`risk/manager.py`, the module changed most invasively. That limitation was not
+stated at the time; it should have been. After installing the missing packages,
+the 30 files were re-run against both trees: **147 failures on each, zero new**,
+once S1-13 was fixed.
+
+**S7-02 follow-up — a startup-ordering fragility, found and closed in the same
+pass.** `init_trade_executor` reads the PositionManager's Redis store, but
+`trade_executor` cannot declare `position_manager` as a registry dependency:
+`core/component_registry.py` runs a Kahn topological sort in which a *failed*
+dependency causes the dependent to be **skipped**, so a Redis outage would have
+stopped trading entirely rather than merely stopped journalling. Ordering was
+therefore relying on registration position. `TradeExecutor._resolve_store()` now
+resolves the journal lazily on first use, so an executor constructed before the
+position manager still picks it up.
 
 ### S1-12 — Kelly's payoff term is derived from confidence, not reward:risk (MEDIUM) — FIXED
 

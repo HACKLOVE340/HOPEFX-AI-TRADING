@@ -723,6 +723,20 @@ class RiskManager:
         return mid_price + sl_dist, mid_price - tp_dist
 
     @staticmethod
+    def _numeric_or_none(v: Any) -> float | None:
+        """Return *v* as a float only if it is genuinely a finite int/float.
+
+        ``float()`` alone is too permissive to gate a money decision on: any
+        object implementing ``__float__`` passes, and a Mock returns 1.0. See
+        S1-12, where that turned a signal carrying no stops into a fabricated
+        1:1 reward:risk ratio.
+        """
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        f = float(v)
+        return f if math.isfinite(f) else None
+
+    @staticmethod
     def _reward_risk_from_prices(
         entry_price: float | None,
         stop_loss: float | None,
@@ -890,7 +904,41 @@ class RiskManager:
         # to zero and the trade still opened at 0.1% of equity. The graduated
         # risk factors could not actually prevent a trade — only the hard gates
         # could. See docs/HARDENING_BACKLOG.md S1-07.
-        final_notional = min(final_notional, equity * _MAX_POSITION_PCT)
+        # Honour the *tighter* of the environment ceiling and the caller's
+        # RiskConfig. The clamp previously read only the module global, so a
+        # RiskManager built with RiskConfig(max_position_size_pct=0.02) had 5%
+        # applied — a limit accepted, stored, reported back by get_limits(), and
+        # never enforced. Config may tighten the ceiling, never loosen it.
+        # See docs/HARDENING_BACKLOG.md S1-13.
+        position_cap_pct = min(_MAX_POSITION_PCT, self._config.max_position_size_pct)
+        final_notional = min(final_notional, equity * position_cap_pct)
+
+        # Cap loss-at-the-stop, not just exposure. Notional is what is on the
+        # table; risk is what actually leaves the account if the stop is hit,
+        # and with a wide stop a position well inside the notional cap can still
+        # lose several times the configured limit. Only applies when the caller
+        # supplied a stop — without one there is no distance to size against.
+        # See docs/HARDENING_BACKLOG.md S1-14.
+        _entry = float(getattr(signal, "tick_mid", 0.0) or 0.0)
+        _sl = self._numeric_or_none(getattr(signal, "stop_loss_price", None))
+        if _sl is not None and _entry > 0:
+            stop_distance = abs(_entry - _sl)
+            if stop_distance > 0:
+                max_loss = equity * position_cap_pct
+                # loss = (notional / entry) * stop_distance  <=  max_loss
+                max_notional_by_risk = max_loss * _entry / stop_distance
+                if max_notional_by_risk < final_notional:
+                    logger.debug(
+                        "size_order: risk-at-stop cap binds for %s — notional "
+                        "%.2f -> %.2f (stop_distance=%.4f, max_loss=%.2f)",
+                        symbol,
+                        final_notional,
+                        max_notional_by_risk,
+                        stop_distance,
+                        max_loss,
+                    )
+                    final_notional = max_notional_by_risk
+
         _min_notional = equity * _MIN_POSITION_PCT
         if final_notional < _min_notional:
             return self._zero_sizing(

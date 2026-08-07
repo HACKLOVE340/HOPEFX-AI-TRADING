@@ -228,6 +228,7 @@ MONEY_PATH = (
     "execution/sl_tp_monitor.py",
     "execution/trade_executor.py",
     "api/health.py",
+    "hopefx_engine.py",
 )
 
 #: Broker methods declared `async def` on brokers/base.py.
@@ -278,4 +279,65 @@ def test_no_unawaited_broker_call_in_an_executor(rel_path: str):
         f"{offenders}. The worker thread only builds a coroutine; nothing awaits "
         f"it, so the broker is never actually called. Use "
         f"execution.broker_call.call_broker instead."
+    )
+
+
+# ── the other shape of the same bug ───────────────────────────────────────────
+
+#: Helpers that correctly resolve a maybe-coroutine. A call whose result is
+#: handed to one of these is fine.
+_AWAIT_HELPERS = ("call_broker", "_await_or_return", "isawaitable", "iscoroutine", "run_in_executor")
+
+
+@pytest.mark.parametrize("rel_path", MONEY_PATH)
+def test_no_broker_result_is_used_without_awaiting_it(rel_path: str):
+    """Catch the *direct* un-awaited call, not just the executor-wrapped one.
+
+    ``hopefx_engine._update_equity`` did::
+
+        info = self._broker.get_account_info()   # async def
+        equity = float(info.get("equity", 0))    # AttributeError on a coroutine
+
+    which the enclosing ``except Exception`` swallowed at WARNING. The
+    ``run_in_executor`` guard above could not see this shape, and equity
+    therefore never reached the risk manager — freezing the drawdown circuit
+    breaker (S12-04b).
+
+    Flags an assignment from a bare async-broker call where the very next
+    statement uses the bound name and nothing resolves the coroutine.
+    """
+    path = REPO_ROOT / rel_path
+    if not path.exists():
+        pytest.skip(f"{rel_path} not present")
+
+    src = path.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    lines = src.splitlines()
+    offenders = []
+
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Attribute)
+            and node.value.func.attr in ASYNC_BROKER_METHODS
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            continue
+
+        name = node.targets[0].id
+        window = "\n".join(lines[node.lineno - 1 : node.lineno + 2])
+        if any(h in window for h in _AWAIT_HELPERS):
+            continue
+        # Does the next line dereference the bound name?
+        nxt = lines[node.lineno] if node.lineno < len(lines) else ""
+        if f"{name}." in nxt or f"{name}[" in nxt or f"({name}" in nxt:
+            offenders.append((node.lineno, node.value.func.attr, name))
+
+    assert not offenders, (
+        f"{rel_path} assigns the result of an async broker call and dereferences "
+        f"it without awaiting, at {offenders}. The value is a coroutine; any "
+        f"attribute access on it raises AttributeError, which an enclosing "
+        f"`except Exception` will hide. Use execution.broker_call.call_broker."
     )

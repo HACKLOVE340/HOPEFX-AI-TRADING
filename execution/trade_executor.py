@@ -119,12 +119,12 @@ class TradeExecutor:
         # crash-recovery record — but the gap is worth saying out loud, because
         # without it a fill that lands during a crash is invisible forever.
         self.state_store = state_store
+        # Resolved lazily on first use when not injected — see _resolve_store().
+        self._store_lookup_done = state_store is not None
         if state_store is None:
-            logger.warning(
-                "TradeExecutor: no state_store — order intents will NOT be "
-                "journalled. A crash between broker ack and add_position leaves "
-                "an untracked live position with no way to reconcile it "
-                "(docs/HARDENING_BACKLOG.md S7-02)."
+            logger.info(
+                "TradeExecutor: no state_store injected — will resolve the "
+                "order-intent journal from the PositionManager on first order."
             )
         self.metrics = get_metrics_registry()
 
@@ -506,6 +506,43 @@ class TradeExecutor:
             message=f"Order {order.status.value}",
         )
 
+    def _resolve_store(self) -> Any:
+        """Return the intent journal, resolving it lazily the first time.
+
+        `init_trade_executor` passes the PositionManager's Redis store, but
+        `trade_executor` cannot declare `position_manager` as a registry
+        dependency: `core/component_registry.py` runs a topological sort in
+        which a **failed** dependency causes the dependent to be *skipped*. A
+        Redis outage would therefore stop trading altogether rather than merely
+        stop journalling — much worse than the problem being solved.
+
+        Startup order is consequently not guaranteed, so an executor built
+        before the position manager must still find the store afterwards rather
+        than journalling nothing for the life of the process.
+        """
+        if self.state_store is not None:
+            return self.state_store
+        if self._store_lookup_done:
+            return None
+
+        self._store_lookup_done = True
+        try:
+            from execution.position_manager import position_manager as _pm
+
+            self.state_store = getattr(_pm, "_redis_store", None)
+        except Exception as exc:
+            logger.warning("TradeExecutor: could not resolve the order-intent store: %s", exc)
+            self.state_store = None
+
+        if self.state_store is None:
+            logger.warning(
+                "TradeExecutor: no state_store — order intents will NOT be "
+                "journalled. A crash between broker ack and add_position leaves "
+                "an untracked live position with no way to reconcile it "
+                "(docs/HARDENING_BACKLOG.md S7-02)."
+            )
+        return self.state_store
+
     async def _journal_intent(
         self,
         client_order_id: str,
@@ -521,10 +558,11 @@ class TradeExecutor:
         recovery-visibility gap into an outage, and the paper path has no store
         at all. The cost of the failure is recorded rather than hidden.
         """
-        if self.state_store is None:
+        store = self._resolve_store()
+        if store is None:
             return
         try:
-            await self.state_store.save_order(
+            await store.save_order(
                 {
                     "id": client_order_id,
                     "client_order_id": client_order_id,
@@ -549,10 +587,11 @@ class TradeExecutor:
 
     async def _clear_intent(self, client_order_id: str, broker_order_id: str | None = None) -> None:
         """Drop the write-ahead record once the position is tracked (S7-02)."""
-        if self.state_store is None:
+        store = self._resolve_store()
+        if store is None:
             return
         try:
-            await self.state_store.remove_order(client_order_id)
+            await store.remove_order(client_order_id)
         except Exception as exc:
             logger.error(
                 "TradeExecutor: could not clear order intent %s (broker order %s): %s — "

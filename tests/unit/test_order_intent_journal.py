@@ -307,3 +307,51 @@ async def test_completed_orders_are_not_reported_as_orphans():
     pm._redis_store = _FakeStore()  # nothing journalled
 
     assert await pm.audit_order_intents(restored={}) == []
+
+
+# ── the journal must not depend on startup ordering ───────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_store_is_resolved_lazily_when_not_injected():
+    """Ordering must not silently disable the journal.
+
+    `init_trade_executor` reads the PositionManager's Redis store, but
+    `trade_executor` cannot declare `position_manager` as a dependency: the
+    registry is a topological sort in which a *failed* dependency causes the
+    dependent to be **skipped**, so a Redis outage would stop trading entirely
+    rather than merely stop journalling. Ordering is therefore not guaranteed,
+    and an executor built before the position manager must still pick the store
+    up later instead of journalling nothing forever.
+    """
+    from unittest.mock import patch
+
+    store = _FakeStore()
+    ex, _, _ = _make_executor(None)  # constructed with no store, as if built first
+    assert ex.state_store is None
+
+    pm = MagicMock()
+    pm._redis_store = store
+    with patch.dict("sys.modules", {"execution.position_manager": MagicMock(position_manager=pm)}):
+        await ex.execute_signal(_signal())
+
+    assert store.save_calls, (
+        "the executor never picked up the store that became available after "
+        "construction — the journal is silently dependent on startup ordering"
+    )
+
+
+@pytest.mark.asyncio
+async def test_lazy_resolution_failure_is_not_fatal():
+    """If no store can be found, trade anyway (loudly) — never block on it."""
+    from unittest.mock import patch
+
+    ex, _, pt = _make_executor(None)
+    broken = MagicMock()
+    type(broken)._redis_store = property(lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    with patch.dict("sys.modules", {"execution.position_manager": MagicMock(position_manager=broken)}):
+        result = await ex.execute_signal(_signal())
+
+    assert result.success
+    pt.add_position.assert_awaited_once()
