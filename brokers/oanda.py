@@ -55,6 +55,14 @@ import re
 import aiohttp
 import requests  # type: ignore[import-untyped]
 
+# AccountInfo is imported, never redefined. This module must NOT declare its own
+# variant: one previously existed here with `nav` instead of `equity` and without
+# the dict accessors, which made every live-OANDA pre-trade risk check raise
+# AttributeError — swallowed by the decision engine and reported as a risk-limit
+# block, so live OANDA silently refused to trade. See docs/HARDENING_BACKLOG.md
+# S1-01 and tests/unit/test_account_info_contract.py.
+from brokers.base import AccountInfo
+
 logger = logging.getLogger(__name__)
 
 _PRACTICE_BASE = "https://api-fxpractice.oanda.com"
@@ -105,19 +113,6 @@ class MarketDataForbiddenError(RuntimeError):
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
-
-
-@dataclass
-class AccountInfo:
-    account_id: str
-    currency: str
-    balance: float
-    nav: float
-    unrealized_pnl: float
-    margin_used: float
-    margin_available: float
-    positions_count: int
-    timestamp: datetime
 
 
 @dataclass
@@ -281,16 +276,19 @@ class OANDABroker:
             # balance = closed cash; NAV = balance + unrealized P&L (higher when winning, lower when losing)
             balance = float(a.get("balance", 0))
             nav = float(a.get("NAV", balance))  # fallback to balance when NAV absent (not to 0)
+            # NAV maps to `equity`: the mark-to-market value the risk gates must
+            # size and measure drawdown against. Reporting `balance` as equity
+            # would leave those gates blind to floating losses on open positions.
             return AccountInfo(
-                account_id=self._account_id,
-                currency=a.get("currency", "USD"),
                 balance=balance,
-                nav=nav,
-                unrealized_pnl=float(a.get("unrealizedPL", 0)),
+                equity=nav,
                 margin_used=float(a.get("marginUsed", 0)),
                 margin_available=float(a.get("marginAvailable", 0)),
                 positions_count=int(a.get("openPositionCount", a.get("openTradeCount", 0))),
                 timestamp=datetime.now(UTC),
+                account_id=self._account_id,
+                currency=a.get("currency", "USD"),
+                unrealized_pnl=float(a.get("unrealizedPL", 0)),
             )
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker get_account_info: %s", exc)
@@ -640,9 +638,6 @@ OandaAPI = OANDABroker
 # Wraps the OANDA v20 REST API with requests.Session (no async).
 
 from brokers.base import (
-    AccountInfo as _AccountInfo,
-)
-from brokers.base import (
     Order as _Order,
 )
 from brokers.base import (
@@ -883,7 +878,7 @@ class OANDAConnector:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    def get_account_info(self) -> _AccountInfo | None:
+    def get_account_info(self) -> AccountInfo | None:
         """Return account balance and margin info."""
         if not self.connected or not self.session:
             return None
@@ -892,7 +887,7 @@ class OANDAConnector:
             resp = self.session.get(url, timeout=self._timeout)
             resp.raise_for_status()
             acct = resp.json().get("account", {})
-            return _AccountInfo(
+            return AccountInfo(
                 balance=float(acct.get("balance", 0)),
                 equity=float(acct.get("NAV", acct.get("balance", 0))),
                 margin_used=float(acct.get("marginUsed", 0)),

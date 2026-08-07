@@ -454,7 +454,19 @@ class HOPEFXDecisionEngine:
                 result.gate_reason = "account_info_unavailable: no broker connected"
                 return None
 
-            account_info: dict[str, Any] = await broker.get_account_info()
+            account_info: Any = await broker.get_account_info()
+            if account_info is None:
+                # Brokers return None when disconnected or when the account
+                # query fails. Same rule as "no broker": never size against an
+                # account we could not read.
+                logger.warning(
+                    "Phase3: broker returned no account info — blocking trade "
+                    "(refusing to size against a fabricated account)."
+                )
+                result.outcome = DecisionOutcome.RISK_BLOCKED
+                result.gate_reason = "account_info_unavailable: broker returned None"
+                return None
+
             raw_positions = await broker.get_positions()
             positions: list[dict] = [
                 {
@@ -472,7 +484,30 @@ class HOPEFXDecisionEngine:
                 result.gate_reason = str(getattr(assessment, "messages", "risk limit"))
                 return None
 
-            equity: float = float(account_info.get("equity", 100_000.0))
+            # No default. `AccountInfo.get` is getattr-based, so a default here
+            # is returned for a *missing field* as readily as a missing key —
+            # which is how a broker whose account object lacks `equity` would
+            # silently be sized against a fabricated six-figure balance. Block
+            # instead; this is the same rule as the no-broker branch above.
+            # Read defensively across dict / AccountInfo / plain object so a
+            # broker returning a non-conforming type is reported as an account
+            # problem rather than surfacing as an opaque "risk error" from the
+            # broad handler below — that misattribution is what made S1-01 look
+            # like a risk limit for the whole of the live-OANDA path.
+            _raw_equity = (
+                account_info.get("equity") if hasattr(account_info, "get") else getattr(account_info, "equity", None)
+            )
+            equity: float = float(_raw_equity or 0.0)
+            if equity <= 0:
+                logger.warning(
+                    "Phase3: account equity unavailable or non-positive (%r) — blocking trade "
+                    "(refusing to size against a fabricated account).",
+                    equity,
+                )
+                result.outcome = DecisionOutcome.RISK_BLOCKED
+                result.gate_reason = f"account_info_unavailable: equity={equity}"
+                return None
+
             entry: float = result.entry_price or float(ctx.data.get("close", 0.0))
             sl_price, tp_price = self._resolve_sl_tp(ctx.data, direction, entry)
             result.stop_loss = sl_price
