@@ -2177,3 +2177,40 @@ of the four CRITICALs.
    published performance figure.
 4. Add the dozen wiring assertions from S12-02 before fixing anything else in
    Slices 1-2 — otherwise the fixes have no regression net.
+
+---
+
+## Round 3 — new finding raised while fixing S1-06
+
+### S1-12 — Kelly's payoff term is derived from confidence, not reward:risk (MEDIUM, open)
+
+`RiskManager._kelly(probability, confidence)` computes the payoff odds as:
+
+```python
+b = max(0.5, confidence * 3.0)
+kelly = (p * b - q) / b
+```
+
+`b` in the Kelly criterion is the **reward-to-risk ratio of the trade** — how
+much is won per unit risked. Here it is synthesised from the model's
+*confidence*, which is a different quantity entirely. The consequence is that
+break-even shifts with confidence rather than with the trade's actual stop and
+target: at `confidence=0.7` (`b=2.1`) the function treats any win probability
+above **0.323** as positive edge, on the assumption of 2.1:1 odds that nothing
+verifies.
+
+The caller has the real numbers. `calculate_position_size` already receives
+`stop_loss_price` and `take_profit_price`, so the true ratio is
+`|tp - entry| / |entry - sl|` — for the decision engine's ATR-based stops
+(`_resolve_sl_tp`: 2×ATR stop, 3×ATR target) that is a genuine `1.5`, not
+`2.1`. Sizing is therefore currently more aggressive than the configured stops
+justify.
+
+**Why it was not fixed with S1-06:** this is a modelling decision, not the unit
+confusion S1-06 addressed. Changing `b` changes the size of every trade, so it
+wants its own change, its own review, and a backtest comparison — with real
+costs now charged (S3-01), that comparison is finally meaningful.
+
+**Minimal fix:** pass the reward:risk ratio into `_kelly` when SL/TP are known,
+falling back to the confidence proxy only when they are not; assert in a test
+that a 1:1 trade requires `p > 0.5` to size at all.

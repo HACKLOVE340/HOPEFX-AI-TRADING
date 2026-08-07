@@ -62,6 +62,15 @@ _ACCOUNT_EQUITY = float(os.getenv("RISK_ACCOUNT_EQUITY") or os.getenv("INITIAL_B
 _MAX_POSITION_PCT = float(os.getenv("RISK_MAX_POSITION_PCT", "0.05"))
 _MIN_POSITION_PCT = float(os.getenv("RISK_MIN_POSITION_PCT", "0.001"))
 _KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
+# Cap on the raw Kelly *bankroll fraction*, distinct from _MAX_POSITION_PCT
+# which caps the resulting *position notional*. These were previously the same
+# constant, so Kelly saturated at 0.05 for any probability above ~0.356 and the
+# criterion returned an identical value for every tradable signal — see
+# docs/HARDENING_BACKLOG.md S1-06. Half-Kelly (0.5) is the conventional ceiling
+# before the separate _KELLY_FRACTION multiplier is applied.
+_MAX_KELLY_FRACTION = float(os.getenv("RISK_MAX_KELLY_FRACTION", "0.5"))
+# Sentinel for "caller did not supply a confidence" — see calculate_position_size.
+_DEFAULT_CONFIDENCE = 0.7
 _MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
 _MAX_DRAWDOWN_PCT = float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10"))
 _MAX_OPEN_POSITIONS = int(os.getenv("RISK_MAX_OPEN_POSITIONS", "3"))
@@ -793,10 +802,24 @@ class RiskManager:
         # equity_override); do not re-read shared state here.
         base_notional = equity * kelly_f * _KELLY_FRACTION
         final_notional = base_notional * quality_f * sentiment_f * impact_f * dd_f
-        final_notional = max(
-            equity * _MIN_POSITION_PCT,
-            min(final_notional, equity * _MAX_POSITION_PCT),
-        )
+
+        # Cap first, then decide whether what remains is worth trading.
+        #
+        # This used to be max(equity * _MIN_POSITION_PCT, ...), which lifted a
+        # zeroed notional back up to the minimum: every risk-reducing factor
+        # (data quality, sentiment, macro impact, drawdown) could drive the size
+        # to zero and the trade still opened at 0.1% of equity. The graduated
+        # risk factors could not actually prevent a trade — only the hard gates
+        # could. See docs/HARDENING_BACKLOG.md S1-07.
+        final_notional = min(final_notional, equity * _MAX_POSITION_PCT)
+        _min_notional = equity * _MIN_POSITION_PCT
+        if final_notional < _min_notional:
+            return self._zero_sizing(
+                symbol,
+                direction,
+                lineage_id,
+                f"below_min_position:{final_notional:.2f}<{_min_notional:.2f}",
+            )
 
         raw_mid = getattr(signal, "tick_mid", 0.0)
         if raw_mid <= 0:
@@ -1034,7 +1057,7 @@ class RiskManager:
         account_balance: float | None = None,
         account_equity: float | None = None,
         direction: str = "long",
-        confidence: float = 0.7,
+        confidence: float = _DEFAULT_CONFIDENCE,
         probability: float = 0.55,
         signal_strength: float = 0.7,
         stop_loss_price: float | None = None,
@@ -1054,8 +1077,15 @@ class RiskManager:
         and .recommended_size alias for downstream consumers.
         """
         equity = float(account_equity or account_balance or self._state.account_equity or _ACCOUNT_EQUITY)
-        # Use signal_strength as confidence when confidence is at default
-        effective_confidence = max(confidence, signal_strength)
+        # Prefer the caller's explicit confidence; fall back to signal_strength
+        # only when confidence was left at its default.
+        #
+        # This was `max(confidence, signal_strength)`, which floored every
+        # signal at the 0.7 default: the ML gate admits signals from 0.52
+        # upward, so any confidence below 0.7 was discarded and replaced by
+        # 0.7. Sizing therefore could not distinguish a marginal signal from a
+        # strong one. See docs/HARDENING_BACKLOG.md S1-06.
+        effective_confidence = float(signal_strength) if confidence == _DEFAULT_CONFIDENCE else float(confidence)
 
         # Accept ``price`` as an alias for ``entry_price`` (legacy callers)
         effective_entry = float(entry_price) or float(kwargs.pop("price", 0.0))
@@ -1239,11 +1269,21 @@ class RiskManager:
 
     @staticmethod
     def _kelly(probability: float, confidence: float) -> float:
+        """Kelly bankroll fraction for a signal.
+
+        Bounded by ``_MAX_KELLY_FRACTION`` — a cap on the *bankroll fraction*.
+        It was previously bounded by ``_MAX_POSITION_PCT`` (0.05), which is a
+        cap on the resulting *position notional*: a unit confusion that made
+        this function saturate at its ceiling for any probability above ~0.356
+        and therefore return the same value for every tradable signal. Combined
+        with a hardcoded probability and a floored confidence, that fixed every
+        position at exactly 1.25% of equity. See S1-06.
+        """
         p = max(0.01, min(probability, 0.99))
         q = 1.0 - p
         b = max(0.5, confidence * 3.0)
         kelly = (p * b - q) / b
-        return max(0.0, min(kelly, _MAX_POSITION_PCT))
+        return max(0.0, min(kelly, _MAX_KELLY_FRACTION))
 
     # ── Orchestrator data access ──────────────────────────────────────────────
 

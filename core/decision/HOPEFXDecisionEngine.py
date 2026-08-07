@@ -513,9 +513,16 @@ class HOPEFXDecisionEngine:
             result.stop_loss = sl_price
             result.take_profit = tp_price
 
+            # `probability` and `direction` were previously omitted, so sizing
+            # ran on the hardcoded defaults (probability=0.55, direction="long")
+            # for every trade — Kelly could not see the model's actual edge, and
+            # short trades were sized and labelled as longs.
+            # See docs/HARDENING_BACKLOG.md S1-06 and S1-09.
             sizing = self._risk.calculate_position_size(
                 symbol=ctx.symbol,
                 signal_strength=result.signal_strength,
+                probability=result.ml_probability,
+                direction="long" if self._is_long(direction) else "short",
                 entry_price=entry,
                 stop_loss_price=sl_price,
                 take_profit_price=tp_price,
@@ -569,7 +576,7 @@ class HOPEFXDecisionEngine:
     ) -> bool:
         """Submit order via TradeExecutor. Returns True on success."""
         direction = signal_info["direction"]
-        action = "buy" if "BUY" in direction.upper() or direction.upper() in ("LONG", "ENTRY_LONG") else "sell"
+        action = "buy" if self._is_long(direction) else "sell"
 
         exec_signal = {
             "symbol": ctx.symbol,
@@ -652,6 +659,18 @@ class HOPEFXDecisionEngine:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _is_long(direction: str) -> bool:
+        """Single definition of "is this a long?".
+
+        This predicate previously existed in three copies (execution action,
+        SL/TP orientation, and — omitted entirely — sizing direction). Copies
+        of a predicate drift; keeping one is the same discipline the rest of
+        Round 3 applies to duplicated types and instances.
+        """
+        d = (direction or "").upper()
+        return "BUY" in d or d in ("LONG", "ENTRY_LONG")
+
     def _build_ohlcv_df(self, data: dict[str, Any]) -> Any:
         """Build a rolling OHLCV DataFrame from the broker data dict."""
         try:
@@ -690,7 +709,7 @@ class HOPEFXDecisionEngine:
         except Exception:
             atr = entry * 0.01
 
-        is_long = "BUY" in direction.upper() or direction.upper() in ("LONG", "ENTRY_LONG")
+        is_long = self._is_long(direction)
         if is_long:
             return float(entry - 2.0 * atr), float(entry + 3.0 * atr)
         return float(entry + 2.0 * atr), float(entry - 3.0 * atr)
