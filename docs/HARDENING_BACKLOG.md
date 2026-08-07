@@ -1334,3 +1334,151 @@ a competitor, and neither needs to be public.
 
 **Minimal fix:** move these under the same `require_role` used by the rest of
 `api/ml.py`.
+
+---
+
+## Round 3 — Slice 7: state and crash recovery
+
+Scope: `execution/redis_state.py`, `execution/position_manager.py`,
+`execution/trade_executor.py`, `alembic/`.
+Method: walked four crash points — (1) after broker ack, before local persist;
+(2) mid partial fill; (3) after SL/TP trigger, before the close is booked;
+(4) mid migration — and asked what state survives and whether boot recovers it.
+
+Round 2 already recorded *"redis_state crash-recovery: reconcile restored
+orders/positions against live broker state on boot"* as an open item. It is
+still open; this slice makes the failure concrete and adds a **deterministic**
+orphan-position path that needs no crash at all.
+
+**Working correctly — verified:**
+
+- `TradeExecutor` performs **no retries** around the broker call
+  (`trade_executor.py:352`), so there is no duplicate-fill window from retry
+  logic on this path.
+- Partial fills are explicitly surfaced rather than silently rounded away
+  (`:393-403`), and the `Position` is created from `order.filled_quantity`, not
+  the requested size.
+- Migrations are conventional; `drop_*` calls appear only in `downgrade()`.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S7-01 | HIGH | A **filled** order with a bad fill price is abandoned — broker holds the position, the system does not | `trade_executor.py:358-374` |
+| S7-02 | HIGH | Crash between broker ack and `add_position` leaves a permanently untracked live position | `trade_executor.py:352-388` |
+| S7-03 | HIGH | Boot restores persisted positions with **no reconciliation** against the broker | `position_manager.py:595-615` |
+| S7-04 | MEDIUM | A malformed record aborts restore mid-loop, leaving partial state and no log | `position_manager.py:605-615` |
+| S7-05 | MEDIUM | No idempotency key on the `TradeExecutor` broker path | `trade_executor.py:352` |
+
+### S7-01 — A filled order the system refuses to track (HIGH)
+
+`trade_executor.py:358-374`:
+
+```python
+if order.status.value in ("filled", "partial"):
+    if not order.average_fill_price or not (order.average_fill_price > 0):
+        logger.error("... order %s status=%s but average_fill_price=%s — skipping position open", ...)
+        return ExecutionResult(success=False, ..., message="Invalid fill price — position not opened")
+```
+
+The guard is inside the `filled`/`partial` branch — it only runs for orders the
+**broker has already executed**. The response is to log, skip
+`position_tracker.add_position()`, and return `success=False`.
+
+**Failure scenario:** a broker acknowledges a market order as `filled` but
+returns `average_fill_price` of `0` or `None` — routine for venues that confirm
+the fill and deliver the execution price in a subsequent message, and the exact
+shape of an async or FIX fill report. The system now has a **live position it
+has deliberately chosen not to record**. Consequences compound:
+
+- `position_tracker` does not know about it → the SL/TP monitor never arms a
+  stop, so the position runs unprotected.
+- `PositionManager` never persists it → a restart cannot recover it.
+- `_phase4_execute` sees `success=False` and returns `EXECUTION_ERROR`
+  (`HOPEFXDecisionEngine.py:543-552`), so the operator is told the trade
+  **failed**.
+- The next signal on the same symbol sizes as if flat.
+
+This requires no crash and no race — it is the deterministic behaviour of the
+error path. Reporting failure for an order that filled is the worst available
+outcome: it is strictly better to record the position at a provisional price and
+alert, or to immediately flatten it.
+
+**Minimal fix:** on this branch, re-query the broker for the fill price; if it
+is still unavailable, open the position at the last known mid, mark it
+`price_unconfirmed`, and raise a CRITICAL alert. Never return
+`success=False` for an order the broker reports as filled.
+
+### S7-02 — The ack-to-persist window (HIGH)
+
+`trade_executor.py:352` awaits `broker.place_market_order(...)`; the position is
+recorded 36 lines later at `:388` via `await self.position_tracker.add_position(position)`.
+Between those two awaits the process can die — SIGKILL, OOM, pod eviction,
+deploy.
+
+**Failure scenario:** the broker fills 100 oz of XAUUSD and the process is
+evicted before `add_position`. Nothing local ever knew about the order: it was
+not written to Redis before submission, and no client-order-id links the broker
+fill back to a local intent (S7-05). On restart, `restore_from_redis` replays
+Redis, which has no record of it. The position is **invisible to every
+subsystem** — unmonitored by SL/TP, absent from risk exposure, absent from the
+dashboard — and stays open until a human reads the broker statement.
+
+**Minimal fix:** write an intent record to Redis *before* the broker call and
+clear it only after `add_position` succeeds. On boot, any intent record without
+a matching position is a reconciliation candidate — which is exactly what S7-03
+needs anyway.
+
+### S7-03 — Boot trusts Redis over the broker (HIGH)
+
+`position_manager.py:604-612`:
+
+```python
+state = await self._redis_store.load_state_on_boot()
+positions = state.get("positions", [])
+async with self._lock:
+    for p_dict in positions:
+        pos = Position.from_dict(p_dict)
+        self._positions[pos.symbol] = pos
+        _prom_positions_open_set(pos.symbol, 1)
+```
+
+Redis is treated as authoritative. The broker is never consulted, so restored
+state is never checked against reality.
+
+**Three failure scenarios, all live:**
+
+1. **Closed while down.** A stop is hit at the broker while the process is
+   restarting. Redis still holds the position; boot restores it. The system
+   believes it is exposed when it is flat — it will refuse new entries on that
+   symbol (position-count and exposure logic) and the Prometheus gauge reports a
+   position that does not exist.
+2. **Opened while down** (the S7-02 case). The broker has a position Redis does
+   not. Boot restores nothing, and the position stays unmanaged.
+3. **Quantity drift.** A partial close at the broker while down leaves the
+   restored `quantity` stale, so every subsequent P&L and exposure figure for
+   that symbol is wrong by the closed amount.
+
+**Minimal fix:** after restoring, call `broker.get_positions()` and diff.
+Broker-only positions get adopted (with an alert); Redis-only positions get
+dropped (with an alert); quantity mismatches take the broker's number. The
+broker is the only authority on what is actually open.
+
+### S7-04 / S7-05 — Partial restore and missing idempotency (MEDIUM)
+
+**S7-04:** the restore loop mutates `self._positions` **inside** the `try`, and
+the handler catches only `(RuntimeError, OSError)`. A `KeyError` or
+`ValueError` from `Position.from_dict` on record 3 of 5 propagates out — after
+records 1 and 2 have already been inserted. The `logger.info("restored %d
+position(s)")` line never runs, so the partial state is not even reported.
+Recovery silently completes with a subset of positions.
+
+*Minimal fix:* build the full list first, then swap it in under the lock; catch
+per-record parse failures and alert on each rather than aborting the batch.
+
+**S7-05:** `trade_executor.py:352` calls
+`place_market_order(symbol=..., side=..., quantity=...)` with no
+`client_order_id`. Round 2's H3 fix added idempotency to the canonical
+`ExecutionEngine` path and the Binance adapter — **this path did not get it**.
+There is no retry here today, so no duplicate-fill window exists right now; the
+cost is that a broker fill cannot be correlated back to a local order, which is
+precisely what S7-02 and S7-03 need to reconcile. Adding it is a prerequisite
+for the other two fixes, not an independent nicety.
