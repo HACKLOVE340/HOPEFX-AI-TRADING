@@ -39,6 +39,7 @@ import logging
 import math
 import os
 import time
+import uuid
 from collections.abc import Callable
 from typing import Any, cast
 from dataclasses import dataclass, field
@@ -103,10 +104,28 @@ class TradeExecutor:
     - Loss-streak detection (STREAK_HALT_LOSSES / STREAK_COOLDOWN_MINUTES)
     """
 
-    def __init__(self, broker: Any, risk_manager: Any, position_tracker: Any) -> None:
+    def __init__(
+        self,
+        broker: Any,
+        risk_manager: Any,
+        position_tracker: Any,
+        state_store: Any = None,
+    ) -> None:
         self.broker = broker
         self.risk_manager = risk_manager
         self.position_tracker = position_tracker
+        # Write-ahead journal for order intents (S7-02). Optional: paper and
+        # dev runs have no Redis, and trading must not stop for want of a
+        # crash-recovery record — but the gap is worth saying out loud, because
+        # without it a fill that lands during a crash is invisible forever.
+        self.state_store = state_store
+        if state_store is None:
+            logger.warning(
+                "TradeExecutor: no state_store — order intents will NOT be "
+                "journalled. A crash between broker ack and add_position leaves "
+                "an untracked live position with no way to reconcile it "
+                "(docs/HARDENING_BACKLOG.md S7-02)."
+            )
         self.metrics = get_metrics_registry()
 
         self._pending_orders: dict[str, dict[str, Any]] = {}
@@ -370,11 +389,28 @@ class TradeExecutor:
         except Exception as _auth_exc:  # never let the gate crash execution
             logger.error("TradeExecutor: authorization check raised %s", _auth_exc)
 
-        # ── 5. Place order ────────────────────────────────────────────────────
+        # ── 5. Journal the intent, then place the order ───────────────────────
+        # The window between the broker acking a fill and add_position() below
+        # is a crash window. If the process dies inside it, the broker holds a
+        # position nothing local ever recorded: it was never written before
+        # submission, and no id linked the fill back to a local order. On
+        # restart Redis has no trace, so the position is invisible to SL/TP, to
+        # risk exposure and to the dashboard, and stays open until someone reads
+        # a broker statement.
+        #
+        # Write the intent first and clear it only once the position is
+        # tracked. Anything still journalled at boot is an order that may have
+        # filled while we were down — the reconciliation candidate S7-03's
+        # broker diff consumes. See docs/HARDENING_BACKLOG.md S7-02 / S7-05.
+        client_order_id = f"hopefx-{uuid.uuid4().hex[:16]}"
+        signal["client_order_id"] = client_order_id
+        await self._journal_intent(client_order_id, symbol, side, size, signal)
+
         order = await self.broker.place_market_order(
             symbol=symbol,
             side=side,
             quantity=size,
+            client_order_id=client_order_id,
         )
 
         if order.status.value in ("filled", "partial"):
@@ -424,6 +460,12 @@ class TradeExecutor:
             position.price_unconfirmed = _price_unconfirmed
             await self.position_tracker.add_position(position)
 
+            # The position is now tracked, so the crash window is closed and the
+            # intent is no longer a reconciliation candidate. Clearing it is
+            # best-effort: a journal error must never make us disown a position
+            # the broker has actually filled.
+            await self._clear_intent(client_order_id, broker_order_id=order.id)
+
             # Tell the RiskManager a position opened. Without this the
             # _MAX_OPEN_POSITIONS gate in size_order() reads a counter that is
             # never incremented on this path (it was written only by the
@@ -463,6 +505,62 @@ class TradeExecutor:
             status=OrderStatus(order.status.value),
             message=f"Order {order.status.value}",
         )
+
+    async def _journal_intent(
+        self,
+        client_order_id: str,
+        symbol: str,
+        side: str,
+        size: float,
+        signal: dict[str, Any],
+    ) -> None:
+        """Write-ahead record of an order we are about to submit (S7-02).
+
+        Best-effort by design: if the journal is unavailable we log and trade
+        anyway. Refusing to trade because Redis is down would convert a
+        recovery-visibility gap into an outage, and the paper path has no store
+        at all. The cost of the failure is recorded rather than hidden.
+        """
+        if self.state_store is None:
+            return
+        try:
+            await self.state_store.save_order(
+                {
+                    "id": client_order_id,
+                    "client_order_id": client_order_id,
+                    "symbol": symbol,
+                    "side": side,
+                    "quantity": float(size),
+                    "status": "intent",
+                    "stop_loss": signal.get("stop_loss"),
+                    "take_profit": signal.get("take_profit"),
+                    "decision_id": signal.get("decision_id"),
+                    "risk_approval_token": signal.get("risk_approval_token"),
+                }
+            )
+        except Exception as exc:
+            logger.error(
+                "TradeExecutor: could not journal order intent %s for %s: %s — "
+                "a crash before add_position would leave this position untracked",
+                client_order_id,
+                symbol,
+                exc,
+            )
+
+    async def _clear_intent(self, client_order_id: str, broker_order_id: str | None = None) -> None:
+        """Drop the write-ahead record once the position is tracked (S7-02)."""
+        if self.state_store is None:
+            return
+        try:
+            await self.state_store.remove_order(client_order_id)
+        except Exception as exc:
+            logger.error(
+                "TradeExecutor: could not clear order intent %s (broker order %s): %s — "
+                "it will be re-examined as an orphan at the next boot",
+                client_order_id,
+                broker_order_id,
+                exc,
+            )
 
     def _provisional_fill_price(self, signal: dict[str, Any], symbol: str) -> float:
         """Best available price for a fill the broker confirmed without one.

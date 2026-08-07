@@ -1703,10 +1703,24 @@ async def init_position_tracker(s: Any) -> Any:
 async def init_trade_executor(s: Any) -> Any:
     from execution.trade_executor import TradeExecutor
 
+    # Share the PositionManager's Redis store so order intents are journalled
+    # before submission. Without it, a crash between the broker ack and
+    # add_position leaves a live position nothing local ever recorded — see
+    # docs/HARDENING_BACKLOG.md S7-02. None in dev/paper, which the executor
+    # reports at WARNING rather than refusing to trade.
+    state_store = None
+    try:
+        from execution.position_manager import position_manager as _pm
+
+        state_store = getattr(_pm, "_redis_store", None)
+    except Exception as exc:
+        logger.warning("TradeExecutor: could not resolve the order-intent store: %s", exc)
+
     return TradeExecutor(
         broker=s.broker,
         risk_manager=s.risk_manager,
         position_tracker=s.position_tracker,
+        state_store=state_store,
     )
 
 

@@ -1363,10 +1363,10 @@ orphan-position path that needs no crash at all.
 | ID | Sev | Issue | Location |
 |----|-----|-------|----------|
 | S7-01 | HIGH | A **filled** order with a bad fill price is abandoned — broker holds the position, the system does not | `trade_executor.py:358-374` |
-| S7-02 | HIGH | Crash between broker ack and `add_position` leaves a permanently untracked live position | `trade_executor.py:352-388` |
+| S7-02 | HIGH — **FIXED** | Crash between broker ack and `add_position` leaves a permanently untracked live position | `trade_executor.py:352-388` |
 | S7-03 | HIGH | Boot restores persisted positions with **no reconciliation** against the broker | `position_manager.py:595-615` |
 | S7-04 | MEDIUM | A malformed record aborts restore mid-loop, leaving partial state and no log | `position_manager.py:605-615` |
-| S7-05 | MEDIUM | No idempotency key on the `TradeExecutor` broker path | `trade_executor.py:352` |
+| S7-05 | MEDIUM — **FIXED** | No idempotency key on the `TradeExecutor` broker path | `trade_executor.py:352` |
 
 ### S7-01 — A filled order the system refuses to track (HIGH)
 
@@ -1407,7 +1407,7 @@ is still unavailable, open the position at the last known mid, mark it
 `price_unconfirmed`, and raise a CRITICAL alert. Never return
 `success=False` for an order the broker reports as filled.
 
-### S7-02 — The ack-to-persist window (HIGH)
+### S7-02 — The ack-to-persist window (HIGH) — FIXED
 
 `trade_executor.py:352` awaits `broker.place_market_order(...)`; the position is
 recorded 36 lines later at `:388` via `await self.position_tracker.add_position(position)`.
@@ -1426,6 +1426,27 @@ dashboard — and stays open until a human reads the broker statement.
 clear it only after `add_position` succeeds. On boot, any intent record without
 a matching position is a reconciliation candidate — which is exactly what S7-03
 needs anyway.
+
+**Fixed** together with S7-05, which is its prerequisite:
+
+* `TradeExecutor` takes an optional `state_store` and generates a
+  `client_order_id` (`hopefx-<16 hex>`) per order, passed to
+  `place_market_order` so a broker fill can be traced back to a local intent.
+* The intent — symbol, side, quantity, SL/TP, `decision_id`,
+  `risk_approval_token` — is journalled **before** submission and cleared only
+  after `add_position` returns.
+* `PositionManager.audit_order_intents()` reports every surviving intent at
+  boot at CRITICAL, saying whether that symbol is currently open. Without this
+  the journal would be state nothing reads — the defect class this round keeps
+  finding. `restore_from_redis` calls it after the broker reconciliation.
+* Journal failures are logged, never fatal: a Redis outage must not make us
+  disown a position the broker filled, and paper/dev runs have no store at all
+  (reported once at WARNING rather than blocking trading).
+
+Wired in `core/startup_factories.py::init_trade_executor`, which shares the
+PositionManager's Redis store. Three mutations verified to fail the tests:
+journalling after the broker call, dropping the `client_order_id`, and clearing
+the intent before the position is tracked.
 
 ### S7-03 — Boot trusts Redis over the broker (HIGH)
 

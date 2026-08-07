@@ -648,7 +648,54 @@ class PositionManager:
             len(records),
             broker is not None,
         )
+
+        # Any order intent still journalled is one TradeExecutor submitted but
+        # never finished recording — i.e. we may have died between the broker
+        # ack and add_position. Surface it, or the write-ahead record is state
+        # nothing ever reads. See docs/HARDENING_BACKLOG.md S7-02.
+        await self.audit_order_intents(parsed)
+
         return len(parsed)
+
+    async def audit_order_intents(self, restored: dict[str, Position] | None = None) -> list[dict]:
+        """Report order intents that were never completed (S7-02).
+
+        Returns the orphaned intent records so a caller can act on them. An
+        intent whose symbol *is* now open was most likely completed and simply
+        not cleared; one whose symbol is **not** open is the dangerous case —
+        either the order never reached the broker, or it filled and we have no
+        local record of it.
+        """
+        if self._redis_store is None:
+            return []
+        try:
+            orders = await self._redis_store.load_orders()
+        except Exception as exc:
+            logger.warning("PositionManager: could not load order intents: %s", exc)
+            return []
+
+        intents = [o for o in orders if str(o.get("status", "")).lower() == "intent"]
+        if not intents:
+            return []
+
+        open_symbols = set(restored or self._positions)
+        for intent in intents:
+            symbol = intent.get("symbol")
+            known = symbol in open_symbols
+            logger.critical(
+                "UNRECONCILED ORDER INTENT | client_order_id=%s symbol=%s side=%s qty=%s "
+                "position_now_open=%s — this order was submitted but never fully "
+                "recorded. If it filled while the process was down, the position "
+                "may be live and unmanaged. Verify against the broker.",
+                intent.get("client_order_id") or intent.get("id"),
+                symbol,
+                intent.get("side"),
+                intent.get("quantity"),
+                known,
+            )
+
+        logger.critical("PositionManager: %d unreconciled order intent(s) found at boot", len(intents))
+        return intents
 
     async def _reconcile_with_broker(self, parsed: dict[str, Position], broker: Any) -> dict[str, Position]:
         """Diff persisted positions against the broker's live positions.
