@@ -100,9 +100,16 @@ Test markers: `unit`, `integration`, `e2e`, `slow`, `requires_redis`, `asyncio`.
 
 ## Gotchas
 
-- **Python 3.10** is the production target (matches the Docker image — avoids
-  pickle mismatches on model artifacts). Local 3.11+ usually works but pin to
-  3.10 when in doubt.
+- **Python 3.12** is the production target — it is what `Dockerfile` runs
+  (`python:3.12-slim`). CI tests **3.11 and 3.12**; the retrain workflows also
+  run 3.12 so model artifacts are pickled on the same interpreter that loads
+  them in production.
+  This previously said 3.10 "matches the Docker image", which was false in both
+  directions: the image was already 3.12, and 3.10 was tested by nothing.
+  Because the stated reason for pinning is pickle compatibility on the
+  committed `.pkl` artifacts, anyone following that advice produced artifacts
+  under an interpreter neither CI nor production ever loaded. If you change the
+  Dockerfile's Python, change the retrain workflows in the same commit.
 - Model `.pkl`/`.zip` artifacts under `ml/saved_models/` and `ml/rl_models/`
   are **intentionally committed** (whitelisted in `.gitignore`, checksum-verified
   in CI). `dashboard/dist/` is **intentionally committed** so the server can

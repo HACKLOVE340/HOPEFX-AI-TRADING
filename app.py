@@ -549,6 +549,18 @@ async def lifespan(_app: FastAPI):
     )
     asyncio.get_running_loop().set_default_executor(_io_executor)
 
+    # Log which safety gates this process is actually running with. Several
+    # Round 3 audit findings were invisible in production because a gate wired
+    # to state nothing writes, or a blocking mode left at its warn-only
+    # default, logs identically to a gate that is passing legitimately.
+    # See docs/HARDENING_BACKLOG.md S11-03.
+    try:
+        from core.safety_config_report import log_safety_config
+
+        log_safety_config()
+    except Exception as _safety_exc:  # never block startup on a report
+        logger.warning("Could not log safety config: %s", _safety_exc)
+
     await kill_switch.start()
 
     # Expose app_state on app.state BEFORE the startup task runs so that
