@@ -2031,3 +2031,149 @@ it is not lost:
 > broker and a `RiskManager` configured with `_MAX_OPEN_POSITIONS=1`, twice.
 > Assert the second call is blocked. On current code it will not be (S1-04),
 > because `TradeExecutor` never calls `notify_position_opened`.
+
+---
+
+## Round 3 — Slice 13: dead code and duplication
+
+Scope: repo root, 63 top-level Python packages, analysed by AST import graph
+(tests and vendored trees excluded).
+
+**Correction to S3-06 (Slice 3):** that finding said `backtest/` "contains its
+own `engine.py`, `data_validator.py`, `transaction_costs.py` … so this needs
+verifying". **Verified: they are genuine re-export shims** — 38-44 lines each,
+244 lines total, and `backtest/__init__.py` documents the arrangement clearly.
+`CLAUDE.md` is accurate on this point and the concern was unfounded.
+
+| ID | Sev | Issue |
+|----|-----|-------|
+| S13-01 | HIGH | Duplication is not a tidiness problem here — **every duplicated pair in this codebase has already produced a confirmed defect** |
+| S13-02 | MEDIUM | Five top-level packages have zero production imports (~790 lines) |
+
+### S13-01 — Every "two of these" produced a bug (HIGH)
+
+Round 3 found 64 issues across 13 slices. The single strongest predictor of a
+defect was **the existence of a second implementation of the same concept**:
+
+| Duplicated concept | Where | Defect it produced |
+|---|---|---|
+| `AccountInfo` dataclass | `brokers/base.py:278` vs `brokers/oanda.py:109` | **S1-01** — live OANDA blocks 100% of trades; the oanda-local copy has no `.get()` and no `equity` field |
+| `KillSwitch` instance | `app.py:286` vs `kill_switch.py:1341` | **S2-01** — split brain; the ops mechanisms drive the instance the money path never reads |
+| Halt flag | `_halt` vs `_trading_halted` | **S1-03** — the drawdown breaker sets one, sizing reads the other |
+| `TransactionCostModel` class | `backtesting/engine.py:239` vs `backtesting/transaction_costs.py` | **S3-06** — the correct cost model is not the one the CLI instantiates |
+| Feature builder | `inference_engine._build_features` vs `AdvancedPredictor` internal | **S4-01** — the drift guard validates a vector the model never scores |
+| Engine implementation | `hopefx_engine.py` (1,706 ln) vs `HOPEFXDecisionEngine` + `TradeExecutor` | **S1-04, S2-02** — position counter and Gatekeeper wiring exist on one path only |
+| Price read path | orchestrator Redis branch vs in-memory fallback | **S5-03** — freshness enforced on one, absent on the other |
+| Private-channel guard | `broadcast()` vs `send_to_user()` | **S8-02** — the Round 2 fix applied to one sibling method |
+
+Eight duplications, eight confirmed defects. The mechanism is consistent: a fix,
+a gate, or a validation is applied to one copy, and the other copy keeps the old
+behaviour. Nothing fails — the second copy simply carries on being wrong, and no
+test notices because (per **S12-02**) tests exercise units, not wiring.
+
+**Two live duplicates not yet implicated in a defect** — worth checking before
+they are:
+
+- **Three engine implementations**: `hopefx_engine.py` (root, 1,706 lines, 5
+  importers), `execution/hopefx_engine.py` (1,073 lines, 1 importer),
+  `execution/engine.py` (1,625 lines). Plus `execution/async_engine.py` (741).
+- **Two smart routers**, both live: `execution/smart_router.py` (714 lines, 7
+  importers) and `brokers/smart_router.py` (296 lines, 3 importers). Round 2
+  fixed a duplicate-fill bug in "both smart routers" — the fix had to be applied
+  twice, which is the cost being paid here.
+
+**Minimal fix — and the highest-leverage item in this round.** Do not attempt a
+consolidation sweep. Instead, for each pair above, delete the copy with fewer
+importers and redirect its callers, **one pair per PR, starting with
+`AccountInfo` and `KillSwitch`** — those two alone close S1-01, S1-02 and S2-01,
+which are three of the four CRITICALs. Then add a CI check that fails when two
+classes with the same name are defined in different modules under
+`brokers/`, `execution/` or `risk/`.
+
+### S13-02 — Packages with no production consumers (MEDIUM)
+
+Of 63 top-level Python packages, five are imported by nothing outside their own
+tree and tests:
+
+| Package | Lines | Prod imports | Test files | Note |
+|---|---|---|---|---|
+| `websocket/` | 237 | 0 | 0 | `CLAUDE.md` lists it as a standalone server superseded by `api/ws_live.py` |
+| `backtest/` | 244 | 0 | 3 | Shim whose stated purpose is back-compat for imports that no longer exist |
+| `src/` | 175 | 0 | 0 | |
+| `strategy/` | 100 | 0 | 1 | `CLAUDE.md` lists it as "live ML engine only" |
+| `hopefx_graphql/` | 35 | 0 | 0 | |
+
+(The `"websocket"` strings in `api/status.py:655` and
+`infrastructure/health_engine.py:526` are health-probe labels, not imports.)
+
+~790 lines. The line count is not the point — the **navigational** cost is.
+`CLAUDE.md` spends a prominent table warning contributors away from four of
+these directories, which is a warning that only exists because the directories
+do. Deleting them removes the hazard and the documentation of the hazard
+together.
+
+`backtest/` deserves a specific decision: a compatibility shim with **zero
+remaining consumers** has completed its job. Its three test files test the shim
+itself, so they go with it.
+
+**Minimal fix:** delete `websocket/`, `src/`, `hopefx_graphql/`; delete
+`backtest/` and `strategy/` after confirming no external consumer depends on the
+published package surface; remove the corresponding rows from the `CLAUDE.md`
+canonical-vs-legacy table.
+
+---
+
+## Round 3 — summary
+
+64 findings across 13 slices, all **CONFIRMED** (traced to a line with a
+reproducible failure scenario). **None are fixed** — this round was audit-only,
+per `docs/AUDIT_PLAYBOOK.md`.
+
+| Slice | Area | Findings | Highest |
+|---|---|---|---|
+| 1 | Money path | 11 | CRITICAL |
+| 2 | Gates & kill switch | 7 | CRITICAL |
+| 3 | Backtest ↔ live parity | 6 | CRITICAL |
+| 4 | ML integrity | 7 | HIGH |
+| 5 | Data layer | 3 | HIGH |
+| 6 | Auth & money-in | 4 | HIGH |
+| 7 | State & crash recovery | 5 | HIGH |
+| 8 | Realtime transport | 4 | HIGH |
+| 9 | Frontend correctness | 3 | HIGH |
+| 10 | Frontend & UX design | 5 | HIGH |
+| 11 | Ops & deployment | 4 | HIGH |
+| 12 | Test quality | 3 | HIGH |
+| 13 | Dead code & duplication | 2 | HIGH |
+
+**The four CRITICALs, in fix order:**
+
+1. **S1-01** — `BROKER_TYPE=oanda` blocks 100% of trades (duplicate `AccountInfo`).
+2. **S1-02** — the fix for S1-01, done naively, silently sizes against a
+   fabricated $100k. Fix both together or neither.
+3. **S2-01** — split-brain kill switch; one activation endpoint stops trading
+   and the other does not.
+4. **S3-01** — the default backtest is frictionless, so every performance
+   figure quoted from it is gross of costs that would consume the edge.
+
+**Two corrections made during the round**, recorded in place: S1-03 was
+overstated as CRITICAL (the pre-trade gate does block; the real defects are
+persistence and propagation), and S4-04 was overstated (the code default is
+warn-only, but `.env.example` ships `DRIFT_BLOCK=true`). An early superadmin
+auth finding was a regex false positive and was withdrawn before publication.
+
+**The one structural theme.** Slices 1, 2, 5, 8 and 13 all reduce to the same
+mechanism: **a control is applied to one of two implementations, and the other
+keeps the old behaviour.** No exception is raised, no test fails, and the logs
+of an inert gate are indistinguishable from those of a passing one. S13-01 lists
+the eight pairs; consolidating `AccountInfo` and `KillSwitch` alone closes three
+of the four CRITICALs.
+
+**Recommended next actions**, in order:
+
+1. Triage the 16 open Dependabot alerts (9 high) — outside this round's scope,
+   but cheaper than anything in it.
+2. Fix S1-01 + S1-02 together, then S2-01. All three are duplication removals.
+3. Wire the cost model into `run.py --mode backtest` (S3-01) and re-run any
+   published performance figure.
+4. Add the dozen wiring assertions from S12-02 before fixing anything else in
+   Slices 1-2 — otherwise the fixes have no regression net.
