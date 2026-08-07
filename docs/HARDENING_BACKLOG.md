@@ -878,7 +878,7 @@ happens when a model is stale, when drift fires, and when a feature is NaN?
 
 | ID | Sev | Issue | Location |
 |----|-----|-------|----------|
-| S4-01 | HIGH | Drift guard and both feature-validation gates run on a vector the model **never scores** | `inference_engine.py:796,857,903` |
+| S4-01 | HIGH — **FIXED** | Drift guard and both feature-validation gates run on a vector the model **never scores** | `inference_engine.py:796,857,903` |
 | S4-02 | HIGH | NaN/Inf features imputed with `0.0` and scored anyway | `inference_engine.py:427-435` |
 | S4-03 | HIGH | ">95% zeros — possible silent upstream data failure" is logged, then traded on | `inference_engine.py:437-447` |
 | S4-04 | MEDIUM | `DRIFT_BLOCK` defaults to **false** — drift warns and trades | `inference_engine.py:78` |
@@ -886,7 +886,7 @@ happens when a model is stale, when drift fires, and when a feature is NaN?
 | S4-06 | MEDIUM | Feature-builder fallback changes the feature set and logs at `debug` | `inference_engine.py:384-397` |
 | S4-07 | LOW | Docstring promises a feature-count-mismatch gate that does not exist | `inference_engine.py:360` |
 
-### S4-01 — The drift guard watches features the model does not use (HIGH)
+### S4-01 — The drift guard watches features the model does not use (HIGH) — FIXED
 
 There are **two independent feature-building paths** inside a single `predict()`
 call:
@@ -922,6 +922,31 @@ and then discard it. A NaN in the vector the model *does* see is never detected.
 (`predictor.predict_proba(X)` where the predictor accepts a prepared matrix), or
 have `_build_features` and the predictor share one builder. Until then, the
 drift/validation telemetry should not be described as covering the live model.
+
+**Fixed** by making the guard follow the model rather than forcing the two
+builders together:
+
+* `AdvancedModelPredictor` records the exact matrix it hands to
+  `model.predict_proba` in `last_scored_features` — after column alignment,
+  imputation and ordering, so it is what the model really saw, not the raw
+  builder output. It is cleared at the top of every `predict_proba`, so a call
+  that returns neutral without scoring cannot leave a stale row behind.
+* `InferenceEngine._features_for_drift_check()` prefers that matrix and falls
+  back to the engine's own vector only when the predictor exposes none —
+  warning once when it does, because that is degraded coverage, not clean
+  coverage.
+* The drift check moved from step 3b (before scoring) to step 4b (after), since
+  the scored matrix does not exist until the model has run. `_check_feature_drift`
+  appends to a rolling buffer, so it must be called exactly once per prediction
+  — running it on both vectors would double-count. The cost is one
+  already-computed probability discarded when `DRIFT_BLOCK` trips.
+* `_check_feature_drift(None)` now returns False *without* touching the buffer,
+  and is documented as "nothing was scored" rather than "no drift" — the S4-05
+  distinction.
+
+Not addressed: the two builders still exist. Unifying them is a larger change
+that risks altering the live feature vector, and the guard now watches the
+right one either way.
 
 ### S4-02 / S4-03 — Detectors with no actuator (HIGH)
 

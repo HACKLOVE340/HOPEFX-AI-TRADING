@@ -237,6 +237,8 @@ class InferenceEngine:
         # Rolling buffer of recent feature vectors (last _DRIFT_WINDOW rows).
         # Used to compute live feature means for KS-test drift detection.
         self._drift_buffer: deque[np.ndarray] = deque(maxlen=_DRIFT_WINDOW)
+        # Warn once if drift has to fall back to the engine's own vector (S4-01).
+        self._drift_scope_warned: bool = False
         # Training feature stats loaded from saved_models/feature_stats.json
         # Format: {feature_name: {"mean": float, "std": float}}
         self._train_stats: dict[str, dict] | None = None
@@ -702,7 +704,38 @@ class InferenceEngine:
             logger.warning("feature_stats.json load failed: %s", exc)
             return None
 
-    def _check_feature_drift(self, X_row: pd.DataFrame) -> bool:
+    def _features_for_drift_check(
+        self,
+        scored: pd.DataFrame | None,
+        fallback: pd.DataFrame | None,
+    ) -> pd.DataFrame | None:
+        """Choose which feature vector the drift guard should watch (S4-01).
+
+        ``predict()`` builds its own feature matrix and the predictor builds a
+        second one internally; only the predictor's reaches the model. Watching
+        the engine's copy meant the guard reported on a distribution nothing
+        scored — internally consistent, and blind to drift in the features that
+        actually drive predictions.
+
+        Prefer what the model saw. Fall back to the engine's own vector only
+        when the predictor exposes nothing (older predictor, or a call that
+        returned neutral without scoring), and say so, because that is degraded
+        coverage rather than clean coverage.
+        """
+        if scored is not None and not scored.empty:
+            return scored
+
+        if not self._drift_scope_warned:
+            logger.warning(
+                "InferenceEngine: predictor did not expose the features it scored — "
+                "drift is being measured on the engine's own feature vector, which "
+                "the model never sees. Treat drift telemetry as indicative only "
+                "(docs/HARDENING_BACKLOG.md S4-01)."
+            )
+            self._drift_scope_warned = True
+        return fallback
+
+    def _check_feature_drift(self, X_row: pd.DataFrame | None) -> bool:
         """
         Detect feature distribution drift using z-score comparison.
 
@@ -715,6 +748,11 @@ class InferenceEngine:
 
         Side-effects: updates self._drift_detected and self._drift_z_max.
         """
+        if X_row is None or X_row.empty:
+            # Nothing was scored, so there is nothing to measure. Reporting
+            # "no drift" here would be the S4-05 mistake again.
+            return False
+
         train_stats = self._load_train_stats()
         if train_stats is None:
             # No training stats → the guard is DISABLED, not "no drift".
@@ -938,19 +976,15 @@ class InferenceEngine:
             )
             return base_result
 
-        # Step 3b: Feature drift guard
-        # Compare live feature distribution to training distribution.
-        # When DRIFT_BLOCK=true and drift is detected, degrade to neutral.
-        # When DRIFT_BLOCK=false (default), log a warning and continue.
-        drift = self._check_feature_drift(X)
-        if drift and _DRIFT_BLOCK:
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
-            base_result["model_version"] = "drift_blocked"
-            base_result["feature_drift"] = True
-            base_result["drift_z_max"] = self._drift_z_max
-            self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
-            return base_result
+        # Step 3b: Feature drift guard — deferred until after scoring.
+        # The guard used to run here, on `X`. But `X` is never given to the
+        # model: the predictor rebuilds its own features from the raw OHLCV
+        # frame, so the guard measured a distribution nothing scored while
+        # drift in the features that actually drive predictions went unseen
+        # (docs/HARDENING_BACKLOG.md S4-01). It now runs below, on the matrix
+        # the predictor reports it handed to the model. The cost is one
+        # already-computed prediction discarded when drift blocks, which is
+        # nothing next to gating on the wrong vector.
 
         # Step 3c: Look-ahead bias guard — validate that the latest feature
         # timestamp is not in the future relative to the decision timestamp.
@@ -1007,6 +1041,24 @@ class InferenceEngine:
                     _ml_cb.record_failure(exc)
                 except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
                     pass
+
+        # Step 4b: Feature drift guard (deferred from step 3b — see S4-01).
+        # Measure drift on the matrix the predictor actually scored, falling
+        # back to the engine's own vector only when it exposes none.
+        drift = self._check_feature_drift(
+            self._features_for_drift_check(
+                getattr(predictor, "last_scored_features", None),
+                fallback=X,
+            )
+        )
+        if drift and _DRIFT_BLOCK:
+            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            base_result["model_version"] = "drift_blocked"
+            base_result["feature_drift"] = True
+            base_result["drift_z_max"] = self._drift_z_max
+            self._fallback_count += 1
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
+            return base_result
 
         # Step 5: Online learner blend
         # SklearnOnlineLearner.predict_proba() accepts the raw OHLCV DataFrame

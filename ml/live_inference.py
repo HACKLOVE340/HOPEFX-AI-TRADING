@@ -186,6 +186,23 @@ class AdvancedModelPredictor:
         self._feature_names: list | None = None
         self._version = "advanced_oos_v1"
         self._cache: _FeatureCache = cache or _feature_cache
+        # The exact matrix handed to the model on the last successful scoring
+        # call. The drift guard in ml/inference_engine.py builds its *own*
+        # feature vector, which was never passed to the model — so it monitored
+        # a distribution nothing scored. Recording what the model actually saw
+        # is what lets the guard watch the right thing.
+        # See docs/HARDENING_BACKLOG.md S4-01.
+        self._last_scored_features: pd.DataFrame | None = None
+
+    @property
+    def last_scored_features(self) -> pd.DataFrame | None:
+        """Feature matrix passed to the model on the last scoring call.
+
+        ``None`` when the most recent ``predict_proba`` returned neutral
+        without scoring (model missing, too few bars, feature build failed), so
+        a stale row is never mistaken for the current prediction's features.
+        """
+        return self._last_scored_features
 
     # ── Model loading ─────────────────────────────────────────────────────────
 
@@ -378,6 +395,10 @@ class AdvancedModelPredictor:
         - Feature building fails
         - The model raises an exception
         """
+        # Clear first: any early return below means we did not score, and the
+        # drift guard must not then check the previous call's vector (S4-01).
+        self._last_scored_features = None
+
         if not self._load():
             return 0.5
 
@@ -445,6 +466,9 @@ class AdvancedModelPredictor:
 
             # Replace any inf/nan that slipped through
             X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            # Record what the model actually receives, so the drift guard can
+            # watch these features rather than a vector nobody scores (S4-01).
+            self._last_scored_features = X.copy()
             proba = self._model.predict_proba(X)
             prob_up = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
             return float(np.clip(prob_up, 0.0, 1.0))
