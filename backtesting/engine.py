@@ -236,16 +236,56 @@ class PerformanceMetrics:
             json.dump(self.to_dict(), f, indent=2)
 
 
+# ── Instrument conventions ────────────────────────────────────────────────────
+# Gold is quoted to 2 decimals and trades in 100 oz contracts; FX is quoted to
+# 4 decimals in 100,000-unit lots. Applying the FX convention to gold — as this
+# module did unconditionally — understates slippage by 1000x and commission by
+# the same factor. See docs/HARDENING_BACKLOG.md S3-03/S3-04 and the matching
+# (correct) logic in backtesting/engine_config.py:433,474.
+_GOLD_PIP = 0.10
+_FX_PIP = 0.0001
+_GOLD_CONTRACT_UNITS = 100.0  # 1 lot of XAUUSD = 100 troy ounces
+_FX_CONTRACT_UNITS = 100_000.0  # 1 standard FX lot
+
+# Default costs for XAUUSD. A backtest with no declared costs previously ran
+# frictionless; these are deliberately conservative retail-broker figures so the
+# default is pessimistic rather than free. Override explicitly per venue.
+_DEFAULT_SPREAD_PIPS = 3.0  # ≈ $0.30 on gold
+_DEFAULT_SLIPPAGE_PIPS = 1.0  # ≈ $0.10 on gold
+
+
+def _is_gold(symbol: str) -> bool:
+    """True when *symbol* is a gold instrument (XAU/USD, XAUUSD, GOLD…)."""
+    s = (symbol or "").upper().replace("/", "").replace("_", "")
+    return s.startswith("XAU") or s.startswith("GOLD")
+
+
+def pip_size(symbol: str) -> float:
+    """Return the pip size for *symbol* — $0.10 for gold, 0.0001 for FX."""
+    return _GOLD_PIP if _is_gold(symbol) else _FX_PIP
+
+
+def contract_units(symbol: str) -> float:
+    """Return the units in one lot — 100 oz for gold, 100,000 for FX."""
+    return _GOLD_CONTRACT_UNITS if _is_gold(symbol) else _FX_CONTRACT_UNITS
+
+
 class TransactionCostModel:
-    """Models trading costs: commission, spread, slippage"""
+    """Models trading costs: commission, spread, slippage.
+
+    Pip size and contract size are resolved **per symbol** rather than assumed
+    to be FX. Defaults are non-zero: a backtest that charges nothing makes any
+    strategy whose edge is smaller than the spread look profitable, which is
+    the single largest source of optimism in a reported equity curve.
+    """
 
     def __init__(
         self,
         commission_per_lot: float = 0.0,
         commission_rate: float = 0.0,
-        spread_pips: float = 0.0,
+        spread_pips: float = _DEFAULT_SPREAD_PIPS,
         slippage_model: str = "fixed",
-        slippage_pips: float = 0.0,
+        slippage_pips: float = _DEFAULT_SLIPPAGE_PIPS,
         slippage_std: float = 0.0,
         seed: int = 42,
     ):
@@ -261,24 +301,33 @@ class TransactionCostModel:
         self._rng = np.random.default_rng(seed)
 
     def calculate_costs(self, order: Order, tick: TickData, quantity: float) -> tuple[float, float, float]:
-        """Returns (fill_price, commission, slippage)"""
+        """Returns (fill_price, commission, slippage).
+
+        Slippage is always applied *against* the order — a buy fills above the
+        ask, a sell below the bid — so it can never flatter a result.
+        """
+        pip = pip_size(order.symbol)
 
         # Base price with spread
         base_price = tick.ask if order.side == OrderSide.BUY else tick.bid
 
-        # Add slippage
+        # Add slippage (pips → price, using this instrument's pip)
         if self.slippage_model == "fixed":
-            slippage = self.slippage_pips * 0.0001  # Convert pips to price
+            slippage = self.slippage_pips * pip
         elif self.slippage_model == "gaussian":
-            slippage = self._rng.normal(self.slippage_pips * 0.0001, self.slippage_std * 0.0001)
+            slippage = self._rng.normal(self.slippage_pips * pip, self.slippage_std * pip)
+            # A negative draw would mean price improvement; never model a cost
+            # as a benefit — clamp at zero.
+            slippage = max(0.0, float(slippage))
         else:
             slippage = 0.0
 
         fill_price = base_price + slippage if order.side == OrderSide.BUY else base_price - slippage
 
-        # Commission
+        # Commission — per-lot uses this instrument's contract size (gold is
+        # 100 oz, not the 100,000-unit FX standard lot).
         if self.commission_per_lot > 0:
-            commission = self.commission_per_lot * (quantity / 100000)  # Standard lot size
+            commission = self.commission_per_lot * (quantity / contract_units(order.symbol))
         elif self.commission_rate > 0:
             commission = fill_price * quantity * self.commission_rate
         else:
@@ -850,12 +899,26 @@ class DataFrameDataHandler:
 
     The DataFrame must have a DatetimeIndex and columns:
     open, high, low, close, volume.  Each bar is converted to a synthetic
-    TickData where bid = close and ask = close (mid-price approximation).
+    ``TickData`` whose **mid** is the bar close, with a half-spread applied to
+    each side.
+
+    This previously emitted ``bid = ask = close``, giving every synthetic tick a
+    spread of exactly zero. Combined with the (then) all-zero cost defaults,
+    every backtest filled at the bar close for free — see
+    docs/HARDENING_BACKLOG.md S3-01. ``spread_pips=0`` still reproduces the old
+    behaviour for callers that model the spread elsewhere, but it now has to be
+    asked for.
     """
 
-    def __init__(self, df: "pd.DataFrame", symbol: str) -> None:
+    def __init__(
+        self,
+        df: "pd.DataFrame",
+        symbol: str,
+        spread_pips: float = _DEFAULT_SPREAD_PIPS,
+    ) -> None:
         self._df = df
         self._symbol = symbol
+        self._half_spread = (spread_pips * pip_size(symbol)) / 2.0
 
     def get_data(
         self,
@@ -870,8 +933,8 @@ class DataFrameDataHandler:
             tick = TickData(
                 timestamp=ts,
                 symbol=self._symbol,
-                bid=close,
-                ask=close,
+                bid=close - self._half_spread,
+                ask=close + self._half_spread,
                 volume=float(row.get("volume", 0.0)),
             )
             yield ts, self._symbol, tick
