@@ -318,3 +318,65 @@ class TestNoFabricatedEquity:
         executor.execute_signal.assert_awaited_once()
         # The real equity reached sizing — not a fabricated 100_000.
         assert risk.calculate_position_size.call_args.kwargs["account_equity"] == 1_950.0
+
+
+# ── S1-01b: the same defect, second instance ──────────────────────────────────
+
+
+class TestNoBrokerLocalAccountInfo:
+    """Every broker must return the canonical ``brokers.base.AccountInfo``.
+
+    S1-01 was found on the OANDA path: ``brokers/oanda.py`` defined its own
+    ``AccountInfo`` dataclass with ``nav`` instead of ``equity`` and no
+    ``.get()``. ``RiskManager.assess_risk`` reads
+    ``account_info.get("equity")``, so live OANDA raised ``AttributeError`` and
+    blocked 100% of trades.
+
+    Re-verifying that fix turned up a **second** copy in ``brokers/ibkr.py``
+    with exactly the same two problems. `execution/execution.py` imports
+    ``IBKRBroker``, so it was a live path too. These tests fail if any broker
+    module grows a third.
+    """
+
+    def test_no_broker_module_defines_its_own_account_info(self):
+        import ast
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parents[2] / "brokers"
+        offenders = []
+        for path in root.rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.ClassDef) and node.name == "AccountInfo":
+                    rel = path.relative_to(root.parent)
+                    if str(rel) != "brokers/base.py":
+                        offenders.append(f"{rel}:{node.lineno}")
+
+        assert not offenders, (
+            f"broker-local AccountInfo definition(s) at {offenders}. "
+            f"RiskManager.assess_risk calls account_info.get('equity'); a plain "
+            f"dataclass has no .get(), so the risk gate raises AttributeError and "
+            f"blocks every trade on that broker (S1-01)."
+        )
+
+    def test_ibkr_account_info_satisfies_the_risk_gate_contract(self):
+        """The exact call the risk gate makes must work on IBKR's return type."""
+        import brokers.ibkr as ibkr_mod
+        from brokers.base import AccountInfo
+
+        assert ibkr_mod.AccountInfo is AccountInfo
+
+        account = AccountInfo(
+            account_id="DU123",
+            currency="USD",
+            balance=10_000.0,
+            equity=12_500.0,
+            margin_used=1_000.0,
+            margin_available=8_000.0,
+            positions_count=1,
+            unrealized_pnl=2_500.0,
+        )
+        # This is risk/manager.py::assess_risk verbatim.
+        equity = float(account.get("equity") or account.get("balance") or 0.0)
+        assert equity == pytest.approx(12_500.0)
+        # IBKR's own name for the same quantity must still resolve.
+        assert account.nav == pytest.approx(12_500.0)

@@ -2031,6 +2031,26 @@ margin gate still blocks an under-margined order and the leverage gate still
 blocks 235x while passing a funded account, and adds an AST guard that fails if
 any money-path file passes a bare async broker method to `run_in_executor`.
 
+#### S1-01b — The same broker-local AccountInfo in `brokers/ibkr.py` (CRITICAL) — FIXED
+
+Found while re-verifying S1-01. The OANDA copy was removed; an identical one
+in `brokers/ibkr.py:117` was not, because the original sweep looked at the
+OANDA path only.
+
+It had both of S1-01's defects: `nav` instead of `equity`, and no `.get()`.
+`RiskManager.assess_risk` reads `account_info.get("equity")`, so an IBKR-backed
+account raised `AttributeError` inside the pre-trade risk assessment — the
+exact failure that blocked 100% of trades on live OANDA. `execution/execution.py:475`
+imports `IBKRBroker`, so this was a live path.
+
+**Fix:** deleted the local dataclass, imported `brokers.base.AccountInfo`, and
+mapped IBKR's vocabulary onto the canonical fields — `NetLiquidation` → `equity`
+(the `.nav` alias still resolves), `BuyingPower` → `margin_available`,
+`positions_count` now populated. `tests/unit/test_account_info_contract.py`
+gained an AST guard that fails if any module under `brokers/` defines
+`AccountInfo` again, plus a test running `assess_risk`'s exact call against the
+IBKR return type.
+
 ### S12-01 — Tests that name a safety property and verify nothing (HIGH)
 
 `tests/integration/test_mcc_signal_pipeline.py:313-322`:
