@@ -590,8 +590,13 @@ class PositionManager:
         history = list(self._history)
         return list(reversed(history))[:limit]
 
-    async def restore_from_redis(self) -> int:
+    async def restore_from_redis(self, broker: Any = None) -> int:
         """Reload open positions from Redis on startup.
+
+        Pass *broker* to reconcile the restored state against the broker's live
+        positions — the only authority on what is actually open. Without it the
+        persisted state is trusted as-is, which is the pre-S7-03 behaviour and
+        is kept only for callers that have no broker available.
 
         This should be called once during application startup after the Redis
         connection is available.
@@ -603,17 +608,127 @@ class PositionManager:
             return 0
         try:
             state = await self._redis_store.load_state_on_boot()
-            positions = state.get("positions", [])
-            async with self._lock:
-                for p_dict in positions:
-                    pos = Position.from_dict(p_dict)
-                    self._positions[pos.symbol] = pos
-                    _prom_positions_open_set(pos.symbol, 1)
-            logger.info("PositionManager: restored %d position(s) from Redis", len(positions))
-            return len(positions)
+            records = state.get("positions", [])
         except (RuntimeError, OSError) as exc:
             logger.warning("PositionManager: failed to restore from Redis: %s", exc)
             return 0
+
+        # Parse the whole batch FIRST, per record, then swap in under the lock.
+        # The loop used to mutate self._positions inside the try while catching
+        # only (RuntimeError, OSError), so a KeyError/ValueError from
+        # from_dict() on record 3 of 5 propagated after records 1-2 were
+        # already inserted — leaving partial state with the success log line
+        # never reached. See docs/HARDENING_BACKLOG.md S7-04.
+        parsed: dict[str, Position] = {}
+        for p_dict in records:
+            try:
+                pos = Position.from_dict(p_dict)
+            except Exception as exc:
+                logger.error("PositionManager: skipping unparseable persisted position %r: %s", p_dict, exc)
+                continue
+            parsed[pos.symbol] = pos
+
+        # Reconcile against the broker, which is the only authority on what is
+        # actually open. Redis was previously treated as authoritative, so a
+        # position closed while the process was down was resurrected (the
+        # system believed it was exposed when flat), one opened while down
+        # stayed unmanaged, and a partial close left a stale quantity.
+        # See docs/HARDENING_BACKLOG.md S7-03.
+        if broker is not None:
+            parsed = await self._reconcile_with_broker(parsed, broker)
+
+        async with self._lock:
+            for symbol, pos in parsed.items():
+                self._positions[symbol] = pos
+                _prom_positions_open_set(symbol, 1)
+
+        logger.info(
+            "PositionManager: restored %d position(s) (%d persisted, broker-reconciled=%s)",
+            len(parsed),
+            len(records),
+            broker is not None,
+        )
+        return len(parsed)
+
+    async def _reconcile_with_broker(self, parsed: dict[str, Position], broker: Any) -> dict[str, Position]:
+        """Diff persisted positions against the broker's live positions.
+
+        Broker-only positions are adopted, Redis-only positions are dropped,
+        and quantity mismatches take the broker's number — each with an alert,
+        because every one of them means the system's view was wrong.
+        """
+        try:
+            live = await broker.get_positions()
+        except Exception as exc:
+            # Cannot reconcile — keep the persisted view rather than losing it,
+            # but say so loudly: the restored state is unverified.
+            logger.error("PositionManager: broker reconciliation failed (%s) — restored state is UNVERIFIED", exc)
+            return parsed
+
+        live_by_symbol: dict[str, Any] = {}
+        for p in live or []:
+            symbol = getattr(p, "symbol", None)
+            if symbol:
+                live_by_symbol[symbol] = p
+
+        reconciled: dict[str, Position] = {}
+
+        for symbol, pos in parsed.items():
+            broker_pos = live_by_symbol.get(symbol)
+            if broker_pos is None:
+                logger.warning(
+                    "PositionManager: %s was persisted but the broker holds no such position — "
+                    "dropping (closed while this process was down)",
+                    symbol,
+                )
+                continue
+            broker_qty = getattr(broker_pos, "quantity", None)
+            if (
+                isinstance(broker_qty, (int, float))
+                and not isinstance(broker_qty, bool)
+                and abs(float(broker_qty) - float(pos.quantity)) > 1e-9
+            ):
+                logger.warning(
+                    "PositionManager: %s quantity mismatch — persisted=%s broker=%s; taking the broker's",
+                    symbol,
+                    pos.quantity,
+                    broker_qty,
+                )
+                pos.quantity = float(broker_qty)
+            reconciled[symbol] = pos
+
+        for symbol, broker_pos in live_by_symbol.items():
+            if symbol in reconciled:
+                continue
+            adopted = self._position_from_broker(broker_pos, symbol)
+            if adopted is None:
+                continue
+            logger.warning(
+                "PositionManager: adopting %s held by the broker but absent from persisted state — "
+                "it was opened while this process was down and has been unmanaged since",
+                symbol,
+            )
+            reconciled[symbol] = adopted
+
+        return reconciled
+
+    @staticmethod
+    def _position_from_broker(broker_pos: Any, symbol: str) -> Position | None:
+        """Build a Position from a broker position object, or None if unusable."""
+        try:
+            side = str(getattr(broker_pos, "side", "") or "long").lower()
+            side = "short" if "short" in side or "sell" in side else "long"
+            return Position(
+                position_id=str(getattr(broker_pos, "id", None) or f"broker-{symbol}"),
+                symbol=symbol,
+                side=side,
+                quantity=float(getattr(broker_pos, "quantity", 0.0) or 0.0),
+                entry_price=float(getattr(broker_pos, "entry_price", 0.0) or 0.0),
+                strategy_id="broker_reconciliation",
+            )
+        except Exception as exc:
+            logger.error("PositionManager: could not adopt broker position %s: %s", symbol, exc)
+            return None
 
 
 # ── Null context manager for no-op span ───────────────────────────────────────

@@ -378,22 +378,33 @@ class TradeExecutor:
         )
 
         if order.status.value in ("filled", "partial"):
-            if not order.average_fill_price or not (order.average_fill_price > 0):
-                logger.error(
-                    "TradeExecutor: order %s status=%s but average_fill_price=%s — skipping position open",
+            # The broker has ALREADY EXECUTED this order. A missing or zero
+            # fill price is a reporting gap, not a reason to disown the
+            # position — brokers that acknowledge a fill and deliver the price
+            # in a later message (async and FIX fill reports) hit this on every
+            # order. Skipping add_position() here left a live, unprotected
+            # position with no stop armed, invisible to risk and the dashboard
+            # and unrecoverable on restart, while the caller was told the trade
+            # FAILED and sized its next signal as if flat.
+            #
+            # Record the position at a provisional price, flag it so nothing
+            # downstream treats that price as confirmed, and alert.
+            # See docs/HARDENING_BACKLOG.md S7-01.
+            _price_unconfirmed = not order.average_fill_price or not (order.average_fill_price > 0)
+            _entry_price = float(order.average_fill_price or 0.0)
+            if _price_unconfirmed:
+                _entry_price = self._provisional_fill_price(signal, symbol)
+                logger.critical(
+                    "TradeExecutor: order %s status=%s but average_fill_price=%s — "
+                    "position OPENED at provisional price %.5f and flagged "
+                    "price_unconfirmed. Reconcile against the broker before "
+                    "trusting P&L for this position.",
                     order.id,
                     order.status.value,
                     order.average_fill_price,
+                    _entry_price,
                 )
-                return ExecutionResult(
-                    success=False,
-                    order_id=order.id,
-                    filled_quantity=order.filled_quantity,
-                    average_price=order.average_fill_price,
-                    commission=order.commission,
-                    status=OrderStatus(order.status.value),
-                    message="Invalid fill price — position not opened",
-                )
+
             from execution.position_tracker import Position
 
             position = Position(
@@ -401,12 +412,16 @@ class TradeExecutor:
                 symbol=symbol,
                 side="long" if side == "buy" else "short",
                 quantity=order.filled_quantity,
-                entry_price=order.average_fill_price,
-                current_price=order.average_fill_price,
+                entry_price=_entry_price,
+                current_price=_entry_price,
                 commission=order.commission,
                 stop_loss=signal.get("stop_loss"),
                 take_profit=signal.get("take_profit"),
             )
+            # Marks a position whose entry price is provisional (S7-01). Set as
+            # an attribute rather than a constructor arg so this works with any
+            # Position implementation the tracker accepts.
+            position.price_unconfirmed = _price_unconfirmed
             await self.position_tracker.add_position(position)
 
             # Tell the RiskManager a position opened. Without this the
@@ -448,6 +463,28 @@ class TradeExecutor:
             status=OrderStatus(order.status.value),
             message=f"Order {order.status.value}",
         )
+
+    def _provisional_fill_price(self, signal: dict[str, Any], symbol: str) -> float:
+        """Best available price for a fill the broker confirmed without one.
+
+        Preference order: the signal's intended entry, then the last mark the
+        position tracker holds, then 0.0. The result is only ever used on a
+        position flagged ``price_unconfirmed`` (S7-01), so it must be treated
+        as a placeholder pending reconciliation — never as a real fill.
+        """
+        for key in ("entry_price", "price", "current_price"):
+            raw = signal.get(key)
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw > 0:
+                return float(raw)
+        try:
+            getter = getattr(self.position_tracker, "get_last_price", None)
+            if callable(getter):
+                last = getter(symbol)
+                if isinstance(last, (int, float)) and not isinstance(last, bool) and last > 0:
+                    return float(last)
+        except Exception as exc:
+            logger.debug("provisional fill price lookup failed for %s: %s", symbol, exc)
+        return 0.0
 
     async def _execute_close(self, signal: dict[str, Any]) -> ExecutionResult:
         """

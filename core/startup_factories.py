@@ -1668,7 +1668,12 @@ async def init_position_manager(s: Any) -> Any:
     # Restore open positions from the previous session.
     # A Timeout/ConnectionError here means Redis is not running — expected in dev.
     try:
-        restored = await _pm.restore_from_redis()
+        # Pass the broker so restored state is reconciled against what is
+        # actually open. Without it Redis is authoritative, which resurrects
+        # positions closed while this process was down and leaves positions
+        # opened while it was down unmanaged.
+        # See docs/HARDENING_BACKLOG.md S7-03.
+        restored = await _pm.restore_from_redis(broker=getattr(s, "broker", None))
         if restored:
             logger.info("PositionManager: restored %d open position(s) from Redis on startup", restored)
         else:
