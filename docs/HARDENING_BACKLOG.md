@@ -225,7 +225,7 @@ the one the FastAPI app uses — is missing gates the standalone engine has.
 |----|-----|------|-------|----------|
 | S1-01 | CRITICAL | brokers/decision | Live OANDA blocks 100% of trades: `AccountInfo` has no `.get()` | `brokers/oanda.py:109`, `HOPEFXDecisionEngine.py:457` |
 | S1-02 | CRITICAL | decision | Fabricated $100k equity fallback contradicts the guard 20 lines above it | `HOPEFXDecisionEngine.py:475` |
-| S1-03 | CRITICAL | risk/execution | Drawdown circuit breaker does not halt the sizing path (two halt flags) | `trade_executor.py:592`, `risk/manager.py:728,1665` |
+| S1-03 | HIGH | risk/execution | Drawdown halt is not persisted and does not propagate (two halt flags) — *corrected during Slice 2, see note* | `trade_executor.py:592`, `risk/manager.py:728,1665` |
 | S1-04 | HIGH | risk | Max-open-positions gate is dead on the decision-engine path | `risk/manager.py:748`, `trade_executor.py` |
 | S1-05 | HIGH | execution | Risk-approval token is forged when absent — "No Unauthorized Trade" can never fail | `trade_executor.py:330` |
 | S1-06 | HIGH | risk | Kelly sizing is a constant — signal quality does not affect size | `risk/manager.py:1056-1058,1241-1246` |
@@ -295,7 +295,15 @@ stated intent at line 447. Additionally: `assess_risk` reading
 to **balance**, which excludes unrealized P&L — a drawdown gate computed on
 balance is blind to floating losses on open positions.
 
-### S1-03 — Drawdown circuit breaker does not stop new orders (CRITICAL)
+### S1-03 — Drawdown halt is not persisted or propagated (HIGH)
+
+> **Corrected during Slice 2.** This was first written up as "the breaker does
+> not stop trading". That is **wrong** and the original severity (CRITICAL) was
+> too high. `risk/pre_trade_gate.py:354` *does* read `_trading_halted`, and
+> `TradeExecutor._execute_open` runs that gate before every order, so orders
+> **are** blocked after the breaker fires. The real defects are narrower and are
+> described below.
+
 
 `RiskManager` carries **two halt flags**: `_halt` and `_trading_halted`.
 `_halt_trading()` (`risk/manager.py:1355-1359`) correctly sets both, persists
@@ -316,19 +324,37 @@ But the two functions the decision engine calls read **only `_halt`**:
 - `risk/manager.py:1665` — `if self._halt:` (in `assess_risk`)
 
 **Failure scenario:** account drawdown crosses `DRAWDOWN_HALT_PCT` after a
-losing close. The executor logs `DRAWDOWN CIRCUIT BREAKER TRIGGERED — halting
-trading` at WARNING and sets `_trading_halted=True`. On the very next tick,
-phase 3 calls `assess_risk` (`_halt` is False → `can_trade=True`) then
-`size_order` (`_halt` is False → returns a normal size), and a new order is
-routed. The operator is looking at a log line that says trading is halted while
-the system keeps opening positions. The halt is also never persisted
-(`_persist_halt_state()` is skipped) and the app-level kill switch never fires,
-so it does not survive a restart either.
+losing close. Because the assignment bypasses `_halt_trading()`, three of that
+method's four effects are skipped:
 
-**Minimal fix:** have `_trigger_drawdown_halt_if_needed` call
-`risk_manager._halt_trading(reason)` instead of assigning the attribute; make
-`size_order`/`assess_risk` read `self._halt or self._trading_halted` as the
-other six call sites already do (`risk/manager.py:898,1513,2045,2165,2194,2218`).
+1. **The halt is not persisted.** `_persist_halt_state()` never runs, so a
+   process restart clears the halt and trading resumes automatically at the
+   same drawdown that triggered the breaker.
+2. **The app kill switch never fires.** `_halt_trading()` calls
+   `ks.activate()` (`risk/manager.py:1363-1368`); the direct assignment does
+   not, so no other subsystem is notified and no Redis/cross-pod propagation
+   occurs.
+3. **`assess_risk` and `size_order` report inconsistent state.** Both read only
+   `_halt` (`risk/manager.py:728,1665`), so `assess_risk().can_trade` stays
+   `True` and `size_order()` returns a normal size while trading is halted. Any
+   API endpoint or dashboard surfacing `can_trade` shows the system as tradable.
+   The order is still blocked one stage later by the pre-trade gate, so this is
+   a state-reporting and wasted-work defect rather than an unblocked trade.
+
+**Minimal fix:** call `risk_manager._halt_trading(reason)` instead of assigning
+the attributes; make `size_order`/`assess_risk` read
+`self._halt or self._trading_halted` as the other six call sites already do
+(`risk/manager.py:898,1513,2045,2165,2194,2218`).
+
+<details>
+<summary>Original (incorrect) write-up, kept for the record</summary>
+
+
+> ~~The operator is looking at a log line that says trading is halted while the
+> system keeps opening positions.~~ Incorrect — the pre-trade gate blocks the
+> order. Corrected above.
+
+</details>
 
 ### S1-04 — Max-open-positions gate never fires (HIGH)
 
@@ -468,3 +494,210 @@ disables all three silently — there is no counter or warning, only `pass`.
 be observable only at debug verbosity.
 
 
+
+---
+
+## Round 3 — Slice 2: gates and kill switch (fail-closed audit)
+
+Scope: `risk/gatekeeper.py`, `risk/pre_trade_gate.py`, `kill_switch.py`,
+`invariants/enforcement.py`, `compliance/`, `risk/fia_compliance.py`.
+Questions asked: does each gate fail **open or closed** when its dependency
+errors? Can any gate be bypassed by reaching the broker another way?
+
+**Good news first — these fail closed and are correctly built:**
+
+- `risk/pre_trade_gate.py:282-302` — a check that raises anything other than
+  `TradeBlockedError` is wrapped in `RiskManagerError` and **blocks** the trade.
+  "A broken risk check is not a pass" is implemented, not just commented.
+- `risk/gatekeeper.py:388-403` — FIA compliance errors block the signal.
+- `execution/oms.py:163-186` — the OMS kill-switch gate blocks on error.
+- `kill_switch.py` — activation persists to a flag file and a state file, the
+  env override is read at construction, and a poll loop plus Redis latch
+  provide cross-pod propagation.
+
+The defects below are **not** fail-open exception handlers — the previous
+rounds cleaned those up. They are gates that are **wired to inputs that never
+change**, so the check runs, passes, and is never able to fire.
+
+| ID | Sev | Area | Issue | Location |
+|----|-----|------|-------|----------|
+| S2-01 | CRITICAL | kill switch | Split-brain: two `KillSwitch` instances; the ops mechanisms drive the one the money path does not read | `app.py:286`, `kill_switch.py:1341`, `pre_trade_gate.py:342` |
+| S2-02 | HIGH | gatekeeper | `Gatekeeper.start()` is never called → gate checks 1, 3 and 4 can never fire | `startup_factories.py:3680`, `gatekeeper.py:232` |
+| S2-03 | HIGH | gatekeeper | Spread gate (check 11) reads an attribute the signal never has → always 0.0 | `gatekeeper.py:497` |
+| S2-04 | HIGH | compliance | FIA controls validate a hardcoded order size of 1.0, env capital, and `daily_pnl=0.0` | `gatekeeper.py:320,336-337` |
+| S2-05 | MEDIUM | compliance | FIA 1.3 and 3.1 are always skipped on the decision-engine path | `gatekeeper.py:328,354-360` |
+| S2-06 | LOW | risk | Kill-switch check silently passes if the import fails | `pre_trade_gate.py:343-344` |
+| S2-07 | LOW | docs | `_run_fia_checks` docstring says errors are "non-blocking"; the code blocks | `gatekeeper.py:308-309` |
+
+### S2-01 — Split-brain kill switch (CRITICAL)
+
+There are **two separate `KillSwitch` objects** in a running process:
+
+| | `app.kill_switch` | `kill_switch.kill_switch` |
+|---|---|---|
+| Created | `app.py:286` | `kill_switch.py:1341` (module singleton) |
+| Redis event bus | yes | **no** |
+| `start()` called | yes (`app.py:540`) | **never** |
+| Poll loop / flag-file polling | running | **not running** |
+| Activated by | `/kill-switch/*` router (`app.py:295`), `RiskManager._halt_trading` (`risk/manager.py:1364`) | `/nuclear/kill_switch/activate` (`api/nuclear.py:104`) |
+| **Read by the money path** | **no** | **yes** — `pre_trade_gate.py:342` |
+
+Only the module singleton is consulted before an order reaches the broker. Only
+the app instance has the poll loop, the flag file watcher, and Redis cross-pod
+propagation. Nothing synchronises them.
+
+**Failure scenarios:**
+
+1. **Operator hits the wrong endpoint.** `POST /kill-switch/activate` (the
+   router registered in `app.py`) sets `app.kill_switch._active = True` and
+   returns success. `pre_trade_gate._check_kill_switch()` reads the *module
+   singleton*, which is still `False` — **orders continue to flow** while the
+   API, the logs, and the health endpoint all report the kill switch as active.
+   `/nuclear/kill_switch/activate` is the endpoint that actually stops trading.
+   Two endpoints, indistinguishable from the outside, opposite effects.
+2. **Flag file does nothing.** The documented ops runbook mechanism
+   (`kill_switch.flag`, "polled every 2 s — survives process crash") is polled
+   only by `app.kill_switch`. The module singleton has no poll loop, so writing
+   the flag file never blocks a trade.
+3. **Redis cross-pod activation does nothing.** Same reason — the listener runs
+   on the app instance only.
+4. **Auto-halt does not fire the gate's switch.** `RiskManager._halt_trading`
+   activates `app.kill_switch` (`risk/manager.py:1364-1368`); the gate's
+   instance stays inactive. (Trading is still blocked, but by the separate
+   `_trading_halted` check, not by the kill switch.)
+5. **Status is wrong either way.** Health routes are wired to `app.kill_switch`
+   (`app.py:959`), so a `/nuclear`-activated kill switch reads as **inactive**
+   on the dashboard while trading is in fact blocked.
+
+Only `HOPEFX_KILL_SWITCH=1` works on both, because each reads it in `__init__`
+(`kill_switch.py:137`).
+
+**Minimal fix:** delete the `app.py:286` instantiation and have `app.py` import
+and start the module singleton, so there is exactly one instance. Add a test
+asserting `app.kill_switch is kill_switch.kill_switch`.
+
+### S2-02 — Gatekeeper is never started; three of its checks are inert (HIGH)
+
+`core/startup_factories.py:3680` builds the Gatekeeper inline:
+
+```python
+gatekeeper = Gatekeeper(orchestrator=getattr(s, "data_orchestrator", None))
+```
+
+`await gatekeeper.start()` is never called — there is no other assignment to
+`s.gatekeeper` anywhere in the codebase. `start()` (`gatekeeper.py:232-244`) is
+what launches `_breach_listener`, and `_breach_listener` (`gatekeeper.py:422`)
+is the **only** production writer of two pieces of state:
+
+- `self._equity.update(equity)` on `reason == "equity_update"`
+- `self._kill_active = True` on `reason in ("kill_switch", "kill_event")`
+
+With the listener never running:
+
+- **Check 1 (kill switch, `gatekeeper.py:545`)** — `_kill_active` stays `False`.
+  The only other writers are the FIA `KILL_SWITCH` status and
+  `activate_kill_switch()`, which has no production caller.
+- **Check 3 (daily drawdown, `:555`)** — `_equity.daily_dd` stays `0.0`, so
+  `0.0 >= _DAILY_DD_LIMIT` is never true.
+- **Check 4 (max drawdown, `:564`)** — same, `max_dd` stays `0.0`.
+
+**Failure scenario:** the account is 8% down on the day. `Gatekeeper.evaluate()`
+runs all 11 checks, checks 3 and 4 compare `0.0` against their limits, and the
+gate returns `passed=True`. The `metrics()` endpoint reports
+`daily_dd_pct: 0.0` and `max_dd_pct: 0.0` regardless of the real account.
+Drawdown protection on this path depends entirely on `RiskManager` and
+`PreTradeGate`; the Gatekeeper's own drawdown checks contribute nothing.
+
+Note `start()` is also not safe to call as written — it `await`s
+`self._signal_consumer()` forever (`gatekeeper.py:244`), so it must be launched
+as a task, not awaited during startup.
+
+**Minimal fix:** launch `_breach_listener` from the factory (or from
+`__init__`), independently of the event-bus consumer loop; or have
+`_run_checks_on_signal` read drawdown from `RiskManager` rather than from a
+private tracker that nothing updates.
+
+### S2-03 — Spread gate never fires (HIGH)
+
+`gatekeeper.py:497` sources the spread for check 11:
+
+```python
+spread=getattr(signal, "tick_spread", 0.0),
+```
+
+The decision engine passes the **brain's** `Signal`
+(`HOPEFXDecisionEngine.py:430` → `strategies/base.py:44`), whose fields are
+`signal_type, symbol, price, timestamp, confidence, metadata`. There is no
+`tick_spread`, so the default `0.0` is always used and
+`0.0 > _MAX_SPREAD_USD` is never true.
+
+**Failure scenario:** a news spike widens the XAUUSD spread to $8. The spread
+gate — the control specifically meant to keep the system out of that market —
+evaluates `0.0 > max` and passes. The order is placed into the spike and pays
+the full spread on entry.
+
+**Minimal fix:** read the spread from the orchestrator tick (as checks 5-8
+already do via `_get_data_quality` / `_get_blackout`) instead of from a signal
+attribute that this path never populates.
+
+### S2-04 — FIA controls validate fabricated inputs (HIGH)
+
+`_run_fia_checks` (`gatekeeper.py:318-338`) builds the order and portfolio dicts
+that `FIAComplianceManager.validate_order()` scores, using `getattr` defaults
+for fields the brain `Signal` does not carry:
+
+| Field | Line | Value actually used | Should be |
+|---|---|---|---|
+| `order["size"]` | 320 | **`1.0`** (constant) | the approved position size |
+| `order["side"]` | 321 | **`"long"`** (constant) | the signal direction |
+| `portfolio_state["capital"]` | 337 | `INITIAL_BALANCE` env, default `100000` | live account equity |
+| `portfolio_state["daily_pnl"]` | 336 | **`0.0`** (constant) | realised daily P&L |
+
+`Signal` has no `quantity`, `size`, `direction`, or `daily_pnl` attribute, so
+every default binds. Additionally the gate runs **before** sizing in the
+decision pipeline (`HOPEFXDecisionEngine.py:430` vs `:481`), so the real size
+does not exist yet at this point.
+
+**Failure scenario:** FIA 2024 maximum-order-size and daily-loss-limit controls
+are mandatory pre-trade risk controls. They are evaluated here against a
+constant size of 1 unit, a constant $100k of capital, and a daily P&L of exactly
+zero. The daily-loss control can never trigger — its input is hardcoded to 0.0.
+An order of any real size passes the size control, because the control never
+sees the real size.
+
+**Minimal fix:** move the FIA call to *after* sizing and pass the approved size,
+real direction, live equity, and the risk manager's `daily_pnl`.
+
+### S2-05 / S2-06 / S2-07 — Lower severity
+
+**S2-05:** `has_prices` (`gatekeeper.py:328`) requires `bid > 0 and ask > bid`.
+The brain `Signal` carries `price` but no bid/ask, so `has_prices` is always
+`False` on this path and FIA 1.3 (price tolerance) and FIA 3.1 (market-data
+validation) are filtered out of the results at `:354-360`. This is deliberate
+and documented, and the orchestrator data-quality gate is cited as the
+compensating control — but it means two of the FIA rules are permanently
+inactive for the primary trading path, which should be stated in the compliance
+record rather than only in a code comment.
+
+**S2-06:** `pre_trade_gate.py:341-344` — if `from kill_switch import kill_switch`
+raises, `ks` is set to `None` and the check returns without blocking. Every
+other failure mode in this file blocks; this one passes. The comment says the
+import "should never fail", which is exactly the assumption worth removing from
+a mandatory control.
+
+**S2-07:** `gatekeeper.py:308-309` documents FIA errors as "logged and treated
+as non-blocking so that a misconfigured compliance manager cannot halt all
+trading". The code at `:388-403` does the opposite and blocks. The code is
+right; the docstring is stale and describes a fail-open policy that would be a
+defect if anyone implemented it from the documentation.
+
+### Cross-cutting note
+
+Slices 1 and 2 keep landing on the same root cause: **controls are attached to
+state that only one of the two engine implementations maintains.** The
+Gatekeeper's equity tracker, `RiskManager.open_positions`, the two halt flags,
+and the two kill-switch instances are all examples. A gate whose input is never
+written is indistinguishable, in logs and metrics, from a gate that is passing
+legitimately — which is why these survived previous audit rounds. Worth a
+dedicated fix pass that inventories every gate input and asserts, in a test,
+that something writes it on the decision-engine path.
