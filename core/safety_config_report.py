@@ -53,39 +53,55 @@ class SafetyFlag:
 # bad model, then what stops bad data.
 SAFETY_FLAGS: tuple[SafetyFlag, ...] = (
     SafetyFlag(
-        "kill switch (env override)", "HOPEFX_KILL_SWITCH", "0",
+        "kill switch (env override)",
+        "HOPEFX_KILL_SWITCH",
+        "0",
         note="1 = all trading halted at startup",
     ),
     SafetyFlag(
-        "live trading", "LIVE_TRADING_ENABLED", "false",
+        "live trading",
+        "LIVE_TRADING_ENABLED",
+        "false",
         note="false = paper only",
     ),
     SafetyFlag(
-        "paper trading", "PAPER_TRADING", "true",
+        "paper trading",
+        "PAPER_TRADING",
+        "true",
         unsafe_when=("false", "0"),
         note="false = real orders reach the broker",
     ),
     SafetyFlag(
-        "broker", "BROKER_TYPE", "paper",
+        "broker",
+        "BROKER_TYPE",
+        "paper",
         note="paper | oanda | mt5 | …",
     ),
     SafetyFlag(
-        "paper fallback", "FALLBACK_TO_PAPER", "false",
+        "paper fallback",
+        "FALLBACK_TO_PAPER",
+        "false",
         unsafe_when=("true", "1", "yes"),
         note="true = silently trades on paper if the real broker is down",
     ),
     SafetyFlag(
-        "invariant mode", "HOPEFX_INVARIANT_MODE", "monitor",
+        "invariant mode",
+        "HOPEFX_INVARIANT_MODE",
+        "monitor",
         unsafe_when=("off",),
         note="monitor = log only; enforce = block",
     ),
     SafetyFlag(
-        "stale-model block", "STALE_MODEL_BLOCK", "true",
+        "stale-model block",
+        "STALE_MODEL_BLOCK",
+        "true",
         unsafe_when=("false", "0"),
         note="false = trade on a stale model",
     ),
     SafetyFlag(
-        "drift block", "DRIFT_BLOCK", "false",
+        "drift block",
+        "DRIFT_BLOCK",
+        "false",
         unsafe_when=("false", "0"),
         note="false = warn on feature drift but keep trading",
     ),
@@ -101,7 +117,9 @@ SAFETY_FLAGS: tuple[SafetyFlag, ...] = (
     SafetyFlag("min data quality", "RISK_MIN_DATA_QUALITY", "0.40"),
     SafetyFlag("max spread (USD)", "GATEKEEPER_MAX_SPREAD_USD", "2.00"),
     SafetyFlag(
-        "WS auth required", "WS_AUTH_REQUIRED", "true",
+        "WS auth required",
+        "WS_AUTH_REQUIRED",
+        "true",
         unsafe_when=("false", "0"),
         note="false = unauthenticated WebSocket clients",
     ),
@@ -156,8 +174,7 @@ def log_safety_config() -> dict[str, Any]:
 
     if report["unsafe_count"]:
         logger.warning(
-            "SAFETY CONFIG: %d gate(s) are configured NOT to protect. "
-            "Confirm this is deliberate before trading live.",
+            "SAFETY CONFIG: %d gate(s) are configured NOT to protect. Confirm this is deliberate before trading live.",
             report["unsafe_count"],
         )
     return report

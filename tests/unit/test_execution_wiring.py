@@ -559,9 +559,7 @@ class TestSLTPMonitor:
     @pytest.mark.asyncio
     async def test_check_positions_tp_triggered(self):
         monitor, pm, broker, tick_cache = self._make_monitor()
-        pm.get_all_positions = MagicMock(
-            return_value={"XAUUSD": self._long_position(take_profit=2350.0)}
-        )
+        pm.get_all_positions = MagicMock(return_value={"XAUUSD": self._long_position(take_profit=2350.0)})
         tick_cache["XAUUSD"] = _FakeTick(2355.5)
         await monitor._check_all_positions()
         await _drain_tasks()
