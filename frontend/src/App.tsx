@@ -291,6 +291,11 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 const NoLiveFeedBanner: React.FC = () => {
   const status       = useStore((s) => s.wsStatus);
   const noLiveFeed   = useStore((s) => s.noLiveFeed);
+  // Client-observed staleness: the socket can stay OPEN while the server sends
+  // nothing, in which case `status` remains 'connected' and `noLiveFeed` stays
+  // false because the server never volunteered it. See S9-01 / S10-05.
+  const feedStale    = useStore((s) => s.feedStale);
+  const lastDataAt   = useStore((s) => s.lastDataAt);
   const noLiveFeedMsg = useStore((s) => s.noLiveFeedMsg);
   const isAuth       = useStore(selectIsAuth);
   const [dismissed, setDismissed]   = React.useState(false);
@@ -308,14 +313,22 @@ const NoLiveFeedBanner: React.FC = () => {
   // Show when: authenticated, attempted, and either WS is down OR server sent no_live_feed
   const showWsDown    = isAuth && attempted && status !== 'connected' && !dismissed;
   const showNoFeed    = isAuth && status === 'connected' && noLiveFeed && !dismissed;
-  if (!showWsDown && !showNoFeed) return null;
+  // Stale feed is NOT dismissible: unlike the others it means the prices on
+  // screen are of unknown age, which is exactly the state a trader must not be
+  // able to hide.
+  const showStale     = isAuth && status === 'connected' && feedStale;
+  if (!showWsDown && !showNoFeed && !showStale) return null;
 
   // Determine severity: connecting = amber, no_live_feed = amber, error/disconnected = amber
   // All states use amber — this is informational, not a critical error.
   const isConnecting = status === 'connecting';
 
+  const staleSeconds = lastDataAt ? Math.round((Date.now() - lastDataAt) / 1000) : null;
+
   const label =
-    showNoFeed
+    showStale
+      ? `Feed stalled — no update for ${staleSeconds ?? '?'}s. Prices shown are NOT live.`
+      : showNoFeed
       ? (noLiveFeedMsg ?? 'No live broker feed — connect a broker in Settings to receive real-time prices.')
       : isConnecting
         ? 'Connecting to live feed…'

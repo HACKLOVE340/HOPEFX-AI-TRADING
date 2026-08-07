@@ -51,6 +51,16 @@ const MAX_RECONNECT_MS       = 30_000;
 const MAX_RECONNECT_ATTEMPTS = 15;
 // Poll REST prices when WS is not connected so the UI shows live-ish data.
 const REST_POLL_INTERVAL_MS  = 5_000;
+// How long without ANY server message before the feed is treated as stale.
+// The socket can stay OPEN while the server sends nothing — a stalled
+// broadcast loop, a frozen upstream — in which case wsStatus remains
+// 'connected' and onclose never fires. Without this the UI rendered the last
+// price it received indefinitely under a green indicator, with no age shown
+// anywhere. Two missed heartbeats is the threshold.
+// See docs/HARDENING_BACKLOG.md S9-01 / S10-05.
+const FEED_STALE_AFTER_MS    = HEARTBEAT_INTERVAL_MS * 2;
+// How often to re-evaluate that condition.
+const FEED_STALE_CHECK_MS    = 5_000;
 
 interface WsMessage {
   type:
@@ -96,6 +106,7 @@ export function useWebSocket(enabled = true) {
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const staleTimer     = useRef<ReturnType<typeof setInterval> | null>(null);
   const restPollTimer  = useRef<ReturnType<typeof setInterval> | null>(null);
   const unmounted      = useRef(false);
   const authedRef      = useRef(false);
@@ -118,8 +129,12 @@ export function useWebSocket(enabled = true) {
       upsertPosition, removePosition, addSignal, setAccount,
       setMicrostructure, setVolumeDelta, setSentiment,
       setRiskSnapshot, setEquitySnapshot, addNewsItem, setSystemAlert,
-      setNoLiveFeed,
+      setNoLiveFeed, markDataReceived,
     } = getState();
+
+    // Any parsed server message is evidence the feed is alive. Recorded before
+    // the switch so it covers every message type, including ones added later.
+    markDataReceived();
 
     switch (msg.type) {
       case 'connected':
@@ -314,6 +329,28 @@ export function useWebSocket(enabled = true) {
   }, []);
 
   /**
+   * Watchdog: flip `feedStale` when nothing has arrived for
+   * FEED_STALE_AFTER_MS.
+   *
+   * This is the consumer that was missing. `lastHeartbeat` was written to the
+   * store on every heartbeat and read nowhere outside test files — no
+   * component, selector or interval ever compared it against `Date.now()`. The
+   * `noLiveFeed` banner is not a substitute: it only fires when the *server*
+   * volunteers that condition, which a stalled server cannot do.
+   * See docs/HARDENING_BACKLOG.md S9-01.
+   */
+  const startFeedWatchdog = useCallback(() => {
+    if (staleTimer.current) clearInterval(staleTimer.current);
+    staleTimer.current = setInterval(() => {
+      const { lastDataAt, feedStale, setFeedStale, wsStatus } = getState();
+      if (wsStatus !== 'connected') return;   // disconnection is already surfaced
+      if (lastDataAt == null) return;         // nothing received yet
+      const stale = Date.now() - lastDataAt > FEED_STALE_AFTER_MS;
+      if (stale !== feedStale) setFeedStale(stale);
+    }, FEED_STALE_CHECK_MS);
+  }, [getState]);
+
+  /**
    * Normalise a symbol key from the REST /trading/prices response to the
    * slash format used by the WebSocket price_tick messages (e.g. "XAU/USD").
    *
@@ -402,6 +439,7 @@ export function useWebSocket(enabled = true) {
       reconnectAttempts.current = 0; // connected — reset the attempt counter
       stopRestPoll(); // WS is up — stop REST polling
       startHeartbeat(ws);
+        startFeedWatchdog();
     };
 
     ws.onmessage = (event) => handleMessage(event.data as string);
@@ -415,6 +453,7 @@ export function useWebSocket(enabled = true) {
 
     ws.onclose = () => {
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      if (staleTimer.current) clearInterval(staleTimer.current);
       if (unmounted.current) return;
       getState().setWsStatus('disconnected');
       authedRef.current = false;
@@ -465,6 +504,7 @@ export function useWebSocket(enabled = true) {
       window.removeEventListener('online', onOnline);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      if (staleTimer.current) clearInterval(staleTimer.current);
       stopRestPoll();
       wsRef.current?.close();
     };

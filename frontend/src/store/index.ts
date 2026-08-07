@@ -166,10 +166,27 @@ interface AlertsSlice {
 interface WsSlice {
   wsStatus:        WsStatus;
   lastHeartbeat:   number | null;
+  /**
+   * Timestamp of the last *data* message (tick, account, position…) received
+   * from the server, independent of connection status.
+   *
+   * `wsStatus` reflects the TCP/WebSocket state, which stays `'connected'`
+   * when the server's broadcast loop stalls — the socket is open, nothing is
+   * arriving. `lastHeartbeat` was already recorded but read nowhere outside
+   * tests, so the client had no way to observe that condition and rendered the
+   * last price it received indefinitely under a green indicator.
+   * See docs/HARDENING_BACKLOG.md S9-01 / S10-05.
+   */
+  lastDataAt:      number | null;
+  /** True when no data has arrived for longer than the stale threshold. */
+  feedStale:       boolean;
   noLiveFeed:      boolean;
   noLiveFeedMsg:   string | null;
   setWsStatus:     (status: WsStatus) => void;
   setHeartbeat:    (ts: number) => void;
+  /** Record that a data message arrived; clears `feedStale`. */
+  markDataReceived: (ts?: number) => void;
+  setFeedStale:    (stale: boolean) => void;
   setNoLiveFeed:   (active: boolean, msg?: string) => void;
 }
 
@@ -395,14 +412,24 @@ export const useStore = create<AppStore>()(
         // ── WebSocket ─────────────────────────────────────────────────────────
         wsStatus:      'disconnected',
         lastHeartbeat: null,
+        lastDataAt:    null,
+        feedStale:     false,
         noLiveFeed:    false,
         noLiveFeedMsg: null,
 
         setWsStatus: (wsStatus) =>
           set({ wsStatus }, false, 'ws/setStatus'),
 
+        // A heartbeat is itself evidence the server is still sending, so it
+        // clears staleness too.
         setHeartbeat: (ts) =>
-          set({ lastHeartbeat: ts }, false, 'ws/heartbeat'),
+          set({ lastHeartbeat: ts, lastDataAt: ts, feedStale: false }, false, 'ws/heartbeat'),
+
+        markDataReceived: (ts) =>
+          set({ lastDataAt: ts ?? Date.now(), feedStale: false }, false, 'ws/data'),
+
+        setFeedStale: (feedStale) =>
+          set({ feedStale }, false, 'ws/feedStale'),
 
         setNoLiveFeed: (active, msg) =>
           set({ noLiveFeed: active, noLiveFeedMsg: msg ?? null }, false, 'ws/noLiveFeed'),

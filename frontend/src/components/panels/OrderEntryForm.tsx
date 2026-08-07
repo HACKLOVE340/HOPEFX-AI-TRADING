@@ -17,6 +17,7 @@ import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
 import { fmtPrice, cn, extractApiError } from '../../lib/utils';
+import { useConfirm } from '../ConfirmDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,13 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   const [tp,        setTp]        = useState(defaultTp ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [result,    setResult]    = useState<{ ok: boolean; msg: string } | null>(null);
+  // Confirmation for capital-committing actions (S10-01). Falls back to
+  // "cancel" when no provider is mounted, so an order never proceeds
+  // unconfirmed in an isolated render.
+  const confirm    = useConfirm();
+  // Surfaced in the confirmation so the trader is told when the price the
+  // order is sized against may be stale (S9-01).
+  const feedStale  = useStore((s) => s.feedStale);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-clear the result banner after 4 seconds so it doesn't linger.
@@ -286,6 +294,37 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
     if (sl) payload.stop_loss   = parseFloat(sl);
     if (tp) payload.take_profit = parseFloat(tp);
 
+    // Confirm before committing capital.
+    //
+    // Closing positions — which REDUCES exposure — was already gated behind a
+    // danger-variant dialog, while opening one was a single click. The risk
+    // asymmetry runs the other way: closing removes market exposure and is
+    // recoverable by re-entering; opening commits capital, arms a stop, and is
+    // recoverable only by paying the spread again. The confirmation restates
+    // magnitude (symbol, side, quantity, entry, stop, max loss) so the person
+    // confirming can actually check it, rather than agreeing to a category.
+    // See docs/HARDENING_BACKLOG.md S10-01 and S10-03.
+    const lines = [
+      `${side === 'buy' ? 'BUY' : 'SELL'} ${qtyNum} ${symbol}`,
+      orderType === 'market'
+        ? `at market${entryPrice > 0 ? ` (~${entryPrice})` : ''}`
+        : `${orderType} @ ${payload.price}`,
+      sl ? `Stop loss: ${slNum}` : 'Stop loss: NONE',
+      tp ? `Take profit: ${tpNum}` : 'Take profit: none',
+      slNum > 0 && entryPrice > 0
+        ? `Max loss at stop: $${(Math.abs(entryPrice - slNum) * qtyNum).toFixed(2)}`
+        : null,
+      feedStale ? 'WARNING: price feed is stalled — the entry shown may be stale.' : null,
+    ].filter(Boolean);
+
+    const ok = await confirm({
+      title:        'Place this order?',
+      description:  lines.join('\n'),
+      confirmLabel: side === 'buy' ? 'Buy' : 'Sell',
+      variant:      'danger',
+    });
+    if (!ok) return;
+
     setSubmitting(true);
     try {
       await tradingApi.placeOrder(payload);
@@ -317,7 +356,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   // price rather than the price at the time the callback was last created.
   // Omitting it caused stale-closure bugs where SL/TP validation used an
   // outdated entry price after a price tick updated tick?.ask / tick?.bid.
-  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced]);
+  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced, confirm, feedStale]);
 
   return (
     <Panel title="Order Entry">
