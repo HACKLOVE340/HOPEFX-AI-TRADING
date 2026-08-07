@@ -23,6 +23,7 @@ These tests use the *real* ``MasterControlCore``, ``PaperTradingBroker``, and
 
 from __future__ import annotations
 
+import logging
 import os
 from decimal import Decimal
 from unittest.mock import patch
@@ -190,13 +191,24 @@ class TestMCCBrokerWiring:
         await broker.disconnect()
 
     @pytest.mark.asyncio
-    async def test_execute_signal_no_broker_is_graceful(self):
-        """When no broker is available, _execute_signal must not raise."""
+    async def test_execute_signal_no_broker_is_graceful(self, caplog):
+        """A discarded BUY must be loud, not merely non-fatal.
+
+        This asserted only "must not raise" (S12-01). But "graceful" here means
+        a high-confidence BUY signal is silently thrown away — if that happens
+        in production because the broker manager failed to wire up, the system
+        looks healthy while trading nothing. Not raising is the easy half; the
+        half that matters is that the drop is visible at WARNING.
+        """
         mcc = _make_mcc()
 
         with _patch_get_broker_manager(None):
-            # Must not raise
-            mcc._execute_signal({"action": "BUY", "confidence": 0.90, "strength": 0.85})
+            with caplog.at_level(logging.WARNING):
+                mcc._execute_signal({"action": "BUY", "confidence": 0.90, "strength": 0.85})
+
+        assert any(
+            "no BrokerManager available" in rec.message and rec.levelno >= logging.WARNING for rec in caplog.records
+        ), "a signal discarded for lack of a broker must be logged at WARNING or above"
 
 
 class TestMCCKillSwitch:
