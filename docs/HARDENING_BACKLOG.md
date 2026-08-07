@@ -1165,3 +1165,172 @@ both inert, on the same tick.
 apply the orchestrator's freshness gate to the in-memory fallback at `:761-767`
 as well as the Redis path, so there is one staleness rule rather than one per
 read path.
+
+---
+
+## Round 3 — Slice 6: auth, secrets, money-in
+
+Scope: `api/` (928 decorated routes across 74 files), `auth/`, `security/`,
+`compliance/`, `payments/`, `monetization/`.
+Method: enumerated every route decorator and classified it by whether any auth
+dependency is reachable (route-level `Depends`, router-level `dependencies=`,
+or a shared helper). 99 of 928 routes resolve with no auth dependency; most are
+legitimately public (health, status, pricing, signature-verified webhooks). The
+findings below are the ones where that is not the case.
+
+**Working correctly — verified:**
+
+- **Superadmin surface is properly gated.** Every route under
+  `api/superadmin/` takes `Depends(_require_superadmin)` and logs via
+  `_log_superadmin_action`. An earlier draft of this audit flagged 130+
+  superadmin routes as unauthenticated; that was a false positive from a regex
+  that did not match the shared helper name. They are covered.
+- **KYC webhooks verify HMAC signatures** before processing
+  (`api/kyc.py:191,220`) and reject with 400 on mismatch.
+- **`KYCGateway.webhook_event` discards the status in the webhook body** and
+  re-queries the provider (`compliance/kyc_provider.py:795-797`), so a forged
+  webhook cannot itself set an approval. This is good defensive design and
+  should be preserved deliberately — see S6-03.
+- Round 2's payment fixes hold: Stripe webhook replay dedup, AML fail-closed,
+  self-referral rejection.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S6-01 | HIGH | Auth helper returns `None` on `ImportError` — 7 endpoints, including arbitrary source-code registration, degrade to unauthenticated | `api/dynamic_strategies.py:80-97` |
+| S6-02 | HIGH | Three unauthenticated endpoints expose every advanced order, system-wide, by ID | `api/advanced_orders.py:200,214,223` |
+| S6-03 | MEDIUM | Webhook HMAC secret defaults to the empty string — signatures become forgeable when unconfigured | `compliance/kyc_provider.py:146,250,387` |
+| S6-04 | MEDIUM | Model internals (SHAP, feature importances, drift) served unauthenticated | `api/ml.py:1899,1917` |
+
+### S6-01 — Auth that disappears if an import fails (HIGH)
+
+`api/dynamic_strategies.py:90-97`:
+
+```python
+def _require_admin():
+    """Require admin role."""
+    try:
+        from api.auth import require_role
+        return Depends(require_role("admin"))
+    except ImportError:
+        return None
+```
+
+Used as a default argument on seven endpoints, e.g.
+`async def register_strategy(request: RegisterStrategyRequest, user=_require_admin())`.
+
+Default arguments are evaluated **once, at import time**. If `api.auth` cannot
+be imported at that moment — a circular import, a missing transitive dependency
+(`python-jose`, `passlib`), a syntax error introduced during a refactor — the
+helper returns `None`, `user=None` becomes an ordinary default parameter with no
+`Depends` wrapper, and FastAPI mounts the route with **no authentication for the
+lifetime of the process**. `_get_current_user()` at `:80-87` has the identical
+shape.
+
+**Failure scenario:** the endpoints so exposed are not read-only.
+`POST /register` accepts arbitrary Python **source code** and compiles it
+(`strategies/dynamic_registry.py`); `POST /activate` makes a compiled strategy
+live for signal generation; `POST /{name}/{action_type}` performs arbitrary
+registry actions. An import-time failure in an unrelated auth dependency
+silently converts an admin-only remote-code-registration surface into a public
+one. The failure mode is the wrong way round: an auth module that fails to
+import should take the router down loudly, not open it quietly.
+
+Two aggravating details: the router **is** mounted
+(`core/router_registry.py:817-819`), and `register_strategy` hardcodes
+`author_id="system"` with the comment *"Will be replaced with actual user ID
+from auth"* — so even when auth works, the code-registration audit trail records
+no actual user.
+
+This pattern is contained to this one file — no other router in `api/` uses it.
+
+**Minimal fix:** import `require_role` at module scope and let an `ImportError`
+propagate. If graceful degradation is genuinely wanted, degrade to a dependency
+that **denies** (`Depends(_always_403)`), never to `None`.
+
+### S6-02 — Unauthenticated exposure of all advanced orders (HIGH)
+
+`api/advanced_orders.py:33-36` declares `APIRouter(prefix="/api/orders/advanced",
+tags=["Advanced Orders"])` with **no `dependencies=`**, and is mounted at
+`core/router_registry.py:826-828`. Three of its routes take no auth dependency
+and perform no ownership check:
+
+| Route | Line | Exposure |
+|---|---|---|
+| `GET /api/orders/advanced/active` | 200 | **Every** active advanced order in the system — optionally filtered by `position_id`, never by user |
+| `GET /api/orders/advanced/health` | 214 | Order-manager internals |
+| `GET /api/orders/advanced/{order_id}` | 223 | Full detail of any order by ID |
+
+There is no global authentication middleware to compensate:
+`SubscriptionPaywallMiddleware` (`core/middleware.py:505`) explicitly passes
+unauthenticated requests through — `if not token: return await call_next(request)`
+— leaving 401s to each route's own dependency, which these routes do not have.
+
+**Failure scenario:** an unauthenticated client calls
+`GET /api/orders/advanced/active` and receives every user's live stop-loss,
+take-profit and trailing-stop levels, sizes, and symbols. On a trading platform
+those levels are the most sensitive data in the system — an observer who knows
+where stops sit knows exactly where forced liquidations will occur.
+`GET /{order_id}` additionally allows enumeration and cross-tenant reads. Note
+`manager.get_active_orders(position_id=...)` accepts a caller-supplied
+`position_id` with no check that the caller owns that position.
+
+**Minimal fix:** add `dependencies=[Depends(require_role("trader"))]` to the
+`APIRouter` and scope every query by the authenticated user id, as the
+superadmin routers already do.
+
+### S6-03 — HMAC verification with an empty default secret (MEDIUM)
+
+`compliance/kyc_provider.py:385-389`:
+
+```python
+def verify_webhook(self, payload: bytes, signature: str) -> bool:
+    webhook_token = os.getenv("ONFIDO_WEBHOOK_TOKEN", "")
+    expected = hmac.new(webhook_token.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+```
+
+`SumsubProvider` is the same shape — `self._secret = os.getenv("SUMSUB_SECRET_KEY", "")`
+at `:146`, used as the HMAC key at `:250`. Sumsub at least warns once at startup
+(`:147-154`); Onfido reads the env var inside the verify call with no warning at
+all.
+
+HMAC keyed with `b""` is a perfectly well-defined function. Any caller can
+compute `hmac.new(b"", payload, sha256).hexdigest()` for a payload of their
+choosing and produce a signature that `compare_digest` accepts. Unset
+configuration therefore does not disable the webhook — it makes it **publicly
+signable**.
+
+**Current blast radius is limited**, and deliberately so: `webhook_event`
+discards the status parsed from the body and calls `check_status(applicant_id)`,
+which re-queries the provider and writes only what the provider returns
+(`:795-797`, `:759-772`). So a forged webhook today yields unauthenticated
+provider-API calls (quota consumption, applicant-id enumeration), not a KYC
+approval.
+
+**The escalation path is what makes this worth fixing now.** `parse_webhook`
+already returns a status that the caller throws away — assigned to `_status` and
+unused. That reads like an oversight and invites a future "fix" that uses it.
+The moment anyone does, an unauthenticated attacker can approve their own KYC,
+which per Round 2 is the gate on fiat withdrawal.
+
+**Minimal fix:** return `False` from `verify_webhook` when the secret is empty,
+and fail startup (or disable the webhook route) when the provider is configured
+without its secret. Add a comment at `:795` recording that discarding the
+webhook status is a deliberate control, not dead code.
+
+### S6-04 — Model internals served unauthenticated (MEDIUM)
+
+`api/ml.py` exposes six unauthenticated `GET` routes, of which two leak model
+structure: `/explain/{model_name}` (SHAP feature importance, `:1899`) and
+`/feature-importance/{model_name}` (`:1917`). The others (`/drift-report`,
+`/drift/status`, `/model-drift`, `/sharpe-circuit-breaker/status`) expose the
+system's live drift and circuit-breaker state.
+
+This is an IP and reconnaissance concern rather than a capital-safety one:
+feature importances over a 200+ feature model describe the strategy's edge
+directly, and the drift endpoints tell an observer when the model is degraded —
+i.e. when the system is least reliable. Both are useful to an adversary and to
+a competitor, and neither needs to be public.
+
+**Minimal fix:** move these under the same `require_role` used by the rest of
+`api/ml.py`.
