@@ -701,3 +701,158 @@ written is indistinguishable, in logs and metrics, from a gate that is passing
 legitimately — which is why these survived previous audit rounds. Worth a
 dedicated fix pass that inventories every gate input and asserts, in a test,
 that something writes it on the decision-engine path.
+
+---
+
+## Round 3 — Slice 3: backtest ↔ live parity
+
+Scope: `backtesting/`, `backtest/`, `run.py --mode backtest`, compared against
+the live path audited in Slices 1-2.
+Question asked: do the backtester and the live engine share signal, sizing and
+fill logic — and if not, in which direction does each divergence bias results?
+
+**Every divergence found biases results optimistically.** There is no case where
+the backtest is more pessimistic than live.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S3-01 | CRITICAL | The default backtest is **frictionless** — zero spread, zero slippage, zero commission | `engine.py:852-874,321,242-249` |
+| S3-02 | HIGH | Signals fill at the **same bar's close** that generated them | `engine.py:431-433` |
+| S3-03 | HIGH | Pip conversion hardcoded to the FX 4-decimal convention — 100× wrong for gold | `engine.py:271,273` |
+| S3-04 | HIGH | Commission assumes a 100,000-unit FX lot; gold's contract is 100 oz | `engine.py:281` |
+| S3-05 | HIGH | Backtest shares **no** signal, risk, or execution code with live | throughout |
+| S3-06 | MEDIUM | Two `TransactionCostModel` classes and four engines; the correct cost model is not the one the CLI uses | `engine.py` vs `transaction_costs.py` |
+
+### S3-01 — The default backtest has zero transaction costs (CRITICAL)
+
+Three defaults compound:
+
+1. `DataFrameDataHandler` (`engine.py:852-874`) synthesises each bar as
+   `bid = close, ask = close`. The docstring says so plainly: *"bid = close and
+   ask = close (mid-price approximation)"*. Therefore `tick.spread == 0.0`.
+2. `BacktestEngine.__init__` (`engine.py:321`) falls back to
+   `TransactionCostModel(seed=seed)` when no cost model is passed.
+3. That model's defaults (`engine.py:242-249`) are `commission_per_lot=0.0`,
+   `commission_rate=0.0`, `spread_pips=0.0`, `slippage_pips=0.0`.
+
+`backtesting/cli_runner.py:249` — the path `run.py --mode backtest` uses —
+constructs `BacktestEngine(initial_capital=..., data_frequency=...)` and passes
+**no cost model**. So `calculate_costs()` returns `slippage = 0.0 * 0.0001 = 0.0`
+and `commission = 0.0`, and the fill price is exactly `tick.ask` (== `close`).
+
+**Failure scenario:** a strategy is evaluated on 5-minute XAUUSD bars, takes two
+round trips a day for a year (~1,460 round trips) at 100 oz. Real cost is
+roughly $0.40-$0.60 per ounce round trip (a 20-30¢ spread on gold plus
+slippage) — about **$60,000-$90,000 of costs** that never appear in the equity
+curve. Any strategy whose per-trade edge is smaller than the spread shows a
+positive Sharpe in backtest and loses money live. This is the single largest
+source of optimism in the reported numbers.
+
+The correct machinery **already exists** and is simply not wired in:
+`engine_config.py:433,474` handles the gold pip properly
+(`pip = 0.10 if price > 100`), `transaction_costs.py` implements a
+square-root impact model, and `enhanced_engine.py:1701` accepts a cost model.
+
+**Minimal fix:** make the cost model a required argument of `BacktestEngine`
+(no zero-cost default), and have `DataFrameDataHandler` apply a configured
+spread around the close instead of `bid = ask = close`. A backtest with no
+declared costs should refuse to run rather than silently report gross returns.
+
+### S3-02 — Fills happen on the signal's own bar (HIGH)
+
+`engine.py:399-433`, per bar, in order: process pending orders → update
+positions → record equity → **call strategy** → `self._execute_signal(signal,
+tick)` using the *same* `tick`.
+
+Because `bid = ask = close`, a signal computed from bar N's close is filled at
+bar N's close.
+
+**Failure scenario:** live, that price is already history the moment the bar
+closes. The earliest realistic fill is bar N+1's open plus decision and network
+latency — the live pipeline adds five phases of work
+(`HOPEFXDecisionEngine.process_tick`) before the broker call. On 5-minute gold
+bars the close-to-next-open gap is routinely tens of cents, which is the same
+order of magnitude as the entire per-trade edge these strategies target. The
+`no_lookahead_context` guard at `engine.py:415` is a real control but a
+different one — it blocks `shift(-N)` inside *feature* computation and says
+nothing about *execution* timing.
+
+**Minimal fix:** queue signals generated on bar N into `pending_orders` and fill
+them from bar N+1 (the engine already has a `pending_orders` list and processes
+it at the top of each iteration — the plumbing exists).
+
+### S3-03 / S3-04 — Cost conversions use FX conventions on a gold system (HIGH)
+
+`engine.py:271` and `:273`:
+
+```python
+slippage = self.slippage_pips * 0.0001  # Convert pips to price
+```
+
+This is unconditional. Gold's pip is `$0.10`, as this repo's own
+`engine_config.py:433` documents (*"Gold (XAU/USD) pip convention: 1 pip = $0.10"*)
+and implements at `:474`. So an operator who explicitly configures
+`slippage_pips=3` to model realistic gold slippage gets **$0.0003** applied
+instead of **$0.30** — a 1000× understatement, and economically indistinguishable
+from zero at a $3,300 price.
+
+`engine.py:281`:
+
+```python
+commission = self.commission_per_lot * (quantity / 100000)  # Standard lot size
+```
+
+100,000 units is the FX standard lot. A gold contract is **100 oz**. With
+quantity expressed in ounces (as `risk/manager.py:813` produces —
+`quantity = final_notional / mid_price`), a $7-per-lot commission on a 100 oz
+trade books as **$0.007** instead of **$7**.
+
+**Failure scenario:** a user who *does* the right thing — reads the docs, sets
+realistic cost parameters — still gets a near-frictionless backtest, and has no
+signal that the parameters were ignored. This is worse than S3-01, where at
+least the zero is visible in the config.
+
+**Minimal fix:** route both through the symbol-aware pip/contract logic that
+`engine_config.py` already implements; delete the hardcoded constants.
+
+### S3-05 — Backtest and live share no code (HIGH)
+
+| Stage | Live (`--mode api`) | Backtest (`--mode backtest`) |
+|---|---|---|
+| Signal | `StrategyBrain.analyze_joint` — weighted multi-strategy consensus | `MACrossoverStrategy` or `MLInferenceStrategy` (`cli_runner.py:73,147`) |
+| Risk / sizing | `risk/manager.py` `size_order` — Kelly, VaR/CVaR, drawdown factors, 11 gates | `InstitutionalRiskManager` (`enhanced_engine.py:1089`) — a separate implementation |
+| Pre-trade gate | `PreTradeGate` (8 checks) + `Gatekeeper` (11 checks) + FIA | none |
+| Execution | `TradeExecutor` → `broker.place_market_order` | `_execute_signal` → immediate synthetic fill |
+
+The consequence runs both ways. None of the Slice 1-2 defects — the constant
+Kelly fraction, the position floor, the dead spread gate, the split-brain kill
+switch — are exercised by any backtest, so a backtest can never catch them.
+And conversely, **the equity curve describes a system that will never run**: it
+is a different strategy, sized by different maths, with no gates, filling at
+prices the live system cannot get.
+
+**Minimal fix:** this is a large change and should be planned, not patched. The
+tractable first step is a **parity harness** — replay one historical day through
+both paths and assert the same signals, sizes, and fill prices within a
+tolerance. Divergence beyond tolerance should fail CI. Until that exists,
+backtest Sharpe/return figures should not be quoted as expected live
+performance in any document or UI.
+
+### S3-06 — Duplicated engines and cost models (MEDIUM)
+
+Four backtest engines exist (`backtesting/engine.py`,
+`backtesting/enhanced_engine.py`, `backtesting/backtest_engine.py`,
+`backtest/engine.py`) and **two different classes named `TransactionCostModel`**:
+
+- `backtesting/engine.py:239` — `commission_per_lot`/`spread_pips`/`slippage_pips`,
+  contains the S3-03/S3-04 conversion bugs. **This is the one the CLI uses.**
+- `backtesting/transaction_costs.py` — `extra_spread_bps`/`spread_markup_bps`,
+  square-root impact model. Used by `enhanced_engine.py` and `backtest_engine.py`.
+
+Same name, different constructor signatures, different correctness. A reader who
+verifies the cost model in `transaction_costs.py` and concludes the backtester
+models costs correctly would be right about a class the default path never
+instantiates. Per `CLAUDE.md`, `backtest/` is a re-export shim of `backtesting/`
+— but it contains its own `engine.py`, `data_validator.py`,
+`transaction_costs.py` and `multi_symbol_backtest.py`, so this needs verifying
+in Slice 13 rather than assuming.
