@@ -196,9 +196,7 @@ async def test_leverage_gate_does_not_block_a_funded_account():
     )
 
     blocked = await engine._check_leverage(req, 0.0)
-    assert blocked is None, (
-        f"leverage gate blocked a funded account: {getattr(blocked, 'message', blocked)}"
-    )
+    assert blocked is None, f"leverage gate blocked a funded account: {getattr(blocked, 'message', blocked)}"
 
 
 @pytest.mark.asyncio
