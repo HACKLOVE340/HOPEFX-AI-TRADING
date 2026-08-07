@@ -1597,3 +1597,102 @@ holds.
 `logger.debug`. Production runs at INFO, so a client losing messages — or being
 disconnected by the error handler — produces no operational signal at all.
 These should be INFO with a counter, or WARNING when a disconnect results.
+
+---
+
+## Round 3 — Slice 9: frontend correctness
+
+Scope: `frontend/src` (204 `.tsx`, 61 `.ts`).
+Questions asked: can stale data render as live? Is money formatting safe? What
+renders when the backend is down? Any double-submit or stale-closure races?
+
+**Working correctly — verified:**
+
+- **Order entry is double-submit safe** — `OrderEntryForm.tsx:199,473` holds a
+  `submitting` flag and disables the button on it (and on `isBlackout`).
+- **Reconnect is bounded and correct** — exponential backoff capped at 30 s with
+  a retry limit, and `_lastMid` is module-level so it survives reconnects
+  (`useWebSocket.ts:47-50,187`).
+- A stale-closure bug in SL/TP validation was previously found and fixed with a
+  documented comment (`OrderEntryForm.tsx:318`) — the class of bug is known here.
+- A `noLiveFeed` banner exists and is wired into `App.tsx:310-319`.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S9-01 | HIGH | The client cannot detect a stalled feed — `lastHeartbeat` is written and never read | `useWebSocket.ts:231`, `store:404` |
+| S9-02 | MEDIUM | The only freshness signal shown is ingest-time confidence, which never decays | `LivePriceTicker.tsx:217` |
+| S9-03 | MEDIUM | ~79% of components and pages render no error state | `frontend/src` |
+
+### S9-01 — A frozen price under a green "connected" light (HIGH)
+
+The hook records a heartbeat timestamp into the store on every server heartbeat
+(`useWebSocket.ts:230-231` → `store:404-405`, `lastHeartbeat`). **Nothing reads
+it.** A repo-wide search for `lastHeartbeat` returns the store definition and
+eight test files — no component, no selector, no effect. There is no interval
+anywhere comparing it against `Date.now()`.
+
+The `noLiveFeed` banner is not a substitute: it is set only when the **server
+explicitly sends** a `no_live_feed` message (`useWebSocket.ts:292`), and
+`App.tsx:310` additionally requires `status === 'connected'`. It reports a
+condition the server volunteers, not one the client observes.
+
+**Failure scenario — this is the client half of S8-01.** The server's broadcast
+loop blocks on one slow socket. The WebSocket stays `OPEN` at the TCP level, so
+`wsStatus` remains `'connected'` and `onclose` never fires. No ticks arrive; no
+heartbeats arrive; the server sends nothing, so `noLiveFeed` stays false. The
+UI keeps rendering **the last price it received, indefinitely, with a green
+connection indicator and no age anywhere on screen.**
+
+A trader watching a frozen gold price they believe is live will size and time
+entries against a number that may be minutes old — and per Slice 5, the server
+may itself be serving a stale tick, so both layers can be wrong at once with no
+indication in either.
+
+`LivePriceTicker.tsx` contains no `timestamp`, `age`, `ago`, or `Date.now`
+reference at all: there is no per-price freshness display to fall back on.
+
+**Minimal fix:** an interval that flips a `feedStale` store flag when
+`Date.now() - lastHeartbeat > 2 × HEARTBEAT_INTERVAL_MS`; grey out or overlay
+every price surface while it is set. The value is already in the store — only
+the consumer is missing.
+
+### S9-02 — The freshness signal that never decays (MEDIUM)
+
+`LivePriceTicker.tsx:217` renders `{(quality * 100).toFixed(0)}%` — the tick
+quality/confidence from the data layer. It is the closest thing on screen to a
+data-health indicator, and a trader will reasonably read a high number as "the
+feed is healthy right now".
+
+Per **S5-02**, that value is assigned when the tick is ingested and stored on a
+frozen dataclass; it is never re-evaluated as the tick ages. A tick graded
+`GOOD` at 14:00:00 still reports high confidence at 15:00. So the one visible
+freshness cue reinforces the S9-01 illusion rather than correcting it: a stalled
+feed displays a frozen price *and* a reassuring confidence percentage.
+
+**Minimal fix:** depends on the S5-02 fix — once quality decays with age, this
+display becomes meaningful. Until then, pair it with an explicit "last update"
+age so the two cannot disagree silently.
+
+### S9-03 — Most views have no failure state (MEDIUM)
+
+36 of 169 files under `components/` and `pages/` reference `isError` or an
+`error &&` render branch — roughly **21% coverage**. The remaining ~79% render
+their success path only.
+
+This is a diffuse finding rather than a single defect, and the severity varies
+by view: an empty analytics chart is cosmetic, whereas a positions or account
+panel that renders nothing on a failed fetch is indistinguishable from "you have
+no open positions" — a false negative on exactly the screen a trader checks
+before deciding whether to intervene.
+
+**Minimal fix:** not a blanket sweep. Triage by consequence — start with the
+views where an empty state could be misread as a *meaningful* zero (positions,
+open orders, account equity, risk limits) and give those an explicit
+"couldn't load" state distinct from "nothing here". The `react-query` `isError`
+flag is already available at every one of these call sites.
+
+**Verification note:** the "run it" clause of this slice — pointing the dev
+server at a stopped backend and at one returning 500s, and recording what each
+view actually does — was **not performed**. The findings above are from reading
+the code. That runtime pass is worth doing before acting on S9-03, since it will
+rank the views by real impact rather than by grep coverage.
