@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import signal as _signal
 import sys
@@ -69,6 +70,15 @@ _KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
 # docs/HARDENING_BACKLOG.md S1-06. Half-Kelly (0.5) is the conventional ceiling
 # before the separate _KELLY_FRACTION multiplier is applied.
 _MAX_KELLY_FRACTION = float(os.getenv("RISK_MAX_KELLY_FRACTION", "0.5"))
+
+# ── Default stop / target geometry ────────────────────────────────────────────
+# _compute_stop_take() places the stop at _STOP_ATR_MULT x ATR and the target at
+# _TARGET_ATR_MULT x ATR. _DEFAULT_REWARD_RISK is derived from them rather than
+# written out a second time, so Kelly's payoff term cannot drift away from the
+# stops the manager actually sets — the duplication failure mode from S13-01.
+_STOP_ATR_MULT = float(os.getenv("RISK_STOP_ATR_MULT", "1.0"))
+_TARGET_ATR_MULT = float(os.getenv("RISK_TARGET_ATR_MULT", "2.0"))
+_DEFAULT_REWARD_RISK = _TARGET_ATR_MULT / max(_STOP_ATR_MULT, 1e-9)
 # Sentinel for "caller did not supply a confidence" — see calculate_position_size.
 _DEFAULT_CONFIDENCE = 0.7
 _MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
@@ -373,6 +383,10 @@ class _MinimalSignal:
         "tick_ts",
         "tick_mid",
         "tick_spread",
+        # Caller-supplied stop/target, so size_order can measure the trade's
+        # real reward:risk instead of synthesising it from confidence (S1-12).
+        "stop_loss_price",
+        "take_profit_price",
     )
 
     def __init__(
@@ -384,6 +398,8 @@ class _MinimalSignal:
         tick_mid: float = 0.0,
         tick_spread: float = 1.0,
         tick_ts: float | None = None,
+        stop_loss_price: float | None = None,
+        take_profit_price: float | None = None,
     ) -> None:
         self.symbol = symbol
         self.direction = direction
@@ -394,6 +410,8 @@ class _MinimalSignal:
         self.features: dict = {}
         self.tick_mid = tick_mid
         self.tick_spread = tick_spread
+        self.stop_loss_price = stop_loss_price
+        self.take_profit_price = take_profit_price
 
 
 # ── Rolling correlation calculator ────────────────────────────────────────────
@@ -698,10 +716,48 @@ class RiskManager:
         atr_proxy: float,
     ) -> tuple:
         """Return (stop_loss_usd, take_profit_usd) for a given direction."""
-        tp_dist = atr_proxy * 2.0
+        sl_dist = atr_proxy * _STOP_ATR_MULT
+        tp_dist = atr_proxy * _TARGET_ATR_MULT
         if direction == "long":
-            return mid_price - atr_proxy, mid_price + tp_dist
-        return mid_price + atr_proxy, mid_price - tp_dist
+            return mid_price - sl_dist, mid_price + tp_dist
+        return mid_price + sl_dist, mid_price - tp_dist
+
+    @staticmethod
+    def _reward_risk_from_prices(
+        entry_price: float | None,
+        stop_loss: float | None,
+        take_profit: float | None,
+    ) -> float | None:
+        """Reward-to-risk ratio implied by a trade's stop and target (S1-12).
+
+        Returns ``None`` when it cannot be measured — no stop, no target, or a
+        stop sitting on the entry (zero risk, undefined ratio). ``None`` means
+        "fall back", never "assume something favourable".
+        """
+
+        # Require genuine numbers. `float()` alone is too permissive: anything
+        # implementing __float__ passes, and a Mock returns 1.0 — which turned a
+        # signal carrying no stops at all into a fabricated 1:1 ratio, sizing a
+        # trade that should have been refused. Only a real int/float may set the
+        # payoff term; everything else falls back.
+        def _num(v: Any) -> float | None:
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                return None
+            f = float(v)
+            return f if math.isfinite(f) else None
+
+        entry = _num(entry_price)
+        sl = _num(stop_loss)
+        tp = _num(take_profit)
+        if entry is None or sl is None or tp is None:
+            return None
+
+        risk = abs(entry - sl)
+        reward = abs(tp - entry)
+
+        if not math.isfinite(risk) or not math.isfinite(reward) or risk <= 0.0:
+            return None
+        return reward / risk
 
     def notify_position_opened(self, symbol: str) -> None:
         """Called when a new position is opened."""
@@ -803,7 +859,22 @@ class RiskManager:
         sentiment_f = self._sentiment_factor(sentiment_score)
         impact_f = self._impact_factor(impact_score)
         dd_f = self._drawdown_factor()
-        kelly_f = self._kelly(prob, conf)
+        # Kelly's payoff term must come from the trade's stop and target, not
+        # from model confidence (S1-12). Prefer the caller's explicit stops;
+        # otherwise use the ratio implied by _compute_stop_take below.
+        reward_risk = self._reward_risk_from_prices(
+            getattr(signal, "tick_mid", None),
+            getattr(signal, "stop_loss_price", None),
+            getattr(signal, "take_profit_price", None),
+        )
+        # Deliberately NOT defaulting to _DEFAULT_REWARD_RISK here. `conf` feeds
+        # nothing else in this function, so always supplying a ratio would drop
+        # confidence out of sizing altogether and make size insensitive to
+        # signal quality — a larger change than S1-12 asks for, and one that
+        # wants the backtest comparison the finding calls for. Callers that
+        # supply real stops get the correct payoff term; callers that do not
+        # keep the legacy confidence proxy unchanged.
+        kelly_f = self._kelly(prob, conf, reward_risk=reward_risk)
 
         # ── Notional size ──────────────────────────────────────────────────
         # `equity` was captured in the locked snapshot above (honors
@@ -1109,6 +1180,8 @@ class RiskManager:
             probability=probability,
             tick_mid=effective_entry,
             tick_ts=kwargs.pop("tick_ts", None),
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
         )
 
         # Size against the supplied equity via equity_override — NO mutation of
@@ -1281,8 +1354,27 @@ class RiskManager:
         return max(0.1, 1.0 - frac * _DD_SIZE_SCALE)
 
     @staticmethod
-    def _kelly(probability: float, confidence: float) -> float:
+    def _kelly(
+        probability: float,
+        confidence: float,
+        reward_risk: float | None = None,
+    ) -> float:
         """Kelly bankroll fraction for a signal.
+
+        ``reward_risk`` is Kelly's ``b`` — how much the trade wins per unit
+        risked, i.e. ``|target - entry| / |entry - stop|``. Pass it whenever the
+        stop and target are known.
+
+        It used to be synthesised from the model's confidence
+        (``max(0.5, confidence * 3.0)``), which is a different quantity
+        entirely. Break-even then moved with the model's certainty instead of
+        with the trade's actual stop and target: at ``confidence=0.7``
+        (``b=2.1``) any win probability above 0.323 counted as positive edge, on
+        2.1:1 odds that nothing verified. Sizing was consequently more
+        aggressive than the configured stops justified. See S1-12.
+
+        The confidence proxy is kept only as a fallback for callers that supply
+        no stops, so their behaviour is unchanged.
 
         Bounded by ``_MAX_KELLY_FRACTION`` — a cap on the *bankroll fraction*.
         It was previously bounded by ``_MAX_POSITION_PCT`` (0.05), which is a
@@ -1294,7 +1386,13 @@ class RiskManager:
         """
         p = max(0.01, min(probability, 0.99))
         q = 1.0 - p
-        b = max(0.5, confidence * 3.0)
+
+        if reward_risk is not None and math.isfinite(reward_risk) and reward_risk > 0.0:
+            b = float(reward_risk)
+        else:
+            # No measurable ratio — legacy confidence proxy.
+            b = max(0.5, confidence * 3.0)
+
         kelly = (p * b - q) / b
         return max(0.0, min(kelly, _MAX_KELLY_FRACTION))
 

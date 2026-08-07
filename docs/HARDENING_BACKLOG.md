@@ -2437,7 +2437,7 @@ of the four CRITICALs.
 
 ## Round 3 — new finding raised while fixing S1-06
 
-### S1-12 — Kelly's payoff term is derived from confidence, not reward:risk (MEDIUM, open)
+### S1-12 — Kelly's payoff term is derived from confidence, not reward:risk (MEDIUM) — FIXED
 
 `RiskManager._kelly(probability, confidence)` computes the payoff odds as:
 
@@ -2469,3 +2469,47 @@ costs now charged (S3-01), that comparison is finally meaningful.
 **Minimal fix:** pass the reward:risk ratio into `_kelly` when SL/TP are known,
 falling back to the confidence proxy only when they are not; assert in a test
 that a 1:1 trade requires `p > 0.5` to size at all.
+
+**Fixed exactly to that scope**, and no wider — the scoping is the interesting
+part:
+
+* `_kelly(probability, confidence, reward_risk=None)` uses the ratio as `b` when
+  one is supplied; otherwise the confidence proxy is unchanged.
+* `_reward_risk_from_prices()` derives it from entry/stop/target, returning
+  `None` for a missing stop or a stop sitting on the entry (zero risk,
+  undefined ratio). `None` means "fall back", never "assume something
+  favourable".
+* `calculate_position_size` forwards its `stop_loss_price` / `take_profit_price`
+  through `_MinimalSignal` so they reach sizing.
+* `_STOP_ATR_MULT` / `_TARGET_ATR_MULT` now drive `_compute_stop_take`, and
+  `_DEFAULT_REWARD_RISK` is derived from them rather than written out twice.
+
+**Deliberately not defaulted.** `size_order` does *not* fall back to
+`_DEFAULT_REWARD_RISK`. `confidence` feeds nothing else in that function, so
+always supplying a ratio would drop confidence out of sizing entirely and make
+position size insensitive to signal quality — a much larger change than this
+finding asks for, and one that needs the backtest comparison the finding calls
+for. Callers with real stops get the correct payoff term; callers without keep
+their existing behaviour.
+
+**Sizing impact, for the callers that do supply stops** (p=0.55, confidence 0.7):
+
+| stops | old `b` | old kelly_f | new `b` | new kelly_f |
+|---|---|---|---|---|
+| none (legacy) | 2.10 | 0.3357 | — | 0.3357 (unchanged) |
+| 1:1 | 2.10 | 0.3357 | 1.00 | 0.1000 |
+| 2:1 | 2.10 | 0.3357 | 2.00 | 0.3250 |
+| 1.5:1 (ATR 2x/3x) | 2.10 | 0.3357 | 1.50 | 0.2500 |
+
+Note it is not a uniform reduction: the old proxy *under*-stated `b` at low
+confidence, so a low-confidence signal with generous stops now sizes larger.
+Run the backtest comparison before live.
+
+**One regression caught by this change and fixed with it:**
+`_reward_risk_from_prices` originally coerced with `float()`, which accepts
+anything implementing `__float__` — a `MagicMock` returns `1.0`. A signal
+carrying no stops at all was therefore read as a fabricated 1:1 ratio, and
+`test_pre_trade_invariant_gate.py::test_corrupt_signal_sizes_zero_even_in_monitor_mode`
+started sizing 1.28 on a NaN-confidence signal. The helper now requires a
+genuine `int`/`float`. That was a real robustness hole, not just a fixture
+artefact: any object with `__float__` could have set the payoff term.
