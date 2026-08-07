@@ -130,7 +130,38 @@ function CloseBtn({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyPositions({ brokerReady }: { brokerReady?: boolean }) {
+/**
+ * Empty state for the positions table.
+ *
+ * Three outcomes, deliberately distinct (audit S9-03):
+ *
+ *   - `positionsKnown === false` — the feed is stale or the socket is down, so
+ *     an empty list means "we don't know", NOT "you are flat". This panel is
+ *     what a trader checks before deciding whether to intervene, and rendering
+ *     an unknown state as a confident zero is the one false negative here that
+ *     can cost money.
+ *   - `brokerReady === false` — broker still starting up.
+ *   - otherwise — genuinely flat.
+ */
+function EmptyPositions({
+  brokerReady,
+  positionsKnown = true,
+}: {
+  brokerReady?: boolean;
+  positionsKnown?: boolean;
+}) {
+  if (!positionsKnown) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
+        <span className="text-2xl opacity-40">⚠️</span>
+        <span className="text-[12px] text-[#ffb800]">Can&apos;t confirm positions</span>
+        <span className="text-[11px] text-slate-500">
+          The live feed is not up to date, so this list may be incomplete. Check your
+          broker directly before acting.
+        </span>
+      </div>
+    );
+  }
   if (brokerReady === false) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
@@ -164,6 +195,11 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
   const removePos    = useStore((s) => s.removePosition);
   const setPositions = useStore((s) => s.setPositions);
   const account      = useStore((s) => s.account);
+  // An empty positions list only means "flat" when the feed is actually
+  // delivering. Stale or disconnected, it means "unknown" — see S9-03.
+  const feedStale    = useStore((s) => s.feedStale);
+  const wsStatus     = useStore((s) => s.wsStatus);
+  const positionsKnown = !feedStale && wsStatus === 'connected';
   const qc           = useQueryClient();
 
   // Broker is considered ready once we have account data with a balance.
@@ -256,7 +292,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       )}
 
       {filtered.length === 0 ? (
-        <EmptyPositions brokerReady={brokerReady} />
+        <EmptyPositions brokerReady={brokerReady} positionsKnown={positionsKnown} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">

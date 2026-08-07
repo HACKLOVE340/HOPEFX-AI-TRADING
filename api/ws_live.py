@@ -192,6 +192,17 @@ class LiveConnectionManager:
         self._subscriptions: dict[str, set[str]] = {}
         # connection_id → user_id (None until auth message received)
         self._user_ids: dict[str, str | None] = {}
+        # Monotonic per-CHANNEL sequence. A client tracks the last seq it saw
+        # on each channel; a jump means it missed a message and should
+        # resynchronise. This matters for the state channels — positions,
+        # account, risk are deltas, so a dropped one leaves the UI wrong
+        # indefinitely rather than for one tick. See S8-03.
+        #
+        # Per channel rather than per connection on purpose: the payload is
+        # serialised once per broadcast and shared by every subscriber (the
+        # O(1) fan-out S8-01 depends on). A per-connection counter would force
+        # a re-serialise per client.
+        self._channel_seq: dict[str, int] = {}
         # connection_id → heartbeat miss count
         self._hb_misses: dict[str, int] = {}
         # itertools.count is thread-safe in CPython (C-level increment) and
@@ -251,6 +262,16 @@ class LiveConnectionManager:
         self._hb_misses[cid] = self._hb_misses.get(cid, 0) + 1
         return self._hb_misses[cid]
 
+    def _stamp(self, channel: str, msg: dict) -> dict:
+        """Return a copy of *msg* carrying its channel and next sequence number.
+
+        A copy, not an in-place update: broadcasters reuse message dicts, and
+        mutating one would leave a stale ``seq`` on the caller's object.
+        """
+        seq = self._channel_seq.get(channel, 0) + 1
+        self._channel_seq[channel] = seq
+        return {**msg, "channel": channel, "seq": seq}
+
     async def _send_bounded(self, cid: str, ws: Any, payload: str) -> bool:
         """Send *payload* to one socket under a hard timeout.
 
@@ -293,8 +314,10 @@ class LiveConnectionManager:
         Empty subscription set = subscribed to all channels (pre-subscribe
         state while the client is still sending its subscribe message).
         """
-        # Serialize once — reuse the string for every send.
-        payload = json.dumps(msg)
+        # Serialize once — reuse the string for every send. The sequence is
+        # stamped here, before serialisation, so every subscriber gets the same
+        # bytes (S8-03 without undoing S8-01's O(1) fan-out).
+        payload = json.dumps(self._stamp(channel, msg))
         # Private channels require an explicit subscription; never deliver them
         # via the implicit "empty subscription = all channels" firehose.
         implicit_all_ok = channel not in self._PRIVATE_CHANNELS
@@ -337,7 +360,7 @@ class LiveConnectionManager:
         Used for per-user channels: account updates, position fills, alerts.
         JSON is serialized once before the loop (same rationale as broadcast).
         """
-        payload = json.dumps(msg)
+        payload = json.dumps(self._stamp(channel, msg))
         # Same private-channel rule as broadcast(). This method kept the
         # "empty subscription = all channels" fallback without the guard, so a
         # connection still mid-handshake — or deliberately subscribed to

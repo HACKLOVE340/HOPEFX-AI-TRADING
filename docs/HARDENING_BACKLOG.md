@@ -1553,7 +1553,7 @@ a disconnect gap.
 |----|-----|-------|----------|
 | S8-01 | HIGH | No backpressure — one slow client stalls the tick feed for every client | `ws_live.py:275-283` |
 | S8-02 | MEDIUM | `send_to_user` lacks the private-channel guard that `broadcast` has | `ws_live.py:309` |
-| S8-03 | MEDIUM | No sequence numbers — a client cannot detect messages missed across a reconnect | throughout |
+| S8-03 | MEDIUM — **PARTLY FIXED** | No sequence numbers — a client cannot detect messages missed across a reconnect | throughout |
 | S8-04 | LOW | Every send failure is logged at `debug` | `ws_live.py:256,282,315` |
 
 ### S8-01 — One slow consumer degrades everyone (HIGH)
@@ -1639,6 +1639,23 @@ holds.
 *Minimal fix:* attach a monotonic per-connection sequence number; on
 `subscribe`, send a full snapshot for state channels before the first delta.
 
+**Partially fixed — gap *detection* only.** Every outbound message now carries
+`channel` and a monotonic `seq`, stamped by `LiveConnectionManager._stamp()` in
+both `broadcast()` and `send_to_user()`. A client tracks the last seq per
+channel; a jump means it missed something.
+
+The counter is **per channel, not per connection**, deliberately: the payload is
+serialised once per broadcast and shared by every subscriber, which is the O(1)
+fan-out S8-01's fix depends on. A per-connection counter forces a re-serialise
+per client. A test asserts all subscribers receive byte-identical payloads so
+this cannot be undone accidentally.
+
+**Still open: resume/snapshot.** A client that detects a gap has no way to
+recover except to reload — there is no snapshot-on-subscribe for `positions`,
+`account` or `risk`. That needs a per-channel snapshot source and is a feature
+rather than a fix. Detection first is still worth having: the UI can now *tell*
+it is out of sync, which is what S9-03's positions panel uses.
+
 **S8-04:** all three send paths (`:256`, `:282`, `:315`) log failures at
 `logger.debug`. Production runs at INFO, so a client losing messages — or being
 disconnected by the error handler — produces no operational signal at all.
@@ -1667,7 +1684,7 @@ renders when the backend is down? Any double-submit or stale-closure races?
 |----|-----|-------|----------|
 | S9-01 | HIGH | The client cannot detect a stalled feed — `lastHeartbeat` is written and never read | `useWebSocket.ts:231`, `store:404` |
 | S9-02 | MEDIUM | The only freshness signal shown is ingest-time confidence, which never decays | `LivePriceTicker.tsx:217` |
-| S9-03 | MEDIUM | ~79% of components and pages render no error state | `frontend/src` |
+| S9-03 | MEDIUM — **PARTLY FIXED** | ~79% of components and pages render no error state | `frontend/src` |
 
 ### S9-01 — A frozen price under a green "connected" light (HIGH)
 
@@ -1736,6 +1753,28 @@ views where an empty state could be misread as a *meaningful* zero (positions,
 open orders, account equity, risk limits) and give those an explicit
 "couldn't load" state distinct from "nothing here". The `react-query` `isError`
 flag is already available at every one of these call sites.
+
+**Fixed for the sharpest case: the positions panel.** `PositionsTable` rendered
+`filtered.length === 0` as "📭 No open positions", and `positions` comes from
+the WebSocket store — so a stalled feed, a dropped socket or a failed load all
+produced an empty array and a confident claim that the trader was flat. That is
+the false negative that matters here: it is the panel checked before deciding
+whether to intervene, and it read identically whether you were genuinely flat or
+the client had no idea.
+
+`EmptyPositions` now distinguishes three states — unknown (`feedStale` or
+`wsStatus !== 'connected'`), broker-initialising, and genuinely flat — and the
+unknown case says "Can't confirm positions … check your broker directly before
+acting". It consumes the `feedStale` flag added for S9-01.
+
+**One existing test was asserting the defect.** `pages.test.tsx`'s "shows no open
+positions when positions list is empty" rendered with the store default
+`wsStatus: 'disconnected'` and asserted the confident empty state — i.e. it
+required the panel to claim you were flat while the socket was down. Corrected
+to set a live feed, with a companion test for the disconnected case.
+
+**Still open: the rest of the ~79%.** Orders, account equity and risk-limit
+views have not been triaged, and the runtime pass below was still not performed.
 
 **Verification note:** the "run it" clause of this slice — pointing the dev
 server at a stopped backend and at one returning 500s, and recording what each
