@@ -856,3 +856,168 @@ instantiates. Per `CLAUDE.md`, `backtest/` is a re-export shim of `backtesting/`
 — but it contains its own `engine.py`, `data_validator.py`,
 `transaction_costs.py` and `multi_symbol_backtest.py`, so this needs verifying
 in Slice 13 rather than assuming.
+
+---
+
+## Round 3 — Slice 4: ML integrity (train/serve skew, staleness, drift)
+
+Scope: `ml/inference_engine.py`, `ml/features_extended.py`, `ml/advanced_predictor.py`.
+Questions asked: does the feature computation at inference match training? What
+happens when a model is stale, when drift fires, and when a feature is NaN?
+
+**Working correctly — verified:**
+
+- `STALE_MODEL_BLOCK` defaults to `true` (`inference_engine.py:73`) and raises
+  `RuntimeError`, which `HOPEFXDecisionEngine.py:357-368` catches and treats as
+  a hard filter. The stale-model path is genuinely fail-closed end to end.
+- The look-ahead guard re-raises `LookAheadBiasError` rather than swallowing it
+  (`inference_engine.py:882-891`).
+- MTF columns are shifted one bar before joining (`:411`) to keep the
+  in-progress higher-timeframe bar out of the feature set.
+- Isotonic calibration and an ML circuit breaker are both wired in.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S4-01 | HIGH | Drift guard and both feature-validation gates run on a vector the model **never scores** | `inference_engine.py:796,857,903` |
+| S4-02 | HIGH | NaN/Inf features imputed with `0.0` and scored anyway | `inference_engine.py:427-435` |
+| S4-03 | HIGH | ">95% zeros — possible silent upstream data failure" is logged, then traded on | `inference_engine.py:437-447` |
+| S4-04 | MEDIUM | `DRIFT_BLOCK` defaults to **false** — drift warns and trades | `inference_engine.py:78` |
+| S4-05 | MEDIUM | Drift guard silently disables itself when training stats are missing | `inference_engine.py:645-647` |
+| S4-06 | MEDIUM | Feature-builder fallback changes the feature set and logs at `debug` | `inference_engine.py:384-397` |
+| S4-07 | LOW | Docstring promises a feature-count-mismatch gate that does not exist | `inference_engine.py:360` |
+
+### S4-01 — The drift guard watches features the model does not use (HIGH)
+
+There are **two independent feature-building paths** inside a single `predict()`
+call:
+
+```
+predict()
+├── :796  X = self._build_features(ohlcv, macro_df, mtf_df, symbol)   # path A
+│         └── :857  drift = self._check_feature_drift(X)              # A is used HERE
+│         └── :424-445  NaN/Inf + all-zero validation on X            # and HERE
+└── :903  raw_prob = predictor.predict_proba(ohlcv, macro_df, symbol) # path B
+          └── AdvancedPredictor builds its OWN features from raw ohlcv
+```
+
+`X` — the vector built, validated, and drift-checked — is **never passed to the
+model**. The model receives the raw `ohlcv` DataFrame and rebuilds features
+internally. Nothing asserts the two vectors agree in content, order, or count.
+
+**Failure scenario:** the macro pipeline stalls. Path A (via
+`build_extended_features_with_data_layer`) fails and falls back to
+`build_extended_features` (`:384`), producing a *different* feature set —
+without microstructure/sentiment/macro injection. The drift buffer now fills
+with vectors from the fallback distribution and reports "no drift", because it
+is internally consistent. Meanwhile path B may still be injecting live macro
+features, or may be failing differently — either way the model is scored on
+features whose distribution nothing is monitoring. Drift on the features that
+actually drive predictions is invisible; drift on features nobody scores
+triggers alerts.
+
+The same applies to the NaN/Inf and all-zero gates: they clean and inspect `X`
+and then discard it. A NaN in the vector the model *does* see is never detected.
+
+**Minimal fix:** score the model on the same `X` the guards validated
+(`predictor.predict_proba(X)` where the predictor accepts a prepared matrix), or
+have `_build_features` and the predictor share one builder. Until then, the
+drift/validation telemetry should not be described as covering the live model.
+
+### S4-02 / S4-03 — Detectors with no actuator (HIGH)
+
+`inference_engine.py:427-435`:
+
+```python
+if bad_cols:
+    logger.warning("... %d features contain NaN/Inf ... — imputing with 0. "
+                   "Investigate data pipeline to prevent systematic model degradation.")
+    X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+```
+
+`inference_engine.py:437-447`:
+
+```python
+if non_zero_pct < 0.05:
+    logger.warning("... feature vector is >95%% zeros ... — possible silent "
+                   "upstream data failure. Check gold feed and macro pipeline.")
+return X          # ← traded on regardless
+```
+
+Both messages correctly diagnose a condition serious enough to name in the log,
+and neither changes the outcome. Nothing increments a blocking counter; nothing
+abstains.
+
+**Failure scenario for S4-02:** imputing `0.0` is not neutral. In this feature
+space zero is a *meaningful* value — a z-score of 0 means "exactly average", an
+RSI-derived feature at 0 means "maximally oversold", a return feature at 0 means
+"no move". Filling a broken feed with zeros does not produce an uncertain
+prediction; it produces a **confident** one, drawn from a region of feature
+space the model was trained to interpret as a strong signal. A feed outage
+therefore yields high-confidence trades rather than abstention.
+
+**Failure scenario for S4-03:** the >95%-zeros check exists precisely because
+someone anticipated a silent upstream failure. When it fires, the system logs
+"possible silent upstream data failure" and places the trade anyway.
+
+**Minimal fix:** return `None` (the existing neutral path, `:405`) when NaN/Inf
+exceeds a small threshold or when `non_zero_pct < 0.05`, and count both in
+`_fallback_count` / the Prometheus fallback counter so they are visible.
+
+### S4-04 / S4-05 — Drift detection is off by default and by accident (MEDIUM)
+
+`inference_engine.py:78` — `DRIFT_BLOCK` defaults to **false**: *"Default: 4.0
+(warn only). Set DRIFT_BLOCK=true to block on drift."* So the shipped
+configuration detects distribution drift, logs `FEATURE DRIFT detected ...
+Continuing (set DRIFT_BLOCK=true to block)`, and trades.
+
+This also hollows out the fail-closed handler at `:690-696`, which sets
+`_drift_detected = True` when the drift computation itself throws, with the
+comment *"Fail CLOSED ... so the DRIFT_BLOCK gate (when enabled) abstains"*.
+With the default configuration the gate is not enabled, so failing closed sets a
+flag that nothing acts on.
+
+`inference_engine.py:645-647` is a second, quieter disablement:
+
+```python
+train_stats = self._load_train_stats()
+if train_stats is None:
+    # No training stats available — drift guard disabled
+    return False
+```
+
+Returning `False` means "no drift", not "unknown". A missing or unreadable
+training-stats file therefore silently disables drift detection with no warning
+log and no status flag — and `_load_train_stats` returns `None` when the file
+does not exist (`:612`). Note `docs/HARDENING_BACKLOG.md` already records a
+related artifact-integrity gap: `stacking_ensemble.pkl` does not match its
+`registry.json` checksum, so stale-artifact conditions in this repo are not
+hypothetical.
+
+**Minimal fix:** default `DRIFT_BLOCK=true` for the live profile (the same
+reasoning that made `STALE_MODEL_BLOCK=true` the default); log a WARNING and
+expose a health flag when training stats are absent rather than returning a
+clean "no drift".
+
+### S4-06 / S4-07 — Silent feature-set substitution (MEDIUM / LOW)
+
+`inference_engine.py:384-397` catches **any** exception from
+`build_extended_features_with_data_layer` and falls back to
+`build_extended_features`, which omits the data-layer injection the docstring
+describes as the live path (*"injects microstructure, sentiment, and macro
+calendar features from the orchestrator"*). The fallback is logged at
+`logger.debug`, so at the production INFO level a permanent switch to a reduced
+feature set is invisible.
+
+If the model was trained on the data-layer feature set, this is textbook
+train/serve skew — the model scores a vector missing whole feature families,
+which after the S4-02 imputation arrive as zeros rather than as an error.
+
+`inference_engine.py:357-360` documents three validation gates, the third being
+*"Feature count mismatch vs expected → log WARNING"*. Only gates 1 and 2 exist
+in the code. There is no comparison of the built feature count against the
+model's `n_features_in_` anywhere in the inference path —
+`n_features_in_` is read once at `:1301`, purely for the status endpoint.
+
+**Minimal fix:** log the fallback at WARNING and record it as a distinct
+Prometheus reason; implement the documented gate by comparing against
+`predictor._model.n_features_in_` and abstaining on mismatch.
