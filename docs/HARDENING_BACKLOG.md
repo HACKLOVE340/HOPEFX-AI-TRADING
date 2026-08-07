@@ -2107,6 +2107,65 @@ verifying". **Verified: they are genuine re-export shims** — 38-44 lines each,
 |----|-----|-------|
 | S13-01 | HIGH | Duplication is not a tidiness problem here — **every duplicated pair in this codebase has already produced a confirmed defect** |
 | S13-02 | MEDIUM | Five top-level packages have zero production imports (~790 lines) |
+| S13-02a | **HIGH** | `websocket/` shadowed the `websocket-client` library, making the MT5 feed's REST fallback unreachable | `market_data/mt5_live_feed.py:35` |
+| S13-03 | **CRITICAL** | Duplicate `OrderSide` enums inverted direction: every BUY reached OANDA as a SELL | `hopefx_engine.py:1444`, `brokers/oanda_stream.py:303` |
+
+### S13-03 — Every BUY was submitted to OANDA as a SELL (CRITICAL) — FIXED
+
+The ninth duplication in the S13-01 table, found by working through it. It is
+the most severe defect in this round: not a gate that failed to block, but a
+trade that went the **wrong way**.
+
+`brokers/__init__.py` does not re-export `brokers.base` — it *redefines*
+`OrderSide`, `OrderType`, `OrderStatus`, `Order` and `Position` with different
+member values:
+
+```
+brokers.OrderSide.BUY       -> <OrderSide.BUY: 'buy'>
+brokers.base.OrderSide.BUY  -> <OrderSide.BUY: 'BUY'>
+same class? False        BUY == BUY? False
+```
+
+`hopefx_engine.py:1444` imported the package-level one and put it in the order
+kwargs. `brokers/oanda_stream.py:303` decided direction with:
+
+```python
+signed_units = units if side == OrderSide.BUY else -units   # brokers.base
+```
+
+The equality was always False, so **every long went to OANDA as negative units,
+i.e. a short**. Sells were correct only by accident, because the wrong branch
+happens to be the sell branch. Nothing raised, nothing logged: the order was
+accepted, just backwards.
+
+Live OANDA is the next milestone, and the standalone engine is one of the two
+paths that reaches it.
+
+Two independent defects, both fixed:
+
+1. **The call site** now imports `OrderSide` from `brokers.base` — the enum
+   `OANDAStream` actually compares against.
+2. **The comparison itself** was fail-to-the-wrong-direction: `units if side ==
+   BUY else -units` treats *anything not BUY* as a sell, so any unrecognised
+   value silently becomes a short. Replaced with `_signed_units()`, which
+   normalises on the member value (immune to the class split), accepts
+   BUY/LONG/SELL/SHORT in either case, and **raises** on anything else rather
+   than guessing a direction.
+
+**Deliberately not done: collapsing the two enums.** `brokers/__init__.py`
+serialises `side.value` into API payloads and Redis position keys, and the
+frontend compares those against lowercase literals
+(`SignalIntelligenceCard.tsx:24` `d === 'buy'`, `PositionsTable.tsx:86`
+`side === 'long'`, `OrderEntryForm.tsx:237`). Unifying the classes flips those
+payloads to uppercase and breaks the comparisons silently — swapping one quiet
+bug for another. The unification is still the right end state; it needs to be
+done as its own change, with the frontend comparisons and any persisted Redis
+keys migrated in the same PR.
+
+`tests/unit/test_order_side_identity.py` pins the hazard (the two enums are
+still incompatible), the fix (the engine imports from `brokers.base`), and the
+guard (direction survives either enum; unknown sides raise). Both fixes were
+mutation-checked: reverting either one fails the suite.
 
 ### S13-01 — Every "two of these" produced a bug (HIGH)
 
@@ -2178,6 +2237,40 @@ itself, so they go with it.
 `backtest/` and `strategy/` after confirming no external consumer depends on the
 published package surface; remove the corresponding rows from the `CLAUDE.md`
 canonical-vs-legacy table.
+
+#### S13-02a — `websocket/` was not merely dead, it was shadowing (HIGH) — FIXED
+
+Severity revised upward while fixing this. `websocket/` sat at the repo root,
+which is ahead of site-packages on `sys.path`, so it captured **every**
+`import websocket` in the project — including the one in
+`market_data/mt5_live_feed.py:35` that wants the `websocket-client` library:
+
+```python
+try:
+    import websocket           # ← got the local dead package
+    WEBSOCKET_AVAILABLE = True # ← True even with websocket-client absent
+except ImportError:
+    WEBSOCKET_AVAILABLE = False
+```
+
+`WEBSOCKET_AVAILABLE` is the flag that turns on the REST fallback. Because the
+shadow made the import always succeed, the `except ImportError` branch was
+unreachable: rather than degrading to REST when the client library was missing,
+the feed proceeded to `websocket.WebSocketApp(...)` (line 225) and raised
+`AttributeError`. Verified directly — `import websocket` resolved to
+`/…/HOPEFX-AI-TRADING/websocket/__init__.py`, and `hasattr(websocket,
+"WebSocketApp")` was `False` while the module reported itself available.
+
+So the deletion is not cleanup; it restores a fallback path that could not run.
+
+One trap worth recording: removing the tracked files is **not** sufficient. An
+empty leftover directory still resolves as a PEP 420 namespace package and keeps
+shadowing (observed: `<module 'websocket' (NamespaceLoader)>`). The directory
+itself has to go.
+
+`tests/unit/test_no_stdlib_package_shadowing.py` pins all three properties: no
+shadowing package at the repo root, `import websocket` yields the real client or
+fails cleanly, and `WEBSOCKET_AVAILABLE` never claims an API that is absent.
 
 ---
 

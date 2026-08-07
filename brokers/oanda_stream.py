@@ -54,6 +54,35 @@ from brokers.base import (
 
 logger = logging.getLogger(__name__)
 
+
+def _signed_units(side: Any, units: float) -> float:
+    """Return ``units`` signed by *side*: positive for BUY, negative for SELL.
+
+    This used to be written inline as::
+
+        signed_units = units if side == OrderSide.BUY else -units
+
+    which treats *anything that is not exactly this module's ``OrderSide.BUY``*
+    as a sell. That is a fail-to-the-wrong-direction default, and it fired:
+    ``hopefx_engine.py`` passed the separately-defined ``brokers.OrderSide``
+    (member value ``'buy'``, vs ``'BUY'`` here), the equality was False, and
+    every long was submitted to OANDA as a short.
+
+    Matching on the normalised member value rather than on enum identity makes
+    the comparison immune to that class split, and an unrecognised side now
+    raises instead of silently reversing the trade. See S13-03.
+    """
+    raw = getattr(side, "value", side)
+    token = str(raw).strip().upper()
+    if token in ("BUY", "LONG"):
+        return abs(units)
+    if token in ("SELL", "SHORT"):
+        return -abs(units)
+    raise ValueError(
+        f"Unrecognised order side {side!r} — refusing to guess a direction. Expected BUY/LONG or SELL/SHORT."
+    )
+
+
 # ── URL constants ─────────────────────────────────────────────────────────────
 
 _PRACTICE_REST = "https://api-fxpractice.oanda.com"
@@ -300,7 +329,7 @@ class OANDAStream:
         take_profit: float | None = None,
     ) -> Order | None:
         """Place a market or limit order."""
-        signed_units = units if side == OrderSide.BUY else -units
+        signed_units = _signed_units(side, units)
         body: dict[str, Any] = {
             "order": {
                 "instrument": symbol,

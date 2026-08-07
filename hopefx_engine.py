@@ -1441,7 +1441,13 @@ class HopeFXEngine:
                 return
 
             from brokers.oanda_stream import OANDAStream
-            from brokers import OrderSide as _OrderSide
+
+            # MUST come from brokers.base — that is the enum OANDAStream
+            # compares against. `brokers.OrderSide` is a *separate* class whose
+            # members ('buy'/'sell') never equal base's ('BUY'/'SELL'), so
+            # importing it here made every BUY fall through to the sell branch
+            # and reach OANDA as negative units. See S13-03.
+            from brokers.base import OrderSide as _OrderSide
 
             if isinstance(self._broker, OANDAStream):
                 order_kwargs: dict = {

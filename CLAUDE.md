@@ -34,7 +34,11 @@ Add new code to the **canonical** dir, never the legacy shim:
 | Backtesting | `backtesting/` | `backtest/` (re-export shim) |
 | Strategies | `strategies/` | `strategy/` (live ML engine only) |
 | Data pipeline | `data_layer/` | `data/` (CSV + old utilities) |
-| WebSocket | `api/ws_live.py` | `websocket/manager.py` (standalone server) |
+
+WebSocket work goes in `api/ws_live.py`. The old standalone `websocket/`
+server is **deleted** — never recreate a top-level `websocket/` package: it
+shadows the `websocket-client` library for the whole project and silently
+disables the REST fallback in `market_data/mt5_live_feed.py` (audit S13-02a).
 
 Import data via the public surface only: `data_layer.orchestrator`,
 `data_layer.tick_store`, `data_layer.feeds.*`.
