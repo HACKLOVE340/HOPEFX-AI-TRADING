@@ -32,6 +32,7 @@ Usage
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -201,6 +202,11 @@ class InferenceEngine:
         self._last_predict_ms: float = 0.0
         self._predict_count: int = 0
         self._fallback_count: int = 0
+        # Whether feature-drift detection has usable training stats.
+        # False means the guard is DISABLED, which _check_feature_drift
+        # otherwise reports indistinguishably from 'no drift' (S4-05).
+        self._drift_stats_available: bool = False
+        self._drift_stats_warned: bool = False
         # Uptime tracking — set on first predict call
         self._first_predict_at: float | None = None
         # Rolling window of signal directions for non-neutral rate
@@ -382,10 +388,20 @@ class InferenceEngine:
                     symbol,
                 )
             except Exception as dl_exc:
-                logger.debug(
-                    "build_extended_features_with_data_layer failed (%s) — falling back to build_extended_features",
+                # WARNING, not debug: this switches to a REDUCED feature set
+                # (no microstructure/sentiment/macro injection). If the model
+                # was trained with those families, scoring without them is
+                # train/serve skew — and at debug level a permanent switch was
+                # invisible at production log level.
+                # See docs/HARDENING_BACKLOG.md S4-06.
+                logger.warning(
+                    "InferenceEngine: data-layer feature builder unavailable (%s) — falling back to "
+                    "build_extended_features WITHOUT microstructure/sentiment/macro features. "
+                    "Predictions are being made on a reduced feature set.",
                     dl_exc,
                 )
+                with contextlib.suppress(Exception):
+                    _PROM.fallback_total.labels(symbol=symbol, reason="reduced_feature_set").inc()
                 from ml.features_extended import build_extended_features
 
                 X, _ = build_extended_features(
@@ -421,28 +437,19 @@ class InferenceEngine:
 
             # ── Feature validation ────────────────────────────────────────────
             # Gate 1: NaN / Inf check — garbage features → garbage predictions.
-            nan_cols = X.columns[X.isnull().any()].tolist()
-            inf_cols = X.columns[np.isinf(X).any()].tolist()
-            bad_cols = list(set(nan_cols + inf_cols))
-            if bad_cols:
-                logger.warning(
-                    "InferenceEngine: %d features contain NaN/Inf for %s: %s — imputing with 0. "
-                    "Investigate data pipeline to prevent systematic model degradation.",
-                    len(bad_cols),
-                    symbol,
-                    bad_cols[:10],
-                )
-                X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-
-            # Gate 2: All-zero feature vector indicates silent upstream failure.
-            non_zero_pct = float((X != 0).values.mean())
-            if non_zero_pct < 0.05:
-                logger.warning(
-                    "InferenceEngine: feature vector for %s is >95%% zeros (non_zero_pct=%.3f) — "
-                    "possible silent upstream data failure. Check gold feed and macro pipeline.",
-                    symbol,
-                    non_zero_pct,
-                )
+            # Gates 1 and 2 now ABSTAIN rather than impute-and-trade.
+            #
+            # Imputing NaN with 0.0 is not neutral in this feature space: a
+            # z-score of 0 means "exactly average", an RSI-derived feature at 0
+            # means "maximally oversold". Filling a broken feed with zeros does
+            # not produce an uncertain prediction — it produces a *confident*
+            # one, drawn from a region the model was trained to read as a strong
+            # signal. A feed outage therefore yielded high-confidence trades
+            # rather than abstention. Likewise the >95%-zero check diagnosed a
+            # "possible silent upstream data failure" and then returned the
+            # vector for trading. See docs/HARDENING_BACKLOG.md S4-02/S4-03.
+            if self._features_are_unusable(X, symbol=symbol):
+                return None
 
             return X
 
@@ -453,6 +460,73 @@ class InferenceEngine:
                 exc,
             )
             return None
+
+    def _features_are_unusable(self, X: pd.DataFrame, symbol: str = "?") -> bool:
+        """True when the feature vector must not be scored.
+
+        Two conditions, both previously logged and then ignored:
+
+        * any NaN/Inf value — see the note in ``_build_features`` on why
+          imputing zero produces confident wrong predictions rather than
+          uncertain ones;
+        * a vector that is >95% zeros, which the code itself describes as a
+          "possible silent upstream data failure".
+
+        Returning True routes the caller to its existing neutral/abstain path.
+        """
+        try:
+            if X is None or X.empty:
+                return True
+
+            numeric = X.select_dtypes(include=[np.number])
+            if numeric.empty:
+                logger.warning("InferenceEngine: no numeric features for %s — abstaining", symbol)
+                return True
+
+            nan_cols = numeric.columns[numeric.isnull().any()].tolist()
+            inf_cols = numeric.columns[np.isinf(numeric).any()].tolist()
+            bad_cols = sorted(set(nan_cols + inf_cols))
+            if bad_cols:
+                logger.warning(
+                    "InferenceEngine: %d features contain NaN/Inf for %s: %s — ABSTAINING. "
+                    "Zero-imputing these would produce a confident prediction from corrupt input.",
+                    len(bad_cols),
+                    symbol,
+                    bad_cols[:10],
+                )
+                self._fallback_count += 1
+                with contextlib.suppress(Exception):
+                    _PROM.fallback_total.labels(symbol=symbol, reason="nan_features").inc()
+                return True
+
+            non_zero_pct = float((numeric != 0).values.mean())
+            if non_zero_pct < 0.05:
+                logger.warning(
+                    "InferenceEngine: feature vector for %s is >95%% zeros (non_zero_pct=%.3f) — "
+                    "ABSTAINING. Probable silent upstream data failure; check gold feed and macro pipeline.",
+                    symbol,
+                    non_zero_pct,
+                )
+                self._fallback_count += 1
+                with contextlib.suppress(Exception):
+                    _PROM.fallback_total.labels(symbol=symbol, reason="all_zero_features").inc()
+                return True
+
+            return False
+        except Exception as exc:
+            # Fail closed: if usability cannot be established, do not score.
+            logger.warning("InferenceEngine: feature usability check failed for %s: %s — abstaining", symbol, exc)
+            return True
+
+    def drift_guard_active(self) -> bool:
+        """Whether feature-drift detection is actually running.
+
+        ``_check_feature_drift`` returns ``False`` ("no drift") when the
+        training-stats file is absent, which is indistinguishable from a clean
+        result. Exposing this lets health checks and operators see that the
+        guard is disabled rather than passing. See S4-05.
+        """
+        return bool(getattr(self, "_drift_stats_available", False))
 
     # ── Calibration ───────────────────────────────────────────────────────────
 
@@ -643,8 +717,22 @@ class InferenceEngine:
         """
         train_stats = self._load_train_stats()
         if train_stats is None:
-            # No training stats available — drift guard disabled
+            # No training stats → the guard is DISABLED, not "no drift".
+            # Returning False here is indistinguishable from a clean result, so
+            # a missing or unreadable stats file silently switched drift
+            # detection off. Record it and say so once, loudly, so the condition
+            # is visible in logs and via drift_guard_active().
+            # See docs/HARDENING_BACKLOG.md S4-05.
+            if self._drift_stats_available or not self._drift_stats_warned:
+                logger.warning(
+                    "InferenceEngine: feature-drift guard DISABLED — no training stats available. "
+                    "Drift will not be detected until the stats file is restored."
+                )
+                self._drift_stats_warned = True
+            self._drift_stats_available = False
             return False
+
+        self._drift_stats_available = True
 
         try:
             row_values = X_row.values[0].astype(float)
