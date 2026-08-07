@@ -1133,10 +1133,10 @@ async def _deep_check_broker() -> DeepCheckResult:
 
         # Try get_account_info first; fall back to is_connected()
         if hasattr(broker, "get_account_info"):
+            from execution.broker_call import call_broker
+
             info = await asyncio.wait_for(
-                broker.get_account_info()
-                if asyncio.iscoroutinefunction(broker.get_account_info)
-                else asyncio.get_running_loop().run_in_executor(None, broker.get_account_info),
+                call_broker(broker.get_account_info),
                 timeout=_CHECK_TIMEOUT_SEC,
             )
             latency_ms = (time.perf_counter() - t0) * 1000

@@ -1935,6 +1935,7 @@ why 467 test files did not catch a single Round 3 finding.
 | S12-02 | HIGH | The suite tests gate *logic* against injected state, never that production code *writes* that state | structural |
 | S12-03 | MEDIUM | 156 skip markers/calls | `tests/` |
 | S12-04 | **CRITICAL** | SL/TP monitor never sends the closing order: `place_order` is invoked but never awaited | `execution/sl_tp_monitor.py:322` |
+| S12-04a | **CRITICAL** | Same bug at 3 more sites; the margin gate was inert (fail-open) against every async broker | `execution/engine.py` |
 
 ### S12-04 — The stop-loss never reached the broker (CRITICAL) — FIXED
 
@@ -1992,6 +1993,43 @@ use a production-shaped tick, drain the spawned close task, and assert
 `place_order.await_count == 1` plus the correct closing side and quantity.
 Verified failing before the fix and passing after, with an identical
 whole-suite failure set (zero regressions).
+
+#### S12-04a — The same bug in three more places, including a fail-*open* margin gate (CRITICAL) — FIXED
+
+Found while re-verifying S12-04. **The claim in S12-04 that the pattern was
+isolated to `sl_tp_monitor.py` was wrong** — that grep was truncated at 40
+results and `execution/engine.py` fell below the cut. A proper AST sweep for
+`run_in_executor` targets that name an `async def` found three more live sites,
+all in `execution/engine.py`:
+
+| Site | Method | Consequence |
+|---|---|---|
+| `_check_margin` (was :923) | `get_account_info` | `equity` reads `0.0`; the buffer test is guarded by `if projected_used > 0 and equity > 0`, so it was **skipped entirely** — the margin gate blocked nothing |
+| `_check_leverage` (was :993) | `get_account_info` | `equity` reads `0.0` → trips `equity <= 0` → blocks **every** order with the false reason "Account equity is zero or negative" |
+| `_place_order_async` (was :1358) | `place_order` | `order.status` raises `AttributeError` on a coroutine |
+
+The margin one is the serious one and it is the opposite of what its own
+docstring promises: *"Fail-closed: any unexpected exception from the broker API
+blocks the trade."* Reading a coroutine is not an exception — it yields a
+plausible-looking `0.0`, and zero equity happens to be the value that turns the
+check off. **The margin gate was inert against every async broker.** Verified
+with a $100-free-margin account against a $23,500 order: it passed.
+
+`ExecutionEngine` is constructed at `hopefx_engine.py:475`, so this is the live
+path, not a dormant class.
+
+**Fix:** added `execution/broker_call.py::call_broker`, which awaits an
+`async def` broker method directly and runs a sync one in the thread pool, so
+neither shape can be mis-called again. Applied at all three engine sites and at
+`sl_tp_monitor.py` (replacing the S12-04 inline fix, so there is one
+implementation rather than two — the S13-01 lesson). `api/health.py:1139` was
+already correct via its own `iscoroutinefunction` branch and was converged onto
+the helper for consistency.
+
+`tests/unit/test_broker_calls_are_awaited.py` covers the helper, asserts the
+margin gate still blocks an under-margined order and the leverage gate still
+blocks 235x while passing a funded account, and adds an AST guard that fails if
+any money-path file passes a bare async broker method to `run_in_executor`.
 
 ### S12-01 — Tests that name a safety property and verify nothing (HIGH)
 
