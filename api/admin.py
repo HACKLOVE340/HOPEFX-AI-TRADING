@@ -126,7 +126,11 @@ def _save_risk_settings(settings: dict[str, Any], changed_by: str = "system") ->
 
     try:
         _RISK_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+        # Trailing newline: this path is repo-tracked (config/risk_settings.json),
+        # so omitting it made every test run that exercised this fallback leave a
+        # one-line diff on a committed risk-config file — noise a contributor
+        # would have to notice and discard by hand, on a file that governs risk.
+        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
         return True
     except Exception as file_exc:
         logger.error("_save_risk_settings fallback failed: %s", file_exc)

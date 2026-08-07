@@ -178,7 +178,8 @@ from api.admin import (
 from api.platform import init_sentry, setup_rate_limiting
 from api.signals import create_signals_router as _create_signals_router
 from config.feature_flags import flags as feature_flags
-from kill_switch import KillSwitch, create_kill_switch_router
+from kill_switch import create_kill_switch_router
+from kill_switch import kill_switch as kill_switch
 
 _signals_router = _create_signals_router()
 
@@ -280,17 +281,28 @@ for _route in app.routes:
 #   2. _redis_breach_listener() subscribes to CH_BREACH — this pod receives
 #      activations triggered on other pods
 # Without this wiring, the kill switch only works within a single process.
+#
+# There is exactly ONE KillSwitch: the module singleton in kill_switch.py.
+# This file used to construct a second one and start *that* (poll loop, flag
+# file, Redis latch) while the money path — risk/pre_trade_gate.py — read the
+# singleton. The two never synchronised, so `POST /api/kill-switch/activate`
+# reported success while orders kept flowing, the documented kill_switch.flag
+# runbook never blocked a trade, and health routes showed the opposite state to
+# whichever instance was actually active. See docs/HARDENING_BACKLOG.md S2-01
+# and tests/unit/test_kill_switch_single_instance.py.
+#
+# The event bus is attached to the singleton rather than passed to a new
+# constructor, so cross-pod propagation reaches the instance that gates trades.
 try:
     from core.event_bus import bus as _event_bus
 
-    kill_switch = KillSwitch(event_bus=_event_bus)
+    kill_switch.set_event_bus(_event_bus)
     logger.info("KillSwitch wired to Redis EventBus for cross-pod propagation")
 except Exception as _ks_bus_err:
     logger.warning(
         "KillSwitch: could not wire Redis EventBus (%s) — kill switch will only work within this pod",
         _ks_bus_err,
     )
-    kill_switch = KillSwitch()
 
 _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
