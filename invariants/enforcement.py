@@ -40,6 +40,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import deque
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -272,6 +273,30 @@ def _safe(kind: str, fn: Any) -> EnforcementResult:
     return _decide(kind, violations)
 
 
+def _resolve_epoch(signal, names: tuple[str, ...]) -> float | None:
+    """Return the first usable timestamp from *names* as a POSIX float.
+
+    Accepts ``int``/``float`` epochs **and** ``datetime`` objects. Accepting
+    only numerics meant the freshness check silently found nothing to measure:
+    ``_MinimalSignal`` carries no timestamp at all, and the brain's ``Signal``
+    carries a ``datetime`` — so the "never trade on a stale tick" invariant
+    could not fire on either signal type used in production.
+    See docs/HARDENING_BACKLOG.md S5-01.
+
+    Naive datetimes are assumed UTC, matching the rest of the data layer.
+    """
+    for name in names:
+        raw = getattr(signal, name, None)
+        if isinstance(raw, bool) or raw is None:
+            continue
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        if isinstance(raw, datetime):
+            ts = raw if raw.tzinfo is not None else raw.replace(tzinfo=timezone.utc)
+            return ts.timestamp()
+    return None
+
+
 # ════════════════════════════════════════════════════════════════════════════════
 # 1. PRE-TRADE GATE
 # ════════════════════════════════════════════════════════════════════════════════
@@ -333,15 +358,7 @@ def enforce_pre_trade(
         # timestamp is present on the signal and a budget was supplied; the first
         # attribute among (tick_ts, tick_timestamp, ts, timestamp) wins.
         if now is not None and max_staleness_s is not None:
-            tick_ts = next(
-                (
-                    getattr(signal, attr)
-                    for attr in ("tick_ts", "tick_timestamp", "ts", "timestamp")
-                    if isinstance(getattr(signal, attr, None), (int, float))
-                    and not isinstance(getattr(signal, attr, None), bool)
-                ),
-                None,
-            )
+            tick_ts = _resolve_epoch(signal, ("tick_ts", "tick_timestamp", "ts", "timestamp"))
             if tick_ts is not None:
                 out += verify_within_limit(
                     now - tick_ts,

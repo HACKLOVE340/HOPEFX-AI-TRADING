@@ -365,6 +365,12 @@ class _MinimalSignal:
         "features",
         "probability",
         "symbol",
+        # POSIX timestamp of the tick this signal was derived from. Without it
+        # enforce_pre_trade's freshness check found no timestamp to measure and
+        # the 5s staleness budget size_order passes was silently skipped — the
+        # "never trade on a stale tick" invariant could not fire at all on the
+        # decision-engine path. See docs/HARDENING_BACKLOG.md S5-01.
+        "tick_ts",
         "tick_mid",
         "tick_spread",
     )
@@ -377,9 +383,11 @@ class _MinimalSignal:
         probability: float,
         tick_mid: float = 0.0,
         tick_spread: float = 1.0,
+        tick_ts: float | None = None,
     ) -> None:
         self.symbol = symbol
         self.direction = direction
+        self.tick_ts = tick_ts
         self.confidence = confidence
         self.probability = probability
         self.data_quality = 1.0
@@ -1090,12 +1098,17 @@ class RiskManager:
         # Accept ``price`` as an alias for ``entry_price`` (legacy callers)
         effective_entry = float(entry_price) or float(kwargs.pop("price", 0.0))
 
+        # tick_ts carries the age of the market data this signal was derived
+        # from, so the pre-trade staleness invariant has something to measure.
+        # Callers that know it should pass it; when absent the check is skipped
+        # exactly as before, so this cannot break existing callers.
         sig = _MinimalSignal(
             symbol=symbol,
             direction=direction,
             confidence=effective_confidence,
             probability=probability,
             tick_mid=effective_entry,
+            tick_ts=kwargs.pop("tick_ts", None),
         )
 
         # Size against the supplied equity via equity_override — NO mutation of

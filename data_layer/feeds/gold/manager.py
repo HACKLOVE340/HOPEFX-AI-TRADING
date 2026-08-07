@@ -428,8 +428,21 @@ class GoldFeedManager:
         prefer_consensus=True  → returns weighted consensus across all live feeds
         prefer_consensus=False → returns tick from highest-confidence single source
         """
+        # The consensus branch is the DEFAULT read path and previously had no
+        # validity or age check at all — less guarded than the single-source
+        # fallback below it. With Redis down, every price read in the system
+        # falls through here (orchestrator.get_latest_tick only applies its
+        # freshness gate inside the Redis branch), so an arbitrarily old
+        # consensus tick was served as the live price and re-published
+        # downstream as a fresh observation.
+        # See docs/HARDENING_BACKLOG.md S5-03.
         if prefer_consensus and self._consensus_tick:
-            return self._consensus_tick
+            if self._consensus_tick.is_valid():
+                return self._consensus_tick
+            logger.warning(
+                "GoldFeedManager: consensus tick is stale (age=%.1fs) — not serving as live price",
+                self._consensus_tick.age_s(),
+            )
 
         # Fallback: priority-ordered single source
         for src in _PRIORITY:

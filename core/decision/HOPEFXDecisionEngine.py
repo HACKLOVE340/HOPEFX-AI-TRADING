@@ -529,6 +529,9 @@ class HOPEFXDecisionEngine:
                 account_equity=equity,
                 volatility=self._estimate_volatility(ctx.data, entry),
                 existing_positions=positions,
+                # Age of the market data behind this decision, so the pre-trade
+                # staleness invariant has something to measure (S5-01).
+                tick_ts=self._tick_timestamp(ctx),
             )
 
             if not sizing.approved or sizing.recommended_size <= 0:
@@ -658,6 +661,26 @@ class HOPEFXDecisionEngine:
             logger.debug("Phase5 online learner notify failed: %s", exc)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _tick_timestamp(ctx: DecisionContext) -> float | None:
+        """POSIX timestamp of the market data behind this decision.
+
+        Prefers an explicit tick timestamp carried on the incoming data; falls
+        back to the decision's own timestamp, which at least bounds staleness
+        at the age of this cycle. Returns None when neither is usable, in which
+        case the staleness check is skipped exactly as before.
+        """
+        raw = ctx.data.get("tick_ts") or ctx.data.get("timestamp") or ctx.data.get("ts")
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            return float(raw)
+        if isinstance(raw, datetime):
+            ts = raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
+            return ts.timestamp()
+        try:
+            return ctx.timestamp.timestamp()
+        except Exception:
+            return None
 
     @staticmethod
     def _is_long(direction: str) -> bool:
