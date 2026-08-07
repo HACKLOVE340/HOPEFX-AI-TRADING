@@ -1907,3 +1907,127 @@ build, does not use conda, and `static.yml` is a Pages deploy superseded by
 `docs.yml`). All three are `workflow_dispatch`-only so they cost nothing at
 runtime — they are noise in the workflow list rather than a risk. Candidates for
 deletion in Slice 13.
+
+---
+
+## Round 3 — Slice 12: test quality
+
+Scope: `tests/` — 467 files, analysed by AST (not grep) to avoid miscounting.
+Question asked: do these tests actually protect the money path?
+
+**Working correctly — verified:**
+
+- **15,098 test functions**, of which **481 (3.2%)** contain no assertion,
+  `pytest.raises`, or mock assertion. As a ratio that is **good** — an initial
+  regex-based estimate of this figure was far higher and was wrong; the AST
+  count above is the accurate one.
+- **Zero `xfail` markers.** Nothing is parked as "known broken".
+- Coverage gates are real and enforced on the right modules — `tests.yml`
+  requires 80% on `risk/`, `execution/`, `kill_switch.py`, `brokers/`.
+
+The problem is not the quantity of tests or the assertion ratio. It is **what
+the assertion-free tests are about**, and a structural blind spot that explains
+why 467 test files did not catch a single Round 3 finding.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S12-01 | HIGH | Assertion-free tests cluster on exactly the safety properties this round found broken | `tests/integration/test_mcc_signal_pipeline.py:313`, others |
+| S12-02 | HIGH | The suite tests gate *logic* against injected state, never that production code *writes* that state | structural |
+| S12-03 | MEDIUM | 156 skip markers/calls | `tests/` |
+
+### S12-01 — Tests that name a safety property and verify nothing (HIGH)
+
+`tests/integration/test_mcc_signal_pipeline.py:313-322`:
+
+```python
+def test_kill_switch_blocks_signal_processing(self):
+    mcc = _make_mcc()
+    mcc.kill_switch_triggered = True
+    # Should silently return — no exception, no execution
+    mcc._on_strategy_signal("strat1", StrategySignal(action="BUY", strength=0.9, confidence=0.9))
+```
+
+The test sets the kill switch, calls the handler, and asserts **nothing**. It
+passes when the kill switch blocks the signal. It passes equally when the kill
+switch does nothing at all and a full BUY order is routed to a broker — the only
+failure it can detect is an exception. The comment asserts "no execution"; the
+code does not.
+
+The contrast sits eleven lines below it: `test_daily_loss_limit_rejects_signal`
+(`:324`) captures `result = mcc._check_signal_risk(...)` and asserts on it. The
+file knows how to write the assertion.
+
+The same shape recurs on money-path controls — all confirmed assertion-free:
+
+| Test | What it claims to cover |
+|---|---|
+| `test_kill_switch_blocks_signal_processing` | kill switch halts trading |
+| `test_check_positions_sl_triggered` | stop-loss fires |
+| `test_check_positions_tp_triggered` | take-profit fires |
+| `test_reconcile_once_broker_exception` | reconciliation survives a broker error |
+| `test_trigger_drift_halt_no_alert_engine` | drift halt without an alert engine |
+| `test_execute_signal_no_broker_is_graceful` | execution with no broker |
+
+A test named for a safety property that asserts nothing is **worse than no
+test**: it produces a green check next to the property's name and closes the
+question for anyone reading the suite. `test_kill_switch_blocks_signal_processing`
+has been passing throughout the period in which — per **S2-01** and **S2-02** —
+the kill switch had a split-brain instance problem and the Gatekeeper's
+kill-switch check was inert.
+
+**Minimal fix:** these are cheap to repair — assert the broker mock's
+`place_market_order` was **not** called. Do these six first; the remaining 475
+can be triaged later.
+
+### S12-02 — The suite tests the lock, never the key (HIGH)
+
+This is the structural finding, and it explains the whole round.
+
+Reference counts across `tests/` for the state the Slice 1-2 gates depend on:
+
+| Symbol | Test files referencing it | What Round 3 found |
+|---|---|---|
+| `max_open_positions` | 10 | S1-04: gate never fires — counter is never incremented |
+| `notify_position_opened` | **1** | the *writer* of that counter |
+| `tick_spread` | 11 | S2-03: always `0.0` — attribute absent on the live signal |
+| `_trading_halted` | 21 | S1-03: set by a path that bypasses persistence |
+| `consensus_tick` | **0** | S5-03: the default price read path, entirely untested |
+
+The pattern is consistent. Ten test files exercise the max-open-positions gate —
+by assigning `open_positions` directly and asserting the gate blocks. That
+verifies the gate's *logic*, which is correct. **Nothing tests that anything on
+the decision-engine path ever writes that value**, which is the actual defect.
+Its sole writer is referenced by one test file.
+
+Every Slice 1-2 finding has this shape: the gate works; the input is never
+populated. Unit tests with injected state cannot see it, because injecting the
+state is precisely the step production omits.
+
+**Minimal fix:** add **wiring tests** — a small set that drives a signal through
+the real decision-engine path with mocked broker/feed and asserts the *side
+effects*, not the return values: that `open_positions` incremented, that the
+Gatekeeper's equity tracker moved, that a spread was populated on the object
+handed to the gate, that the sizing result's `risk_approval_token` reached the
+executor. Roughly a dozen assertions would have caught most of Round 3.
+
+### S12-03 — Skips (MEDIUM)
+
+156 `@pytest.mark.skip` markers or `pytest.skip()` calls across the suite. Most
+are legitimate environment guards (`requires_redis`, missing optional deps), but
+the set has not been reviewed as a whole, and per the project's own history a
+path bug once silently disabled ~124 security tests without anyone noticing.
+
+*Minimal fix:* print skip reasons in CI summary output and fail the build if the
+skip count rises, so silent disablement is visible.
+
+### Deliverable not produced
+
+The playbook's slice-12 prompt asks for **one failing test for the
+highest-severity untested invariant**, as proof. That was **not written** — this
+round is audit-only, no code changes. The test to write first is stated here so
+it is not lost:
+
+> Drive one signal through `HOPEFXDecisionEngine.process_tick` with a mocked
+> broker and a `RiskManager` configured with `_MAX_OPEN_POSITIONS=1`, twice.
+> Assert the second call is blocked. On current code it will not be (S1-04),
+> because `TradeExecutor` never calls `notify_position_opened`.
