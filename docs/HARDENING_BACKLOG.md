@@ -1934,6 +1934,64 @@ why 467 test files did not catch a single Round 3 finding.
 | S12-01 | HIGH | Assertion-free tests cluster on exactly the safety properties this round found broken | `tests/integration/test_mcc_signal_pipeline.py:313`, others |
 | S12-02 | HIGH | The suite tests gate *logic* against injected state, never that production code *writes* that state | structural |
 | S12-03 | MEDIUM | 156 skip markers/calls | `tests/` |
+| S12-04 | **CRITICAL** | SL/TP monitor never sends the closing order: `place_order` is invoked but never awaited | `execution/sl_tp_monitor.py:322` |
+
+### S12-04 — The stop-loss never reached the broker (CRITICAL) — FIXED
+
+Found by *fixing* S12-01: once the assertion-free SL/TP tests were given real
+assertions, they failed. The cause was not the new assertions.
+
+`_close_position` sent the closing order like this:
+
+```python
+order = await loop.run_in_executor(
+    None,
+    lambda: self._broker.place_order(...),   # async def
+)
+if order is not None:
+    ...   # book the close, alert "STOP_LOSS HIT: Closed ..."
+```
+
+`BaseBroker.place_order` is `async def` (`brokers/base.py:413`), as are the
+OANDA (`brokers/oanda_broker.py:237`) and MT5 (`brokers/mt5_broker.py:182`)
+implementations — every live path. The worker thread therefore only *built* a
+coroutine and returned it. Awaiting the executor future yielded that coroutine
+object, never an `Order`. It is not `None`, so the monitor took the success
+branch: it booked the position closed and emitted a **critical** Telegram alert
+reading `STOP_LOSS HIT: Closed BUY 1.0 XAUUSD` — while no order had been sent
+and the position remained fully open at the broker.
+
+Reproduced directly: `place_order.called == True`, `place_order.await_count == 0`.
+`called` is True throughout, which is why any test asserting `.called` would
+also have passed. Only `await_count` catches it.
+
+Blast radius: the automated stop-loss/take-profit safety net was inert against
+every async broker, and failed *silently upward* — the logs, the alert, and the
+position manager all reported a successful close. Only the paper broker
+(`brokers/paper_trading.py:517`, sync) actually worked, which is why paper
+trading never surfaced it.
+
+Two things hid this for as long as the suite has existed:
+1. The SL/TP tests asserted nothing (S12-01).
+2. Their fixture put plain `dict`s in the tick cache, but production stores
+   `GoldTick` objects and `_get_mid` reads `hasattr(tick, "mid")`. So `_get_mid`
+   returned `None` and the tests only ever exercised the "no price, skip" branch
+   — the close path under test never ran at all.
+
+**Fix:** keep the executor hop (so a blocking sync broker cannot stall the loop)
+and await the result when it is awaitable:
+
+```python
+order = await loop.run_in_executor(None, lambda: self._broker.place_order(...))
+if inspect.isawaitable(order):
+    order = await order
+```
+
+Regression tests in `tests/unit/test_execution_wiring.py::TestSLTPMonitor` now
+use a production-shaped tick, drain the spawned close task, and assert
+`place_order.await_count == 1` plus the correct closing side and quantity.
+Verified failing before the fix and passing after, with an identical
+whole-suite failure set (zero regressions).
 
 ### S12-01 — Tests that name a safety property and verify nothing (HIGH)
 

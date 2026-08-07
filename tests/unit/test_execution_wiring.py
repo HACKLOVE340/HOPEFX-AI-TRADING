@@ -4,7 +4,8 @@
 """Execution package wiring tests with correct APIs."""
 
 from __future__ import annotations
-from datetime import timezone
+import asyncio
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
@@ -464,15 +465,61 @@ class TestRedisStateStore:
         assert isinstance(result, list)
 
 
+class _FakeTick:
+    """A tick shaped like what production actually puts in the cache.
+
+    ``ExecutionEngine._last_ticks`` holds ``GoldTick`` *objects* (see
+    ``execution/engine.py`` ``get_tick_feed_status``, which reads ``tick.mid``
+    and ``tick.timestamp.isoformat()``), and ``SLTPMonitor._get_mid`` reads the
+    price with ``hasattr(tick, "mid")``.
+
+    These tests used to put a plain ``dict`` here. A dict has no ``.mid``
+    attribute, so ``_get_mid`` returned ``None`` and every SL/TP test exercised
+    the "no price, skip" branch — the stop-loss logic under test never ran once.
+    Combined with the tests asserting nothing (S12-01), that hid the S12-04
+    defect below for as long as the suite has existed.
+    """
+
+    def __init__(self, mid: float):
+        self.mid = float(mid)
+        self.bid = float(mid) - 0.5
+        self.ask = float(mid) + 0.5
+        self.timestamp = datetime.now(UTC)
+
+
+async def _drain_tasks():
+    """Let the tasks ``_check_all_positions`` spawned via create_task finish."""
+    for _ in range(20):
+        await asyncio.sleep(0)
+    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
 class TestSLTPMonitor:
     def _make_monitor(self):
         from execution.sl_tp_monitor import SLTPMonitor
 
         pm = MagicMock()
+        # Mirror the real PositionManager: both are async.
+        pm.close_position = AsyncMock(return_value=True)
+        pm.get_position = MagicMock(return_value=None)
         broker = _make_broker_mock()
         tick_cache = {}
         monitor = SLTPMonitor(position_manager=pm, broker=broker, tick_cache=tick_cache)
         return monitor, pm, broker, tick_cache
+
+    @staticmethod
+    def _long_position(stop_loss=2280.0, take_profit=2400.0):
+        pos = MagicMock()
+        pos.position_id = "pos-1"
+        pos.symbol = "XAUUSD"
+        pos.side = "buy"
+        pos.entry_price = 2300.0
+        pos.quantity = 1.0
+        pos.stop_loss = stop_loss
+        pos.take_profit = take_profit
+        return pos
 
     def test_init(self):
         monitor, *_ = self._make_monitor()
@@ -480,47 +527,74 @@ class TestSLTPMonitor:
 
     @pytest.mark.asyncio
     async def test_check_positions_empty(self):
+        """No positions, no orders. Previously asserted nothing (S12-01)."""
         monitor, pm, broker, tick_cache = self._make_monitor()
         pm.get_all_positions = MagicMock(return_value={})
         await monitor._check_all_positions()
+        await _drain_tasks()
+        broker.place_order.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_check_positions_no_tick_skips(self):
+        """With no tick, nothing may be closed — acting on a missing price is
+        worse than not acting. Previously asserted nothing (S12-01)."""
         monitor, pm, broker, tick_cache = self._make_monitor()
-        mock_pos = MagicMock()
-        mock_pos.stop_loss = 2280.0
-        mock_pos.take_profit = 2400.0
-        mock_pos.side = "buy"
-        mock_pos.entry_price = 2300.0
-        mock_pos.quantity = 1.0
-        pm.get_all_positions = MagicMock(return_value={"XAUUSD": mock_pos})
+        pm.get_all_positions = MagicMock(return_value={"XAUUSD": self._long_position()})
         await monitor._check_all_positions()  # no tick — should skip
+        await _drain_tasks()
+        broker.place_order.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stale_tick_does_not_trigger_a_stop(self):
+        """A frozen feed must not fire a stop against a stale price."""
+        monitor, pm, broker, tick_cache = self._make_monitor()
+        pm.get_all_positions = MagicMock(return_value={"XAUUSD": self._long_position()})
+        stale = _FakeTick(2275.5)
+        stale.timestamp = datetime.now(UTC) - timedelta(hours=1)
+        tick_cache["XAUUSD"] = stale
+        await monitor._check_all_positions()
+        await _drain_tasks()
+        broker.place_order.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_check_positions_tp_triggered(self):
         monitor, pm, broker, tick_cache = self._make_monitor()
-        mock_pos = MagicMock()
-        mock_pos.stop_loss = 2280.0
-        mock_pos.take_profit = 2350.0
-        mock_pos.side = "buy"
-        mock_pos.entry_price = 2300.0
-        mock_pos.quantity = 1.0
-        pm.get_all_positions = MagicMock(return_value={"XAUUSD": mock_pos})
-        tick_cache["XAUUSD"] = {"bid": 2355.0, "ask": 2356.0, "mid": 2355.5}
+        pm.get_all_positions = MagicMock(
+            return_value={"XAUUSD": self._long_position(take_profit=2350.0)}
+        )
+        tick_cache["XAUUSD"] = _FakeTick(2355.5)
         await monitor._check_all_positions()
+        await _drain_tasks()
+        # Price is through the take-profit: a closing order MUST reach the
+        # broker. `await_count` is the assertion that matters, not `called` —
+        # see the stop-loss test below for why.
+        assert broker.place_order.await_count == 1, "take-profit did not close the position"
 
     @pytest.mark.asyncio
     async def test_check_positions_sl_triggered(self):
         monitor, pm, broker, tick_cache = self._make_monitor()
-        mock_pos = MagicMock()
-        mock_pos.stop_loss = 2280.0
-        mock_pos.take_profit = 2400.0
-        mock_pos.side = "buy"
-        mock_pos.entry_price = 2300.0
-        mock_pos.quantity = 1.0
-        pm.get_all_positions = MagicMock(return_value={"XAUUSD": mock_pos})
-        tick_cache["XAUUSD"] = {"bid": 2275.0, "ask": 2276.0, "mid": 2275.5}
+        pm.get_all_positions = MagicMock(return_value={"XAUUSD": self._long_position()})
+        tick_cache["XAUUSD"] = _FakeTick(2275.5)
         await monitor._check_all_positions()
+        await _drain_tasks()
+
+        # S12-04 regression. `_close_position` used to invoke the broker as
+        #     await loop.run_in_executor(None, lambda: self._broker.place_order(...))
+        # but `BaseBroker.place_order` is `async def` (brokers/base.py), as are
+        # the OANDA and MT5 implementations. The worker thread therefore only
+        # *built* a coroutine and handed it back; nothing ever awaited it, so no
+        # order reached the broker. The monitor then saw a non-None result,
+        # declared success, and emitted a critical "STOP_LOSS HIT: Closed ..."
+        # alert while the position was still fully open at the broker.
+        #
+        # `called` was True the whole time — only `await_count` catches this.
+        assert broker.place_order.await_count == 1, (
+            "stop-loss never reached the broker: place_order was invoked but never awaited"
+        )
+        # And the close must be booked as a SELL (opposite the long).
+        kwargs = broker.place_order.await_args.kwargs
+        assert str(kwargs["side"]).upper().endswith("SELL")
+        assert kwargs["quantity"] == 1.0
 
 
 class TestExecutionEngine:

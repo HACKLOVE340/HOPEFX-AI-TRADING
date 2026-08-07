@@ -311,14 +311,61 @@ class TestMCCRiskGate:
     """Verify risk gates block bad signals."""
 
     def test_kill_switch_blocks_signal_processing(self):
+        """With the kill switch set, no order may be executed.
+
+        This test previously asserted **nothing** — it set the flag, called the
+        handler, and ended. It therefore passed whether the kill switch blocked
+        the signal or did nothing at all; the only failure it could detect was
+        an exception. It was green throughout the period in which the kill
+        switch had a split-brain instance problem (S2-01) and the Gatekeeper's
+        kill-switch check was inert (S2-02).
+
+        A test that names a safety property and verifies nothing is worse than
+        no test: it puts a green check next to the property and closes the
+        question. See docs/HARDENING_BACKLOG.md S12-01.
+        """
+        from unittest.mock import MagicMock
+
         from strategies.base_enhanced import StrategySignal
 
         mcc = _make_mcc()
         mcc.kill_switch_triggered = True
-        # Should silently return — no exception, no execution
+        mcc._execute_signal = MagicMock()
+
         mcc._on_strategy_signal(
             "strat1",
             StrategySignal(action="BUY", strength=0.9, confidence=0.9),
+        )
+
+        mcc._execute_signal.assert_not_called()
+
+    def test_signal_executes_when_kill_switch_is_clear(self):
+        """Control case: without the kill switch the signal must get through.
+
+        Without this, `assert_not_called()` above would also pass if
+        `_on_strategy_signal` never executed anything under any condition.
+        """
+        from unittest.mock import MagicMock
+
+        from strategies.base_enhanced import StrategySignal
+
+        mcc = _make_mcc()
+        mcc.kill_switch_triggered = False
+        mcc._execute_signal = MagicMock()
+        mcc._check_signal_risk = MagicMock(return_value=True)
+        # _on_strategy_signal only executes when aggregation reaches consensus
+        # (action != HOLD and confidence > 0.6). Stub it so this test isolates
+        # the kill-switch branch rather than the aggregation maths.
+        mcc._aggregate_signals = MagicMock(return_value={"action": "BUY", "confidence": 0.9})
+
+        mcc._on_strategy_signal(
+            "strat1",
+            StrategySignal(action="BUY", strength=0.9, confidence=0.9),
+        )
+
+        assert mcc._execute_signal.called, (
+            "no signal reached execution even with the kill switch clear — the "
+            "blocking assertion above would pass vacuously"
         )
 
     def test_daily_loss_limit_rejects_signal(self):

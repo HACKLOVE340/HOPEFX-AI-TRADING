@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import logging
 import os
 from datetime import timezone
@@ -319,6 +320,18 @@ class SLTPMonitor:
             for attempt in range(1, _MAX_RETRIES + 1):
                 try:
                     loop = asyncio.get_running_loop()
+                    # `BaseBroker.place_order` is `async def` (as are the OANDA
+                    # and MT5 implementations); only the paper broker is sync.
+                    # Running it in the executor therefore just *builds* a
+                    # coroutine on a worker thread — awaiting the executor future
+                    # yields that coroutine object, not an Order. It is non-None,
+                    # so the code below used to declare the close a success and
+                    # alert "STOP_LOSS HIT: Closed ..." while no order had ever
+                    # been sent and the position was still open at the broker.
+                    #
+                    # Keep the executor hop so a *blocking* sync broker cannot
+                    # stall the event loop, then await the result if it is
+                    # awaitable. See docs/HARDENING_BACKLOG.md S12-04.
                     order = await loop.run_in_executor(
                         None,
                         lambda: self._broker.place_order(
@@ -330,6 +343,8 @@ class SLTPMonitor:
                             stop_price=None,
                         ),
                     )
+                    if inspect.isawaitable(order):
+                        order = await order
                     if order is not None:
                         # Book the ACTUAL executed fill price, not the trigger
                         # mid — on a gap/slippage stop the real fill can be much
