@@ -1482,3 +1482,118 @@ There is no retry here today, so no duplicate-fill window exists right now; the
 cost is that a broker fill cannot be correlated back to a local order, which is
 precisely what S7-02 and S7-03 need to reconcile. Adding it is a prerequisite
 for the other two fixes, not an independent nicety.
+
+---
+
+## Round 3 — Slice 8: realtime transport
+
+Scope: `api/ws_live.py` (2,249 lines).
+Questions asked: per-channel authorization, backpressure when a client is slow,
+reconnect/resubscribe semantics, message ordering, and what a client sees after
+a disconnect gap.
+
+**Working correctly — verified:**
+
+- `WS_AUTH_REQUIRED` defaults to `true` and is **enforced structurally**: the
+  module raises `RuntimeError` at import when `APP_ENV=production` and the flag
+  is off (`:96-101`). A misconfiguration cannot silently open the socket.
+- Round 2's private-channel fix holds — `broadcast()` excludes
+  `_PRIVATE_CHANNELS` from the "empty subscription = all channels" path
+  (`:271-273`).
+- Origin checking, a 20 s auth timeout, and heartbeat miss-limits are all
+  implemented.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S8-01 | HIGH | No backpressure — one slow client stalls the tick feed for every client | `ws_live.py:275-283` |
+| S8-02 | MEDIUM | `send_to_user` lacks the private-channel guard that `broadcast` has | `ws_live.py:309` |
+| S8-03 | MEDIUM | No sequence numbers — a client cannot detect messages missed across a reconnect | throughout |
+| S8-04 | LOW | Every send failure is logged at `debug` | `ws_live.py:256,282,315` |
+
+### S8-01 — One slow consumer degrades everyone (HIGH)
+
+`broadcast()` (`:275-283`) fans out sequentially, awaiting each socket in turn:
+
+```python
+for cid, subs in list(self._subscriptions.items()):
+    if channel in subs or (not subs and implicit_all_ok):
+        ws = self._connections.get(cid)
+        if ws:
+            try:
+                await ws.send_text(payload)      # ← blocks the shared coroutine
+```
+
+There is no per-client send queue, no bounded buffer, and **no send timeout**.
+Every `asyncio.wait_for` in this 2,249-line file wraps a `receive_text` — not one
+wraps a send.
+
+**Failure scenario:** a laptop sleeps with the dashboard tab open. The TCP
+window freezes; the socket is not yet reset, so `send_text` blocks once the
+kernel buffer fills rather than raising. The tick broadcaster
+(`_eventbus_tick_broadcaster`, `:620`) is a single coroutine consuming
+`bus.subscribe(CH_TICK)` and calling `broadcast()` per tick — so it is now
+blocked inside that one client's send. **Every other connected trader stops
+receiving price updates** until that socket errors or drains, and messages back
+up in the Redis pubsub buffer behind it.
+
+The 30-second stale-feed watchdog does not help: `_stale_deadline` is refreshed
+at the top of each loop iteration (`:649`), and while the coroutine is blocked
+inside `broadcast()` the loop is not iterating, so the watchdog cannot fire
+either. The failure is silent in both directions — the stalled clients see a
+frozen price, and the server logs nothing above `debug`.
+
+For a trading UI a frozen price is not a cosmetic problem: it is the input a
+human uses to decide whether to intervene, and slice 9 examines whether the
+frontend can even tell that its feed has stopped.
+
+**Minimal fix:** give each connection a bounded `asyncio.Queue` with a dedicated
+writer task; on overflow, drop the oldest tick (prices are idempotent — the next
+tick supersedes) and disconnect the client if the queue stays full. At minimum,
+wrap the send in `asyncio.wait_for(..., timeout=1.0)` so one socket cannot hold
+the fan-out.
+
+### S8-02 — The private-channel guard was applied to only one of two senders (MEDIUM)
+
+`broadcast()` (`:273`) computes `implicit_all_ok = channel not in self._PRIVATE_CHANNELS`
+so `account`, `equity`, `risk`, `positions` and `alerts` are never delivered to a
+connection that has not explicitly subscribed. `send_to_user()` (`:309`) has the
+same `or not subs` fallback with **no such guard**:
+
+```python
+subs = self._subscriptions.get(cid, set())
+if channel in subs or not subs:
+```
+
+This is scoped to `uid == user_id`, so it is not a cross-user leak — the data
+reaches the right person. But a connection that is still mid-handshake, or has
+deliberately subscribed to `prices` only, receives private account and risk
+messages it never asked for. Given Round 2 fixed exactly this pattern in the
+sibling method, this looks like the fix not being carried across.
+
+**Minimal fix:** apply `implicit_all_ok` in `send_to_user` too, or require an
+explicit subscription for private channels in both paths.
+
+### S8-03 / S8-04 — No gap detection, and silent drops (MEDIUM / LOW)
+
+**S8-03:** there is no per-connection sequence number anywhere in the file. The
+only `seq` present is `tick_seq` read off an inbound event-bus message (`:918`)
+and used to build a signal id. A client that drops and reconnects therefore
+cannot tell whether it missed anything, and there is no resume or snapshot
+mechanism.
+
+For `prices` this is tolerable — the next tick supersedes. For **state**
+channels it is not: `positions`, `account` and `risk` are delivered as updates,
+so a missed `positions` message leaves the UI displaying a position that has
+since closed, or omitting one that opened, **indefinitely** — until some later
+update happens to correct it. Combined with S8-01 (drops are silent) and S7-03
+(server-side position state may itself be wrong after a restart), there is no
+layer in the stack that reconciles what the UI shows against what the broker
+holds.
+
+*Minimal fix:* attach a monotonic per-connection sequence number; on
+`subscribe`, send a full snapshot for state channels before the first delta.
+
+**S8-04:** all three send paths (`:256`, `:282`, `:315`) log failures at
+`logger.debug`. Production runs at INFO, so a client losing messages — or being
+disconnected by the error handler — produces no operational signal at all.
+These should be INFO with a counter, or WARNING when a disconnect results.
