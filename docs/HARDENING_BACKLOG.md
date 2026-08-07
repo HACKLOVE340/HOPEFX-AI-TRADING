@@ -1792,3 +1792,118 @@ system state is readable "in under a second" need a real screen to be
 trustworthy, and are therefore deliberately **not** claimed here. What is
 recorded above is limited to what the source establishes: which affordances
 exist, which do not, and where a control's data source is provably wrong.
+
+---
+
+## Round 3 — Slice 11: ops and deployment
+
+Scope: `Dockerfile`, `docker-compose*.yml`, `k8s/`, `helm/`,
+`.github/workflows/` (21 files), `.env.example`.
+
+**Working correctly — verified:**
+
+- **Health probes are honest.** `/api/health/live` returns 200 unconditionally
+  and *documents that it does* — correct for a Kubernetes liveness probe, which
+  should only detect a wedged process. `/api/health/ready` returns **503 when a
+  critical component is down** (`api/health.py:796+`). This is the right split;
+  many systems get it backwards.
+- **No secrets in compose.** `docker-compose.yml` contains no inline passwords,
+  tokens, or keys.
+- **Several dormant workflows are deliberate and documented** — `fortify.yml`
+  ("requires a paid enterprise subscription"), `jekyll-docker.yml` ("This repo
+  uses MkDocs, not Jekyll. Disabled automatic triggers"). Dormant-with-a-reason
+  is not dead code.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S11-01 | HIGH | Four sources disagree on the Python version; the documented target is tested by nothing | `CLAUDE.md`, `Dockerfile:20`, `pyproject.toml:29`, `tests.yml:36` |
+| S11-02 | HIGH | `STALE_MODEL_BLOCK` and `LIVE_TRADING_ENABLED` are absent from `.env.example` | `.env.example` |
+| S11-03 | MEDIUM | 1,078 env vars read in code; 255 undocumented, 134 documented but never read | repo-wide |
+| S11-04 | LOW | Three GitHub starter-template workflows unrelated to this project | `.github/workflows/` |
+
+### S11-01 — The documented Python version is the one nothing runs (HIGH)
+
+| Source | Python version |
+|---|---|
+| `CLAUDE.md` | *"**Python 3.10** is the production target (matches the Docker image — avoids pickle mismatches on model artifacts)"* |
+| `Dockerfile:20` | `FROM python:3.12-slim` |
+| `pyproject.toml:29`, `setup.py:35` | `>=3.10` |
+| `.github/workflows/tests.yml:36` | matrix `["3.11", "3.12"]` |
+
+The production image is **3.12**. CI tests **3.11 and 3.12**. So **3.10 — the
+version the contributor guide instructs everyone to pin to — is exercised by
+nothing**, and the parenthetical justifying it ("matches the Docker image") is
+factually wrong.
+
+**Failure scenario:** the stated reason for the pin is pickle compatibility on
+model artifacts, and this repo **commits** its `.pkl`/`.zip` artifacts under
+`ml/saved_models/` and `ml/rl_models/` (whitelisted in `.gitignore`,
+checksum-verified in CI). A contributor who follows `CLAUDE.md`, installs 3.10,
+and runs the retrain pipeline produces artifacts pickled under an interpreter
+and dependency set that **no CI job and no production image ever loads**. The
+checksum gate confirms the file is unmodified; it says nothing about whether it
+deserialises correctly on 3.12. The existing note that
+`stacking_ensemble.pkl` fails its `registry.json` checksum shows artifact drift
+is already live in this repo.
+
+**Minimal fix:** pick one version and make the other three follow. If 3.12 is
+the intent, correct `CLAUDE.md` and add 3.12 to nothing (it is already there);
+if 3.10 is the intent, change the `Dockerfile` and the CI matrix. Whichever is
+chosen, the retrain workflow must run on the same interpreter as the production
+image.
+
+### S11-02 — The two flags that gate unsafe trading are undocumented (HIGH)
+
+`.env.example` is thorough — 957 documented variables, including good practice
+like `DRIFT_BLOCK=true` and `HOPEFX_INVARIANT_MODE=monitor`. Two are missing:
+
+- **`STALE_MODEL_BLOCK`** — decides whether the system refuses to trade on a
+  stale model (`ml/inference_engine.py:73`). Its code default is `true`, and
+  Slice 4 confirmed the fail-closed path works end to end.
+- **`LIVE_TRADING_ENABLED`** — gates live trading.
+
+An operator who builds their `.env` from the template — the documented workflow
+(`scripts/bootstrap_dev.py`) — produces a config that mentions neither. Both
+then run on their code defaults, invisibly. For `STALE_MODEL_BLOCK` the default
+is safe, so the risk is that an operator cannot *find* the flag to verify it,
+and cannot tell whether the protection is on. The absence of the system's most
+important safety switches from the file operators actually read is the defect,
+independent of the default's direction.
+
+Also absent and safety-relevant: `FIA_MAX_ORDER_SIZE`,
+`FIA_MAX_INTRADAY_POSITION` (Slice 2 showed these controls receive fabricated
+inputs — they are also unconfigurable from the template), `SLTP_MAX_TICK_AGE_S`,
+`MCC_EMERGENCY_DD_PCT`, `FALLBACK_TO_PAPER`, `PAPER_RAISE_ON_STALE`.
+
+**Correction to S4-04 (Slice 4):** that finding stated `DRIFT_BLOCK` defaults to
+false and therefore ships in warn-only mode. The **code** default is indeed
+`false` (`inference_engine.py:78`), but `.env.example:1089` sets
+`DRIFT_BLOCK=true` with an explanatory comment — so an operator following the
+documented setup gets blocking behaviour. S4-04 remains valid for any
+environment not built from the template (containers, Kubernetes, CI), where the
+code default governs, but it is **less severe than written**: the intended
+configuration is correct and documented.
+
+### S11-03 / S11-04 — Configuration surface and template workflows
+
+**S11-03:** the codebase reads **1,078 distinct environment variables**. 255 are
+read but not in `.env.example`; 134 are in `.env.example` but read nowhere
+(dead config that will mislead an operator into thinking a knob exists).
+
+The count itself is the finding. A system whose safety properties are decided by
+env-var defaults — as Slices 2, 4 and 5 all showed — cannot be reasoned about
+when there are a thousand of them and a quarter are undocumented. There is no
+single place that answers "what configuration is this process actually running
+under, and which safety gates are live?"
+
+*Minimal fix:* a startup log line (or `/api/health/detailed` field) enumerating
+the resolved values of the ~20 safety-critical flags — kill switch, invariant
+mode, drift/stale blocking, risk limits, broker type, paper/live. Cheap, and it
+would have made several findings in this round visible in production logs.
+
+**S11-04:** `webpack.yml`, `python-package-conda.yml` and `static.yml` are
+GitHub starter templates that do not match this project (it has no webpack
+build, does not use conda, and `static.yml` is a Pages deploy superseded by
+`docs.yml`). All three are `workflow_dispatch`-only so they cost nothing at
+runtime — they are noise in the workflow list rather than a risk. Candidates for
+deletion in Slice 13.
