@@ -134,22 +134,49 @@ class TestDiagnosticReport:
 
 
 class TestEnvVarCheck:
-    def test_missing_required_vars_reported_as_critical(self):
+    def test_missing_required_vars_reported_as_critical(self, monkeypatch):
+        """A missing required secret must be reported critical, not ok.
+
+        This test used to pop only ``SECRET_KEY`` and assert critical when that
+        variable had not been set in the first place. But ``SECRET_KEY`` is not
+        the required var — it is one of three accepted *aliases* for
+        ``SECURITY_JWT_SECRET`` (``security/diagnostics.py:327``), and the test
+        suite sets ``SECURITY_JWT_SECRET`` at import time. So the canonical name
+        was still present, the check correctly returned "ok", and the assertion
+        fired against a check that was behaving properly.
+
+        Clear the canonical name and every alias, which is what "the required
+        variable is missing" actually means.
+        """
         from security.diagnostics import DiagnosticsEngine
 
         engine = DiagnosticsEngine()
 
-        # Temporarily remove a required var
-        original = os.environ.pop("SECRET_KEY", None)
-        try:
-            results = _run(engine._check_env_vars())
-            statuses = {r.check_name: r.status for r in results}
-            # If SECRET_KEY was missing, env_vars_required must be critical
-            if original is None:
-                assert statuses.get("env_vars_required") == "critical"
-        finally:
-            if original is not None:
-                os.environ["SECRET_KEY"] = original
+        for name in ("SECURITY_JWT_SECRET", "JWT_SECRET_KEY", "SECRET_KEY"):
+            monkeypatch.delenv(name, raising=False)
+
+        results = _run(engine._check_env_vars())
+        statuses = {r.check_name: r.status for r in results}
+        assert statuses.get("env_vars_required") == "critical"
+
+        detail = next(r for r in results if r.check_name == "env_vars_required")
+        assert any("SECURITY_JWT_SECRET" in m for m in detail.details.get("missing", []))
+
+    def test_an_alias_alone_satisfies_the_requirement(self, monkeypatch):
+        """The aliasing the test above tripped over is deliberate — pin it."""
+        from security.diagnostics import DiagnosticsEngine
+
+        engine = DiagnosticsEngine()
+        monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
+        monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+        monkeypatch.setenv("SECRET_KEY", "legacy-alias-value")
+        monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+
+        results = _run(engine._check_env_vars())
+        statuses = {r.check_name: r.status for r in results}
+        assert statuses.get("env_vars_required") == "ok", (
+            "a legacy SECRET_KEY alias no longer satisfies SECURITY_JWT_SECRET"
+        )
 
     def test_all_required_vars_present_returns_ok(self, monkeypatch):
         from security.diagnostics import DiagnosticsEngine, _REQUIRED_ENV_VARS

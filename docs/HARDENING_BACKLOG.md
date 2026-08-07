@@ -948,6 +948,55 @@ Not addressed: the two builders still exist. Unifying them is a larger change
 that risks altering the live feature vector, and the guard now watches the
 right one either way.
 
+### S4-06 — The stationarity test certified features it never examined (MEDIUM) — FIXED
+
+`StationarityTester.test()` returned a **permissive** result when `statsmodels`
+could not be imported:
+
+```python
+return StationarityResult(
+    adf_pvalue=0.01,        # what a confidently stationary series produces
+    kpss_pvalue=0.10,
+    is_stationary=True,     # ← certifies a test that never ran
+    method="SKIPPED (statsmodels unavailable)",
+)
+```
+
+The fabricated p-values are worse than the boolean. `adf_pvalue=0.01` reads as
+strong evidence, so any caller looking at the numbers rather than `method` saw a
+confident pass. Every feature was waved into training and inference regardless
+of whether it was stationary — which is the one thing this check exists to
+prevent.
+
+`statsmodels` is in `requirements.txt`, so a correct deployment has it; this is
+the behaviour on an import failure, and it must be "unknown, therefore not
+stationary" rather than "passed". Same principle as the drift guard in S4-05.
+
+**Fix:** fail closed — `is_stationary=False`, `adf_pvalue=1.0` (no evidence
+against a unit root), `kpss_pvalue=0.0`, a `— fail-closed` suffix on `method`,
+and a WARNING naming the feature. Controls in the new test file confirm the
+tester still passes white noise and still rejects a random walk when statsmodels
+*is* present, so the fix did not simply make it useless.
+
+**Ninth test found protecting a defect.**
+`test_ml_pipeline_full.py::test_test_without_statsmodels` asserted
+`is_stationary is True` — it *required* the tester to certify a series it had
+not examined. Corrected, with added assertions that the p-values do not
+impersonate a result.
+
+### S4-05b — A diagnostics test that could never fail (LOW) — FIXED
+
+`test_diagnostics.py::test_missing_required_vars_reported_as_critical` popped
+`SECRET_KEY` and asserted the env-var check reported `critical`. But
+`SECRET_KEY` is not the required variable — it is one of three accepted
+*aliases* for `SECURITY_JWT_SECRET` (`security/diagnostics.py:327`), which the
+suite sets at import. The canonical name was still present, the check correctly
+returned `ok`, and the assertion fired against code that was behaving properly.
+
+The production check was right; the test was wrong. It now clears the canonical
+name and every alias, and a companion test pins the aliasing behaviour it
+tripped over.
+
 ### S4-02 / S4-03 — Detectors with no actuator (HIGH)
 
 `inference_engine.py:427-435`:
