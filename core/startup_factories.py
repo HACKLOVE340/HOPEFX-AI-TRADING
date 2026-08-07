@@ -3677,10 +3677,29 @@ async def init_decision_engine(s: Any) -> Any:
             try:
                 from risk.gatekeeper import Gatekeeper
 
-                gatekeeper = Gatekeeper(orchestrator=getattr(s, "data_orchestrator", None))
+                gatekeeper = Gatekeeper(
+                    orchestrator=getattr(s, "data_orchestrator", None),
+                    risk_manager=getattr(s, "risk_manager", None),
+                )
                 logger.info("init_decision_engine: built Gatekeeper inline")
             except Exception as _gk_exc:
                 logger.warning("init_decision_engine: could not build Gatekeeper: %s", _gk_exc)
+
+        # Start the Gatekeeper's breach listener. It is the only production
+        # writer of _kill_active and the equity tracker, so without it gate
+        # checks 1 (kill switch), 3 (daily drawdown) and 4 (max drawdown)
+        # compare constants against their limits and can never fire.
+        # start() cannot be used here — it awaits the signal consumer forever.
+        # See docs/HARDENING_BACKLOG.md S2-02.
+        if gatekeeper is not None:
+            try:
+                gatekeeper.start_breach_listener()
+            except Exception as _gk_start_exc:
+                logger.error(
+                    "init_decision_engine: could not start Gatekeeper breach listener (%s) — "
+                    "its kill-switch and drawdown checks will not fire",
+                    _gk_start_exc,
+                )
 
         trade_executor = getattr(s, "trade_executor", None)
         feature_engineer = getattr(s, "feature_engineer", None)
