@@ -1021,3 +1021,147 @@ model's `n_features_in_` anywhere in the inference path —
 **Minimal fix:** log the fallback at WARNING and record it as a distinct
 Prometheus reason; implement the documented gate by comparing against
 `predictor._model.n_features_in_` and abstaining on mismatch.
+
+---
+
+## Round 3 — Slice 5: data layer integrity
+
+Scope: `data_layer/orchestrator.py`, `data_layer/feeds/gold/manager.py`,
+`data_layer/validation.py`, `data_layer/types.py`, `data_layer/tick_store.py`.
+Questions asked: what happens on gaps, duplicate or out-of-order ticks, timezone
+and DST boundaries, and a stalled feed?
+
+**Working correctly — verified:**
+
+- **Timezone discipline is clean.** Every `datetime` construction in
+  `data_layer/` is UTC-aware (`datetime.now(UTC)`, `fromtimestamp(..., tz=UTC)`);
+  there are no naive `datetime.now()` or deprecated `utcnow()` calls. DST is a
+  non-issue because nothing works in local time.
+- **Future-dated data is rejected** in both the OHLCV and feature-matrix
+  validators (`validation.py:255-259,361-363`), raising `FutureLeakageError`.
+- **The Redis cache read has a correct two-sided freshness gate**
+  (`orchestrator.py:731-742`) — an upper bound on age *and* a clock-skew tolerance
+  so a future-dated tick cannot pass by having a negative age.
+- **Cross-symbol contamination was fixed**: the in-memory fallback is guarded by
+  `_is_gold_symbol(symbol)` (`orchestrator.py:761`) so a cache miss on EUR_USD no
+  longer returns the gold price relabelled.
+
+The findings below are all the same shape: **freshness is enforced on one read
+path and on none of the others.**
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S5-01 | HIGH | The "never trade on a stale tick" invariant never executes on the decision-engine path | `risk/manager.py:352-359`, `invariants/enforcement.py:336-344` |
+| S5-02 | HIGH | Tick `quality` is frozen at ingest — a stalled feed's last tick stays `GOOD` forever | `types.py:106-112`, `feeds/gold/manager.py:431-438` |
+| S5-03 | MEDIUM | The consensus tick is returned with no validity or age check at all | `feeds/gold/manager.py:431-432` |
+
+### S5-01 — The staleness invariant cannot fire (HIGH)
+
+`risk/manager.py:770-776` calls the constitutional pre-trade invariant with a
+staleness budget:
+
+```python
+_inv = enforce_pre_trade(signal, data_quality=..., equity=equity,
+                         now=datetime.now(UTC).timestamp(),
+                         max_staleness_s=_MAX_TICK_STALENESS_S)   # 5.0s
+```
+
+`invariants/enforcement.py:336-344` resolves the tick timestamp like this:
+
+```python
+tick_ts = next((getattr(signal, attr)
+                for attr in ("tick_ts", "tick_timestamp", "ts", "timestamp")
+                if isinstance(getattr(signal, attr, None), (int, float))
+                and not isinstance(getattr(signal, attr, None), bool)), None)
+```
+
+Two independent reasons this never resolves on the live path:
+
+1. **`_MinimalSignal` has no timestamp field at all.** Its `__slots__`
+   (`risk/manager.py:352-359`) are exactly
+   `confidence, data_quality, direction, features, probability, symbol, tick_mid`.
+   `calculate_position_size` — the entry point the decision engine uses —
+   constructs it at `:1063-1069` without any timestamp. All four candidate
+   attributes are absent, so `tick_ts` is `None` and the freshness block is
+   skipped.
+2. **Even the brain's `Signal` would fail the type test.** Its `timestamp` is a
+   `datetime` (`strategies/base.py:50`), and the comprehension requires
+   `isinstance(..., (int, float))`. A `datetime` is neither, so it is filtered
+   out.
+
+**Failure scenario:** the gold feed stalls at 14:00. The orchestrator's Redis
+gate discards the stale cached tick, but the in-memory fallback (S5-02/S5-03)
+keeps serving the 14:00 price. At 14:20 a signal is generated from that
+20-minute-old price. `size_order` calls `enforce_pre_trade` with a 5-second
+staleness budget; the check finds no usable timestamp and passes. The order is
+sized and routed against a price two hundred and forty budget-widths out of
+date. The invariant named "No Unverified AI Decision: never trade on a stale
+tick" contributes nothing.
+
+**Minimal fix:** stamp `tick_ts` (as a POSIX float) onto `_MinimalSignal` from
+the orchestrator tick that produced `tick_mid`, and accept `datetime` in the
+enforcement comprehension. Add a test that a signal with a 60-second-old tick is
+refused when `HOPEFX_INVARIANT_MODE=enforce`.
+
+### S5-02 — Tick quality is a snapshot, not a live property (HIGH)
+
+`GoldTick.is_valid()` (`types.py:106-112`) treats a tick as valid when
+`quality not in (REJECTED, STALE)` and the prices are sane. `quality` is
+assigned by the DataQualityEngine **when the tick is ingested** and the tick is
+a frozen dataclass — it is never re-evaluated afterwards.
+
+`GoldFeedManager` holds the last tick per source in `self._latest` and returns
+it (`feeds/gold/manager.py:434-438`):
+
+```python
+for src in _PRIORITY:
+    tick = self._latest.get(src)
+    if tick and tick.quality != TickQuality.REJECTED and tick.is_valid():
+        return tick
+```
+
+**Failure scenario:** a tick arrives at 14:00:00 and is graded `GOOD`. The
+upstream feed then disconnects. `self._latest` still holds that tick, its
+`quality` is still `GOOD`, and `is_valid()` still returns `True` — at 14:05, at
+15:00, and the next morning. `active_sources()` (`:445`) uses the same predicate,
+so the health endpoint reports the dead feed as an active source. Nothing in
+this class measures age.
+
+**Minimal fix:** make `is_valid()` (or the manager's read path) take a
+`max_age_s` and compare against `tick.timestamp`, using the same
+`DQE_STALE_THRESHOLD_S` the orchestrator already reads at
+`orchestrator.py:731`.
+
+### S5-03 — The consensus path skips even the validity check (MEDIUM)
+
+`feeds/gold/manager.py:431-432`, the first two lines of `get_latest_tick` and
+the default branch (`prefer_consensus=True`):
+
+```python
+if prefer_consensus and self._consensus_tick:
+    return self._consensus_tick
+```
+
+No `is_valid()`, no `quality` check, no age check — the single-source fallback
+below it at least calls `is_valid()`. So the *default* read path is the least
+guarded one in the module.
+
+This matters most when Redis is unavailable: `orchestrator.get_latest_tick`
+only applies its freshness gate inside `if self._redis_store._r:`
+(`orchestrator.py:702`). With Redis down, **every** price read falls through to
+`_gold_feed.get_latest_tick()` at `:762`, which returns the unchecked consensus
+tick — and `_on_tick(tick)` at `:766` then re-publishes it downstream as a fresh
+observation.
+
+**Failure scenario:** Redis outage plus feed stall. The orchestrator serves an
+arbitrarily old consensus tick as the live price, re-emits it through
+`_on_tick`, and `RiskManager._get_data_quality` (`risk/manager.py:1254`) reads
+`tick.confidence` from it — the confidence recorded at ingest, which is high.
+Gate check 5 (data quality) therefore passes on stale data, and per S5-01 the
+staleness invariant does not run either. Two independent staleness controls,
+both inert, on the same tick.
+
+**Minimal fix:** apply `is_valid()` and an age bound on the consensus branch;
+apply the orchestrator's freshness gate to the in-memory fallback at `:761-767`
+as well as the Redis path, so there is one staleness rule rather than one per
+read path.
