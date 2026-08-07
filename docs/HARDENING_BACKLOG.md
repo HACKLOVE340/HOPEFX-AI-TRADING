@@ -1696,3 +1696,99 @@ server at a stopped backend and at one returning 500s, and recording what each
 view actually does — was **not performed**. The findings above are from reading
 the code. That runtime pass is worth doing before acting on S9-03, since it will
 rank the views by real impact rather than by grep coverage.
+
+---
+
+## Round 3 — Slice 10: frontend and UX design (trading surface)
+
+Scope: `frontend/src`, reviewed against the duties a capital-committing UI owes
+its operator rather than against visual taste.
+
+**Working correctly — verified:**
+
+- **Close-all is properly confirmed.** `Trade.tsx:472-477` uses a `useConfirm`
+  dialog with a `danger` variant and the text *"This will market-close every
+  open position immediately. This cannot be undone."* `PositionsTable.tsx:10,24`
+  implements an inline dialog deliberately instead of `window.confirm`, with the
+  reasoning recorded in a comment.
+- **Kill-switch state is persistently visible** in the account bar
+  (`AccountBar.tsx:157-163`), not buried in a settings page.
+- **P&L and deltas carry a sign, not just a colour** (`LivePriceTicker.tsx:147`,
+  `delta >= 0 ? '+' : ''`), so red/green is not the sole carrier of meaning on
+  that surface.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| S10-01 | HIGH | Opening a position needs no confirmation; closing one does | `OrderEntryForm.tsx` |
+| S10-02 | MEDIUM | The kill-switch badge may report the wrong instance | `AccountBar.tsx:157` + S2-01 |
+| S10-03 | MEDIUM | Confirmations describe the action but not its magnitude | `Trade.tsx:472-477` |
+| S10-04 | MEDIUM | ~15% of components carry any ARIA attribute; order entry has one | `frontend/src` |
+| S10-05 | — | No latency or data-age indicator anywhere | see S9-01 |
+
+### S10-01 — The confirmation is on the wrong action (HIGH)
+
+`OrderEntryForm.tsx` contains no `confirm`, `useConfirm`, or dialog of any kind.
+A single click on the submit button places a **live market order**. Meanwhile
+close-all — which *reduces* exposure — is gated behind a danger-variant modal.
+
+The risk asymmetry runs the other way: closing a position removes market
+exposure and is recoverable by re-entering; opening one commits capital, arms a
+stop, and is recoverable only by paying the spread again. A misclick or a
+double-tap on a phone opens a real position at market.
+
+This compounds with S9-01: the trader may be clicking against a price display
+that has silently frozen, with no age indicator to warn them, and with no
+confirmation step that would show them the price the order will actually be
+sized against.
+
+**Minimal fix:** reuse the existing `useConfirm` hook — it is already built,
+already styled, and already used two files away. The confirmation should restate
+**symbol, direction, quantity, entry price, stop-loss, and computed max loss**;
+`OrderEntryForm.tsx:128` already computes `maxLoss`, so the number is in hand.
+
+### S10-02 — The kill-switch badge inherits the split-brain problem (MEDIUM)
+
+`AccountBar.tsx:157` renders the badge from `account.kill_switch`. Per **S2-01**
+there are two `KillSwitch` instances, and the health/status routes are wired to
+`app.kill_switch` (`app.py:959`) while the money path reads the module singleton
+via `pre_trade_gate.py:342`.
+
+**Failure scenario:** an operator activates the kill switch via
+`/nuclear/kill_switch/activate` (the endpoint that actually stops trading). The
+status route reads the *other* instance and reports inactive, so the badge stays
+dark — the operator sees no confirmation that the most important control in the
+system took effect, and may activate it again elsewhere or assume it failed.
+The inverse is worse: activating via the app router lights the badge while
+trading continues.
+
+**This is not a frontend fix.** The UI is faithfully rendering what the API
+reports; S2-01 must be fixed at the source. Recorded here because the badge is
+where an operator will experience the bug.
+
+### S10-03 / S10-04 / S10-05 — Confirmations, accessibility, latency
+
+**S10-03:** the close-all dialog says *"every open position"* without stating
+how many, in which symbols, or at what aggregate notional. A confirmation that
+does not restate the magnitude cannot be checked by the person confirming it —
+they are agreeing to a category, not to a quantity. The position count and
+notional are already in the store.
+
+**S10-04:** 31 of 204 `.tsx` files reference any `aria-` attribute (~15%).
+`OrderEntryForm.tsx` has exactly one — `role="alert"` at `:493`. The order
+inputs (symbol, side, quantity, SL, TP) carry no `aria-label`, and there is no
+keyboard-shortcut affordance for order entry or for the kill switch. For a
+surface where a mis-set field commits capital, label association is a
+correctness feature, not only a compliance one.
+
+**S10-05:** there is no latency, "last updated", or data-age indicator on any
+price or position surface — the design consequence of S9-01. A trading UI should
+make the *age* of its data as visible as the data itself; here the age is not
+computed at all, so the operator has no way to distinguish a quiet market from a
+dead feed.
+
+**Scope note:** this slice was conducted by reading components, not by
+exercising the running UI. Judgements about hierarchy, scan-time, and whether
+system state is readable "in under a second" need a real screen to be
+trustworthy, and are therefore deliberately **not** claimed here. What is
+recorded above is limited to what the source establishes: which affordances
+exist, which do not, and where a control's data source is provably wrong.
