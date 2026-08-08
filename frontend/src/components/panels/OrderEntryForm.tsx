@@ -12,11 +12,13 @@
 
 import React, { useState, useCallback, useEffect, useRef, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useStore, selectIsBlackout } from '../../store';
+import { useStore, selectIsBlackout, selectFeedLive } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, cn, extractApiError } from '../../lib/utils';
+import { fmtPrice, cn, extractApiError, describeSubmitFailure } from '../../lib/utils';
+import { useConfirm } from '../ConfirmDialog';
+import { useHotkeys } from '../../hooks/useHotkeys';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -197,7 +199,27 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   const [sl,        setSl]        = useState(defaultSl ?? '');
   const [tp,        setTp]        = useState(defaultTp ?? '');
   const [submitting, setSubmitting] = useState(false);
+
+  // S10-04: `b` / `s` set the direction without reaching for the mouse. Bare
+  // letters are safe here only because `useHotkeys` refuses to fire from inside
+  // a field or while a dialog is open — without that, typing a quantity would
+  // arm a side. Submission is deliberately NOT bound: Enter already submits the
+  // form natively, and it still goes through the confirmation.
+  useHotkeys({
+    b: () => setSide('buy'),
+    s: () => setSide('sell'),
+  });
   const [result,    setResult]    = useState<{ ok: boolean; msg: string } | null>(null);
+  // Confirmation for capital-committing actions (S10-01). Falls back to
+  // "cancel" when no provider is mounted, so an order never proceeds
+  // unconfirmed in an isolated render.
+  const confirm    = useConfirm();
+  // Surfaced in the confirmation so the trader is told when the price the
+  // order is sized against may be stale (S9-01).
+  // `selectFeedLive`, not `s.feedStale`: connected-with-nothing-received-yet
+  // is also not a price you should size an order against (F1-02), and a
+  // second local copy of this rule is how S10-02 started.
+  const feedLive   = useStore(selectFeedLive);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-clear the result banner after 4 seconds so it doesn't linger.
@@ -286,6 +308,37 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
     if (sl) payload.stop_loss   = parseFloat(sl);
     if (tp) payload.take_profit = parseFloat(tp);
 
+    // Confirm before committing capital.
+    //
+    // Closing positions — which REDUCES exposure — was already gated behind a
+    // danger-variant dialog, while opening one was a single click. The risk
+    // asymmetry runs the other way: closing removes market exposure and is
+    // recoverable by re-entering; opening commits capital, arms a stop, and is
+    // recoverable only by paying the spread again. The confirmation restates
+    // magnitude (symbol, side, quantity, entry, stop, max loss) so the person
+    // confirming can actually check it, rather than agreeing to a category.
+    // See docs/HARDENING_BACKLOG.md S10-01 and S10-03.
+    const lines = [
+      `${side === 'buy' ? 'BUY' : 'SELL'} ${qtyNum} ${symbol}`,
+      orderType === 'market'
+        ? `at market${entryPrice > 0 ? ` (~${entryPrice})` : ''}`
+        : `${orderType} @ ${payload.price}`,
+      sl ? `Stop loss: ${slNum}` : 'Stop loss: NONE',
+      tp ? `Take profit: ${tpNum}` : 'Take profit: none',
+      slNum > 0 && entryPrice > 0
+        ? `Max loss at stop: $${(Math.abs(entryPrice - slNum) * qtyNum).toFixed(2)}`
+        : null,
+      feedLive ? null : 'WARNING: the price feed is not live — the entry shown may be stale.',
+    ].filter(Boolean);
+
+    const ok = await confirm({
+      title:        'Place this order?',
+      description:  lines.join('\n'),
+      confirmLabel: side === 'buy' ? 'Buy' : 'Sell',
+      variant:      'danger',
+    });
+    if (!ok) return;
+
     setSubmitting(true);
     try {
       await tradingApi.placeOrder(payload);
@@ -306,7 +359,11 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
       } else if (httpStatus === 403) {
         detail = extractApiError(e, 'Order rejected — check KYC status or subscription plan.');
       } else {
-        detail = extractApiError(e, 'Order failed');
+        // F2-01: the old fallback said "Order failed". On a timeout — reachable
+        // at 30s on this axios instance — nothing came back, so whether the
+        // broker filled it is unknown, and "failed" invites a second order on
+        // top of a live one.
+        detail = describeSubmitFailure(e, 'order').message;
       }
       setResult({ ok: false, msg: detail });
     } finally {
@@ -317,7 +374,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   // price rather than the price at the time the callback was last created.
   // Omitting it caused stale-closure bugs where SL/TP validation used an
   // outdated entry price after a price tick updated tick?.ask / tick?.bid.
-  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced]);
+  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced, confirm, feedLive]);
 
   return (
     <Panel title="Order Entry">
@@ -374,12 +431,19 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
           </div>
         )}
 
-        {/* Buy / Sell toggle */}
-        <div className="grid grid-cols-2 gap-1.5">
+        {/* Buy / Sell toggle
+            S10-04: `aria-pressed` and a named group. These are buttons whose
+            selected state lived only in a CSS class, so nothing announced which
+            direction the order would go — on the control that decides exactly
+            that, next to a submit button that commits capital. The green/red
+            distinction was also the sole visual carrier, which is the F7-01
+            question applied to a control rather than a readout. */}
+        <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Order side">
           {(['buy', 'sell'] as Side[]).map((s) => (
             <button
               key={s}
               type="button"
+              aria-pressed={side === s}
               onClick={() => setSide(s)}
               className={cn(
                 'py-2 rounded font-bold text-[13px] border transition-colors',
@@ -391,16 +455,20 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
               )}
             >
               {s === 'buy' ? '▲ Buy' : '▼ Sell'}
+              <span className="ml-1 text-[9px] opacity-50" aria-hidden="true">
+                {s === 'buy' ? 'B' : 'S'}
+              </span>
             </button>
           ))}
         </div>
 
-        {/* Order type tabs */}
-        <div className="flex gap-1">
+        {/* Order type tabs — same treatment (S10-04). */}
+        <div className="flex gap-1" role="group" aria-label="Order type">
           {ORDER_TYPES.map(({ value, label }) => (
             <button
               key={value}
               type="button"
+              aria-pressed={orderType === value}
               onClick={() => setOrderType(value)}
               className={cn(
                 'flex-1 py-1 rounded text-[11px] font-semibold border transition-colors',

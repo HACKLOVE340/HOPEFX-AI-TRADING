@@ -11,8 +11,15 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
-import { useStore, selectAccount } from '../store';
+import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
+import { useDataFreshness } from '../hooks/useDataFreshness';
+import { StaleDataNotice } from '../components/ui/StaleDataNotice';
+import {
+  useInstrumentSpecs,
+  BUILTIN_SPECS,
+  type InstrumentSpec,
+} from '../hooks/useInstrumentSpecs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,25 +74,20 @@ interface SavedCalc {
  * size is derived by dividing risk by it, the suggested position was ~150×
  * too small. On a position-sizing tool that is the whole output.
  */
-const SYMBOLS: Record<string, { pipSize: number; contractSize: number; quoteIsUsd: boolean; label: string }> = {
-  'XAU/USD': { pipSize: 0.01,    contractSize: 100,    quoteIsUsd: true,  label: 'Gold (XAU/USD)' },
-  'EUR/USD': { pipSize: 0.0001,  contractSize: 100000, quoteIsUsd: true,  label: 'EUR/USD' },
-  'GBP/USD': { pipSize: 0.0001,  contractSize: 100000, quoteIsUsd: true,  label: 'GBP/USD' },
-  'USD/JPY': { pipSize: 0.01,    contractSize: 100000, quoteIsUsd: false, label: 'USD/JPY' },
-  'BTC/USD': { pipSize: 1,       contractSize: 1,      quoteIsUsd: true,  label: 'Bitcoin (BTC/USD)' },
-  'ETH/USD': { pipSize: 0.01,    contractSize: 1,      quoteIsUsd: true,  label: 'Ethereum (ETH/USD)' },
-};
 
 // ─── Calculation logic ────────────────────────────────────────────────────────
 
-export function calculate(state: CalcState): CalcResult | null {
+export function calculate(
+  state: CalcState,
+  specs: Record<string, InstrumentSpec> = BUILTIN_SPECS,
+): CalcResult | null {
   const balance  = parseFloat(state.accountBalance);
   const riskPct  = parseFloat(state.riskPercent) / 100;
   const entry    = parseFloat(state.entryPrice);
   const sl       = parseFloat(state.stopLoss);
   const tp       = parseFloat(state.takeProfit);
   const leverage = parseFloat(state.leverage) || 1;
-  const sym      = SYMBOLS[state.symbol];
+  const sym      = specs[state.symbol];
 
   if (!sym || isNaN(balance) || isNaN(entry) || isNaN(sl) || isNaN(tp) || entry <= 0) return null;
   if (sl === entry || tp === entry) return null;
@@ -173,6 +175,13 @@ const ResultRow: React.FC<{ label: string; value: string; highlight?: boolean }>
 const RiskCalculator: React.FC = () => {
   const account = useStore(selectAccount);
   const prices  = useStore((s) => s.prices);
+  const feedLive = useStore(selectFeedLive);
+  // F5-01: pip and contract sizes come from the server's instrument catalogue,
+  // which is what the backtester and the order path use. The built-in table is
+  // still the offline default — a backend test fails CI if it disagrees with the
+  // server's — but which one is in use is rendered rather than swallowed,
+  // because this page's whole output is derived from these numbers (F1-01).
+  const instruments = useInstrumentSpecs();
 
   const [state, setState] = useState<CalcState>({
     symbol:         'XAU/USD',
@@ -186,6 +195,9 @@ const RiskCalculator: React.FC = () => {
 
   const [livePrice, setLivePrice]   = useState<number | null>(null);
   const [livePriceAge, setLivePriceAge] = useState<number>(0);
+  // F1-01: the price fetch below fell back to store prices invisibly, while
+  // that price is the input to position sizing.
+  const freshness = useDataFreshness('the live price');
   const [history, setHistory]       = useState<SavedCalc[]>([]);
   const [saving, setSaving]         = useState(false);
   const [saveMsg, setSaveMsg]       = useState('');
@@ -216,7 +228,12 @@ const RiskCalculator: React.FC = () => {
           // Only auto-fill entry if user hasn't typed one
           setState(prev => prev.entryPrice === '' ? { ...prev, entryPrice: price.toFixed(price < 10 ? 5 : 2) } : prev);
         }
-      } catch { /* fall back to store prices */ }
+      } catch {
+        // F1-01: this silently fell back to store prices while the page went on
+        // computing a position size from them. The number the trader sizes
+        // against must never look current when the fetch failed.
+        freshness.markFailed('the live price');
+      }
     };
     fetchPrice();
     priceTimerRef.current = setInterval(fetchPrice, 5000);
@@ -228,7 +245,18 @@ const RiskCalculator: React.FC = () => {
     };
   }, [state.symbol]);
 
-  // Fallback: use store prices if API unavailable
+  // Fallback: use store prices if API unavailable.
+  //
+  // F1-02: those store prices come off the WebSocket, so when the feed stalls
+  // this fallback quietly seeds the entry price with a figure that stopped
+  // moving — and the entry price is what every number on this page is computed
+  // from. The HTTP path already says when it failed; this says when the thing
+  // it falls back to is no longer live.
+  useEffect(() => {
+    if (livePrice) return;
+    if (!feedLive && prices[state.symbol]) freshness.markFailed('a live price');
+  }, [feedLive, prices, state.symbol, livePrice, freshness]);
+
   useEffect(() => {
     if (livePrice) return;
     const tick = prices[state.symbol];
@@ -251,7 +279,7 @@ const RiskCalculator: React.FC = () => {
   const set = useCallback((key: keyof CalcState) => (v: string) =>
     setState((prev) => ({ ...prev, [key]: v })), []);
 
-  const result = calculate(state);
+  const result = calculate(state, instruments.specs);
 
   const handleSave = async () => {
     if (!result) return;
@@ -313,8 +341,10 @@ const RiskCalculator: React.FC = () => {
         ]}
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* Live price indicator */}
-            {livePrice && (
+            {/* Live price indicator. The green dot must not appear while the
+                fetch is failing — the price feeding position sizing would then
+                look current when it is not (F1-01). */}
+            {livePrice && !freshness.failed && (
               <div style={{ fontSize: 11, color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
                 ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: '#475569' }}>{livePriceAge}s</span>
               </div>
@@ -336,6 +366,28 @@ const RiskCalculator: React.FC = () => {
         }
       />
 
+      <StaleDataNotice failed={freshness.failed} what={freshness.what} />
+      {instruments.source === 'builtin' && !instruments.loading && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            padding: '8px 12px', borderRadius: 6, marginBottom: 12,
+            background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.3)',
+            fontSize: 12, color: '#ffb800',
+          }}
+        >
+          <span aria-hidden="true">⚠</span>
+          <span>
+            Couldn&apos;t reach the instrument catalogue — sizing from the
+            built-in specification. It is checked against the server on every
+            build, so the numbers should agree, but they have not been confirmed
+            for this session.
+          </span>
+        </div>
+      )}
+
       <div style={s.grid}>
         {/* ── Inputs ── */}
         <div style={s.card}>
@@ -347,7 +399,7 @@ const RiskCalculator: React.FC = () => {
             value={state.symbol}
             onChange={(e) => setState((p) => ({ ...p, symbol: e.target.value }))}
           >
-            {Object.entries(SYMBOLS).map(([k, v]) => (
+            {Object.entries(instruments.specs).map(([k, v]) => (
               <option key={k} value={k}>{v.label}</option>
             ))}
           </select>

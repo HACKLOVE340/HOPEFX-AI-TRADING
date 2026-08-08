@@ -13,10 +13,28 @@ between modules — typed contracts only.
 
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+
+UTC = timezone.utc
+
+
+def _DEFAULT_STALE_THRESHOLD_S() -> float:
+    """Max tick age, read at call time so tests/ops can retune without reimport.
+
+    Same env var the orchestrator's Redis-cache freshness gate uses, so both
+    read paths share one staleness rule (S5-02/S5-03).
+    """
+    return float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0"))
+
+
+def _FUTURE_SKEW_TOLERANCE_S() -> float:
+    """Tolerance for clocks slightly ahead of ours."""
+    return float(os.getenv("TICK_FUTURE_SKEW_TOLERANCE_S", "5.0"))
+
 
 try:
     from enum import StrEnum
@@ -103,13 +121,40 @@ class GoldTick:
         if self.spread == 0.0 and self.ask > self.bid:
             object.__setattr__(self, "spread", round(self.ask - self.bid, 6))
 
-    def is_valid(self) -> bool:
-        return (
-            self.quality not in (TickQuality.REJECTED, TickQuality.STALE)
-            and self.mid > 0
-            and self.bid > 0
-            and self.ask >= self.bid
-        )
+    def age_s(self, now: datetime | None = None) -> float:
+        """Seconds since this tick was observed (negative if future-dated)."""
+        _now = now or datetime.now(UTC)
+        ts = self.timestamp if self.timestamp.tzinfo is not None else self.timestamp.replace(tzinfo=UTC)
+        return (_now - ts).total_seconds()
+
+    def is_valid(self, max_age_s: float | None = None) -> bool:
+        """Whether this tick may be used as a live price.
+
+        ``quality`` is graded once at ingest and this is a frozen dataclass, so
+        it never changes afterwards. Validity must therefore also consider
+        **age**: without it, a tick graded GOOD at 14:00:00 still reported
+        ``is_valid() is True`` at 15:00 after the feed had disconnected, and
+        ``GoldFeedManager.active_sources()`` — which uses the same predicate —
+        listed dead feeds as active on the health endpoint.
+        See docs/HARDENING_BACKLOG.md S5-02.
+
+        The default budget is ``DQE_STALE_THRESHOLD_S``, the same threshold the
+        orchestrator's Redis-cache gate already applies, so there is one
+        staleness rule rather than one per read path.
+        """
+        if self.quality in (TickQuality.REJECTED, TickQuality.STALE):
+            return False
+        if not (self.mid > 0 and self.bid > 0 and self.ask >= self.bid):
+            return False
+
+        budget = max_age_s if max_age_s is not None else _DEFAULT_STALE_THRESHOLD_S()
+        if budget <= 0:
+            return True
+        age = self.age_s()
+        # A future-dated tick beyond clock-skew tolerance signals upstream clock
+        # skew or a parse error and must never be treated as live — otherwise a
+        # negative age trivially passes the upper bound.
+        return -_FUTURE_SKEW_TOLERANCE_S() <= age <= budget
 
 
 # ── OHLCV bar ─────────────────────────────────────────────────────────────────

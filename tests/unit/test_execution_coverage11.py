@@ -85,6 +85,12 @@ class TestExecuteOpenSuccessPath:
                     "stop_loss": 2340.0,
                     "take_profit": 2370.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is True
@@ -109,6 +115,7 @@ class TestExecuteOpenSuccessPath:
                     "stop_loss": 2360.0,
                     "take_profit": 2330.0,
                     "confidence": 0.75,
+                    "risk_approval_token": "rat-test-fixture",  # see S1-05 note above
                 }
             )
         assert result.success is True
@@ -137,6 +144,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is True  # partial counts as success
@@ -165,6 +178,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is False
@@ -188,6 +207,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is False
@@ -212,6 +237,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is False
@@ -259,6 +290,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert len(fired) == 1

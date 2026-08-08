@@ -15,7 +15,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { useStore, selectTriggeredAlerts } from '../store';
+import { useStore, selectTriggeredAlerts, selectFeedLive } from '../store';
+import { LiveFeedNotice } from '../components/ui/LiveFeedNotice';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -82,6 +83,10 @@ const PriceAlerts: React.FC = () => {
   const [tab, setTab]             = useState<'active' | 'history' | 'live'>('active');
   // Live triggered alerts from WebSocket store
   const wsTriggered = useStore(selectTriggeredAlerts);
+  // …and whether that socket is actually delivering. Without this the page
+  // renders identically whether alerts are being watched for or not, which is
+  // the one thing it exists to tell you (F1-02).
+  const feedLive = useStore(selectFeedLive);
   const [showForm, setShowForm]   = useState(false);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState('');
@@ -242,6 +247,10 @@ const PriceAlerts: React.FC = () => {
         </div>
       )}
 
+      {/* A dead socket means no alert will reach this screen, whatever the
+          list below says about being active (F1-02). */}
+      <LiveFeedNotice live={feedLive} what="alert triggers" className="mb-3" />
+
       {/* Load / action errors */}
       {loadErr && <div style={s.errorBox}>{loadErr}</div>}
       {actionErr && <div style={{ ...s.errorBox, marginBottom: 12 }}>{actionErr}</div>}
@@ -312,7 +321,19 @@ const PriceAlerts: React.FC = () => {
       {/* Live WS triggers */}
       {tab === 'live' && (
         wsTriggered.length === 0
-          ? <div style={s.empty}>No live triggers yet. Alerts fire here in real-time via WebSocket.</div>
+          ? (
+            // Empty vs unknown, the S10-01 distinction. "No live triggers yet"
+            // is a statement about the market; with the socket down it is a
+            // statement about the socket, and the two read identically.
+            feedLive
+              ? <div style={s.empty}>No live triggers yet. Alerts fire here in real-time via WebSocket.</div>
+              : (
+                <div style={{ ...s.empty, color: '#ffb800' }} role="status" aria-live="polite">
+                  ⚠️ Live trigger feed is not connected. Alerts may have fired
+                  without appearing here — check the Trigger History tab.
+                </div>
+              )
+          )
           : wsTriggered.map((t) => (
             <div key={t.id} style={{ ...s.historyRow, background: '#1e293b', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
               <span style={{ color: '#f97316', fontSize: 16 }}>⚡</span>

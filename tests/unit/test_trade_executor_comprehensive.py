@@ -87,6 +87,25 @@ def _make_executor(halted=False, drawdown=0.0, equity=100_000.0):
     return TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
 
 
+def _signal(**overrides):
+    """Build an execution signal that carries a risk-approval token.
+
+    TradeExecutor no longer manufactures a token when one is absent (audit
+    finding S1-05) — an order with no proof it passed RiskManager.size_order()
+    is rejected as unauthorized. Tests exercising the *execution* path must
+    therefore supply one, exactly as the decision engine now does. Tests that
+    want to assert the rejection should omit it deliberately.
+    """
+    sig = {
+        "symbol": "XAUUSD",
+        "action": "buy",
+        "size": 1.0,
+        "risk_approval_token": "rat-test-fixture",
+    }
+    sig.update(overrides)
+    return sig
+
+
 # ── ExecutionResult dataclass ──────────────────────────────────────────────────
 
 
@@ -183,7 +202,7 @@ class TestExecuteSignalBuy:
         ex = _make_executor()
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
             MockGate.return_value.check = MagicMock(return_value=None)
-            result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
+            result = await ex.execute_signal(_signal(action="buy"))
         assert result.success is True
         assert result.status == OrderStatus.FILLED
 
@@ -192,7 +211,7 @@ class TestExecuteSignalBuy:
         ex = _make_executor()
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
             MockGate.return_value.check = MagicMock(return_value=None)
-            result = await ex.execute_signal({"symbol": "XAUUSD", "action": "sell", "size": 1.0})
+            result = await ex.execute_signal(_signal(action="sell"))
         assert result.success is True
 
     @pytest.mark.asyncio
@@ -203,8 +222,27 @@ class TestExecuteSignalBuy:
         ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
             MockGate.return_value.check = MagicMock(return_value=None)
+            result = await ex.execute_signal(_signal(action="buy"))
+        assert result.success is False
+        # Must fail because the *broker* rejected it, not because the order was
+        # unauthorized — otherwise this passes for the wrong reason.
+        assert "UNAUTHORIZED" not in (result.message or "")
+
+    @pytest.mark.asyncio
+    async def test_order_without_risk_approval_token_is_rejected(self):
+        """An order that never passed sizing must not reach the broker (S1-05)."""
+        broker = _mock_broker()
+        ex = TradeExecutor(
+            broker=broker,
+            risk_manager=_mock_risk_manager(),
+            position_tracker=_mock_position_tracker(),
+        )
+        with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
+            MockGate.return_value.check = MagicMock(return_value=None)
             result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
         assert result.success is False
+        assert "UNAUTHORIZED" in (result.message or "")
+        broker.place_market_order.assert_not_awaited()
 
 
 # ── execute_signal — close path ────────────────────────────────────────────────

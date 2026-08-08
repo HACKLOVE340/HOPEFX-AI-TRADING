@@ -27,7 +27,7 @@ import { useToast } from '../components/Toast';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { PageHeader } from '../components';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
+import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot, selectFeedLive } from '../store';
 
 const TRADE_CROSS_LINKS = [
   { label: 'Trading Terminal', href: '/terminal',       icon: '🖥️', color: '#3b82f6' },
@@ -43,7 +43,7 @@ import { OrderEntryForm } from '../components/panels/OrderEntryForm';
 import { PositionsTable } from '../components/panels/PositionsTable';
 import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol, describeCloseAll, positionSide } from '../lib/utils';
 import type { PriceTick } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -156,11 +156,13 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
 
 const BrokerStatusBanner: React.FC = () => {
   const account  = useStore((s) => s.account);
-  const wsStatus = useStore(selectWsStatus);
+  // F10-01: `selectFeedLive`, not `wsStatus`. A stalled socket stays
+  // 'connected', so this banner was suppressed during the outage it describes.
+  const feedLive = useStore(selectFeedLive);
 
-  // Only show when we have no account data AND WS is not connected
+  // Only show when we have no account data AND the feed is not delivering
   // (avoids flash during normal load)
-  if (account || wsStatus === 'connected') return null;
+  if (account || feedLive) return null;
 
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#ffb800]/10 border border-[#ffb800]/30 text-[11px]">
@@ -178,6 +180,10 @@ const BrokerStatusBanner: React.FC = () => {
 const AccountBar: React.FC = () => {
   const { data: account } = useAccount();
   const wsStatus = useStore(selectWsStatus);
+  // F10-01: "live" must describe the feed, not the socket — the same defect
+  // fixed in Dashboard's WsBadge, surviving here because this page is a
+  // near-duplicate of it and nobody knew the badge existed three times.
+  const feedLive = useStore(selectFeedLive);
 
   if (!account) return null;
 
@@ -216,11 +222,13 @@ const AccountBar: React.FC = () => {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
+            feedLive ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
         <span className="text-[10px] text-slate-500 capitalize">
-          {wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
+          {feedLive ? 'live'
+            : wsStatus === 'connected' ? 'stalled'
+            : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
         </span>
       </div>
     </div>
@@ -270,7 +278,7 @@ function TradeHistoryTab() {
         </thead>
         <tbody>
           {data.map((t) => {
-            const isLong = t.side === 'long' || t.side === 'buy';
+            const isLong = positionSide(t) === 'long';  // F5-02
             const pnlPos = t.realized_pnl >= 0;
             return (
               <tr key={t.id} className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/30 transition-colors">
@@ -461,6 +469,7 @@ const Trade: React.FC = () => {
   const [closingAll, setClosingAll]         = useState(false);
   const [pendingSide, setPendingSide]       = useState<'buy' | 'sell' | null>(null);
   const prices      = useStore((s) => s.prices);
+  const positions   = useStore((s) => s.positions);
   const allHistory  = useStore((s) => s.priceHistory);
   const qc          = useQueryClient();
   const confirm     = useConfirm();
@@ -469,9 +478,13 @@ const Trade: React.FC = () => {
   usePositions();
 
   const handleCloseAll = useCallback(async () => {
+    // State the magnitude, not the category. "Every open position" is
+    // something a trader cannot check before agreeing to it — they are not told
+    // how many, which symbols, or what P&L they are about to realise. Shared
+    // with PositionsTable so the two confirmations cannot drift (S10-03).
     const ok = await confirm({
       title:        'Close all positions?',
-      description:  'This will market-close every open position immediately. This cannot be undone.',
+      description:  describeCloseAll(positions),
       confirmLabel: 'Close All',
       variant:      'danger',
     });
@@ -486,7 +499,7 @@ const Trade: React.FC = () => {
     } finally {
       setClosingAll(false);
     }
-  }, [confirm, qc, toast]);
+  }, [confirm, positions, qc, toast]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {

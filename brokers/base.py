@@ -276,7 +276,21 @@ class Position:
 
 @dataclass
 class AccountInfo:
-    """Account information"""
+    """Account information.
+
+    **This is the only AccountInfo type.** ``brokers/oanda.py`` previously
+    defined a second dataclass of the same name with ``nav`` instead of
+    ``equity`` and no dict accessors; because the live money path reads account
+    info with ``.get("equity")`` (``risk/manager.py`` ``assess_risk``,
+    ``api/ws_live.py`` equity broadcaster), wiring the async OANDA broker made
+    every pre-trade risk assessment raise ``AttributeError`` — swallowed and
+    reported as a risk-limit block. Do not reintroduce a broker-local variant;
+    add optional fields here instead.
+
+    ``equity`` is the mark-to-market account value (OANDA calls it NAV): it
+    includes unrealised P&L on open positions. Drawdown gates must use it
+    rather than ``balance``, which excludes floating losses.
+    """
 
     balance: float
     equity: float
@@ -284,11 +298,28 @@ class AccountInfo:
     margin_available: float
     positions_count: int
     timestamp: datetime | None = None
+    # Optional venue metadata — defaulted so every existing constructor keeps
+    # working, and so brokers that report them do not have to drop the data.
+    account_id: str = ""
+    currency: str = "USD"
+    unrealized_pnl: float = 0.0
+
+    @property
+    def nav(self) -> float:
+        """Alias for :attr:`equity` — OANDA's name for the same quantity."""
+        return self.equity
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Dict-style read used across the live path.
+
+        Note this is ``getattr``-based, so a **missing field returns the
+        caller's default**. Callers must not pass a plausible-looking default
+        for a value they cannot safely fabricate — notably account equity,
+        where a default would be sized against as if it were real.
+        """
         return getattr(self, key, default)
 
 

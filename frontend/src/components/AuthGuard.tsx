@@ -19,6 +19,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useStore, selectIsAuth } from '../store';
+import { hasRole } from '../lib/subscription';
 import { authApi } from '../hooks/useApi';
 
 interface AuthGuardProps {
@@ -26,12 +27,7 @@ interface AuthGuardProps {
   requiredRole?: import('../store').UserRole;
 }
 
-const ROLE_RANK: Record<import('../store').UserRole, number> = {
-  user:       0,
-  trader:     1,
-  admin:      2,
-  superadmin: 3,
-};
+
 
 function isTokenExpired(token: string | null): boolean {
   if (!token) return false; // null token = not restored yet, not expired
@@ -166,9 +162,13 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
   }
 
   if (requiredRole && user) {
-    const userRank     = ROLE_RANK[user.role] ?? 0;
-    const requiredRank = ROLE_RANK[requiredRole] ?? 0;
-    if (userRank < requiredRank) {
+    // F10-02: `hasRole` and `ROLE_RANK` live in lib/subscription. This file
+    // carried its own byte-identical copy of the rank table plus an inline
+    // re-implementation of the comparison — a second role mechanism alongside
+    // AdminGuard/SuperAdminGuard, with different denial copy. They agree today;
+    // S13-01's record in this codebase is that duplicated pairs do not stay
+    // agreeing.
+    if (!hasRole(user.role, requiredRole)) {
       return (
         <div
           role="alert"

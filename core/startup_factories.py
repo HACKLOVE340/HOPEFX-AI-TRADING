@@ -1668,7 +1668,12 @@ async def init_position_manager(s: Any) -> Any:
     # Restore open positions from the previous session.
     # A Timeout/ConnectionError here means Redis is not running — expected in dev.
     try:
-        restored = await _pm.restore_from_redis()
+        # Pass the broker so restored state is reconciled against what is
+        # actually open. Without it Redis is authoritative, which resurrects
+        # positions closed while this process was down and leaves positions
+        # opened while it was down unmanaged.
+        # See docs/HARDENING_BACKLOG.md S7-03.
+        restored = await _pm.restore_from_redis(broker=getattr(s, "broker", None))
         if restored:
             logger.info("PositionManager: restored %d open position(s) from Redis on startup", restored)
         else:
@@ -1698,10 +1703,24 @@ async def init_position_tracker(s: Any) -> Any:
 async def init_trade_executor(s: Any) -> Any:
     from execution.trade_executor import TradeExecutor
 
+    # Share the PositionManager's Redis store so order intents are journalled
+    # before submission. Without it, a crash between the broker ack and
+    # add_position leaves a live position nothing local ever recorded — see
+    # docs/HARDENING_BACKLOG.md S7-02. None in dev/paper, which the executor
+    # reports at WARNING rather than refusing to trade.
+    state_store = None
+    try:
+        from execution.position_manager import position_manager as _pm
+
+        state_store = getattr(_pm, "_redis_store", None)
+    except Exception as exc:
+        logger.warning("TradeExecutor: could not resolve the order-intent store: %s", exc)
+
     return TradeExecutor(
         broker=s.broker,
         risk_manager=s.risk_manager,
         position_tracker=s.position_tracker,
+        state_store=state_store,
     )
 
 
@@ -3677,10 +3696,29 @@ async def init_decision_engine(s: Any) -> Any:
             try:
                 from risk.gatekeeper import Gatekeeper
 
-                gatekeeper = Gatekeeper(orchestrator=getattr(s, "data_orchestrator", None))
+                gatekeeper = Gatekeeper(
+                    orchestrator=getattr(s, "data_orchestrator", None),
+                    risk_manager=getattr(s, "risk_manager", None),
+                )
                 logger.info("init_decision_engine: built Gatekeeper inline")
             except Exception as _gk_exc:
                 logger.warning("init_decision_engine: could not build Gatekeeper: %s", _gk_exc)
+
+        # Start the Gatekeeper's breach listener. It is the only production
+        # writer of _kill_active and the equity tracker, so without it gate
+        # checks 1 (kill switch), 3 (daily drawdown) and 4 (max drawdown)
+        # compare constants against their limits and can never fire.
+        # start() cannot be used here — it awaits the signal consumer forever.
+        # See docs/HARDENING_BACKLOG.md S2-02.
+        if gatekeeper is not None:
+            try:
+                gatekeeper.start_breach_listener()
+            except Exception as _gk_start_exc:
+                logger.error(
+                    "init_decision_engine: could not start Gatekeeper breach listener (%s) — "
+                    "its kill-switch and drawdown checks will not fire",
+                    _gk_start_exc,
+                )
 
         trade_executor = getattr(s, "trade_executor", None)
         feature_engineer = getattr(s, "feature_engineer", None)

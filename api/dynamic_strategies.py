@@ -29,9 +29,17 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Router-level authentication so a new route cannot be added without it. Four
+# read endpoints (/list, /active, /versions, /health) previously carried no
+# dependency at all, exposing registered strategy source and state. The write
+# endpoints keep their stricter per-route admin requirement on top of this.
+# See docs/HARDENING_BACKLOG.md S6-01.
+from api.auth import require_role as _router_require_role
+
 router = APIRouter(
     prefix="/api/strategies/dynamic",
     tags=["Dynamic Strategies"],
+    dependencies=[Depends(_router_require_role("trader"))],
 )
 
 
@@ -78,24 +86,26 @@ class StrategyVersionResponse(BaseModel):
 # ── Auth dependency ───────────────────────────────────────────────────────────
 
 
-def _get_current_user():
-    """Get the current authenticated user."""
-    try:
-        from api.auth import get_current_user
+# These helpers used to swallow ImportError and return None. As default
+# arguments they are evaluated ONCE at import, so a failed `api.auth` import —
+# a circular import, a missing transitive dependency, a syntax error during a
+# refactor — mounted every endpoint below with NO authentication for the
+# lifetime of the process. That includes POST /register, which accepts and
+# compiles arbitrary Python source. An auth module that cannot be imported must
+# take this router down loudly, not open it quietly.
+# See docs/HARDENING_BACKLOG.md S6-01.
+from api.auth import get_current_user as _get_current_user_dep
+from api.auth import require_role as _require_role
 
-        return Depends(get_current_user)
-    except ImportError:
-        return None
+
+def _get_current_user():
+    """Dependency: the current authenticated user."""
+    return Depends(_get_current_user_dep)
 
 
 def _require_admin():
-    """Require admin role."""
-    try:
-        from api.auth import require_role
-
-        return Depends(require_role("admin"))
-    except ImportError:
-        return None
+    """Dependency: caller must hold the admin role."""
+    return Depends(_require_role("admin"))
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

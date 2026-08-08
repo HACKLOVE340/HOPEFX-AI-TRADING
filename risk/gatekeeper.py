@@ -192,13 +192,20 @@ class Gatekeeper:
         orchestrator=None,
         lineage_store=None,
         fia_compliance: FIAComplianceManager | None = None,
+        risk_manager=None,
     ) -> None:
         initial_balance = float(os.getenv("INITIAL_BALANCE", "100000"))
         self._orch = orchestrator
         self._lineage = lineage_store
+        # Optional: supplies live equity and realised daily P&L to the FIA
+        # controls, which previously received env-derived capital and a
+        # hardcoded daily_pnl of 0.0 (S2-04).
+        self._risk_manager = risk_manager
         self._equity = _EquityTracker(initial_balance)
         self._calendar = _NewsCalendar()
         self._kill_active: bool = False
+        # Background breach-listener task (see start_breach_listener).
+        self._breach_task: asyncio.Task | None = None
         self._paused_until: float = 0.0
         self._daily_trades: int = 0
         _now = datetime.now(UTC)
@@ -228,6 +235,31 @@ class Gatekeeper:
         )
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    def start_breach_listener(self) -> asyncio.Task | None:
+        """Start only the breach listener, as a background task.
+
+        ``start()`` awaits ``_signal_consumer()`` forever, so a caller that only
+        wants direct ``evaluate()`` mode cannot await it — which is why
+        ``startup_factories`` never started the Gatekeeper at all, leaving
+        ``_breach_listener`` (the sole production writer of ``_kill_active`` and
+        the equity tracker) unrun. Gate checks 1, 3 and 4 then compared
+        constants against their limits forever. See
+        docs/HARDENING_BACKLOG.md S2-02.
+
+        Returns the task, or None when there is no running event loop.
+        """
+        if self._breach_task is not None and not self._breach_task.done():
+            return self._breach_task
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.warning("Gatekeeper: no running event loop — breach listener not started")
+            return None
+        self._running = True
+        self._breach_task = loop.create_task(self._breach_listener(), name="gatekeeper_breach_listener")
+        logger.info("Gatekeeper: breach listener started (equity + kill events wired)")
+        return self._breach_task
 
     async def start(self) -> None:
         """Event-bus mode: subscribe to signals and route to orders."""
@@ -315,11 +347,20 @@ class Gatekeeper:
             ask = _safe_float(signal, ("tick_ask", "ask"))
             mid = _safe_float(signal, ("tick_mid", "mid_price", "mid"))
 
+            # FIA 2024 pre-trade controls are only meaningful on the real order.
+            # These fields used to fall back to a hardcoded size of 1.0 and a
+            # side of "long" because the brain's Signal carries neither, so the
+            # FIA maximum-order-size control never saw a real size. Resolve the
+            # size from whichever field the caller populated, and treat "no
+            # size available" as unknown rather than as 1 unit.
+            # See docs/HARDENING_BACKLOG.md S2-04.
+            _size = _safe_float(signal, ("quantity", "size", "approved_size", "position_size"), default=0.0)
+            _side = getattr(signal, "direction", None) or self._side_from_signal(signal)
             order = {
                 "symbol": getattr(signal, "symbol", "XAU_USD"),
-                "size": float(getattr(signal, "quantity", getattr(signal, "size", 1.0))),
-                "side": getattr(signal, "direction", "long"),
-                "price": float(getattr(signal, "entry_price", mid)),
+                "size": _size,
+                "side": _side,
+                "price": float(getattr(signal, "entry_price", mid) or mid),
             }
             # FIA 3.1 market-data validation is only meaningful when the signal
             # carries live tick prices (bid > 0 and ask > bid).  Pure ML signals
@@ -332,9 +373,14 @@ class Gatekeeper:
                 "ask": ask if has_prices else 0.0,
                 "timestamp": datetime.now(UTC),
             }
+            # Live account state, not env defaults. `daily_pnl` was hardcoded to
+            # 0.0 (the brain's Signal has no such field), which meant the FIA
+            # daily-loss control had a constant zero as its input and could
+            # never trigger. Prefer the risk manager's real figures and fall
+            # back to the configured capital only when nothing else is wired.
             portfolio_state = {
-                "daily_pnl": float(getattr(signal, "daily_pnl", 0.0)),
-                "capital": float(os.getenv("INITIAL_BALANCE", "100000")),
+                "daily_pnl": self._live_daily_pnl(signal),
+                "capital": self._live_capital(),
             }
 
             fia_results = await self._fia.validate_order(order, market_data, portfolio_state)
@@ -494,7 +540,7 @@ class Gatekeeper:
             sentiment_score=self._get_sentiment(signal),
             daily_trades=getattr(self, "_daily_trades", 0),
             confidence=getattr(signal, "confidence", 0.0),
-            spread=getattr(signal, "tick_spread", 0.0),
+            spread=self._get_spread(signal),
         )
 
     def _run_checks_on_dict(self, signal: dict) -> list[dict]:
@@ -635,6 +681,67 @@ class Gatekeeper:
         return failures
 
     # ── Orchestrator data access ──────────────────────────────────────────────
+
+    def _side_from_signal(self, signal) -> str:
+        """Derive long/short from a signal_type when no explicit direction."""
+        st = getattr(signal, "signal_type", None)
+        raw = str(getattr(st, "value", st) or "").upper()
+        if "SELL" in raw or "SHORT" in raw:
+            return "short"
+        return "long"
+
+    def _live_daily_pnl(self, signal) -> float:
+        """Real realised daily P&L for the FIA daily-loss control (S2-04)."""
+        explicit = getattr(signal, "daily_pnl", None)
+        if isinstance(explicit, (int, float)) and not isinstance(explicit, bool):
+            return float(explicit)
+        rm = getattr(self, "_risk_manager", None)
+        if rm is not None:
+            for attr in ("daily_pnl", "_daily_pnl"):
+                val = getattr(rm, attr, None)
+                if isinstance(val, (int, float)) and not isinstance(val, bool):
+                    return float(val)
+            state = getattr(rm, "_state", None)
+            val = getattr(state, "daily_pnl", None) if state is not None else None
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                return float(val)
+        return 0.0
+
+    def _live_capital(self) -> float:
+        """Live account equity, falling back to configured capital (S2-04)."""
+        rm = getattr(self, "_risk_manager", None)
+        if rm is not None:
+            state = getattr(rm, "_state", None)
+            equity = getattr(state, "account_equity", None) if state is not None else None
+            if isinstance(equity, (int, float)) and not isinstance(equity, bool) and equity > 0:
+                return float(equity)
+        current = getattr(self._equity, "_current", None)
+        if isinstance(current, (int, float)) and not isinstance(current, bool) and current > 0:
+            return float(current)
+        return float(os.getenv("INITIAL_BALANCE", "100000"))
+
+    def _get_spread(self, signal) -> float:
+        """Orchestrator tick spread is authoritative, as it is for data quality.
+
+        This previously read ``getattr(signal, "tick_spread", 0.0)``. The brain's
+        ``Signal`` (``strategies/base.py``) has no ``tick_spread`` field, so the
+        spread gate compared ``0.0`` against its limit on every call and could
+        never fire — including during the news spikes it exists to avoid.
+        See docs/HARDENING_BACKLOG.md S2-03.
+
+        Falls back to the signal attribute for callers (ExecutionSignal, dict
+        signals) that do carry one.
+        """
+        if self._orch is not None:
+            try:
+                tick = self._orch.get_latest_tick()
+                if tick is not None:
+                    spread = getattr(tick, "spread", None)
+                    if spread is not None:
+                        return float(spread)
+            except Exception as exc:
+                logger.debug("Gatekeeper: orchestrator spread fetch failed: %s", exc)
+        return float(getattr(signal, "tick_spread", 0.0) or 0.0)
 
     def _get_data_quality(self, signal) -> float:
         """Orchestrator tick confidence is authoritative.

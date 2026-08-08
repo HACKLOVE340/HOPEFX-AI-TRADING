@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { useStore, selectRiskSnapshot, selectAccount } from '../../store';
+import { useStore, selectRiskSnapshot, selectAccount, selectKillSwitch } from '../../store';
 
 const fmtPct = (v: number | null | undefined, dp = 1): string =>
   v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(dp)}%`;
@@ -39,7 +39,8 @@ export const RiskTransparencyStrip: React.FC = () => {
   const risk    = useStore(selectRiskSnapshot);
   const account = useStore(selectAccount);
 
-  const killSwitch = risk?.kill_switch_active ?? account?.kill_switch ?? false;
+  // Shared selector — see S10-02.
+  const killSwitch = useStore(selectKillSwitch);
 
   // Prefer the live WS snapshot; fall back to account metrics where present.
   const dailyLoss   = risk?.daily_loss_pct;

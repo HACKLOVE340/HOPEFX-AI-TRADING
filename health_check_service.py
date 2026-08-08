@@ -52,6 +52,8 @@ Mount in app.py:
 from __future__ import annotations
 
 import asyncio
+
+from execution.broker_call import call_broker
 import logging
 import os
 import shutil
@@ -236,12 +238,13 @@ async def _check_broker() -> ComponentStatus:
         if broker is None:
             return ComponentStatus(status="degraded", latency_ms=0.0, detail="Broker not initialised")
 
-        def _get_info():
-            return broker.get_account_info()
-
-        loop = asyncio.get_running_loop()
+        # S12-04g: this ran `broker.get_account_info()` inside an executor, so
+        # against an async broker the future resolved to a *coroutine*, the
+        # balance read below came back None, and the check reported the broker
+        # healthy having read nothing. `call_broker` awaits a coroutine function
+        # and keeps the executor path for a sync one.
         info = await asyncio.wait_for(
-            loop.run_in_executor(None, _get_info),
+            call_broker(broker.get_account_info),
             timeout=_TIMEOUT_S,
         )
         latency = (time.monotonic() - t0) * 1000

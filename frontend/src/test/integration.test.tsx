@@ -390,8 +390,27 @@ describe('store → Dashboard integration', () => {
     const Dashboard = await getDashboard();
     wrap(<Dashboard />);
 
-    act(() => { useStore.getState().setWsStatus('connected'); });
+    // "Live" now means the feed is delivering, not merely that the socket is
+    // open — an open socket that has sent nothing is the S9-01 failure, and
+    // this test used to require the badge to call it Live (F1-02).
+    act(() => {
+      useStore.getState().setWsStatus('connected');
+      useStore.getState().markDataReceived();
+    });
     expect(screen.getByText('Live')).toBeInTheDocument();
+  });
+
+  it('WS badge says Stalled when connected but nothing is arriving', async () => {
+    const Dashboard = await getDashboard();
+    wrap(<Dashboard />);
+
+    act(() => {
+      useStore.getState().setWsStatus('connected');
+      useStore.getState().markDataReceived();
+      useStore.getState().setFeedStale(true);
+    });
+    expect(screen.getByText('Stalled')).toBeInTheDocument();
+    expect(screen.queryByText('Live')).not.toBeInTheDocument();
   });
 
   it('WS disconnected shows Disconnected', async () => {

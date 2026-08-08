@@ -88,6 +88,10 @@ _last_mid_lock = _threading.Lock()
 AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "20"))
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
+# Hard bound on a single socket write. A frozen TCP window makes send_text
+# block rather than raise, so without this one stalled client held the shared
+# broadcast loop and every other client stopped receiving data (S8-01).
+_SEND_TIMEOUT_S: float = float(os.getenv("WS_SEND_TIMEOUT_S", "2.0"))
 # Set to "false" to allow unauthenticated connections (dev/demo mode only).
 # In production this MUST be true — all WS data (prices, signals, account
 # updates) would otherwise be broadcast to unauthenticated connections.
@@ -188,6 +192,17 @@ class LiveConnectionManager:
         self._subscriptions: dict[str, set[str]] = {}
         # connection_id → user_id (None until auth message received)
         self._user_ids: dict[str, str | None] = {}
+        # Monotonic per-CHANNEL sequence. A client tracks the last seq it saw
+        # on each channel; a jump means it missed a message and should
+        # resynchronise. This matters for the state channels — positions,
+        # account, risk are deltas, so a dropped one leaves the UI wrong
+        # indefinitely rather than for one tick. See S8-03.
+        #
+        # Per channel rather than per connection on purpose: the payload is
+        # serialised once per broadcast and shared by every subscriber (the
+        # O(1) fan-out S8-01 depends on). A per-connection counter would force
+        # a re-serialise per client.
+        self._channel_seq: dict[str, int] = {}
         # connection_id → heartbeat miss count
         self._hb_misses: dict[str, int] = {}
         # itertools.count is thread-safe in CPython (C-level increment) and
@@ -247,14 +262,47 @@ class LiveConnectionManager:
         self._hb_misses[cid] = self._hb_misses.get(cid, 0) + 1
         return self._hb_misses[cid]
 
+    def _stamp(self, channel: str, msg: dict) -> dict:
+        """Return a copy of *msg* carrying its channel and next sequence number.
+
+        A copy, not an in-place update: broadcasters reuse message dicts, and
+        mutating one would leave a stale ``seq`` on the caller's object.
+        """
+        seq = self._channel_seq.get(channel, 0) + 1
+        self._channel_seq[channel] = seq
+        return {**msg, "channel": channel, "seq": seq}
+
+    async def _send_bounded(self, cid: str, ws: Any, payload: str) -> bool:
+        """Send *payload* to one socket under a hard timeout.
+
+        A frozen TCP window (sleeping laptop, congested mobile link) makes
+        ``send_text`` **block** rather than raise once the kernel buffer fills.
+        Every ``asyncio.wait_for`` in this module wrapped a ``receive_text``;
+        none wrapped a send, so one such client could hold the shared fan-out
+        indefinitely. See docs/HARDENING_BACKLOG.md S8-01.
+
+        Returns True on success; False when the client should be disconnected.
+        """
+        try:
+            await asyncio.wait_for(ws.send_text(payload), timeout=_SEND_TIMEOUT_S)
+            return True
+        except TimeoutError:
+            logger.warning(
+                "WS send timed out after %.1fs for %s — disconnecting slow consumer",
+                _SEND_TIMEOUT_S,
+                cid,
+            )
+            return False
+        except Exception as exc:
+            # INFO, not debug: at production log level a client silently losing
+            # messages produced no operational signal at all (S8-04).
+            logger.info("WS send failed for %s: %s", cid, exc)
+            return False
+
     async def send(self, cid: str, msg: dict) -> None:
         ws = self._connections.get(cid)
-        if ws:
-            try:
-                await ws.send_text(json.dumps(msg))
-            except Exception as exc:
-                logger.debug("WS send failed for %s: %s", cid, exc)
-                self.disconnect(cid)
+        if ws and not await self._send_bounded(cid, ws, json.dumps(msg)):
+            self.disconnect(cid)
 
     async def broadcast(self, channel: str, msg: dict) -> None:
         """Send to all connections subscribed to channel.
@@ -266,23 +314,35 @@ class LiveConnectionManager:
         Empty subscription set = subscribed to all channels (pre-subscribe
         state while the client is still sending its subscribe message).
         """
-        # Serialize once — reuse the string for every send.
-        payload = json.dumps(msg)
+        # Serialize once — reuse the string for every send. The sequence is
+        # stamped here, before serialisation, so every subscriber gets the same
+        # bytes (S8-03 without undoing S8-01's O(1) fan-out).
+        payload = json.dumps(self._stamp(channel, msg))
         # Private channels require an explicit subscription; never deliver them
         # via the implicit "empty subscription = all channels" firehose.
         implicit_all_ok = channel not in self._PRIVATE_CHANNELS
-        dead: list[str] = []
-        for cid, subs in list(self._subscriptions.items()):
-            if channel in subs or (not subs and implicit_all_ok):
-                ws = self._connections.get(cid)
-                if ws:
-                    try:
-                        await ws.send_text(payload)
-                    except Exception as exc:
-                        logger.debug("WS broadcast failed for %s: %s", cid, exc)
-                        dead.append(cid)
-        for cid in dead:
-            self.disconnect(cid)
+
+        targets = [
+            (cid, ws)
+            for cid, subs in list(self._subscriptions.items())
+            if (channel in subs or (not subs and implicit_all_ok)) and (ws := self._connections.get(cid)) is not None
+        ]
+        if not targets:
+            return
+
+        # Fan out CONCURRENTLY under a per-send timeout. This loop used to await
+        # each socket in turn, so one client whose TCP window had frozen blocked
+        # the shared tick broadcaster and every other trader stopped receiving
+        # prices — while the 30s stale-feed watchdog could not fire either,
+        # because its deadline is only refreshed at the top of a loop that was
+        # no longer iterating. See docs/HARDENING_BACKLOG.md S8-01.
+        results = await asyncio.gather(
+            *(self._send_bounded(cid, ws, payload) for cid, ws in targets),
+            return_exceptions=True,
+        )
+        for (cid, _ws), ok in zip(targets, results, strict=False):
+            if ok is not True:
+                self.disconnect(cid)
 
     async def broadcast_signal(self, symbol: str, signal: dict) -> None:
         """Called by signal_engine.py to push a signal to all 'signals' subscribers."""
@@ -300,22 +360,35 @@ class LiveConnectionManager:
         Used for per-user channels: account updates, position fills, alerts.
         JSON is serialized once before the loop (same rationale as broadcast).
         """
-        payload = json.dumps(msg)
-        dead: list[str] = []
-        for cid, uid in list(self._user_ids.items()):
-            if uid != user_id:
-                continue
-            subs = self._subscriptions.get(cid, set())
-            if channel in subs or not subs:
-                ws = self._connections.get(cid)
-                if ws:
-                    try:
-                        await ws.send_text(payload)
-                    except Exception as exc:
-                        logger.debug("WS user-send failed for %s: %s", cid, exc)
-                        dead.append(cid)
-        for cid in dead:
-            self.disconnect(cid)
+        payload = json.dumps(self._stamp(channel, msg))
+        # Same private-channel rule as broadcast(). This method kept the
+        # "empty subscription = all channels" fallback without the guard, so a
+        # connection still mid-handshake — or deliberately subscribed to
+        # `prices` only — received private account and risk messages it never
+        # asked for. Right user, wrong channel: the Round 2 fix was applied to
+        # one of two sibling senders. See docs/HARDENING_BACKLOG.md S8-02.
+        implicit_all_ok = channel not in self._PRIVATE_CHANNELS
+
+        targets = [
+            (cid, ws)
+            for cid, uid in list(self._user_ids.items())
+            if uid == user_id
+            and (
+                channel in self._subscriptions.get(cid, set())
+                or (not self._subscriptions.get(cid, set()) and implicit_all_ok)
+            )
+            and (ws := self._connections.get(cid)) is not None
+        ]
+        if not targets:
+            return
+
+        results = await asyncio.gather(
+            *(self._send_bounded(cid, ws, payload) for cid, ws in targets),
+            return_exceptions=True,
+        )
+        for (cid, _ws), ok in zip(targets, results, strict=False):
+            if ok is not True:
+                self.disconnect(cid)
 
     @property
     def connection_count(self) -> int:

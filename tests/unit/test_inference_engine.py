@@ -37,8 +37,17 @@ def _make_ohlcv(n: int = 150, freq: str = "D") -> pd.DataFrame:
 
 
 def _make_feature_df(n_features: int = 20) -> pd.DataFrame:
+    """Synthetic feature row with realistic, non-degenerate values.
+
+    This used to return ``np.zeros((1, n_features))``. An all-zero feature
+    vector is precisely the condition ``_features_are_unusable`` now rejects as
+    a probable silent upstream data failure (audit finding S4-03) — the engine
+    previously logged that diagnosis and scored the vector anyway. A fixture
+    that is indistinguishable from a broken feed cannot exercise the prediction
+    path, so it now carries plausible feature values.
+    """
     return pd.DataFrame(
-        np.zeros((1, n_features)),
+        np.linspace(0.1, 2.0, n_features).reshape(1, n_features),
         columns=[f"f{i}" for i in range(n_features)],
     )
 

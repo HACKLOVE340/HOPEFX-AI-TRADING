@@ -39,6 +39,7 @@ import logging
 import math
 import os
 import time
+import uuid
 from collections.abc import Callable
 from typing import Any, cast
 from dataclasses import dataclass, field
@@ -103,10 +104,28 @@ class TradeExecutor:
     - Loss-streak detection (STREAK_HALT_LOSSES / STREAK_COOLDOWN_MINUTES)
     """
 
-    def __init__(self, broker: Any, risk_manager: Any, position_tracker: Any) -> None:
+    def __init__(
+        self,
+        broker: Any,
+        risk_manager: Any,
+        position_tracker: Any,
+        state_store: Any = None,
+    ) -> None:
         self.broker = broker
         self.risk_manager = risk_manager
         self.position_tracker = position_tracker
+        # Write-ahead journal for order intents (S7-02). Optional: paper and
+        # dev runs have no Redis, and trading must not stop for want of a
+        # crash-recovery record — but the gap is worth saying out loud, because
+        # without it a fill that lands during a crash is invisible forever.
+        self.state_store = state_store
+        # Resolved lazily on first use when not injected — see _resolve_store().
+        self._store_lookup_done = state_store is not None
+        if state_store is None:
+            logger.info(
+                "TradeExecutor: no state_store injected — will resolve the "
+                "order-intent journal from the PositionManager on first order."
+            )
         self.metrics = get_metrics_registry()
 
         self._pending_orders: dict[str, dict[str, Any]] = {}
@@ -327,8 +346,30 @@ class TradeExecutor:
         # risk-approval token + decision id, then verify before the broker call so
         # this path carries the same No Unauthorized Trade / No Hidden Decision
         # guarantee as the OMS and smart-router paths. MONITOR logs; ENFORCE refuses.
-        signal["risk_approval_token"] = signal.get("risk_approval_token") or f"rat-{signal.get('signal_id', 'te')}"
-        signal["decision_id"] = signal.get("decision_id") or signal.get("signal_id") or signal["risk_approval_token"]
+        # Do NOT manufacture a token. It is issued by RiskManager.size_order()
+        # as proof the order passed the risk gate; minting one here made the
+        # No Unauthorized Trade invariant — a truthiness check — pass on a
+        # constant, so it could never detect the thing it exists to detect,
+        # not even with HOPEFX_INVARIANT_MODE=enforce.
+        # See docs/HARDENING_BACKLOG.md S1-05.
+        _token = signal.get("risk_approval_token")
+        if not _token:
+            logger.critical(
+                "TradeExecutor BLOCKED order | symbol=%s reason=missing risk_approval_token "
+                "(order did not come from RiskManager.size_order)",
+                symbol,
+            )
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.REJECTED,
+                message="[UNAUTHORIZED] missing risk_approval_token — order did not pass the risk gate",
+                latency_ms=0,
+            )
+        signal["decision_id"] = signal.get("decision_id") or signal.get("signal_id") or _token
         try:
             from invariants.enforcement import enforce_order_authorization
 
@@ -348,30 +389,58 @@ class TradeExecutor:
         except Exception as _auth_exc:  # never let the gate crash execution
             logger.error("TradeExecutor: authorization check raised %s", _auth_exc)
 
-        # ── 5. Place order ────────────────────────────────────────────────────
+        # ── 5. Journal the intent, then place the order ───────────────────────
+        # The window between the broker acking a fill and add_position() below
+        # is a crash window. If the process dies inside it, the broker holds a
+        # position nothing local ever recorded: it was never written before
+        # submission, and no id linked the fill back to a local order. On
+        # restart Redis has no trace, so the position is invisible to SL/TP, to
+        # risk exposure and to the dashboard, and stays open until someone reads
+        # a broker statement.
+        #
+        # Write the intent first and clear it only once the position is
+        # tracked. Anything still journalled at boot is an order that may have
+        # filled while we were down — the reconciliation candidate S7-03's
+        # broker diff consumes. See docs/HARDENING_BACKLOG.md S7-02 / S7-05.
+        client_order_id = f"hopefx-{uuid.uuid4().hex[:16]}"
+        signal["client_order_id"] = client_order_id
+        await self._journal_intent(client_order_id, symbol, side, size, signal)
+
         order = await self.broker.place_market_order(
             symbol=symbol,
             side=side,
             quantity=size,
+            client_order_id=client_order_id,
         )
 
         if order.status.value in ("filled", "partial"):
-            if not order.average_fill_price or not (order.average_fill_price > 0):
-                logger.error(
-                    "TradeExecutor: order %s status=%s but average_fill_price=%s — skipping position open",
+            # The broker has ALREADY EXECUTED this order. A missing or zero
+            # fill price is a reporting gap, not a reason to disown the
+            # position — brokers that acknowledge a fill and deliver the price
+            # in a later message (async and FIX fill reports) hit this on every
+            # order. Skipping add_position() here left a live, unprotected
+            # position with no stop armed, invisible to risk and the dashboard
+            # and unrecoverable on restart, while the caller was told the trade
+            # FAILED and sized its next signal as if flat.
+            #
+            # Record the position at a provisional price, flag it so nothing
+            # downstream treats that price as confirmed, and alert.
+            # See docs/HARDENING_BACKLOG.md S7-01.
+            _price_unconfirmed = not order.average_fill_price or not (order.average_fill_price > 0)
+            _entry_price = float(order.average_fill_price or 0.0)
+            if _price_unconfirmed:
+                _entry_price = self._provisional_fill_price(signal, symbol)
+                logger.critical(
+                    "TradeExecutor: order %s status=%s but average_fill_price=%s — "
+                    "position OPENED at provisional price %.5f and flagged "
+                    "price_unconfirmed. Reconcile against the broker before "
+                    "trusting P&L for this position.",
                     order.id,
                     order.status.value,
                     order.average_fill_price,
+                    _entry_price,
                 )
-                return ExecutionResult(
-                    success=False,
-                    order_id=order.id,
-                    filled_quantity=order.filled_quantity,
-                    average_price=order.average_fill_price,
-                    commission=order.commission,
-                    status=OrderStatus(order.status.value),
-                    message="Invalid fill price — position not opened",
-                )
+
             from execution.position_tracker import Position
 
             position = Position(
@@ -379,13 +448,38 @@ class TradeExecutor:
                 symbol=symbol,
                 side="long" if side == "buy" else "short",
                 quantity=order.filled_quantity,
-                entry_price=order.average_fill_price,
-                current_price=order.average_fill_price,
+                entry_price=_entry_price,
+                current_price=_entry_price,
                 commission=order.commission,
                 stop_loss=signal.get("stop_loss"),
                 take_profit=signal.get("take_profit"),
             )
+            # Marks a position whose entry price is provisional (S7-01). Set as
+            # an attribute rather than a constructor arg so this works with any
+            # Position implementation the tracker accepts.
+            position.price_unconfirmed = _price_unconfirmed
             await self.position_tracker.add_position(position)
+
+            # The position is now tracked, so the crash window is closed and the
+            # intent is no longer a reconciliation candidate. Clearing it is
+            # best-effort: a journal error must never make us disown a position
+            # the broker has actually filled.
+            await self._clear_intent(client_order_id, broker_order_id=order.id)
+
+            # Tell the RiskManager a position opened. Without this the
+            # _MAX_OPEN_POSITIONS gate in size_order() reads a counter that is
+            # never incremented on this path (it was written only by the
+            # standalone hopefx_engine.py), so it compares 0 >= 3 forever and
+            # the decision engine can open unbounded concurrent positions.
+            # See docs/HARDENING_BACKLOG.md S1-04.
+            try:
+                self.risk_manager.notify_position_opened(symbol)
+            except Exception as _notify_exc:  # never fail an executed order on bookkeeping
+                logger.error(
+                    "TradeExecutor: notify_position_opened failed for %s: %s — open-position count is now understated",
+                    symbol,
+                    _notify_exc,
+                )
 
             # A market order that only partially filled leaves an unfilled
             # remainder that is NOT resubmitted here. Surface it explicitly so
@@ -411,6 +505,123 @@ class TradeExecutor:
             status=OrderStatus(order.status.value),
             message=f"Order {order.status.value}",
         )
+
+    def _resolve_store(self) -> Any:
+        """Return the intent journal, resolving it lazily the first time.
+
+        `init_trade_executor` passes the PositionManager's Redis store, but
+        `trade_executor` cannot declare `position_manager` as a registry
+        dependency: `core/component_registry.py` runs a topological sort in
+        which a **failed** dependency causes the dependent to be *skipped*. A
+        Redis outage would therefore stop trading altogether rather than merely
+        stop journalling — much worse than the problem being solved.
+
+        Startup order is consequently not guaranteed, so an executor built
+        before the position manager must still find the store afterwards rather
+        than journalling nothing for the life of the process.
+        """
+        if self.state_store is not None:
+            return self.state_store
+        if self._store_lookup_done:
+            return None
+
+        self._store_lookup_done = True
+        try:
+            from execution.position_manager import position_manager as _pm
+
+            self.state_store = getattr(_pm, "_redis_store", None)
+        except Exception as exc:
+            logger.warning("TradeExecutor: could not resolve the order-intent store: %s", exc)
+            self.state_store = None
+
+        if self.state_store is None:
+            logger.warning(
+                "TradeExecutor: no state_store — order intents will NOT be "
+                "journalled. A crash between broker ack and add_position leaves "
+                "an untracked live position with no way to reconcile it "
+                "(docs/HARDENING_BACKLOG.md S7-02)."
+            )
+        return self.state_store
+
+    async def _journal_intent(
+        self,
+        client_order_id: str,
+        symbol: str,
+        side: str,
+        size: float,
+        signal: dict[str, Any],
+    ) -> None:
+        """Write-ahead record of an order we are about to submit (S7-02).
+
+        Best-effort by design: if the journal is unavailable we log and trade
+        anyway. Refusing to trade because Redis is down would convert a
+        recovery-visibility gap into an outage, and the paper path has no store
+        at all. The cost of the failure is recorded rather than hidden.
+        """
+        store = self._resolve_store()
+        if store is None:
+            return
+        try:
+            await store.save_order(
+                {
+                    "id": client_order_id,
+                    "client_order_id": client_order_id,
+                    "symbol": symbol,
+                    "side": side,
+                    "quantity": float(size),
+                    "status": "intent",
+                    "stop_loss": signal.get("stop_loss"),
+                    "take_profit": signal.get("take_profit"),
+                    "decision_id": signal.get("decision_id"),
+                    "risk_approval_token": signal.get("risk_approval_token"),
+                }
+            )
+        except Exception as exc:
+            logger.error(
+                "TradeExecutor: could not journal order intent %s for %s: %s — "
+                "a crash before add_position would leave this position untracked",
+                client_order_id,
+                symbol,
+                exc,
+            )
+
+    async def _clear_intent(self, client_order_id: str, broker_order_id: str | None = None) -> None:
+        """Drop the write-ahead record once the position is tracked (S7-02)."""
+        store = self._resolve_store()
+        if store is None:
+            return
+        try:
+            await store.remove_order(client_order_id)
+        except Exception as exc:
+            logger.error(
+                "TradeExecutor: could not clear order intent %s (broker order %s): %s — "
+                "it will be re-examined as an orphan at the next boot",
+                client_order_id,
+                broker_order_id,
+                exc,
+            )
+
+    def _provisional_fill_price(self, signal: dict[str, Any], symbol: str) -> float:
+        """Best available price for a fill the broker confirmed without one.
+
+        Preference order: the signal's intended entry, then the last mark the
+        position tracker holds, then 0.0. The result is only ever used on a
+        position flagged ``price_unconfirmed`` (S7-01), so it must be treated
+        as a placeholder pending reconciliation — never as a real fill.
+        """
+        for key in ("entry_price", "price", "current_price"):
+            raw = signal.get(key)
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw > 0:
+                return float(raw)
+        try:
+            getter = getattr(self.position_tracker, "get_last_price", None)
+            if callable(getter):
+                last = getter(symbol)
+                if isinstance(last, (int, float)) and not isinstance(last, bool) and last > 0:
+                    return float(last)
+        except Exception as exc:
+            logger.debug("provisional fill price lookup failed for %s: %s", symbol, exc)
+        return 0.0
 
     async def _execute_close(self, signal: dict[str, Any]) -> ExecutionResult:
         """
@@ -493,6 +704,18 @@ class TradeExecutor:
 
         if success and closed_position:
             realized_pnl = closed_position.realized_pnl
+
+            # Mirror of the open notification (S1-04). Without this the
+            # open-position counter only ever grows, and the position cap
+            # eventually blocks all trading with no positions actually open.
+            try:
+                self.risk_manager.notify_position_closed(getattr(closed_position, "symbol", position_id))
+            except Exception as _notify_exc:
+                logger.error(
+                    "TradeExecutor: notify_position_closed failed for %s: %s — open-position count is now overstated",
+                    position_id,
+                    _notify_exc,
+                )
 
             # Update risk manager equity. Increment from CURRENT equity, not the
             # day's starting equity — otherwise each close clobbers the realised

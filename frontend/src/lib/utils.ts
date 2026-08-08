@@ -367,3 +367,142 @@ export function extractApiError(err: unknown, fallback = 'An error occurred'): s
   if (typeof msg === 'string' && msg.length > 0) return msg;
   return fallback;
 }
+
+/**
+ * Whether a failed request that *commits capital* actually failed (F2-01).
+ *
+ * `extractApiError` answers "what went wrong". For a GET that is enough. For an
+ * order it is not, because there are two failures with opposite consequences:
+ *
+ *   the server answered  → the order was refused. Nothing is open. Retry freely.
+ *   nothing came back    → unknown. The broker may have filled it. Do NOT retry.
+ *
+ * The axios instance carries `timeout: 30_000` (useApi.ts:15), so the second
+ * case is reachable in ordinary use: a slow broker produces an error with no
+ * `response`, the catch falls through to its generic branch, and the trader is
+ * told the order **failed**. The natural response to that is to place it again
+ * — and now they hold double the position they intended, with one stop covering
+ * half of it.
+ *
+ * The distinction already exists in this codebase, reasoned out in these exact
+ * terms, for logging in:
+ *
+ *     True only for a DEFINITIVE auth rejection … as opposed to a
+ *     timeout/network/5xx, which says nothing about whether the session is
+ *     actually valid.                                     — useApi.ts:198
+ *
+ * It was written once, correctly, and the path that moves money never got it.
+ *
+ * Note `extractApiError`'s timeout copy — "please try again" — is right for a
+ * read and wrong here, which is why this is a separate function rather than a
+ * flag on that one.
+ *
+ * @param what what was being committed, in the user's words: 'order', 'close'.
+ */
+export function describeSubmitFailure(
+  err: unknown,
+  what = 'request',
+): { message: string; outcomeKnown: boolean } {
+  const e = err as { response?: unknown; request?: unknown } | null | undefined;
+
+  // The server answered: it refused. Definitive.
+  if (e?.response) {
+    return { message: extractApiError(err, `The ${what} was rejected.`), outcomeKnown: true };
+  }
+  // A request was sent and nothing came back. This is the dangerous one.
+  if (e?.request) {
+    return {
+      message:
+        `We never heard back about your ${what}. It may have gone through — ` +
+        `check your open positions before doing anything else.`,
+      outcomeKnown: false,
+    };
+  }
+  // Never became a request at all (bad config, thrown before dispatch), so
+  // nothing reached the broker.
+  return { message: extractApiError(err, `The ${what} could not be sent.`), outcomeKnown: true };
+}
+
+/**
+ * One-line summary of what closing *all* positions actually does (S10-03).
+ *
+ * There were two close-all confirmations with different wording and different
+ * information: `Trade.tsx` said "this will market-close every open position
+ * immediately" — a category, not a quantity — and `PositionsTable` gave a count
+ * and nothing else. Neither told the trader the number that matters: the P&L
+ * they are about to realise. Closing three winners and closing three losers
+ * read identically.
+ *
+ * Both call sites now use this, so the two cannot drift apart again — the
+ * duplication failure mode from S13-01.
+ */
+export function describeCloseAll(
+  positions: ReadonlyArray<{ symbol?: string | null; unrealized_pnl?: number | null }>,
+): string {
+  const list = positions ?? [];
+  if (list.length === 0) return 'There are no open positions to close.';
+
+  // Sum only the P&L we actually have. A missing value must not become 0 and
+  // silently understate the total, and must never surface as NaN.
+  const known = list.map((p) => p.unrealized_pnl).filter((v): v is number => typeof v === 'number' && isFinite(v));
+  const net = known.reduce((a, b) => a + b, 0);
+  const partial = known.length !== list.length;
+
+  const symbols = list.map((p) => p.symbol).filter((s): s is string => !!s);
+  const unique = Array.from(new Set(symbols));
+  const named = unique.length > 0 && unique.length <= 4 ? ` (${unique.join(', ')})` : '';
+
+  const outcome =
+    known.length === 0
+      ? 'P&L unavailable'
+      : `realising a ${net < 0 ? 'loss' : 'profit'} of ${fmtPnl(net)}`;
+
+  const caveat = partial ? ' P&L is missing for some positions, so the total may be understated.' : '';
+
+  return (
+    `Market-close ${list.length} open position${list.length === 1 ? '' : 's'}${named}, ` +
+    `${outcome}. This cannot be undone.${caveat}`
+  );
+}
+
+/** Default staleness threshold for on-screen data-age indicators (S10-05). */
+export const DATA_STALE_AFTER_MS = 30_000;
+
+/**
+ * Human age of a piece of data, in the words a trader reads at a glance.
+ *
+ * There was no latency or data-age indicator anywhere in the app (S10-05), so a
+ * frozen price and a live one were visually identical.
+ *
+ * A negative age (client/server clock skew) reads as "just now" rather than
+ * "-5s ago" — the alternative invites the reader to distrust the whole widget.
+ */
+export function formatAge(ageMs: number | null | undefined): string {
+  if (ageMs == null || !isFinite(ageMs)) return 'unknown';
+  const ms = Math.max(0, ageMs);
+  if (ms < 1_000) return 'just now';
+  const s = Math.floor(ms / 1_000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
+
+/**
+ * Whether a quality/confidence reading still describes reality (S9-02).
+ *
+ * `LivePriceTicker` renders the orchestrator's quality score as a percentage.
+ * That score is assigned when a tick is ingested and never re-evaluated as the
+ * tick ages, so a tick graded GOOD at 14:00 still reported 94% at 15:00 — the
+ * one visible freshness cue reinforcing the stalled-feed illusion instead of
+ * correcting it.
+ *
+ * A missing timestamp returns false: never assume fresh.
+ */
+export function qualityIsMeaningful(
+  lastDataAt: number | null | undefined,
+  staleAfterMs: number = DATA_STALE_AFTER_MS,
+): boolean {
+  if (lastDataAt == null || !isFinite(lastDataAt)) return false;
+  return Date.now() - lastDataAt < staleAfterMs;
+}

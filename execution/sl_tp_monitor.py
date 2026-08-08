@@ -40,6 +40,8 @@ import os
 from datetime import timezone
 from typing import Any
 
+from execution.broker_call import call_broker
+
 logger = logging.getLogger(__name__)
 
 UTC = timezone.utc
@@ -318,17 +320,23 @@ class SLTPMonitor:
             success = False
             for attempt in range(1, _MAX_RETRIES + 1):
                 try:
-                    loop = asyncio.get_running_loop()
-                    order = await loop.run_in_executor(
-                        None,
-                        lambda: self._broker.place_order(
-                            symbol=symbol,
-                            side=close_side,
-                            order_type=OrderType.MARKET,
-                            quantity=qty,
-                            price=None,
-                            stop_price=None,
-                        ),
+                    # `BaseBroker.place_order` is `async def` (as are the OANDA
+                    # and MT5 implementations); only the paper broker is sync.
+                    # Running it in an executor therefore just *built* a
+                    # coroutine on a worker thread — awaiting the executor future
+                    # yielded that coroutine object, not an Order. It is
+                    # non-None, so the code below declared the close a success
+                    # and alerted "STOP_LOSS HIT: Closed ..." while no order had
+                    # ever been sent and the position was still open at the
+                    # broker. See docs/HARDENING_BACKLOG.md S12-04.
+                    order = await call_broker(
+                        self._broker.place_order,
+                        symbol=symbol,
+                        side=close_side,
+                        order_type=OrderType.MARKET,
+                        quantity=qty,
+                        price=None,
+                        stop_price=None,
                     )
                     if order is not None:
                         # Book the ACTUAL executed fill price, not the trigger

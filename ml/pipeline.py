@@ -279,15 +279,34 @@ class StationarityTester:
 
     def test(self, series: pd.Series, name: str = "") -> StationarityResult:
         if not _STATSMODELS:
-            # Return a permissive result if statsmodels unavailable
+            # Fail CLOSED. This used to return a permissive result —
+            # is_stationary=True with adf_pvalue=0.01 and kpss_pvalue=0.10,
+            # i.e. the numbers a *confidently stationary* series produces. A
+            # caller reading the p-values rather than `method` saw strong
+            # evidence for a test that never ran, and every feature was waved
+            # through into training and inference regardless of whether it was
+            # stationary. Non-stationary features are precisely what this check
+            # exists to keep out.
+            #
+            # statsmodels is in requirements.txt, so a correct deployment has
+            # it; this is the behaviour when it is missing, which must be
+            # "unknown, therefore not stationary" rather than "passed".
+            # Same principle as the drift guard in S4-05.
+            # See docs/HARDENING_BACKLOG.md S4-06.
+            logger.warning(
+                "StationarityTester: statsmodels unavailable — cannot test %r. "
+                "Reporting NOT stationary (fail-closed); install statsmodels to "
+                "restore the check.",
+                name,
+            )
             return StationarityResult(
                 feature=name,
                 adf_statistic=0.0,
-                adf_pvalue=0.01,
+                adf_pvalue=1.0,  # no evidence against a unit root
                 kpss_statistic=0.0,
-                kpss_pvalue=0.10,
-                is_stationary=True,
-                method="SKIPPED (statsmodels unavailable)",
+                kpss_pvalue=0.0,  # rejects the stationarity null
+                is_stationary=False,
+                method="SKIPPED (statsmodels unavailable) — fail-closed",
             )
 
         series = series.dropna()

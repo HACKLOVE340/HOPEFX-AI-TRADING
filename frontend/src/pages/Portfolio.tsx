@@ -28,7 +28,10 @@ import {
   selectPositions,
   selectEquityCurve,
   selectPerformanceSummary,
+  selectFeedLive,
 } from '../store';
+import { LiveFeedNotice } from '../components/ui/LiveFeedNotice';
+import { DataAge } from '../components/ui/DataAge';
 import {
   useEquityCurve,
   usePerformanceSummary,
@@ -81,6 +84,11 @@ const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub }) => (
 const AccountSummary: React.FC = () => {
   useAccount();
   const account = useStore(selectAccount);
+  // Every tile below is a socket-fed number. When the feed stalls they freeze
+  // at their last value and read exactly like current ones — unrealized P&L
+  // included, which is the figure a trader watches to decide whether to close
+  // (F1-02). The age says how long ago these were true.
+  const lastDataAt = useStore((s) => s.lastDataAt);
 
   if (!account) {
     return (
@@ -101,6 +109,10 @@ const AccountSummary: React.FC = () => {
   const dailyPct   = balance > 0 ? (dailyPnl / balance) * 100 : 0;
 
   return (
+    <div className="flex flex-col gap-2">
+    <div className="flex items-center justify-end">
+      <DataAge at={lastDataAt} label="figures as of" />
+    </div>
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       <StatTile label="Balance"      value={`$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
       <StatTile label="Equity"       value={`$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
@@ -117,6 +129,7 @@ const AccountSummary: React.FC = () => {
         positive={dailyPct >= 0 ? true : false}
         sub={`${dailyPnl >= 0 ? '+' : ''}$${dailyPnl.toFixed(2)}`}
       />
+    </div>
     </div>
   );
 };
@@ -203,8 +216,8 @@ const TradeHistory: React.FC = () => {
     const toMs   = dateTo   ? new Date(dateTo + 'T23:59:59').getTime() : Infinity;
     return trades.filter((t) => {
       const matchDir = filter === 'all' ? true
-        : filter === 'long'  ? (t.side === 'long' || t.side === 'buy')
-        : filter === 'short' ? (t.side === 'short' || t.side === 'sell')
+        : filter === 'long'  ? positionSide(t) === 'long'
+        : filter === 'short' ? positionSide(t) === 'short'
         : filter === 'win'   ? t.pnl >= 0
         : t.pnl < 0;
       const matchSearch = !search || t.symbol.toLowerCase().includes(search.toLowerCase());
@@ -317,7 +330,9 @@ const TradeHistory: React.FC = () => {
             </thead>
             <tbody>
               {filtered.map((t) => {
-                const isLong = t.side === 'long' || t.side === 'buy';
+                // F5-02: one owner for this rule. The hand-rolled variant
+                // drops `direction` and any casing the API sends.
+                const isLong = positionSide(t) === 'long';
                 const pnlPos = t.pnl >= 0;
                 return (
                   <tr
@@ -534,7 +549,8 @@ const AllocationBreakdown: React.FC = () => {
   for (const p of positions) {
     const row = (bySymbol[p.symbol] ??= { long: 0, short: 0 });
     const notional = p.size * p.current_price;
-    if (p.side === 'long') row.long  += notional;
+    // F5-02: a 'buy' position was counted as short exposure here.
+    if (positionSide(p) === 'long') row.long  += notional;
     else                   row.short += notional;
   }
 
@@ -575,6 +591,7 @@ const Portfolio: React.FC = () => {
   const equityQuery = useEquityCurve();
   usePositions();
   const equityHistory = useStore(selectEquityCurve);
+  const feedLive = useStore(selectFeedLive);
   const toast = useToast();
 
   const equityPoints = useMemo(() =>
@@ -634,6 +651,10 @@ const Portfolio: React.FC = () => {
           </div>
         }
       />
+
+      {/* Balances, P&L and allocation below are all last-received values. Say
+          so when they have stopped being refreshed (F1-02). */}
+      <LiveFeedNotice live={feedLive} what="balances and P&amp;L" />
 
       <AccountSummary />
 

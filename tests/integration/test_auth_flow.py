@@ -129,7 +129,10 @@ def client(session_factory):
 
     app = FastAPI()
     app.include_router(_router_mod.router)
-    return TestClient(app, raise_server_exceptions=False)
+    # yield + reset so the injected service does not outlive this fixture
+    # (S6-05): set_auth_service writes a module global.
+    yield TestClient(app, raise_server_exceptions=False)
+    _router_mod.reset_auth_service()
 
 
 @pytest.fixture(autouse=True)

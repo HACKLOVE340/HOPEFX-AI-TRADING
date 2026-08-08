@@ -23,7 +23,7 @@ import {
   CandlestickSeries, LineSeries, HistogramSeries, LineStyle,
 } from 'lightweight-charts';
 import type { UTCTimestamp } from 'lightweight-charts';
-import { useStore, selectIsAuth, useHasHydrated } from '../../store';
+import { useStore, selectIsAuth, useHasHydrated, selectPrice } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { ohlcvLimitFor } from '../../features/chart-bot/services/chart-api';
 import { cn, fmtPrice, extractApiError } from '../../lib/utils';
@@ -148,8 +148,11 @@ export function AIChart({
 
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
-  const prices   = useStore((s) => s.prices);
-  const tick     = prices[symbol] as PriceTick | undefined;
+  // F9-01: `selectPrice(symbol)` rather than the whole `prices` map. `setPrice`
+  // gives the map a new identity on every tick of every instrument, so a
+  // whole-map subscriber re-renders for symbols it never shows.
+  const tickForSymbol = useStore(selectPrice(symbol));
+  const tick     = tickForSymbol as PriceTick | undefined;
 
   const [aiResult,       setAiResult]       = useState<AIResult | null>(null);
   const [loading,        setLoading]        = useState(true);

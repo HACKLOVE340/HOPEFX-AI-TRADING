@@ -13,12 +13,12 @@
 
 import React, { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useStore } from '../../store';
+import { useStore, selectFeedLive } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError, sameSymbol, positionSide } from '../../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, cn, sameSymbol, positionSide, describeCloseAll, describeSubmitFailure } from '../../lib/utils';
 import type { Position } from '../../types';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
@@ -130,7 +130,38 @@ function CloseBtn({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyPositions({ brokerReady }: { brokerReady?: boolean }) {
+/**
+ * Empty state for the positions table.
+ *
+ * Three outcomes, deliberately distinct (audit S9-03):
+ *
+ *   - `positionsKnown === false` — the feed is stale or the socket is down, so
+ *     an empty list means "we don't know", NOT "you are flat". This panel is
+ *     what a trader checks before deciding whether to intervene, and rendering
+ *     an unknown state as a confident zero is the one false negative here that
+ *     can cost money.
+ *   - `brokerReady === false` — broker still starting up.
+ *   - otherwise — genuinely flat.
+ */
+function EmptyPositions({
+  brokerReady,
+  positionsKnown = true,
+}: {
+  brokerReady?: boolean;
+  positionsKnown?: boolean;
+}) {
+  if (!positionsKnown) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
+        <span className="text-2xl opacity-40">⚠️</span>
+        <span className="text-[12px] text-[#ffb800]">Can&apos;t confirm positions</span>
+        <span className="text-[11px] text-slate-500">
+          The live feed is not up to date, so this list may be incomplete. Check your
+          broker directly before acting.
+        </span>
+      </div>
+    );
+  }
   if (brokerReady === false) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
@@ -164,6 +195,11 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
   const removePos    = useStore((s) => s.removePosition);
   const setPositions = useStore((s) => s.setPositions);
   const account      = useStore((s) => s.account);
+  // An empty positions list only means "flat" when the feed is actually
+  // delivering. Stale or disconnected, it means "unknown" — see S9-03.
+  // The expression used to live here inline; it is now `selectFeedLive`, shared
+  // with the other surfaces that ask the same question (F1-02).
+  const positionsKnown = useStore(selectFeedLive);
   const qc           = useQueryClient();
 
   // Broker is considered ready once we have account data with a balance.
@@ -197,7 +233,12 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       onClosed?.(id);
       invalidate();
     } catch (e: unknown) {
-      setError(extractApiError(e, 'Close failed'));
+      // F2-01: "Close failed" after a 30s timeout is a claim we cannot make —
+      // the close may have gone through. Refetch rather than leave the row
+      // showing an exposure that may no longer exist.
+      const outcome = describeSubmitFailure(e, 'close');
+      setError(outcome.message);
+      if (!outcome.outcomeKnown) invalidate();
     } finally {
       setClosingId(null);
     }
@@ -212,7 +253,11 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       setPositions([]);
       invalidate();
     } catch (e: unknown) {
-      setError(extractApiError(e, 'Close all failed'));
+      // Worse here than for a single close: a close-all that timed out may have
+      // closed some, all, or none of them. Ask the server rather than guess.
+      const outcome = describeSubmitFailure(e, 'close-all');
+      setError(outcome.message);
+      if (!outcome.outcomeKnown) invalidate();
     } finally {
       setClosingAll(false);
     }
@@ -243,7 +288,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
     >
       {confirmCloseAll && (
         <ConfirmDialog
-          message={`Close all ${filtered.length} open position(s)? This cannot be undone.`}
+          message={describeCloseAll(filtered)}
           onConfirm={handleCloseAllConfirmed}
           onCancel={() => setConfirmCloseAll(false)}
         />
@@ -256,7 +301,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       )}
 
       {filtered.length === 0 ? (
-        <EmptyPositions brokerReady={brokerReady} />
+        <EmptyPositions brokerReady={brokerReady} positionsKnown={positionsKnown} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
@@ -300,11 +345,19 @@ function PositionRow({
   closing: boolean;
   onClose: () => void;
 }) {
+  // F5-02: `pos.side === 'long' ? 1 : -1` decided the sign of this number, and
+  // the API reports direction as `side` or `direction`, in either case, with
+  // 'buy'/'sell' as well as 'long'/'short'. A profitable long arriving as
+  // side:'buy' rendered as a −10% loss — beside a badge that read LONG, because
+  // that one line below already called `positionSide`. An unreported side fell
+  // to −1, i.e. defaulted to short, which is exactly what the helper's docstring
+  // forbids. Null now means unknown and shows no signed percentage at all.
+  const side = positionSide(pos);
   const pnlPct =
-    pos.entry_price > 0
+    pos.entry_price > 0 && side !== null
       ? ((pos.current_price - pos.entry_price) / pos.entry_price) * 100 *
-        (pos.side === 'long' ? 1 : -1)
-      : 0;
+        (side === 'long' ? 1 : -1)
+      : null;
 
   return (
     <tr className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/40 transition-colors">
@@ -332,12 +385,20 @@ function PositionRow({
       <td className="px-3 py-2.5">
         <div className="flex flex-col gap-0.5">
           <PnlBadge value={pos.unrealized_pnl} />
-          <span className={cn(
-            'text-[10px] tabular-nums',
-            pnlPct >= 0 ? 'text-[#00e676]/70' : 'text-[#ff1744]/70',
-          )}>
-            {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
-          </span>
+          {pnlPct === null ? (
+            // Direction not reported: the percentage cannot be signed, and a
+            // guessed sign is worse than no number (F5-02).
+            <span className="text-[10px] tabular-nums text-slate-500" title="Direction not reported">
+              —
+            </span>
+          ) : (
+            <span className={cn(
+              'text-[10px] tabular-nums',
+              pnlPct >= 0 ? 'text-[#00e676]/70' : 'text-[#ff1744]/70',
+            )}>
+              {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+            </span>
+          )}
         </div>
       </td>
       <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">

@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../../store';
+import { useStore, selectKillSwitch } from '../../store';
 import { Panel } from '../ui/Panel';
 import { MetricTile } from '../ui/MetricTile';
 import { StatusDot } from '../ui/StatusDot';
@@ -71,7 +71,8 @@ export function RiskDashboard() {
   const health   = useStore((s) => s.orchestratorHealth);
   const quality  = useStore((s) => s.qualityReport);
 
-  const killSwitch    = account?.kill_switch ?? false;
+  // Shared selector — see S10-02.
+  const killSwitch    = useStore(selectKillSwitch);
   const qualityScore  = health?.quality_score ?? null;
   const sourceHealth  = quality?.source_health as Record<string, Record<string, unknown>> | undefined;
 

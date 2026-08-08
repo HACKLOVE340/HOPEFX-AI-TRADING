@@ -24,15 +24,25 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload, get_current_user, require_role
 from pydantic import BaseModel, Field
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
+# Authentication is declared at the ROUTER level so a new route cannot be
+# added here without it. These endpoints expose live stop-loss, take-profit
+# and trailing levels — on a trading platform the most sensitive data in
+# the system, since knowing where stops sit is knowing where forced
+# liquidations occur. They were previously reachable with no auth and no
+# ownership check, and no global middleware compensates:
+# SubscriptionPaywallMiddleware passes unauthenticated requests through by
+# design, leaving 401s to each route's own dependency.
+# See docs/HARDENING_BACKLOG.md S6-02.
 router = APIRouter(
     prefix="/api/orders/advanced",
     tags=["Advanced Orders"],
+    dependencies=[Depends(require_role("trader"))],
 )
 
 

@@ -11,7 +11,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { watchlistApi } from '../hooks/useApi';
-import { useStore } from '../store';
+import { useDataFreshness } from '../hooks/useDataFreshness';
+import { StaleDataNotice } from '../components/ui/StaleDataNotice';
+import { useStore, selectFeedLive } from '../store';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -84,6 +86,7 @@ const Sparkline: React.FC<{ history: number[] }> = ({ history }) => {
 const WatchlistPage: React.FC = () => {
   const navigate    = useNavigate();
   const storePrices = useStore((s) => s.prices);
+  const feedLive    = useStore(selectFeedLive);
 
   const [items,     setItems]     = useState<WatchlistItem[]>([]);
   const [loading,   setLoading]   = useState(true);
@@ -97,6 +100,10 @@ const WatchlistPage: React.FC = () => {
     history: item.history ?? [],
   });
 
+  // F1-01: both fetches below used to swallow their failure, so the page
+  // rendered its default symbol list — under the banner "Live prices refresh
+  // every 5 seconds" — identically whether the backend was healthy or dead.
+  const freshness = useDataFreshness('the watchlist');
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
@@ -107,8 +114,12 @@ const WatchlistPage: React.FC = () => {
       if (res.data.items?.length) {
         setItems(res.data.items.map(normalise));
       }
+      if (mountedRef.current) freshness.markOk();
     } catch {
-      // API unavailable — show empty list; no fake data
+      // API unavailable. Keep whatever is on screen, but say so — rendering the
+      // default list silently is what made this page indistinguishable from a
+      // working one (F1-01).
+      if (mountedRef.current) freshness.markFailed('the watchlist');
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -122,16 +133,26 @@ const WatchlistPage: React.FC = () => {
         if (Array.isArray(res.data) && res.data.length > 0) {
           setItems(res.data.map(normalise));
         }
-      } catch { /* keep existing prices */ }
+        if (mountedRef.current) freshness.markOk();
+      } catch {
+        // Keep the last prices — but stop calling them live (F1-01).
+        if (mountedRef.current) freshness.markFailed('live prices');
+      }
     }, 5000);
     return () => clearInterval(id);
-  }, [fetchWatchlist]);
+  }, [fetchWatchlist, freshness]);
 
   // Overlay live store prices for real-time feel.
   // Store keys on 'XAU/USD'; the watchlist stores 'XAUUSD'. The mapping used to
   // be a hardcoded chain of five .replace() calls against ten offered symbols,
   // so half of them never matched a feed key and simply showed no live price.
+  //
+  // F1-02: gated on the feed actually delivering. The overlay is socket data
+  // laid over the 5-second HTTP snapshot, so a stalled feed did not merely fail
+  // to update the row — it overwrote a *current* polled price with a frozen one,
+  // under the banner "Live prices refresh every 5 seconds".
   const enrichedItems: WatchlistItem[] = items.map((item) => {
+    if (!feedLive) return item;
     const tick = storePrices[toSlashSymbol(item.symbol)] ?? storePrices[item.symbol];
     if (!tick) return item;
     return {
@@ -201,7 +222,12 @@ const WatchlistPage: React.FC = () => {
       <div style={{ ...s.header, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={s.title}>Watchlist</h1>
-          <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
+          <p style={s.subtitle}>
+            {freshness.isLive && feedLive
+              ? 'Live prices refresh every 5 seconds. Click a symbol to open its chart.'
+              : 'Prices are not updating right now. Click a symbol to open its chart.'}
+          </p>
+          <StaleDataNotice failed={freshness.failed} what={freshness.what} className="mt-2" />
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/trade')}

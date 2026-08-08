@@ -297,9 +297,29 @@ def _check_ip_rate_limit(ip: str) -> None:
         )
 
 
-def set_auth_service(service) -> None:
+def set_auth_service(service):
+    """Install the auth service, returning the one it displaced.
+
+    Returning the previous value lets a caller restore it without reaching into
+    module globals — which is what test fixtures need. Three test files
+    installed a mock here and never put the real service back; one of those
+    mocks approves every login, so it silently disabled authentication for the
+    remainder of the process. See docs/HARDENING_BACKLOG.md S6-05.
+    """
     global _auth_service
+    previous = _auth_service
     _auth_service = service
+    return previous
+
+
+def reset_auth_service() -> None:
+    """Drop any injected auth service, restoring lazy resolution.
+
+    Counterpart to :func:`set_auth_service`, mirroring
+    :func:`reset_rate_limit_state`. Call this in test teardown.
+    """
+    global _auth_service
+    _auth_service = None
 
 
 def reset_rate_limit_state() -> None:

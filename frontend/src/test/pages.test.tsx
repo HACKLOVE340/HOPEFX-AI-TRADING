@@ -689,9 +689,23 @@ describe('Trading page', () => {
     expect(screen.getByText(/50,000/)).toBeInTheDocument();
   });
 
-  it('shows no open positions when positions list is empty', async () => {
+  it('shows no open positions when positions list is empty and the feed is live', async () => {
+    // The store defaults to wsStatus 'disconnected'. This test used to render
+    // with that default and assert a confident "No open positions" — which is
+    // the S9-03 defect: an empty list with no live feed means "we don't know",
+    // not "you are flat". Set the state the test actually means to exercise.
+    // `lastDataAt` too (F1-02): connected-with-nothing-received-yet is not
+    // "live", it is "we have not heard anything", and rendering that as a
+    // confident empty list is the same defect one step earlier.
+    useStore.setState({ wsStatus: 'connected', feedStale: false, lastDataAt: Date.now() });
     await renderTrading();
     expect(screen.getByText(/no open positions/i)).toBeInTheDocument();
+  });
+
+  it('does not claim "no open positions" while disconnected (S9-03)', async () => {
+    useStore.setState({ wsStatus: 'disconnected', feedStale: false });
+    await renderTrading();
+    expect(screen.queryByText(/no open positions/i)).not.toBeInTheDocument();
   });
 
   it('shows position row when positions are in store', async () => {

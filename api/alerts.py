@@ -21,7 +21,20 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization: anyone with devtools can set the store's plan,
+# and nothing stops a direct call carrying a valid free-tier token. The routes
+# below depended on `get_current_user` alone, which checks *authentication* and
+# never *plan*, so the advertised gate existed on neither side.
+#
+# Same defect, and the same sentence, as the one already fixed in api/nocode.py.
+# Admin and superadmin bypass require_plan by design.
+# Advertised in frontend/src/lib/subscription.ts as: alerts -> starter
+from monetization.subscription import require_plan
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +144,7 @@ def _serialise(alert) -> dict[str, Any]:
 async def create_alert(
     body: CreateAlertIn,
     request: Request,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Create a price alert. Requires: authenticated user."""
     engine = _get_engine(request)
@@ -171,7 +184,7 @@ async def list_alerts(
     request: Request,
     symbol: str | None = None,
     status: str | None = None,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """List all alerts, optionally filtered by symbol or status. Requires: authenticated user."""
     engine = _get_engine(request)
@@ -193,7 +206,7 @@ async def get_trigger_history(
     symbol: str | None = None,
     alert_id: str | None = None,
     limit: int = 50,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Return the last N alert trigger events. Requires: authenticated user."""
     engine = _get_engine(request)
@@ -206,7 +219,7 @@ async def get_trigger_history(
 async def get_active_alerts(
     request: Request,
     symbol: str | None = None,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Return only active (non-paused, non-expired) alerts. Requires: authenticated user."""
     engine = _get_engine(request)
@@ -230,7 +243,7 @@ def _get_owned_alert(engine, alert_id: str, user_sub: str):
 async def get_alert(
     alert_id: str,
     request: Request,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Get a single alert by ID. Requires: authenticated user."""
     engine = _get_engine(request)
@@ -242,7 +255,7 @@ async def get_alert(
 async def delete_alert(
     alert_id: str,
     request: Request,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Delete an alert. Requires: authenticated user."""
     engine = _get_engine(request)
@@ -256,7 +269,7 @@ async def delete_alert(
 async def pause_alert(
     alert_id: str,
     request: Request,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Pause an alert. Requires: authenticated user."""
     engine = _get_engine(request)
@@ -270,7 +283,7 @@ async def pause_alert(
 async def resume_alert(
     alert_id: str,
     request: Request,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Resume a paused alert. Requires: authenticated user."""
     engine = _get_engine(request)

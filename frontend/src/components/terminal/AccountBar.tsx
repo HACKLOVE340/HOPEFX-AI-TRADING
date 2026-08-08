@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../../store';
+import { useStore, selectKillSwitch } from '../../store';
 import { MetricTile } from '../ui/MetricTile';
 import { fmtPctRaw, fmtPct, fmtRatio, pnlColor, fmtMarginLevel, marginLevelIsSafe, fmtPrice, fmtPnl } from '../../lib/utils';
 import { notificationsApi } from '../../hooks/useApi';
@@ -61,6 +61,10 @@ function NotificationBell() {
 
 export function AccountBar() {
   const account = useStore((s) => s.account);
+  // Shared selector: three surfaces used to derive this independently from two
+  // different fields and could disagree about whether trading was halted
+  // (S10-02).
+  const killSwitch = useStore(selectKillSwitch);
 
   if (!account) {
     return (
@@ -154,7 +158,7 @@ export function AccountBar() {
         value={account.open_trades?.toString() ?? '—'}
         compact
       />
-      {account.kill_switch && (
+      {killSwitch && (
         <>
           <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
           <div className="flex items-center gap-1.5 px-2 py-1 bg-[#ff1744]/10 border border-[#ff1744]/30 rounded animate-pulse">

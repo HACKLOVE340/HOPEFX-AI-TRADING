@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import signal as _signal
 import sys
@@ -62,6 +63,24 @@ _ACCOUNT_EQUITY = float(os.getenv("RISK_ACCOUNT_EQUITY") or os.getenv("INITIAL_B
 _MAX_POSITION_PCT = float(os.getenv("RISK_MAX_POSITION_PCT", "0.05"))
 _MIN_POSITION_PCT = float(os.getenv("RISK_MIN_POSITION_PCT", "0.001"))
 _KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
+# Cap on the raw Kelly *bankroll fraction*, distinct from _MAX_POSITION_PCT
+# which caps the resulting *position notional*. These were previously the same
+# constant, so Kelly saturated at 0.05 for any probability above ~0.356 and the
+# criterion returned an identical value for every tradable signal — see
+# docs/HARDENING_BACKLOG.md S1-06. Half-Kelly (0.5) is the conventional ceiling
+# before the separate _KELLY_FRACTION multiplier is applied.
+_MAX_KELLY_FRACTION = float(os.getenv("RISK_MAX_KELLY_FRACTION", "0.5"))
+
+# ── Default stop / target geometry ────────────────────────────────────────────
+# _compute_stop_take() places the stop at _STOP_ATR_MULT x ATR and the target at
+# _TARGET_ATR_MULT x ATR. _DEFAULT_REWARD_RISK is derived from them rather than
+# written out a second time, so Kelly's payoff term cannot drift away from the
+# stops the manager actually sets — the duplication failure mode from S13-01.
+_STOP_ATR_MULT = float(os.getenv("RISK_STOP_ATR_MULT", "1.0"))
+_TARGET_ATR_MULT = float(os.getenv("RISK_TARGET_ATR_MULT", "2.0"))
+_DEFAULT_REWARD_RISK = _TARGET_ATR_MULT / max(_STOP_ATR_MULT, 1e-9)
+# Sentinel for "caller did not supply a confidence" — see calculate_position_size.
+_DEFAULT_CONFIDENCE = 0.7
 _MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
 _MAX_DRAWDOWN_PCT = float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10"))
 _MAX_OPEN_POSITIONS = int(os.getenv("RISK_MAX_OPEN_POSITIONS", "3"))
@@ -356,8 +375,18 @@ class _MinimalSignal:
         "features",
         "probability",
         "symbol",
+        # POSIX timestamp of the tick this signal was derived from. Without it
+        # enforce_pre_trade's freshness check found no timestamp to measure and
+        # the 5s staleness budget size_order passes was silently skipped — the
+        # "never trade on a stale tick" invariant could not fire at all on the
+        # decision-engine path. See docs/HARDENING_BACKLOG.md S5-01.
+        "tick_ts",
         "tick_mid",
         "tick_spread",
+        # Caller-supplied stop/target, so size_order can measure the trade's
+        # real reward:risk instead of synthesising it from confidence (S1-12).
+        "stop_loss_price",
+        "take_profit_price",
     )
 
     def __init__(
@@ -368,15 +397,21 @@ class _MinimalSignal:
         probability: float,
         tick_mid: float = 0.0,
         tick_spread: float = 1.0,
+        tick_ts: float | None = None,
+        stop_loss_price: float | None = None,
+        take_profit_price: float | None = None,
     ) -> None:
         self.symbol = symbol
         self.direction = direction
+        self.tick_ts = tick_ts
         self.confidence = confidence
         self.probability = probability
         self.data_quality = 1.0
         self.features: dict = {}
         self.tick_mid = tick_mid
         self.tick_spread = tick_spread
+        self.stop_loss_price = stop_loss_price
+        self.take_profit_price = take_profit_price
 
 
 # ── Rolling correlation calculator ────────────────────────────────────────────
@@ -681,10 +716,62 @@ class RiskManager:
         atr_proxy: float,
     ) -> tuple:
         """Return (stop_loss_usd, take_profit_usd) for a given direction."""
-        tp_dist = atr_proxy * 2.0
+        sl_dist = atr_proxy * _STOP_ATR_MULT
+        tp_dist = atr_proxy * _TARGET_ATR_MULT
         if direction == "long":
-            return mid_price - atr_proxy, mid_price + tp_dist
-        return mid_price + atr_proxy, mid_price - tp_dist
+            return mid_price - sl_dist, mid_price + tp_dist
+        return mid_price + sl_dist, mid_price - tp_dist
+
+    @staticmethod
+    def _numeric_or_none(v: Any) -> float | None:
+        """Return *v* as a float only if it is genuinely a finite int/float.
+
+        ``float()`` alone is too permissive to gate a money decision on: any
+        object implementing ``__float__`` passes, and a Mock returns 1.0. See
+        S1-12, where that turned a signal carrying no stops into a fabricated
+        1:1 reward:risk ratio.
+        """
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        f = float(v)
+        return f if math.isfinite(f) else None
+
+    @staticmethod
+    def _reward_risk_from_prices(
+        entry_price: float | None,
+        stop_loss: float | None,
+        take_profit: float | None,
+    ) -> float | None:
+        """Reward-to-risk ratio implied by a trade's stop and target (S1-12).
+
+        Returns ``None`` when it cannot be measured — no stop, no target, or a
+        stop sitting on the entry (zero risk, undefined ratio). ``None`` means
+        "fall back", never "assume something favourable".
+        """
+
+        # Require genuine numbers. `float()` alone is too permissive: anything
+        # implementing __float__ passes, and a Mock returns 1.0 — which turned a
+        # signal carrying no stops at all into a fabricated 1:1 ratio, sizing a
+        # trade that should have been refused. Only a real int/float may set the
+        # payoff term; everything else falls back.
+        def _num(v: Any) -> float | None:
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                return None
+            f = float(v)
+            return f if math.isfinite(f) else None
+
+        entry = _num(entry_price)
+        sl = _num(stop_loss)
+        tp = _num(take_profit)
+        if entry is None or sl is None or tp is None:
+            return None
+
+        risk = abs(entry - sl)
+        reward = abs(tp - entry)
+
+        if not math.isfinite(risk) or not math.isfinite(reward) or risk <= 0.0:
+            return None
+        return reward / risk
 
     def notify_position_opened(self, symbol: str) -> None:
         """Called when a new position is opened."""
@@ -786,17 +873,80 @@ class RiskManager:
         sentiment_f = self._sentiment_factor(sentiment_score)
         impact_f = self._impact_factor(impact_score)
         dd_f = self._drawdown_factor()
-        kelly_f = self._kelly(prob, conf)
+        # Kelly's payoff term must come from the trade's stop and target, not
+        # from model confidence (S1-12). Prefer the caller's explicit stops;
+        # otherwise use the ratio implied by _compute_stop_take below.
+        reward_risk = self._reward_risk_from_prices(
+            getattr(signal, "tick_mid", None),
+            getattr(signal, "stop_loss_price", None),
+            getattr(signal, "take_profit_price", None),
+        )
+        # Deliberately NOT defaulting to _DEFAULT_REWARD_RISK here. `conf` feeds
+        # nothing else in this function, so always supplying a ratio would drop
+        # confidence out of sizing altogether and make size insensitive to
+        # signal quality — a larger change than S1-12 asks for, and one that
+        # wants the backtest comparison the finding calls for. Callers that
+        # supply real stops get the correct payoff term; callers that do not
+        # keep the legacy confidence proxy unchanged.
+        kelly_f = self._kelly(prob, conf, reward_risk=reward_risk)
 
         # ── Notional size ──────────────────────────────────────────────────
         # `equity` was captured in the locked snapshot above (honors
         # equity_override); do not re-read shared state here.
         base_notional = equity * kelly_f * _KELLY_FRACTION
         final_notional = base_notional * quality_f * sentiment_f * impact_f * dd_f
-        final_notional = max(
-            equity * _MIN_POSITION_PCT,
-            min(final_notional, equity * _MAX_POSITION_PCT),
-        )
+
+        # Cap first, then decide whether what remains is worth trading.
+        #
+        # This used to be max(equity * _MIN_POSITION_PCT, ...), which lifted a
+        # zeroed notional back up to the minimum: every risk-reducing factor
+        # (data quality, sentiment, macro impact, drawdown) could drive the size
+        # to zero and the trade still opened at 0.1% of equity. The graduated
+        # risk factors could not actually prevent a trade — only the hard gates
+        # could. See docs/HARDENING_BACKLOG.md S1-07.
+        # Honour the *tighter* of the environment ceiling and the caller's
+        # RiskConfig. The clamp previously read only the module global, so a
+        # RiskManager built with RiskConfig(max_position_size_pct=0.02) had 5%
+        # applied — a limit accepted, stored, reported back by get_limits(), and
+        # never enforced. Config may tighten the ceiling, never loosen it.
+        # See docs/HARDENING_BACKLOG.md S1-13.
+        position_cap_pct = min(_MAX_POSITION_PCT, self._config.max_position_size_pct)
+        final_notional = min(final_notional, equity * position_cap_pct)
+
+        # Cap loss-at-the-stop, not just exposure. Notional is what is on the
+        # table; risk is what actually leaves the account if the stop is hit,
+        # and with a wide stop a position well inside the notional cap can still
+        # lose several times the configured limit. Only applies when the caller
+        # supplied a stop — without one there is no distance to size against.
+        # See docs/HARDENING_BACKLOG.md S1-14.
+        _entry = float(getattr(signal, "tick_mid", 0.0) or 0.0)
+        _sl = self._numeric_or_none(getattr(signal, "stop_loss_price", None))
+        if _sl is not None and _entry > 0:
+            stop_distance = abs(_entry - _sl)
+            if stop_distance > 0:
+                max_loss = equity * position_cap_pct
+                # loss = (notional / entry) * stop_distance  <=  max_loss
+                max_notional_by_risk = max_loss * _entry / stop_distance
+                if max_notional_by_risk < final_notional:
+                    logger.debug(
+                        "size_order: risk-at-stop cap binds for %s — notional "
+                        "%.2f -> %.2f (stop_distance=%.4f, max_loss=%.2f)",
+                        symbol,
+                        final_notional,
+                        max_notional_by_risk,
+                        stop_distance,
+                        max_loss,
+                    )
+                    final_notional = max_notional_by_risk
+
+        _min_notional = equity * _MIN_POSITION_PCT
+        if final_notional < _min_notional:
+            return self._zero_sizing(
+                symbol,
+                direction,
+                lineage_id,
+                f"below_min_position:{final_notional:.2f}<{_min_notional:.2f}",
+            )
 
         raw_mid = getattr(signal, "tick_mid", 0.0)
         if raw_mid <= 0:
@@ -1034,7 +1184,7 @@ class RiskManager:
         account_balance: float | None = None,
         account_equity: float | None = None,
         direction: str = "long",
-        confidence: float = 0.7,
+        confidence: float = _DEFAULT_CONFIDENCE,
         probability: float = 0.55,
         signal_strength: float = 0.7,
         stop_loss_price: float | None = None,
@@ -1054,18 +1204,32 @@ class RiskManager:
         and .recommended_size alias for downstream consumers.
         """
         equity = float(account_equity or account_balance or self._state.account_equity or _ACCOUNT_EQUITY)
-        # Use signal_strength as confidence when confidence is at default
-        effective_confidence = max(confidence, signal_strength)
+        # Prefer the caller's explicit confidence; fall back to signal_strength
+        # only when confidence was left at its default.
+        #
+        # This was `max(confidence, signal_strength)`, which floored every
+        # signal at the 0.7 default: the ML gate admits signals from 0.52
+        # upward, so any confidence below 0.7 was discarded and replaced by
+        # 0.7. Sizing therefore could not distinguish a marginal signal from a
+        # strong one. See docs/HARDENING_BACKLOG.md S1-06.
+        effective_confidence = float(signal_strength) if confidence == _DEFAULT_CONFIDENCE else float(confidence)
 
         # Accept ``price`` as an alias for ``entry_price`` (legacy callers)
         effective_entry = float(entry_price) or float(kwargs.pop("price", 0.0))
 
+        # tick_ts carries the age of the market data this signal was derived
+        # from, so the pre-trade staleness invariant has something to measure.
+        # Callers that know it should pass it; when absent the check is skipped
+        # exactly as before, so this cannot break existing callers.
         sig = _MinimalSignal(
             symbol=symbol,
             direction=direction,
             confidence=effective_confidence,
             probability=probability,
             tick_mid=effective_entry,
+            tick_ts=kwargs.pop("tick_ts", None),
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
         )
 
         # Size against the supplied equity via equity_override — NO mutation of
@@ -1238,12 +1402,47 @@ class RiskManager:
         return max(0.1, 1.0 - frac * _DD_SIZE_SCALE)
 
     @staticmethod
-    def _kelly(probability: float, confidence: float) -> float:
+    def _kelly(
+        probability: float,
+        confidence: float,
+        reward_risk: float | None = None,
+    ) -> float:
+        """Kelly bankroll fraction for a signal.
+
+        ``reward_risk`` is Kelly's ``b`` — how much the trade wins per unit
+        risked, i.e. ``|target - entry| / |entry - stop|``. Pass it whenever the
+        stop and target are known.
+
+        It used to be synthesised from the model's confidence
+        (``max(0.5, confidence * 3.0)``), which is a different quantity
+        entirely. Break-even then moved with the model's certainty instead of
+        with the trade's actual stop and target: at ``confidence=0.7``
+        (``b=2.1``) any win probability above 0.323 counted as positive edge, on
+        2.1:1 odds that nothing verified. Sizing was consequently more
+        aggressive than the configured stops justified. See S1-12.
+
+        The confidence proxy is kept only as a fallback for callers that supply
+        no stops, so their behaviour is unchanged.
+
+        Bounded by ``_MAX_KELLY_FRACTION`` — a cap on the *bankroll fraction*.
+        It was previously bounded by ``_MAX_POSITION_PCT`` (0.05), which is a
+        cap on the resulting *position notional*: a unit confusion that made
+        this function saturate at its ceiling for any probability above ~0.356
+        and therefore return the same value for every tradable signal. Combined
+        with a hardcoded probability and a floored confidence, that fixed every
+        position at exactly 1.25% of equity. See S1-06.
+        """
         p = max(0.01, min(probability, 0.99))
         q = 1.0 - p
-        b = max(0.5, confidence * 3.0)
+
+        if reward_risk is not None and math.isfinite(reward_risk) and reward_risk > 0.0:
+            b = float(reward_risk)
+        else:
+            # No measurable ratio — legacy confidence proxy.
+            b = max(0.5, confidence * 3.0)
+
         kelly = (p * b - q) / b
-        return max(0.0, min(kelly, _MAX_POSITION_PCT))
+        return max(0.0, min(kelly, _MAX_KELLY_FRACTION))
 
     # ── Orchestrator data access ──────────────────────────────────────────────
 

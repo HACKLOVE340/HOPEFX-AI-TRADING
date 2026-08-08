@@ -1253,15 +1253,35 @@ class TestLiveConnectionManager:
     # ── send_to_user ─────────────────────────────────────────────────────────
 
     async def test_send_to_user_reaches_correct_connection(self):
+        """Routing: only the addressed user's connection receives the message.
+
+        Both connections now subscribe explicitly. `account` is a private
+        channel, and send_to_user no longer delivers private channels via the
+        "empty subscription = all channels" fallback — broadcast() already
+        guarded that and the guard was missing here (audit finding S8-02).
+        This test's subject is user routing, which the explicit subscription
+        preserves; the fallback behaviour it previously depended on is asserted
+        against in test_send_to_user_skips_unsubscribed_private_channel below.
+        """
         ws_a, ws_b = _MockWS(), _MockWS()
         cid_a = await self.mgr.connect(ws_a)
         cid_b = await self.mgr.connect(ws_b)
         self.mgr.authenticate(cid_a, "alice")
         self.mgr.authenticate(cid_b, "bob")
+        self.mgr.subscribe(cid_a, ["account"])
+        self.mgr.subscribe(cid_b, ["account"])
         msg = {"type": "account_update", "data": {"balance": 5000.0}}
         await self.mgr.send_to_user("alice", "account", msg)
         assert len(ws_a.sent) == 1
         assert len(ws_b.sent) == 0
+
+    async def test_send_to_user_skips_unsubscribed_private_channel(self):
+        """A connection that never opted in must not receive private data (S8-02)."""
+        ws_a = _MockWS()
+        cid_a = await self.mgr.connect(ws_a)
+        self.mgr.authenticate(cid_a, "alice")  # no subscribe() call
+        await self.mgr.send_to_user("alice", "account", {"type": "account_update", "data": {}})
+        assert len(ws_a.sent) == 0
 
     # ── heartbeat helpers ─────────────────────────────────────────────────────
 

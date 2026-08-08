@@ -160,6 +160,14 @@ class TestStationarityTester:
         assert "insufficient" in result.method.lower()
 
     def test_test_without_statsmodels(self):
+        """A test that cannot run must fail closed, not wave the feature through.
+
+        This asserted ``is_stationary is True`` — i.e. it required the tester to
+        certify a series it had not examined. The old code also returned
+        ``adf_pvalue=0.01``, the value a confidently stationary series produces,
+        so any caller reading the numbers rather than ``method`` saw strong
+        evidence for a test that never ran. See docs/HARDENING_BACKLOG.md S4-06.
+        """
         from ml.pipeline import StationarityTester
         import ml.pipeline as pl
 
@@ -167,8 +175,11 @@ class TestStationarityTester:
         s = pd.Series(np.random.randn(100))
         with patch.object(pl, "_STATSMODELS", False):
             result = tester.test(s, "feat")
-        assert result.is_stationary is True
+        assert bool(result.is_stationary) is False
         assert "unavailable" in result.method
+        # ...and the p-values must not impersonate a result.
+        assert result.adf_pvalue >= 0.5
+        assert result.kpss_pvalue <= 0.5
 
     def test_test_dataframe(self):
         from ml.pipeline import FeatureEngineer, StationarityTester

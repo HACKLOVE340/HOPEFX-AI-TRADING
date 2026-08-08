@@ -53,6 +53,8 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
+from brokers.base import AccountInfo
+
 logger = logging.getLogger(__name__)
 
 # ib_insync — optional dependency
@@ -113,16 +115,13 @@ class MarketDataForbiddenError(RuntimeError):
 # ── Data classes ──────────────────────────────────────────────────────────────
 
 
-@dataclass
-class AccountInfo:
-    account_id: str
-    currency: str
-    balance: float
-    nav: float
-    unrealized_pnl: float
-    buying_power: float
-    margin_used: float
-    timestamp: datetime
+# AccountInfo is deliberately NOT redefined here. A broker-local copy is what
+# caused S1-01: `brokers/oanda.py` had its own dataclass with `nav` instead of
+# `equity` and no `.get()`, and `RiskManager.assess_risk` reads
+# `account_info.get("equity")` — so live OANDA raised AttributeError and blocked
+# 100% of trades. This module had the identical copy (S1-01b).
+# `brokers.base.AccountInfo` carries a `.nav` alias and `.get()`, so IBKR's
+# vocabulary still works. See docs/HARDENING_BACKLOG.md S1-01.
 
 
 @dataclass
@@ -235,10 +234,14 @@ class IBKRBroker:
                 account_id=self._ib.managedAccounts()[0] if self._ib.managedAccounts() else "",
                 currency=currency,
                 balance=float(vals.get("CashBalance", 0)),
-                nav=float(vals.get("NetLiquidation", 0)),
+                # IBKR's NetLiquidation is what the rest of the system calls
+                # equity; `AccountInfo.nav` remains available as an alias.
+                equity=float(vals.get("NetLiquidation", 0)),
                 unrealized_pnl=float(vals.get("UnrealizedPnL", 0)),
-                buying_power=float(vals.get("BuyingPower", 0)),
+                # BuyingPower is IBKR's name for free margin.
+                margin_available=float(vals.get("BuyingPower", 0)),
                 margin_used=float(vals.get("MaintMarginReq", 0)),
+                positions_count=len(self._ib.positions() or []),
                 timestamp=datetime.now(UTC),
             )
         except Exception as exc:

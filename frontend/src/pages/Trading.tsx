@@ -12,7 +12,7 @@ import {
 } from 'lightweight-charts';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useStore, useHasHydrated, selectIsAuth } from '../store';
+import { useStore, useHasHydrated, selectIsAuth, selectFeedLive } from '../store';
 import { tradingApi } from '../hooks/useApi';
 import { usePositions, useAccount, useSignals } from '../hooks/useOrchestratorData';
 // Import guarded variants from the barrel — each panel has its own
@@ -28,7 +28,7 @@ import {
 } from '../components/panels';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError, sameSymbol } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError, sameSymbol, positionSide } from '../lib/utils';
 import type { PriceTick } from '../store';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -81,10 +81,10 @@ function toUTC(ts: number | string): UTCTimestamp {
 interface TopBarProps {
   symbol: string; setSymbol: (s: string) => void;
   timeframe: string; setTimeframe: (t: string) => void;
-  tick: PriceTick | undefined; wsStatus: string;
+  tick: PriceTick | undefined; wsStatus: string; feedLive: boolean;
 }
 
-function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: TopBarProps) {
+function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus, feedLive }: TopBarProps) {
   const navigate = useNavigate();
   const account = useStore((s) => s.account);
 
@@ -168,13 +168,14 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
       </button>
 
       {/* WS status */}
+      {/* F10-01: keyed to the feed, not the socket. Third copy of this badge. */}
       <span className={cn(
         'text-[10px] px-2 py-0.5 rounded font-bold border',
-        wsStatus === 'connected'
+        feedLive
           ? 'bg-[#00e676]/10 border-[#00e676]/30 text-[#00e676]'
           : 'bg-[#ffb800]/10 border-[#ffb800]/30 text-[#ffb800]',
       )}>
-        {wsStatus === 'connected' ? '● LIVE' : '○ REST'}
+        {feedLive ? '● LIVE' : wsStatus === 'connected' ? '● STALLED' : '○ REST'}
       </span>
     </div>
   );
@@ -414,7 +415,7 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
         </thead>
         <tbody>
           {data.map((t) => {
-            const isLong = t.side === 'long' || t.side === 'buy';
+            const isLong = positionSide(t) === 'long';  // F5-02
             const pnlPos = t.realized_pnl >= 0;
             return (
               <tr key={t.id} className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/30 transition-colors">
@@ -852,6 +853,7 @@ function TradingPage() {
   useSignals();
 
   const wsStatus = useStore((s) => s.wsStatus);
+  const feedLive = useStore(selectFeedLive);
   const prices   = useStore((s) => s.prices);
   const tick     = prices[symbol];
 
@@ -860,7 +862,7 @@ function TradingPage() {
       <TopBar
         symbol={symbol} setSymbol={setSymbol}
         timeframe={timeframe} setTimeframe={setTimeframe}
-        tick={tick} wsStatus={wsStatus}
+        tick={tick} wsStatus={wsStatus} feedLive={feedLive}
       />
 
       <div className="flex flex-1 min-h-0 gap-2 p-2 overflow-hidden">

@@ -81,7 +81,11 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
-          python-version: "3.11"
+          # Must match the Dockerfile interpreter (python:3.12-slim). Model
+          # artifacts are pickled here and loaded in production, so training on
+          # a different minor version risks a deserialisation mismatch on the
+          # very artifacts CI checksum-verifies. See HARDENING_BACKLOG S11-01.
+          python-version: "3.12"
 
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
@@ -161,7 +165,11 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
-          python-version: "3.11"
+          # Must match the Dockerfile interpreter (python:3.12-slim). Model
+          # artifacts are pickled here and loaded in production, so training on
+          # a different minor version risks a deserialisation mismatch on the
+          # very artifacts CI checksum-verifies. See HARDENING_BACKLOG S11-01.
+          python-version: "3.12"
 
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0

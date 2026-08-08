@@ -32,6 +32,7 @@ import AISupportWidget from './components/ai/AISupportWidget';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ToastProvider } from './components/Toast';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { KillSwitchHotkey } from './components/KillSwitchHotkey';
 import { CommandPalette } from './components/CommandPalette';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -44,8 +45,8 @@ import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
 const Login                   = React.lazy(() => import('./pages/Login'));
 const Register                = React.lazy(() => import('./pages/Register'));
-const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));
-const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));
+const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));  // pragma: allowlist secret — page import, not a credential
+const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));  // pragma: allowlist secret — page import, not a credential
 const PrivacyPolicy           = React.lazy(() => import('./pages/PrivacyPolicy'));
 const Onboarding              = React.lazy(() => import('./pages/Onboarding'));
 const NotFound                = React.lazy(() => import('./pages/NotFound'));
@@ -291,6 +292,11 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 const NoLiveFeedBanner: React.FC = () => {
   const status       = useStore((s) => s.wsStatus);
   const noLiveFeed   = useStore((s) => s.noLiveFeed);
+  // Client-observed staleness: the socket can stay OPEN while the server sends
+  // nothing, in which case `status` remains 'connected' and `noLiveFeed` stays
+  // false because the server never volunteered it. See S9-01 / S10-05.
+  const feedStale    = useStore((s) => s.feedStale);
+  const lastDataAt   = useStore((s) => s.lastDataAt);
   const noLiveFeedMsg = useStore((s) => s.noLiveFeedMsg);
   const isAuth       = useStore(selectIsAuth);
   const [dismissed, setDismissed]   = React.useState(false);
@@ -308,14 +314,22 @@ const NoLiveFeedBanner: React.FC = () => {
   // Show when: authenticated, attempted, and either WS is down OR server sent no_live_feed
   const showWsDown    = isAuth && attempted && status !== 'connected' && !dismissed;
   const showNoFeed    = isAuth && status === 'connected' && noLiveFeed && !dismissed;
-  if (!showWsDown && !showNoFeed) return null;
+  // Stale feed is NOT dismissible: unlike the others it means the prices on
+  // screen are of unknown age, which is exactly the state a trader must not be
+  // able to hide.
+  const showStale     = isAuth && status === 'connected' && feedStale;
+  if (!showWsDown && !showNoFeed && !showStale) return null;
 
   // Determine severity: connecting = amber, no_live_feed = amber, error/disconnected = amber
   // All states use amber — this is informational, not a critical error.
   const isConnecting = status === 'connecting';
 
+  const staleSeconds = lastDataAt ? Math.round((Date.now() - lastDataAt) / 1000) : null;
+
   const label =
-    showNoFeed
+    showStale
+      ? `Feed stalled — no update for ${staleSeconds ?? '?'}s. Prices shown are NOT live.`
+      : showNoFeed
       ? (noLiveFeedMsg ?? 'No live broker feed — connect a broker in Settings to receive real-time prices.')
       : isConnecting
         ? 'Connecting to live feed…'
@@ -658,6 +672,11 @@ const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <ToastProvider>
       <ConfirmDialogProvider>
+        {/* S10-04: Shift+K halts trading from anywhere. Every other kill-switch
+            trigger lives in Settings or the superadmin panel, so a trader
+            watching a position run against them had to navigate away from the
+            trading screen to stop trading. Renders nothing; it only binds. */}
+        <KillSwitchHotkey />
         <BrowserRouter>
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>

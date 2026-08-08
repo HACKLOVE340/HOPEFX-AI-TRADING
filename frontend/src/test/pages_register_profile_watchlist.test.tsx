@@ -17,10 +17,10 @@ vi.mock('../hooks/useWebSocket', () => ({
 
 vi.mock('../hooks/useApi', () => ({
   authApi: {
-    login:            vi.fn().mockResolvedValue({ data: { access_token: 'tok', token_type: 'bearer', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),
+    login:            vi.fn().mockResolvedValue({ data: { access_token: 'tok', token_type: 'bearer', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),  // pragma: allowlist secret — vitest mock, literal "tok"
     logout:           vi.fn().mockResolvedValue({ data: {} }),
     me:               vi.fn().mockResolvedValue({ data: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } }),
-    register:         vi.fn().mockResolvedValue({ data: { access_token: 'tok', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),
+    register:         vi.fn().mockResolvedValue({ data: { access_token: 'tok', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),  // pragma: allowlist secret — vitest mock, literal "tok"
     activateFreeTier: vi.fn().mockResolvedValue({ data: {} }),
   },
   tradingApi: {
@@ -257,7 +257,7 @@ vi.mock('../hooks/useApi', () => ({
     updateUser:      vi.fn().mockResolvedValue({ data: {} }),
     banUser:         vi.fn().mockResolvedValue({ data: {} }),
     unbanUser:       vi.fn().mockResolvedValue({ data: {} }),
-    resetPassword:   vi.fn().mockResolvedValue({ data: {} }),
+    resetPassword:   vi.fn().mockResolvedValue({ data: {} }),  // pragma: allowlist secret — vitest mock, literal "tok"
     auditLog:        vi.fn().mockResolvedValue({ data: { events: [], total: 0 } }),
     auditExport:     vi.fn().mockResolvedValue({ data: {} }),
     platformConfig:  vi.fn().mockResolvedValue({ data: {} }),
@@ -474,9 +474,13 @@ describe('Profile page', () => {
   it('renders profile username after load', async () => {
     await renderProfile();
     await waitFor(() => {
-      // Use querySelector since text may be split across elements
       const el = document.querySelector('h1');
       expect(el).toBeTruthy();
+      // F11: this used to stop at "an h1 exists", which passes on any page with
+      // a heading — including an error page, and including this one with the
+      // name deleted from the DOM (verified by mutation). The test's own name
+      // says "username", so assert the username.
+      expect(el?.textContent ?? '').toMatch(/Trader One|trader1/);
     }, { timeout: 3000 });
   });
 

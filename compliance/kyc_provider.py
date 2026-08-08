@@ -247,6 +247,15 @@ class SumsubProvider(KYCProvider):
         return VerificationStatus.PENDING
 
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
+        # An unset secret must DISABLE the webhook, not make it publicly
+        # signable. HMAC keyed with b"" is a perfectly well-defined function,
+        # so any caller could compute a signature compare_digest accepts.
+        # See docs/HARDENING_BACKLOG.md S6-03.
+        if not self._secret:
+            logger.error("Sumsub webhook rejected: SUMSUB_SECRET_KEY is not configured")
+            return False
+        if not signature:
+            return False
         expected = hmac.new(self._secret.encode(), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 
@@ -383,8 +392,16 @@ class OnfidoProvider(KYCProvider):
         return status_map.get(result, VerificationStatus.PENDING)
 
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
-        # Onfido uses SHA-256 HMAC with the webhook token
+        # Onfido uses SHA-256 HMAC with the webhook token.
+        # An unset token must DISABLE the webhook, not make it publicly
+        # signable — see the note on SumsubProvider.verify_webhook and
+        # docs/HARDENING_BACKLOG.md S6-03.
         webhook_token = os.getenv("ONFIDO_WEBHOOK_TOKEN", "")
+        if not webhook_token:
+            logger.error("Onfido webhook rejected: ONFIDO_WEBHOOK_TOKEN is not configured")
+            return False
+        if not signature:
+            return False
         expected = hmac.new(webhook_token.encode(), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 

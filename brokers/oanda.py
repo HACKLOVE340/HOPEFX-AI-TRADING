@@ -55,6 +55,14 @@ import re
 import aiohttp
 import requests  # type: ignore[import-untyped]
 
+# AccountInfo is imported, never redefined. This module must NOT declare its own
+# variant: one previously existed here with `nav` instead of `equity` and without
+# the dict accessors, which made every live-OANDA pre-trade risk check raise
+# AttributeError — swallowed by the decision engine and reported as a risk-limit
+# block, so live OANDA silently refused to trade. See docs/HARDENING_BACKLOG.md
+# S1-01 and tests/unit/test_account_info_contract.py.
+from brokers.base import AccountInfo, OrderSide, Position
+
 logger = logging.getLogger(__name__)
 
 _PRACTICE_BASE = "https://api-fxpractice.oanda.com"
@@ -105,19 +113,6 @@ class MarketDataForbiddenError(RuntimeError):
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
-
-
-@dataclass
-class AccountInfo:
-    account_id: str
-    currency: str
-    balance: float
-    nav: float
-    unrealized_pnl: float
-    margin_used: float
-    margin_available: float
-    positions_count: int
-    timestamp: datetime
 
 
 @dataclass
@@ -281,16 +276,19 @@ class OANDABroker:
             # balance = closed cash; NAV = balance + unrealized P&L (higher when winning, lower when losing)
             balance = float(a.get("balance", 0))
             nav = float(a.get("NAV", balance))  # fallback to balance when NAV absent (not to 0)
+            # NAV maps to `equity`: the mark-to-market value the risk gates must
+            # size and measure drawdown against. Reporting `balance` as equity
+            # would leave those gates blind to floating losses on open positions.
             return AccountInfo(
-                account_id=self._account_id,
-                currency=a.get("currency", "USD"),
                 balance=balance,
-                nav=nav,
-                unrealized_pnl=float(a.get("unrealizedPL", 0)),
+                equity=nav,
                 margin_used=float(a.get("marginUsed", 0)),
                 margin_available=float(a.get("marginAvailable", 0)),
                 positions_count=int(a.get("openPositionCount", a.get("openTradeCount", 0))),
                 timestamp=datetime.now(UTC),
+                account_id=self._account_id,
+                currency=a.get("currency", "USD"),
+                unrealized_pnl=float(a.get("unrealizedPL", 0)),
             )
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker get_account_info: %s", exc)
@@ -556,6 +554,55 @@ class OANDABroker:
             logger.error("OANDABroker get_open_positions: %s", exc)
             return []
 
+    async def get_positions(self) -> list[Position]:
+        """Open positions in the shared :class:`brokers.base.Position` contract.
+
+        G-01. ``PositionManager._reconcile_with_broker`` awaits *this* method;
+        this class only had :meth:`get_open_positions`, which returns raw
+        mappings. The call raised ``AttributeError``, the handler caught it, and
+        every restart kept an unreconciled Redis snapshot while logging that the
+        restored state was UNVERIFIED. The sync ``OANDAConnector`` further down
+        this module does have a ``get_positions`` — which is presumably why it
+        went unnoticed — but it is neither the class production wires nor async.
+
+        Normalisation decisions, stated because they are not obvious:
+
+        * **Quantity is a magnitude, direction lives in ``side``.** OANDA reports
+          short units negative; leaking that sign into ``quantity`` gives
+          downstream sizing a negative position.
+        * **Hedged accounts are netted.** OANDA permits a long and a short leg on
+          one instrument simultaneously; the reconciler's model is one position
+          per symbol, so the two legs are summed and the sign of the net decides
+          the side.
+        * **A net-flat hedge is not a position** and is omitted rather than
+          reported as a zero-quantity holding.
+        * A malformed record is skipped, not fatal: losing one position from the
+          view is bad, losing the whole restore is worse.
+        """
+        out: list[Position] = []
+        for rec in await self.get_open_positions():
+            try:
+                symbol = rec.get("symbol")
+                if not symbol:
+                    continue
+                net = int(rec.get("long_units", 0) or 0) + int(rec.get("short_units", 0) or 0)
+                if net == 0:
+                    continue
+                out.append(
+                    Position(
+                        symbol=str(symbol),
+                        side=OrderSide.BUY if net > 0 else OrderSide.SELL,
+                        quantity=abs(net),
+                        entry_price=float(rec.get("average_price", 0.0) or 0.0),
+                        current_price=float(rec.get("current_price", 0.0) or 0.0),
+                        unrealized_pnl=float(rec.get("unrealized_pnl", 0.0) or 0.0),
+                        id=str(symbol),
+                    )
+                )
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.error("OANDABroker.get_positions: skipping malformed record %r: %s", rec, exc)
+        return out
+
     async def close_position(self, symbol: str, direction: str = "all") -> dict[str, Any]:
         """Close an open position by symbol."""
         if not self.connected or not self._session:
@@ -639,9 +686,6 @@ OandaAPI = OANDABroker
 # Used by tests, BrokerFactory, and any synchronous execution path.
 # Wraps the OANDA v20 REST API with requests.Session (no async).
 
-from brokers.base import (
-    AccountInfo as _AccountInfo,
-)
 from brokers.base import (
     Order as _Order,
 )
@@ -883,7 +927,7 @@ class OANDAConnector:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    def get_account_info(self) -> _AccountInfo | None:
+    def get_account_info(self) -> AccountInfo | None:
         """Return account balance and margin info."""
         if not self.connected or not self.session:
             return None
@@ -892,7 +936,7 @@ class OANDAConnector:
             resp = self.session.get(url, timeout=self._timeout)
             resp.raise_for_status()
             acct = resp.json().get("account", {})
-            return _AccountInfo(
+            return AccountInfo(
                 balance=float(acct.get("balance", 0)),
                 equity=float(acct.get("NAV", acct.get("balance", 0))),
                 margin_used=float(acct.get("marginUsed", 0)),
