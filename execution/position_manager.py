@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Mapping
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -714,9 +715,9 @@ class PositionManager:
 
         live_by_symbol: dict[str, Any] = {}
         for p in live or []:
-            symbol = getattr(p, "symbol", None)
+            symbol = _broker_field(p, "symbol")
             if symbol:
-                live_by_symbol[symbol] = p
+                live_by_symbol[str(symbol)] = p
 
         reconciled: dict[str, Position] = {}
 
@@ -729,7 +730,7 @@ class PositionManager:
                     symbol,
                 )
                 continue
-            broker_qty = getattr(broker_pos, "quantity", None)
+            broker_qty = _broker_field(broker_pos, "quantity")
             if (
                 isinstance(broker_qty, (int, float))
                 and not isinstance(broker_qty, bool)
@@ -763,19 +764,40 @@ class PositionManager:
     def _position_from_broker(broker_pos: Any, symbol: str) -> Position | None:
         """Build a Position from a broker position object, or None if unusable."""
         try:
-            side = str(getattr(broker_pos, "side", "") or "long").lower()
+            side = str(_broker_field(broker_pos, "side") or "long").lower()
             side = "short" if "short" in side or "sell" in side else "long"
             return Position(
-                position_id=str(getattr(broker_pos, "id", None) or f"broker-{symbol}"),
+                position_id=str(_broker_field(broker_pos, "id") or f"broker-{symbol}"),
                 symbol=symbol,
                 side=side,
-                quantity=float(getattr(broker_pos, "quantity", 0.0) or 0.0),
-                entry_price=float(getattr(broker_pos, "entry_price", 0.0) or 0.0),
+                quantity=float(_broker_field(broker_pos, "quantity") or 0.0),
+                entry_price=float(_broker_field(broker_pos, "entry_price") or 0.0),
                 strategy_id="broker_reconciliation",
             )
         except Exception as exc:
             logger.error("PositionManager: could not adopt broker position %s: %s", symbol, exc)
             return None
+
+
+def _broker_field(record: Any, name: str) -> Any:
+    """Read *name* from a broker position record, mapping or object.
+
+    G-01. This loop used `getattr(p, name, None)` only. Brokers in this codebase
+    do not agree on the shape: `OANDABroker.get_open_positions()` returns
+    `list[dict]`, and a dict has no `.symbol` attribute — so `live_by_symbol`
+    came back empty, **every persisted position was dropped as closed**, and no
+    broker-only position was ever adopted. An empty broker view is the most
+    dangerous possible misreading here, because it looks exactly like "the
+    account is flat".
+
+    `OANDABroker` now returns proper `Position` objects, which fixes the case
+    that prompted this. The mapping path stays because it costs one function and
+    the next broker adapter to return dicts should degrade to a wrong number, not
+    to a silent flat account. An enum `side` is rendered via `.value` so string
+    comparison downstream behaves the same for both shapes.
+    """
+    value = record.get(name) if isinstance(record, Mapping) else getattr(record, name, None)
+    return getattr(value, "value", value)
 
 
 # ── Null context manager for no-op span ───────────────────────────────────────

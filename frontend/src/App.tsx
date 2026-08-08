@@ -32,6 +32,7 @@ import AISupportWidget from './components/ai/AISupportWidget';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ToastProvider } from './components/Toast';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { KillSwitchHotkey } from './components/KillSwitchHotkey';
 import { CommandPalette } from './components/CommandPalette';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -44,8 +45,8 @@ import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
 const Login                   = React.lazy(() => import('./pages/Login'));
 const Register                = React.lazy(() => import('./pages/Register'));
-const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));
-const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));
+const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));  // pragma: allowlist secret — page import, not a credential
+const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));  // pragma: allowlist secret — page import, not a credential
 const PrivacyPolicy           = React.lazy(() => import('./pages/PrivacyPolicy'));
 const Onboarding              = React.lazy(() => import('./pages/Onboarding'));
 const NotFound                = React.lazy(() => import('./pages/NotFound'));
@@ -671,6 +672,11 @@ const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <ToastProvider>
       <ConfirmDialogProvider>
+        {/* S10-04: Shift+K halts trading from anywhere. Every other kill-switch
+            trigger lives in Settings or the superadmin panel, so a trader
+            watching a position run against them had to navigate away from the
+            trading screen to stop trading. Renders nothing; it only binds. */}
+        <KillSwitchHotkey />
         <BrowserRouter>
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>

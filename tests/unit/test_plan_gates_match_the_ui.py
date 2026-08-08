@@ -42,11 +42,14 @@ Deliberately **not** gated, and worth stating so the omissions read as decisions
     sizing arithmetic runs in the browser; what a subscription buys is the saved
     calculation history. Gating a quote would protect nothing and would break
     the entry auto-fill. Pinned open below.
-  * ``/api/billing/*`` — the ``wallet`` feature is advertised as starter, but
-    billing is also *how a user upgrades*. Gating it behind a paid plan would
-    lock a free user out of the page that sells them the plan. The wallet
-    surface needs a narrower gate than "the billing router"; recorded, not
-    guessed at.
+  * ``/api/billing/*`` — mostly open, on purpose: billing is *how a user
+    upgrades*, so gating ``/plans``, ``/subscription``, ``/stripe/*``,
+    ``/payments/*`` or ``/payment-methods`` would lock a free account out of the
+    page that sells them the plan. Pinned open below. Two groups within it are
+    gated: ``/elite/*`` at elite (account manager, support tickets, custom dev —
+    each labelled "(Elite)" in its own summary and previously reachable by any
+    authenticated free account) and ``/balance`` + ``/transactions`` at starter,
+    which are the ``wallet`` feature itself.
 """
 
 from __future__ import annotations
@@ -109,7 +112,35 @@ GATED = [
     ("prop_firm", "get", "/api/risk/prop-firm/daily-stats", None, "professional"),
     ("risk_calculator", "get", "/api/risk/calculator/history", None, "starter"),
     ("risk_calculator", "post", "/api/risk/calculator/history", {"symbol": "XAUUSD"}, "starter"),
+    ("billing", "get", "/api/billing/balance", None, "starter"),
+    ("billing", "get", "/api/billing/transactions", None, "starter"),
+    ("billing", "get", "/api/billing/elite/account-manager", None, "elite"),
+    ("billing", "get", "/api/billing/elite/support/tickets", None, "elite"),
 ]
+
+# Billing routes that must stay reachable on any plan: this router is *how a
+# user upgrades*, and gating it would lock a free account out of the page that
+# sells them the plan.
+BILLING_OPEN = [
+    ("get", "/api/billing/plans"),
+    ("get", "/api/billing/subscription"),
+    ("get", "/api/billing/payment-methods"),
+    ("get", "/api/billing/stripe/config"),
+]
+
+
+@pytest.mark.parametrize(("method", "path"), BILLING_OPEN)
+def test_the_upgrade_path_stays_open_to_a_free_account(method, path):
+    c = _client("billing", FREE_USER)
+    res = c.request(method, path)
+    if res.status_code == 403:
+        detail = res.json().get("detail")
+        err = detail.get("error") if isinstance(detail, dict) else None
+        assert err != "PLAN_LIMIT_EXCEEDED", (
+            f"{method.upper()} {path} is gated behind a plan, but it is part of "
+            f"how a user buys a plan — this locks a free account out of "
+            f"upgrading (F4-01b)."
+        )
 
 
 @pytest.mark.parametrize(("module", "method", "path", "body", "plan"), GATED)

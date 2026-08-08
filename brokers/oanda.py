@@ -61,7 +61,7 @@ import requests  # type: ignore[import-untyped]
 # AttributeError — swallowed by the decision engine and reported as a risk-limit
 # block, so live OANDA silently refused to trade. See docs/HARDENING_BACKLOG.md
 # S1-01 and tests/unit/test_account_info_contract.py.
-from brokers.base import AccountInfo
+from brokers.base import AccountInfo, OrderSide, Position
 
 logger = logging.getLogger(__name__)
 
@@ -553,6 +553,55 @@ class OANDABroker:
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker get_open_positions: %s", exc)
             return []
+
+    async def get_positions(self) -> list[Position]:
+        """Open positions in the shared :class:`brokers.base.Position` contract.
+
+        G-01. ``PositionManager._reconcile_with_broker`` awaits *this* method;
+        this class only had :meth:`get_open_positions`, which returns raw
+        mappings. The call raised ``AttributeError``, the handler caught it, and
+        every restart kept an unreconciled Redis snapshot while logging that the
+        restored state was UNVERIFIED. The sync ``OANDAConnector`` further down
+        this module does have a ``get_positions`` — which is presumably why it
+        went unnoticed — but it is neither the class production wires nor async.
+
+        Normalisation decisions, stated because they are not obvious:
+
+        * **Quantity is a magnitude, direction lives in ``side``.** OANDA reports
+          short units negative; leaking that sign into ``quantity`` gives
+          downstream sizing a negative position.
+        * **Hedged accounts are netted.** OANDA permits a long and a short leg on
+          one instrument simultaneously; the reconciler's model is one position
+          per symbol, so the two legs are summed and the sign of the net decides
+          the side.
+        * **A net-flat hedge is not a position** and is omitted rather than
+          reported as a zero-quantity holding.
+        * A malformed record is skipped, not fatal: losing one position from the
+          view is bad, losing the whole restore is worse.
+        """
+        out: list[Position] = []
+        for rec in await self.get_open_positions():
+            try:
+                symbol = rec.get("symbol")
+                if not symbol:
+                    continue
+                net = int(rec.get("long_units", 0) or 0) + int(rec.get("short_units", 0) or 0)
+                if net == 0:
+                    continue
+                out.append(
+                    Position(
+                        symbol=str(symbol),
+                        side=OrderSide.BUY if net > 0 else OrderSide.SELL,
+                        quantity=abs(net),
+                        entry_price=float(rec.get("average_price", 0.0) or 0.0),
+                        current_price=float(rec.get("current_price", 0.0) or 0.0),
+                        unrealized_pnl=float(rec.get("unrealized_pnl", 0.0) or 0.0),
+                        id=str(symbol),
+                    )
+                )
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.error("OANDABroker.get_positions: skipping malformed record %r: %s", rec, exc)
+        return out
 
     async def close_position(self, symbol: str, direction: str = "all") -> dict[str, Any]:
         """Close an open position by symbol."""

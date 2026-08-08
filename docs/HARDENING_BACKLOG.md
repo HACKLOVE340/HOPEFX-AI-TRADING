@@ -3819,3 +3819,99 @@ comprehensible by keyboard alone.
 **Still open from S10-04:** there is no keyboard shortcut affordance for order
 entry or the kill switch. That is a feature decision, not a defect, and is left
 to the product rather than invented here.
+
+---
+
+## Round 4 — PR #265 automated review, and the last two deferrals
+
+### G-01 — startup reconciliation could not read live OANDA positions (P1) — **FIXED**
+
+Raised by automated review on PR #265 as **thirteen threads restating one
+finding**. Verified against the code before acting on it; both halves are real.
+
+**1. The method does not exist.** `startup_factories.py:1151` wires
+`AsyncOANDAConnector`, an alias for `brokers.oanda.OANDABroker` (`oanda.py:632`).
+That class implements `get_open_positions()` and **not** the `get_positions()`
+that `PositionManager._reconcile_with_broker` awaits. The call raises
+`AttributeError`, the handler catches it, logs *"restored state is UNVERIFIED"*,
+and returns the persisted Redis snapshot untouched.
+
+The sync `OANDAConnector` further down the same module *does* have
+`get_positions()`, returning objects — which is presumably why nobody noticed.
+It is neither the class production wires nor async.
+
+**2. Even reachable, the records are the wrong shape.**
+`get_open_positions()` returns `list[dict]`; the reconciler does
+`getattr(p, "symbol", None)`. A dict has no `.symbol`, so `live_by_symbol` stays
+empty — and an empty broker view is the most dangerous possible misreading here,
+because **every persisted position is then dropped as closed** and no
+broker-only position is adopted. It looks exactly like "the account is flat".
+
+*One correction to the report:* `get_open_positions()` already maps `instrument`
+onto a `symbol` key, so the key name is not the problem — attribute-vs-mapping
+access is.
+
+Reconciliation exists to catch exactly what a restart creates: positions closed,
+opened or resized while the process was down. Inert, live OANDA exposure sits
+outside position limits, stop monitoring, risk tracking and the dashboard, while
+the operator is told the restore succeeded.
+
+Same family as **S1-01** (a second `AccountInfo`), **S13-03** (BUY submitted as
+SELL) and **S12-04** (never-awaited broker coroutines): the money path and the
+broker disagreeing about a contract, failing upward.
+
+**Fix, both sides.** A normalised async `OANDABroker.get_positions()` returning
+`brokers.base.Position`, with the decisions stated rather than implied —
+quantity is a magnitude and direction lives in `side` (OANDA reports shorts
+negative; leaking that sign gives downstream sizing a negative position); a
+hedged account's two legs are **netted**, because the reconciler's model is one
+position per symbol; a net-flat hedge is not a position; a malformed record is
+skipped rather than fatal. And `_broker_field()` in the reconciler, which reads
+mappings as well as objects — kept even though the OANDA side now returns proper
+objects, because the next adapter to return dicts should degrade to a wrong
+number, not to a silent flat account.
+
+### F4-01b (final) — the narrow billing gate — **FIXED**
+
+The last deferral. Most of `/api/billing` stays open **on purpose**: billing is
+how a user upgrades, so gating `/plans`, `/subscription`, `/stripe/*`,
+`/payments/*` or `/payment-methods` would lock a free account out of the page
+that sells them the plan. Those are now **pinned open** by a test.
+
+Two groups inside it are not that:
+
+| routes | tier | was |
+|---|---|---|
+| `/api/billing/elite/*` (5) | elite | auth only |
+| `/api/billing/balance`, `/transactions` | starter | auth only |
+
+`/elite/*` is the sharper find and was not in the original scope: dedicated
+account-manager contact, support tickets and custom-development requests, each
+labelled **"(Elite)"** in its own route summary, each reachable by any
+authenticated free-tier account.
+
+### S10-04 (rest) — keyboard shortcuts — **FIXED**
+
+Recorded as *"a feature decision, not a defect, left to the product"*. Doing it
+made the gap sharper than the entry: auditing where the kill switch can actually
+be thrown, **every trigger lives in Settings or the superadmin panel**. A trader
+watching a position run against them had to navigate away from the trading
+screen to halt trading — at the moment navigating away is the worst thing to ask.
+
+`hooks/useHotkeys.ts`, written around what a shortcut layer on this surface must
+**refuse** to do:
+
+- **never fire while typing** — a bare `b` for "buy" that also fired inside the
+  quantity field would arm a direction on a keystroke meant as text;
+- **never fire while a dialog is open** — a confirmation is a question, and the
+  answer must come from the dialog;
+- **never bypass a confirmation** — a shortcut is an accelerator for reaching a
+  control, not a way around the guard on it.
+
+Bound: `b` / `s` for order side (with the letter shown on the button, since a
+shortcut nobody knows about is not an affordance), and `Shift+K` to halt
+trading — a modifier deliberately, because "halt all trading" must not be one
+stray keystroke away. It opens the same confirmation a button would, states in
+words that **open positions are not closed**, and reports a timeout through
+`describeSubmitFailure` (F2-01) rather than claiming a halt failed when it may
+have succeeded.

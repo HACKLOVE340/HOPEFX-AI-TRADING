@@ -34,6 +34,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+
+# ── F4-01b (final): the narrow wallet gate ───────────────────────────────────
+#
+# This router was deliberately left ungated in the first pass, and the reason
+# still holds for most of it: **billing is how a user upgrades.** Gating
+# /plans, /subscription, /stripe/*, /payments/* or /payment-methods behind a paid
+# plan would lock a free user out of the page that sells them the plan.
+#
+# Two groups are not that, and are gated:
+#
+#   /elite/*                 elite    — dedicated account manager contact,
+#                                       support tickets and custom-dev requests.
+#                                       Each says "(Elite)" in its own summary
+#                                       and was reachable by any authenticated
+#                                       free-tier account.
+#   /balance, /transactions  starter  — the `wallet` feature the UI advertises
+#                                       at starter and gated in React only.
+#
+# Everything else stays open on purpose. The omissions here are decisions.
+from monetization.subscription import require_plan
 from monetization.activation import UnknownPlanError, activate_paid_plan, resolve_plan_price_usd
 
 logger = logging.getLogger(__name__)
@@ -673,7 +693,7 @@ async def flutterwave_status():
 
 
 @router.get("/balance")
-async def get_balance(user: TokenPayload = Depends(get_current_user)):
+async def get_balance(user: TokenPayload = Depends(require_plan("starter"))):
     """
     Return the authenticated user's wallet balance.
 
@@ -1101,7 +1121,7 @@ async def detach_payment_method(
 async def get_transactions(
     limit: int = 50,
     offset: int = 0,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """
     Return the authenticated user's transaction history.
@@ -1235,7 +1255,7 @@ _DEFAULT_ACCOUNT_MANAGER = {
 
 
 @router.get("/elite/account-manager", summary="Get dedicated account manager contact (Elite)")
-async def get_account_manager(user: TokenPayload = Depends(get_current_user)):
+async def get_account_manager(user: TokenPayload = Depends(require_plan("elite"))):
     """
     Return the dedicated account manager details for the authenticated Elite user.
 
@@ -1258,7 +1278,7 @@ class SupportTicketRequest(BaseModel):
 @router.post("/elite/support/ticket", summary="Submit a dedicated support ticket (Elite)")
 async def create_support_ticket(
     body: SupportTicketRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Create a dedicated support ticket for an Elite subscriber.
@@ -1308,7 +1328,7 @@ async def create_support_ticket(
 async def list_support_tickets(
     limit: int = 50,
     offset: int = 0,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Return all support tickets submitted by the authenticated Elite user.
@@ -1340,7 +1360,7 @@ async def list_support_tickets(
 )
 async def get_ticket_timeline(
     ticket_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Return the event timeline for a specific Elite support ticket.
@@ -1411,7 +1431,7 @@ class CustomDevRequest(BaseModel):
 @router.post("/elite/custom-dev/request", summary="Submit a custom development request (Elite)")
 async def submit_custom_dev_request(
     body: CustomDevRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Submit a bespoke development request (strategy, indicator, integration, etc.)
@@ -1459,7 +1479,7 @@ async def submit_custom_dev_request(
 async def list_custom_dev_requests(
     limit: int = 50,
     offset: int = 0,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Return all custom development requests submitted by the authenticated Elite user.

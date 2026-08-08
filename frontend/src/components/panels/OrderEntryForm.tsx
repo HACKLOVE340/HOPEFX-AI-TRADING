@@ -18,6 +18,7 @@ import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
 import { fmtPrice, cn, extractApiError, describeSubmitFailure } from '../../lib/utils';
 import { useConfirm } from '../ConfirmDialog';
+import { useHotkeys } from '../../hooks/useHotkeys';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,16 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   const [sl,        setSl]        = useState(defaultSl ?? '');
   const [tp,        setTp]        = useState(defaultTp ?? '');
   const [submitting, setSubmitting] = useState(false);
+
+  // S10-04: `b` / `s` set the direction without reaching for the mouse. Bare
+  // letters are safe here only because `useHotkeys` refuses to fire from inside
+  // a field or while a dialog is open — without that, typing a quantity would
+  // arm a side. Submission is deliberately NOT bound: Enter already submits the
+  // form natively, and it still goes through the confirmation.
+  useHotkeys({
+    b: () => setSide('buy'),
+    s: () => setSide('sell'),
+  });
   const [result,    setResult]    = useState<{ ok: boolean; msg: string } | null>(null);
   // Confirmation for capital-committing actions (S10-01). Falls back to
   // "cancel" when no provider is mounted, so an order never proceeds
@@ -444,6 +455,9 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
               )}
             >
               {s === 'buy' ? '▲ Buy' : '▼ Sell'}
+              <span className="ml-1 text-[9px] opacity-50" aria-hidden="true">
+                {s === 'buy' ? 'B' : 'S'}
+              </span>
             </button>
           ))}
         </div>
