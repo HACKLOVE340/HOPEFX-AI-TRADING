@@ -3624,3 +3624,130 @@ nine, all already found and corrected in earlier slices of this round (the badge
 required to read "Live" on a dead socket; the account-summary test passing on a
 page subtitle; the positions panel required to claim "no open positions" while
 disconnected). This slice adds one more.
+
+---
+
+## Round 4 — Slices F7–F10
+
+### F7-01 — colour is not the sole carrier of meaning — **clean, now pinned**
+
+The one F7 question that is a safety duty rather than taste: *"Are red/green the
+only carriers of long/short and P&L sign?"* **No**, on both counts:
+
+- `SideBadge` renders `▲ Long` / `▼ Short` — glyph and word, colour as
+  reinforcement.
+- `fmtPnl` renders `+$50.00` / `-$50.00`. Its own docstring records the version
+  where it did not: *"the negative branch previously produced an empty sign
+  while still taking Math.abs, so every loss rendered as a positive number …
+  Colour usually carried the meaning; the number did not."* Under deuteranopia
+  that page had **no loss indicator at all**.
+
+Pinned by tests that read the text with styling ignored, which is what a
+red-green colour-blind trader effectively does with these two hues.
+
+**Not claimed:** whether the most decision-relevant number is the most
+prominent, and whether the hierarchy scans in under a second. The S10 scope note
+already recorded that reading components cannot settle that, and it still
+cannot. It needs a real screen.
+
+Two other F7 questions are answered by work already done this round: *"can a
+user tell at a glance whether the system is live, degraded, or halted?"* — three
+distinct states now (F1-02/F10-01) where there were two, and one kill-switch
+source (S10-02) where there were three. *"Does the UI imply more certainty than
+the data supports?"* — that is the whole of F1-02, S9-02 and F6-01.
+
+### F8-01 — the confirmation guarding every destructive action was not focus-trapped (MEDIUM)
+
+`ConfirmDialog` declares `role="dialog"` and `aria-modal="true"`, and its
+backdrop blocks the **mouse**. The keyboard walked straight out:
+
+| behaviour | before |
+|---|---|
+| focus moves into the dialog | ✅ (`autoFocus` on the confirm button) |
+| Tab stays inside | ❌ escaped on the second Tab |
+| Shift+Tab stays inside | ❌ |
+| Escape closes | ✅ |
+| focus returns to the trigger | ❌ fell to `<body>` |
+
+The markup said the page behind was inert and the behaviour said otherwise; a
+screen-reader user got the worse of the two.
+
+**Filed under the money path, not general a11y,** because with focus back on the
+submit button behind the dialog, Enter re-submits the form. That is the
+mechanism behind **F2-02** — that entry fixed the consequence (a promise that
+never settled); this fixes the cause.
+
+Fixed: Tab/Shift+Tab cycle within the dialog, focus is restored to the element
+that opened it, Escape unchanged. The whole close-all path is now operable by
+keyboard alone, and there is a test that says so.
+
+### F9-01 — measured render cost of a tick (LOW)
+
+`setPrice` gives `prices` and `priceHistory` a new object identity on every tick,
+which is correct — it is how zustand notifies. The cost lands on **ten call
+sites that subscribe to the whole map** rather than to one symbol, so they
+re-render on every tick of every instrument including ones they never display.
+`selectPrice(symbol)` already exists for exactly this.
+
+Measured, not asserted: a component on `selectPrice` records **zero** re-renders
+across three ticks in other instruments; the whole-map subscriber re-renders for
+all of them.
+
+**Converted one** (`AIChart`) and stopped. In `OrderEntryForm` and
+`RiskCalculator` the symbol is declared *after* the subscription, so the change
+means reordering hooks — restructuring a money path for a gain jsdom cannot
+measure. The remaining sites are recorded with the number rather than churned;
+`LivePriceTicker` and `Watchlist` genuinely need the whole map.
+
+### F9-02 — nothing grows without bound — **clean**
+
+Five arrays append and all five are capped: price history at `MAX_TICK_HISTORY`,
+signals at `MAX_SIGNALS`, news at 50, triggered alerts at 100, recent paths at 6.
+Everything else replaces wholesale. Pinned with 1,000-tick and 500-item loops.
+
+### F10-01 — the "LIVE" badge exists three times; F1-02 fixed one (HIGH)
+
+The S13-01 prediction landing exactly. Three near-duplicate trading pages each
+carry their own liveness badge:
+
+| surface | was |
+|---|---|
+| `Dashboard` `WsBadge` | **fixed in F1-02** |
+| `Trade.tsx:219` status dot | `wsStatus === 'connected'` → green, pulsing, "live" |
+| `Trading.tsx:177` TopBar pill | `wsStatus === 'connected'` → "● LIVE" |
+
+Two of the three went on saying LIVE, in green, through a stalled feed — the
+defect F1-02 exists to fix — because a fix applied to one half of a duplicate
+does not reach the other when nobody knows the other exists.
+
+`Trade`'s broker-status banner had the same shape one step further on: it was
+suppressed by `wsStatus === 'connected'`, hiding the warning during the outage
+it describes.
+
+All three now read `selectFeedLive` and distinguish **live / stalled /
+disconnected**. A test greps every one of them and fails on a fourth copy.
+
+### F10-02 — two role mechanisms, and a rank table defined twice (LOW)
+
+`AuthGuard` accepts a `requiredRole` prop, carries **its own byte-identical copy
+of `ROLE_RANK`**, and re-implements inline the comparison that
+`lib/subscription.ts::hasRole` already provides — a second role mechanism
+alongside `AdminGuard`/`SuperAdminGuard`, with different denial copy. **No route
+uses it** (all 11 privileged routes go through the helpers); its only callers are
+seven tests.
+
+F4-02 deferred the decision here. Resolved by consolidation rather than deletion:
+`AuthGuard` now imports `hasRole`, so the capability and its tests survive and
+the duplicate constant is gone. The two mechanisms agreed today — S13-01's record
+in this codebase is that duplicated pairs do not stay agreeing.
+
+### F10 route/page reconciliation
+
+Already done in F4 and clean: 70 lazy route components, every one resolving to a
+real file, no top-level page without a route. Not repeated.
+
+### A contract test caught this work
+
+`type_accuracy_contract.test.ts` rejected the focus trap's `items[0]!` /
+`items[items.length - 1]!` — the repo's own `noUncheckedIndexedAccess` guard
+(audit #38) firing on new code, correctly. Rewritten as bind-then-check.

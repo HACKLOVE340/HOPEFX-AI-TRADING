@@ -27,7 +27,7 @@ import { useToast } from '../components/Toast';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { PageHeader } from '../components';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
+import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot, selectFeedLive } from '../store';
 
 const TRADE_CROSS_LINKS = [
   { label: 'Trading Terminal', href: '/terminal',       icon: '🖥️', color: '#3b82f6' },
@@ -156,11 +156,13 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
 
 const BrokerStatusBanner: React.FC = () => {
   const account  = useStore((s) => s.account);
-  const wsStatus = useStore(selectWsStatus);
+  // F10-01: `selectFeedLive`, not `wsStatus`. A stalled socket stays
+  // 'connected', so this banner was suppressed during the outage it describes.
+  const feedLive = useStore(selectFeedLive);
 
-  // Only show when we have no account data AND WS is not connected
+  // Only show when we have no account data AND the feed is not delivering
   // (avoids flash during normal load)
-  if (account || wsStatus === 'connected') return null;
+  if (account || feedLive) return null;
 
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#ffb800]/10 border border-[#ffb800]/30 text-[11px]">
@@ -178,6 +180,10 @@ const BrokerStatusBanner: React.FC = () => {
 const AccountBar: React.FC = () => {
   const { data: account } = useAccount();
   const wsStatus = useStore(selectWsStatus);
+  // F10-01: "live" must describe the feed, not the socket — the same defect
+  // fixed in Dashboard's WsBadge, surviving here because this page is a
+  // near-duplicate of it and nobody knew the badge existed three times.
+  const feedLive = useStore(selectFeedLive);
 
   if (!account) return null;
 
@@ -216,11 +222,13 @@ const AccountBar: React.FC = () => {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
+            feedLive ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
         <span className="text-[10px] text-slate-500 capitalize">
-          {wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
+          {feedLive ? 'live'
+            : wsStatus === 'connected' ? 'stalled'
+            : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
         </span>
       </div>
     </div>

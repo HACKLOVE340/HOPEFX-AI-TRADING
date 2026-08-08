@@ -263,3 +263,59 @@ describe('no surface re-derives feed liveness itself — F1-02', () => {
     ).toBe(true);
   });
 });
+
+// ── F10-01 ───────────────────────────────────────────────────────────────────
+
+/**
+ * The "is it live?" badge exists **three times**, once per near-duplicate
+ * trading page — `Dashboard`'s `WsBadge`, `Trade`'s status dot, and `Trading`'s
+ * TopBar pill. F1-02 fixed the first. The other two still read
+ * `wsStatus === 'connected'` and went on saying LIVE, in green, through a stall.
+ *
+ * That is the S13-01 prediction landing exactly: every duplicated pair in this
+ * codebase had already produced a defect, and a fix applied to one half of a
+ * duplicate does not reach the other because nobody knows the other exists.
+ *
+ * `Trade`'s broker banner had the same shape one step further on — it was
+ * suppressed by `wsStatus === 'connected'`, so the warning was hidden during the
+ * outage it describes.
+ */
+describe('F10-01 — every live badge reads the feed, not the socket', () => {
+  const SURFACES = [
+    'src/pages/Dashboard.tsx',
+    'src/pages/Trade.tsx',
+    'src/pages/Trading.tsx',
+  ];
+
+  it.each(SURFACES)('%s does not key a liveness claim to wsStatus alone', async (rel) => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const src = fs.readFileSync(path.resolve(process.cwd(), rel), 'utf8');
+
+    // A liveness *claim* is a bare `wsStatus === 'connected'` ternary whose
+    // TRUE branch says live. `feedLive ? 'LIVE' : wsStatus === 'connected' ?
+    // 'STALLED' : 'REST'` is correct and must not be flagged — wsStatus is the
+    // right thing to distinguish stalled from disconnected.
+    const offenders = src
+      .split('\n')
+      .map((l, i) => [i + 1, l] as const)
+      .filter(([, l]) => {
+        const m = l.match(/wsStatus\s*===\s*'connected'\s*\?([^:]*)/);
+        return m != null && /\blive\b/i.test(m[1] ?? '');
+      });
+
+    expect(
+      offenders,
+      `${rel} claims "live" from wsStatus alone at line(s) ` +
+        `${offenders.map(([n]) => n).join(', ')} — the socket stays 'connected' ` +
+        `through a stall, which is the whole of S9-01 (F10-01).`,
+    ).toEqual([]);
+  });
+
+  it.each(SURFACES)('%s uses the shared selector', async (rel) => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const src = fs.readFileSync(path.resolve(process.cwd(), rel), 'utf8');
+    expect(src.includes('selectFeedLive')).toBe(true);
+  });
+});
