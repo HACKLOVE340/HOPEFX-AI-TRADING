@@ -62,6 +62,19 @@ jobs:
             cd "${{ secrets.VPS_APP_DIR }}"
             echo "[ci] fetching latest main..."
             git fetch --all --prune
+            # Record any drift before discarding it. `reset --hard` is the right
+            # call — the server must match the commit being deployed — but doing
+            # it silently means edits made directly on the box vanish with no
+            # trace. This has already bitten once: a deploy was blocked by 39
+            # locally-modified tracked files, and a reset would have destroyed
+            # them unrecorded. Costs nothing when the tree is clean.
+            if ! git diff --quiet HEAD 2>/dev/null; then
+              drift="/tmp/hopefx-drift-$(date -u +%Y%m%d-%H%M%S).patch"
+              git diff --binary HEAD > "$drift" || true
+              echo "[ci] WARNING: server had local modifications; saved to $drift"
+              echo "[ci]          restore with: git apply -3 $drift"
+              git status --porcelain | head -40
+            fi
             git reset --hard origin/main
             echo "[ci] running deploy script..."
             bash deployments/deploy.sh
