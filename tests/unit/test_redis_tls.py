@@ -109,14 +109,37 @@ class TestEnforceTLS:
             result = _enforce_tls(url)
         assert result.startswith("rediss://")
 
-    def test_production_plaintext_raises(self):
-        """Plaintext redis:// in production raises RuntimeError."""
+    def test_production_plaintext_to_a_routable_host_raises(self):
+        """Plaintext redis:// to a reachable host in production raises.
+
+        The host here used to be ``localhost``. That made the rule "no plaintext
+        in production, anywhere", which is stricter than the threat: loopback
+        and private addresses cannot be eavesdropped from another machine, and
+        the repository's own docker-compose.yml is exactly that case —
+        APP_ENV=production with REDIS_URL=redis://…@redis:6379/0. Enforcing it
+        there made the stack unrunnable: the tick writer never started, so ticks
+        were neither persisted nor broadcast and prices froze, and there was no
+        setting that helped because redis:7-alpine serves no TLS.
+
+        The rule now applies to destinations that can actually be listened to,
+        which is what it was written to protect. See
+        tests/unit/test_redis_tls_private_destinations.py for the full split.
+        """
+        from cache.redis_client import _enforce_tls
+
+        url = "redis://cache.example.com:6379/0"
+        with patch.dict(os.environ, {"APP_ENV": "production", "IS_FORCE_TLS": "", "REDIS_FORCE_TLS": "false"}):
+            with pytest.raises(RuntimeError, match="TLS required"):
+                _enforce_tls(url)
+
+    def test_production_plaintext_to_loopback_is_allowed(self):
+        """The other half of the split, stated explicitly so the narrowing is
+        deliberate rather than an accident of the host chosen above."""
         from cache.redis_client import _enforce_tls
 
         url = "redis://localhost:6379/0"
         with patch.dict(os.environ, {"APP_ENV": "production", "IS_FORCE_TLS": "", "REDIS_FORCE_TLS": "false"}):
-            with pytest.raises(RuntimeError, match="TLS required"):
-                _enforce_tls(url)
+            assert _enforce_tls(url) == url
 
     def test_production_force_tls_upgrades_not_raises(self):
         """In production, IS_FORCE_TLS=true upgrades URL instead of raising."""

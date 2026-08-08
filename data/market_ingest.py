@@ -102,6 +102,17 @@ def _validate_tick(bid: float, ask: float, symbol: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class IngestConfigurationError(RuntimeError):
+    """The feed is misconfigured and retrying cannot fix it.
+
+    Separated from ordinary connection errors on purpose. ``_ws_loop`` retries
+    anything transient with exponential back-off, which is right for a dropped
+    socket and wrong for "this exchange does not exist" — that produced an
+    endless reconnect loop that looked like a flaky network instead of a wrong
+    setting.
+    """
+
+
 class _StalenessGuard:
     """Fires a breach event when no tick arrives within STALE_TIMEOUT_S."""
 
@@ -233,6 +244,12 @@ class MarketIngest:
                     backoff = WS_RECONNECT_BASE  # reset on success
 
             except asyncio.CancelledError:
+                break
+            except IngestConfigurationError as exc:
+                # Not retryable. Waiting longer will not make the exchange exist.
+                logger.error("MarketIngest: %s", exc)
+                logger.error("MarketIngest: stopping — fix the configuration and restart.")
+                self._running = False
                 break
             except Exception as exc:
                 logger.error("MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff)
@@ -394,14 +411,31 @@ class MarketIngest:
 
         exchange_cls = getattr(ccxtpro, EXCHANGE_ID, None)
         if exchange_cls is None:
-            # Fallback to a public exchange that carries XAU/USD (e.g. bitfinex)
-            logger.warning(
-                "ccxt.pro has no '%s' exchange — falling back to bitfinex for XAU/USD",
-                EXCHANGE_ID,
+            # No silent substitute.
+            #
+            # This used to fall back to ``ccxtpro.bitfinex``, described in the
+            # comment as "a public exchange that carries XAU/USD". Bitfinex is a
+            # crypto exchange and does not list XAU/USD, so with the default
+            # INGEST_EXCHANGE=oanda — and ccxt.pro has no oanda — production span
+            # its wheels forever:
+            #
+            #   ccxt.pro has no 'oanda' exchange — falling back to bitfinex
+            #   MarketIngest WS error: bitfinex does not have market symbol
+            #     XAU/USD — reconnecting in 2.0 s   (then 4, 8, 16 …)
+            #   STALE FEED: no tick for 10.2 s on XAU/USD
+            #
+            # A feed that cannot serve the symbol is not a fallback, it is an
+            # outage wearing a reconnect loop. Raising stops the loop and says
+            # what to change; the staleness detector then reports a dead feed
+            # instead of a flapping one, which is the difference between an
+            # operator seeing "misconfigured" and seeing "the network is bad".
+            raise IngestConfigurationError(
+                f"ccxt.pro has no '{EXCHANGE_ID}' exchange, so {SYMBOL} cannot be streamed from it. "
+                f"Set INGEST_EXCHANGE to an exchange ccxt.pro supports and that lists {SYMBOL}, "
+                f"or run the OANDA feed (market_data/) instead of MarketIngest for FX and metals. "
+                f"Refusing to substitute a different venue — the previous fallback was bitfinex, "
+                f"which does not list {SYMBOL} and produced an endless reconnect loop."
             )
-            exchange_cls = ccxtpro.bitfinex
-            config.pop("apiKey", None)
-            config.pop("secret", None)
 
         return exchange_cls(config)
 

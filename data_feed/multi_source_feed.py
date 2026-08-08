@@ -425,6 +425,8 @@ class MultiSourceTickFeed:
                 src._owns_session = False
 
         # Connect Redis tick writer (non-fatal if Redis is unavailable).
+        # Bound before the try so no path can reach the banner with it unset.
+        tick_writer_started = False
         try:
             from .redis_tick_writer import RedisTickWriter
 
@@ -445,7 +447,13 @@ class MultiSourceTickFeed:
             # broadcast), charts stuck on "Loading market data…", and
             # "No OHLCV data available" on the indicator builder — one silent
             # failure presenting as a dozen broken pages.
-            if not await self._tick_writer.start():
+            # The banner below reports this flag, not the truthiness of
+            # self._tick_writer. The object exists whether or not Redis answered,
+            # so the old check logged "redis=connected" on the very same startup
+            # that warned ticks would NOT be persisted — two adjacent lines
+            # contradicting each other, with the reassuring one last.
+            tick_writer_started = await self._tick_writer.start()
+            if not tick_writer_started:
                 logger.warning(
                     "MultiSourceTickFeed: RedisTickWriter did not start — ticks will NOT be "
                     "persisted or broadcast. Check Redis connectivity (REDIS_URL/REDIS_PASSWORD)."
@@ -453,6 +461,7 @@ class MultiSourceTickFeed:
         except Exception as exc:
             logger.warning("MultiSourceTickFeed: RedisTickWriter init failed (non-fatal): %s", exc)
             self._tick_writer = None
+            tick_writer_started = False
 
         # Launch one polling task per symbol plus the health monitor.
         for sym in self._states:
@@ -463,7 +472,7 @@ class MultiSourceTickFeed:
             "MultiSourceTickFeed started | %d symbol(s) | refresh=%.1fs | redis=%s",
             len(self._states),
             self._refresh_s,
-            "connected" if self._tick_writer else "unavailable",
+            "connected" if tick_writer_started else "UNAVAILABLE — ticks not persisted",
         )
 
     async def stop(self) -> None:

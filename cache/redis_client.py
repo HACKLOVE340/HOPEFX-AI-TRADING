@@ -59,6 +59,9 @@ _no_config_warned: bool = False
 _connect_failed_warned: bool = False
 # Emit the plaintext-TLS dev warning only once per process to avoid log flood.
 _tls_warning_emitted: bool = False
+# Separate latch: the private-destination note is an INFO explaining why a
+# plaintext production connection was allowed, not the plaintext warning.
+_tls_private_note_emitted: bool = False
 
 
 def _parse_hosts(hosts_str: str, default_port: int = 6379) -> list[tuple[str, int]]:
@@ -157,6 +160,42 @@ async def _try_sentinel(
         return None, None
 
 
+def is_private_redis_host(redis_url: str) -> bool:
+    """True when *redis_url* points somewhere that cannot leave the host or its
+    private network.
+
+    The TLS requirement exists so credentials never cross a network someone
+    could be listening on. A loopback address, an RFC-1918 address, or a
+    single-label hostname — a Docker Compose service name like ``redis``, which
+    has no public DNS meaning and resolves only on the container network — is
+    not that network. Requiring TLS there buys nothing and costs everything:
+    ``redis:7-alpine`` serves no TLS, so ``rediss://`` cannot connect either.
+
+    Anything with a routable hostname is still held to the rule.
+    """
+    from urllib.parse import urlparse
+
+    try:
+        host = (urlparse(redis_url).hostname or "").strip()
+    except (ValueError, AttributeError):
+        return False
+    if not host:
+        return False
+
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return True
+
+    import ipaddress
+
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        # Not an IP. A name with no dot cannot be a public DNS name; it is a
+        # container/service name resolved by the private network's own DNS.
+        return "." not in host
+    return addr.is_loopback or addr.is_private or addr.is_link_local
+
+
 def _enforce_tls(redis_url: str) -> str:
     """
     Enforce TLS in production environments.
@@ -193,12 +232,30 @@ def _enforce_tls(redis_url: str) -> str:
         logger.info("Redis: REDIS_FORCE_TLS=true — upgraded URL to rediss://")
         return upgraded
 
-    if app_env == "production":
+    if app_env == "production" and not is_private_redis_host(redis_url):
         raise RuntimeError(
             "Redis TLS required in production: REDIS_URL must use rediss:// (not redis://). "
             "Update REDIS_URL to rediss://<host>:<port>/<db> or set REDIS_FORCE_TLS=true "
             "to auto-upgrade. This check prevents credentials from being sent in plaintext."
         )
+
+    if app_env == "production":
+        # Private destination: allowed, but said out loud. The shipped
+        # docker-compose.yml is exactly this case — APP_ENV defaults to
+        # production and REDIS_URL is redis://…@redis:6379/0 — and raising here
+        # made the stack unrunnable as configured: the tick writer failed to
+        # start, so ticks were never persisted or broadcast and prices froze in
+        # the UI. rediss:// was no escape either, since redis:7-alpine serves no
+        # TLS. Narrowed to destinations that can actually be eavesdropped.
+        global _tls_private_note_emitted
+        if not _tls_private_note_emitted:
+            logger.info(
+                "Redis: plaintext connection permitted in production — the destination in "
+                "REDIS_URL is loopback or private, so no credentials cross a routable network. "
+                "Use rediss:// if Redis ever moves to a different host."
+            )
+            _tls_private_note_emitted = True
+        return redis_url
 
     # Warn once per process — plaintext in non-production is allowed but notable.
     global _tls_warning_emitted
