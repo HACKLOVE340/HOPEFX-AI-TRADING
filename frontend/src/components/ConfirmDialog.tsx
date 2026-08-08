@@ -70,6 +70,16 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
   const resolverRef = useRef<Resolver | null>(null);
 
   const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
+    // F2-02: `resolverRef` is one slot. A second confirm() used to overwrite the
+    // first resolver, leaving that promise never settled — and every caller
+    // does `const ok = await confirm(...)` before setting its busy flag, so the
+    // displaced caller hung forever and its `finally` never ran. A submit
+    // button disabled while a confirmation is pending stayed disabled for the
+    // life of the page.
+    //
+    // Settle it `false`: nobody is looking at a dialog that has been replaced,
+    // and the only safe answer to a confirmation nobody saw is no.
+    resolverRef.current?.(false);
     setState({ open: true, opts });
     return new Promise<boolean>(resolve => { resolverRef.current = resolve; });
   }, []);

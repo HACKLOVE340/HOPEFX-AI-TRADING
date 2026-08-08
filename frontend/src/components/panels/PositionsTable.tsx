@@ -18,7 +18,7 @@ import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError, sameSymbol, positionSide, describeCloseAll } from '../../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, cn, sameSymbol, positionSide, describeCloseAll, describeSubmitFailure } from '../../lib/utils';
 import type { Position } from '../../types';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
@@ -233,7 +233,12 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       onClosed?.(id);
       invalidate();
     } catch (e: unknown) {
-      setError(extractApiError(e, 'Close failed'));
+      // F2-01: "Close failed" after a 30s timeout is a claim we cannot make —
+      // the close may have gone through. Refetch rather than leave the row
+      // showing an exposure that may no longer exist.
+      const outcome = describeSubmitFailure(e, 'close');
+      setError(outcome.message);
+      if (!outcome.outcomeKnown) invalidate();
     } finally {
       setClosingId(null);
     }
@@ -248,7 +253,11 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       setPositions([]);
       invalidate();
     } catch (e: unknown) {
-      setError(extractApiError(e, 'Close all failed'));
+      // Worse here than for a single close: a close-all that timed out may have
+      // closed some, all, or none of them. Ask the server rather than guess.
+      const outcome = describeSubmitFailure(e, 'close-all');
+      setError(outcome.message);
+      if (!outcome.outcomeKnown) invalidate();
     } finally {
       setClosingAll(false);
     }

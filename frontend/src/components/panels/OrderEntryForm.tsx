@@ -12,11 +12,11 @@
 
 import React, { useState, useCallback, useEffect, useRef, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useStore, selectIsBlackout } from '../../store';
+import { useStore, selectIsBlackout, selectFeedLive } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, cn, extractApiError } from '../../lib/utils';
+import { fmtPrice, cn, extractApiError, describeSubmitFailure } from '../../lib/utils';
 import { useConfirm } from '../ConfirmDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -205,7 +205,10 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   const confirm    = useConfirm();
   // Surfaced in the confirmation so the trader is told when the price the
   // order is sized against may be stale (S9-01).
-  const feedStale  = useStore((s) => s.feedStale);
+  // `selectFeedLive`, not `s.feedStale`: connected-with-nothing-received-yet
+  // is also not a price you should size an order against (F1-02), and a
+  // second local copy of this rule is how S10-02 started.
+  const feedLive   = useStore(selectFeedLive);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-clear the result banner after 4 seconds so it doesn't linger.
@@ -314,7 +317,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
       slNum > 0 && entryPrice > 0
         ? `Max loss at stop: $${(Math.abs(entryPrice - slNum) * qtyNum).toFixed(2)}`
         : null,
-      feedStale ? 'WARNING: price feed is stalled — the entry shown may be stale.' : null,
+      feedLive ? null : 'WARNING: the price feed is not live — the entry shown may be stale.',
     ].filter(Boolean);
 
     const ok = await confirm({
@@ -345,7 +348,11 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
       } else if (httpStatus === 403) {
         detail = extractApiError(e, 'Order rejected — check KYC status or subscription plan.');
       } else {
-        detail = extractApiError(e, 'Order failed');
+        // F2-01: the old fallback said "Order failed". On a timeout — reachable
+        // at 30s on this axios instance — nothing came back, so whether the
+        // broker filled it is unknown, and "failed" invites a second order on
+        // top of a live one.
+        detail = describeSubmitFailure(e, 'order').message;
       }
       setResult({ ok: false, msg: detail });
     } finally {
@@ -356,7 +363,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   // price rather than the price at the time the callback was last created.
   // Omitting it caused stale-closure bugs where SL/TP validation used an
   // outdated entry price after a price tick updated tick?.ask / tick?.bid.
-  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced, confirm, feedStale]);
+  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced, confirm, feedLive]);
 
   return (
     <Panel title="Order Entry">

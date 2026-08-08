@@ -23,7 +23,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Spinner } from '../components/Spinner';
 import { DataAge } from '../components/ui/DataAge';
-import { extractApiError, fmtPnl } from '../lib/utils';
+import { extractApiError, fmtPnl, describeSubmitFailure } from '../lib/utils';
 import { useConfirm } from '../components/ConfirmDialog';
 
 
@@ -92,7 +92,11 @@ const AmountForm: React.FC<{
     }
     setBusy(true); setMsg('');
     try { await onConfirm(amount); }
-    catch (e) { setMsg(extractApiError(e, `${mode === 'deposit' ? 'Deposit' : 'Withdrawal'} failed.`)); }
+    // F2-01: "Deposit failed" on a timeout is a claim about money we cannot
+    // make. Today these endpoints persist nothing, so the cost is low — but
+    // that is a property of the current backend, not of this message, and it
+    // becomes wrong the moment a real processor is wired in.
+    catch (e) { setMsg(describeSubmitFailure(e, mode === 'deposit' ? 'deposit' : 'withdrawal').message); }
     finally { setBusy(false); }
   };
 

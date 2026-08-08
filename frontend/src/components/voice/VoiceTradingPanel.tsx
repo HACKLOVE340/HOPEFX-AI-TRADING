@@ -20,6 +20,7 @@ import { isSuperAdmin } from '../../lib/subscription';
 import { useVoice } from '../../hooks/useVoice';
 import { parseVoiceCommand, describeIntent, type VoiceIntent } from '../../lib/voiceCommands';
 import { tradingApi } from '../../hooks/useApi';
+import { describeSubmitFailure } from '../../lib/utils';
 import { useToast } from '../Toast';
 
 const VoiceTradingPanel: React.FC = () => {
@@ -92,9 +93,15 @@ const VoiceTradingPanel: React.FC = () => {
       }
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;
+      // F2-01: the old fallback said "Command failed. Nothing was executed." —
+      // out loud, and on a timeout it is a flat assertion of something we do
+      // not know. For a trade it invites a duplicate; for the kill switch it
+      // tells the operator trading is still running when it may already have
+      // been halted, which is the more dangerous direction of the two.
+      const what = pending.kind === 'kill_switch' ? 'kill switch' : 'order';
       const msg = status === 403
         ? 'Rejected by the server risk gate.'
-        : 'Command failed. Nothing was executed.';
+        : describeSubmitFailure(e, what).message;
       toast.error(msg);
       voice.speak(msg);
     } finally {

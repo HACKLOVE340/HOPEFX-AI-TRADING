@@ -3074,3 +3074,124 @@ behaviour:
   matched `/balance/i` against a page whose `account` is null, so it was passing
   on the page **subtitle** ("Balances, equity curve, …") and had never once
   looked at the account summary. It now sets an account and asserts the tile.
+
+---
+
+## Round 4 — Slice F2: money-committing surfaces
+
+Scope: every surface where a click moves capital — `OrderEntryForm`,
+`PositionsTable` close and close-all, `VoiceTradingPanel`, `Wallet`
+deposit/withdraw, `CryptoCheckout`, `PricingPage`. The playbook's questions:
+can it double-submit; does it confirm with the actual numbers; what does it do
+when the price it quotes is stale; **what happens if the request times out**.
+
+### F2-01 — "Order failed" is a claim, and on a timeout it is a false one (HIGH)
+
+`OrderEntryForm.tsx:340`, `PositionsTable.tsx:236` and `:251`,
+`VoiceTradingPanel.tsx:93`, `Wallet.tsx:94`.
+
+The axios instance carries `timeout: 30_000` (`useApi.ts:15`). A broker that
+takes 31 seconds produces an error with **no `response`**, which falls through
+every one of these catches to its generic branch:
+
+| surface | said |
+|---|---|
+| `OrderEntryForm` | `Order failed` |
+| `PositionsTable` | `Close failed` / `Close all failed` |
+| `VoiceTradingPanel` | `Command failed. Nothing was executed.` — **spoken aloud** |
+| `Wallet` | `Deposit failed.` / `Withdrawal failed.` |
+
+None of that is known. A timeout means the answer never came back, not that the
+order was refused — it may be live at the broker right now. And the natural
+response to "Order failed" is to place it again, at which point the trader holds
+double the position they intended with one stop covering half of it. The voice
+panel is the sharpest: it asserts *"Nothing was executed"* out loud, and for the
+kill-switch branch that tells an operator trading is still running when it may
+already have been halted.
+
+**The distinction already exists in this codebase**, reasoned out in exactly
+these terms — for logging in:
+
+```
+/** True only for a DEFINITIVE auth rejection … as opposed to a
+ *  timeout/network/5xx, which says nothing about whether the session is
+ *  actually valid. */
+export function _isDefiniteAuthRejection(err: unknown): boolean
+                                                    — useApi.ts:198
+```
+
+Written once, correctly, and the path that moves money never got it. S13-01 in
+its most expensive form.
+
+**Fix:** `describeSubmitFailure(err, what)` in `lib/utils.ts` returns
+`{ message, outcomeKnown }`. `response` present → the server refused, definitive.
+`request` present with no response → unknown, and the copy says so: *"We never
+heard back about your order. It may have gone through — check your open
+positions before doing anything else."* Deliberately **not** "try again", which
+is what `extractApiError`'s timeout copy says and is right for a read and wrong
+for a write. Close and close-all additionally `invalidate()` on an unknown
+outcome, so the panel refetches the truth instead of showing an exposure that
+may no longer exist.
+
+### F2-02 — One resolver slot for a dialog that can be asked twice (MEDIUM)
+
+`ConfirmDialog.tsx:72`
+
+```ts
+const confirm = useCallback((opts) => {
+  setState({ open: true, opts });
+  return new Promise<boolean>(resolve => { resolverRef.current = resolve; });
+}, []);
+```
+
+`resolverRef` is one slot. A second `confirm()` overwrote the first resolver and
+the first promise was then **never settled** — not resolved, not rejected. Every
+caller awaits it before setting its busy flag:
+
+```ts
+const ok = await confirm({ … });
+if (!ok) return;
+setSubmitting(true);            // OrderEntryForm.tsx:328
+```
+
+so the displaced caller hung forever and its `finally` never ran. A submit
+button disabled while a confirmation is pending stays disabled for the life of
+the page.
+
+Reachable because `setSubmitting(true)` comes *after* the await, so the submit
+button is live for as long as the dialog is open. The backdrop blocks the mouse
+but focus is not trapped, so Enter still submits the form behind it.
+
+**It did not fire two orders** — the surviving resolver belonged to the second
+call, so exactly one action proceeded. The defect is the abandoned promise, not
+a double-submit. **Fix:** settle the displaced promise `false` before opening
+the new one. Nobody is looking at a dialog that has been replaced, and the only
+safe answer to a confirmation nobody saw is no.
+
+### Examined and **not** defects
+
+- **`CryptoCheckout`** — `/payments/crypto/address` and the Flutterwave init
+  both move no money: the first mints a deposit address, the second returns a
+  link the user must complete on the processor's own page. A timeout on either
+  is genuinely retryable and "please try again" is correct advice. No change.
+- **`OrderEntryForm` confirmation content** — already restates symbol, side,
+  quantity, entry, stop, take profit and **max loss at stop** (S10-01/S10-03),
+  so the person confirming can check the magnitude rather than agree to a
+  category. Now warns from `selectFeedLive` rather than a local `feedStale`
+  read, so an order priced before the first tick arrives is covered too, and the
+  rule has one copy rather than two (the S10-02 drift).
+
+### A test that proved nothing, caught by mutation
+
+The first version of the double-submit test passed identically with and without
+the fix. `vi.resetModules()` gives `OrderEntryForm` a fresh `ConfirmDialog`
+module with a fresh React context, so pairing it with the top-level
+`ConfirmDialogProvider` import gave the form a provider it could not see —
+`useConfirm` fell back to its always-refuse stub (`ConfirmDialog.tsx:47`) and no
+dialog ever opened. The test asserted its way through an early return. The
+provider is now imported from the same module graph, and the escape hatch is
+gone: if the dialog does not open, the test fails rather than passing quietly.
+
+That fallback is itself correct — refusing when there is no provider is
+fail-closed, and it is commented as such. It is only dangerous in a test that
+does not notice it has been taken.

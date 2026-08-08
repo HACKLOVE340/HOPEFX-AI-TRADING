@@ -369,6 +369,61 @@ export function extractApiError(err: unknown, fallback = 'An error occurred'): s
 }
 
 /**
+ * Whether a failed request that *commits capital* actually failed (F2-01).
+ *
+ * `extractApiError` answers "what went wrong". For a GET that is enough. For an
+ * order it is not, because there are two failures with opposite consequences:
+ *
+ *   the server answered  → the order was refused. Nothing is open. Retry freely.
+ *   nothing came back    → unknown. The broker may have filled it. Do NOT retry.
+ *
+ * The axios instance carries `timeout: 30_000` (useApi.ts:15), so the second
+ * case is reachable in ordinary use: a slow broker produces an error with no
+ * `response`, the catch falls through to its generic branch, and the trader is
+ * told the order **failed**. The natural response to that is to place it again
+ * — and now they hold double the position they intended, with one stop covering
+ * half of it.
+ *
+ * The distinction already exists in this codebase, reasoned out in these exact
+ * terms, for logging in:
+ *
+ *     True only for a DEFINITIVE auth rejection … as opposed to a
+ *     timeout/network/5xx, which says nothing about whether the session is
+ *     actually valid.                                     — useApi.ts:198
+ *
+ * It was written once, correctly, and the path that moves money never got it.
+ *
+ * Note `extractApiError`'s timeout copy — "please try again" — is right for a
+ * read and wrong here, which is why this is a separate function rather than a
+ * flag on that one.
+ *
+ * @param what what was being committed, in the user's words: 'order', 'close'.
+ */
+export function describeSubmitFailure(
+  err: unknown,
+  what = 'request',
+): { message: string; outcomeKnown: boolean } {
+  const e = err as { response?: unknown; request?: unknown } | null | undefined;
+
+  // The server answered: it refused. Definitive.
+  if (e?.response) {
+    return { message: extractApiError(err, `The ${what} was rejected.`), outcomeKnown: true };
+  }
+  // A request was sent and nothing came back. This is the dangerous one.
+  if (e?.request) {
+    return {
+      message:
+        `We never heard back about your ${what}. It may have gone through — ` +
+        `check your open positions before doing anything else.`,
+      outcomeKnown: false,
+    };
+  }
+  // Never became a request at all (bad config, thrown before dispatch), so
+  // nothing reached the broker.
+  return { message: extractApiError(err, `The ${what} could not be sent.`), outcomeKnown: true };
+}
+
+/**
  * One-line summary of what closing *all* positions actually does (S10-03).
  *
  * There were two close-all confirmations with different wording and different
