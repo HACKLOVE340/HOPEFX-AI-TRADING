@@ -11,7 +11,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
-import { useStore, selectAccount } from '../store';
+import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
@@ -175,6 +175,7 @@ const ResultRow: React.FC<{ label: string; value: string; highlight?: boolean }>
 const RiskCalculator: React.FC = () => {
   const account = useStore(selectAccount);
   const prices  = useStore((s) => s.prices);
+  const feedLive = useStore(selectFeedLive);
 
   const [state, setState] = useState<CalcState>({
     symbol:         'XAU/USD',
@@ -238,7 +239,18 @@ const RiskCalculator: React.FC = () => {
     };
   }, [state.symbol]);
 
-  // Fallback: use store prices if API unavailable
+  // Fallback: use store prices if API unavailable.
+  //
+  // F1-02: those store prices come off the WebSocket, so when the feed stalls
+  // this fallback quietly seeds the entry price with a figure that stopped
+  // moving — and the entry price is what every number on this page is computed
+  // from. The HTTP path already says when it failed; this says when the thing
+  // it falls back to is no longer live.
+  useEffect(() => {
+    if (livePrice) return;
+    if (!feedLive && prices[state.symbol]) freshness.markFailed('a live price');
+  }, [feedLive, prices, state.symbol, livePrice, freshness]);
+
   useEffect(() => {
     if (livePrice) return;
     const tick = prices[state.symbol];

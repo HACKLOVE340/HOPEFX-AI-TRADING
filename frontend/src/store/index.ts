@@ -549,7 +549,45 @@ export const selectMacro              = (s: AppStore) => s.macro;
 export const selectEquityCurve        = (s: AppStore) => s.equityCurve;
 export const selectPerformanceSummary = (s: AppStore) => s.performanceSummary;
 export const selectTriggeredAlerts    = (s: AppStore) => s.triggeredAlerts;
-export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch ?? false;
+/**
+ * Whether trading is halted, from every source that can say so (S10-02).
+ *
+ * Three surfaces used to derive this independently — AccountBar from
+ * `account.kill_switch`, RiskTransparencyStrip from
+ * `risk.kill_switch_active ?? account.kill_switch`, RiskDashboard from
+ * `account.kill_switch` — so a backend populating only the risk snapshot made
+ * one badge read HALTED while two read nothing, on the same screen, about the
+ * same switch. That is the frontend half of the S2-01 split brain.
+ *
+ * Deliberately an OR, not a precedence chain: a safety indicator may
+ * over-report, never under-report. If any source says halted, we say halted.
+ */
+export const selectKillSwitch         = (s: AppStore): boolean =>
+  Boolean(s.riskSnapshot?.kill_switch_active) || Boolean(s.account?.kill_switch);
+
+/**
+ * Is the live feed actually delivering — as opposed to merely connected?
+ * (audit F1-02)
+ *
+ * `wsStatus` alone is not the answer: S9-01 is precisely that it stays
+ * `'connected'` while the server's broadcast loop stalls. Nothing errors,
+ * nothing reconnects, the numbers just stop moving.
+ *
+ * Three conditions, all required:
+ *   - the socket is open,
+ *   - the watchdog has not flagged the feed stale,
+ *   - and something has actually arrived.
+ *
+ * The last one is the easy one to leave out. Connected-but-nothing-received-yet
+ * is "unknown", not "live", and rendering unknown as live is the S10-01 defect
+ * (an empty list shown for "flat" and for "we have no idea" alike). Same
+ * asymmetry as `selectKillSwitch`: over-report a problem, never under-report.
+ *
+ * One copy, because three surfaces each deriving the kill switch their own way
+ * was S10-02 and `PositionsTable` had already started the same drift here.
+ */
+export const selectFeedLive           = (s: AppStore): boolean =>
+  s.wsStatus === 'connected' && !s.feedStale && s.lastDataAt != null;
 // Derived from the macro slice — true when a high-impact event blackout is active.
 // Used by OrderEntryForm to disable order submission with a clear UI message.
 export const selectIsBlackout         = (s: AppStore) => s.macro?.is_blackout ?? false;

@@ -69,8 +69,7 @@ def test_the_skipped_result_does_not_fabricate_evidence(tester, monkeypatch):
     result = tester.test(pd.Series([1.0, 2.0, 3.0]), name="f")
 
     assert result.adf_pvalue != 0.01, (
-        "adf_pvalue=0.01 is what a strongly stationary series looks like; a test "
-        "that never ran must not report it"
+        "adf_pvalue=0.01 is what a strongly stationary series looks like; a test that never ran must not report it"
     )
     assert result.adf_pvalue >= 0.5, "a skipped ADF must not read as significant"
     assert result.kpss_pvalue <= 0.5, "a skipped KPSS must not read as passing"

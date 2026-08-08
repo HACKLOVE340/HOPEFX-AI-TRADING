@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import { PageHeader, EmptyState, CrossLinkBar, Spinner } from '../components';
 import { PanelSkeleton } from '../components/ui/Skeleton';
+import { DataAge } from '../components/ui/DataAge';
 import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
 import {
   useStore,
@@ -26,6 +27,7 @@ import {
   selectPositions,
   selectSignals,
   selectWsStatus,
+  selectFeedLive,
   selectEquityCurve,
   selectRiskSnapshot,
   selectMicrostructure,
@@ -461,27 +463,39 @@ const MlAccuracyCard: React.FC = () => {
 // ─── Market Regime panel ──────────────────────────────────────────────────────
 
 interface MarketRegime {
-  regime: string;
-  confidence: number;
-  volatility: string;
-  trend: string;
+  // Nullable in practice, not by design: `/trading/regime` returns a partial
+  // object before the classifier has enough bars, and typing these as required
+  // is what let the crash through tsc (F1-03).
+  regime: string | null;
+  confidence: number | null;
+  volatility: string | null;
+  trend: string | null;
   description?: string;
 }
 
 const MarketRegimePanel: React.FC = () => {
   const [regime, setRegime] = useState<MarketRegime | null>(null);
   const [err, setErr]       = useState(false);
+  // Whether the request has come back at all. Without it, a response that
+  // arrived but named no regime is indistinguishable from one still in flight,
+  // and the panel spins forever instead of admitting it has nothing.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     tradingApi.regime('XAU/USD')
-      .then((r) => setRegime(r.data as MarketRegime))
-      .catch(() => setErr(true));
+      .then((r) => { setRegime(r.data as MarketRegime); setLoaded(true); })
+      .catch(() => { setErr(true); setLoaded(true); });
   }, []);
 
-  if (err || !regime) {
+  // `!regime` only catches null. An object without a `regime` field passed the
+  // guard and then threw on `.replace` of undefined, taking the whole Dashboard
+  // route down rather than this panel — the F1-03 class, and the reason the
+  // Dashboard row of the F1 matrix could not be scored at all. Treat a payload
+  // that does not name a regime as no regime data.
+  if (err || !regime?.regime) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
-        {err ? 'Regime data unavailable.' : <><Spinner size="sm" /> Loading…</>}
+        {err || loaded ? 'Regime data unavailable.' : <><Spinner size="sm" /> Loading…</>}
       </div>
     );
   }
@@ -502,12 +516,12 @@ const MarketRegimePanel: React.FC = () => {
       </div>
       <div>
         <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>{(regime.confidence * 100).toFixed(1)}%</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>{regime.confidence != null ? `${(regime.confidence * 100).toFixed(1)}%` : '—'}</div>
       </div>
       <div>
         <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regime.volatility === 'high' ? '#f87171' : regime.volatility === 'medium' ? '#fbbf24' : '#4ade80' }}>
-          {regime.volatility.charAt(0).toUpperCase() + regime.volatility.slice(1)}
+          {regime.volatility ? regime.volatility.charAt(0).toUpperCase() + regime.volatility.slice(1) : '—'}
         </div>
       </div>
       <div>
@@ -624,21 +638,35 @@ const QuickNav: React.FC = () => (
 
 const WsBadge: React.FC = () => {
   const status = useStore(selectWsStatus);
+  // F1-02 / S9-01: this badge said "Live", in glowing green, for as long as the
+  // socket was open — including while the server's broadcast loop was stalled
+  // and nothing had arrived for minutes. It is the one cue a trader glances at
+  // to decide whether the prices beside it can be trusted, so it must describe
+  // the *feed*, not the connection.
+  const feedLive   = useStore(selectFeedLive);
+  const lastDataAt = useStore((st) => st.lastDataAt);
+  const stalled    = status === 'connected' && !feedLive;
+
   const colors: Record<string, string> = {
     connected:    '#22c55e',
     connecting:   '#fbbf24',
     disconnected: '#64748b',
     error:        '#f87171',
   };
+  const dot = stalled ? '#ffb800' : (colors[status] ?? '#64748b');
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#94a3b8' }}>
       <span style={{
         width: 8, height: 8, borderRadius: '50%',
-        background: colors[status] ?? '#64748b',
+        background: dot,
         display: 'inline-block',
-        boxShadow: status === 'connected' ? `0 0 6px ${colors.connected}` : 'none',
+        boxShadow: feedLive ? `0 0 6px ${colors.connected}` : 'none',
       }} />
-      {status === 'connected' ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1)}
+      {stalled
+        ? 'Stalled'
+        : status === 'connected' ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1)}
+      {stalled && <DataAge at={lastDataAt} />}
     </div>
   );
 };

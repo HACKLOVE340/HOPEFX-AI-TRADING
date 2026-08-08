@@ -14,7 +14,6 @@ available, and gracefully skipped when the service is not reachable.
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
 import textwrap
 from pathlib import Path

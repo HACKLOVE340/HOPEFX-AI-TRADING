@@ -112,6 +112,63 @@ class SilentSocket extends DeadSocket {
   }
 }
 
+/**
+ * Pages that read WebSocket-fed store state, directly or through a child.
+ *
+ * Only these can be judged on the ws* axis. Derived by following each page's
+ * `useStore` subscriptions — including transitive ones, which is why Portfolio
+ * is here (it embeds `PositionsTable`) — to the slices `useWebSocket` writes:
+ * prices, positions, account, signals, riskSnapshot, triggeredAlerts.
+ */
+const SOCKET_FED = new Set([
+  'Dashboard', 'Trading', 'Trade', 'TradingDashboard',
+  'Portfolio', 'RiskCalculator', 'Watchlist', 'PriceAlerts',
+]);
+// Deliberately absent: `Performance`, `PnLDashboard`, `Wallet`, `TradeJournal`
+// — all REST-only, no `useStore` between them. Performance was in this list on
+// first writing and should not have been; it reads its data through useQuery.
+
+const tick = (ageMs: number) => ({
+  'XAU/USD': {
+    symbol: 'XAU/USD', bid: 2350, ask: 2350.3, mid: 2350.15,
+    spread: 0.3, timestamp: Date.now() - ageMs, change_pct: 0.1,
+  },
+});
+
+/**
+ * Feed state as the app actually observes it — instrument failure #4.
+ *
+ * Swapping `globalThis.WebSocket` looked like it drove the transport axis. It
+ * drove nothing: `useWebSocket` is mounted once, in `App.tsx:475`, and this
+ * harness renders page components directly. No scenario ever constructed a
+ * socket, so `DeadSocket` and `SilentSocket` were never instantiated and the
+ * two ws* rows differed from the control only by whatever the harness itself
+ * wrote into the store — which, for `healthy`, was `wsStatus: 'disconnected'`
+ * from the shared beforeEach. The control was the *most* broken state in the
+ * matrix, and every ws* comparison was measured against it.
+ *
+ * The socket classes stay, to keep any component that constructs one from
+ * throwing. What actually varies the axis is the store, because the store is
+ * what the pages read.
+ */
+const FEED_STATE: Record<Scenario, Record<string, unknown>> = {
+  // Connected and delivering.
+  healthy:  { wsStatus: 'connected',    feedStale: false, lastDataAt: Date.now(), prices: tick(0) },
+  down:     { wsStatus: 'connected',    feedStale: false, lastDataAt: Date.now(), prices: tick(0) },
+  error500: { wsStatus: 'connected',    feedStale: false, lastDataAt: Date.now(), prices: tick(0) },
+  auth401:  { wsStatus: 'connected',    feedStale: false, lastDataAt: Date.now(), prices: tick(0) },
+  // Never opened: nothing has ever arrived, so there is no tick at all.
+  wsDead:   { wsStatus: 'disconnected', feedStale: false, lastDataAt: null, prices: {} },
+  // Open, and silent long enough for the staleness watchdog to fire — with the
+  // last tick it did receive still sitting in the store. This is S9-01: the
+  // failure that does not announce itself, and the reason a page cannot judge
+  // freshness from "do I have a price?".
+  wsSilent: {
+    wsStatus: 'connected', feedStale: true,
+    lastDataAt: Date.now() - 300_000, prices: tick(300_000),
+  },
+};
+
 // ─── Page registry ────────────────────────────────────────────────────────────
 // The money-relevant and highest-traffic routes. Deliberately not all 86: the
 // point is a ranked answer, not a wall of noise.
@@ -219,9 +276,8 @@ describe('F1 — what every view does when the backend is broken', () => {
         it(`${name} looks different when the backend is ${scenario}`, async () => {
           installAxiosStub(scenario);
           globalThis.WebSocket = (scenario === 'wsSilent' ? SilentSocket : DeadSocket) as never;
-          if (scenario === 'wsSilent') {
-            useStore.setState({ wsStatus: 'connected' } as never);
-          }
+          // The axis that actually reaches the pages. See FEED_STATE.
+          useStore.setState(FEED_STATE[scenario] as never);
 
           const out = await renderPage(name, loader, scenario);
 
@@ -252,6 +308,23 @@ describe('F1 — what every view does when the backend is broken', () => {
           // and every page trivially looked "identical". The call count is what
           // makes the finding real.)
           if ((callsPerRender[`${name}|${scenario}`] ?? 0) === 0) return;
+
+          // The ws* rows only mean something for a page that reads socket-fed
+          // state. `Wallet` and `TradeJournal` do not: four one-shot HTTP reads
+          // and a REST-backed table respectively, no store subscription between
+          // them. Rendering identically under a dead socket is correct for
+          // those, and asserting otherwise would push us to bolt a warning onto
+          // a page that has nothing stale to warn about — noise that trains the
+          // user to ignore the ones that matter.
+          if (scenario.startsWith('ws') && !SOCKET_FED.has(name)) return;
+
+          // `RiskCalculator` reads the socket only as a *fallback*, when its
+          // 5-second price poll fails. Under wsDead the store holds no tick at
+          // all and HTTP is healthy, so the page sizes against a current polled
+          // price and is right to say nothing — the misleading case is a tick
+          // that exists and has stopped moving, which is the wsSilent row, and
+          // that one is asserted. The HTTP-failure half is F1-01.
+          if (scenario === 'wsDead' && name === 'RiskCalculator') return;
 
           expect(
             out,

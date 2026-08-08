@@ -2849,12 +2849,25 @@ own request counter caught it: **138 requests in a single render pass** where 4
 were expected. The hook is now memoised, with two regression tests on object
 identity. Worth noting the instrument found a bug in its own fix.
 
-### F1-03 — the harness's limits, restated after use
+### F1-03 — the harness's limits, restated after use — **CORRECTED, see F1-04**
 
-Two further artefacts appeared while iterating and are *not* product defects:
-`Dashboard` and `Performance` intermittently render empty inside the F1 file
-while rendering 980 and 486 characters when probed in isolation — order or
-timing pollution within the shared process. Recorded rather than chased.
+> This entry originally read: *"Two further artefacts appeared while iterating
+> and are not product defects: `Dashboard` and `Performance` intermittently
+> render empty inside the F1 file … order or timing pollution within the shared
+> process. Recorded rather than chased."*
+>
+> **That was wrong, and wrong in the expensive direction.** Both pages were
+> *crashing*, on a real product defect, and I filed it as instrument noise.
+> "Renders empty" was a throw during render taking the whole route down. The
+> tell was in the run output the whole time — vitest reported six unhandled
+> `TypeError`s naming `Dashboard.tsx:499` and `Performance.tsx:412` — and I
+> attributed it to test pollution without reading them. Chasing it would have
+> cost one grep. See **F1-04**.
+
+The genuine harness limits stand as listed in the slice header: jsdom is not a
+browser; pages render without the app's providers; `lightweight-charts` is
+mocked without `HistogramSeries`, so chart pages throw for reasons unrelated to
+the backend (this is why `Trading` still reads `crash` in every column).
 
 
 ### S9-02 + S10-05 — FIXED together
@@ -2889,3 +2902,175 @@ is the question actually being asked.
 
 Mutation-verified: forcing `qualityLive = true` (the original behaviour) fails
 the end-to-end ticker test.
+
+---
+
+### S10-02 — FIXED (the frontend half)
+
+The backlog entry above says *"this is not a frontend fix"*, and for the
+split-brain source that remains true — S2-01 must still be fixed in the backend.
+But reading the three surfaces turned up a second, independent defect that *is*
+entirely frontend: they did not agree with each other.
+
+| Surface | read |
+|---|---|
+| `AccountBar.tsx:157` | `account.kill_switch` |
+| `RiskTransparencyStrip.tsx:42` | `risk.kill_switch_active ?? account.kill_switch` |
+| `RiskDashboard.tsx:74` | `account.kill_switch` |
+
+Three renderings of one fact, from two fields, with three precedences. A backend
+populating `riskSnapshot.kill_switch_active` but not `account.kill_switch`
+produced one badge reading HALTED and two reading nothing — on the same screen,
+about the same switch. That is the S13-01 duplication pattern, in which every
+duplicated pair found in this codebase had already produced a defect.
+
+**Fix:** one `selectKillSwitch` in the store, deliberately an **OR** and not a
+precedence chain:
+
+```ts
+export const selectKillSwitch = (s: AppStore): boolean =>
+  Boolean(s.riskSnapshot?.kill_switch_active) || Boolean(s.account?.kill_switch);
+```
+
+A safety indicator may over-report, never under-report. All three surfaces now
+read it, pinned by a test that greps each file and fails if any re-derives the
+value itself.
+
+---
+
+### F1-02 — FIXED, and the finding was partly wrong
+
+The entry above named `Wallet`, `PriceAlerts` and `Portfolio`. Two of those were
+right; `Wallet` was not.
+
+**`Wallet` has no socket dependency at all** — four one-shot HTTP reads on
+mount, no `useStore`, no subscription. Rendering identically under a dead socket
+is *correct* for that page, and bolting a feed warning onto it would have been
+noise that trains a user to ignore the warnings that matter. What it genuinely
+lacks is any statement of when the balance was read: fetched once at mount,
+never refreshed, and displayed as a current figure indefinitely. That is S10-05
+(data age), not a socket defect, and it is fixed as such — a `<DataAge>` beside
+the balance with a 2-minute stale threshold.
+
+The two real ones:
+
+- **`PriceAlerts`** — the page whose entire promise is that it will tell you
+  when something happens. Its Live Triggers tab read *"No live triggers yet.
+  Alerts fire here in real-time via WebSocket."* With the socket down that
+  sentence is false — nothing will ever appear there — and an empty list was
+  shown for "nothing has triggered" and for "your alert channel is dead" alike.
+  The S10-01 empty-vs-unknown defect, on the worst possible page for it.
+- **`Portfolio`** — equity, margin, free margin, unrealized and daily P&L, all
+  read from socket-fed store fields, all frozen at their last value with nothing
+  saying so. Unrealized P&L is the number a trader watches to decide whether to
+  close.
+
+Two more surfaced once the instrument was fixed (below):
+
+- **`Watchlist`** — worse than a display problem. The page overlays socket ticks
+  *on top of* its 5-second HTTP price snapshot, so a stalled feed did not merely
+  fail to update a row: it overwrote a **current** polled price with a frozen
+  one, under the banner "Live prices refresh every 5 seconds". The overlay is
+  now gated on the feed being live.
+- **`Dashboard`'s connection badge** — said "Live", in glowing green, for as
+  long as the socket was open, including while nothing had arrived for minutes.
+  It is the one cue a trader glances at to decide whether the prices beside it
+  can be trusted. It now describes the *feed*: "Stalled" in amber, with the age.
+
+**Fix:** one `selectFeedLive` in the store, and `components/ui/LiveFeedNotice.tsx`
+to render it.
+
+```ts
+export const selectFeedLive = (s: AppStore): boolean =>
+  s.wsStatus === 'connected' && !s.feedStale && s.lastDataAt != null;
+```
+
+The third condition is the one that is easy to leave out. Connected-but-nothing-
+received-yet is *unknown*, not live, and rendering unknown as live is S10-01 one
+step earlier. `PositionsTable` had already begun the S10-02 drift with an inline
+copy of the first two conditions; it now reads the shared selector, and a grep
+test fails if any surface re-derives it.
+
+#### The instrument was measuring nothing — failure #4
+
+Before any of the above could be trusted, the harness had to be fixed, for the
+fourth time in this slice.
+
+**The ws\* axis had never been exercised.** The matrix swapped
+`globalThis.WebSocket` for a `DeadSocket`/`SilentSocket` — but `useWebSocket` is
+mounted in exactly one place, `App.tsx:475`, and this harness renders page
+components directly. **No scenario ever constructed a socket.** Neither stub was
+ever instantiated. The two ws\* rows differed from the control only by whatever
+the harness itself wrote into the store, and what it wrote for `healthy` was
+`wsStatus: 'disconnected'` from the shared `beforeEach` — while `wsSilent`
+explicitly set `'connected'`. **The control was the most broken state in the
+matrix, and every ws\* result was measured against it.** The comparison ran
+backwards.
+
+The fix drives the store directly, because the store is what the pages read:
+`healthy` gets a fresh tick and `lastDataAt: Date.now()`; `wsDead` gets no tick
+at all; `wsSilent` gets `feedStale: true` with the last tick it received still
+sitting there — the S9-01 shape, and the reason a page cannot judge freshness
+from "do I have a price?".
+
+A second correction: `SOCKET_FED`, the list of pages the ws\* axis can judge,
+listed `Performance` on first writing. `Performance` has no `useStore` in it at
+all. Removed.
+
+**Result: 12 failing ws\* rows → 0.** Pages exempted from that axis, with the
+reason recorded in the test: `Wallet`, `TradeJournal`, `PnLDashboard`,
+`Performance` (REST-only), and `RiskCalculator` under `wsDead` specifically —
+its socket use is a *fallback* reached only when HTTP fails, so with no tick in
+the store and healthy HTTP it is right to say nothing. The misleading case is a
+tick that exists and has stopped moving, which is `wsSilent`, and that one is
+asserted.
+
+---
+
+### F1-04 — A partial payload takes down the whole route (HIGH)
+
+What F1-03 misfiled as harness noise. Three sites, one shape: a field read
+without a guard on a payload that is documented — by the component's own copy —
+to arrive incomplete.
+
+**`Performance.tsx:412`** — `pub.total_trades.toString()`. The four stats beside
+it *are* guarded, two of them with the subtitle **"Need 50+ trades"**. So the
+component knows this payload arrives partially populated, and two of its six
+tiles were left out. The same page guards the same field correctly 140 lines
+later (`wr.total_trades ?? '—'`) — the S13-01 duplication pattern again: two
+copies of one rule, one of them wrong. `max_drawdown_pct` had the same gap, and
+`start_date` was guarded against the `'—'` sentinel but not against absence, so
+it printed **"Paper trading started: undefined."**
+
+**`Dashboard.tsx:481`** — `if (err || !regime)` catches null and nothing else.
+An object without a `regime` field passed the guard and threw on `.replace` of
+undefined. `confidence` and `volatility` had the same gap.
+
+`.toString()` on undefined throws *inside render*, and a throw in render takes
+the route down, not the tile. A user asking "how is my strategy doing?" got a
+blank screen.
+
+**Fix:** guards at each site, and the interfaces widened to `| null` — typing
+these as required is what let the crash past `tsc` in the first place. The
+regime panel additionally tracks whether the request has returned, so a response
+that arrived carrying no regime says "Regime data unavailable" instead of
+spinning forever: unknown rendered as loading is the same silent-failure shape
+one layer down.
+
+**Both pages are now scoreable by the matrix** — their rows read `?` in every
+column, healthy included, because they never rendered. `Dashboard` immediately
+reported a real F1-02 finding on its first honest run (the "Live" badge above).
+
+#### Nine tests were asserting the defective behaviour
+
+Found and corrected while fixing the above — each had pinned in the old
+behaviour:
+
+- `integration.test.tsx` required the badge to read **"Live"** on an open socket
+  that had delivered nothing. That is S9-01 stated as a requirement.
+- `pages.test.tsx` set `wsStatus: 'connected', feedStale: false` — with no
+  `lastDataAt` — and required a confident "No open positions".
+- `pages_portfolio_performance.test.tsx`'s *"renders account summary section"*
+  matched `/balance/i` against a page whose `account` is null, so it was passing
+  on the page **subtitle** ("Balances, equity curve, …") and had never once
+  looked at the account summary. It now sets an account and asserts the tile.

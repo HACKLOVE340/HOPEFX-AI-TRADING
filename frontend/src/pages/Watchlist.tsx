@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { watchlistApi } from '../hooks/useApi';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
-import { useStore } from '../store';
+import { useStore, selectFeedLive } from '../store';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -86,6 +86,7 @@ const Sparkline: React.FC<{ history: number[] }> = ({ history }) => {
 const WatchlistPage: React.FC = () => {
   const navigate    = useNavigate();
   const storePrices = useStore((s) => s.prices);
+  const feedLive    = useStore(selectFeedLive);
 
   const [items,     setItems]     = useState<WatchlistItem[]>([]);
   const [loading,   setLoading]   = useState(true);
@@ -145,7 +146,13 @@ const WatchlistPage: React.FC = () => {
   // Store keys on 'XAU/USD'; the watchlist stores 'XAUUSD'. The mapping used to
   // be a hardcoded chain of five .replace() calls against ten offered symbols,
   // so half of them never matched a feed key and simply showed no live price.
+  //
+  // F1-02: gated on the feed actually delivering. The overlay is socket data
+  // laid over the 5-second HTTP snapshot, so a stalled feed did not merely fail
+  // to update the row — it overwrote a *current* polled price with a frozen one,
+  // under the banner "Live prices refresh every 5 seconds".
   const enrichedItems: WatchlistItem[] = items.map((item) => {
+    if (!feedLive) return item;
     const tick = storePrices[toSlashSymbol(item.symbol)] ?? storePrices[item.symbol];
     if (!tick) return item;
     return {
@@ -216,7 +223,7 @@ const WatchlistPage: React.FC = () => {
         <div>
           <h1 style={s.title}>Watchlist</h1>
           <p style={s.subtitle}>
-            {freshness.isLive
+            {freshness.isLive && feedLive
               ? 'Live prices refresh every 5 seconds. Click a symbol to open its chart.'
               : 'Prices are not updating right now. Click a symbol to open its chart.'}
           </p>

@@ -19,12 +19,15 @@ import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError } f
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PublicPerformance {
-  total_trades:    number;
+  // Nullable in practice: the endpoint omits stats until there are enough
+  // trades to compute them, which is what the "Need 50+ trades" copy below
+  // refers to. Typing them as required is what let F1-03 through tsc.
+  total_trades:    number | null;
   win_rate:        number | null;
   avg_return_pct:  number | null;
   sharpe:          number | null;
-  max_drawdown_pct: number;
-  start_date:      string;
+  max_drawdown_pct: number | null;
+  start_date:      string | null;
   note:            string;
 }
 
@@ -409,17 +412,26 @@ const Performance: React.FC = () => {
           {pub && (
             <>
               <div style={s.statsGrid}>
-                <StatCard label="Total Trades"  value={pub.total_trades.toString()} sub="Paper trading" color="#60a5fa" />
+                {/* F1-03: `.toString()` on a missing field throws inside render,
+                    and a throw in render takes the whole route down rather than
+                    the tile. The four stats beside this one were already
+                    guarded — and this page's own strategy table guards
+                    `total_trades` correctly — so the payload was known to
+                    arrive partially populated. */}
+                <StatCard label="Total Trades"  value={pub.total_trades != null ? String(pub.total_trades) : '—'} sub="Paper trading" color="#60a5fa" />
                 <StatCard label="Win Rate"      value={pub.win_rate != null ? `${pub.win_rate}%` : '—'} sub={pub.win_rate == null ? 'Need 50+ trades' : 'Winning trades'} color={pub.win_rate != null && pub.win_rate >= 50 ? '#00e676' : '#ff1744'} />
                 <StatCard label="Avg Return"    value={pub.avg_return_pct != null ? `${pub.avg_return_pct > 0 ? '+' : ''}${pub.avg_return_pct}%` : '—'} sub="Per trade" color={pub.avg_return_pct != null && pub.avg_return_pct >= 0 ? '#00e676' : '#ff1744'} />
                 <StatCard label="Sharpe"        value={pub.sharpe != null ? pub.sharpe.toString() : '—'} sub={pub.sharpe == null ? 'Need 50+ trades' : 'Annualised'} color="#a78bfa" />
-                <StatCard label="Max Drawdown"  value={`${pub.max_drawdown_pct}%`} sub="Peak-to-trough" color="#ff1744" />
+                <StatCard label="Max Drawdown"  value={pub.max_drawdown_pct != null ? `${pub.max_drawdown_pct}%` : '—'} sub="Peak-to-trough" color="#ff1744" />
               </div>
               <div style={s.noteBox}>
                 <span style={{ color: '#fbbf24', marginRight: 8 }}>⏱</span>
                 <strong style={{ color: '#f1f5f9' }}>Transparency: </strong>
                 {pub.note}
-                {pub.start_date !== '—' && ` Paper trading started: ${pub.start_date}.`}
+                {/* Guarded against the '—' sentinel but not against the field
+                    being absent, so a partial payload printed "Paper trading
+                    started: undefined." (F1-03). */}
+                {pub.start_date && pub.start_date !== '—' && ` Paper trading started: ${pub.start_date}.`}
               </div>
             </>
           )}

@@ -13,7 +13,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useStore } from '../../store';
+import { useStore, selectFeedLive } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
@@ -197,9 +197,9 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
   const account      = useStore((s) => s.account);
   // An empty positions list only means "flat" when the feed is actually
   // delivering. Stale or disconnected, it means "unknown" — see S9-03.
-  const feedStale    = useStore((s) => s.feedStale);
-  const wsStatus     = useStore((s) => s.wsStatus);
-  const positionsKnown = !feedStale && wsStatus === 'connected';
+  // The expression used to live here inline; it is now `selectFeedLive`, shared
+  // with the other surfaces that ask the same question (F1-02).
+  const positionsKnown = useStore(selectFeedLive);
   const qc           = useQueryClient();
 
   // Broker is considered ready once we have account data with a balance.

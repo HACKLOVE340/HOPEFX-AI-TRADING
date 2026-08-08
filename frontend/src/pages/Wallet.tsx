@@ -22,6 +22,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Spinner } from '../components/Spinner';
+import { DataAge } from '../components/ui/DataAge';
 import { extractApiError, fmtPnl } from '../lib/utils';
 import { useConfirm } from '../components/ConfirmDialog';
 
@@ -159,6 +160,11 @@ const Wallet: React.FC = () => {
   const [frozen, setFrozen]             = useState(0);
   const [pendingBal, setPendingBal]     = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(true);
+  // When the balance was read. It is fetched once on mount and never refreshed,
+  // so without this the figure below reads as current no matter how long the
+  // page has been open (S10-05). Wallet subscribes to no socket, so this is the
+  // only freshness signal available to it.
+  const [balanceAt, setBalanceAt]       = useState<number | null>(null);
   const [balanceErr, setBalanceErr]     = useState('');
   const [transactions, setTxs]          = useState<Transaction[]>([]);
   const [txLoading, setTxLoading]       = useState(true);
@@ -183,7 +189,7 @@ const Wallet: React.FC = () => {
 
     api.get<{ balance: number; frozen: number; pending: number }>(
       '/billing/balance', { signal: ctrl.signal })
-      .then(r => { setBalance(r.data?.balance ?? 0); setFrozen(r.data?.frozen ?? 0); setPendingBal(r.data?.pending ?? 0); })
+      .then(r => { setBalance(r.data?.balance ?? 0); setFrozen(r.data?.frozen ?? 0); setPendingBal(r.data?.pending ?? 0); setBalanceAt(Date.now()); })
       .catch(e => { if ((e as {name?:string}).name !== 'CanceledError') setBalanceErr(extractApiError(e, 'Failed to load balance.')); })
       .finally(() => { if (mountedRef.current) setBalanceLoading(false); });
 
@@ -342,8 +348,9 @@ const Wallet: React.FC = () => {
                   <span>Margin used: <span className="text-slate-400">${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
                   <span>Pending: <span className="text-slate-400">${pendingBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
                 </div>
-                <div className="text-slate-600 text-2xs mt-1">
-                  Reported by your connected broker — not a cash wallet balance.
+                <div className="text-slate-600 text-2xs mt-1 flex items-center gap-2 flex-wrap">
+                  <span>Reported by your connected broker — not a cash wallet balance.</span>
+                  <DataAge at={balanceAt} label="read" staleAfterMs={120_000} />
                 </div>
               </>
             )}

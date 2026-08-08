@@ -694,7 +694,10 @@ describe('Trading page', () => {
     // with that default and assert a confident "No open positions" — which is
     // the S9-03 defect: an empty list with no live feed means "we don't know",
     // not "you are flat". Set the state the test actually means to exercise.
-    useStore.setState({ wsStatus: 'connected', feedStale: false });
+    // `lastDataAt` too (F1-02): connected-with-nothing-received-yet is not
+    // "live", it is "we have not heard anything", and rendering that as a
+    // confident empty list is the same defect one step earlier.
+    useStore.setState({ wsStatus: 'connected', feedStale: false, lastDataAt: Date.now() });
     await renderTrading();
     expect(screen.getByText(/no open positions/i)).toBeInTheDocument();
   });
