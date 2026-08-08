@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -3248,12 +3249,33 @@ def restore_engine_state_after_promotion(engine, snapshot) -> list[str]:
     else:
         missing.append("positions")
 
-    if hasattr(engine, "_current_equity"):
-        engine._current_equity = snapshot.equity
+    # An empty snapshot means "there was no state to replicate", NOT "equity is
+    # zero". Feeding 0.0 into the risk manager makes DrawdownTracker reject it as
+    # invalid and fail CLOSED at 100% drawdown, which auto-halts trading and
+    # latches the kill switch — observed on main, where a standby promoted with
+    # no replicated state produced:
+    #     DrawdownTracker.update: invalid equity=0.0 balance=0.0 — failing CLOSED
+    #     RiskManager: TRADING HALTED — auto_halt:drawdown=100.00%>=10.0%
+    #     KILL SWITCH ACTIVATED
+    # Halting is the safe direction to be wrong in, but halting a healthy system
+    # because the snapshot was empty is still wrong. Skip the restore and say so.
+    equity = float(getattr(snapshot, "equity", 0.0) or 0.0)
+    equity_usable = math.isfinite(equity) and equity > 0.0
+
+    if hasattr(engine, "_current_equity") and equity_usable:
+        engine._current_equity = equity
 
     # Prefer the risk manager: it re-arms the auto-halt gates.
     risk = getattr(engine, "_risk_manager", None) or getattr(engine, "_risk", None)
-    if risk is not None and hasattr(risk, "update_equity"):
+    if risk is not None and hasattr(risk, "update_equity") and not equity_usable:
+        logger.error(
+            "HOT-STANDBY: promoted with no usable equity in the snapshot (equity=%r) — "
+            "risk state NOT restored, leaving the risk manager on its own accounting "
+            "rather than halting on a phantom 100%% drawdown",
+            getattr(snapshot, "equity", None),
+        )
+        missing.append("equity/drawdown")
+    elif risk is not None and hasattr(risk, "update_equity"):
         # Restore the drawdown peak BEFORE the equity, or the gate is armed
         # against the wrong reference. A freshly promoted pod has never seen the
         # primary's high-water mark, so feeding it only the current equity makes
@@ -3265,10 +3287,10 @@ def restore_engine_state_after_promotion(engine, snapshot) -> list[str]:
         # max() so a snapshot that somehow carries a lower peak can only ever
         # tighten the gate, never loosen it.
         peak = float(getattr(snapshot, "peak_equity", 0.0) or 0.0)
-        if peak > snapshot.equity:
+        if math.isfinite(peak) and peak > equity:
             _seed_drawdown_peak(risk, peak)
             restored.append(f"drawdown-peak={peak:.2f}")
-        risk.update_equity(snapshot.equity)
+        risk.update_equity(equity)
         restored.append("equity+drawdown+halt-gates")
     elif hasattr(engine, "_dd_tracker"):
         engine._dd_tracker.update(equity=snapshot.equity)

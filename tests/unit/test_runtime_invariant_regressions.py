@@ -545,6 +545,66 @@ class TestHotStandbyPromotionRestore:
         r.update_equity(105_000.0)  # a drop must not lower the mark
         assert r._peak_equity == 120_000.0
 
+    def test_an_empty_snapshot_does_not_halt_trading(self):
+        """Regression seen on main after the promotion fix landed.
+
+        Routing promotion through RiskManager.update_equity meant an empty
+        snapshot (equity=0.0) reached DrawdownTracker, which rejects it as
+        invalid and fails CLOSED at 100% drawdown — auto-halting trading and
+        latching the kill switch:
+
+            DrawdownTracker.update: invalid equity=0.0 balance=0.0 — failing CLOSED
+            RiskManager: TRADING HALTED — auto_halt:drawdown=100.00%>=10.0%
+            KILL SWITCH ACTIVATED
+
+        An empty snapshot means "there was no state to replicate", not "equity is
+        zero". Halting is the safe direction to be wrong in, but halting a
+        healthy system because the snapshot was empty is still wrong.
+        """
+        from core.startup_factories import restore_engine_state_after_promotion
+        from risk.manager import RiskManager
+
+        rm = RiskManager(initial_balance=100_000.0)
+        engine = _RootShapedEngine()
+        engine._risk_manager = rm
+
+        snap = _Snapshot(positions={}, equity=0.0)
+        snap.peak_equity = 0.0
+        restore_engine_state_after_promotion(engine, snap)
+
+        assert rm._halt is False, "an empty snapshot halted trading"
+
+    @pytest.mark.parametrize("bad", [0.0, -5.0, float("nan"), float("inf")])
+    def test_unusable_equity_values_never_reach_the_risk_manager(self, bad):
+        from core.startup_factories import restore_engine_state_after_promotion
+        from risk.manager import RiskManager
+
+        rm = RiskManager(initial_balance=100_000.0)
+        engine = _RootShapedEngine()
+        engine._risk_manager = rm
+
+        snap = _Snapshot(equity=bad)
+        snap.peak_equity = 0.0
+        restore_engine_state_after_promotion(engine, snap)
+
+        assert rm._halt is False
+
+    def test_a_real_breach_still_halts_after_the_guard(self):
+        """The guard must not have blunted the gate it was added next to."""
+        from core.startup_factories import restore_engine_state_after_promotion
+        from risk.manager import RiskManager
+
+        rm = RiskManager(initial_balance=100_000.0)
+        engine = _RootShapedEngine()
+        engine._risk_manager = rm
+
+        snap = _Snapshot(equity=105_000.0)
+        snap.peak_equity = 120_000.0
+        restore_engine_state_after_promotion(engine, snap)
+
+        assert rm.current_drawdown == pytest.approx(0.125, abs=1e-6)
+        assert rm._halt is True
+
     def test_missing_engine_is_reported_not_swallowed(self):
         from core.startup_factories import restore_engine_state_after_promotion
 
