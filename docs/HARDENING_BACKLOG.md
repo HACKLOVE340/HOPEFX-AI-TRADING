@@ -3502,3 +3502,125 @@ number. Only the latter was in scope here.
 `fmtPnl`, `fmtPrice`, `fmtPct`, `fmtPctRaw`, `fmtCompact`, `fmtSpread` — all
 null-safe, all sign-correct. `fmtPnl`'s negative branch was the audit-#… defect
 where every loss rendered positive; it is fixed and stays fixed.
+
+---
+
+## Round 4 — Slice F6: loading, empty, and error states, triaged by consequence
+
+The playbook asks for triage, not a sweep: the views where an empty or missing
+state can be misread as a *meaningful* value, and for each, whether "couldn't
+load" is distinguishable from "nothing here".
+
+| surface | verdict |
+|---|---|
+| positions | **fixed earlier** — S9-03/S10-01, three-way empty/unknown/broker-starting |
+| account equity | **fixed earlier** — F1-02, `LiveFeedNotice` + `DataAge` |
+| alerts | **fixed earlier** — F1-02, Live Triggers tab distinguishes the two |
+| risk limits | **clean** (below) |
+| open orders | **n/a** — no standing-order view exists; orders are market-only through `OrderEntryForm` |
+| KYC status | **F6-01, fixed** |
+
+### F6-01 — a failed load manufactured a compliance state (MEDIUM)
+
+`KYCPage.tsx:149`
+
+```ts
+} catch {
+  setError('Failed to load KYC status. Please refresh.');
+  setKycState({ status: 'not_started', submitted_at: null,
+                reviewed_at: null, rejection_reason: null, documents: [] });
+}
+```
+
+The error handler does not fall through to a default — it **constructs** a
+status object and asserts `not_started`. The page then rendered the full "Not
+Started" card, put the step indicator on step 1, and offered the document upload
+form, all describing a state nobody checked.
+
+An error banner sits above it, so the failure is technically visible. But the
+page is making a specific contradicting claim at the same time:
+
+- a user whose documents are `under_review` is told they have not begun, and the
+  obvious response to that is to upload everything again;
+- an `approved` user is told to start verifying;
+- a `rejected` user is not shown the rejection reason they came for.
+
+**Fix:** an `unknown` status that is explicitly *not* a server state — the
+client's answer when it could not ask. It renders an amber "Status unavailable"
+card, takes the step indicator to step 0, hides the upload form (`canSubmit`
+already excluded it), and says in words: *"Nothing has changed — refresh to try
+again, and don't re-submit documents until this loads."*
+
+### Checked and clean
+
+- **`RiskDashboard`** — the surface most likely to have this defect, and it does
+  not. `marginLevel` falls back to `0`, but every displayed figure is guarded by
+  `{account ? … : '—'}`, and `marginLevelIsSafe(0)` returns true by design (no
+  position, no margin risk) rather than painting a false liquidation warning.
+- Everything else is cosmetic, as the playbook predicted. Said and moved on.
+
+---
+
+## Round 4 — Slice F11: do the tests assert anything?
+
+Run last, because it says how much to trust the rest.
+
+### The measurement, including two wrong answers on the way
+
+Three automated classifiers, three numbers, and the first two were wrong:
+
+1. *"58 tests where every assertion is a mount/defined check."* Wrong — it
+   counted `expect(found).toBeTruthy()` after a **text-matching** `find()`,
+   which is a genuine output assertion.
+2. *"132 tests with no content-dependent assertion."* Wrong the other way — it
+   flagged `store.test.ts`, `trading_logic.test.ts` and
+   `risk_calculator_math.test.ts`, which are pure logic tests that correctly
+   render nothing. `expect(store.positions).toHaveLength(2)` is a strong
+   assertion.
+3. *"67 of 624 rendering tests assert nothing about output."* Still wrong — it
+   flagged tests whose assertions live in a helper (`pctOf(container)`) and
+   `renderHook` tests that assert on hook state.
+
+**The categories do not separate mechanically.** Reported as a fact about the
+method rather than dressed up as a result, because a number nobody checked is
+exactly what this slice exists to find.
+
+### What the suite actually looks like
+
+- **0 tests with zero assertions**, out of 1,264.
+- **No weak test on a money path or a guard.** The mount-only tests are on
+  admin, affiliate, marketplace, social and tools pages.
+- The `renders without crashing` family (~25) is honestly named and earns its
+  keep: F1-04 found `Dashboard` and `Performance` both crashing on a partial
+  payload, which is exactly what those catch.
+- **13 test files `vi.mock('../hooks/useApi')` wholesale**, so the real request
+  layer, its interceptors and every failure branch are unexercised there. This
+  is why the F1 harness stubs the axios *adapter* instead — already recorded in
+  its header, and the reason F1 found what the page tests could not.
+
+### F11-01 — one test verified hollow, by mutation (LOW) — **FIXED**
+
+`pages_register_profile_watchlist.test.tsx :: renders profile username after
+load`
+
+```ts
+const el = document.querySelector('h1');
+expect(el).toBeTruthy();
+```
+
+Its name promises the username; it asserts an `<h1>` exists. **Verified by
+deleting `{profile.display_name || profile.username}` from `Profile.tsx` — the
+test still passed.** It would also pass on an error page that happens to have a
+heading.
+
+Now asserts the heading's text, and the same mutation fails.
+
+Its three siblings (Win Rate / Avg P&L / Sharpe stat cards) were checked and are
+fine — they match on `innerHTML` for their label text.
+
+**Verdict on the suite: better than the slice assumed.** The backend precedent —
+nine tests found asserting defective behaviour — has a frontend counterpart of
+nine, all already found and corrected in earlier slices of this round (the badge
+required to read "Live" on a dead socket; the account-summary test passing on a
+page subtitle; the positions panel required to claim "no open positions" while
+disconnected). This slice adds one more.

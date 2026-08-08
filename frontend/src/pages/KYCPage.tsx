@@ -16,7 +16,14 @@ import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
 
-type KYCStatus = 'not_started' | 'pending' | 'under_review' | 'approved' | 'rejected';
+/**
+ * `unknown` is not a server status — it is the client's answer when it could not
+ * ask (F6-01). The catch below used to construct `{ status: 'not_started' }`,
+ * so a failed load rendered a specific compliance claim: a user under review was
+ * told they had not begun, and the obvious response to that is to upload
+ * everything again.
+ */
+type KYCStatus = 'not_started' | 'pending' | 'under_review' | 'approved' | 'rejected' | 'unknown';
 
 interface KYCState {
   status: KYCStatus;
@@ -30,6 +37,7 @@ const STATUS_CONFIG: Record<KYCStatus, {
   label: string; color: string; bg: string; border: string; icon: string;
   badgeVariant: 'success' | 'warning' | 'info' | 'danger' | 'neutral';
 }> = {
+  unknown:      { label: 'Status unavailable', color: '#ffb800', bg: '#78350f22', border: '#92400e', icon: '?', badgeVariant: 'warning' },
   not_started:  { label: 'Not Started',  color: '#94a3b8', bg: '#1e293b22', border: '#334155', icon: '○', badgeVariant: 'neutral' },
   pending:      { label: 'Pending',       color: '#f59e0b', bg: '#78350f22', border: '#92400e', icon: '⏳', badgeVariant: 'warning' },
   under_review: { label: 'Under Review',  color: '#60a5fa', bg: '#1e3a5f22', border: '#1d4ed8', icon: '🔍', badgeVariant: 'info' },
@@ -74,6 +82,9 @@ const STEPS = [
 function getStep(status: KYCStatus): number {
   if (status === 'approved') return 3;
   if (status === 'under_review' || status === 'pending') return 2;
+  // 0 = no step highlighted. `unknown` means the status could not be loaded, so
+  // placing the user at step 1 would assert they are at the beginning (F6-01).
+  if (status === 'unknown') return 0;
   return 1;
 }
 
@@ -149,7 +160,9 @@ const KYCPage: React.FC = () => {
     } catch {
       if (!mountedRef.current) return;
       setError('Failed to load KYC status. Please refresh.');
-      setKycState({ status: 'not_started', submitted_at: null, reviewed_at: null, rejection_reason: null, documents: [] });
+      // F6-01: do NOT fabricate 'not_started' here. We did not reach the server,
+      // so we know nothing about this user's verification state.
+      setKycState({ status: 'unknown', submitted_at: null, reviewed_at: null, rejection_reason: null, documents: [] });
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -204,7 +217,7 @@ const KYCPage: React.FC = () => {
     } finally { setSubmitting(false); }
   };
 
-  const status = kycState?.status ?? 'not_started';
+  const status: KYCStatus = kycState?.status ?? 'unknown';
   const cfg    = STATUS_CONFIG[status];
   const canSubmit = status === 'not_started' || status === 'rejected';
   // Enforce what the page already promises, rather than accepting one document
@@ -286,6 +299,13 @@ const KYCPage: React.FC = () => {
                 {status === 'under_review' && (
                   <p style={{ fontSize: 13, color: '#60a5fa', margin: '8px 0 0' }}>
                     Your documents are under review. This typically takes 1–2 business days.
+                  </p>
+                )}
+                {status === 'unknown' && (
+                  <p style={{ fontSize: 13, color: '#ffb800', margin: '8px 0 0' }}>
+                    We couldn&apos;t reach the verification service, so we don&apos;t know
+                    where your application stands. Nothing has changed — refresh to try
+                    again, and don&apos;t re-submit documents until this loads.
                   </p>
                 )}
                 {status === 'pending' && (
