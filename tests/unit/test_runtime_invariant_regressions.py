@@ -166,6 +166,85 @@ class TestConfigurationColumnNames:
         assert "config_value" in src
 
 
+class TestCallerErrorsCountAsDatabaseFailures:
+    """Why a wrong column name took three health endpoints to 503.
+
+    `DatabaseManager.session()` yields inside a `try`, and its trailing
+    `except Exception` calls `_record_failure()`. So an exception raised by the
+    *caller's* code inside the with-block — an AttributeError from touching a
+    column that does not exist — is booked as a DATABASE failure. Five of them
+    open the circuit breaker, and from then on every DB consumer in the process
+    gets `ConnectionError: Database circuit breaker is open`, which is exactly
+    what appeared in the CI logs alongside the 503s.
+
+    This test pins the mechanism rather than asserting it is desirable. The
+    caller bug is fixed (see TestConfigurationColumnNames), but the conflation
+    itself is still latent: any future bad query re-creates it. Narrowing the
+    breaker to genuine database errors is a change to a resilience gate and is
+    deliberately left as a separate decision.
+    """
+
+    @staticmethod
+    def _manager():
+        import threading
+
+        from database.connection import DatabaseManager
+
+        class _Session:
+            def execute(self, *a, **k): ...
+            def commit(self): ...
+            def rollback(self): ...
+            def close(self): ...
+
+        class _Metrics:
+            query_count = 0
+            slow_query_count = 0
+            error_count = 0
+
+            def record_latency(self, *a): ...
+
+        m = DatabaseManager.__new__(DatabaseManager)
+        m._session_factory = lambda: _Session()
+        m.connection_string = "sqlite://"
+        m.query_timeout = 30
+        m.max_retries = 1
+        m._circuit_open = False
+        m._circuit_half_open = False
+        m._circuit_threshold = 5
+        m._circuit_recovery_time = 60.0
+        m._failure_count = 0
+        m._last_failure_time = None
+        m._success_count = 0
+        m._metrics_lock = threading.Lock()
+        m._metrics = _Metrics()
+        return m
+
+    def test_five_caller_side_attribute_errors_open_the_breaker(self):
+        from database.models import Configuration
+
+        mgr = self._manager()
+        assert mgr._circuit_open is False
+
+        for _ in range(mgr._circuit_threshold):
+            with pytest.raises(AttributeError), mgr.session():
+                Configuration.key  # noqa: B018 — the exact defect, an app-level bug
+
+        assert mgr._failure_count == 5
+        assert mgr._circuit_open is True, "an application bug was booked as database unhealthiness"
+
+    def test_once_open_every_other_db_consumer_is_refused(self):
+        """The `ConnectionError` string that showed up in the CI logs."""
+        from database.models import Configuration
+
+        mgr = self._manager()
+        for _ in range(mgr._circuit_threshold):
+            with pytest.raises(AttributeError), mgr.session():
+                Configuration.key  # noqa: B018
+
+        with pytest.raises(ConnectionError, match="circuit breaker is open"), mgr.session():
+            pass  # pragma: no cover — session() raises before yielding
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Hot-standby promotion restores state onto the engine that is actually wired
 # ─────────────────────────────────────────────────────────────────────────────
