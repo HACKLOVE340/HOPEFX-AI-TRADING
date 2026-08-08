@@ -73,15 +73,25 @@ jobs:
       # Satisfies the :?required variable checks in docker-compose.yml so
       # Docker Compose can interpolate the config before the smoke override
       # environment: block takes effect (e.g. REDIS_PASSWORD in redis.command).
+      #
+      # Two secret scanners see this step, and they need the pragma in
+      # different places:
+      #   - scripts/check_secrets.sh reads raw file lines, so every credential
+      #     line inside the heredoc carries its own pragma (stripped back out
+      #     before the value reaches .env — see the sed below).
+      #   - detect-secrets runs a YAML transformer first, which collapses this
+      #     whole block scalar into a single value attributed to the `run:`
+      #     line. Pragmas inside the heredoc are invisible to it; the one on
+      #     the block-scalar header below is the only one it can see.
       - name: Generate minimal CI .env
-        run: |
+        run: |  # pragma: allowlist secret
           cat > .env <<'EOF'
           POSTGRES_USER=hopefx
-          POSTGRES_PASSWORD=ci_smoke_password
+          POSTGRES_PASSWORD=ci_smoke_password  # pragma: allowlist secret
           POSTGRES_DB=hopefx
-          REDIS_PASSWORD=ci-smoke-redis-password
-          SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!
-          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          REDIS_PASSWORD=ci-smoke-redis-password  # pragma: allowlist secret
+          SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!  # pragma: allowlist secret
+          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # pragma: allowlist secret
           CONFIG_SALT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!
           HOPEFX_DOMAIN=localhost
@@ -91,9 +101,9 @@ jobs:
           IS_FORCE_TLS=false
           REDIS_FORCE_TLS=false
           ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
-          BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw
-          BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw
-          BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw
+          BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw  # pragma: allowlist secret
+          BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw  # pragma: allowlist secret
+          BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw  # pragma: allowlist secret
           GRAFANA_ADMIN_PASSWORD=ci-smoke-grafana-placeholder
           ALERTMANAGER_SMTP_FROM=ci@localhost
           ALERTMANAGER_SMTP_TO=ci@localhost
@@ -111,6 +121,13 @@ jobs:
           EOF
           # Strip leading whitespace added by the heredoc indentation
           sed -i 's/^[[:space:]]*//' .env
+          # Strip the allowlist pragmas. They mark these values as known CI
+          # placeholders for scripts/check_secrets.sh, which scans staged files
+          # and would otherwise block any edit to this workflow on lines that
+          # have been here since it was written. Compose does not strip inline
+          # comments from an env_file, so leaving them in would make the
+          # password literally "ci_smoke_password  # pragma: allowlist secret".
+          sed -i 's/[[:space:]]*#[[:space:]]*pragma:[[:space:]]*allowlist[[:space:]]*secret[[:space:]]*$//' .env
           echo "Generated .env with $(wc -l < .env) entries."
 
       # ── Start the minimal stack ────────────────────────────────────────────
@@ -400,8 +417,21 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs postgres --tail=50 || true
           echo "=== redis logs ==="
           docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs redis --tail=50 || true
-          echo "=== app logs ==="
-          docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs app --tail=100 || true
+          # 100 lines was not enough: the app emits hundreds of startup lines,
+          # so the tail showed only the request handling and cut off the
+          # component-registry sequence — which is exactly where a readiness
+          # failure originates. `db_pool` reporting down was undiagnosable from
+          # a 100-line tail because the "Async DB pool initialised" line (or the
+          # warning replacing it) had already scrolled past.
+          echo "=== app logs (startup sequence) ==="
+          docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs app --tail=600 || true
+
+          # Pull out the lines that decide readiness, so the cause is visible
+          # without scrolling 600 lines of a folded CI log group.
+          echo "=== app logs: startup and readiness signals ==="
+          docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs app --no-color 2>/dev/null \
+            | grep -Ei "async db pool|set_default_pool|component_registry|\[OK\]|\[FAIL\]|startup_event|Database initialized|Database is |Traceback|CRITICAL" \
+            | tail -80 || true
 
       # ── Tear down ─────────────────────────────────────────────────────────
       - name: Tear down stack
