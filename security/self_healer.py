@@ -1532,8 +1532,23 @@ Return the complete fixed file:"""
         """
         import os as _os
 
-        # Skip diagnostics in development — they make blocking HTTP calls to
-        # localhost which starve the single-worker event loop.
+        # An explicit off switch. This loop wedged production once already
+        # (security/diagnostics.py forked ten interpreters on the event loop
+        # thread), and while that specific defect is fixed and tested, an
+        # operator staring at a hung container needs a way to take the whole
+        # subsystem out of the path without editing code or disabling the healer.
+        if _os.getenv("HEAL_DIAG_ENABLED", "true").strip().lower() in ("0", "false", "no", "off"):
+            logger.info("SelfHealer: diagnostics loop disabled by HEAL_DIAG_ENABLED")
+            return
+
+        # Skip diagnostics outside production. The suite probes a running server
+        # over HTTP at APP_BASE_URL, which a dev checkout may not have, and its
+        # findings describe a deployed stack. (This used to say the checks
+        # "make blocking HTTP calls to localhost which starve the single-worker
+        # event loop" — the starvation was real, but disabling it here fixed it
+        # only in the environment where it did no harm and left it running in
+        # the one where it did. The blocking is now fixed at the source; see
+        # tests/unit/test_diagnostics_never_wedges_the_loop.py.)
         if _os.getenv("APP_ENV", "development").lower() in ("development", "dev", "test"):
             logger.info("SelfHealer: diagnostics loop disabled in %s mode", _os.getenv("APP_ENV", "development"))
             return
