@@ -3188,6 +3188,26 @@ async def init_chaos_controller(s: Any) -> Any | None:
         return None
 
 
+def _seed_drawdown_peak(risk, peak: float) -> None:
+    """Raise the risk manager's high-water mark to ``peak`` before equity is set.
+
+    Replays the peak as an equity observation, which is how the mark is
+    established in normal operation, so DrawdownTracker and RiskState stay
+    consistent with each other rather than being poked at directly. The caller
+    immediately follows with the real equity, so the peak is the only lasting
+    effect.
+    """
+    try:
+        risk.update_equity(peak)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "HOT-STANDBY: could not restore drawdown peak %.2f — the promoted pod "
+            "will measure drawdown against a fresh peak: %s",
+            peak,
+            exc,
+        )
+
+
 def restore_engine_state_after_promotion(engine, snapshot) -> list[str]:
     """Push a hot-standby snapshot back into the live engine. Returns what was restored.
 
@@ -3234,6 +3254,20 @@ def restore_engine_state_after_promotion(engine, snapshot) -> list[str]:
     # Prefer the risk manager: it re-arms the auto-halt gates.
     risk = getattr(engine, "_risk_manager", None) or getattr(engine, "_risk", None)
     if risk is not None and hasattr(risk, "update_equity"):
+        # Restore the drawdown peak BEFORE the equity, or the gate is armed
+        # against the wrong reference. A freshly promoted pod has never seen the
+        # primary's high-water mark, so feeding it only the current equity makes
+        # that equity its peak: drawdown reads 0%, and a pod whose primary had
+        # already auto-halted resumes trading mid-breach. Measured, with a 120k
+        # peak, 105k restored equity and a 10% cap:
+        #     primary   dd=12.50%  halted=True
+        #     promoted  dd= 0.00%  halted=False   (before this)
+        # max() so a snapshot that somehow carries a lower peak can only ever
+        # tighten the gate, never loosen it.
+        peak = float(getattr(snapshot, "peak_equity", 0.0) or 0.0)
+        if peak > snapshot.equity:
+            _seed_drawdown_peak(risk, peak)
+            restored.append(f"drawdown-peak={peak:.2f}")
         risk.update_equity(snapshot.equity)
         restored.append("equity+drawdown+halt-gates")
     elif hasattr(engine, "_dd_tracker"):

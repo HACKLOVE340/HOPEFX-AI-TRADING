@@ -396,6 +396,82 @@ class TestHotStandbyPromotionRestore:
         assert engine._intra_monitor.updates == [88_000.0]
         assert "positions" in restored
 
+    def test_promotion_restores_the_drawdown_peak_not_just_equity(self):
+        """A promoted pod must not measure drawdown against a fresh peak.
+
+        Raised in review on #268 and reproduced: restoring only `snapshot.equity`
+        makes the promoted pod adopt that equity as its own high-water mark, so a
+        primary that had already auto-halted on a breach hands over to a standby
+        reporting 0% drawdown that happily resumes trading.
+
+            120k peak, 105k restored equity, 10% cap
+              primary   dd=12.50%  halted=True
+              promoted  dd= 0.00%  halted=False   <- before
+        """
+        from core.startup_factories import restore_engine_state_after_promotion
+        from risk.manager import RiskManager
+
+        primary = RiskManager(initial_balance=100_000.0)
+        primary.update_equity(120_000.0)
+        primary.update_equity(105_000.0)
+
+        promoted = RiskManager(initial_balance=100_000.0)
+        snap = _Snapshot(equity=105_000.0)
+        snap.peak_equity = 120_000.0
+        engine = _RootShapedEngine()
+        engine._risk_manager = promoted
+        restore_engine_state_after_promotion(engine, snap)
+
+        assert promoted.current_drawdown == pytest.approx(primary.current_drawdown, abs=1e-6)
+        assert promoted._halt is True, "promoted pod resumed trading mid-breach"
+
+    def test_a_healthy_failover_does_not_spuriously_halt(self):
+        """Restoring the peak must tighten the gate, not trip it needlessly."""
+        from core.startup_factories import restore_engine_state_after_promotion
+        from risk.manager import RiskManager
+
+        rm = RiskManager(initial_balance=100_000.0)
+        snap = _Snapshot(equity=118_000.0)
+        snap.peak_equity = 120_000.0
+        engine = _RootShapedEngine()
+        engine._risk_manager = rm
+        restore_engine_state_after_promotion(engine, snap)
+
+        assert rm.current_drawdown < 0.10
+        assert rm._halt is False
+
+    def test_a_snapshot_without_the_peak_field_still_restores(self):
+        """Snapshots written before peak_equity existed must not break promotion."""
+        from core.startup_factories import restore_engine_state_after_promotion
+        from risk.manager import RiskManager
+
+        rm = RiskManager(initial_balance=100_000.0)
+        engine = _RootShapedEngine()
+        engine._risk_manager = rm
+        snap = _Snapshot(equity=105_000.0)  # no peak_equity attribute at all
+        assert not hasattr(snap, "peak_equity")
+
+        restored = restore_engine_state_after_promotion(engine, snap)
+        assert restored, "legacy snapshot should still restore what it can"
+
+    def test_state_snapshot_carries_the_peak(self):
+        """The peak has to be replicated or the promoted pod cannot know it."""
+        from resilience.hot_standby import StateSnapshot
+
+        assert "peak_equity" in StateSnapshot.__dataclass_fields__
+
+    def test_replicator_peak_only_rises(self):
+        from resilience.hot_standby import HotStandbyReplicator
+
+        r = HotStandbyReplicator.__new__(HotStandbyReplicator)
+        r._equity = 0.0
+        r._balance = 0.0
+        r._peak_equity = 0.0
+        r.update_equity(100_000.0)
+        r.update_equity(120_000.0)
+        r.update_equity(105_000.0)  # a drop must not lower the mark
+        assert r._peak_equity == 120_000.0
+
     def test_missing_engine_is_reported_not_swallowed(self):
         from core.startup_factories import restore_engine_state_after_promotion
 

@@ -4135,7 +4135,10 @@ def _ohlcv_budget_from_env(raw: str | None, default: float = 20.0) -> float:
     return value
 
 
-_OHLCV_TOTAL_BUDGET_S = _ohlcv_budget_from_env(os.getenv("OHLCV_FETCH_BUDGET_S"))
+# The literal default is passed inline as well as being the function's
+# fallback: Gate B reads os.getenv() calls statically and treats a var with
+# no inline default as one the compose file is required to forward.
+_OHLCV_TOTAL_BUDGET_S = _ohlcv_budget_from_env(os.getenv("OHLCV_FETCH_BUDGET_S", "20"))
 _OHLCV_ENGINE_TIMEOUT_S = 25.0
 _OHLCV_YFINANCE_TIMEOUT_S = 20.0
 # Below this there is no point starting a network leg — it cannot finish, and
