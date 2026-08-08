@@ -122,7 +122,16 @@ def _build_test_app():
     except Exception:
         pass
 
-    return _app
+    # yield + reset so the injected service does not outlive this fixture
+    # (S6-05): set_auth_service writes a module global.
+    yield _app
+
+    try:
+        from auth.router import reset_auth_service
+
+        reset_auth_service()
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="module")

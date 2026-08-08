@@ -948,6 +948,47 @@ Not addressed: the two builders still exist. Unifying them is a larger change
 that risks altering the live feature vector, and the guard now watches the
 right one either way.
 
+### S6-05 — A mock auth service outlived its test and approved every login (HIGH) — FIXED
+
+The single remaining failure of the Round 3 sweep, and it was not flakiness.
+
+`tests/integration/test_api_routing.py::test_login_with_invalid_credentials_returns_401`
+passed alone and failed in the full run with `assert 200 in (401, 400, ...)` —
+`POST /api/auth/login` returned **200 OK for invalid credentials**.
+
+Bisected to `tests/unit/test_auth_coverage.py`. Its `client` fixture calls
+`auth.router.set_auth_service(mock_svc)` — a **module global** — with a mock
+whose `login()` returns `(True, "Login successful", {...})` unconditionally, and
+never restores it. From that fixture onward, every login in the process was
+answered by a service that approves anything.
+
+Three test files installed an auth service; none restored it:
+
+| File | set | restore |
+|---|---|---|
+| `tests/unit/test_auth_coverage.py` | 2 | 0 |
+| `tests/integration/test_auth_flow.py` | 1 | 0 |
+| `tests/e2e/test_auth_billing_trading.py` | 2 | 0 |
+
+**The red test is the smaller half of this.** Any auth assertion running after
+that fixture was exercising a mock that always succeeds rather than the real
+service — the S12-01 pattern again: tests that look like they verify a safety
+property while verifying nothing. How much downstream auth coverage was
+hollowed out has not been quantified.
+
+`auth/router.py` already had `reset_rate_limit_state()` "to prevent cross-module
+state leakage", so the convention existed — the auth service simply had no
+counterpart.
+
+**Fix:** added `reset_auth_service()` alongside it, and made `set_auth_service()`
+return the value it displaced so a caller can restore without touching globals.
+All three fixtures converted to `yield` + reset.
+`tests/unit/test_auth_service_isolation.py` pins the hooks and adds an AST guard
+that fails if any of those files installs an auth service without restoring it.
+
+Verified against the original cross-file reproduction: the two-file run that
+produced `200 OK` for a bad password now passes.
+
 ### S4-06 — The stationarity test certified features it never examined (MEDIUM) — FIXED
 
 `StationarityTester.test()` returned a **permissive** result when `statsmodels`

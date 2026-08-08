@@ -182,7 +182,7 @@ class TestAuthApiEndpoints:
             from fastapi.testclient import TestClient
 
             from auth.router import router as auth_router
-            from auth.router import set_auth_service
+            from auth.router import reset_auth_service, set_auth_service
 
             # Mock auth service
             mock_svc = MagicMock()
@@ -203,11 +203,19 @@ class TestAuthApiEndpoints:
                 },
             )
             mock_svc.verify_email.return_value = (True, "Email verified")
+            # yield + reset: this mock's login() returns success for ANY
+            # credentials, and set_auth_service writes a module global. Leaving
+            # it installed silently disabled authentication for every later test
+            # in the process — it is what made
+            # test_api_routing.py::test_login_with_invalid_credentials_returns_401
+            # see 200 OK for a bad password. See docs/HARDENING_BACKLOG.md S6-05.
             set_auth_service(mock_svc)
 
             app = FastAPI()
             app.include_router(auth_router)
-            return TestClient(app, raise_server_exceptions=False)
+            yield TestClient(app, raise_server_exceptions=False)
+            reset_auth_service()
+            return
         except Exception:
             pytest.skip("Auth router not importable in this environment")
 
