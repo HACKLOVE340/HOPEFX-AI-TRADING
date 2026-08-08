@@ -43,7 +43,7 @@ import { OrderEntryForm } from '../components/panels/OrderEntryForm';
 import { PositionsTable } from '../components/panels/PositionsTable';
 import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol, describeCloseAll } from '../lib/utils';
 import type { PriceTick } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -461,6 +461,7 @@ const Trade: React.FC = () => {
   const [closingAll, setClosingAll]         = useState(false);
   const [pendingSide, setPendingSide]       = useState<'buy' | 'sell' | null>(null);
   const prices      = useStore((s) => s.prices);
+  const positions   = useStore((s) => s.positions);
   const allHistory  = useStore((s) => s.priceHistory);
   const qc          = useQueryClient();
   const confirm     = useConfirm();
@@ -469,9 +470,13 @@ const Trade: React.FC = () => {
   usePositions();
 
   const handleCloseAll = useCallback(async () => {
+    // State the magnitude, not the category. "Every open position" is
+    // something a trader cannot check before agreeing to it — they are not told
+    // how many, which symbols, or what P&L they are about to realise. Shared
+    // with PositionsTable so the two confirmations cannot drift (S10-03).
     const ok = await confirm({
       title:        'Close all positions?',
-      description:  'This will market-close every open position immediately. This cannot be undone.',
+      description:  describeCloseAll(positions),
       confirmLabel: 'Close All',
       variant:      'danger',
     });
@@ -486,7 +491,7 @@ const Trade: React.FC = () => {
     } finally {
       setClosingAll(false);
     }
-  }, [confirm, qc, toast]);
+  }, [confirm, positions, qc, toast]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {

@@ -18,7 +18,7 @@ import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError, sameSymbol, positionSide } from '../../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError, sameSymbol, positionSide, describeCloseAll } from '../../lib/utils';
 import type { Position } from '../../types';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
@@ -279,7 +279,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
     >
       {confirmCloseAll && (
         <ConfirmDialog
-          message={`Close all ${filtered.length} open position(s)? This cannot be undone.`}
+          message={describeCloseAll(filtered)}
           onConfirm={handleCloseAllConfirmed}
           onCancel={() => setConfirmCloseAll(false)}
         />

@@ -13,6 +13,8 @@ import { Link } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
 import { useStore, selectAccount } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
+import { useDataFreshness } from '../hooks/useDataFreshness';
+import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -186,6 +188,9 @@ const RiskCalculator: React.FC = () => {
 
   const [livePrice, setLivePrice]   = useState<number | null>(null);
   const [livePriceAge, setLivePriceAge] = useState<number>(0);
+  // F1-01: the price fetch below fell back to store prices invisibly, while
+  // that price is the input to position sizing.
+  const freshness = useDataFreshness('the live price');
   const [history, setHistory]       = useState<SavedCalc[]>([]);
   const [saving, setSaving]         = useState(false);
   const [saveMsg, setSaveMsg]       = useState('');
@@ -216,7 +221,12 @@ const RiskCalculator: React.FC = () => {
           // Only auto-fill entry if user hasn't typed one
           setState(prev => prev.entryPrice === '' ? { ...prev, entryPrice: price.toFixed(price < 10 ? 5 : 2) } : prev);
         }
-      } catch { /* fall back to store prices */ }
+      } catch {
+        // F1-01: this silently fell back to store prices while the page went on
+        // computing a position size from them. The number the trader sizes
+        // against must never look current when the fetch failed.
+        freshness.markFailed('the live price');
+      }
     };
     fetchPrice();
     priceTimerRef.current = setInterval(fetchPrice, 5000);
@@ -313,8 +323,10 @@ const RiskCalculator: React.FC = () => {
         ]}
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* Live price indicator */}
-            {livePrice && (
+            {/* Live price indicator. The green dot must not appear while the
+                fetch is failing — the price feeding position sizing would then
+                look current when it is not (F1-01). */}
+            {livePrice && !freshness.failed && (
               <div style={{ fontSize: 11, color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
                 ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: '#475569' }}>{livePriceAge}s</span>
               </div>
@@ -335,6 +347,8 @@ const RiskCalculator: React.FC = () => {
           </div>
         }
       />
+
+      <StaleDataNotice failed={freshness.failed} what={freshness.what} />
 
       <div style={s.grid}>
         {/* ── Inputs ── */}

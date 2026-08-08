@@ -2773,7 +2773,7 @@ or dead, the user cannot tell, and that is the finding.
 
 | ID | Sev | Issue | Location |
 |----|-----|-------|----------|
-| F1-01 | **HIGH** | Three pages issue requests, every request fails, and the page renders byte-identically to the healthy case | `Watchlist`, `TradeJournal`, `RiskCalculator` |
+| F1-01 | **HIGH** — **FIXED** | Three pages issue requests, every request fails, and the page renders byte-identically to the healthy case | `Watchlist`, `TradeJournal`, `RiskCalculator` |
 | F1-02 | MEDIUM | Three more are indistinguishable under a dead or silent WebSocket | `Wallet`, `PriceAlerts`, `Portfolio` |
 | F1-03 | LOW | The shared chart mock is incomplete, so chart pages cannot be render-tested | `src/test/setup.ts` |
 
@@ -2813,3 +2813,45 @@ app's theme/auth/layout providers, so some render empty here and would not in
 the app; only pages that issued a request are asserted on. A dev-server pass
 against a genuinely stopped backend is still worth doing — this catches the
 cheap majority in CI.
+
+
+### F1-01 — FIXED
+
+All three had the same shape: a `catch` that swallowed the failure and silently
+substituted a fallback.
+
+| Page | was | now |
+|---|---|---|
+| `Watchlist` | `catch { /* show empty list */ }` + `catch { /* keep existing prices */ }` | 5/5 identical → **2/5** |
+| `RiskCalculator` | `catch { /* fall back to store prices */ }` | 5/5 → **2/5** |
+| `TradeJournal` | `Promise.allSettled` rejections → `setTrades([])`, `setStats(null)` | 5/5 → **2/5** |
+
+The remaining 2/5 are `wsDead` and `wsSilent`, where HTTP succeeds — these pages
+take their data over HTTP, so being unchanged there is correct, not a gap.
+
+Degrading was never the problem; degrading *invisibly* was, because the page
+then stated things it could not know. `Watchlist` announced **"Live prices
+refresh every 5 seconds"** with every request failing. `RiskCalculator` showed a
+green live-price dot while feeding a fallback price into position sizing.
+`TradeJournal` rendered "All Trades (0)" as fact.
+
+**Fix:** `hooks/useDataFreshness.ts` gives a page one place to record "my last
+load failed"; `components/ui/StaleDataNotice.tsx` renders it (`role="status"`,
+`aria-live="polite"` — important, not an emergency). The liveness claims are now
+conditional: Watchlist's subtitle changes, and RiskCalculator's green dot is
+suppressed while the fetch is failing.
+
+**A defect introduced and caught during this fix.** `useDataFreshness` first
+returned a fresh object every render. `TradeJournal` puts it in `fetchAll`'s
+dependency array, so `fetchAll` was a new function every render, which re-ran
+its effect, which fetched again — an unbounded request loop. The F1 harness's
+own request counter caught it: **138 requests in a single render pass** where 4
+were expected. The hook is now memoised, with two regression tests on object
+identity. Worth noting the instrument found a bug in its own fix.
+
+### F1-03 — the harness's limits, restated after use
+
+Two further artefacts appeared while iterating and are *not* product defects:
+`Dashboard` and `Performance` intermittently render empty inside the F1 file
+while rendering 980 and 486 characters when probed in isolation — order or
+timing pollution within the shared process. Recorded rather than chased.

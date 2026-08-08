@@ -15,6 +15,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { journalApi } from '../hooks/useApi';
+import { useDataFreshness } from '../hooks/useDataFreshness';
+import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 import { extractApiError, fmtPnl } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -99,6 +101,9 @@ const TradeJournal: React.FC = () => {
   const [mistakes, setMistakes]   = useState<JournalEntry[]>([]);
   const [stats, setStats]         = useState<JournalStats | null>(null);
   const [loading, setLoading]     = useState(true);
+  // F1-01: every failed fetch below became an empty list, so a dead backend
+  // rendered exactly like an empty journal.
+  const freshness = useDataFreshness('your journal');
   const [editing, setEditing]     = useState<string | null>(null);
   const [editForm, setEditForm]   = useState<Partial<JournalEntry>>({});
   const [saving, setSaving]       = useState(false);
@@ -122,6 +127,11 @@ const TradeJournal: React.FC = () => {
         journalApi.mistakes(),
       ]);
       if (!mountedRef.current) return;
+      // F1-01: every rejection below became an empty array or null, so a total
+      // backend failure rendered exactly like a genuinely empty journal —
+      // "All Trades (0)" stated as fact. Record it instead.
+      const anyFailed = [tradesRes, statsRes, mistakesRes].some((r) => r.status === 'rejected');
+      if (anyFailed) freshness.markFailed('your journal'); else freshness.markOk();
       if (tradesRes.status === 'fulfilled') {
         const d = tradesRes.value.data as JournalEntry[] | { trades?: JournalEntry[] };
         setTrades((Array.isArray(d) ? d : (d.trades ?? [])).map(normalizeEntry));
@@ -136,7 +146,7 @@ const TradeJournal: React.FC = () => {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [filterTag]);
+  }, [filterTag, freshness]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -173,6 +183,7 @@ const TradeJournal: React.FC = () => {
         <div>
           <h1 style={s.title}>Trade Journal</h1>
           <p style={s.subtitle}>Every trade logged automatically. Add notes, emotions, and tags to improve.</p>
+          <StaleDataNotice failed={freshness.failed} what={freshness.what} className="mt-2" />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button

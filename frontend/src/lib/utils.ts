@@ -367,3 +367,45 @@ export function extractApiError(err: unknown, fallback = 'An error occurred'): s
   if (typeof msg === 'string' && msg.length > 0) return msg;
   return fallback;
 }
+
+/**
+ * One-line summary of what closing *all* positions actually does (S10-03).
+ *
+ * There were two close-all confirmations with different wording and different
+ * information: `Trade.tsx` said "this will market-close every open position
+ * immediately" — a category, not a quantity — and `PositionsTable` gave a count
+ * and nothing else. Neither told the trader the number that matters: the P&L
+ * they are about to realise. Closing three winners and closing three losers
+ * read identically.
+ *
+ * Both call sites now use this, so the two cannot drift apart again — the
+ * duplication failure mode from S13-01.
+ */
+export function describeCloseAll(
+  positions: ReadonlyArray<{ symbol?: string | null; unrealized_pnl?: number | null }>,
+): string {
+  const list = positions ?? [];
+  if (list.length === 0) return 'There are no open positions to close.';
+
+  // Sum only the P&L we actually have. A missing value must not become 0 and
+  // silently understate the total, and must never surface as NaN.
+  const known = list.map((p) => p.unrealized_pnl).filter((v): v is number => typeof v === 'number' && isFinite(v));
+  const net = known.reduce((a, b) => a + b, 0);
+  const partial = known.length !== list.length;
+
+  const symbols = list.map((p) => p.symbol).filter((s): s is string => !!s);
+  const unique = Array.from(new Set(symbols));
+  const named = unique.length > 0 && unique.length <= 4 ? ` (${unique.join(', ')})` : '';
+
+  const outcome =
+    known.length === 0
+      ? 'P&L unavailable'
+      : `realising a ${net < 0 ? 'loss' : 'profit'} of ${fmtPnl(net)}`;
+
+  const caveat = partial ? ' P&L is missing for some positions, so the total may be understated.' : '';
+
+  return (
+    `Market-close ${list.length} open position${list.length === 1 ? '' : 's'}${named}, ` +
+    `${outcome}. This cannot be undone.${caveat}`
+  );
+}
