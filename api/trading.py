@@ -4091,6 +4091,73 @@ def _bars_are_usable(bars) -> bool:
     return max(closes) - min(closes) > 0.0
 
 
+# Total wall-clock budget for one _get_ohlcv_for_symbol call, shared across
+# every fallback leg.
+#
+# The legs used to carry independent 25s and 20s timeouts, which sum to 45s. That
+# is a genuine hazard on its own: one request could pin a worker for 45 seconds
+# while upstreams were degraded, and 45s is also exactly the runtime invariant
+# checker's HTTP_TIMEOUT.
+#
+# Note what this does NOT claim. Bounding the fetch did not stop
+# /api/trading/patterns timing out in CI — it still does, so that probe has a
+# cause upstream of this function that is still being tracked down. What this
+# does guarantee is that the fetch itself can no longer be the one responsible:
+# each leg gets whatever is left of the budget, and a leg is skipped outright
+# once nothing is left, so the total is bounded however many sources are tried.
+#
+# The bundled gold CSV at the end of the chain is local, but it only answers
+# daily/weekly timeframes (_load_gold_history_csv returns [] for intraday), so
+# it is not a universal backstop — on a 1h request the chain really can come
+# back empty.
+
+
+def _ohlcv_budget_from_env(raw: str | None, default: float = 20.0) -> float:
+    """Parse OHLCV_FETCH_BUDGET_S, falling back rather than killing the import.
+
+    This is evaluated at module import, so a bare ``float(os.getenv(...))`` turns
+    a typo'd env var into a ValueError that stops ``api.trading`` — and therefore
+    every trading route — from loading at all. A misconfigured tuning knob must
+    not be able to take the API down, so an unusable value logs and falls back.
+    Non-positive values are rejected too: a zero or negative budget would skip
+    every leg and silently return no data.
+    """
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logger.warning("OHLCV_FETCH_BUDGET_S=%r is not a number — using %.0fs", raw, default)
+        return default
+    if value <= 0:
+        logger.warning("OHLCV_FETCH_BUDGET_S=%r must be > 0 — using %.0fs", raw, default)
+        return default
+    return value
+
+
+# The literal default is passed inline as well as being the function's
+# fallback: Gate B reads os.getenv() calls statically and treats a var with
+# no inline default as one the compose file is required to forward.
+_OHLCV_TOTAL_BUDGET_S = _ohlcv_budget_from_env(os.getenv("OHLCV_FETCH_BUDGET_S", "20"))
+_OHLCV_ENGINE_TIMEOUT_S = 25.0
+_OHLCV_YFINANCE_TIMEOUT_S = 20.0
+# Below this there is no point starting a network leg — it cannot finish, and
+# trying only delays the local fallback.
+_OHLCV_MIN_LEG_S = 1.0
+
+
+def _ohlcv_leg_timeout(deadline: float, leg_cap: float) -> float | None:
+    """Seconds this leg may use, or None when the shared budget is spent.
+
+    None means "skip this leg": fall through to the next source rather than
+    starting a request there is no time left to finish.
+    """
+    remaining = deadline - time.monotonic()
+    if remaining < _OHLCV_MIN_LEG_S:
+        return None
+    return min(leg_cap, remaining)
+
+
 async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
     """Fetch OHLCV bars for a symbol: price engine, then yfinance, then gold CSV.
 
@@ -4106,18 +4173,34 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
     the compact spelling. Passing the OANDA form straight through would miss
     every entry and silently disable the fallback again.
 
-    The price-engine call carries the same timeout and usability check `/ohlcv`
-    applies, so `/patterns` and `/levels` cannot hang longer than `/ohlcv` on a
-    stalled engine, and placeholder bars do not suppress the fallbacks.
+    The price-engine call carries the same usability check `/ohlcv` applies, so
+    placeholder bars do not suppress the fallbacks.
+
+    Every leg draws from one shared `_OHLCV_TOTAL_BUDGET_S` deadline, so the
+    whole call is bounded no matter how many sources it has to try.
     """
+    deadline = time.monotonic() + _OHLCV_TOTAL_BUDGET_S
     try:
         from core.app_state import app_state
 
-        if app_state and app_state.price_engine:
-            bars = await asyncio.wait_for(
-                app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
-                timeout=25.0,
-            )
+        leg = _ohlcv_leg_timeout(deadline, _OHLCV_ENGINE_TIMEOUT_S)
+        if app_state and app_state.price_engine and leg is not None:
+            engine_get = app_state.price_engine.get_ohlcv
+            if asyncio.iscoroutinefunction(engine_get):
+                bars = await asyncio.wait_for(engine_get(symbol, timeframe, limit), timeout=leg)
+            else:
+                # A *synchronous* get_ohlcv cannot be passed to wait_for: calling
+                # it runs the blocking work inline on the event loop first — for
+                # however long it takes, with the timeout doing nothing — and
+                # wait_for then raises TypeError on the returned list, so the
+                # result is discarded and the price engine is silently skipped.
+                # data_layer.orchestrator.get_ohlcv is exactly this shape, so the
+                # bug is one swapped engine away. Run it off-loop and bounded.
+                _loop = asyncio.get_running_loop()
+                bars = await asyncio.wait_for(
+                    _loop.run_in_executor(None, engine_get, symbol, timeframe, limit),
+                    timeout=leg,
+                )
             if _bars_are_usable(bars):
                 return bars
             logger.debug(
@@ -4134,7 +4217,10 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
 
     # yfinance — same ticker table and "" == no Yahoo source convention as /ohlcv.
     ticker_sym = _yf_ticker_map().get(compact, compact)
-    if ticker_sym:
+    yf_leg = _ohlcv_leg_timeout(deadline, _OHLCV_YFINANCE_TIMEOUT_S)
+    if ticker_sym and yf_leg is None:
+        logger.debug("OHLCV budget spent before yfinance for %s — using local sources only", compact)
+    if ticker_sym and yf_leg is not None:
         try:
             import yfinance as _yf
 
@@ -4172,7 +4258,7 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
                 ]
 
             loop = asyncio.get_running_loop()
-            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=20.0)
+            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=yf_leg)
             if bars:
                 return bars
         except Exception as exc:
@@ -4376,7 +4462,23 @@ async def get_chart_patterns(
     engines, each with entry/target/stop price levels.
     """
     norm = _normalise_symbol(symbol)
+    # The runtime invariant checker reports this endpoint as "timed out" at its
+    # 45s HTTP_TIMEOUT, and bounding the fetch did not stop it — so log how long
+    # the fetch actually took. Without this the next failure is as opaque as the
+    # last one.
+    _t0 = time.perf_counter()
     ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
+    _fetch_s = time.perf_counter() - _t0
+    if _fetch_s > 5.0:
+        logger.warning(
+            "/patterns OHLCV fetch took %.1fs for %s %s (limit=%s, budget=%.0fs) — %d bars",
+            _fetch_s,
+            norm,
+            timeframe,
+            limit,
+            _OHLCV_TOTAL_BUDGET_S,
+            len(ohlcv or []),
+        )
     df = _ohlcv_to_df(ohlcv)
 
     if df is None or df.empty:

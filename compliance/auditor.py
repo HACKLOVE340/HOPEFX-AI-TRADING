@@ -10,6 +10,7 @@ Meets regulatory requirements for financial trading
 """
 
 import asyncio
+import copy
 import hashlib
 import json
 import logging
@@ -76,6 +77,24 @@ class ImmutableAuditLog:
         # producing a different timestamp than the one stored in the record,
         # which caused verify_integrity() to always return False.
         timestamp = datetime.now(UTC).isoformat()
+
+        # Take ownership of the payload before hashing it.
+        #
+        # The record used to store the caller's dict by reference, so anything
+        # the caller did to that dict afterwards — mutating it, or reusing one
+        # scratch dict across several appends — retroactively changed
+        # record.data. verify_integrity() then recomputed data_hash over the
+        # mutated payload, disagreed with the stored hash, and reported
+        # "INTEGRITY VIOLATION" for a log nobody had tampered with.
+        #
+        # That is the worst failure mode for a tamper-evidence mechanism: this
+        # is the SEC/CFTC trade-reporting chain, and a detector that cries wolf
+        # on ordinary caller aliasing trains operators to ignore it, so a real
+        # violation lands in a channel that is already being tuned out.
+        #
+        # deepcopy (rather than a json round-trip) keeps the value types exactly
+        # as they were, so nothing about serialisation behaviour changes.
+        data = copy.deepcopy(data)
 
         # Compute hash using the same timestamp that will be stored
         chain_hash = self._calculate_hash(data, timestamp)

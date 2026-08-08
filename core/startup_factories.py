@@ -3188,6 +3188,125 @@ async def init_chaos_controller(s: Any) -> Any | None:
         return None
 
 
+def _seed_drawdown_peak(risk, peak: float) -> None:
+    """Raise the risk manager's high-water mark to ``peak`` before equity is set.
+
+    Replays the peak as an equity observation, which is how the mark is
+    established in normal operation, so DrawdownTracker and RiskState stay
+    consistent with each other rather than being poked at directly. The caller
+    immediately follows with the real equity, so the peak is the only lasting
+    effect.
+    """
+    try:
+        risk.update_equity(peak)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "HOT-STANDBY: could not restore drawdown peak %.2f — the promoted pod "
+            "will measure drawdown against a fresh peak: %s",
+            peak,
+            exc,
+        )
+
+
+def restore_engine_state_after_promotion(engine, snapshot) -> list[str]:
+    """Push a hot-standby snapshot back into the live engine. Returns what was restored.
+
+    Two different classes are named ``HopeFXEngine``: the root ``hopefx_engine``
+    module's — which is what ``init_engine`` actually wires into
+    ``s.hopefx_engine`` — and ``execution.hopefx_engine``'s. The promotion
+    callback was written against the latter. It set
+    ``_open_positions``/``_current_equity`` and then reached for
+    ``_dd_tracker``/``_intra_monitor``, and the root engine has none of those
+    four; it has ``_risk_manager``.
+
+    So on every real promotion the first two assignments quietly created orphan
+    attributes nothing reads, and the third raised ``AttributeError``. The
+    promoted pod restored *nothing* — no equity, no drawdown state, no
+    intra-trade state — and the only trace was a single
+    ``on_promote_callback failed`` line inside the replicator.
+
+    Equity is restored through ``RiskManager.update_equity`` rather than by
+    poking the drawdown tracker directly: it syncs the tracker *and*
+    re-evaluates the auto-halt drawdown limits, so a pod promoted into a breach
+    halts instead of trading on with a fresh-looking peak.
+
+    The position *count* is deliberately not synthesised. On the root engine
+    ``RiskState.open_positions`` is re-derived from ``_open_positions_list``, so
+    seeding it here would just be overwritten; whatever cannot be restored is
+    named in the log rather than faked.
+    """
+    if engine is None:
+        logger.error("HOT-STANDBY: promoted with no engine — state NOT restored")
+        return []
+
+    restored: list[str] = []
+    missing: list[str] = []
+
+    if hasattr(engine, "_open_positions"):
+        engine._open_positions = snapshot.positions
+        restored.append("positions")
+    else:
+        missing.append("positions")
+
+    if hasattr(engine, "_current_equity"):
+        engine._current_equity = snapshot.equity
+
+    # Prefer the risk manager: it re-arms the auto-halt gates.
+    risk = getattr(engine, "_risk_manager", None) or getattr(engine, "_risk", None)
+    if risk is not None and hasattr(risk, "update_equity"):
+        # Restore the drawdown peak BEFORE the equity, or the gate is armed
+        # against the wrong reference. A freshly promoted pod has never seen the
+        # primary's high-water mark, so feeding it only the current equity makes
+        # that equity its peak: drawdown reads 0%, and a pod whose primary had
+        # already auto-halted resumes trading mid-breach. Measured, with a 120k
+        # peak, 105k restored equity and a 10% cap:
+        #     primary   dd=12.50%  halted=True
+        #     promoted  dd= 0.00%  halted=False   (before this)
+        # max() so a snapshot that somehow carries a lower peak can only ever
+        # tighten the gate, never loosen it.
+        peak = float(getattr(snapshot, "peak_equity", 0.0) or 0.0)
+        if peak > snapshot.equity:
+            _seed_drawdown_peak(risk, peak)
+            restored.append(f"drawdown-peak={peak:.2f}")
+        risk.update_equity(snapshot.equity)
+        restored.append("equity+drawdown+halt-gates")
+    elif hasattr(engine, "_dd_tracker"):
+        engine._dd_tracker.update(equity=snapshot.equity)
+        restored.append("equity+drawdown")
+    else:
+        missing.append("equity/drawdown")
+
+    if hasattr(engine, "_intra_monitor"):
+        engine._intra_monitor.update_equity(snapshot.equity)
+        restored.append("intra-trade")
+    else:
+        missing.append("intra-trade")
+
+    if not restored:
+        logger.error(
+            "HOT-STANDBY: promoted but %s exposes none of the expected state "
+            "attributes — positions and equity NOT restored",
+            type(engine).__name__,
+        )
+        return []
+
+    logger.info(
+        "HOT-STANDBY: engine state restored [%s] on %s — positions=%d equity=%.2f",
+        ", ".join(restored),
+        type(engine).__name__,
+        len(snapshot.positions),
+        snapshot.equity,
+    )
+    if missing:
+        logger.warning(
+            "HOT-STANDBY: %s does not carry %s — left to normal broker/risk "
+            "reconciliation, NOT restored from the snapshot",
+            type(engine).__name__,
+            ", ".join(missing),
+        )
+    return restored
+
+
 async def init_hot_standby(s: Any) -> Any | None:
     """
     Initialise HotStandbyReplicator for position-state replication and
@@ -3220,18 +3339,7 @@ async def init_hot_standby(s: Any) -> Any | None:
                 len(snapshot.positions),
                 snapshot.equity,
             )
-            # Restore open positions into the execution engine if available
-            engine = getattr(s, "hopefx_engine", None)
-            if engine is not None:
-                engine._open_positions = snapshot.positions
-                engine._current_equity = snapshot.equity
-                engine._dd_tracker.update(equity=snapshot.equity)
-                engine._intra_monitor.update_equity(snapshot.equity)
-                logger.info(
-                    "HOT-STANDBY: engine state restored — positions=%d equity=%.2f",
-                    len(snapshot.positions),
-                    snapshot.equity,
-                )
+            restore_engine_state_after_promotion(getattr(s, "hopefx_engine", None), snapshot)
 
         async def _on_demote() -> None:
             logger.critical("HOT-STANDBY DEMOTED: this pod lost the leader key")
