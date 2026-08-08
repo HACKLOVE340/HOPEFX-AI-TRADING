@@ -4110,7 +4110,32 @@ def _bars_are_usable(bars) -> bool:
 # daily/weekly timeframes (_load_gold_history_csv returns [] for intraday), so
 # it is not a universal backstop — on a 1h request the chain really can come
 # back empty.
-_OHLCV_TOTAL_BUDGET_S = float(os.getenv("OHLCV_FETCH_BUDGET_S", "20") or 20)
+
+
+def _ohlcv_budget_from_env(raw: str | None, default: float = 20.0) -> float:
+    """Parse OHLCV_FETCH_BUDGET_S, falling back rather than killing the import.
+
+    This is evaluated at module import, so a bare ``float(os.getenv(...))`` turns
+    a typo'd env var into a ValueError that stops ``api.trading`` — and therefore
+    every trading route — from loading at all. A misconfigured tuning knob must
+    not be able to take the API down, so an unusable value logs and falls back.
+    Non-positive values are rejected too: a zero or negative budget would skip
+    every leg and silently return no data.
+    """
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logger.warning("OHLCV_FETCH_BUDGET_S=%r is not a number — using %.0fs", raw, default)
+        return default
+    if value <= 0:
+        logger.warning("OHLCV_FETCH_BUDGET_S=%r must be > 0 — using %.0fs", raw, default)
+        return default
+    return value
+
+
+_OHLCV_TOTAL_BUDGET_S = _ohlcv_budget_from_env(os.getenv("OHLCV_FETCH_BUDGET_S"))
 _OHLCV_ENGINE_TIMEOUT_S = 25.0
 _OHLCV_YFINANCE_TIMEOUT_S = 20.0
 # Below this there is no point starting a network leg — it cannot finish, and

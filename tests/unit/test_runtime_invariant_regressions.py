@@ -71,6 +71,33 @@ class TestOhlcvFetchBudget:
         # And below the sum of the individual legs, which is the whole point.
         assert t._OHLCV_TOTAL_BUDGET_S < (t._OHLCV_ENGINE_TIMEOUT_S + t._OHLCV_YFINANCE_TIMEOUT_S)
 
+    def test_a_misconfigured_budget_cannot_take_down_the_api(self):
+        """The knob is parsed at import time, so a typo must not break the module.
+
+        `float(os.getenv(...))` at module scope turns a bad env var into a
+        ValueError that stops `api.trading` — and therefore every trading route —
+        from importing at all. A tuning knob must never be able to do that.
+        """
+        import api.trading as t
+
+        assert t._ohlcv_budget_from_env("not-a-number") == 20.0
+        assert t._ohlcv_budget_from_env("") == 20.0
+        assert t._ohlcv_budget_from_env(None) == 20.0
+        assert t._ohlcv_budget_from_env("   ") == 20.0
+
+    def test_a_non_positive_budget_is_rejected(self):
+        """Zero or negative would skip every leg and silently return no data."""
+        import api.trading as t
+
+        assert t._ohlcv_budget_from_env("0") == 20.0
+        assert t._ohlcv_budget_from_env("-5") == 20.0
+
+    def test_a_valid_budget_is_honoured(self):
+        import api.trading as t
+
+        assert t._ohlcv_budget_from_env("8") == 8.0
+        assert t._ohlcv_budget_from_env("12.5") == 12.5
+
     def test_fresh_deadline_is_capped_by_remaining_budget(self):
         import api.trading as t
 
