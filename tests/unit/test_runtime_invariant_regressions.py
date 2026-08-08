@@ -12,11 +12,15 @@ Each one had gone unnoticed for the same reason: it happened inside a
 so the symptom was a wrong number, an empty page or a slow request rather than a
 traceback anybody would chase.
 
-1. ``/api/trading/patterns`` timed out. ``_get_ohlcv_for_symbol`` carried
-   independent 25s and 20s leg timeouts that sum to 45s — exactly the checker's
-   ``HTTP_TIMEOUT`` — so with both remotes unreachable the request could never
-   come back in time. The bundled gold CSV that would have answered instantly
-   sat behind both of them.
+1. ``_get_ohlcv_for_symbol`` was unbounded in total. It carried independent 25s
+   and 20s leg timeouts, which sum to 45s — long enough for one request to pin a
+   worker while upstreams were degraded, and exactly the checker's
+   ``HTTP_TIMEOUT``.
+
+   Bounding it did **not** stop ``/api/trading/patterns`` timing out in CI; that
+   probe still fails, from a cause upstream of this function that is still being
+   tracked down. What the shared budget guarantees is that the fetch can no
+   longer be the thing responsible.
 
 2. ``api/superadmin/financial.py`` queried ``Configuration.key``. The column is
    ``config_key``; ``key``/``value``/``updated_at`` do not exist. Building the
@@ -53,11 +57,11 @@ class TestOhlcvFetchBudget:
     """The whole fetch is bounded, not each leg independently."""
 
     def test_budget_is_under_the_invariant_checker_timeout(self):
-        """The regression that started this: legs summed to exactly the probe timeout.
+        """Legs summed to exactly the probe timeout; the total must stay under it.
 
         `scripts/runtime_invariant_check.py` uses HTTP_TIMEOUT = 45, and the old
-        25s + 20s legs summed to 45s, so a fully-degraded upstream chain could
-        not answer inside the probe. Pin the relationship, not just the number.
+        25s + 20s legs summed to exactly that. Pin the relationship, not just the
+        number, so the sum cannot silently creep back up to it.
         """
         import api.trading as t
 

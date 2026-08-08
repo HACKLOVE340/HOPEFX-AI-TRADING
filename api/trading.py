@@ -4094,16 +4094,22 @@ def _bars_are_usable(bars) -> bool:
 # Total wall-clock budget for one _get_ohlcv_for_symbol call, shared across
 # every fallback leg.
 #
-# The legs used to carry independent 25s and 20s timeouts. Those sum to 45s —
-# exactly the runtime invariant checker's HTTP_TIMEOUT — so /api/trading/patterns
-# timed out in CI whenever both remotes were unreachable. The same arithmetic let
-# one request pin a worker for 45s in production while upstreams were degraded.
+# The legs used to carry independent 25s and 20s timeouts, which sum to 45s. That
+# is a genuine hazard on its own: one request could pin a worker for 45 seconds
+# while upstreams were degraded, and 45s is also exactly the runtime invariant
+# checker's HTTP_TIMEOUT.
 #
-# The budget is shared rather than per-leg: each leg gets whatever is left, and a
-# leg is skipped outright once nothing is left. That matters for the ordering —
-# the bundled gold CSV is local and always succeeds for XAUUSD, and it sits last,
-# so under the old scheme two dead remotes ahead of it burned the whole request
-# and the data that was on disk the entire time was never reached.
+# Note what this does NOT claim. Bounding the fetch did not stop
+# /api/trading/patterns timing out in CI — it still does, so that probe has a
+# cause upstream of this function that is still being tracked down. What this
+# does guarantee is that the fetch itself can no longer be the one responsible:
+# each leg gets whatever is left of the budget, and a leg is skipped outright
+# once nothing is left, so the total is bounded however many sources are tried.
+#
+# The bundled gold CSV at the end of the chain is local, but it only answers
+# daily/weekly timeframes (_load_gold_history_csv returns [] for intraday), so
+# it is not a universal backstop — on a 1h request the chain really can come
+# back empty.
 _OHLCV_TOTAL_BUDGET_S = float(os.getenv("OHLCV_FETCH_BUDGET_S", "20") or 20)
 _OHLCV_ENGINE_TIMEOUT_S = 25.0
 _OHLCV_YFINANCE_TIMEOUT_S = 20.0
