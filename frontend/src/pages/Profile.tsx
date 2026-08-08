@@ -3,7 +3,7 @@
  * Features: edit form, avatar upload, follow/unfollow, stats, signals, strategies.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError, fmtPct, fmtPctRaw } from '../lib/utils';
@@ -29,7 +29,25 @@ const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const currentUser = useStore(s => s.user);
-  const isOwn = !id || id === 'me' || id === currentUser?.id;
+
+  /**
+   * F4-01 — the own-profile view is reachable only from the guarded route.
+   *
+   * `/profile` is declared as `gated('profile', <Profile />)`; `/profile/:id`
+   * carries no guard at all, deliberately, so one trader can view another's
+   * public profile the way `Leaderboard` and `Marketplace` are public previews.
+   *
+   * But `isOwn` used to be `!id || id === 'me' || id === currentUser?.id`, so
+   * `/profile/me` resolved to the *own*-profile view — edit controls included,
+   * calling `profileApi.get(undefined)` exactly as the gated route does — at a
+   * URL with neither `AuthGuard` nor the subscription gate. The gate is
+   * client-side only, so that is a complete bypass of it: six extra characters.
+   *
+   * A self-referencing id now redirects to `/profile`, which is guarded. Only
+   * the guarded route can produce `isOwn`.
+   */
+  const selfAlias = id != null && (id === 'me' || id === currentUser?.id);
+  const isOwn = !id;
 
   const [profile, setProfile]       = useState<TraderProfile | null>(null);
   const [loading, setLoading]       = useState(true);
@@ -48,6 +66,9 @@ const Profile: React.FC = () => {
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const loadProfile = useCallback(async () => {
+    // Redirecting to the guarded route — don't spend a request on a view that
+    // is about to be replaced (F4-01).
+    if (selfAlias) return;
     setLoading(true); setError(null);
     try {
       const res = await profileApi.get(isOwn ? undefined : id);
@@ -64,7 +85,7 @@ const Profile: React.FC = () => {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [id, isOwn]);
+  }, [id, isOwn, selfAlias]);
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
 
@@ -111,6 +132,10 @@ const Profile: React.FC = () => {
   // error and not-found each used to render inside `s.page` — its own 100vh
   // box with its own background and padding — while only the success path used
   // the shell, so the layout jumped on every visit as the profile resolved.
+  // Before anything renders or fetches: an id that means "me" belongs on the
+  // guarded route (F4-01).
+  if (selfAlias) return <Navigate to="/profile" replace />;
+
   if (loading) return <div className="page-content"><p style={{color:'#94a3b8'}}>Loading profile…</p></div>;
   if (error)   return <div className="page-content"><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
   if (!profile) return (

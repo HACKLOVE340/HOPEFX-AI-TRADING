@@ -3195,3 +3195,91 @@ gone: if the dialog does not open, the test fails rather than passing quietly.
 That fallback is itself correct — refusing when there is no provider is
 fail-closed, and it is commented as such. It is only dangerous in a test that
 does not notice it has been taken.
+
+---
+
+## Round 4 — Slice F4: routing, guards, and authorization
+
+Scope: 86 `<Route>` declarations in `App.tsx`, four guards (`AuthGuard`,
+`AdminGuard`, `SuperAdminGuard`, `SubscriptionGate`) and the three helpers that
+compose them (`gated()`, `adminOnly()`, `superAdminOnly()`).
+
+### Route/page reconciliation — clean
+
+70 lazy route components, **every one resolving to a real file**, and **no
+top-level page in `src/pages` without a route**. No dead routes, no orphaned
+pages. Recorded rather than tested.
+
+Every privileged route goes through a helper, and all three helpers nest their
+guard inside `AuthGuard`. That composition is now pinned by a test, because
+three of the four guards are only safe *because* of it:
+
+| guard | with no `user` | why it needs AuthGuard |
+|---|---|---|
+| `SuperAdminGuard` | spinner | a logged-out visitor gets a spinner that never resolves |
+| `SubscriptionGate` | spinner | same |
+| `AdminGuard` | spinner *only if* `isAuth` | with `isAuth` false and a persisted user it falls through to the role check |
+
+None of those is reachable through `App.tsx` today. They are one careless
+`<AdminGuard>` on a route away from being reachable.
+
+### Flash of protected content — none found
+
+The playbook's emphasised question. All four guards render a spinner while the
+role is unresolved, and tests now pin that a logged-out visitor and an
+authenticated-but-unsynced visitor both get **no children** from `AdminGuard`,
+`SuperAdminGuard` and `SubscriptionGate`.
+
+### F4-01 — `/profile/me` bypasses the gate on `/profile` (MEDIUM)
+
+```
+App.tsx:606   <Route path="/profile"     element={wrap(gated('profile', <Profile />))} />
+App.tsx:607   <Route path="/profile/:id" element={wrap(<Profile />)} />
+```
+
+`/profile/:id` carrying no guard is deliberate — one trader viewing another's
+public profile, the same design as the `Leaderboard` and `Marketplace` public
+previews (the comment at `App.tsx:588` says so). The defect is that `Profile`
+decided *which view* to show from the URL:
+
+```ts
+Profile.tsx:32   const isOwn = !id || id === 'me' || id === currentUser?.id;
+```
+
+So `/profile/me` resolved to `isOwn === true` — the full own-profile view, edit
+controls included, calling `profileApi.get(undefined)` exactly as the gated
+route does — at a URL with neither `AuthGuard` nor the subscription gate.
+
+**What this does and does not expose.** Checked against the backend rather than
+assumed:
+
+- **No anonymous leak.** `GET /profiles/me` and `PUT /profiles/me` both carry
+  `Depends(get_current_user)` (`api/profiles.py:136,145`), so a logged-out
+  visitor at `/profile/me` gets a rejected request, not data.
+- **A complete subscription bypass.** `SubscriptionGate` is a React component;
+  the `profile` feature is enforced **only on the client**. Neither
+  `/profiles/me` endpoint has a plan check. So a logged-in user whose plan does
+  not include `profile` typed six extra characters and got the page, the data,
+  and the ability to edit it.
+
+**Fix:** a self-referencing id redirects to `/profile`, which is guarded, before
+rendering or fetching. Public viewing of *other* traders is unchanged and tested
+so it stays that way. Only the guarded route can now produce `isOwn`.
+
+**This is a client-side fix to a client-side hole, and it is not the durable
+one.** A gate enforced only in React is a UI affordance, not an authorization
+boundary — anyone with devtools can set the store's plan. The durable fix is a
+plan check on `/profiles/me` in the backend. Filed as **F4-01b**, backend.
+
+### F4-02 — `AuthGuard`'s `requiredRole` is dead (LOW)
+
+`AuthGuard` accepts a `requiredRole` prop and implements a full `ROLE_RANK`
+comparison with its own Access Denied screen. **No route uses it** — every role
+check in `App.tsx` goes through `AdminGuard` or `SuperAdminGuard`, which have
+their own, differently-worded denial screens. The only callers are seven cases
+in `components.test.tsx`, so the tests keep alive a code path production never
+takes.
+
+Not fixed: deleting it is a judgement call about which of the two role
+mechanisms should survive, and the redundant one is the *safe* kind of dead
+code. Recorded for F10 (dead code and duplication), where that call belongs.
