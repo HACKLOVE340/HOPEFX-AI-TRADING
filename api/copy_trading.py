@@ -14,7 +14,20 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization: anyone with devtools can set the store's plan,
+# and nothing stops a direct call carrying a valid free-tier token. The routes
+# below depended on `get_current_user` alone, which checks *authentication* and
+# never *plan*, so the advertised gate existed on neither side.
+#
+# Same defect, and the same sentence, as the one already fixed in api/nocode.py.
+# Admin and superadmin bypass require_plan by design.
+# Advertised in frontend/src/lib/subscription.ts as: copy-trading -> professional
+from monetization.subscription import require_plan
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +52,7 @@ def _get_copy_engine():
 
 
 @router.get("/my-copies")
-async def get_my_copies(user: TokenPayload = Depends(get_current_user)):
+async def get_my_copies(user: TokenPayload = Depends(require_plan("professional"))):
     """
     Retrieve all active copy trading subscriptions for the current user.
     Returns: list of copies with master trader info, performance, and settings.
@@ -57,7 +70,7 @@ async def get_my_copies(user: TokenPayload = Depends(get_current_user)):
 
 
 @router.post("/copies/{copy_id}/pause")
-async def pause_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+async def pause_copy(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Pause an active copy trading subscription."""
     engine = _get_copy_engine()
     if not engine:
@@ -73,7 +86,7 @@ async def pause_copy(copy_id: str, user: TokenPayload = Depends(get_current_user
 
 
 @router.post("/copies/{copy_id}/resume")
-async def resume_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+async def resume_copy(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Resume a paused copy trading subscription."""
     engine = _get_copy_engine()
     if not engine:
@@ -89,7 +102,7 @@ async def resume_copy(copy_id: str, user: TokenPayload = Depends(get_current_use
 
 
 @router.post("/copies/{copy_id}/stop")
-async def stop_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+async def stop_copy(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Stop and remove a copy trading subscription permanently."""
     engine = _get_copy_engine()
     if not engine:
@@ -105,7 +118,7 @@ async def stop_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)
 
 
 @router.patch("/copies/{copy_id}/risk")
-async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Depends(get_current_user)):
+async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Depends(require_plan("professional"))):
     """
     Adjust risk settings for a copy trading subscription.
     Payload: { max_drawdown_pct, lot_multiplier, max_open_trades }
@@ -124,7 +137,7 @@ async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Dep
 
 
 @router.get("/copies/{copy_id}/performance")
-async def get_copy_performance(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+async def get_copy_performance(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Get performance metrics for a specific copy subscription (must belong to the requesting user)."""
     engine = _get_copy_engine()
     if not engine:

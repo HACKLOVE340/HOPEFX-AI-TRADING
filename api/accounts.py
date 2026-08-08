@@ -57,7 +57,20 @@ MAX_TRANSFER_AMOUNT = float(os.getenv("MAX_TRANSFER_AMOUNT", "1_000_000_000"))  
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization: anyone with devtools can set the store's plan,
+# and nothing stops a direct call carrying a valid free-tier token. The routes
+# below depended on `get_current_user` alone, which checks *authentication* and
+# never *plan*, so the advertised gate existed on neither side.
+#
+# Same defect, and the same sentence, as the one already fixed in api/nocode.py.
+# Admin and superadmin bypass require_plan by design.
+# Advertised in frontend/src/lib/subscription.ts as: sub-accounts (elite) / teams (enterprise) -> per-endpoint
+from monetization.subscription import require_plan
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["Accounts"])
@@ -349,7 +362,7 @@ class TransferRequest(BaseModel):
 
 @router.get("/sub-accounts")
 async def list_sub_accounts(
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """List all sub-accounts owned by the current user."""
     # Prefer DB-backed sub_accounts table
@@ -369,7 +382,7 @@ async def list_sub_accounts(
 @router.post("/sub-accounts", status_code=status.HTTP_201_CREATED)
 async def create_sub_account(
     req: CreateSubAccountRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Create a new sub-account."""
     ids = _get_index(user.sub)
@@ -432,7 +445,7 @@ async def create_sub_account(
 @router.get("/sub-accounts/{account_id}", summary="Get a specific sub-account")
 async def get_sub_account(
     account_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Return details of a single sub-account owned by the current user."""
     acc = _get_account_any(user.sub, account_id)
@@ -445,7 +458,7 @@ async def get_sub_account(
 async def update_sub_account(
     account_id: str,
     req: UpdateSubAccountRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Update sub-account fields."""
     acc = _get_account_any(user.sub, account_id)
@@ -477,7 +490,7 @@ async def update_sub_account(
 @router.delete("/sub-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sub_account(
     account_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> None:
     """Delete a sub-account. Cannot delete the last active account."""
     acc = _get_account_any(user.sub, account_id)
@@ -507,7 +520,7 @@ async def delete_sub_account(
 async def transfer_between_sub_accounts(
     account_id: str,
     req: TransferRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Transfer funds between two sub-accounts owned by the same user."""
     if account_id == req.to_account_id:
@@ -594,7 +607,7 @@ def _save_team_members(team_id: str, members: list[dict]) -> None:
 
 
 @router.get("/teams")
-async def list_teams(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+async def list_teams(user: TokenPayload = Depends(require_plan("enterprise"))) -> dict[str, Any]:
     """List teams the current user belongs to."""
     teams = []
     ids = _get_index(user.sub)
@@ -610,7 +623,7 @@ async def list_teams(user: TokenPayload = Depends(get_current_user)) -> dict[str
 @router.post("/teams", status_code=status.HTTP_201_CREATED)
 async def create_team(
     req: CreateTeamRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> dict[str, Any]:
     """Create a new team. Creator is added as owner member."""
     ids = _get_index(user.sub)
@@ -648,7 +661,7 @@ async def create_team(
 async def invite_member(
     team_id: str,
     req: InviteMemberRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> dict[str, Any]:
     """Invite a member to a team. Requires owner role."""
     members = _get_team_members(team_id)
@@ -668,7 +681,7 @@ async def invite_member(
 async def remove_member(
     team_id: str,
     member_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> None:
     """Remove a member from a team. Requires owner role."""
     members = _get_team_members(team_id)
@@ -686,7 +699,7 @@ async def update_member_role(
     team_id: str,
     member_id: str,
     req: UpdateMemberRoleRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> dict[str, Any]:
     """Change a team member's role. Requires owner role."""
     members = _get_team_members(team_id)

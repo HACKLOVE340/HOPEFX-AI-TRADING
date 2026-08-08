@@ -33,12 +33,36 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "unit-test-indicators-secret-key-32
 
 from api.auth import TokenPayload, get_current_user
 from api.custom_indicators import router as indicators_router
+from monetization.subscription import (
+    SubscriptionStatus,
+    SubscriptionTier,
+    subscription_manager,
+)
+
+# Custom indicators are a professional-tier feature and the router now enforces
+# that server-side (F4-01b) — it previously depended on `get_current_user`
+# alone, which checks authentication and never plan. These tests exercise
+# handler behaviour (CRUD, 404s, deploy), not the gate, so the caller is given
+# the plan the feature is advertised at. The gate itself is covered by
+# tests/unit/test_plan_gates_match_the_ui.py.
+_INDICATORS_USER = "test-indicators-user"
+
+
+@pytest.fixture(autouse=True)
+def _professional_subscription():
+    sub = subscription_manager.create_subscription(_INDICATORS_USER, SubscriptionTier.PROFESSIONAL, duration_days=30)
+    # create_subscription opens a paid tier PENDING; require_plan reads
+    # is_active(). Mirror activation.activate_paid_plan on a successful payment.
+    sub.status = SubscriptionStatus.ACTIVE
+    yield
+    subscription_manager._user_subscriptions.pop(_INDICATORS_USER, None)
+    subscription_manager._subscriptions.pop(sub.subscription_id, None)
 
 
 def _make_app() -> tuple[FastAPI, dict[str, Any]]:
     """Create an app with an in-memory db_store mock."""
     app = FastAPI()
-    _user = TokenPayload(sub="test-indicators-user", role="trader")
+    _user = TokenPayload(sub=_INDICATORS_USER, role="trader")
     app.dependency_overrides[get_current_user] = lambda: _user
     app.include_router(indicators_router)
     # In-memory store shared across requests within one test
@@ -57,7 +81,7 @@ def store() -> dict[str, Any]:
 @pytest.fixture()
 def client(store: dict[str, Any]) -> TestClient:
     app = FastAPI()
-    _user = TokenPayload(sub="test-indicators-user", role="trader")
+    _user = TokenPayload(sub=_INDICATORS_USER, role="trader")
     app.dependency_overrides[get_current_user] = lambda: _user
     app.include_router(indicators_router)
 

@@ -29,7 +29,20 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization: anyone with devtools can set the store's plan,
+# and nothing stops a direct call carrying a valid free-tier token. The routes
+# below depended on `get_current_user` alone, which checks *authentication* and
+# never *plan*, so the advertised gate existed on neither side.
+#
+# Same defect, and the same sentence, as the one already fixed in api/nocode.py.
+# Admin and superadmin bypass require_plan by design.
+# Advertised in frontend/src/lib/subscription.ts as: indicators -> professional
+from monetization.subscription import require_plan
 from api.db_store import db_get, db_set
 from api.error_details import safe_error
 
@@ -141,7 +154,7 @@ _BUILTIN_INDICATORS = [
 
 
 @router.get("", summary="List user's custom indicators")
-async def list_indicators(user: TokenPayload = Depends(get_current_user)) -> dict:
+async def list_indicators(user: TokenPayload = Depends(require_plan("professional"))) -> dict:
     indicators = _load_indicators(user.sub)
     return {"indicators": indicators, "total": len(indicators)}
 
@@ -149,7 +162,7 @@ async def list_indicators(user: TokenPayload = Depends(get_current_user)) -> dic
 @router.post("", summary="Create a custom indicator")
 async def create_indicator(
     body: IndicatorCreate,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     new_indicator = {
@@ -174,7 +187,9 @@ async def list_builtin_indicators() -> dict:
 
 
 @router.post("/calculate", summary="Calculate a built-in indicator on provided data")
-async def calculate_indicator(body: CalculateRequest, _user: TokenPayload = Depends(get_current_user)) -> dict:
+async def calculate_indicator(
+    body: CalculateRequest, _user: TokenPayload = Depends(require_plan("professional"))
+) -> dict:
     """Apply a built-in indicator to a data series and return the result."""
     try:
         from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, CCI, WilliamsR
@@ -229,7 +244,7 @@ class PreviewRequest(BaseModel):
 @router.post("/preview", summary="Preview a custom indicator formula")
 async def preview_indicator(
     body: PreviewRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """Evaluate a formula string against recent price data and return index/value pairs."""
     import math
@@ -320,7 +335,7 @@ async def preview_indicator(
 @router.get("/{indicator_id}", summary="Get a specific custom indicator")
 async def get_indicator(
     indicator_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     for ind in indicators:
@@ -333,7 +348,7 @@ async def get_indicator(
 async def replace_indicator(
     indicator_id: str,
     body: IndicatorCreate,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     for ind in indicators:
@@ -354,7 +369,7 @@ async def replace_indicator(
 async def update_indicator(
     indicator_id: str,
     body: IndicatorUpdate,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     for ind in indicators:
@@ -378,7 +393,7 @@ async def update_indicator(
 @router.delete("/{indicator_id}", summary="Delete a custom indicator")
 async def delete_indicator(
     indicator_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     updated = [i for i in indicators if i.get("indicator_id") != indicator_id]
@@ -392,7 +407,7 @@ async def delete_indicator(
 async def apply_indicator(
     indicator_id: str,
     body: dict,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """
     Apply a saved custom indicator to a symbol/timeframe.
@@ -458,7 +473,7 @@ class TestIndicatorRequest(BaseModel):
 async def test_indicator(
     indicator_id: str,
     body: TestIndicatorRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """
     Run the saved indicator against recent price data and return a pass/fail result
@@ -521,7 +536,7 @@ async def test_indicator(
 @router.post("/{indicator_id}/deploy", summary="Deploy a custom indicator to the live chart engine")
 async def deploy_indicator(
     indicator_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """
     Mark the indicator as deployed so the chart engine loads it automatically.

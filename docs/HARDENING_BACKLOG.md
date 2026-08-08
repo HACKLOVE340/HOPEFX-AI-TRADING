@@ -3250,26 +3250,84 @@ So `/profile/me` resolved to `isOwn === true` — the full own-profile view, edi
 controls included, calling `profileApi.get(undefined)` exactly as the gated
 route does — at a URL with neither `AuthGuard` nor the subscription gate.
 
-**What this does and does not expose.** Checked against the backend rather than
-assumed:
+**What this does and does not expose — CORRECTED.**
 
-- **No anonymous leak.** `GET /profiles/me` and `PUT /profiles/me` both carry
-  `Depends(get_current_user)` (`api/profiles.py:136,145`), so a logged-out
-  visitor at `/profile/me` gets a rejected request, not data.
-- **A complete subscription bypass.** `SubscriptionGate` is a React component;
-  the `profile` feature is enforced **only on the client**. Neither
-  `/profiles/me` endpoint has a plan check. So a logged-in user whose plan does
-  not include `profile` typed six extra characters and got the page, the data,
-  and the ability to edit it.
+> The first version of this entry called it *"a complete subscription bypass …
+> got the page, the data, and the ability to edit it."* **That was wrong.**
+> `PLAN_FEATURES.profile` is `'free'` and free is rank 0, so
+> `hasFeatureAccess(…, 'profile')` is true for every authenticated user:
+> `gated('profile', …)` blocks nobody on plan grounds and is effectively
+> `AuthGuard` alone. I asserted a severity from the route table without reading
+> the feature map it depends on.
+
+What it actually was: `/profile/me` bypassed **`AuthGuard`**, so a logged-out
+visitor reached the own-profile view — which then fails its own API call, since
+`GET /profiles/me` and `PUT /profiles/me` both carry `Depends(get_current_user)`
+(`api/profiles.py:136,145`). A broken page for an anonymous visitor; no data
+leak, and nothing a logged-in user did not already have.
+
+The fix stands on its own merits — the own-profile view has no business being
+reachable from an unguarded route, and this exact pattern *is* a live bypass for
+any feature whose required plan is not `free`. `/profile/:id` was the only route
+in all 86 sharing a component with a guarded route, so it is also the only place
+the pattern occurs.
+
+**The generalisation is the real finding, and it is F4-01b below.**
 
 **Fix:** a self-referencing id redirects to `/profile`, which is guarded, before
 rendering or fetching. Public viewing of *other* traders is unchanged and tested
 so it stays that way. Only the guarded route can now produce `isOwn`.
 
-**This is a client-side fix to a client-side hole, and it is not the durable
-one.** A gate enforced only in React is a UI affordance, not an authorization
-boundary — anyone with devtools can set the store's plan. The durable fix is a
-plan check on `/profiles/me` in the backend. Filed as **F4-01b**, backend.
+### F4-01b — the plan gate existed on neither side (HIGH) — **FIXED**
+
+Chasing the corrected F4-01 to its real form. `SubscriptionGate` in React and
+`PLAN_FEATURES` in TypeScript are UI affordances, not authorization: anyone with
+devtools can set the store's plan, and nothing stops a direct call carrying a
+valid free-tier token.
+
+**This was already found once**, for the no-code Strategy Builder, and the note
+left behind states it exactly:
+
+> "every route in `api/nocode.py` depended on `get_current_user` alone, which
+>  checks *authentication* and never *plan*. So the advertised gate existed on
+>  neither side."
+>                          — `tests/unit/test_nocode_plan_gate.py`
+
+`api/nocode.py` was fixed. **The same shape survived in every other paid
+feature.** Of ~60 API routers, five enforced a plan; the rest depended on
+`get_current_user` alone:
+
+| route | feature | advertised | was |
+|---|---|---|---|
+| `/api/copy-trading/*` | copy-trading | professional | auth only |
+| `/api/indicators` (user CRUD) | indicators | professional | auth only |
+| `/api/accounts/sub-accounts/*` | sub-accounts | elite | auth only |
+| `/api/accounts/teams/*` | teams | enterprise | auth only |
+| `/api/alerts/*` | alerts | starter | auth only |
+
+A free-tier account reached every one. Each is now `Depends(require_plan(…))` at
+the advertised tier — 8 failing-first cases, all confirmed reaching a 200 before
+the fix. Admin and superadmin bypass by design, pinned by a test, because adding
+a gate without that would have silently broken support workflows.
+
+**Deliberately not gated**, so the omissions read as decisions rather than
+oversights:
+
+- `/api/indicators/builtin` — standard indicator definitions, no user data and
+  nothing proprietary. Pinned open so the gate cannot creep onto it.
+- `/api/billing/*` — `wallet` is advertised as starter, but billing is also
+  **how a user upgrades**. Gating it behind a paid plan locks a free user out of
+  the page that sells them the plan. That surface needs a narrower gate than
+  "the billing router"; recorded, not guessed at.
+- `/api/risk/*` — `prop-firm` (professional) and `risk-calculator` (starter)
+  share one prefix across two routers, so it needs per-endpoint work rather than
+  a router-level dependency. Not done here.
+
+**Blast radius, measured rather than hoped for:** 21 failures, all in
+`test_custom_indicators_api.py`, whose fixture gave its caller no subscription.
+Those tests exercise CRUD and 404 handling, not the gate, so the fixture now
+grants the plan the feature is advertised at — the same shape as the nocode
+test's. Backend after: **15,147 passed, 0 failed.**
 
 ### F4-02 — `AuthGuard`'s `requiredRole` is dead (LOW)
 

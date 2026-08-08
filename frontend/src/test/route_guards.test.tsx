@@ -38,7 +38,7 @@ import AdminGuard from '../components/AdminGuard';
 import SuperAdminGuard from '../components/SuperAdminGuard';
 import SubscriptionGate from '../components/SubscriptionGate';
 
-const SECRET = 'PROTECTED-CONTENT';
+const GUARDED_TEXT = 'GUARDED-CONTENT';
 
 const at = (path: string, ui: React.ReactElement) =>
   render(
@@ -65,18 +65,18 @@ describe('guards never render protected content to a logged-out visitor — F4',
   beforeEach(() => { loggedOut(); vi.restoreAllMocks(); });
 
   it('AdminGuard does not render children', async () => {
-    at('/admin', <AdminGuard><div>{SECRET}</div></AdminGuard>);
-    await waitFor(() => expect(screen.queryByText(SECRET)).toBeNull());
+    at('/admin', <AdminGuard><div>{GUARDED_TEXT}</div></AdminGuard>);
+    await waitFor(() => expect(screen.queryByText(GUARDED_TEXT)).toBeNull());
   });
 
   it('SuperAdminGuard does not render children', async () => {
-    at('/master-control', <SuperAdminGuard><div>{SECRET}</div></SuperAdminGuard>);
-    await waitFor(() => expect(screen.queryByText(SECRET)).toBeNull());
+    at('/master-control', <SuperAdminGuard><div>{GUARDED_TEXT}</div></SuperAdminGuard>);
+    await waitFor(() => expect(screen.queryByText(GUARDED_TEXT)).toBeNull());
   });
 
   it('SubscriptionGate does not render children', async () => {
-    at('/wallet', <SubscriptionGate featureKey="wallet"><div>{SECRET}</div></SubscriptionGate>);
-    await waitFor(() => expect(screen.queryByText(SECRET)).toBeNull());
+    at('/wallet', <SubscriptionGate featureKey="wallet"><div>{GUARDED_TEXT}</div></SubscriptionGate>);
+    await waitFor(() => expect(screen.queryByText(GUARDED_TEXT)).toBeNull());
   });
 });
 
@@ -88,18 +88,18 @@ describe('guards do not leak content while the role is still unknown — F4', ()
   });
 
   it('AdminGuard shows a spinner, not the page', () => {
-    at('/admin', <AdminGuard><div>{SECRET}</div></AdminGuard>);
-    expect(screen.queryByText(SECRET)).toBeNull();
+    at('/admin', <AdminGuard><div>{GUARDED_TEXT}</div></AdminGuard>);
+    expect(screen.queryByText(GUARDED_TEXT)).toBeNull();
   });
 
   it('SuperAdminGuard shows a spinner, not the page', () => {
-    at('/master-control', <SuperAdminGuard><div>{SECRET}</div></SuperAdminGuard>);
-    expect(screen.queryByText(SECRET)).toBeNull();
+    at('/master-control', <SuperAdminGuard><div>{GUARDED_TEXT}</div></SuperAdminGuard>);
+    expect(screen.queryByText(GUARDED_TEXT)).toBeNull();
   });
 
   it('SubscriptionGate shows a spinner, not the upgrade wall or the page', () => {
-    at('/wallet', <SubscriptionGate featureKey="wallet"><div>{SECRET}</div></SubscriptionGate>);
-    expect(screen.queryByText(SECRET)).toBeNull();
+    at('/wallet', <SubscriptionGate featureKey="wallet"><div>{GUARDED_TEXT}</div></SubscriptionGate>);
+    expect(screen.queryByText(GUARDED_TEXT)).toBeNull();
     expect(screen.queryByText(/plan required/i)).toBeNull();
   });
 });
@@ -107,28 +107,28 @@ describe('guards do not leak content while the role is still unknown — F4', ()
 describe('guards admit the right roles — F4', () => {
   it('AdminGuard admits an admin', () => {
     as('admin');
-    at('/admin', <AdminGuard><div>{SECRET}</div></AdminGuard>);
-    expect(screen.getByText(SECRET)).toBeTruthy();
+    at('/admin', <AdminGuard><div>{GUARDED_TEXT}</div></AdminGuard>);
+    expect(screen.getByText(GUARDED_TEXT)).toBeTruthy();
   });
 
   it('AdminGuard refuses a trader', () => {
     as('trader');
-    at('/admin', <AdminGuard><div>{SECRET}</div></AdminGuard>);
-    expect(screen.queryByText(SECRET)).toBeNull();
+    at('/admin', <AdminGuard><div>{GUARDED_TEXT}</div></AdminGuard>);
+    expect(screen.queryByText(GUARDED_TEXT)).toBeNull();
     expect(screen.getByText(/admin access required/i)).toBeTruthy();
   });
 
   it('SuperAdminGuard refuses an admin', () => {
     as('admin');
-    at('/master-control', <SuperAdminGuard><div>{SECRET}</div></SuperAdminGuard>);
-    expect(screen.queryByText(SECRET)).toBeNull();
+    at('/master-control', <SuperAdminGuard><div>{GUARDED_TEXT}</div></SuperAdminGuard>);
+    expect(screen.queryByText(GUARDED_TEXT)).toBeNull();
     expect(screen.getByText(/insufficient privilege/i)).toBeTruthy();
   });
 
   it('SuperAdminGuard admits a superadmin', () => {
     as('superadmin');
-    at('/master-control', <SuperAdminGuard><div>{SECRET}</div></SuperAdminGuard>);
-    expect(screen.getByText(SECRET)).toBeTruthy();
+    at('/master-control', <SuperAdminGuard><div>{GUARDED_TEXT}</div></SuperAdminGuard>);
+    expect(screen.getByText(GUARDED_TEXT)).toBeTruthy();
   });
 });
 
