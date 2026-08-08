@@ -740,6 +740,43 @@ from core.startup_factories import (
 )
 
 
+def _enable_stack_dump_signal() -> None:
+    """Let SIGUSR1 dump every thread's stack to stderr.
+
+    Written after a production hang that could not be diagnosed at all. The
+    container's health probe timed out with **zero bytes received** — curl
+    connected and the server never wrote a response — repeatedly, every 30
+    seconds. ``/api/health/live`` returns a literal dict and cannot block, so
+    something upstream was not letting it run; but with no way to see what the
+    process was doing, every explanation was a guess.
+
+    There was no way in: ``faulthandler`` was never registered, ``py-spy`` is
+    not in the image, and ``docker exec … python -c 'faulthandler.dump_traceback()'``
+    only dumps the *new* process, which says nothing about PID 1.
+
+    Now one signal answers it, with nothing to install:
+
+        docker kill -s USR1 hopefx-ai-trading-app-1
+        docker logs --tail 100 hopefx-ai-trading-app-1
+
+    The traceback of every thread, including whatever is holding the event
+    loop, goes to stderr. SIGUSR1 is used because nothing else in this stack
+    claims it and the default disposition would otherwise kill the process.
+    """
+    import faulthandler
+    import signal
+
+    try:
+        # keep the file open for the process lifetime — faulthandler writes to
+        # the fd directly, so a closed handle would silently produce nothing.
+        faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True, chain=False)
+        logger.info("Stack-dump signal armed: `docker kill -s USR1 <container>` dumps all thread stacks to stderr")
+    except (AttributeError, ValueError, OSError) as exc:
+        # SIGUSR1 does not exist on Windows, and faulthandler refuses if stderr
+        # has been replaced with an object that has no fileno().
+        logger.debug("Stack-dump signal not armed: %s", exc)
+
+
 async def startup_event():
     """Initialize application on startup via ComponentRegistry.
 
@@ -749,6 +786,8 @@ async def startup_event():
     logger.info("=" * 70)
     logger.info("HOPEFX AI TRADING API - STARTING")
     logger.info("=" * 70)
+
+    _enable_stack_dump_signal()
 
     _registry = _build_component_registry(app, feature_flags)
     _tasks_done: list[str] = []
