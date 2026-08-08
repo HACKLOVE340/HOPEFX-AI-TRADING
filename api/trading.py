@@ -4185,10 +4185,22 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
 
         leg = _ohlcv_leg_timeout(deadline, _OHLCV_ENGINE_TIMEOUT_S)
         if app_state and app_state.price_engine and leg is not None:
-            bars = await asyncio.wait_for(
-                app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
-                timeout=leg,
-            )
+            engine_get = app_state.price_engine.get_ohlcv
+            if asyncio.iscoroutinefunction(engine_get):
+                bars = await asyncio.wait_for(engine_get(symbol, timeframe, limit), timeout=leg)
+            else:
+                # A *synchronous* get_ohlcv cannot be passed to wait_for: calling
+                # it runs the blocking work inline on the event loop first — for
+                # however long it takes, with the timeout doing nothing — and
+                # wait_for then raises TypeError on the returned list, so the
+                # result is discarded and the price engine is silently skipped.
+                # data_layer.orchestrator.get_ohlcv is exactly this shape, so the
+                # bug is one swapped engine away. Run it off-loop and bounded.
+                _loop = asyncio.get_running_loop()
+                bars = await asyncio.wait_for(
+                    _loop.run_in_executor(None, engine_get, symbol, timeframe, limit),
+                    timeout=leg,
+                )
             if _bars_are_usable(bars):
                 return bars
             logger.debug(
@@ -4450,7 +4462,23 @@ async def get_chart_patterns(
     engines, each with entry/target/stop price levels.
     """
     norm = _normalise_symbol(symbol)
+    # The runtime invariant checker reports this endpoint as "timed out" at its
+    # 45s HTTP_TIMEOUT, and bounding the fetch did not stop it — so log how long
+    # the fetch actually took. Without this the next failure is as opaque as the
+    # last one.
+    _t0 = time.perf_counter()
     ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
+    _fetch_s = time.perf_counter() - _t0
+    if _fetch_s > 5.0:
+        logger.warning(
+            "/patterns OHLCV fetch took %.1fs for %s %s (limit=%s, budget=%.0fs) — %d bars",
+            _fetch_s,
+            norm,
+            timeframe,
+            limit,
+            _OHLCV_TOTAL_BUDGET_S,
+            len(ohlcv or []),
+        )
     df = _ohlcv_to_df(ohlcv)
 
     if df is None or df.empty:

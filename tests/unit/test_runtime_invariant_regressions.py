@@ -98,6 +98,46 @@ class TestOhlcvFetchBudget:
         assert t._ohlcv_budget_from_env("8") == 8.0
         assert t._ohlcv_budget_from_env("12.5") == 12.5
 
+    def test_a_synchronous_price_engine_is_not_run_on_the_event_loop(self):
+        """A sync get_ohlcv must go to an executor, not be called inline.
+
+        `asyncio.wait_for(engine.get_ohlcv(...))` on a *synchronous* method runs
+        the blocking work inline first — the timeout does nothing — and then
+        raises TypeError on the returned list, so the result is thrown away and
+        the price engine is silently skipped. `data_layer.orchestrator.get_ohlcv`
+        is exactly that shape, so it is one swapped engine away.
+        """
+        import asyncio
+        import threading
+
+        import api.trading as t
+        from core.app_state import app_state
+
+        calls: dict = {}
+
+        class _SyncEngine:
+            def get_ohlcv(self, symbol, timeframe, limit=100):
+                calls["thread"] = threading.current_thread().name
+                return [
+                    {"timestamp": i, "open": 1.0, "high": 2.0, "low": 0.5, "close": 1.0 + i * 0.01, "volume": 1}
+                    for i in range(30)
+                ]
+
+        async def _run():
+            prev = app_state.price_engine
+            app_state.price_engine = _SyncEngine()
+            try:
+                return await t._get_ohlcv_for_symbol("XAU_USD", "1h", 30)
+            finally:
+                app_state.price_engine = prev
+
+        main_thread = threading.current_thread().name
+        bars = asyncio.run(_run())
+
+        assert calls.get("thread") is not None, "the sync engine was never called at all"
+        assert calls["thread"] != main_thread, "sync engine ran on the event loop thread"
+        assert bars, "the sync engine's result was discarded"
+
     def test_fresh_deadline_is_capped_by_remaining_budget(self):
         import api.trading as t
 
@@ -197,22 +237,21 @@ class TestConfigurationColumnNames:
         assert "config_value" in src
 
 
-class TestCallerErrorsCountAsDatabaseFailures:
-    """Why a wrong column name took three health endpoints to 503.
+class TestCallerErrorsDoNotTripTheDatabaseBreaker:
+    """Why a wrong column name took three health endpoints to 503 — and no longer can.
 
-    `DatabaseManager.session()` yields inside a `try`, and its trailing
-    `except Exception` calls `_record_failure()`. So an exception raised by the
-    *caller's* code inside the with-block — an AttributeError from touching a
-    column that does not exist — is booked as a DATABASE failure. Five of them
-    open the circuit breaker, and from then on every DB consumer in the process
-    gets `ConnectionError: Database circuit breaker is open`, which is exactly
-    what appeared in the CI logs alongside the 503s.
+    `DatabaseManager.session()` yields inside a `try`, so an exception raised by
+    the *caller's* code inside the with-block lands in the trailing
+    `except Exception`. That used to call `_record_failure()`, booking a pure
+    programming error as evidence the database was unwell. Five of them opened
+    the shared circuit breaker, and every DB consumer in the process then got
+    `ConnectionError: Database circuit breaker is open` — which is exactly what
+    appeared in CI beside the /api/health, /health/ready and /health/deep 503s.
 
-    This test pins the mechanism rather than asserting it is desirable. The
-    caller bug is fixed (see TestConfigurationColumnNames), but the conflation
-    itself is still latent: any future bad query re-creates it. Narrowing the
-    breaker to genuine database errors is a change to a resilience gate and is
-    deliberately left as a separate decision.
+    A typo could take out health reporting process-wide. The breaker now ignores
+    pure-Python programming errors while still counting everything SQLAlchemy or
+    the driver raises, so its protection against a genuinely sick database is
+    unchanged.
     """
 
     @staticmethod
@@ -250,21 +289,28 @@ class TestCallerErrorsCountAsDatabaseFailures:
         m._metrics = _Metrics()
         return m
 
-    def test_five_caller_side_attribute_errors_open_the_breaker(self):
+    def test_caller_side_errors_no_longer_open_the_breaker(self):
+        """The exact defect: touching a column that does not exist on the model."""
         from database.models import Configuration
 
         mgr = self._manager()
-        assert mgr._circuit_open is False
-
-        for _ in range(mgr._circuit_threshold):
+        for _ in range(mgr._circuit_threshold * 2):
             with pytest.raises(AttributeError), mgr.session():
-                Configuration.key  # noqa: B018 — the exact defect, an app-level bug
+                Configuration.key  # noqa: B018 — an application bug, not a DB fault
 
-        assert mgr._failure_count == 5
-        assert mgr._circuit_open is True, "an application bug was booked as database unhealthiness"
+        assert mgr._failure_count == 0
+        assert mgr._circuit_open is False, "an application bug must not read as database unhealthiness"
 
-    def test_once_open_every_other_db_consumer_is_refused(self):
-        """The `ConnectionError` string that showed up in the CI logs."""
+    def test_the_error_still_propagates_to_the_caller(self):
+        """Not counting it is not the same as swallowing it."""
+        from database.models import Configuration
+
+        mgr = self._manager()
+        with pytest.raises(AttributeError), mgr.session():
+            Configuration.key  # noqa: B018
+
+    def test_other_db_consumers_keep_working(self):
+        """Before, the sixth caller was refused outright."""
         from database.models import Configuration
 
         mgr = self._manager()
@@ -272,8 +318,35 @@ class TestCallerErrorsCountAsDatabaseFailures:
             with pytest.raises(AttributeError), mgr.session():
                 Configuration.key  # noqa: B018
 
-        with pytest.raises(ConnectionError, match="circuit breaker is open"), mgr.session():
-            pass  # pragma: no cover — session() raises before yielding
+        with mgr.session() as db:
+            assert db is not None  # no ConnectionError
+
+    def test_real_database_errors_still_open_the_breaker(self):
+        """The gate must not have been softened into uselessness."""
+        from sqlalchemy.exc import OperationalError
+
+        mgr = self._manager()
+        boom = OperationalError("SELECT 1", {}, Exception("server closed the connection"))
+        for _ in range(mgr._circuit_threshold):
+            mgr._record_failure(boom)
+
+        assert mgr._failure_count == 5
+        assert mgr._circuit_open is True
+
+    def test_sqlalchemy_errors_are_never_treated_as_caller_side(self):
+        from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
+
+        mgr = self._manager()
+        # ProgrammingError can mean an unapplied migration — a real DB problem.
+        assert mgr._is_caller_side(ProgrammingError("s", {}, Exception("no such table"))) is False
+        assert mgr._is_caller_side(SQLAlchemyError("boom")) is False
+        assert mgr._is_caller_side(AttributeError("no column")) is True
+        assert mgr._is_caller_side(None) is False
+
+    def test_value_error_still_counts(self):
+        """Drivers do raise ValueError on bad data — not excluded."""
+        mgr = self._manager()
+        assert mgr._is_caller_side(ValueError("bad literal")) is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
