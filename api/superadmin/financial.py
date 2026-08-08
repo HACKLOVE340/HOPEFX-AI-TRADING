@@ -735,20 +735,22 @@ async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> d
             return {"fees": fees}
     except Exception as exc:
         logger.debug("fee_config config_manager: %s", exc)
-    # Fallback: read from DB Configuration table
+    # Fallback: read from the DB `configurations` table.
+    #
+    # This used to hand-roll its own query against Configuration.key/.value —
+    # neither of which is a column (they are config_key/config_value). Building
+    # that query raised AttributeError *inside* db_manager.session(), whose
+    # `except Exception` books any error as a DATABASE failure; five of those
+    # tripped the circuit breaker and took /api/health, /health/ready and
+    # /health/deep to 503. api.db_store already owns this table correctly —
+    # right column names, JSON coding, and a plain SessionLocal() that cannot
+    # feed the breaker — so go through it instead of re-deriving the mapping.
     try:
-        from database.connection import get_db_manager
+        from api.db_store import db_get
 
-        mgr = get_db_manager()
-        if mgr:
-            with mgr.session() as db:
-                from database.models import Configuration
-
-                row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
-                if row and row.value:
-                    import json as _json
-
-                    return {"fees": _json.loads(row.value) if isinstance(row.value, str) else row.value}
+        fees = db_get("fee_config")
+        if fees:
+            return {"fees": fees}
     except Exception as exc:
         logger.warning("fee_config db: %s", exc)
     return {
@@ -767,23 +769,25 @@ async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> d
 async def update_fee_config(body: dict, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Update platform fee configuration."""
     _log_superadmin_action(user, "fee_config_update", str(body))
+    # Same table, same reason as the reader above. The hand-rolled version was
+    # doubly broken on write: Configuration(key=..., value=...) raises TypeError
+    # because neither is a column, and `environment` is NOT NULL and was never
+    # set, so the INSERT could not have succeeded either way. db_set handles all
+    # of that.
+    saved = False
     try:
-        from database.connection import get_db_manager
-        import json as _json
+        from api.db_store import db_set
 
-        mgr = get_db_manager()
-        if mgr:
-            with mgr.session() as db:
-                from database.models import Configuration
-
-                row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
-                if row:
-                    row.value = _json.dumps(body)
-                    row.updated_at = datetime.now(timezone.utc)
-                else:
-                    row = Configuration(key="fee_config", value=_json.dumps(body))
-                    db.add(row)
-                db.commit()
+        saved = db_set("fee_config", body, changed_by=getattr(user, "sub", "superadmin"))
     except Exception as exc:
         logger.warning("fee_config update: %s", exc)
+
+    if not saved:
+        # Reporting ok=True on a failed write told the operator their fee change
+        # was live when it had not been stored at all. On a money-moving system
+        # that is the wrong way to be wrong: say so and let the caller retry.
+        raise HTTPException(
+            status_code=503,
+            detail="Fee configuration could not be persisted — not applied.",
+        )
     return {"ok": True, "fees": body}

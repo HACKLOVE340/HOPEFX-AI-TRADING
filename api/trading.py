@@ -4091,6 +4091,39 @@ def _bars_are_usable(bars) -> bool:
     return max(closes) - min(closes) > 0.0
 
 
+# Total wall-clock budget for one _get_ohlcv_for_symbol call, shared across
+# every fallback leg.
+#
+# The legs used to carry independent 25s and 20s timeouts. Those sum to 45s —
+# exactly the runtime invariant checker's HTTP_TIMEOUT — so /api/trading/patterns
+# timed out in CI whenever both remotes were unreachable. The same arithmetic let
+# one request pin a worker for 45s in production while upstreams were degraded.
+#
+# The budget is shared rather than per-leg: each leg gets whatever is left, and a
+# leg is skipped outright once nothing is left. That matters for the ordering —
+# the bundled gold CSV is local and always succeeds for XAUUSD, and it sits last,
+# so under the old scheme two dead remotes ahead of it burned the whole request
+# and the data that was on disk the entire time was never reached.
+_OHLCV_TOTAL_BUDGET_S = float(os.getenv("OHLCV_FETCH_BUDGET_S", "20") or 20)
+_OHLCV_ENGINE_TIMEOUT_S = 25.0
+_OHLCV_YFINANCE_TIMEOUT_S = 20.0
+# Below this there is no point starting a network leg — it cannot finish, and
+# trying only delays the local fallback.
+_OHLCV_MIN_LEG_S = 1.0
+
+
+def _ohlcv_leg_timeout(deadline: float, leg_cap: float) -> float | None:
+    """Seconds this leg may use, or None when the shared budget is spent.
+
+    None means "skip this leg": fall through to the next source rather than
+    starting a request there is no time left to finish.
+    """
+    remaining = deadline - time.monotonic()
+    if remaining < _OHLCV_MIN_LEG_S:
+        return None
+    return min(leg_cap, remaining)
+
+
 async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
     """Fetch OHLCV bars for a symbol: price engine, then yfinance, then gold CSV.
 
@@ -4106,17 +4139,21 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
     the compact spelling. Passing the OANDA form straight through would miss
     every entry and silently disable the fallback again.
 
-    The price-engine call carries the same timeout and usability check `/ohlcv`
-    applies, so `/patterns` and `/levels` cannot hang longer than `/ohlcv` on a
-    stalled engine, and placeholder bars do not suppress the fallbacks.
+    The price-engine call carries the same usability check `/ohlcv` applies, so
+    placeholder bars do not suppress the fallbacks.
+
+    Every leg draws from one shared `_OHLCV_TOTAL_BUDGET_S` deadline, so the
+    whole call is bounded no matter how many sources it has to try.
     """
+    deadline = time.monotonic() + _OHLCV_TOTAL_BUDGET_S
     try:
         from core.app_state import app_state
 
-        if app_state and app_state.price_engine:
+        leg = _ohlcv_leg_timeout(deadline, _OHLCV_ENGINE_TIMEOUT_S)
+        if app_state and app_state.price_engine and leg is not None:
             bars = await asyncio.wait_for(
                 app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
-                timeout=25.0,
+                timeout=leg,
             )
             if _bars_are_usable(bars):
                 return bars
@@ -4134,7 +4171,10 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
 
     # yfinance — same ticker table and "" == no Yahoo source convention as /ohlcv.
     ticker_sym = _yf_ticker_map().get(compact, compact)
-    if ticker_sym:
+    yf_leg = _ohlcv_leg_timeout(deadline, _OHLCV_YFINANCE_TIMEOUT_S)
+    if ticker_sym and yf_leg is None:
+        logger.debug("OHLCV budget spent before yfinance for %s — using local sources only", compact)
+    if ticker_sym and yf_leg is not None:
         try:
             import yfinance as _yf
 
@@ -4172,7 +4212,7 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
                 ]
 
             loop = asyncio.get_running_loop()
-            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=20.0)
+            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=yf_leg)
             if bars:
                 return bars
         except Exception as exc:

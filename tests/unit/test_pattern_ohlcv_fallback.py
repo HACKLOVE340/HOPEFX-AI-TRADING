@@ -149,7 +149,18 @@ async def test_placeholder_bars_from_the_engine_do_not_suppress_the_fallback(mon
 
 
 async def test_a_stalled_price_engine_does_not_hang_the_endpoint(monkeypatch):
-    """/patterns and /levels must not outlast /ohlcv's 25s engine timeout."""
+    """/patterns and /levels must not hang on a stalled price engine.
+
+    This used to pin the engine leg at exactly 25.0s. It now draws from one
+    shared `_OHLCV_TOTAL_BUDGET_S` deadline instead: 25s (engine) + 20s
+    (yfinance) summed to exactly the runtime invariant checker's 45s
+    HTTP_TIMEOUT, so /api/trading/patterns could never answer the probe when
+    both remotes were unreachable — and the bundled gold CSV that would have
+    replied instantly sat behind both of them.
+
+    The invariant this test exists to protect is "the engine call is bounded".
+    That still holds, and the bound is now strictly tighter.
+    """
     import asyncio
 
     from api import trading
@@ -172,7 +183,9 @@ async def test_a_stalled_price_engine_does_not_hang_the_endpoint(monkeypatch):
     monkeypatch.setattr(trading.asyncio, "wait_for", _spy)
 
     assert await trading._get_ohlcv_for_symbol("EUR_USD", "1h", 200) == []
-    assert seen["timeout"] == 25.0, "engine call is unbounded"
+    assert seen.get("timeout") is not None, "engine call is unbounded"
+    assert 0 < seen["timeout"] <= trading._OHLCV_ENGINE_TIMEOUT_S
+    assert seen["timeout"] <= trading._OHLCV_TOTAL_BUDGET_S, "engine leg must respect the shared budget"
 
 
 def test_the_pattern_page_distinguishes_no_data_from_no_patterns():
