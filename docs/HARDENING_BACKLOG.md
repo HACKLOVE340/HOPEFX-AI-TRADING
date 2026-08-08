@@ -3404,3 +3404,101 @@ no data arrives.
 silently) and documented at the declaration as *not* the freshness signal, with
 a pointer to `lastDataAt` / `feedStale` / `selectFeedLive`. Pinned by a test, so
 the field cannot quietly go back to looking like the answer.
+
+---
+
+## Round 4 — Slice F5: numbers, money, and precision
+
+Scope: every place a price, size, P&L, percentage or currency value is formatted
+or computed in the frontend, cross-checked against what the backend sends for
+the same field.
+
+### F5-01 — two instrument tables, already drifted (MEDIUM)
+
+`api/trading.py::_SYMBOL_CATALOGUE` is the server's instrument spec and is
+served to clients at `GET /api/trading/symbols`. The risk calculator does not
+read it: `RiskCalculator.tsx` carries its own hardcoded `SYMBOLS` map of pip and
+contract sizes, and sizes positions from that.
+
+They disagreed on **ETH/USD** — `0.01` on the client against `0.1` on the
+server.
+
+**Stated precisely rather than alarmingly.** The sizing formula is
+
+```
+stopPips       = stopDist / pipSize
+pipValuePerLot = pipSize * contractSize
+lotSize        = riskAmount / (stopPips * pipValuePerLot)
+```
+
+`pipSize` cancels, so **lot size and max loss were correct** — verified by
+running `calculate()` at both values. What was wrong were the two figures shown
+beside them: the pip count and the pip value, both out by 10×. On a $100 ETH
+stop the tool reported *"10,000 pips"*.
+
+`contractSize` does **not** cancel, so a divergence there would move the
+suggested position itself. All six symbols agree on it.
+
+Gold specifically was checked against the backend audit's S3 precedent and is
+consistent on both sides: pip `0.01`, contract 100 oz — not FX's `0.0001` at
+100,000.
+
+**Fix:** value corrected, and a test in `tests/unit/` now parses the `SYMBOLS`
+map out of the `.tsx` and compares every entry against `_SYMBOL_CATALOGUE`. The
+copy may exist; it may not disagree. **Follow-up:** the calculator should read
+`/api/trading/symbols` and stop keeping a copy. That is a real change to a
+position-sizing tool — it needs a load state, and F1-01 established this page
+must not silently substitute a fallback — so it is recorded rather than done in
+passing.
+
+### F5-02 — a side comparison that decided the sign of a number (HIGH)
+
+`lib/utils.ts::positionSide` already owns this rule, and its docstring says why
+it exists:
+
+> The API is inconsistent: some endpoints return `side`, others `direction`, and
+> either may be absent — which is why `pos.direction.toLowerCase()` crashed
+> PnLDashboard (audit #37/#40) while **three other call sites each wrote their
+> own slightly different comparison**. `null` means "not reported", which
+> callers must render as unknown rather than defaulting to short.
+
+`PositionsTable.tsx:351` was a fourth:
+
+```ts
+const pnlPct =
+  ((pos.current_price - pos.entry_price) / pos.entry_price) * 100 *
+  (pos.side === 'long' ? 1 : -1);
+```
+
+Every case the helper handles, this got wrong:
+
+| reported as | rendered |
+|---|---|
+| `side: 'buy'` | **−10% on a profitable long** |
+| `side: 'LONG'` | same, on case alone |
+| `direction: 'long'`, no `side` | same |
+| nothing at all | −1, i.e. **defaults to short** — the one thing the docstring forbids |
+
+And the badge one line below *does* call `positionSide(pos)`, so the same row
+displayed **LONG** beside a percentage signed as if it were short. Two elements
+disagreeing about one position, on screen, simultaneously.
+
+`Portfolio.tsx:550` had the same shape in the allocation breakdown — a `'buy'`
+position counted as short exposure.
+
+**Fix:** both use `positionSide`, and an unreported direction now renders `—`
+rather than a guessed sign. Four further hand-rolled copies
+(`t.side === 'long' || t.side === 'buy'`, in `Portfolio`, `Trading`, `Trade`,
+`Performance`) are consolidated onto the helper — same rule, written five times,
+each missing the `direction` fallback and case normalisation.
+
+**Deliberately left alone:** the ~40 other `side ===` / `direction ===`
+comparisons the grep turned up drive arrows, badge colours and filter buttons.
+Miscoding a colour is cosmetic and belongs to F7; miscoding a sign is a wrong
+number. Only the latter was in scope here.
+
+### Checked and clean
+
+`fmtPnl`, `fmtPrice`, `fmtPct`, `fmtPctRaw`, `fmtCompact`, `fmtSpread` — all
+null-safe, all sign-correct. `fmtPnl`'s negative branch was the audit-#… defect
+where every loss rendered positive; it is fixed and stays fixed.

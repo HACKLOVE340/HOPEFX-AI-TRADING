@@ -216,8 +216,8 @@ const TradeHistory: React.FC = () => {
     const toMs   = dateTo   ? new Date(dateTo + 'T23:59:59').getTime() : Infinity;
     return trades.filter((t) => {
       const matchDir = filter === 'all' ? true
-        : filter === 'long'  ? (t.side === 'long' || t.side === 'buy')
-        : filter === 'short' ? (t.side === 'short' || t.side === 'sell')
+        : filter === 'long'  ? positionSide(t) === 'long'
+        : filter === 'short' ? positionSide(t) === 'short'
         : filter === 'win'   ? t.pnl >= 0
         : t.pnl < 0;
       const matchSearch = !search || t.symbol.toLowerCase().includes(search.toLowerCase());
@@ -330,7 +330,9 @@ const TradeHistory: React.FC = () => {
             </thead>
             <tbody>
               {filtered.map((t) => {
-                const isLong = t.side === 'long' || t.side === 'buy';
+                // F5-02: one owner for this rule. The hand-rolled variant
+                // drops `direction` and any casing the API sends.
+                const isLong = positionSide(t) === 'long';
                 const pnlPos = t.pnl >= 0;
                 return (
                   <tr
@@ -547,7 +549,8 @@ const AllocationBreakdown: React.FC = () => {
   for (const p of positions) {
     const row = (bySymbol[p.symbol] ??= { long: 0, short: 0 });
     const notional = p.size * p.current_price;
-    if (p.side === 'long') row.long  += notional;
+    // F5-02: a 'buy' position was counted as short exposure here.
+    if (positionSide(p) === 'long') row.long  += notional;
     else                   row.short += notional;
   }
 

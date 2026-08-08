@@ -75,7 +75,11 @@ const SYMBOLS: Record<string, { pipSize: number; contractSize: number; quoteIsUs
   'GBP/USD': { pipSize: 0.0001,  contractSize: 100000, quoteIsUsd: true,  label: 'GBP/USD' },
   'USD/JPY': { pipSize: 0.01,    contractSize: 100000, quoteIsUsd: false, label: 'USD/JPY' },
   'BTC/USD': { pipSize: 1,       contractSize: 1,      quoteIsUsd: true,  label: 'Bitcoin (BTC/USD)' },
-  'ETH/USD': { pipSize: 0.01,    contractSize: 1,      quoteIsUsd: true,  label: 'Ethereum (ETH/USD)' },
+  // F5-01: was 0.01, against the backend catalogue's 0.1 (api/trading.py
+  // `_SYMBOL_CATALOGUE`). The sizing formula divides by pipSize and multiplies
+  // by it again, so lot size and max loss were unaffected — but the pip count
+  // and pip value shown beside them were ten times out.
+  'ETH/USD': { pipSize: 0.1,     contractSize: 1,      quoteIsUsd: true,  label: 'Ethereum (ETH/USD)' },
 };
 
 // ─── Calculation logic ────────────────────────────────────────────────────────

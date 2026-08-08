@@ -345,11 +345,19 @@ function PositionRow({
   closing: boolean;
   onClose: () => void;
 }) {
+  // F5-02: `pos.side === 'long' ? 1 : -1` decided the sign of this number, and
+  // the API reports direction as `side` or `direction`, in either case, with
+  // 'buy'/'sell' as well as 'long'/'short'. A profitable long arriving as
+  // side:'buy' rendered as a −10% loss — beside a badge that read LONG, because
+  // that one line below already called `positionSide`. An unreported side fell
+  // to −1, i.e. defaulted to short, which is exactly what the helper's docstring
+  // forbids. Null now means unknown and shows no signed percentage at all.
+  const side = positionSide(pos);
   const pnlPct =
-    pos.entry_price > 0
+    pos.entry_price > 0 && side !== null
       ? ((pos.current_price - pos.entry_price) / pos.entry_price) * 100 *
-        (pos.side === 'long' ? 1 : -1)
-      : 0;
+        (side === 'long' ? 1 : -1)
+      : null;
 
   return (
     <tr className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/40 transition-colors">
@@ -377,12 +385,20 @@ function PositionRow({
       <td className="px-3 py-2.5">
         <div className="flex flex-col gap-0.5">
           <PnlBadge value={pos.unrealized_pnl} />
-          <span className={cn(
-            'text-[10px] tabular-nums',
-            pnlPct >= 0 ? 'text-[#00e676]/70' : 'text-[#ff1744]/70',
-          )}>
-            {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
-          </span>
+          {pnlPct === null ? (
+            // Direction not reported: the percentage cannot be signed, and a
+            // guessed sign is worse than no number (F5-02).
+            <span className="text-[10px] tabular-nums text-slate-500" title="Direction not reported">
+              —
+            </span>
+          ) : (
+            <span className={cn(
+              'text-[10px] tabular-nums',
+              pnlPct >= 0 ? 'text-[#00e676]/70' : 'text-[#ff1744]/70',
+            )}>
+              {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+            </span>
+          )}
         </div>
       </td>
       <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">

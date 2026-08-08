@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { PageHeader, EmptyState, CrossLinkBar } from '../components';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError, positionSide } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -137,7 +137,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 
 function TradeRow({ trade }: { trade: Trade }) {
   const won = trade.realized_pnl > 0;
-  const isLong = trade.side === 'buy' || trade.side === 'long';
+  const isLong = positionSide(trade) === 'long';  // F5-02
   return (
     <tr style={{ borderBottom: '1px solid #1e293b' }}>
       <td style={s.td}><strong style={{ color: '#f1f5f9' }}>{trade.symbol}</strong></td>
