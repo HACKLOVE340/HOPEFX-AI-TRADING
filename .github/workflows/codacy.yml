@@ -93,7 +93,12 @@ jobs:
               BASE="HEAD~1"
             fi
           fi
-          FILES=$(git diff --name-only "$BASE" "$HEAD" -- '*.py' | \
+          # --diff-filter=d drops DELETED paths. Without it this list contains
+          # files the PR removed, and both ruff and bandit exit 1 with
+          # "E902 No such file or directory" on a path that is gone — so any PR
+          # that deletes a Python file fails the gate for having deleted it.
+          # (Hit by this PR removing the shadowing `websocket/` package, S13-02a.)
+          FILES=$(git diff --name-only --diff-filter=d "$BASE" "$HEAD" -- '*.py' | \
             grep -v '^tests/' | \
             grep -v '^alembic/' | \
             grep -v '^examples/' | \
