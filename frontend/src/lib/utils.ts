@@ -409,3 +409,45 @@ export function describeCloseAll(
     `${outcome}. This cannot be undone.${caveat}`
   );
 }
+
+/** Default staleness threshold for on-screen data-age indicators (S10-05). */
+export const DATA_STALE_AFTER_MS = 30_000;
+
+/**
+ * Human age of a piece of data, in the words a trader reads at a glance.
+ *
+ * There was no latency or data-age indicator anywhere in the app (S10-05), so a
+ * frozen price and a live one were visually identical.
+ *
+ * A negative age (client/server clock skew) reads as "just now" rather than
+ * "-5s ago" — the alternative invites the reader to distrust the whole widget.
+ */
+export function formatAge(ageMs: number | null | undefined): string {
+  if (ageMs == null || !isFinite(ageMs)) return 'unknown';
+  const ms = Math.max(0, ageMs);
+  if (ms < 1_000) return 'just now';
+  const s = Math.floor(ms / 1_000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
+
+/**
+ * Whether a quality/confidence reading still describes reality (S9-02).
+ *
+ * `LivePriceTicker` renders the orchestrator's quality score as a percentage.
+ * That score is assigned when a tick is ingested and never re-evaluated as the
+ * tick ages, so a tick graded GOOD at 14:00 still reported 94% at 15:00 — the
+ * one visible freshness cue reinforcing the stalled-feed illusion instead of
+ * correcting it.
+ *
+ * A missing timestamp returns false: never assume fresh.
+ */
+export function qualityIsMeaningful(
+  lastDataAt: number | null | undefined,
+  staleAfterMs: number = DATA_STALE_AFTER_MS,
+): boolean {
+  if (lastDataAt == null || !isFinite(lastDataAt)) return false;
+  return Date.now() - lastDataAt < staleAfterMs;
+}

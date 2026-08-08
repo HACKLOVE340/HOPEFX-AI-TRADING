@@ -7,8 +7,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
-import { fmtPrice, fmtPctRaw, fmtSpread, cn } from '../../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtSpread, cn, qualityIsMeaningful } from '../../lib/utils';
 import { StatusDot } from '../ui/StatusDot';
+import { DataAge } from '../ui/DataAge';
 import { Sparkline } from '../ui/Sparkline';
 import type { PriceTick } from '../../types';
 
@@ -190,6 +191,13 @@ export function LivePriceTicker() {
   const histories = useStore((s) => s.priceHistory);
   const wsStatus  = useStore((s) => s.wsStatus);
   const quality   = useStore((s) => s.orchestratorHealth?.quality_score);
+  // S9-02: `quality_score` is assigned when a tick is ingested and never
+  // re-evaluated as it ages, so a tick graded GOOD at 14:00 still read 94% at
+  // 15:00. Paired with S9-01's frozen price, the one visible freshness cue
+  // reinforced the illusion instead of correcting it. Gate it on arrival time.
+  const lastDataAt = useStore((s) => s.lastDataAt);
+  const feedStale  = useStore((s) => s.feedStale);
+  const qualityLive = !feedStale && qualityIsMeaningful(lastDataAt);
 
   return (
     <div className="bg-[#0d1421] border-b border-[#1e2d3d] shrink-0">
@@ -209,15 +217,40 @@ export function LivePriceTicker() {
         <div className="ml-auto flex items-center gap-4 px-5 shrink-0">
           {quality != null && (
             <div className="flex flex-col items-end gap-0.5">
-              <span className="text-[9px] text-slate-600 uppercase tracking-widest">Data Quality</span>
+              <span className="text-[9px] text-slate-600 uppercase tracking-widest">
+                Data Quality
+              </span>
               <span
                 className="font-mono tabular-nums text-xs font-semibold"
-                style={{ color: quality > 0.8 ? '#00e676' : quality > 0.5 ? '#ffb800' : '#ff3b5c' }}
+                title={
+                  qualityLive
+                    ? 'Ingest quality of the most recent tick'
+                    : 'This score was recorded when the last tick arrived. It does not describe the feed right now.'
+                }
+                style={{
+                  // Never paint a confident green on a score whose data has
+                  // gone stale — that is the S9-02 defect exactly.
+                  color: !qualityLive
+                    ? '#64748b'
+                    : quality > 0.8
+                      ? '#00e676'
+                      : quality > 0.5
+                        ? '#ffb800'
+                        : '#ff3b5c',
+                }}
               >
-                {(quality * 100).toFixed(0)}%
+                {(quality * 100).toFixed(0)}%{qualityLive ? '' : ' (as of last tick)'}
               </span>
             </div>
           )}
+
+          {/* S10-05: there was no data-age indicator anywhere in the app, so a
+              frozen price and a live one looked identical. */}
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-[9px] text-slate-600 uppercase tracking-widest">Updated</span>
+            <DataAge at={lastDataAt} />
+          </div>
+
           <StatusDot status={wsStatus} label={wsStatus} size="md" />
         </div>
       </div>

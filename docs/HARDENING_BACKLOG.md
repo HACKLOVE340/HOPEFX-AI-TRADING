@@ -1773,7 +1773,7 @@ renders when the backend is down? Any double-submit or stale-closure races?
 | ID | Sev | Issue | Location |
 |----|-----|-------|----------|
 | S9-01 | HIGH | The client cannot detect a stalled feed — `lastHeartbeat` is written and never read | `useWebSocket.ts:231`, `store:404` |
-| S9-02 | MEDIUM | The only freshness signal shown is ingest-time confidence, which never decays | `LivePriceTicker.tsx:217` |
+| S9-02 | MEDIUM — **FIXED** | The only freshness signal shown is ingest-time confidence, which never decays | `LivePriceTicker.tsx:217` |
 | S9-03 | MEDIUM — **PARTLY FIXED** | ~79% of components and pages render no error state | `frontend/src` |
 
 ### S9-01 — A frozen price under a green "connected" light (HIGH)
@@ -1898,7 +1898,7 @@ its operator rather than against visual taste.
 | S10-02 | MEDIUM | The kill-switch badge may report the wrong instance | `AccountBar.tsx:157` + S2-01 |
 | S10-03 | MEDIUM | Confirmations describe the action but not its magnitude | `Trade.tsx:472-477` |
 | S10-04 | MEDIUM | ~15% of components carry any ARIA attribute; order entry has one | `frontend/src` |
-| S10-05 | — | No latency or data-age indicator anywhere | see S9-01 |
+| S10-05 | — **FIXED** | No latency or data-age indicator anywhere | see S9-01 |
 
 ### S10-01 — The confirmation is on the wrong action (HIGH)
 
@@ -2855,3 +2855,37 @@ Two further artefacts appeared while iterating and are *not* product defects:
 `Dashboard` and `Performance` intermittently render empty inside the F1 file
 while rendering 980 and 486 characters when probed in isolation — order or
 timing pollution within the shared process. Recorded rather than chased.
+
+
+### S9-02 + S10-05 — FIXED together
+
+They were one defect seen from two sides. S10-05: no data-age indicator existed
+anywhere, so a frozen price and a live one were visually identical. S9-02: the
+one freshness cue that *did* exist — `LivePriceTicker`'s "94%" quality score —
+is assigned when a tick is ingested and never re-evaluated as it ages, so a tick
+graded GOOD at 14:00 still read 94% at 15:00.
+
+Compounded with S9-01, a stalled feed showed a frozen price **and** a reassuring
+green percentage. The single visible cue actively reinforced the illusion rather
+than correcting it.
+
+**Fix:**
+* `formatAge()` and `DATA_STALE_AFTER_MS` in `lib/utils` — age in the words a
+  trader reads at a glance ("just now", "42s ago", "4m ago"). Negative ages from
+  clock skew read as "just now"; a `-5s ago` invites distrust of the widget.
+* `qualityIsMeaningful(lastDataAt)` — a missing timestamp returns **false**.
+  Never assume fresh.
+* `components/ui/DataAge.tsx` — `role="status"`, `aria-live="polite"`, and it
+  re-renders on a 1s timer. Without the timer the age would freeze at whatever
+  it was when the parent last rendered, which is the same class of bug it exists
+  to expose.
+* `LivePriceTicker` now shows an "Updated · 42s ago" indicator, and the quality
+  percentage is **never painted healthy-green while the data is stale** — it
+  greys out and appends "(as of last tick)".
+
+Age is computed from **client arrival time**, not the server's `timestamp`
+field: server clock skew cannot corrupt it, and "how long since we last heard"
+is the question actually being asked.
+
+Mutation-verified: forcing `qualityLive = true` (the original behaviour) fails
+the end-to-end ticker test.
