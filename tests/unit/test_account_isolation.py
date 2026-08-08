@@ -156,31 +156,52 @@ def test_the_orders_ownership_index_is_named_as_the_migration_created_it():
     assert "ix_orders_user_id" not in names, "index=True on the column duplicates the explicit Index"
 
 
-# ── The broker itself: the part still to be built ────────────────────────────
+# ── Why one broker instance can never serve two users ────────────────────────
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PaperTradingBroker.positions is keyed by symbol and _update_position merges "
-        "into the existing entry, so two users trading one symbol share a single netted "
-        "position. Per-user accounts require a broker/account instance per user — "
-        "self._user_id is already accepted by __init__ and never read. Until then no "
-        "amount of read-filtering can separate these two users."
-    ),
-)
-async def test_two_users_trading_one_symbol_get_two_positions():
+async def test_one_broker_instance_merges_everything_into_one_position_per_symbol():
+    """The measurement behind ``core.account_registry``.
+
+    A single ``PaperTradingBroker`` keys ``positions`` by symbol and merges on
+    write, so two fills on one symbol become one record — quantity summed, entry
+    averaged, id equal to the symbol. That is correct for *one* account and
+    catastrophic for two, and it cannot be undone downstream: after the merge
+    there is no share left to attribute to either user.
+
+    This is pinned rather than fixed. The netting is right for a single account;
+    the fix is to stop sharing the instance, which is what the registry does —
+    see tests/unit/test_per_user_accounts.py.
+    """
     from brokers.paper_trading import PaperTradingBroker
 
-    broker = PaperTradingBroker(user_id="alice")
+    broker = PaperTradingBroker(user_id="shared", namespace="test-shared-merge")
     await broker.connect()
 
     await broker.place_market_order(symbol="XAUUSD", side="buy", quantity=1.0)
     await broker.place_market_order(symbol="XAUUSD", side="buy", quantity=3.0)
 
     positions = await broker.get_positions()
-    assert len(positions) == 2, (
-        f"expected one position per user, got {len(positions)}: "
-        f"{[(getattr(p, 'id', None), p.quantity, p.entry_price) for p in positions]}"
-    )
+    assert len(positions) == 1
+    assert positions[0].quantity == 4.0
+    assert str(positions[0].id) == "XAUUSD", "the position id is the symbol — there is no per-user identity in it"
+
+
+@pytest.mark.asyncio
+async def test_the_registry_is_what_separates_them():
+    """The same two fills, routed through per-user accounts."""
+    from core.account_registry import get_account_registry, reset_account_registry
+
+    reset_account_registry()
+    try:
+        reg = get_account_registry()
+        alice = await reg.resolve("iso-alice")
+        bob = await reg.resolve("iso-bob")
+
+        await alice.broker.place_market_order(symbol="XAUUSD", side="buy", quantity=1.0)
+        await bob.broker.place_market_order(symbol="XAUUSD", side="buy", quantity=3.0)
+
+        assert (await alice.broker.get_positions())[0].quantity == 1.0
+        assert (await bob.broker.get_positions())[0].quantity == 3.0
+    finally:
+        reset_account_registry()

@@ -416,21 +416,57 @@ def set_state(state) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _broker_call(method_name: str, *args, **kwargs):
-    """
-    Call a broker method whether it is sync or async.
-    PaperTradingBroker uses sync methods; OANDA uses async.
-    This wrapper handles both transparently.
+async def _call_on(broker: Any, method_name: str, *args, **kwargs):
+    """Call a broker method whether it is sync or async.
+
+    PaperTradingBroker uses sync methods; OANDA uses async. Sync methods run in
+    an executor so they do not block the event loop.
     """
     import asyncio
 
-    broker = app_state.broker
+    if broker is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised",
+        )
     method = getattr(broker, method_name)
     if asyncio.iscoroutinefunction(method):
         return await method(*args, **kwargs)
-    # Sync method — run in executor to avoid blocking the event loop
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: method(*args, **kwargs))
+
+
+async def _broker_call(method_name: str, *args, **kwargs):
+    """Call a method on the **shared** process-wide broker.
+
+    This is the deployment's own account — the autonomous engine's book. It is
+    NOT any particular user's, so it must not back a request handler; use
+    :func:`_user_broker_call` there. See ``core/account_registry.py`` and
+    backlog T-01 for why: the shared engine nets every user's fills into one
+    position per symbol.
+    """
+    return await _call_on(app_state.broker, method_name, *args, **kwargs)
+
+
+async def _resolve_account(user_id: str):
+    """The account the request acts on, per ``core.account_registry``."""
+    from core.account_registry import get_account_registry
+
+    return await get_account_registry().resolve(user_id)
+
+
+async def _user_broker_call(user_id: str, method_name: str, *args, **kwargs):
+    """Call a broker method on *user_id*'s own account.
+
+    Every request handler that touches positions, orders or balances goes
+    through here. On a paper deployment this is an account belonging to that
+    user alone; on a live single-account venue the registry hands back the
+    shared broker and says so, and the deployment is genuinely single-account —
+    ``GET /api/trading/account`` reports that in ``isolated`` so the caller is
+    not misled about whose money it is looking at.
+    """
+    resolution = await _resolve_account(user_id)
+    return await _call_on(resolution.broker, method_name, *args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -446,9 +482,14 @@ async def _broker_call(method_name: str, *args, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-async def _validate_order(order: "OrderRequest") -> None:
+async def _validate_order(order: "OrderRequest", user_id: str) -> None:
     """
     Validate broker availability and prop-firm rules before touching risk.
+
+    The prop-firm rules are evaluated against *this user's* account. Read from
+    the shared engine they were checked against the deployment's combined book,
+    so one user's drawdown could block another user's order — or, worse, let one
+    through because somebody else's profit was covering the breach.
 
     Raises HTTP 503 if the broker is not ready.
     Raises HTTP 403 if prop-firm rules are violated.
@@ -465,7 +506,7 @@ async def _validate_order(order: "OrderRequest") -> None:
     try:
         from brokers.prop_firms.guard import check_prop_firm_rules
 
-        account_info = await _broker_call("get_account_info")
+        account_info = await _user_broker_call(user_id, "get_account_info")
         check_prop_firm_rules(account_info)
     except HTTPException:
         raise
@@ -517,8 +558,8 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
     Raises HTTP 503 when the check itself fails (fail-safe: block the order).
     """
     try:
-        account_info = await _broker_call("get_account_info")
-        positions = await _broker_call("get_positions")
+        account_info = await _user_broker_call(user_id, "get_account_info")
+        positions = await _user_broker_call(user_id, "get_positions")
         positions_dicts = [
             {
                 "symbol": p.symbol,
@@ -630,7 +671,7 @@ def _log_compliance(order: "OrderRequest", user_id: str) -> None:
         logger.error("Compliance log error: %s", comp_exc)
 
 
-async def _route_to_broker(order: "OrderRequest") -> Any:
+async def _route_to_broker(order: "OrderRequest", user_id: str) -> Any:
     """
     Submit the order to the broker and return the fill result.
 
@@ -642,7 +683,8 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
             kwargs["stop_loss"] = order.stop_loss
         if order.take_profit is not None:
             kwargs["take_profit"] = order.take_profit
-        result = await _broker_call(
+        result = await _user_broker_call(
+            user_id,
             "place_market_order",
             symbol=order.symbol,
             side=order.side,
@@ -665,8 +707,18 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
         ) from None
 
 
-async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
-    """Broadcast the fill over WebSocket. Best-effort — logs on failure."""
+async def _broadcast_fill_ws(order: "OrderRequest", result: Any, user_id: str) -> None:
+    """Send the fill to the trader who placed it. Best-effort — logs on failure.
+
+    This used ``broadcast("trades", …)``, so every fill — symbol, side, size and
+    price — went to every subscriber of the trades channel. That is the reported
+    behaviour in its most direct form: place an order and everyone else sees it
+    appear. Fills go to their owner now.
+
+    The legacy ``app_state.ws_manager`` fallback broadcast too and has no
+    per-user send, so it is used only when there is genuinely no ws_live manager
+    to route through, and it is logged when it happens.
+    """
     trade_msg = {
         "type": "trade_fill",
         "data": {
@@ -681,18 +733,20 @@ async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
     try:
         from api.ws_live import get_live_manager as _get_live_mgr
 
-        await _get_live_mgr().broadcast("trades", trade_msg)
+        await _get_live_mgr().send_to_user(user_id, "trades", trade_msg)
         return
     except Exception as exc:
-        logger.debug("ws_live broadcast failed, trying ws_manager: %s", exc)
+        logger.debug("ws_live send_to_user failed, trying ws_manager: %s", exc)
 
-    # Fallback: legacy WebSocketManager on app_state (websockets-based).
+    # Fallback: legacy WebSocketManager on app_state (websockets-based). It has
+    # no per-user delivery, so the fill is dropped rather than shown to everyone.
     if not (hasattr(app_state, "ws_manager") and app_state.ws_manager is not None):
         return
-    try:
-        await app_state.ws_manager.broadcast(trade_msg)
-    except Exception as exc:
-        logger.warning("WebSocket broadcast failed: %s", exc)
+    logger.warning(
+        "Fill notification for user=%s not delivered: ws_live unavailable and the "
+        "legacy ws_manager cannot address a single user.",
+        user_id,
+    )
 
 
 def _send_fill_push(order: "OrderRequest", result: Any, user_id: str) -> None:
@@ -841,7 +895,7 @@ async def _record_fill(
         order.quantity,
         order_id,
     )
-    await _broadcast_fill_ws(order, result)
+    await _broadcast_fill_ws(order, result, user_id)
     _send_fill_push(order, result, user_id)
     _send_fill_email(order, result, user_id)
     _increment_fill_metrics(order)
@@ -941,10 +995,10 @@ async def place_order(
     _check_trading_paused()  # soft halt set by superadmin /engine/pause
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
     # Rate limit enforced via Depends(_order_rate_limit_dep) above.
-    await _validate_order(order)
+    await _validate_order(order, user.sub)
     await _apply_risk_checks(order, user.sub)
     _log_compliance(order, user.sub)
-    result = await _route_to_broker(order)
+    result = await _route_to_broker(order, user.sub)
     return await _record_fill(order, result, user.sub)
 
 
@@ -970,8 +1024,18 @@ async def get_orders(
     """
     orders: list[dict] = []
 
-    # 1. Live orders from broker
-    broker = getattr(app_state, "broker", None) if app_state else None
+    # 1. Live orders from this user's own account.
+    #
+    # This read used app_state.broker directly and applied no ownership filter
+    # of any kind, so every authenticated user saw every other user's live
+    # orders — symbol, side, size and price. It was the least protected of the
+    # trading reads: /positions at least filtered, this did not.
+    #
+    # On a live single-account venue the orders belong to the deployment rather
+    # than to the caller, and the broker cannot attribute them, so they are not
+    # shown at all; the DB fallback below returns the caller's own filled orders.
+    resolution = await _resolve_account(user.sub)
+    broker = resolution.broker if resolution.isolated else None
     if broker is not None:
         try:
             raw_orders = []
@@ -1068,7 +1132,7 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Broker not available",
         )
-    raw = await _broker_call("get_account_info")
+    raw = await _user_broker_call(user.sub, "get_account_info")
 
     def _f(obj, *keys, default=0.0):
         for k in keys:
@@ -1103,23 +1167,25 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
     }
 
 
-def _owned_position_ids(user: TokenPayload) -> set[str] | None:
-    """IDs of the open positions belonging to *user*, or None for operators.
+def _owned_position_ids(user: TokenPayload) -> set[str]:
+    """IDs of the open positions belonging to *user*.
 
-    Returning None means "no filtering" and is reserved for admin/superadmin,
-    who are expected to see the whole book.
+    Used **only** when the caller's account is not isolated — i.e. on a live
+    single-account venue, where one real account is shared by the deployment and
+    the broker cannot tell two users apart. On a paper deployment each user has
+    their own broker (``core.account_registry``), so its ``get_positions()``
+    already returns their rows and only theirs; filtering on top of that would
+    hide a user's own positions, because paper position ids are symbols and do
+    not match the database row ids.
 
-    app_state.broker is a single process-wide paper engine shared by every
-    logged-in user, so its get_positions() returns EVERYONE's positions. Without
-    this filter each user saw every other user's open trades — sizes, entries
-    and P&L — on their own screen.
+    Fail closed: a broker position with no owning DB row is hidden rather than
+    shown to everyone.
 
-    Fail closed: a broker position with no owning DB row is hidden from ordinary
-    users rather than shown to all of them. Unowned rows are logged so the gap
-    is visible instead of silently swallowing a user's own position.
+    Operators are not exempt. This used to return ``None`` — meaning *apply no
+    filter* — for admin and superadmin, which is why a superadmin saw, and was
+    seen in, the whole book. Whole-book access now lives on the operator
+    endpoints, which name the account explicitly and are audited.
     """
-    if user.role in ("admin", "superadmin"):
-        return None
     if app_state is None or getattr(app_state, "db_session_factory", None) is None:
         # No database to establish ownership. Showing the shared book to an
         # ordinary user would leak other traders' activity, so show nothing.
@@ -1148,11 +1214,11 @@ def _owned_position_ids(user: TokenPayload) -> set[str] | None:
 async def get_positions(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get the authenticated user's open positions.
+    """Get the authenticated user's open positions — theirs and only theirs.
 
-    Operators (admin/superadmin) see the whole book; everyone else sees only
-    the positions they own — see _owned_position_ids for why that filter is
-    necessary and why it fails closed.
+    Every role, including admin and superadmin, sees its own account here. The
+    whole book is available on the operator endpoints, which say so and are
+    audited.
 
     Returns an empty list when the broker is not yet initialised so the
     frontend positions table renders cleanly during cold-start.
@@ -1160,18 +1226,24 @@ async def get_positions(
     if not app_state or not app_state.broker:
         return []
 
-    positions = await _broker_call("get_positions")
+    resolution = await _resolve_account(user.sub)
+    positions = await _call_on(resolution.broker, "get_positions")
 
-    owned = _owned_position_ids(user)
-    if owned is not None:
+    if not resolution.isolated:
+        # Live single-account venue: one real account behind every user, so the
+        # broker cannot separate them and database ownership is the only
+        # attribution available. Fails closed — an unattributable position is
+        # hidden rather than shown to everyone.
+        owned = _owned_position_ids(user)
         total = len(positions)
         positions = [p for p in positions if str(getattr(p, "id", "")) in owned]
         if total != len(positions):
             logger.debug(
-                "Positions filtered by ownership: user=%s visible=%d hidden=%d",
+                "Positions filtered by ownership: user=%s visible=%d hidden=%d (%s)",
                 user.sub,
                 len(positions),
                 total - len(positions),
+                resolution.reason,
             )
 
     result = []
@@ -1230,12 +1302,13 @@ async def close_position(
 
             with app_state.db_session_factory() as _db:
                 _pos_row = _db.query(_Pos).filter(_Pos.id == position_id).first()
-                if (
-                    _pos_row is not None
-                    and _pos_row.user_id
-                    and _pos_row.user_id != user.sub
-                    and user.role not in ("admin", "superadmin")
-                ):
+                # No operator exemption. This used to let admin and superadmin
+                # close another user's position through the ordinary endpoint.
+                # It is also dead weight now — close_position acts on the
+                # caller's own account, which physically cannot hold somebody
+                # else's position — but leaving the carve-out in would say the
+                # opposite of what the code does.
+                if _pos_row is not None and _pos_row.user_id and _pos_row.user_id != user.sub:
                     logger.warning(
                         "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
                         user.sub,
@@ -1251,7 +1324,7 @@ async def close_position(
         except Exception as _idor_exc:
             logger.debug("Ownership check skipped (non-fatal): %s", _idor_exc)
 
-    success = await _broker_call("close_position", position_id)
+    success = await _user_broker_call(user.sub, "close_position", position_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1331,17 +1404,21 @@ async def close_all_positions(
             detail="Broker not initialised — cannot close positions. The paper trading engine starts automatically on server startup.",
         )
 
-    owned = _owned_position_ids(user)
-    if owned is None:
-        # Operator: close-all genuinely means the whole book.
-        closed = await _broker_call("close_all_positions")
-        logger.info("All positions closed by operator: user=%s count=%s", user.sub, closed)
-        return {"status": "success", "closed_positions": closed}
+    resolution = await _resolve_account(user.sub)
 
-    # Ordinary user: close only their own. app_state.broker is a single
-    # process-wide paper engine, so the broker's own close_all_positions()
-    # would liquidate every other trader's book as well — a destructive
-    # cross-user action reachable from the "Close All" button.
+    if resolution.isolated:
+        # The account holds this user's positions and nobody else's, so
+        # close-all means exactly what it says and cannot reach another book.
+        closed = await _call_on(resolution.broker, "close_all_positions")
+        count = len(closed) if isinstance(closed, list) else closed
+        logger.info("All own positions closed: user=%s count=%s", user.sub, count)
+        return {"status": "success", "closed_positions": count}
+
+    # Live single-account venue: the broker's own close_all_positions() would
+    # liquidate every other trader's book as well — a destructive cross-user
+    # action reachable from the "Close All" button — so close only the positions
+    # attributable to this user.
+    owned = _owned_position_ids(user)
     if not owned:
         return {"status": "success", "closed_positions": 0}
 
@@ -1349,7 +1426,7 @@ async def close_all_positions(
     failed: list[str] = []
     for pos_id in owned:
         try:
-            if await _broker_call("close_position", pos_id):
+            if await _user_broker_call(user.sub, "close_position", pos_id):
                 closed += 1
             else:
                 failed.append(pos_id)
@@ -1492,7 +1569,7 @@ async def hedge_position(
         )
 
     # Fetch the position to mirror
-    positions = await _broker_call("get_positions")
+    positions = await _user_broker_call(user.sub, "get_positions")
     target = next((p for p in positions if str(p.id) == position_id), None)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.") from None
@@ -1508,7 +1585,7 @@ async def hedge_position(
         quantity=hedge_qty,
         order_type="market",
     )
-    result = await _route_to_broker(hedge_order)
+    result = await _route_to_broker(hedge_order, user.sub)
     logger.info(
         "Hedge placed: user=%s position_id=%s hedge_side=%s qty=%s",
         user.sub,
@@ -2128,7 +2205,7 @@ async def get_account(
         _margin_used = 0.0
         _MARGIN_RATE = 0.02  # 2% paper margin requirement (matches PaperTradingBroker)
         try:
-            _bpos = await _broker_call("get_positions")
+            _bpos = await _user_broker_call(user.sub, "get_positions")
             if _bpos:
                 _open_trades = len(_bpos)
                 _unrealized = round(sum(float(getattr(p, "unrealized_pnl", 0) or 0.0) for p in _bpos), 2)
@@ -2177,7 +2254,7 @@ async def get_account(
             "currency": "USD",
         }
 
-    raw = await _broker_call("get_account_info")
+    raw = await _user_broker_call(user.sub, "get_account_info")
 
     def _f(obj, *keys, default=0.0):
         for k in keys:
@@ -2298,7 +2375,7 @@ async def get_account(
     # summary reports 0 open trades / $0 margin while positions are actually
     # open. Use get_positions() so /account always agrees with /positions.
     try:
-        _bpos = await _broker_call("get_positions")
+        _bpos = await _user_broker_call(user.sub, "get_positions")
         if _bpos:
             _MARGIN_RATE = 0.02  # matches PaperTradingBroker paper margin
             open_trades = len(_bpos)
@@ -2344,6 +2421,11 @@ async def get_account(
         "cvar_95": cvar_95,
         "kill_switch": kill_switch_active,
         "currency": _s(raw, "currency", "base_currency", default="USD"),
+        # Whether these figures are this user's alone. False means the
+        # deployment is on a live single-account venue where one real account
+        # sits behind every user, so the balance shown is the deployment's. The
+        # caller is told rather than left to assume.
+        "isolated": (await _resolve_account(user.sub)).isolated,
     }
 
 

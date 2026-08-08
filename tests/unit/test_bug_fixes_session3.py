@@ -349,10 +349,35 @@ class TestTradingFixes:
         assert "raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT" in src
 
     def test_nested_if_merged(self):
-        """The nested IDOR check must be a single if condition."""
-        src = _source("api/trading.py")
-        # After fix: single line condition
-        assert "and user.role not in" in src
+        """The IDOR ownership check must be a single ``if``, not nested ones.
+
+        This asserted on the literal ``"and user.role not in"``, which coupled a
+        structural property (one condition, not two nested) to one clause of the
+        condition — the operator carve-out that let admin and superadmin close
+        another user's position. That carve-out was deliberately removed when
+        accounts became per-user, so the substring is gone while the property it
+        stood for still holds. Checked on the parsed tree instead.
+        """
+        import ast
+        import inspect
+
+        from api import trading
+
+        tree = ast.parse(inspect.getsource(trading.close_position))
+        # The ownership branch is the one that raises 403.
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.If):
+                continue
+            raises_403 = any(
+                isinstance(n, ast.Raise) and "403" in ast.unparse(n) or "FORBIDDEN" in ast.unparse(n)
+                for n in ast.walk(node)
+            )
+            if not raises_403:
+                continue
+            nested = [n for n in node.body if isinstance(n, ast.If)]
+            assert not nested, "the ownership check is nested again — it should be one combined condition"
+            return
+        raise AssertionError("no 403 ownership branch found in close_position")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

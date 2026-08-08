@@ -457,14 +457,47 @@ def _get_broker_state():
         return None
 
 
-def _live_account() -> AccountInfo:
+def _isolation_supported() -> bool:
+    """False when the deployment is one real account at a venue."""
+    try:
+        from core.account_registry import get_account_registry
+
+        return get_account_registry().isolation_supported()
+    except Exception:  # pragma: no cover - defensive
+        return True
+
+
+def _live_account(user_id: str = "") -> AccountInfo:
+    """Account summary for *user_id*.
+
+    This read ``state.broker`` — the shared process-wide engine — so every
+    GraphQL caller was shown the same balance, equity and open-position count
+    regardless of who they were. It now resolves the caller's own account.
+
+    ``peek`` rather than ``resolve`` because these resolvers are synchronous and
+    cannot await. A user who has not traded has no account yet, and the zeroed
+    struct below is the right answer for them — falling back to the shared
+    broker would restate the bug.
+    """
+    broker = None
+    try:
+        from core.account_registry import get_account_registry
+
+        broker = get_account_registry().peek(user_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("graphql: account lookup failed for user=%s: %s", user_id, exc)
+
     state = _get_broker_state()
-    if state and hasattr(state, "broker"):
+    if broker is None and state is not None and not _isolation_supported():
+        # Live single-account venue: one real account, and it is the only
+        # account there is. Reporting it is not a cross-user leak.
+        broker = getattr(state, "broker", None)
+
+    if broker is not None:
         try:
             import asyncio as _asyncio
             import inspect as _inspect
 
-            broker = state.broker
             # Use sync helper when available (PaperTradingBroker exposes one)
             if hasattr(broker, "_get_account_info_sync"):
                 info = broker._get_account_info_sync()
@@ -649,8 +682,8 @@ class Query:
 
     @strawberry.field(description="Current account summary")
     def account(self, info: Info) -> AccountInfo:
-        _require_auth(info)
-        return _live_account()
+        user = _require_auth(info)
+        return _live_account(str(user.get("sub") or user.get("user_id") or ""))
 
     @strawberry.field(description="ML model metrics and predictor stats")
     def ml_metrics(self, info: Info) -> MLMetrics:
@@ -813,12 +846,12 @@ class Query:
 
     @strawberry.field(description="Current risk status")
     def risk_status(self, info: Info) -> RiskStatus:
-        _require_auth(info)
+        _user = _require_auth(info)
         try:
             from risk.manager import RiskManager
 
             rm = RiskManager()
-            acct = _live_account()
+            acct = _live_account(str(_user.get("sub") or _user.get("user_id") or ""))
             assessment = rm.assess_risk(
                 account_info={"balance": acct.balance, "equity": acct.equity},
                 positions=[],
@@ -1095,12 +1128,13 @@ class Subscription:
     ) -> AsyncGenerator[AccountEvent, None]:
         """Streams account equity snapshots every 10 seconds."""
         try:
-            _require_auth(info)
+            _user = _require_auth(info)
         except PermissionError:
             return
 
+        _uid = str(_user.get("sub") or _user.get("user_id") or "")
         while True:
-            acct = _live_account()
+            acct = _live_account(_uid)
             yield AccountEvent(
                 balance=acct.balance,
                 equity=acct.equity,

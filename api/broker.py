@@ -27,7 +27,7 @@ UTC = timezone.utc
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends
-from api.auth import get_current_user, require_role
+from api.auth import TokenPayload, get_current_user, require_role
 from pydantic import BaseModel
 
 _HTTP_OK = HTTPStatus.OK.value
@@ -283,9 +283,14 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
 
 
 @router.get("/status", summary="Current broker connection status, balance, and data feed")
-async def broker_status():
+async def broker_status(user: TokenPayload = Depends(get_current_user)):
     """
     Return broker connection state, account balance, data feed, and ML engine status.
+
+    Connectivity and broker_type describe the deployment — one venue connection,
+    shared by design. Balance and open_positions describe **the caller's own
+    account**: they used to be read off app_state.broker, so every user was
+    shown the shared engine's balance and position count as if it were theirs.
 
     data_feed: NuclearStreamer (primary) → RealTimePriceEngine (fallback).
     OANDA is never used as a price source.
@@ -329,14 +334,23 @@ async def broker_status():
             open_positions = 0
             broker_error: str | None = None
 
+            # Balance and positions come from the caller's own account, not the
+            # shared engine. On a live single-account venue there is only one
+            # account and the registry says so; then this genuinely is the
+            # deployment's balance and is reported as before.
+            from core.account_registry import get_account_registry
+
+            _resolution = await get_account_registry().resolve(str(getattr(user, "sub", "") or ""))
+            account_broker = _resolution.broker or broker
+
             try:
-                if hasattr(broker, "get_account_info"):
+                if hasattr(account_broker, "get_account_info"):
                     import inspect as _inspect
 
-                    if _inspect.iscoroutinefunction(broker.get_account_info):
-                        info = await broker.get_account_info()
+                    if _inspect.iscoroutinefunction(account_broker.get_account_info):
+                        info = await account_broker.get_account_info()
                     else:
-                        info = broker.get_account_info()
+                        info = account_broker.get_account_info()
                     # info may be a dataclass, dict, or object
                     if hasattr(info, "__dict__"):
                         info = info.__dict__
@@ -346,17 +360,17 @@ async def broker_status():
                     else:
                         balance = getattr(info, "balance", None) or getattr(info, "equity", None)
                         currency = getattr(info, "currency", "USD")
-                elif hasattr(broker, "get_account_balance"):
-                    balance = broker.get_account_balance()
-                elif hasattr(broker, "balance"):
-                    balance = broker.balance
+                elif hasattr(account_broker, "get_account_balance"):
+                    balance = account_broker.get_account_balance()
+                elif hasattr(account_broker, "balance"):
+                    balance = account_broker.balance
             except Exception as exc:
                 broker_error = "Account info unavailable — check server logs"
                 logger.warning("broker_status: account info error: %s", exc, exc_info=True)
 
             try:
-                if hasattr(broker, "get_positions"):
-                    positions = await broker.get_positions()
+                if hasattr(account_broker, "get_positions"):
+                    positions = await account_broker.get_positions()
                     open_positions = len(positions) if positions else 0
             except Exception as _exc:
                 logger.warning("broker_status: get_positions failed: %s", _exc)

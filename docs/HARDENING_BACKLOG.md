@@ -4093,6 +4093,62 @@ Nothing in the codebase inserts into `database.models.Order`. Orders exist only
 on the broker, so there are no rows to attribute even once the model can see
 `user_id`. Per-user order history needs the write path to persist them.
 
+### Resolved
+
+**T-01 — fixed.** `core/account_registry.py` gives every user their own
+`PaperTradingBroker`, keyed off the `user_id` the constructor already accepted,
+with an explicit per-user Redis namespace so state survives a restart without
+colliding. Two users trading XAUUSD now hold two positions; closing one leaves
+the other open; one user's P&L no longer moves another's balance.
+
+A live venue (`oanda`, `mt5`, `ibkr`, …) is **one real account** and cannot be
+split in-process. The registry reports `isolated=False` with a reason rather
+than presenting two users with "their own" view of one account, and each caller
+decides what that means: `/trading/orders` shows nothing, `api/portfolio.py`
+reports no data, the WebSocket account push is skipped.
+
+**T-02 — fixed.** Every surface now resolves the caller's account:
+
+| Surface | Now |
+|---|---|
+| `GET /trading/orders` | the caller's own account; nothing when not isolated |
+| `/trading/balance`, `/account`, `/positions`, close, close-all, hedge | `_user_broker_call(user.sub, …)` |
+| `api/portfolio.py` (3 sites) | `_user_broker(user)`; `None` when not isolated |
+| WS account broadcaster | one message per connected user via `send_to_user` |
+| `push_position_update` / `push_position_close` | owner required; dropped and logged without one |
+| fill notifications | `send_to_user`, not `broadcast("trades", …)` |
+| `api/broker.py` `/status` | connectivity stays deployment-wide; balance and positions are the caller's |
+| `api/graphql_schema.py` | `_live_account(user_id)` via a non-creating `peek` |
+
+`tests/unit/test_no_shared_broker_in_handlers.py` is an AST guard: a new handler
+that calls `_broker_call` or `app_state.broker.<method>()` fails the build. The
+gaps appeared because the filter was applied by hand, endpoint by endpoint —
+this stops that recurring.
+
+**T-03 — fixed.** `_owned_position_ids` no longer returns the "no filter"
+sentinel for any role, and the IDOR carve-out that let operators close another
+user's position is gone. Whole-book access moved to
+`/api/superadmin/trading/*`: read-only, superadmin-only, the account named in
+the request, every call written to the hash-chained audit log.
+
+### Still open
+
+**T-04 — orders are not persisted.** Nothing writes `database.models.Order`, so
+per-user order *history* depends on the broker's in-memory list plus the trades
+table. The ownership column and `core.tenancy.owned_order_ids` are ready for
+when a writer exists.
+
+**Per-user risk limits.** `RiskManager` and the kill switch still act
+process-wide. That is right for the kill switch — it is an emergency stop for
+the venue — and wrong for per-user drawdown limits, which should be evaluated
+per account.
+
+**The autonomous engine's account.** `app_state.broker` remains the engine's own
+book. Whether the bot should trade each user's account is a product decision,
+not a defect, and is deliberately unchanged here.
+
+### Notes from the fix
+
 ### Done so far
 
 * `core/tenancy.py` — one place that resolves ownership, failing closed to an
@@ -4101,13 +4157,3 @@ on the broker, so there are no rows to attribute even once the model can see
   migration `o1p2q3r4s5t6`; the model never declared it, so the ORM had no
   attribute to filter on. Schema was right, model was blind. No new migration
   was needed — the one drafted for it was deleted once that was established.
-
-### Remaining, in order
-
-1. **T-01 first.** A broker/account instance per user, keyed off the `user_id`
-   the constructor already takes. Everything else depends on it.
-2. Per-user balance, equity and margin derived from that account.
-3. Scope every surface in T-02 through `core.tenancy`.
-4. Route the private WebSocket channels via `send_to_user`.
-5. Operator endpoints for whole-book views (T-03).
-6. Persist orders with their owner (T-04).

@@ -394,6 +394,17 @@ class LiveConnectionManager:
     def connection_count(self) -> int:
         return len(self._connections)
 
+    def connected_user_ids(self) -> list[str]:
+        """Distinct authenticated users currently connected.
+
+        Connections whose ``user_id`` is still ``None`` — authenticated by the
+        handshake but not yet identified — are omitted. The per-user account
+        broadcaster iterates this, and an unidentified connection has no account
+        of its own; including it would mean picking somebody's balance to send,
+        which is the bug this replaced.
+        """
+        return sorted({uid for uid in self._user_ids.values() if uid})
+
 
 # Singleton
 _manager = LiveConnectionManager()
@@ -1439,13 +1450,81 @@ async def _chartbot_broadcaster() -> None:
             logger.debug("chartbot_broadcaster: outer error: %s", exc)
 
 
+async def _build_account_message(broker: Any) -> dict | None:
+    """Render one account's metrics in the AccountMetrics shape the frontend
+    store expects. Returns None when the broker has nothing to report."""
+    from core.app_state import app_state as _app_state  # type: ignore[import]
+
+    _acct_coro = broker.get_account_info()
+    acct_raw = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
+    if not acct_raw:
+        return None
+
+    # acct_raw may be an AccountInfo dataclass or a dict — handle both.
+    def _acct_get(key: str, default=0.0):
+        if hasattr(acct_raw, key):
+            return getattr(acct_raw, key) or default
+        if isinstance(acct_raw, dict):
+            return acct_raw.get(key, default) or default
+        return default
+
+    balance = float(_acct_get("balance", 0.0))
+    equity = float(_acct_get("equity", balance))
+    margin_used = float(_acct_get("margin_used", 0.0))
+    margin_free = float(_acct_get("margin_free", equity - margin_used))
+    # Shared definition — core/account_metrics.margin_level. api/trading.py
+    # used to return 0.0 for the same state, so a flat account read as
+    # "no risk" over this socket and "margin call" over REST.
+    margin_level = _margin_level(equity, margin_used)
+    daily_pnl = float(_acct_get("daily_pnl", _acct_get("unrealized_pnl", 0.0)))
+    daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
+    total_pnl = float(_acct_get("total_pnl", _acct_get("realized_pnl", 0.0)))
+
+    # Risk manager stats (optional). Process-wide, not per account — these are
+    # engine statistics rather than anybody's balance.
+    rm = getattr(_app_state, "risk_manager", None) if _app_state else None
+    win_rate = float(getattr(rm, "win_rate", 0.0) or 0.0)
+    sharpe = float(getattr(rm, "sharpe_ratio", 0.0) or 0.0)
+    max_dd = float(getattr(rm, "max_drawdown_pct", 0.0) or 0.0)
+
+    _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
+    positions = await _pos_coro if asyncio.iscoroutine(_pos_coro) else _pos_coro
+    open_trades = len(positions) if positions else int(_acct_get("open_trades", 0))
+
+    return {
+        "type": "account_update",
+        "data": {
+            "balance": balance,
+            "equity": equity,
+            "margin_used": margin_used,
+            "margin_free": margin_free,
+            "margin_level": round(margin_level, 2),
+            "daily_pnl": round(daily_pnl, 2),
+            "daily_pnl_pct": round(daily_pnl_pct, 4),
+            "total_pnl": round(total_pnl, 2),
+            "win_rate": round(win_rate, 2),
+            "sharpe_ratio": round(sharpe, 4),
+            "max_drawdown": round(max_dd, 4),
+            "open_trades": open_trades,
+        },
+    }
+
+
 async def _account_update_broadcaster() -> None:
     """
-    Push account_update messages to clients subscribed to the 'account' channel.
+    Push account_update messages to each connected user's own socket.
 
-    Polls the broker every 5 seconds and broadcasts the full AccountMetrics
-    shape that the frontend store expects. Falls back gracefully when the
-    broker is not yet initialised.
+    This used to poll ``app_state.broker`` — the one global account — and
+    ``broadcast("account", …)`` the result to every subscriber, so each user was
+    shown somebody else's balance, equity and P&L as though it were their own.
+    The code said as much: *"BEFORE enabling multi-tenant accounts this MUST
+    become send_to_user(owner_id, …) so one user cannot receive another's
+    balance/PnL."* This is that change.
+
+    One account is now resolved per connected user via ``core.account_registry``
+    and delivered with ``send_to_user``. A user with no resolvable identity —
+    a connection still mid-handshake — is skipped rather than sent the shared
+    account.
     """
     _POLL_INTERVAL = 5  # seconds
     while True:
@@ -1453,74 +1532,25 @@ async def _account_update_broadcaster() -> None:
         if _manager.connection_count == 0:
             continue
         try:
-            from core.app_state import app_state as _app_state  # type: ignore[import]
+            from core.account_registry import get_account_registry
 
-            broker = getattr(_app_state, "broker", None) if _app_state else None
-            if broker is None:
-                continue
-
-            _acct_coro = broker.get_account_info()
-            acct_raw = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
-            if not acct_raw:
-                continue
-
-            # Normalise to the AccountMetrics shape the frontend store expects.
-            # acct_raw may be an AccountInfo dataclass or a dict — handle both.
-            # _acct_raw=acct_raw binds the loop variable at definition time (B023).
-            def _acct_get(key: str, default=0.0, _acct_raw=acct_raw):
-                if hasattr(_acct_raw, key):
-                    return getattr(_acct_raw, key) or default
-                if isinstance(_acct_raw, dict):
-                    return _acct_raw.get(key, default) or default
-                return default
-
-            balance = float(_acct_get("balance", 0.0))
-            equity = float(_acct_get("equity", balance))
-            margin_used = float(_acct_get("margin_used", 0.0))
-            margin_free = float(_acct_get("margin_free", equity - margin_used))
-            # Shared definition — core/account_metrics.margin_level. api/trading.py
-            # used to return 0.0 for the same state, so a flat account read as
-            # "no risk" over this socket and "margin call" over REST.
-            margin_level = _margin_level(equity, margin_used)
-            daily_pnl = float(_acct_get("daily_pnl", _acct_get("unrealized_pnl", 0.0)))
-            daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
-            total_pnl = float(_acct_get("total_pnl", _acct_get("realized_pnl", 0.0)))
-
-            # Risk manager stats (optional)
-            rm = getattr(_app_state, "risk_manager", None) if _app_state else None
-            win_rate = float(getattr(rm, "win_rate", 0.0) or 0.0)
-            sharpe = float(getattr(rm, "sharpe_ratio", 0.0) or 0.0)
-            max_dd = float(getattr(rm, "max_drawdown_pct", 0.0) or 0.0)
-
-            # Open trade count from positions
-            _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
-            positions = await _pos_coro if asyncio.iscoroutine(_pos_coro) else _pos_coro
-            open_trades = len(positions) if positions else int(_acct_get("open_trades", 0))
-
-            account_msg = {
-                "type": "account_update",
-                "data": {
-                    "balance": balance,
-                    "equity": equity,
-                    "margin_used": margin_used,
-                    "margin_free": margin_free,
-                    "margin_level": round(margin_level, 2),
-                    "daily_pnl": round(daily_pnl, 2),
-                    "daily_pnl_pct": round(daily_pnl_pct, 4),
-                    "total_pnl": round(total_pnl, 2),
-                    "win_rate": round(win_rate, 2),
-                    "sharpe_ratio": round(sharpe, 4),
-                    "max_drawdown": round(max_dd, 4),
-                    "open_trades": open_trades,
-                },
-            }
-            # NOTE: single-account deployment — `broker` is the one global
-            # account, so broadcasting its metrics to all subscribers of the
-            # (now subscription-gated) private "account" channel is acceptable
-            # today. BEFORE enabling multi-tenant accounts this MUST become
-            # _manager.send_to_user(owner_id, "account", account_msg) so one
-            # user cannot receive another's balance/PnL.
-            await _manager.broadcast("account", account_msg)
+            registry = get_account_registry()
+            for user_id in _manager.connected_user_ids():
+                try:
+                    resolution = await registry.resolve(user_id)
+                    if resolution.broker is None:
+                        continue
+                    if not resolution.isolated:
+                        # A live single-account venue: this is the deployment's
+                        # account, not this user's. Sending it would restate the
+                        # exact bug in a new place.
+                        continue
+                    account_msg = await _build_account_message(resolution.broker)
+                    if account_msg is None:
+                        continue
+                    await _manager.send_to_user(user_id, "account", account_msg)
+                except Exception as per_user_exc:
+                    logger.debug("account_update for user=%s: %s", user_id, per_user_exc)
         except Exception as exc:
             logger.debug("account_update_broadcaster: %s", exc)
 
@@ -1816,20 +1846,31 @@ async def ws_live_stats() -> dict:
 
 
 async def push_position_update(position: dict, user_id: str | None = None) -> None:
-    """Push a position update. If user_id is given, only that user receives it."""
-    msg = {"type": "position_update", "data": position}
-    if user_id:
-        await _manager.send_to_user(user_id, "positions", msg)
-    else:
-        await _manager.broadcast("positions", msg)
+    """Push a position update to its owner.
+
+    ``positions`` is a private channel. The ``else`` branch here used to
+    ``broadcast`` whenever the caller omitted ``user_id``, which sent one user's
+    symbol, size, entry and P&L to every subscriber — the default argument was
+    ``None``, so a caller that simply did not pass an owner got the leaking path
+    silently. A position with no identifiable owner is now dropped and logged,
+    because there is no safe audience for it.
+    """
+    if not user_id:
+        logger.warning(
+            "position_update dropped: no owning user_id. A private position "
+            "update has no safe audience; pass the owner. position=%s",
+            position.get("id") or position.get("symbol") or "<unknown>",
+        )
+        return
+    await _manager.send_to_user(user_id, "positions", {"type": "position_update", "data": position})
 
 
 async def push_position_close(position_id: str, user_id: str | None = None) -> None:
-    msg = {"type": "position_close", "data": {"id": position_id}}
-    if user_id:
-        await _manager.send_to_user(user_id, "positions", msg)
-    else:
-        await _manager.broadcast("positions", msg)
+    """Push a position close to its owner. See ``push_position_update``."""
+    if not user_id:
+        logger.warning("position_close dropped: no owning user_id. position_id=%s", position_id)
+        return
+    await _manager.send_to_user(user_id, "positions", {"type": "position_close", "data": {"id": position_id}})
 
 
 async def push_signal(signal: dict) -> None:

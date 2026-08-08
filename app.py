@@ -915,6 +915,17 @@ async def shutdown_event():
             logger.info("[OK] Trading engine stopped")
         except Exception as _te_err:
             logger.warning("Trading engine stop error: %s", _te_err)
+
+    # Per-user trading accounts (core.account_registry). Each is a live broker
+    # instance with its own Redis-backed state; leaving them connected on
+    # shutdown leaks connections and can hold the interpreter open.
+    try:
+        from core.account_registry import get_account_registry
+
+        await get_account_registry().close_all()
+        logger.info("[OK] Per-user trading accounts closed")
+    except Exception as _acct_err:
+        logger.warning("Account registry shutdown error: %s", _acct_err)
     _engine_task = getattr(app_state, "engine_task", None)
     if _engine_task is not None and not _engine_task.done():
         _engine_task.cancel()
