@@ -2741,3 +2741,75 @@ carrying no stops at all was therefore read as a fabricated 1:1 ratio, and
 started sizing 1.28 on a NaN-confidence signal. The helper now requires a
 genuine `int`/`float`. That was a real robustness hole, not just a fixture
 artefact: any object with `__float__` could have set the payoff term.
+
+
+---
+
+## Round 4 — Slice F1: runtime failure matrix
+
+Scope: 12 money-relevant pages rendered against five broken-backend states plus
+a healthy control, with the axios adapter stubbed so the real `hooks/useApi`
+runs. `frontend/src/test/f1_runtime_failure_matrix.test.tsx`.
+
+This is the pass S9-03 recorded as **not performed**.
+
+**The instrument matters.** A word-list classifier ("does the page say error?")
+was tried first and discarded: it reported `ERROR_SHOWN` on *healthy* pages
+because a connection badge renders the word "disconnected". The objective
+question needs no vocabulary — **does the page render differently when the
+backend is unreachable?** If output is identical whether the backend is healthy
+or dead, the user cannot tell, and that is the finding.
+
+**Two instrument failures were caught and corrected before reporting:**
+
+1. The first stub set `axios.defaults.adapter` only. `api` is built with
+   `axios.create()` at import time, which snapshots the defaults — so **zero
+   requests were intercepted** and every page trivially looked "identical". The
+   harness now stubs `api.defaults.adapter` too and counts requests per render;
+   a page with no requests is no longer asserted on.
+2. `Trading` reported CRASH in all six states including healthy. It is a harness
+   artefact: the shared `src/test/setup.ts` mocks `lightweight-charts` without
+   `HistogramSeries`. Not a product defect; excluded.
+
+| ID | Sev | Issue | Location |
+|----|-----|-------|----------|
+| F1-01 | **HIGH** | Three pages issue requests, every request fails, and the page renders byte-identically to the healthy case | `Watchlist`, `TradeJournal`, `RiskCalculator` |
+| F1-02 | MEDIUM | Three more are indistinguishable under a dead or silent WebSocket | `Wallet`, `PriceAlerts`, `Portfolio` |
+| F1-03 | LOW | The shared chart mock is incomplete, so chart pages cannot be render-tested | `src/test/setup.ts` |
+
+### F1-01 — Pages that cannot tell you the backend is gone (HIGH)
+
+| Page | requests issued | identical to healthy in |
+|---|---|---|
+| `RiskCalculator` | 3 | 5/5 states |
+| `Watchlist` | 2 | 5/5 states |
+| `TradeJournal` | 4 | 5/5 states |
+
+Verified verbatim. `Watchlist` with the backend **completely unreachable**
+renders its full symbol list and the line:
+
+> *"Live prices refresh every 5 seconds."*
+
+— which is false, with no indication anywhere. Every request it made failed.
+This is the S9-03 shape (a confident statement the data does not support),
+confirmed at runtime rather than inferred from reading.
+
+`TradeJournal` renders "All Trades (n)" and "Mistakes (n)" counts identically
+whether those counts were fetched or the fetch failed.
+
+**Contrast — what correct looks like:** `Dashboard`, `TradingDashboard` and
+`Performance` render differently in **all five** failure states. The capability
+exists in this codebase; it is not applied uniformly.
+
+### F1-02 — Blind to the socket specifically (MEDIUM)
+
+`Wallet`, `PriceAlerts` and `Portfolio` degrade visibly when HTTP fails but are
+unchanged when the WebSocket is dead or silent. Given S9-01 (the client could
+not detect a stalled feed at all until this round), a dead socket is the more
+likely production failure of the two.
+
+**Harness limits, stated:** jsdom not a browser; pages rendered without the
+app's theme/auth/layout providers, so some render empty here and would not in
+the app; only pages that issued a request are asserted on. A dev-server pass
+against a genuinely stopped backend is still worth doing — this catches the
+cheap majority in CI.
