@@ -3751,3 +3751,71 @@ real file, no top-level page without a route. Not repeated.
 `type_accuracy_contract.test.ts` rejected the focus trap's `items[0]!` /
 `items[items.length - 1]!` — the repo's own `noUncheckedIndexedAccess` guard
 (audit #38) firing on new code, correctly. Rewritten as bind-then-check.
+
+---
+
+## Round 4 — closing the deferred follow-ups
+
+### F4-01b (continued) — `/api/risk` per-endpoint gates — **FIXED**
+
+Deferred from the first pass because `/api/risk` is shared by two routers at two
+different tiers, so it needed per-endpoint work rather than one router-level
+dependency. Done:
+
+| route | feature | tier |
+|---|---|---|
+| `/api/risk/prop-firm/*` (7 routes) | prop-firm | professional |
+| `/api/risk/calculator/*` (3 routes) | risk-calculator | starter |
+
+**`/api/risk/live-price/{symbol}` is deliberately left at authentication-only,
+and pinned open.** It returns a mid price, not the paid feature: the sizing
+arithmetic runs in the browser, and what a subscription buys is the saved
+calculation history beside it. Gating a quote would protect nothing and would
+break the entry auto-fill for anyone who reaches the page another way.
+
+Backend after: **15,172 passed, 0 failed** — no blast radius this time; the
+prop-firm and calculator tests already gave their callers subscriptions.
+
+That leaves one recorded and undone: the **`/api/billing` wallet gate**, which
+still needs to be narrower than "the billing router" because billing is how a
+user upgrades. Gating it would lock a free user out of the page that sells them
+the plan.
+
+### S10-04 — **CORRECTED, and fixed**
+
+> The original entry read: *"31 of 204 `.tsx` files reference any `aria-`
+> attribute (~15%). `OrderEntryForm.tsx` has exactly one … The order inputs
+> (symbol, side, quantity, SL, TP) carry no `aria-label`."*
+>
+> **The second sentence measured the wrong thing.** The inputs *are* labelled,
+> and labelled the better way: `Field` renders `<label htmlFor={id}>` against
+> `<input id={id}>`, which is native association and is preferred over
+> `aria-label`. `getByLabelText(/quantity/i)` finds them. Counting `aria-`
+> attributes cannot see correct native labelling, so a file doing it right
+> scores zero — which is how a metric produced a finding that was not there.
+> Same failure as the F1-04 mis-attribution and the F4-01 severity claim: a
+> number asserted without checking what it was counting.
+
+What was genuinely missing is on the two controls that are **not** native
+inputs:
+
+```tsx
+<button type="button" onClick={() => setSide(s)}
+        className={cn(..., side === s && s === 'buy' ? '…green…' : '…')}>
+```
+
+Buy/Sell and Market/Limit/Stop are buttons whose selected state lived **only in
+a CSS class**. Tabbing through announced *"Buy, button. Sell, button."* with
+nothing to say which was active — on the control that decides the direction of
+an order, beside a submit button that commits capital in that direction. It is
+also F7-01 applied to a control rather than a readout: green/red was the sole
+visual carrier of the selection.
+
+**Fix:** `aria-pressed` on both toggle sets, and `role="group"` with a name on
+each. Together with F8-01's focus trap, the order path — choose side, choose
+type, fill the fields, submit, confirm, cancel — is now operable and
+comprehensible by keyboard alone.
+
+**Still open from S10-04:** there is no keyboard shortcut affordance for order
+entry or the kill switch. That is a feature decision, not a defect, and is left
+to the product rather than invented here.

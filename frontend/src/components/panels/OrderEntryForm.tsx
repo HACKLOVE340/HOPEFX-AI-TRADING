@@ -420,12 +420,19 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
           </div>
         )}
 
-        {/* Buy / Sell toggle */}
-        <div className="grid grid-cols-2 gap-1.5">
+        {/* Buy / Sell toggle
+            S10-04: `aria-pressed` and a named group. These are buttons whose
+            selected state lived only in a CSS class, so nothing announced which
+            direction the order would go — on the control that decides exactly
+            that, next to a submit button that commits capital. The green/red
+            distinction was also the sole visual carrier, which is the F7-01
+            question applied to a control rather than a readout. */}
+        <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Order side">
           {(['buy', 'sell'] as Side[]).map((s) => (
             <button
               key={s}
               type="button"
+              aria-pressed={side === s}
               onClick={() => setSide(s)}
               className={cn(
                 'py-2 rounded font-bold text-[13px] border transition-colors',
@@ -441,12 +448,13 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
           ))}
         </div>
 
-        {/* Order type tabs */}
-        <div className="flex gap-1">
+        {/* Order type tabs — same treatment (S10-04). */}
+        <div className="flex gap-1" role="group" aria-label="Order type">
           {ORDER_TYPES.map(({ value, label }) => (
             <button
               key={value}
               type="button"
+              aria-pressed={orderType === value}
               onClick={() => setOrderType(value)}
               className={cn(
                 'flex-1 py-1 rounded text-[11px] font-semibold border transition-colors',

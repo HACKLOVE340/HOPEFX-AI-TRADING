@@ -29,6 +29,18 @@ from pydantic import BaseModel, Field, field_validator
 
 from api.auth import TokenPayload, get_current_user
 
+# ── F4-01b (continued) ───────────────────────────────────────────────────────
+#
+# `/calculator/*` is the `risk-calculator` feature, advertised as starter, and
+# was gated in React only. Now gated here too.
+#
+# `/live-price/{symbol}` is deliberately left at authentication-only. It returns
+# a mid price, not the paid feature: the sizing arithmetic runs in the browser,
+# and what a subscription buys is the saved-calculation history above. Gating a
+# quote would protect nothing and would break the entry auto-fill for any user
+# who reaches the page by another route.
+from monetization.subscription import require_plan
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/risk", tags=["Risk Calculator"])
@@ -177,7 +189,7 @@ async def get_live_price(
 
 
 @router.get("/calculator/history", summary="Saved risk/reward calculations")
-async def list_calculations(user: TokenPayload = Depends(get_current_user)):
+async def list_calculations(user: TokenPayload = Depends(require_plan("starter"))):
     """Return the authenticated user's saved R:R calculations, newest first."""
     history = _load_history(user.sub)
     return {"calculations": list(reversed(history)), "total": len(history)}
@@ -186,7 +198,7 @@ async def list_calculations(user: TokenPayload = Depends(get_current_user)):
 @router.post("/calculator/history", summary="Save a risk/reward calculation", status_code=201)
 async def save_calculation(
     body: SaveCalcRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Persist a risk/reward calculation for later reference."""
     # Compute derived fields.
@@ -233,7 +245,7 @@ async def save_calculation(
 @router.delete("/calculator/history/{calc_id}", summary="Delete a saved calculation")
 async def delete_calculation(
     calc_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Remove a saved R:R calculation by ID."""
     history = _load_history(user.sub)

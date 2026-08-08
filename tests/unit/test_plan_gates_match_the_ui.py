@@ -38,6 +38,10 @@ Deliberately **not** gated, and worth stating so the omissions read as decisions
   * ``/api/indicators/builtin`` — a list of standard indicator definitions, no
     user data and nothing proprietary. It has no auth dependency at all today
     and that is left alone.
+  * ``/api/risk/live-price/{symbol}`` — a mid price, not the paid feature. The
+    sizing arithmetic runs in the browser; what a subscription buys is the saved
+    calculation history. Gating a quote would protect nothing and would break
+    the entry auto-fill. Pinned open below.
   * ``/api/billing/*`` — the ``wallet`` feature is advertised as starter, but
     billing is also *how a user upgrades*. Gating it behind a paid plan would
     lock a free user out of the page that sells them the plan. The wallet
@@ -100,6 +104,11 @@ GATED = [
     ("accounts", "post", "/api/accounts/sub-accounts", {"name": "x"}, "elite"),
     ("alerts", "get", "/api/alerts/", None, "starter"),
     ("alerts", "get", "/api/alerts/active", None, "starter"),
+    ("prop_firm", "get", "/api/risk/prop-firm/history", None, "professional"),
+    ("prop_firm", "get", "/api/risk/prop-firm/challenges", None, "professional"),
+    ("prop_firm", "get", "/api/risk/prop-firm/daily-stats", None, "professional"),
+    ("risk_calculator", "get", "/api/risk/calculator/history", None, "starter"),
+    ("risk_calculator", "post", "/api/risk/calculator/history", {"symbol": "XAUUSD"}, "starter"),
 ]
 
 
@@ -145,6 +154,14 @@ def test_admin_bypasses_the_plan_gate():
     a gate were added without it."""
     c = _client("copy_trading", "admin-user-f4", role="admin")
     res = c.get("/api/copy-trading/my-copies")
+    assert res.status_code != 403 or res.json().get("detail", {}).get("error") != "PLAN_LIMIT_EXCEEDED"
+
+
+def test_live_price_stays_open_to_any_authenticated_user():
+    """Not the paid feature — see the module docstring. Pinned so the gate on
+    the calculator history does not creep onto the quote beside it."""
+    c = _client("risk_calculator", FREE_USER)
+    res = c.get("/api/risk/live-price/XAU_USD")
     assert res.status_code != 403 or res.json().get("detail", {}).get("error") != "PLAN_LIMIT_EXCEEDED"
 
 
