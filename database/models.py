@@ -211,6 +211,23 @@ class Order(Base):
     # Idempotency key — UNIQUE constraint prevents duplicate broker submissions.
     # Set by the trading engine before the first submission attempt.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
+    # Owning user. The COLUMN has existed since migration o1p2q3r4s5t6, which
+    # added it and indexed it — but this model never declared it, so the ORM had
+    # no attribute to filter on and GET /api/trading/orders returned the shared
+    # engine's whole book to every caller. The schema was right; the model was
+    # blind to it.
+    #
+    # No ForeignKey: o1p2q3r4s5t6 added the column without one ("SQLite does not
+    # support ADD COLUMN with constraints"), and declaring a constraint the
+    # database does not have is how model and schema drift apart. Nullable
+    # because rows written before that migration cannot be attributed
+    # retroactively — core.tenancy treats an order with no user_id as belonging
+    # to nobody and hides it rather than showing it to everybody.
+    #
+    # index=True is deliberately absent: the index is declared explicitly below
+    # as idx_orders_user_id, matching the name Alembic already created. Both
+    # would produce two indexes on the same column.
+    user_id = Column(String(36), nullable=True)
     # FIX: add FK + ondelete so orphaned orders are cleaned up when Account is deleted.
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
     # FIX: add ondelete so orphaned orders are cleaned up when Trade is deleted.
@@ -808,7 +825,11 @@ Index("idx_trades_symbol_entry_time", Trade.symbol, Trade.entry_time)
 # History-by-user without status filter (e.g. paginated trade history endpoint)
 Index("idx_trades_user_entry_time", Trade.user_id, Trade.entry_time)
 
-# Orders — Order has no user_id; use account_id + symbol as the covering key
+# Orders — user_id is the ownership key core.tenancy filters on. The index is
+# named to match the one migration o1p2q3r4s5t6 already created, so create_all
+# and Alembic produce the same schema instead of two differently-named indexes
+# on the same column.
+Index("idx_orders_user_id", Order.user_id)
 Index("idx_orders_symbol_created", Order.symbol, Order.created_at)
 Index("idx_orders_account_symbol_created", Order.account_id, Order.symbol, Order.created_at)
 # Unfilled order lookups by symbol (polling for pending orders)

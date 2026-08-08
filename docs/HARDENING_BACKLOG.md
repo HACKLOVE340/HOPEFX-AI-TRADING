@@ -4018,3 +4018,96 @@ p = 0.45–0.55 against b = 2.0 — an edge of +0.35 per unit risked — and pri
 median endings of 10²⁴ with zero ruin for both rules. That is not a result, it
 is a range where the question cannot be asked. Rewritten to sweep at and below
 break-even, with costs.
+
+---
+
+## T — Account isolation (multi-tenancy)
+
+**Reported:** users see trades they did not place; a superadmin's trade is
+visible to, and moves the numbers of, everyone else.
+
+**Confirmed, and the cause is architectural rather than a missing filter.**
+`app_state.broker` is one process-wide engine with one account. Every logged-in
+user — trader, admin and superadmin alike — trades against it and reads from it.
+Two comments say so outright:
+
+* `api/trading.py` — *"app_state.broker is a single process-wide paper engine
+  shared by every logged-in user, so its get_positions() returns EVERYONE's
+  positions."*
+* `api/ws_live.py` — *"single-account deployment … BEFORE enabling multi-tenant
+  accounts this MUST become `send_to_user(owner_id, …)` so one user cannot
+  receive another's balance/PnL."*
+
+Isolation was deferred while the product was single-account, and the filters
+added since landed unevenly.
+
+### T-01 — the broker nets every user into one position per symbol  (CRITICAL)
+
+`PaperTradingBroker.positions` is a `dict[str, Position]` keyed by **symbol**,
+and `_update_position` merges into the existing entry with the comment *"For
+simplicity, assume same side"*. Two users buying XAUUSD do not get two
+positions. Demonstrated directly:
+
+    two orders, 1.0 lot and 3.0 lots
+    → 1 position, id="XAUUSD", qty=4.0, entry=weighted average
+
+The position id **is the symbol**. So capital is commingled in a single object,
+`close_position("XAUUSD")` closes it for both users, and there is nothing to
+attribute a share of it to either.
+
+This is why read-filtering cannot fix it, and why filtering alone is not even
+safe: with one netted position per symbol, at most one user can own the matching
+row, so gating positions before fixing the broker makes the *other* user's own
+position disappear from their screen.
+
+`PaperTradingBroker.__init__` already accepts `user_id`. It is assigned to
+`self._user_id` and never read — the seam exists, unused.
+
+### T-02 — read surfaces that were never scoped  (HIGH)
+
+Gated already: `GET /trading/trades` (filters on `user.sub`),
+`GET /trading/positions` (owned-id filter, fails closed).
+
+Not gated — every authenticated user sees the shared book:
+
+| Surface | State |
+|---|---|
+| `GET /trading/orders` | no filter at all |
+| `GET /trading/balance`, `/account` | the one global account's balance/equity/margin/PnL |
+| `api/portfolio.py` (3 sites) | no user filter anywhere in the file |
+| `api/ws_live.py` account broadcaster | `broadcast("account", …)` to every subscriber |
+| `push_position_update` / `push_position_close` | fall back to `broadcast` when `user_id` is None |
+| `_broadcast_fill_ws` | fills go to the whole `trades` channel |
+| `api/broker.py:359`, `api/graphql_schema.py:469` | unscoped |
+
+### T-03 — the operator bypass  (MEDIUM)
+
+`_owned_position_ids` returned `None` — meaning *apply no filter* — for `admin`
+and `superadmin`. That is the reported behaviour. Decision taken: operators are
+ordinary traders on the ordinary endpoints; whole-book access moves to explicit
+`/api/superadmin/*` routes that name the account and are audited.
+
+### T-04 — the orders table has no writer  (MEDIUM)
+
+Nothing in the codebase inserts into `database.models.Order`. Orders exist only
+on the broker, so there are no rows to attribute even once the model can see
+`user_id`. Per-user order history needs the write path to persist them.
+
+### Done so far
+
+* `core/tenancy.py` — one place that resolves ownership, failing closed to an
+  empty book whenever ownership cannot be established.
+* `Order.user_id` declared on the model. The **column** has existed since
+  migration `o1p2q3r4s5t6`; the model never declared it, so the ORM had no
+  attribute to filter on. Schema was right, model was blind. No new migration
+  was needed — the one drafted for it was deleted once that was established.
+
+### Remaining, in order
+
+1. **T-01 first.** A broker/account instance per user, keyed off the `user_id`
+   the constructor already takes. Everything else depends on it.
+2. Per-user balance, equity and margin derived from that account.
+3. Scope every surface in T-02 through `core.tenancy`.
+4. Route the private WebSocket channels via `send_to_user`.
+5. Operator endpoints for whole-book views (T-03).
+6. Persist orders with their owner (T-04).
