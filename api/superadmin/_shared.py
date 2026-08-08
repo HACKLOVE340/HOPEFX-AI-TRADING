@@ -65,6 +65,34 @@ def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt else None
 
 
+def _audit_payload(row) -> dict:
+    """Decode an ``AuditLogEntry``'s JSON payload.
+
+    Five superadmin readers — AML alerts, sanctions hits, GDPR requests, the
+    consent log and risk breaches — each did::
+
+        meta = json.loads(r.metadata or "{}") if r.metadata else {}
+
+    ``AuditLogEntry`` has no ``metadata`` column. On a declarative model
+    ``r.metadata`` is SQLAlchemy's ``MetaData`` object, which is truthy, so the
+    guard never fired and ``json.loads`` was handed a ``MetaData``:
+    ``TypeError: the JSON object must be str, bytes or bytearray``. Each site
+    caught it and returned whatever it had already accumulated — so five
+    compliance views silently showed no database-backed rows at all.
+
+    The payload column is ``data_json``, which is what both writers use
+    (``_log_superadmin_action`` here and ``ComplianceManager``).
+    """
+    raw = getattr(row, "data_json", None)
+    if not raw:
+        return {}
+    try:
+        blob = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return blob if isinstance(blob, dict) else {}
+
+
 def _validate_report_id(report_id: str) -> str:
     """Raise HTTPException 400 if report_id is not a safe UUID-based name."""
     if not _REPORT_ID_RE.match(report_id):

@@ -26,7 +26,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
-from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from ._shared import _audit_payload, _require_superadmin, _utcnow, _log_superadmin_action
 from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ async def get_gdpr_requests(
             for row in rows:
                 rid = f"gdpr_{row.id}"
                 if rid not in existing_ids:
-                    meta = json.loads(row.metadata or "{}") if row.metadata else {}
+                    meta = _audit_payload(row)
                     reqs.append(
                         {
                             "request_id": rid,
@@ -250,7 +250,7 @@ async def get_consent_log(
                 q = q.filter(AuditLogEntry.user_id == user_id)
             rows = q.order_by(AuditLogEntry.created_at.desc()).limit(limit).all()
             for r in rows:
-                meta = json.loads(r.metadata or "{}") if r.metadata else {}
+                meta = _audit_payload(r)
                 entries.append(
                     {
                         "entry_id": str(r.id),

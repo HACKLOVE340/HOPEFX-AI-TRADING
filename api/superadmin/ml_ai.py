@@ -331,29 +331,15 @@ async def list_training_jobs(user: TokenPayload = Depends(_require_superadmin)) 
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
-                from database.models import SystemEvent
+                from database.system_events import read_events
+                from ml.training_manager import _job_from_event
 
-                rows = (
-                    db.query(SystemEvent)
-                    .filter(SystemEvent.event_type == "ml_training")
-                    .order_by(SystemEvent.created_at.desc())
-                    .limit(50)
-                    .all()
-                )
-                jobs = [
-                    {
-                        "id": str(r.id),
-                        "model": r.component or "unknown",
-                        "status": r.status or "completed",
-                        "started_at": r.created_at.isoformat() if r.created_at else None,
-                        "duration_s": r.metadata.get("duration_s", 0) if r.metadata else 0,
-                        "metrics": r.metadata.get("metrics", {}) if r.metadata else {},
-                    }
-                    for r in rows
-                ]
-                return {"jobs": jobs}
+                # This used to re-derive the row→dict mapping by hand, from the
+                # same three non-existent columns as the manager above it. One
+                # mapping now, in ml/training_manager.
+                return {"jobs": [_job_from_event(rec) for rec in read_events(db, event_type="ml_training", limit=50)]}
     except Exception as exc:
-        logger.debug("training_jobs db fallback: %s", exc)
+        logger.warning("training_jobs db fallback failed: %s", exc)
     return {"jobs": []}
 
 
@@ -373,31 +359,15 @@ async def list_ab_tests(user: TokenPayload = Depends(_require_superadmin)) -> di
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
-                from database.models import SystemEvent
+                from database.system_events import read_events
+                from ml.ab_testing import _test_from_event
 
-                rows = (
-                    db.query(SystemEvent)
-                    .filter(SystemEvent.event_type == "ab_test")
-                    .order_by(SystemEvent.created_at.desc())
-                    .limit(20)
-                    .all()
-                )
-                tests = [
-                    {
-                        "id": str(r.id),
-                        "name": r.component or "unknown",
-                        "status": r.status or "active",
-                        "control": r.metadata.get("control", "baseline") if r.metadata else "baseline",
-                        "variant": r.metadata.get("variant", "challenger") if r.metadata else "challenger",
-                        "traffic_split": r.metadata.get("traffic_split", 0.5) if r.metadata else 0.5,
-                        "started_at": r.created_at.isoformat() if r.created_at else None,
-                        "metrics": r.metadata.get("metrics", {}) if r.metadata else {},
-                    }
-                    for r in rows
-                ]
-                return {"tests": tests}
+                # As above: the hand-rolled copy also disagreed with the
+                # manager's own shape, emitting "variant" where every other
+                # producer emits "challenger".
+                return {"tests": [_test_from_event(rec) for rec in read_events(db, event_type="ab_test", limit=20)]}
     except Exception as exc:
-        logger.debug("ab_tests db fallback: %s", exc)
+        logger.warning("ab_tests db fallback failed: %s", exc)
     return {"tests": []}
 
 

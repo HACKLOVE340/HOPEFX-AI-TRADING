@@ -692,16 +692,28 @@ async def list_payouts(
                 total = q.count()
                 offset = (page - 1) * page_size
                 rows = q.order_by(WalletTransaction.created_at.desc()).offset(offset).limit(page_size).all()
+                # ``WalletTransaction`` has no ``metadata`` column. On a
+                # declarative model ``r.metadata`` is SQLAlchemy's MetaData
+                # object — truthy, so the ``if r.metadata`` guard never fired
+                # and ``.get()`` raised AttributeError on the first row. The
+                # outer except caught it and this endpoint returned an empty
+                # payout queue no matter how many payouts were pending.
+                #
+                # ``method`` and ``processed_at`` were never persisted by
+                # anything: payments/wallet.py writes transaction_id, type,
+                # amount, balance_after, currency, reference, status and notes.
+                # Reporting the columns that exist rather than inventing two.
                 payouts = [
                     {
                         "id": str(r.id),
+                        "transaction_id": r.transaction_id,
                         "user_id": str(r.user_id) if r.user_id else None,
                         "amount": float(r.amount or 0),
                         "currency": r.currency or "USD",
                         "status": r.status or "pending",
-                        "method": r.metadata.get("method", "bank_transfer") if r.metadata else "bank_transfer",
+                        "reference": r.reference,
+                        "notes": r.notes,
                         "created_at": r.created_at.isoformat() if r.created_at else None,
-                        "processed_at": r.metadata.get("processed_at") if r.metadata else None,
                     }
                     for r in rows
                 ]

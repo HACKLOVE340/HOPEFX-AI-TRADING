@@ -10,6 +10,7 @@ This file retains only the unique /infra/* routes to avoid duplicate
 route registration.
 """
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -47,6 +48,64 @@ def _get_mem_pct() -> float:
         return round(psutil.virtual_memory().percent, 1)
     except Exception:
         return 0.0
+
+
+_BROKER_PROBE_TIMEOUT_S = 5.0
+
+
+async def _probe_broker() -> dict[str, Any]:
+    """Report whether the live broker actually answers.
+
+    Two bugs lived in the four lines this replaces.
+
+    It imported ``get_broker`` from ``brokers.factory``, which has never
+    defined that name — the module's only public symbol is ``BrokerFactory``.
+    Every request raised ``ImportError`` into the handler's ``except``, so this
+    page reported the broker as ``error`` regardless of the broker's state.
+    ``BrokerFactory`` would have been wrong even spelled correctly: it
+    *constructs* a broker, and viewing a health page must not open a second
+    connection. The live broker is the one ``app_state`` holds, which is also
+    what ``health_check_service._check_broker`` reads.
+
+    It then decided health with ``if broker:``. A broker whose connection
+    dropped is still a truthy object, so once the import was fixed this would
+    have reported ``ok`` for a broker that could not fill an order. Ask it for
+    the account instead, and say what came back. ``call_broker`` handles both
+    the async adapters and the sync ones.
+    """
+    t0 = time.perf_counter()
+
+    def _elapsed() -> float:
+        return round((time.perf_counter() - t0) * 1000, 2)
+
+    try:
+        from core.app_state import app_state
+
+        broker = getattr(app_state, "broker", None)
+        if broker is None:
+            # Paper and backtest deployments legitimately run without one.
+            # That is a known state, not a fault, and must not read as red.
+            return {"status": "unavailable", "latency_ms": 0, "detail": "no broker configured"}
+
+        from execution.broker_call import call_broker
+
+        info = await asyncio.wait_for(call_broker(broker.get_account_info), timeout=_BROKER_PROBE_TIMEOUT_S)
+        balance = getattr(info, "balance", None)
+        if balance is None and isinstance(info, dict):
+            balance = info.get("balance")
+        return {
+            "status": "ok",
+            "latency_ms": _elapsed(),
+            "detail": f"balance={balance}" if balance is not None else "account info OK",
+        }
+    except TimeoutError:
+        return {
+            "status": "error",
+            "latency_ms": _elapsed(),
+            "detail": f"broker did not answer within {_BROKER_PROBE_TIMEOUT_S}s",
+        }
+    except Exception as exc:
+        return {"status": "error", "latency_ms": _elapsed(), "detail": safe_error(exc)}
 
 
 @router.get("/infra/health")
@@ -91,21 +150,7 @@ async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) ->
         }
 
     # ── Broker ────────────────────────────────────────────────────────────────
-    t0 = time.perf_counter()
-    try:
-        from brokers.factory import get_broker
-
-        broker = get_broker()
-        if broker:
-            results["broker"] = {"status": "ok", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
-        else:
-            results["broker"] = {"status": "unavailable", "latency_ms": 0}
-    except Exception as exc:
-        results["broker"] = {
-            "status": "error",
-            "detail": safe_error(exc),
-            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-        }
+    results["broker"] = await _probe_broker()
 
     overall = "ok" if all(v.get("status") == "ok" for v in results.values()) else "degraded"
     return {

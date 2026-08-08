@@ -63,6 +63,31 @@ except ImportError:
 Base = declarative_base()
 
 
+# An auto-incrementing surrogate primary key that works on both backends.
+#
+# ``Column(PKBigInt, primary_key=True)`` is fine on PostgreSQL — Alembic and
+# ``create_all`` emit BIGSERIAL and the value is generated server-side. On
+# SQLite it is not: only a column declared exactly ``INTEGER PRIMARY KEY`` is
+# an alias for the implicit ``rowid`` and auto-populates. ``BIGINT PRIMARY KEY``
+# is an ordinary column, so every insert that omits ``id`` fails with
+# ``NOT NULL constraint failed: <table>.id``.
+#
+# Twelve tables were declared that way, including ``audit_log``,
+# ``wallet_transactions`` and ``system_events``, so on any SQLite-backed
+# deployment — which is the dev default and what CI boots — none of them could
+# be written to. The three call sites found doing so all caught the
+# IntegrityError and carried on: the superadmin audit writer logs "action still
+# executed", and the ML training/A-B persistence logs at debug. So a compliance
+# audit log silently stopped appending, and nobody was told.
+#
+# ``with_variant`` keeps BIGINT on PostgreSQL (an audit log should not be
+# capped at 2^31) while emitting the rowid-aliasing INTEGER on SQLite.
+# ``audit_log`` had previously been patched to plain ``Integer`` to work around
+# this, which fixed SQLite by narrowing the column on PostgreSQL too; it uses
+# this type now like everything else.
+PKBigInt = BigInteger().with_variant(Integer, "sqlite")
+
+
 class TradeStatus(enum.Enum):
     PENDING = "pending"
     OPEN = "open"
@@ -301,7 +326,7 @@ class AccountSnapshot(Base):
 
     __tablename__ = "account_snapshots"
 
-    id = Column(BigInteger, primary_key=True)
+    id = Column(PKBigInt, primary_key=True)
     timestamp = Column(DateTime, default=_utcnow, index=True)
 
     # Balance
@@ -338,7 +363,7 @@ class MarketData(Base):
 
     __tablename__ = "market_data"
 
-    id = Column(BigInteger, primary_key=True)
+    id = Column(PKBigInt, primary_key=True)
     symbol = Column(String(20), nullable=False, index=True)
     timeframe = Column(String(10), nullable=False, index=True)
     timestamp = Column(DateTime, nullable=False, index=True)
@@ -363,7 +388,7 @@ class SystemEvent(Base):
 
     __tablename__ = "system_events"
 
-    id = Column(BigInteger, primary_key=True)
+    id = Column(PKBigInt, primary_key=True)
     timestamp = Column(DateTime, default=_utcnow, index=True)
     level = Column(String(20), nullable=False)  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     component = Column(String(50), nullable=False, index=True)
@@ -384,7 +409,7 @@ class PerformanceMetric(Base):
 
     __tablename__ = "performance_metric_samples"
 
-    id = Column(BigInteger, primary_key=True)
+    id = Column(PKBigInt, primary_key=True)
     timestamp = Column(DateTime, default=_utcnow, index=True)
     metric_type = Column(String(50), nullable=False, index=True)  # strategy, system, risk
 
@@ -495,7 +520,7 @@ class OrderBook(Base):
 
     __tablename__ = "order_book_snapshots"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
     symbol = Column(String(20), nullable=False, index=True)
     bids_json = Column(Text, nullable=True)  # JSON [[price, size], ...]
     asks_json = Column(Text, nullable=True)
@@ -509,7 +534,7 @@ class AISignal(Base):
 
     __tablename__ = "ai_signals"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
     symbol = Column(String(20), nullable=False, index=True)
     signal_type = Column(String(10), nullable=False)  # buy, sell, hold
     confidence = Column(Float, nullable=False)
@@ -528,7 +553,7 @@ class Prediction(Base):
 
     __tablename__ = "predictions"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
     symbol = Column(String(20), nullable=False, index=True)
     model_name = Column(String(100), nullable=False)
     predicted_price = Column(Float, nullable=False)
@@ -545,7 +570,7 @@ class NewsData(Base):
 
     __tablename__ = "news_data"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
     headline = Column(String(500), nullable=False)
     source = Column(String(100), nullable=True)
     url = Column(String(500), nullable=True)
@@ -561,7 +586,7 @@ class PerformanceMetrics(Base):
 
     __tablename__ = "performance_metrics"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
     strategy_name = Column(String(100), nullable=False, index=True)
     symbol = Column(String(20), nullable=True)
     timeframe = Column(String(20), nullable=True)
@@ -645,7 +670,7 @@ class TickData(Base):
         Index("idx_tick_data_source_ts_ns", "source", "ts_ns"),
     )
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
     # Nanosecond epoch — use time.time_ns() when inserting
     ts_ns = Column(BigInteger, nullable=False, index=True)
     symbol = Column(String(20), nullable=False, index=True)
@@ -710,7 +735,7 @@ class WalletTransaction(Base):
 
     __tablename__ = "wallet_transactions"
 
-    id = Column(BigInteger, primary_key=True)
+    id = Column(PKBigInt, primary_key=True)
     transaction_id = Column(String(50), unique=True, nullable=False, index=True)
     user_id = Column(String(50), nullable=False, index=True)
     transaction_type = Column(String(30), nullable=False)  # deposit, withdrawal, fee, commission
@@ -728,9 +753,12 @@ class AuditLogEntry(Base):
 
     __tablename__ = "audit_log"
 
-    # Integer maps to INTEGER in SQLite (gets the implicit rowid alias / autoincrement)
-    # and to BIGINT in PostgreSQL via dialect — both correct for an audit log.
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    # Was plain ``Integer``: that did fix the SQLite insert failure, but the
+    # comment justifying it ("maps to BIGINT in PostgreSQL via dialect") is not
+    # true — sa.Integer emits INTEGER on PostgreSQL, capping an append-only
+    # audit log at 2^31 rows. ``PKBigInt`` gets both: BIGINT on PostgreSQL,
+    # rowid-aliasing INTEGER on SQLite.
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
     sequence_number = Column(BigInteger, nullable=False, index=True)
     timestamp = Column(DateTime, default=_utcnow, nullable=False, index=True)
     # created_at mirrors timestamp for query compatibility with the superadmin audit API.
@@ -983,7 +1011,7 @@ if SQLALCHEMY_AVAILABLE:
 
     class WatchlistEntry(Base):
         __tablename__ = "watchlists"
-        id = Column(BigInteger, primary_key=True, autoincrement=True)
+        id = Column(PKBigInt, primary_key=True, autoincrement=True)
         user_id = Column(String(128), nullable=False, index=True)
         symbol = Column(String(20), nullable=False)
         added_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

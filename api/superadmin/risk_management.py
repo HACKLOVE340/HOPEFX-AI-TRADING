@@ -29,7 +29,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
-from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from ._shared import _audit_payload, _require_superadmin, _utcnow, _log_superadmin_action
 from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
@@ -467,7 +467,7 @@ async def get_prop_breaches(
             for r in rows:
                 bid = f"breach_{r.id}"
                 if bid not in existing_ids:
-                    meta = json.loads(r.metadata or "{}") if r.metadata else {}
+                    meta = _audit_payload(r)
                     breaches.append(
                         {
                             "breach_id": bid,

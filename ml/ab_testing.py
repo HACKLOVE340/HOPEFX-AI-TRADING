@@ -135,6 +135,27 @@ class ABTest:
         }
 
 
+def _test_from_event(rec: Any) -> dict[str, Any]:
+    """Render a stored ``system_events`` row as an A/B test dict.
+
+    Matches ``ABTest.to_dict`` so a caller cannot tell whether a test came from
+    memory or from the database. See ``database/system_events.py`` for why the
+    row is shaped the way it is.
+    """
+    payload = rec.payload
+    return {
+        "id": rec.ref_id,
+        "name": rec.component,
+        "status": rec.status or "completed",
+        "control": payload.get("control", "baseline"),
+        "challenger": payload.get("challenger", "variant"),
+        "traffic_split": payload.get("traffic_split", 0.5),
+        "started_at": rec.started_at,
+        "finished_at": payload.get("finished_at"),
+        "metrics": payload.get("metrics", {}),
+    }
+
+
 class ABTestManager:
     """
     Manages ML champion/challenger A/B tests.
@@ -163,34 +184,17 @@ class ABTestManager:
             db_mgr = get_db_manager()
             if db_mgr:
                 with db_mgr.session() as db:
-                    from database.models import SystemEvent
+                    from database.system_events import read_events
 
-                    rows = (
-                        db.query(SystemEvent)
-                        .filter(SystemEvent.event_type == "ab_test")
-                        .order_by(SystemEvent.created_at.desc())
-                        .limit(20)
-                        .all()
-                    )
                     in_memory_ids = {t["id"] for t in result}
-                    for r in rows:
-                        if str(r.id) not in in_memory_ids:
-                            meta = r.metadata or {}
-                            result.append(
-                                {
-                                    "id": str(r.id),
-                                    "name": r.component or "unknown",
-                                    "status": r.status or "completed",
-                                    "control": meta.get("control", "baseline"),
-                                    "challenger": meta.get("challenger", "variant"),
-                                    "traffic_split": meta.get("traffic_split", 0.5),
-                                    "started_at": r.created_at.isoformat() if r.created_at else None,
-                                    "finished_at": meta.get("finished_at"),
-                                    "metrics": meta.get("metrics", {}),
-                                }
-                            )
+                    for rec in read_events(db, event_type="ab_test", limit=20):
+                        if rec.ref_id in in_memory_ids:
+                            continue
+                        if active_only and rec.status != "active":
+                            continue
+                        result.append(_test_from_event(rec))
         except Exception as exc:
-            logger.debug("ABTestManager.list_tests db: %s", exc)
+            logger.warning("ABTestManager.list_tests could not read stored tests: %s", exc)
 
         return result
 
@@ -271,14 +275,16 @@ class ABTestManager:
             if not db_mgr:
                 return
             with db_mgr.session() as db:
-                from database.models import SystemEvent
+                from database.system_events import upsert_event
 
-                row = SystemEvent(
-                    id=test.test_id,
+                upsert_event(
+                    db,
+                    ref_id=test.test_id,
                     event_type="ab_test",
                     component=test.name,
                     status=test.status,
-                    metadata={
+                    message=f"ab_test {test.name}: {test.status}",
+                    payload={
                         "control": test.control,
                         "challenger": test.challenger,
                         "traffic_split": test.traffic_split,
@@ -286,10 +292,9 @@ class ABTestManager:
                         "metrics": test.get_metrics(),
                     },
                 )
-                db.merge(row)  # healer: ignore — SQLAlchemy merge, not pandas merge
                 db.commit()
         except Exception as exc:
-            logger.debug("ABTestManager._persist_test: %s", exc)
+            logger.warning("ABTestManager._persist_test failed, test not recorded: %s", exc)
 
     def _load_from_db(self) -> None:
         try:
@@ -299,28 +304,29 @@ class ABTestManager:
             if not db_mgr:
                 return
             with db_mgr.session() as db:
-                from database.models import SystemEvent
+                from database.system_events import read_events
 
-                rows = (
-                    db.query(SystemEvent)
-                    .filter(SystemEvent.event_type == "ab_test", SystemEvent.status == "active")
-                    .all()
-                )
-                for r in rows:
-                    meta = r.metadata or {}
+                # ``status`` is not a column — it lives inside details_json, so
+                # the filter happens here rather than in SQL. This table holds
+                # one row per experiment, so there is nothing to gain from
+                # pushing it down.
+                for rec in read_events(db, event_type="ab_test", limit=200):
+                    if rec.status != "active":
+                        continue
+                    payload = rec.payload
                     test = ABTest(
-                        test_id=str(r.id),
-                        name=r.component or "unknown",
-                        control=meta.get("control", "baseline"),
-                        challenger=meta.get("challenger", "variant"),
-                        traffic_split=float(meta.get("traffic_split", 0.2)),
+                        test_id=rec.ref_id,
+                        name=rec.component,
+                        control=payload.get("control", "baseline"),
+                        challenger=payload.get("challenger", "variant"),
+                        traffic_split=float(payload.get("traffic_split", 0.2)),
                         status="active",
-                        started_at=r.created_at.isoformat() if r.created_at else None,
+                        started_at=rec.started_at,
                     )
                     with self._lock:
                         self._tests[test.test_id] = test
         except Exception as exc:
-            logger.debug("ABTestManager._load_from_db: %s", exc)
+            logger.warning("ABTestManager could not restore running tests from the database: %s", exc)
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────

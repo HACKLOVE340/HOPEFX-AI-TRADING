@@ -39,6 +39,27 @@ _KNOWN_MODELS = [
 ]
 
 
+def _job_from_event(rec: Any) -> dict[str, Any]:
+    """Render a stored ``system_events`` row as a training-job dict.
+
+    ``list_jobs`` and ``get_job`` each built this shape by hand, from columns
+    that do not exist (``created_at``, ``status``, ``metadata``). One function,
+    one mapping — see ``database/system_events.py`` for why the row looks the
+    way it does.
+    """
+    payload = rec.payload
+    return {
+        "id": rec.ref_id,
+        "model": rec.component,
+        "status": rec.status or "completed",
+        "started_at": rec.started_at,
+        "finished_at": payload.get("finished_at"),
+        "duration_s": payload.get("duration_s", 0),
+        "metrics": payload.get("metrics", {}),
+        "error": payload.get("error"),
+    }
+
+
 class TrainingJob:
     def __init__(
         self,
@@ -108,32 +129,12 @@ class TrainingManager:
             db_mgr = get_db_manager()
             if db_mgr:
                 with db_mgr.session() as db:
-                    from database.models import SystemEvent
+                    from database.system_events import read_events
 
-                    rows = (
-                        db.query(SystemEvent)
-                        .filter(SystemEvent.event_type == "ml_training")
-                        .order_by(SystemEvent.created_at.desc())
-                        .limit(limit)
-                        .all()
-                    )
-                    for r in rows:
-                        meta = r.metadata or {}
-                        job_id = str(r.id)
+                    for rec in read_events(db, event_type="ml_training", limit=limit):
                         # Don't duplicate active jobs
-                        if job_id not in self._active:
-                            jobs.append(
-                                {
-                                    "id": job_id,
-                                    "model": r.component or "unknown",
-                                    "status": r.status or "completed",
-                                    "started_at": r.created_at.isoformat() if r.created_at else None,
-                                    "finished_at": meta.get("finished_at"),
-                                    "duration_s": meta.get("duration_s", 0),
-                                    "metrics": meta.get("metrics", {}),
-                                    "error": meta.get("error"),
-                                }
-                            )
+                        if rec.ref_id not in self._active:
+                            jobs.append(_job_from_event(rec))
         except Exception as exc:
             logger.debug("TrainingManager.list_jobs db query: %s", exc)
 
@@ -154,20 +155,14 @@ class TrainingManager:
             db_mgr = get_db_manager()
             if db_mgr:
                 with db_mgr.session() as db:
-                    from database.models import SystemEvent
+                    from database.system_events import read_events
 
-                    row = db.query(SystemEvent).filter(SystemEvent.id == job_id).first()
-                    if row:
-                        meta = row.metadata or {}
-                        return {
-                            "id": str(row.id),
-                            "model": row.component or "unknown",
-                            "status": row.status or "completed",
-                            "started_at": row.created_at.isoformat() if row.created_at else None,
-                            "finished_at": meta.get("finished_at"),
-                            "duration_s": meta.get("duration_s", 0),
-                            "metrics": meta.get("metrics", {}),
-                        }
+                    # The job id lives in trace_id, not the BigInteger primary
+                    # key — see database/system_events.py. The old lookup
+                    # compared a UUID string against that integer PK.
+                    for rec in read_events(db, event_type="ml_training", limit=200):
+                        if rec.ref_id == job_id:
+                            return _job_from_event(rec)
         except Exception as exc:
             logger.debug("TrainingManager.get_job: %s", exc)
         return None
@@ -287,24 +282,26 @@ class TrainingManager:
             if not db_mgr:
                 return
             with db_mgr.session() as db:
-                from database.models import SystemEvent
+                from database.system_events import upsert_event
 
-                row = SystemEvent(
-                    id=job_id,
+                upsert_event(
+                    db,
+                    ref_id=job_id,
                     event_type="ml_training",
                     component=model,
                     status=status,
-                    metadata={
+                    level="ERROR" if error else "INFO",
+                    message=f"training {model}: {status}",
+                    payload={
                         "duration_s": round(duration_s, 1),
                         "metrics": metrics,
                         "error": error,
                         "finished_at": datetime.now(UTC).isoformat(),
                     },
                 )
-                db.add(row)
                 db.commit()
         except Exception as exc:
-            logger.debug("TrainingManager._persist_job: %s", exc)
+            logger.warning("TrainingManager._persist_job failed, run not recorded: %s", exc)
 
     def _static_model_status(self) -> list[dict[str, Any]]:
         """Return a static status list from saved model files when DB is unavailable."""

@@ -35,7 +35,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from api.auth import TokenPayload
-from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from ._shared import _audit_payload, _require_superadmin, _utcnow, _log_superadmin_action
 from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
@@ -201,7 +201,7 @@ async def get_aml_alerts(
             for r in rows:
                 aid = f"aml_{r.id}"
                 if aid not in existing_ids:
-                    meta = json.loads(r.metadata or "{}") if r.metadata else {}
+                    meta = _audit_payload(r)
                     alerts.append(
                         {
                             "alert_id": aid,
@@ -306,7 +306,7 @@ async def get_sanctions_hits(
             for r in rows:
                 hid = f"sanc_{r.id}"
                 if hid not in existing_ids:
-                    meta = json.loads(r.metadata or "{}") if r.metadata else {}
+                    meta = _audit_payload(r)
                     hits.append(
                         {
                             "hit_id": hid,
