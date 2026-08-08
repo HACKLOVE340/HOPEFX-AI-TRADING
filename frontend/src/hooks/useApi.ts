@@ -383,8 +383,21 @@ export const authApi = {
 
 // ── Trading ───────────────────────────────────────────────────────────────────
 
+export interface SymbolSpec {
+  symbol: string;
+  description: string;
+  category: string;
+  pip_size: number;
+  lot_size: number;
+  min_lot: number;
+  max_lot: number;
+  margin_rate: number;
+}
+
 export const tradingApi = {
   positions:      ()              => api.get('/trading/positions'),
+  /** Instrument catalogue — the server's pip and contract sizes (F5-01). */
+  symbols:        ()              => api.get<SymbolSpec[]>('/trading/symbols'),
   signals:        ()              => api.get('/trading/signals'),
   account:        ()              => api.get('/trading/account'),
   prices:         ()              => api.get<Record<string, { bid: number; ask: number; last: number; timestamp: number }>>('/trading/prices'),

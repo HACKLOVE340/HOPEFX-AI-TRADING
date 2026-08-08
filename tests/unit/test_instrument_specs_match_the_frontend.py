@@ -6,10 +6,15 @@ tests/unit/test_instrument_specs_match_the_frontend.py
 ======================================================
 F5-01 — two instrument tables, and they had already drifted.
 
-``api/trading.py::_SYMBOL_CATALOGUE`` is the server's instrument spec and is
-served to clients at ``GET /api/trading/symbols``. The risk calculator does not
-read it: ``frontend/src/pages/RiskCalculator.tsx`` carries its own hardcoded
-``SYMBOLS`` map of pip sizes and contract sizes, and sizes positions from that.
+``api/trading.py::_SYMBOL_CATALOGUE`` is the server's instrument spec, served at
+``GET /api/trading/symbols``. The risk calculator did not read it: it carried its
+own hardcoded ``SYMBOLS`` map of pip and contract sizes and sized positions from
+that.
+
+**Since fixed** — ``useInstrumentSpecs`` now fetches the catalogue and the server
+is the authority. What remains on the client is ``BUILTIN_SPECS``, the offline
+default used when that call fails, and it is what this test checks. A fallback
+nobody verifies is just a second opinion.
 
 They disagreed on ETH/USD — ``0.01`` on the client against ``0.1`` on the
 server, a factor of ten.
@@ -27,12 +32,8 @@ both out by 10×. A trader reading "stop distance: 10,000 pips" on a $100 stop
 would reasonably conclude the tool was broken, or worse, believe it.
 
 This is the S13-01 duplication pattern, which has now produced a defect in every
-duplicated pair found in this codebase. The durable fix is for the calculator to
-read ``/api/trading/symbols`` rather than keep a copy; that is a real change to
-a position-sizing tool — it needs a load state, and F1-01 established that this
-page must not silently substitute a fallback — so it is recorded as follow-up
-rather than done in passing. This test is the guard in the meantime: the copy is
-allowed to exist, but it is not allowed to disagree.
+duplicated pair found in this codebase. The copy is allowed to exist as an
+offline default; it is not allowed to disagree.
 """
 
 from __future__ import annotations
@@ -47,14 +48,21 @@ from api.trading import _SYMBOL_CATALOGUE
 
 pytestmark = pytest.mark.unit
 
-_RISK_CALC = Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "RiskCalculator.tsx"
+_SPECS_TS = Path(__file__).resolve().parents[2] / "frontend" / "src" / "hooks" / "useInstrumentSpecs.ts"
 
 
 def _frontend_symbols() -> dict[str, dict[str, float]]:
-    """Parse the hardcoded SYMBOLS map out of RiskCalculator.tsx."""
-    src = _RISK_CALC.read_text(encoding="utf-8")
-    block = re.search(r"const SYMBOLS[^=]*=\s*\{(.*?)\n\};", src, re.S)
-    assert block, "SYMBOLS map not found in RiskCalculator.tsx — re-check F5-01"
+    """Parse the offline fallback table out of useInstrumentSpecs.ts.
+
+    The calculator now reads ``GET /api/trading/symbols`` at runtime, so the
+    server is the authority. This table remains as the offline default when that
+    call fails — which is exactly why it still has to agree with the catalogue:
+    a fallback nobody checks is a second opinion, and S13-01's record is that
+    every duplicated pair here has already produced a defect.
+    """
+    src = _SPECS_TS.read_text(encoding="utf-8")
+    block = re.search(r"BUILTIN_SPECS[^=]*=\s*\{(.*?)\n\};", src, re.S)
+    assert block, "BUILTIN_SPECS not found in useInstrumentSpecs.ts — re-check F5-01"
 
     out: dict[str, dict[str, float]] = {}
     for line in block.group(1).split("\n"):
@@ -63,7 +71,7 @@ def _frontend_symbols() -> dict[str, dict[str, float]]:
             continue
         fields = dict(re.findall(r"(\w+):\s*([\d.]+)", line))
         out[key.group(1).replace("/", "")] = {k: ast.literal_eval(v) for k, v in fields.items()}
-    assert out, "parsed no symbols out of RiskCalculator.tsx"
+    assert out, "parsed no symbols out of useInstrumentSpecs.ts"
     return out
 
 

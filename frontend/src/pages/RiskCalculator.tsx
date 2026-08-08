@@ -15,6 +15,11 @@ import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
+import {
+  useInstrumentSpecs,
+  BUILTIN_SPECS,
+  type InstrumentSpec,
+} from '../hooks/useInstrumentSpecs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,29 +74,20 @@ interface SavedCalc {
  * size is derived by dividing risk by it, the suggested position was ~150×
  * too small. On a position-sizing tool that is the whole output.
  */
-const SYMBOLS: Record<string, { pipSize: number; contractSize: number; quoteIsUsd: boolean; label: string }> = {
-  'XAU/USD': { pipSize: 0.01,    contractSize: 100,    quoteIsUsd: true,  label: 'Gold (XAU/USD)' },
-  'EUR/USD': { pipSize: 0.0001,  contractSize: 100000, quoteIsUsd: true,  label: 'EUR/USD' },
-  'GBP/USD': { pipSize: 0.0001,  contractSize: 100000, quoteIsUsd: true,  label: 'GBP/USD' },
-  'USD/JPY': { pipSize: 0.01,    contractSize: 100000, quoteIsUsd: false, label: 'USD/JPY' },
-  'BTC/USD': { pipSize: 1,       contractSize: 1,      quoteIsUsd: true,  label: 'Bitcoin (BTC/USD)' },
-  // F5-01: was 0.01, against the backend catalogue's 0.1 (api/trading.py
-  // `_SYMBOL_CATALOGUE`). The sizing formula divides by pipSize and multiplies
-  // by it again, so lot size and max loss were unaffected — but the pip count
-  // and pip value shown beside them were ten times out.
-  'ETH/USD': { pipSize: 0.1,     contractSize: 1,      quoteIsUsd: true,  label: 'Ethereum (ETH/USD)' },
-};
 
 // ─── Calculation logic ────────────────────────────────────────────────────────
 
-export function calculate(state: CalcState): CalcResult | null {
+export function calculate(
+  state: CalcState,
+  specs: Record<string, InstrumentSpec> = BUILTIN_SPECS,
+): CalcResult | null {
   const balance  = parseFloat(state.accountBalance);
   const riskPct  = parseFloat(state.riskPercent) / 100;
   const entry    = parseFloat(state.entryPrice);
   const sl       = parseFloat(state.stopLoss);
   const tp       = parseFloat(state.takeProfit);
   const leverage = parseFloat(state.leverage) || 1;
-  const sym      = SYMBOLS[state.symbol];
+  const sym      = specs[state.symbol];
 
   if (!sym || isNaN(balance) || isNaN(entry) || isNaN(sl) || isNaN(tp) || entry <= 0) return null;
   if (sl === entry || tp === entry) return null;
@@ -180,6 +176,12 @@ const RiskCalculator: React.FC = () => {
   const account = useStore(selectAccount);
   const prices  = useStore((s) => s.prices);
   const feedLive = useStore(selectFeedLive);
+  // F5-01: pip and contract sizes come from the server's instrument catalogue,
+  // which is what the backtester and the order path use. The built-in table is
+  // still the offline default — a backend test fails CI if it disagrees with the
+  // server's — but which one is in use is rendered rather than swallowed,
+  // because this page's whole output is derived from these numbers (F1-01).
+  const instruments = useInstrumentSpecs();
 
   const [state, setState] = useState<CalcState>({
     symbol:         'XAU/USD',
@@ -277,7 +279,7 @@ const RiskCalculator: React.FC = () => {
   const set = useCallback((key: keyof CalcState) => (v: string) =>
     setState((prev) => ({ ...prev, [key]: v })), []);
 
-  const result = calculate(state);
+  const result = calculate(state, instruments.specs);
 
   const handleSave = async () => {
     if (!result) return;
@@ -365,6 +367,26 @@ const RiskCalculator: React.FC = () => {
       />
 
       <StaleDataNotice failed={freshness.failed} what={freshness.what} />
+      {instruments.source === 'builtin' && !instruments.loading && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            padding: '8px 12px', borderRadius: 6, marginBottom: 12,
+            background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.3)',
+            fontSize: 12, color: '#ffb800',
+          }}
+        >
+          <span aria-hidden="true">⚠</span>
+          <span>
+            Couldn&apos;t reach the instrument catalogue — sizing from the
+            built-in specification. It is checked against the server on every
+            build, so the numbers should agree, but they have not been confirmed
+            for this session.
+          </span>
+        </div>
+      )}
 
       <div style={s.grid}>
         {/* ── Inputs ── */}
@@ -377,7 +399,7 @@ const RiskCalculator: React.FC = () => {
             value={state.symbol}
             onChange={(e) => setState((p) => ({ ...p, symbol: e.target.value }))}
           >
-            {Object.entries(SYMBOLS).map(([k, v]) => (
+            {Object.entries(instruments.specs).map(([k, v]) => (
               <option key={k} value={k}>{v.label}</option>
             ))}
           </select>

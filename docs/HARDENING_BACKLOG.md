@@ -3915,3 +3915,106 @@ stray keystroke away. It opens the same confirmation a button would, states in
 words that **open positions are not closed**, and reports a timeout through
 `describeSubmitFailure` (F2-01) rather than claiming a halt failed when it may
 have succeeded.
+
+---
+
+## Round 4 — the three remaining follow-ups, closed
+
+### F5-01 (follow-up) — the calculator reads the server's catalogue — **FIXED**
+
+`useInstrumentSpecs` fetches `GET /api/trading/symbols`, so the server — the
+same catalogue the backtester, order path and symbol search use — is now the
+authority for pip and contract sizes.
+
+The rule that shaped the design: **F1-01 forbids a silent fallback on this
+page.** That finding was this very component swallowing a failed price fetch and
+quietly substituting a store price, *while that price is the input to position
+sizing*. Replacing one silent substitution with another would be the same defect
+in a different coat. So the built-in table survives as an offline default — it
+is legitimate, because `test_instrument_specs_match_the_frontend.py` fails CI if
+it ever disagrees with the server — and the page **says** when it is on it.
+
+`quoteIsUsd` is derived rather than fetched: the catalogue has no such field and
+it is a property of the symbol.
+
+### S12-04e/f/g — the un-awaited tail, triaged — **FIXED**
+
+The backlog carried "~333 un-awaited broker call sites still need triage". **That
+number was a raw grep and it was wrong.** An AST pass that filters properly:
+
+| filter | count |
+|---|---|
+| method-name match anywhere | 266 |
+| …with a broker-shaped receiver, inside `async def` | 37 |
+| …excluding `wait_for` / `gather` / `create_task` / `iscoroutine` guards | 6 |
+| …**real, after reading every one** | **4** |
+
+**S12-04e (CRITICAL) — the kill switch could not close a position.**
+`CircuitBreaker._execute_kill_switch` called `self.broker.get_positions()`
+without awaiting. Against an async broker that is a coroutine: truthy, so the
+"nothing to close" exit never fired; `cancel_all_orders()` built a second
+coroutine and dropped it; `for position in positions` raised
+`TypeError: 'coroutine' object is not iterable` straight into the retry loop's
+`except`. Three attempts, nothing closed, then a final `len()` on another
+coroutine inside the escalation branch. **The most important control in the
+product could not close anything**, and the operator was told it had partially
+failed — of a mechanism that never ran. Reproduced exactly (three logged
+`'coroutine' object is not iterable`) before the fix.
+
+**S12-04f** — `trader_full.OrderGateway.place_market_order` never awaited
+`place_order`, so the order never reached the broker; `cancel_order` was
+annotated `-> bool` and returned a coroutine, so every caller's `if success:`
+was true whatever the broker did.
+
+**S12-04g** — `health_check_service._check_broker` ran `broker.get_account_info()`
+inside an executor, so against an async broker the future resolved to a
+coroutine, the balance read came back `None`, and the check reported the broker
+**ok** having read nothing.
+
+All four now use `execution/broker_call.call_broker`, which awaits a coroutine
+function and runs a sync one in an executor — correct against either shape.
+
+**Verified NOT bugs and left alone rather than churned:**
+`execution/fix_router.py:483` runs `broker.place_order` in an executor with the
+comment "PaperTradingBroker.place_order is synchronous" — checked, it is `def`,
+not `async def`, so the comment is accurate and the executor right.
+`brain/brain.py` binds then awaits through `asyncio.wait_for` at all seven sites.
+
+### S1-12 — the Kelly backtest comparison — **DONE**
+
+`scripts/kelly_sizing_comparison.py`, output in `docs/KELLY_SIZING_COMPARISON.txt`.
+It drives the real `RiskManager._kelly` over real XAUUSD bars, sizing each signal
+under both rules. Stated as what it is: a **sizing comparison, not a strategy
+backtest** — win probabilities are swept rather than predicted, so nothing
+depends on trusting the model.
+
+The change: `b = max(0.5, confidence * 3.0)` → `b = |target−entry| / |entry−stop|`.
+With the risk manager's own ATR stops (2.0×ATR target / 1.0×ATR stop) the real
+`b` is 2.0, so break-even is **33.3%**.
+
+Sizing: the new rule is **smaller in 12 of 25** confidence×probability cells and
+larger in 8 — it is not uniformly more conservative, it is *correctly* keyed. The
+old rule sized up to **+44% larger** at high confidence, which is exactly the
+defect: confidence was standing in for odds.
+
+The simulation is where it matters, swept **around** break-even with costs:
+
+| true p | rule | median end | p(lose 50%) | median max DD |
+|---|---|---|---|---|
+| 30.3% | old | 86,457 | 0% | 20.4% |
+| 30.3% | **new** | **100,000** | 0% | **0.0%** |
+| 33.3% *(break-even)* | old | 86,467 | 4% | 36.7% |
+| 33.3% | **new** | **100,000** | **0%** | **0.0%** |
+| 38.3% *(real edge)* | old | 312,086 | 1% | 43.8% |
+| 38.3% | new | 286,141 | **0%** | **32.4%** |
+
+**The new rule refuses to trade below the real break-even.** The old one could
+not: its break-even moved with model confidence rather than with the stops, so a
+confident model kept it sizing into a negative-expectancy trade. With a genuine
+edge the new rule gives up ~8% of median return for ~11 points less drawdown.
+
+*A correction on the way there:* the first version of the simulation swept
+p = 0.45–0.55 against b = 2.0 — an edge of +0.35 per unit risked — and printed
+median endings of 10²⁴ with zero ruin for both rules. That is not a result, it
+is a range where the question cannot be asked. Rewritten to sweep at and below
+break-even, with costs.

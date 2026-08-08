@@ -40,6 +40,8 @@ Streaming API keys (at least one required for live ticks):
 from __future__ import annotations
 
 import asyncio
+
+from execution.broker_call import call_broker
 import contextlib
 import logging
 import os
@@ -183,7 +185,11 @@ class OrderGateway:
             from brokers.base import OrderSide, OrderType
 
             side_enum = OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL
-            order = self._broker.place_order(
+            # S12-04f: `call_broker`, not a bare call. BaseBroker.place_order is
+            # `async def`, so this bound a coroutine and dropped it — the order
+            # never reached the broker, and the caller got a truthy object back.
+            order = await call_broker(
+                self._broker.place_order,
                 symbol=symbol,
                 side=side_enum,
                 order_type=OrderType.MARKET,
@@ -204,7 +210,9 @@ class OrderGateway:
 
     async def cancel_order(self, order_id: str) -> bool:
         try:
-            return self._broker.cancel_order(order_id)
+            # S12-04f: annotated `-> bool` but returned a coroutine, so every
+            # caller's `if success:` was true whatever the broker did.
+            return bool(await call_broker(self._broker.cancel_order, order_id))
         except Exception as exc:
             logger.error("OrderGateway.cancel_order: %s", exc)
             return False

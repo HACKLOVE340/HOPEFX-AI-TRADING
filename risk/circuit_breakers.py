@@ -25,6 +25,8 @@ from enum import Enum
 
 import redis
 
+from execution.broker_call import call_broker
+
 logger = logging.getLogger(__name__)
 
 # Number of consecutive monitoring-loop failures (e.g. a broker disconnect that
@@ -353,19 +355,25 @@ class CircuitBreaker:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                positions = self.broker.get_positions()
+                # S12-04e: `call_broker`, not a bare call. Every BaseBroker
+                # method is `async def`, so this used to bind a coroutine —
+                # truthy, so the "nothing to close" exit never fired, and
+                # iterating it raised TypeError straight into the except-block
+                # below. Three retries later the kill switch had closed nothing
+                # and reported a partial failure of a mechanism that never ran.
+                positions = await call_broker(self.broker.get_positions)
                 if not positions:
                     logger.info("No open positions to close")
                     break
 
                 # Cancel all pending orders first
-                self.broker.cancel_all_orders()
+                await call_broker(self.broker.cancel_all_orders)
                 await asyncio.sleep(0.5)  # Brief pause
 
                 # Close all positions at market
                 for position in positions:
                     try:
-                        self.broker.close_position(position, order_type="MARKET")
+                        await call_broker(self.broker.close_position, position, order_type="MARKET")
                         logger.info("Closed position: %s", position)
 
                     except Exception as e:
@@ -373,7 +381,7 @@ class CircuitBreaker:
 
                 # Verify closure
                 await asyncio.sleep(1)
-                remaining = self.broker.get_positions()
+                remaining = await call_broker(self.broker.get_positions)
                 if not remaining:
                     logger.info("✅ All positions closed successfully")
                     break
@@ -385,7 +393,7 @@ class CircuitBreaker:
                 await asyncio.sleep(1)
 
         # ── Final verification + broker-level escalation ──────────────────────
-        final_positions = self.broker.get_positions()
+        final_positions = await call_broker(self.broker.get_positions)
         if final_positions:
             n_remaining = len(final_positions)
             critical_msg = (
