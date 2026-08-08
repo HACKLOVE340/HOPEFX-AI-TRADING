@@ -3341,3 +3341,66 @@ takes.
 Not fixed: deleting it is a judgement call about which of the two role
 mechanisms should survive, and the redundant one is the *safe* kind of dead
 code. Recorded for F10 (dead code and duplication), where that call belongs.
+
+---
+
+## Round 4 — Slice F3: state, freshness, and the store
+
+Scope: all 33 state fields in `src/store/index.ts` — what writes each, what reads
+it, what happens when it goes stale — then the React Query layer separately: 83
+`useQuery` call sites and their `staleTime` / `refetchInterval`.
+
+### F3-01 — the HTTP fallback is switched off by the failure it exists for (HIGH)
+
+`hooks/useOrchestratorData.ts`, three queries, with the comment above the first
+saying exactly what it is for:
+
+```ts
+// ── Account (every 10s — fallback when WS is down) ──────────────────────
+refetchInterval: wsStatus === 'connected' ? false : 10_000,   // :277  account
+refetchInterval: wsStatus === 'connected' ? false : 10_000,   // :321  positions
+refetchInterval: wsStatus === 'connected' ? false : 15_000,   // :354  signals
+```
+
+The fallback is right. Its **trigger** is not. "WS is down" is measured as
+`wsStatus !== 'connected'`, and S9-01 is precisely that `wsStatus` *stays*
+`'connected'` while the server's broadcast loop stalls: socket open, nothing
+arriving, nothing erroring, nothing reconnecting.
+
+So in the one failure this fallback was written for, it never fires. Account,
+positions and signals freeze at their last pushed value, and the polling that
+would have refreshed them is suppressed by the flag that failed to notice. A
+stalled feed is not a state the app rides out — it is permanent until something
+else forces a refetch.
+
+**It compounds with F1-02 in an unhappy way.** The notices added there now tell
+the user their balances and P&L may have moved, while the app holds a working
+HTTP path it has switched off. It could have been self-healing and was instead
+merely honest.
+
+**Fix:** key all three to `selectFeedLive` — connected **and** not stale **and**
+something has arrived. A stall now repairs itself within one interval, and the
+recovery is automatic rather than requiring a reload.
+
+The remaining 80 query sites were read and are sane: nothing money-bearing
+serves cached data indefinitely, the longest `staleTime` on a trading surface is
+2 minutes (`performance/equity-curve`), and the only hour-long one is
+`GeopoliticalRiskPage`, which is appropriate for its data.
+
+### F3-02 — `lastHeartbeat` is a decoy (LOW)
+
+Of the store's 33 state fields, **every one has at least one reader except
+`lastHeartbeat`, which has zero.** The playbook named it as the known example
+and it was still there.
+
+Being unused is not the problem. Being unused *under that name* is: it is the
+field a reader reaches for when they want "is the feed alive?", it is kept
+faithfully up to date, and the codebase had to grow `lastDataAt` and `feedStale`
+to answer that question because nothing consumed this one. A heartbeat says the
+transport is open — which is the exact thing S9-01 showed keeps being true while
+no data arrives.
+
+**Fix:** kept (dropping it would make `useWebSocket` discard a message type
+silently) and documented at the declaration as *not* the freshness signal, with
+a pointer to `lastDataAt` / `feedStale` / `selectFeedLive`. Pinned by a test, so
+the field cannot quietly go back to looking like the answer.

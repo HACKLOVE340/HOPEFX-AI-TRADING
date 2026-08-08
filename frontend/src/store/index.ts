@@ -165,6 +165,24 @@ interface AlertsSlice {
 
 interface WsSlice {
   wsStatus:        WsStatus;
+  /**
+   * Timestamp of the last `heartbeat` message specifically.
+   *
+   * **This is not the freshness signal — nothing reads it.** F3-02: of the
+   * store's 33 state fields it is the only one with zero readers outside this
+   * file, and the audit playbook already named it as the known example. It is
+   * kept because the heartbeat message type exists and dropping the field would
+   * make `useWebSocket` discard a message silently.
+   *
+   * It is a decoy, which is why this comment is here: it carries the name a
+   * reader reaches for when they want "is the feed alive?", and answering that
+   * from it is wrong — a heartbeat is the transport telling you the socket is
+   * open, which is the exact thing S9-01 showed keeps being true while no data
+   * arrives.
+   *
+   * For liveness use `lastDataAt` / `feedStale`, or `selectFeedLive`, which
+   * combine them with the connection state.
+   */
   lastHeartbeat:   number | null;
   /**
    * Timestamp of the last *data* message (tick, account, position…) received
