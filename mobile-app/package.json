@@ -74,7 +74,7 @@
     "fast-xml-parser": ">=5.7.0",
     "postcss": ">=8.5.10",
     "braces": ">=3.0.3",
-    "brace-expansion": "5.0.8",
+    "brace-expansion": ">=5.0.9",
     "micromatch": ">=4.0.8",
     "semver": ">=7.5.2",
     "@expo/plist": ">=0.2.3",

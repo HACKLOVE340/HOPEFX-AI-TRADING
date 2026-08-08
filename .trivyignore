@@ -5,3 +5,22 @@
 # reachable in production for this codebase.
 CVE-2026-55685
 GHSA-qwww-vcr4-c8h2
+
+# image-size — DoS via infinite loops in the ICNS / JXL / HEIF parsers.
+#
+# Suppressed because there is nothing to upgrade to, not because it is
+# harmless: both advisories (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq) cover
+# `<=2.0.2`, and 2.0.2 is the latest published release. No version of this
+# package is unaffected, so pinning cannot clear it.
+#
+# Reachability: image-size enters mobile-app/ through exactly one path —
+# `metro` (the React Native bundler), which pulls it at ^1.0.2. Verified with
+# `npm ls`: no other dependent. Metro runs at build time on developer and CI
+# machines, measuring this repository's own asset files; it is not part of the
+# JS bundle shipped to a device, and it never parses an attacker-supplied
+# image. The DoS therefore has no production surface here.
+#
+# Revisit when metro widens its range past image-size 2.0.2, or when a fixed
+# release lands — at that point drop these two lines rather than renewing them.
+CVE-2025-71329
+CVE-2025-71330
