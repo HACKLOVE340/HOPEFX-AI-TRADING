@@ -447,8 +447,53 @@ class PaperTradingBroker(BrokerConnector):
             self._restore_state_from_redis()
         return True
 
+    def _save_balance_to_redis(self) -> None:
+        """Persist the cash balance after it moves.
+
+        Called from the only two places that move it — commission and realised
+        P&L on close. Persistence must never be able to break a fill, so any
+        failure is logged and swallowed, exactly as position persistence does.
+        """
+        if self._redis_state is None:
+            return
+        try:
+            self._redis_state.save_balance(self.balance)
+        except Exception as exc:
+            logger.warning("PaperTradingBroker: Redis save_balance failed: %s", exc)
+
     def _restore_state_from_redis(self) -> None:
-        """Reload open orders and positions from Redis after a restart."""
+        """Reload balance, open orders and positions from Redis after a restart.
+
+        The balance restore is new. Positions were already durable and the
+        balance was not, so every restart replayed the open book against
+        starting capital: every closed trade the account had ever made was
+        silently erased and equity jumped to ``initial_balance``. Nothing
+        logged an error — a fresh account is an ordinary thing to be — so the
+        number looked plausible and the P&L history did not survive a deploy.
+
+        A restored balance always wins over ``initial_balance``, and the
+        restore is logged with both figures so the substitution is visible. To
+        genuinely reset an account, delete its ``hopefx:<ns>:balance`` key or
+        give the broker a new namespace.
+        """
+        try:
+            persisted_balance = self._redis_state.load_balance()
+            # None means "never saved" — a new namespace, which correctly keeps
+            # initial_balance. It is not the same as a balance of 0.0, which is
+            # an account that has been wiped out and must restore as zero.
+            if persisted_balance is not None:
+                previous = self.balance
+                self.balance = persisted_balance
+                self.equity = persisted_balance
+                if abs(previous - persisted_balance) > 1e-9:
+                    logger.info(
+                        "PaperTradingBroker: restored balance $%.2f from Redis (initial was $%.2f)",
+                        persisted_balance,
+                        previous,
+                    )
+        except Exception as exc:
+            logger.warning("PaperTradingBroker: balance restore from Redis failed: %s", exc)
+
         try:
             state = self._redis_state.load_state_on_boot()
             restored_positions = 0
@@ -744,6 +789,7 @@ class PaperTradingBroker(BrokerConnector):
         commission = (quantity / self._standard_lot_units) * self._commission_per_lot
         self.balance -= commission
         self.equity = self.balance
+        self._save_balance_to_redis()
         logger.debug(
             "Commission charged: $%.4f (qty=%.0f lots=%.4f rate=%.2f/lot)",
             commission,
@@ -861,9 +907,12 @@ class PaperTradingBroker(BrokerConnector):
         else:
             gross_pnl = (position.entry_price - exit_price) * position.quantity
 
-        # Apply gross P&L then deduct closing commission
+        # Apply gross P&L then deduct closing commission.
+        # _deduct_commission persists the balance, so the write below covers the
+        # zero-commission case (commission_per_lot=0 returns early).
         self.balance += gross_pnl
         self.equity = self.balance
+        self._save_balance_to_redis()
         close_commission = self._deduct_commission(position.quantity)
         net_pnl = gross_pnl - close_commission
 

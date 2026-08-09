@@ -432,6 +432,11 @@ services:
       ALERTMANAGER_SMTP_HOST: ${ALERTMANAGER_SMTP_HOST:-localhost:587}
       ALERTMANAGER_SMTP_USERNAME: ${ALERTMANAGER_SMTP_USERNAME:-}
       ALERTMANAGER_SMTP_PASSWORD: ${ALERTMANAGER_SMTP_PASSWORD:-}
+      # Referenced by alertmanager.yml.tmpl but previously passed through
+      # nowhere, so the PagerDuty routing_key was always empty — which is a
+      # hard startup error, not a disabled channel. The template now omits the
+      # block entirely when this is unset.
+      ALERTMANAGER_PAGERDUTY_KEY: ${ALERTMANAGER_PAGERDUTY_KEY:-}
     volumes:
       - alertmanager_data:/alertmanager
     depends_on:

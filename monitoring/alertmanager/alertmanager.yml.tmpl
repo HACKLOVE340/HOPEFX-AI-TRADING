@@ -10,20 +10,48 @@
 # When real fills flow and a drawdown or P&L reconciliation breach fires,
 # the on-call page goes out via Telegram instantly (group_wait: 0s).
 #
-# Required environment variables (set in .env, never committed):
+# Optional environment variables (set in .env, never committed). A channel
+# whose variables are unset is omitted from the rendered config entirely — see
+# the @if blocks below and the note on conditional blocks at the end of this
+# header.
+#
 #   ALERTMANAGER_TELEGRAM_BOT_TOKEN  — Telegram bot token from @BotFather
-#   ALERTMANAGER_TELEGRAM_CHAT_ID    — Telegram chat/channel ID (integer)
+#   ALERTMANAGER_TELEGRAM_CHAT_ID    — Telegram chat/channel ID (non-zero integer)
 #   ALERTMANAGER_SMTP_FROM           — sender address
 #   ALERTMANAGER_SMTP_TO             — recipient address
 #   ALERTMANAGER_SMTP_HOST           — SMTP relay host:port (e.g. smtp.sendgrid.net:587)
 #   ALERTMANAGER_SMTP_USERNAME       — SMTP auth username
 #   ALERTMANAGER_SMTP_PASSWORD       — SMTP auth password
-#
-# Optional (PagerDuty on-call escalation):
 #   ALERTMANAGER_PAGERDUTY_KEY       — PagerDuty Events API v2 integration key
 #
-# Optional (Slack secondary channel):
-#   ALERTMANAGER_SLACK_WEBHOOK_URL   — Slack incoming webhook URL
+# ── Why the @if blocks exist ─────────────────────────────────────────────────
+#
+# This file used to declare every receiver unconditionally, with empty strings
+# where the secrets go. Alertmanager rejects that outright, so the container
+# never started — not with the shipped defaults, and not with every documented
+# variable set either, because three of the keys did not exist in the schema.
+# Verified against prom/alertmanager v0.27.0 `amtool check-config`:
+#
+#   routing_key: ''            → missing service or routing key in PagerDuty config
+#   bot_token: ''              → missing bot_token or bot_token_file on telegram_config
+#   chat_id: 0                 → missing chat_id on telegram_config
+#   to: ''                     → missing to address in email config
+#   email_configs.subject      → field subject not found in type config.plain
+#   email_configs.body         → field body not found in type config.plain
+#   telegram_configs.tls_config→ field tls_config not found in type config.plain
+#
+# The last three are not configuration mistakes an operator could fix: the
+# correct spellings are `headers.subject`, `text`, and `http_config.tls_config`.
+# So `alertmanager` sat in a restart loop while Prometheus scraped happily and
+# every rule in monitoring/rules — drawdown breach, circuit breaker open, P&L
+# reconciliation failure — fired into nothing.
+#
+# Blocks between `# @if VAR` and `# @endif` are kept only when VAR is set and
+# non-empty in the entrypoint's environment; otherwise they are deleted before
+# alertmanager ever sees the file. A receiver with no integrations is valid, so
+# the stack starts with zero secrets configured. entrypoint.sh prints exactly
+# which channels are live at boot, because a config that silently notifies
+# nobody is the failure mode this whole file is guarding against.
 
 global:
   resolve_timeout: 5m
@@ -76,11 +104,12 @@ route:
 receivers:
   # critical: Telegram (immediate on-call page) + email + optional PagerDuty
   - name: 'critical'
+    # @if HOPEFX_AM_TELEGRAM_ENABLED
     telegram_configs:
-      - bot_token: '${ALERTMANAGER_TELEGRAM_BOT_TOKEN:-}'
-        # chat_id must be an integer — obtain via @userinfobot or the
+      - bot_token: '${ALERTMANAGER_TELEGRAM_BOT_TOKEN}'
+        # chat_id must be a non-zero integer — obtain via @userinfobot or the
         # Telegram Bot API getUpdates endpoint.
-        chat_id: ${ALERTMANAGER_TELEGRAM_CHAT_ID:-0}
+        chat_id: ${ALERTMANAGER_TELEGRAM_CHAT_ID}
         message: |
           HOPEFX CRITICAL ALERT
           Alert: {{ .GroupLabels.alertname }}
@@ -91,13 +120,18 @@ receivers:
           {{ end }}
         parse_mode: 'Markdown'
         send_resolved: true
-        tls_config:
-          insecure_skip_verify: false
+        http_config:
+          tls_config:
+            insecure_skip_verify: false
+    # @endif
 
+    # @if HOPEFX_AM_EMAIL_ENABLED
     email_configs:
-      - to: '${ALERTMANAGER_SMTP_TO:-}'
-        subject: '[CRITICAL] HopeFX: {{ .GroupLabels.alertname }}'
-        body: |
+      - to: '${ALERTMANAGER_SMTP_TO}'
+        headers:
+          subject: '[CRITICAL] HopeFX: {{ .GroupLabels.alertname }}'
+          X-HopeFX-Severity: critical
+        text: |
           CRITICAL alert fired on HopeFX production.
 
           {{ range .Alerts }}
@@ -107,12 +141,11 @@ receivers:
           Started:     {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
           {{ end }}
         send_resolved: true
-        headers:
-          X-HopeFX-Severity: critical
+    # @endif
 
-    # PagerDuty escalation — only active when ALERTMANAGER_PAGERDUTY_KEY is set.
+    # @if HOPEFX_AM_PAGERDUTY_ENABLED
     pagerduty_configs:
-      - routing_key: '${ALERTMANAGER_PAGERDUTY_KEY:-}'
+      - routing_key: '${ALERTMANAGER_PAGERDUTY_KEY}'
         description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         severity: 'critical'
         send_resolved: true
@@ -120,13 +153,17 @@ receivers:
           alert: '{{ .GroupLabels.alertname }}'
           environment: 'production'
           service: 'hopefx-trading'
+    # @endif
 
   # email-default: warning and default alerts
   - name: 'email-default'
+    # @if HOPEFX_AM_EMAIL_ENABLED
     email_configs:
-      - to: '${ALERTMANAGER_SMTP_TO:-}'
-        subject: '[{{ .Status | toUpper }}] HopeFX: {{ .GroupLabels.alertname }}'
-        body: |
+      - to: '${ALERTMANAGER_SMTP_TO}'
+        headers:
+          subject: '[{{ .Status | toUpper }}] HopeFX: {{ .GroupLabels.alertname }}'
+          X-HopeFX-Severity: '{{ .CommonLabels.severity }}'
+        text: |
           {{ .Status | toUpper }} alert on HopeFX production.
 
           {{ range .Alerts }}
@@ -137,8 +174,7 @@ receivers:
           Started:     {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
           {{ end }}
         send_resolved: true
-        headers:
-          X-HopeFX-Severity: '{{ .CommonLabels.severity }}'
+    # @endif
 
 # ── Inhibition rules ──────────────────────────────────────────────────────────
 #

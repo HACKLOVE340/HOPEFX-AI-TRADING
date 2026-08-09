@@ -70,6 +70,18 @@ def _key_prefixes(namespace: str) -> tuple[str, str, str, str]:
     )
 
 
+def _balance_key(namespace: str) -> str:
+    """Key holding the account's cash balance for *namespace*.
+
+    Deliberately has no TTL, unlike orders and positions. Orders and positions
+    expiring after a week is a bounded loss — they are working state. A balance
+    that expires reverts the account to its starting capital, which is not a
+    gap in the record but a wrong number that looks entirely plausible.
+    """
+    base = f"hopefx:{namespace}:" if namespace else "hopefx:"
+    return f"{base}balance"
+
+
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -101,6 +113,42 @@ class RedisStateStore:
             self._order_index,
             self._position_index,
         ) = _key_prefixes(namespace)
+        self._balance_key = _balance_key(namespace)
+
+    # ------------------------------------------------------------------
+    # Balance
+    # ------------------------------------------------------------------
+
+    def save_balance(self, balance: float) -> None:
+        """Persist the account's cash balance.
+
+        Positions were already durable; the balance they settle into was not.
+        Every restart therefore replayed open positions against starting
+        capital, so realised P&L — every closed trade the account had ever
+        made — silently vanished and equity jumped to whatever the initial
+        balance was. Nothing logged an error, because from the process's point
+        of view a fresh account is a perfectly ordinary thing to be.
+        """
+        try:
+            self._r.set(self._balance_key, json.dumps({"balance": float(balance), "_saved_at": _now_iso()}))
+        except (OSError, ValueError, TypeError) as exc:
+            logger.error("RedisStateStore.save_balance error: %s", exc)
+
+    def load_balance(self) -> float | None:
+        """Return the persisted balance, or None if this account has none yet.
+
+        None means "never saved", which is different from 0.0 and must not be
+        confused with it — a fresh namespace starts at its initial balance, a
+        wiped-out account starts at zero.
+        """
+        try:
+            raw = self._r.get(self._balance_key)
+            if not raw:
+                return None
+            return float(json.loads(raw)["balance"])
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            logger.error("RedisStateStore.load_balance error: %s", exc)
+            return None
 
     # ------------------------------------------------------------------
     # Orders
@@ -236,6 +284,25 @@ class AsyncRedisStateStore:
             self._order_index,
             self._position_index,
         ) = _key_prefixes(namespace)
+        self._balance_key = _balance_key(namespace)
+
+    async def save_balance(self, balance: float) -> None:
+        """See :meth:`RedisStateStore.save_balance`."""
+        try:
+            await self._r.set(self._balance_key, json.dumps({"balance": float(balance), "_saved_at": _now_iso()}))
+        except (OSError, ValueError, TypeError) as exc:
+            logger.error("AsyncRedisStateStore.save_balance error: %s", exc)
+
+    async def load_balance(self) -> float | None:
+        """See :meth:`RedisStateStore.load_balance`."""
+        try:
+            raw = await self._r.get(self._balance_key)
+            if not raw:
+                return None
+            return float(json.loads(raw)["balance"])
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            logger.error("AsyncRedisStateStore.load_balance error: %s", exc)
+            return None
 
     async def save_order(self, order: dict[str, Any]) -> None:
         order_id = str(order.get("id") or order.get("order_id", ""))
