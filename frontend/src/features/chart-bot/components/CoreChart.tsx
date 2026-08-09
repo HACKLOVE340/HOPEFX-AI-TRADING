@@ -32,6 +32,7 @@ import { useOHLCV } from '../hooks/useChartData';
 import { ohlcvLimitFor } from '../services/chart-api';
 import { ema, bollinger, rsi } from '../utils/indicators';
 import { COLORS, CHART_DIMS } from '../utils/design-tokens';
+import { fmtSpread } from '../../../lib/utils';
 import { formatPrice, formatTime } from '../utils/formatters';
 import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartClickContext } from '../types';
 
@@ -95,7 +96,7 @@ const CrosshairBar = memo(({ info, bid, ask }: { info: CrosshairInfo | null; bid
         <>
           <span style={s.chLabel}>Bid <span style={{ ...s.chVal, color: COLORS.profit.base }}>{formatPrice(bid)}</span></span>
           <span style={s.chLabel}>Ask <span style={{ ...s.chVal, color: COLORS.loss.base }}>{formatPrice(ask)}</span></span>
-          <span style={s.chLabel}>Spread <span style={{ ...s.chVal, color: COLORS.neon.gold }}>{spread > 0 ? (spread * 100).toFixed(1) + ' pts' : '—'}</span></span>
+          <span style={s.chLabel}>Spread <span style={{ ...s.chVal, color: COLORS.neon.gold }}>{spread > 0 ? fmtSpread(spread) : '—'}</span></span>
         </>
       )}
     </div>

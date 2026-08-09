@@ -34,7 +34,7 @@ import {
   selectSentiment,
 } from '../store';
 import { mlApi, tradingApi } from '../hooks/useApi';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtSpread } from '../lib/utils';
 import type { EquityPoint } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -570,7 +570,10 @@ const RiskSnapshotPanel: React.FC = () => {
         },
         {
           label: 'Spread (XAU)',
-          value: micro?.spread != null ? `$${micro.spread.toFixed(2)}` : '—',
+          // fmtSpread, not a dollar figure: the terminal renders the same
+          // quantity as points, and two units for one number on two screens is
+          // not a comparison a trader should have to do in their head.
+          value: fmtSpread(micro?.spread),
           warn: micro?.spread != null && micro.spread > 0.5,
         },
         {

@@ -139,6 +139,27 @@ export function fmtCompact(value: number | null | undefined): string {
 }
 
 /** Format spread in pips (for gold: 1 pip = $0.01) */
+/**
+ * Absolute bid/ask spread, in points.
+ *
+ * The single renderer for this quantity. It had four, and the deployed app
+ * showed two of them at once:
+ *
+ *   LivePriceTicker      fmtSpread(tick.spread)          "30.0 pts"
+ *   Dashboard risk card  `$${micro.spread.toFixed(2)}`   "$0.88"
+ *   CoreChart            (spread * 100).toFixed(1)+' pts'  — this body, inlined
+ *   NuclearCandleChart   fmtPrice(price.spread)          "0.30" — a spread
+ *                                                        formatted as a price
+ *
+ * A trader looking at the terminal and the dashboard together saw "30.0 pts"
+ * and "$0.88" for the same instrument and had no way to reconcile them: not
+ * only different units, but different sources — the first from the WebSocket
+ * quote, the second from the microstructure snapshot. The unit difference hid
+ * the source difference, which is the one that mattered.
+ *
+ * Percentage spread (`spread_pct`) is a different quantity and keeps its own
+ * formatting; this is only for the absolute figure.
+ */
 export function fmtSpread(spread: number | null | undefined): string {
   if (spread == null || !isFinite(spread)) return '—';
   return `${(spread * 100).toFixed(1)} pts`;
