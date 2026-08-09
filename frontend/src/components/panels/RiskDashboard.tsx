@@ -138,7 +138,7 @@ export function RiskDashboard() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider">Margin Level</span>
             <span className="font-mono tabular-nums text-xs font-semibold" style={{ color: marginColor }}>
-              {account ? fmtMarginLevel(marginLevel) : '—'}
+              {account ? fmtMarginLevel(marginLevel, account.margin_used) : '—'}
             </span>
           </div>
           <div className="h-1.5 bg-[#1e2d3d] rounded-full overflow-hidden">

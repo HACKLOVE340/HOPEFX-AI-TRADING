@@ -206,7 +206,7 @@ const AccountBar: React.FC = () => {
         },
         {
           label: 'Margin Level',
-          value: fmtMarginLevel(account.margin_level),
+          value: fmtMarginLevel(account.margin_level, account.margin_used),
           color:
             marginLevelIsSafe(account.margin_level) ? 'text-[#00e676]' :
             (account.margin_level ?? 300) > 100 ? 'text-[#ffb800]' : 'text-[#ff1744]',

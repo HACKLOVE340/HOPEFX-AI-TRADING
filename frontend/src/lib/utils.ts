@@ -167,9 +167,31 @@ export function fmtRatio(value: number | null | undefined): string {
  */
 export const MARGIN_LEVEL_SAFE = 1000;
 
-export function fmtMarginLevel(value: number | null | undefined): string {
+/** The "no margin in use" sentinel from core/account_metrics.NO_MARGIN_LEVEL. */
+export const NO_MARGIN_LEVEL = 9999;
+
+export function fmtMarginLevel(
+  value: number | null | undefined,
+  /** Margin actually in use, when the caller knows it. Zero means no exposure,
+   *  which is a different statement from "a very high ratio". */
+  marginUsed?: number | null,
+): string {
   if (value == null || !isFinite(value)) return '—';
   if (value <= 0) return '—';
+  // Both halves of "nothing at risk" now render the same way.
+  //
+  // api/trading.py reports no-margin-in-use as 0.0 and api/ws_live.py as the
+  // 9999.0 sentinel; this function turned the first into "—" and the second
+  // into ">999%". The dashboard showed `MARGIN >999%` directly above
+  // `Used: $0`, which reads as a computed ratio rather than as no exposure —
+  // and the two panels disagreed purely on which endpoint had answered.
+  //
+  // ">999%" is still right for genuine tiny exposure ($0.81 against $10,000 is
+  // a true 1,234,568%, arithmetically correct and unreadable). The distinction
+  // is whether any margin is in use at all, which is why marginUsed is read
+  // when the caller has it.
+  if (marginUsed != null && marginUsed <= 0) return '—';
+  if (value === NO_MARGIN_LEVEL) return '—';
   if (value >= MARGIN_LEVEL_SAFE) return '>999%';
   return `${value.toFixed(0)}%`;
 }

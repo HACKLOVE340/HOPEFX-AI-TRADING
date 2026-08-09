@@ -119,22 +119,44 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
 
 // ── Microstructure strip ──────────────────────────────────────────────────────
 
+/**
+ * Ticks required before order-flow statistics mean anything.
+ *
+ * OFI and buy pressure are normalised ratios: with three ticks that all went
+ * the same way they read 100.0% and paint a full green bar — visually identical
+ * to 100% across a thousand ticks, and carrying none of the same information.
+ * The deployed terminal showed exactly that: `OFI 100.0%  BUY PRESS 100%` beside
+ * `TICKS 3`.
+ *
+ * The engine's arithmetic is correct; what was wrong is presenting a
+ * three-sample estimate with the confidence of a converged one. Below this
+ * threshold the ratios are withheld and the tick count is shown instead, so the
+ * strip says "not enough data yet" rather than "the market is 100% bid".
+ */
+const MIN_TICKS_FOR_FLOW = 30;
+
 function MicroStrip() {
   const micro = useStore((s) => s.microstructure);
 
   if (!micro) return null;
 
+  const ticks    = micro.tick_count ?? 0;
+  const enough   = ticks >= MIN_TICKS_FOR_FLOW;
   const ofi      = micro.order_flow_imbalance;
   const delta    = micro.volume_delta;
   const pressure = micro.buy_pressure;
-  const ofiColor = ofi > 0.1 ? '#00e676' : ofi < -0.1 ? '#ff1744' : '#ffb800';
+  const ofiColor = !enough ? '#64748b' : ofi > 0.1 ? '#00e676' : ofi < -0.1 ? '#ff1744' : '#ffb800';
 
   return (
     <div className="flex items-center gap-6 px-5 py-2 border-t border-[#1e2d3d] bg-[#080c14]">
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-slate-600 uppercase tracking-widest">OFI</span>
-        <span className="font-mono tabular-nums text-[11px] font-semibold" style={{ color: ofiColor }}>
-          {(ofi * 100).toFixed(1)}%
+        <span
+          className="font-mono tabular-nums text-[11px] font-semibold"
+          style={{ color: ofiColor }}
+          title={enough ? undefined : `Needs ${MIN_TICKS_FOR_FLOW} ticks; have ${ticks}`}
+        >
+          {enough ? `${(ofi * 100).toFixed(1)}%` : '—'}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
@@ -145,7 +167,7 @@ function MicroStrip() {
             delta >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
           )}
         >
-          {delta >= 0 ? '+' : ''}{delta.toFixed(0)}
+          {enough ? `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}` : '—'}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
@@ -155,13 +177,13 @@ function MicroStrip() {
             <div
               className="h-full rounded-full"
               style={{
-                width:           `${pressure * 100}%`,
+                width:           enough ? `${pressure * 100}%` : '0%',
                 backgroundColor: pressure > 0.6 ? '#00e676' : pressure < 0.4 ? '#ff1744' : '#ffb800',
               }}
             />
           </div>
           <span className="font-mono tabular-nums text-[10px] text-slate-400">
-            {(pressure * 100).toFixed(0)}%
+            {enough ? `${(pressure * 100).toFixed(0)}%` : '—'}
           </span>
         </div>
       </div>
@@ -173,8 +195,12 @@ function MicroStrip() {
       </div>
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-slate-600 uppercase tracking-widest">Ticks</span>
-        <span className="font-mono tabular-nums text-[11px] text-slate-400">
-          {micro.tick_count.toLocaleString()}
+        <span
+          className="font-mono tabular-nums text-[11px]"
+          style={{ color: enough ? '#94a3b8' : '#ffb800' }}
+          title={enough ? undefined : `Order-flow statistics need ${MIN_TICKS_FOR_FLOW} ticks`}
+        >
+          {ticks.toLocaleString()}
         </span>
       </div>
     </div>

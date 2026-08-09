@@ -462,9 +462,24 @@ describe('fmtMarginLevel', () => {
 
   it('bounds the unreadable end instead of printing it', () => {
     expect(fmtMarginLevel(1234567.9)).toBe('>999%');   // $0.81 used vs $10,000
-    expect(fmtMarginLevel(9999)).toBe('>999%');        // NO_MARGIN_LEVEL sentinel
     expect(fmtMarginLevel(1000)).toBe('>999%');
     expect(fmtMarginLevel(999)).toBe('999%');
+  });
+
+  it('reports the no-margin sentinel as no value, not as a huge ratio', () => {
+    // Changed deliberately. This asserted '>999%' for the 9999.0 sentinel,
+    // which met the goal above it — a flat account must not look like a margin
+    // call — but did so by printing a ratio for a quantity that is undefined
+    // when no margin is used. The deployed dashboard showed `MARGIN >999%`
+    // directly over `Used: $0`, which reads as a computed figure.
+    //
+    // '—' meets the same goal (marginLevelIsSafe still returns true, so the
+    // colour stays neutral) and matches how the 0.0 form of the identical state
+    // already rendered. Genuine tiny exposure is untouched: the 1234567.9 case
+    // above is $0.81 actually at risk and still reports '>999%'.
+    expect(fmtMarginLevel(9999)).toBe('—');
+    expect(fmtMarginLevel(9999, 0)).toBe('—');
+    expect(marginLevelIsSafe(9999)).toBe(true);
   });
 
   it('shows no value when there is nothing to report', () => {

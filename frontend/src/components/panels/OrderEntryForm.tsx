@@ -191,7 +191,26 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   const liveSymbols = Object.keys(prices);
   const symbols = liveSymbols.length > 0 ? liveSymbols : FALLBACK_SYMBOLS;
 
-  const [symbol,    setSymbol]    = useState(symbolProp ?? symbols[0] ?? 'XAU/USD');
+  // Controlled by the parent when `symbolProp` is supplied, internal otherwise.
+  //
+  // This was `useState(symbolProp ?? symbols[0] ?? 'XAU/USD')`, and useState's
+  // argument is read once, on mount. On the Trade page the parent passes
+  // `symbol={selectedSymbol}` and re-renders with a new value each time you
+  // click a symbol card — which this state then ignored, forever holding
+  // whatever was selected when the form first mounted (XAU/USD).
+  //
+  // The card highlighted, the heading changed, the positions table changed, and
+  // the order form silently kept trading gold. The symbol dropdown that would
+  // have let you correct it is hidden precisely when `symbolProp` is passed
+  // (see the `!symbolProp` guard below), so there was no way back.
+  //
+  // That is a money-path defect, not a cosmetic one: selecting GBP/USD and
+  // pressing Buy submitted an order in XAU/USD. The confirmation dialog names
+  // the real symbol, which is the only thing that stood between this and a
+  // wrong-instrument fill.
+  const [internalSymbol, setInternalSymbol] = useState(symbols[0] ?? 'XAU/USD');
+  const symbol = symbolProp ?? internalSymbol;
+  const setSymbol = setInternalSymbol;
   const [side,      setSide]      = useState<Side>(defaultSide ?? 'buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [qty,       setQty]       = useState(defaultQty ?? '0.01');

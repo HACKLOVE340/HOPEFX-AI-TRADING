@@ -115,7 +115,7 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Margin"
-        value={fmtMarginLevel(account.margin_level)}
+        value={fmtMarginLevel(account.margin_level, account.margin_used)}
         sub={`Used: $${fmtPrice(account.margin_used, 0)}`}
         valueColor={marginColor}
         compact
