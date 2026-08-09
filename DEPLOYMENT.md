@@ -38,38 +38,70 @@ cd HOPEFX-AI-TRADING
 #### 3. Configure Environment
 
 ```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit with production values
-nano .env
+python3 scripts/bootstrap_env.py --domain your-domain.com
 ```
 
-**Required environment variables:**
+This writes `.env` (mode 0600) from `.env.example` with a freshly generated value
+for every secret, and prints the superadmin, admin, trader and Grafana passwords
+once — **save them before you close the terminal.**
+
+Do not copy `.env.example` by hand. It ships fourteen `CHANGE_ME_*` placeholders,
+and startup validation rejects every one of them in production. A missed
+placeholder does not announce itself; the deploy stops with
+
+```
+dependency failed to start: container hopefx-ai-trading-app-1 is unhealthy
+```
+
+which is `sys.exit(1)` inside startup validation, seen from outside the
+container. To read the actual reason:
+
 ```bash
-# Security (CRITICAL - Generate unique values!)
-CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-CONFIG_SALT=$(python -c "import secrets; print(secrets.token_hex(16))")
-
-# Database
-POSTGRES_PASSWORD=$(python -c "import secrets; print(secrets.token_hex(16))")
-POSTGRES_USER=hopefx_admin
-
-# Application
-APP_ENV=production
+docker compose logs app | grep -A 20 "STARTUP VALIDATION FAILED"
 ```
+
+Three of those placeholders also have to agree with each other —
+`DATABASE_URL`, `POSTGRES_PASSWORD` and `DB_PASSWORD` are one credential written
+three times — which is the part hand-editing tends to get wrong in a way that
+only shows up as a database the app cannot log in to. The generator handles it.
+
+Useful flags:
+
+```bash
+# regenerate over an existing .env (keeps a timestamped backup)
+python3 scripts/bootstrap_env.py --domain your-domain.com --force
+
+# NAME=VALUE lines only, for control-panel environment editors that
+# import every line and choke on the '#' comments
+python3 scripts/bootstrap_env.py --domain your-domain.com --no-comments
+```
+
+Things the generator deliberately leaves for you, because they come from
+third-party accounts you set up after the platform is running:
+
+| Variable | Needed for |
+|----------|-----------|
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Billing. Set both, then `FEATURE_BILLING_SUBSCRIPTION=true` and restart. It ships **off** — left on with no webhook secret, startup validation hard-fails and the deploy never comes up. |
+| `OANDA_API_KEY`, `OANDA_ACCOUNT_ID` | Live/practice OANDA execution. Paper trading works without them. |
+| `FINNHUB_API_KEY` | Live economic calendar. Falls back to a hardcoded schedule. |
+| `ANTHROPIC_API_KEY` | AI chat. Stub responses without it. |
+
+None of these block startup.
 
 #### 4. Build and Start
 
 ```bash
 # Build images
-docker-compose build
+docker compose build
 
 # Start services
-docker-compose up -d
+docker compose up -d
+
+# Seed the superadmin account (uses BOOTSTRAP_SUPERADMIN_* from .env)
+docker compose exec app python3 scripts/bootstrap_prod.py
 
 # Check logs
-docker-compose logs -f hopefx-app
+docker compose logs -f app
 ```
 
 #### 5. Verify Deployment

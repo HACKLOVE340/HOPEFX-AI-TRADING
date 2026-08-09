@@ -51,6 +51,32 @@ def _env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
+# The prefix every placeholder in .env.example carries. This is the value the
+# validator rejects, not a value it uses, so the placeholder hook exempts it the
+# same way it exempts its own detection regex.
+_PLACEHOLDER_PREFIX = "CHANGE_ME"  # healer: ignore
+
+
+def is_placeholder(value: str) -> bool:
+    """True when *value* is an unreplaced .env.example placeholder.
+
+    Ten validators in this file needed this check and nine of them had it,
+    written out longhand as ``elif is_placeholder(val)``. The tenth —
+    ``_validate_crypto_webhook_secret`` — tested only for empty and for length,
+    and ``CHANGE_ME_generate_64_char_hex_secret`` is 37 characters, so it
+    cleared the length floor and passed.
+
+    That secret verifies crypto payment webhook signatures. A production
+    deployment could run with the literal placeholder as its value, and
+    ``.env.example`` is in the public repository, so the "secret" was printed in
+    the source tree. Nothing reported it, because the one copy of the check that
+    mattered was the one that had been left out.
+
+    Shared now, so a validator either calls it or visibly does not.
+    """
+    return value.strip().upper().startswith(_PLACEHOLDER_PREFIX)
+
+
 # ---------------------------------------------------------------------------
 # Public exception
 # ---------------------------------------------------------------------------
@@ -76,7 +102,7 @@ def _validate_jwt(errors: list[str]) -> None:
         errors.append(
             f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)",
         )
-    elif jwt_val.startswith("CHANGE_ME"):
+    elif is_placeholder(jwt_val):
         errors.append(
             "INSECURE SECURITY_JWT_SECRET: placeholder value detected — "
             "replace with a real random secret before deploying",
@@ -96,7 +122,11 @@ def _validate_database(errors: list[str]) -> None:
         errors.append(
             "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL",
         )
-    if db_pass and len(db_pass) < 12:
+    if db_pass and is_placeholder(db_pass):
+        errors.append(
+            "INSECURE DB_PASSWORD: placeholder value — replace before deploying",
+        )
+    elif db_pass and len(db_pass) < 12:
         errors.append(
             f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)",
         )
@@ -131,6 +161,15 @@ def _validate_redis(errors: list[str]) -> None:
             "MISSING  REDIS_PASSWORD: Redis runs without authentication in production. "
             "Set REDIS_PASSWORD to a strong random value (e.g. openssl rand -hex 32).",
         )
+    elif is_placeholder(redis_password):
+        # docker-compose.yml interpolates this into --requirepass and into every
+        # REDIS_URL, so a placeholder here is not a warning about a future
+        # mistake — it *is* the password Redis is running with, published in
+        # .env.example.
+        errors.append(
+            "INSECURE REDIS_PASSWORD: placeholder value — this becomes Redis's actual "
+            "password via docker-compose. Replace with e.g. openssl rand -hex 32.",
+        )
 
 
 def _validate_encryption_key(errors: list[str]) -> None:
@@ -144,7 +183,7 @@ def _validate_encryption_key(errors: list[str]) -> None:
         errors.append(
             f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)",
         )
-    elif enc_key.startswith("CHANGE_ME"):
+    elif is_placeholder(enc_key):
         errors.append(
             "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying",
         )
@@ -200,7 +239,7 @@ def _validate_kill_switch_token(errors: list[str]) -> None:
         errors.append(
             f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)",
         )
-    elif ks_token.startswith("CHANGE_ME"):
+    elif is_placeholder(ks_token):
         errors.append(
             "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying",
         )
@@ -240,7 +279,7 @@ def _validate_llm_backend(errors: list[str]) -> None:
                 env_name,
                 url,
             )
-    elif api_key.startswith("CHANGE_ME"):
+    elif is_placeholder(api_key):
         errors.append(f"INSECURE {env_name}: placeholder value detected — replace with a real key from {url}")
 
 
@@ -250,6 +289,11 @@ def _validate_crypto_webhook_secret(errors: list[str]) -> None:
     if not secret:
         errors.append(
             "MISSING  CRYPTO_WEBHOOK_SECRET — crypto payment webhooks will be rejected in production. "
+            'Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"'
+        )
+    elif is_placeholder(secret):
+        errors.append(
+            "INSECURE CRYPTO_WEBHOOK_SECRET: placeholder value — replace before deploying. "
             'Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"'
         )
     elif len(secret) < 32:
@@ -306,7 +350,7 @@ def _validate_finnhub(errors: list[str]) -> None:
                 "dates, actual vs forecast values) will not be available. "
                 "Set FINNHUB_API_KEY to a valid Finnhub API key to enable live data."
             )
-    elif key.startswith("CHANGE_ME"):
+    elif is_placeholder(key):
         errors.append(
             "INSECURE FINNHUB_API_KEY: placeholder value detected — "
             "replace with a real Finnhub API key from https://finnhub.io/dashboard"
@@ -371,7 +415,7 @@ def _validate_stripe(errors: list[str]) -> None:
                 "STRIPE_SECRET_KEY not set — Stripe payment endpoints will raise "
                 "until configured. Set to sk_live_... for production."
             )
-    elif key.startswith("CHANGE_ME"):
+    elif is_placeholder(key):
         errors.append("INSECURE STRIPE_SECRET_KEY: placeholder value — replace with a real Stripe key.")
     elif not key.startswith(("sk_live_", "sk_test_")):
         errors.append(f"INVALID  STRIPE_SECRET_KEY: expected sk_live_... or sk_test_... prefix, got {key[:12]!r}...")
@@ -392,7 +436,7 @@ def _validate_stripe(errors: list[str]) -> None:
                 "STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification "
                 "is disabled. Set to whsec_... from your Stripe dashboard."
             )
-    elif webhook.startswith("CHANGE_ME"):
+    elif is_placeholder(webhook):
         errors.append("INSECURE STRIPE_WEBHOOK_SECRET: placeholder value — replace with the real whsec_... value.")
 
 
