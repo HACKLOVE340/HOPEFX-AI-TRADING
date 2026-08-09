@@ -302,23 +302,51 @@ export function fmtRelative(iso: string | number | null | undefined): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// ── WebSocket ─────────────────────────────────────────────────────────────────
+// ── Base URLs ─────────────────────────────────────────────────────────────────
+//
+// One resolver per base URL, because there were four and they disagreed.
+//
+// `.env.example` ships `VITE_API_URL=` and `VITE_WS_URL=` — present but empty.
+// An empty string is not nullish, so `import.meta.env.VITE_API_URL ?? '/api'`
+// evaluates to `''`, not `'/api'`, and axios with `baseURL: ''` resolves every
+// request against the page origin: `/positions` instead of `/api/positions`.
+// Three of the four call sites used `??`; one used a truthy check. Empty must
+// mean "not configured", so the check has to be truthy everywhere.
+//
+// The second disagreement was what the value *is*. `.env.example` documents
+// `VITE_WS_URL=wss://api.YOUR_DOMAIN` — an origin with no path — and
+// `getWsBase()` treats it that way, with callers appending `/ws/live`. But
+// useWebSocket.ts and orchestrator-ws.ts used it as the complete socket URL, so
+// setting it connected to the origin with no endpoint path at all. Both now go
+// through this function.
 
 /**
- * Returns the WebSocket base URL for the current environment.
+ * Returns the HTTP API base URL for the current environment.
  *
  * Priority:
- *   1. VITE_WS_URL env var (set in .env / docker-compose)
+ *   1. VITE_API_URL, when set to a non-empty value (separate API domain)
+ *   2. `/api` — same-origin, which is how the bundled deployment serves it.
+ */
+export function getApiBase(): string {
+  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+  return envUrl || '/api';
+}
+
+/**
+ * Returns the WebSocket base URL — an origin, with no trailing path.
+ *
+ * Priority:
+ *   1. VITE_WS_URL env var, when set to a non-empty value
  *   2. Derived from window.location — wss:// on HTTPS, ws:// on HTTP.
  *      This avoids mixed-content errors on production HTTPS deployments
  *      where a hardcoded ws:// fallback would be blocked by the browser.
  *
- * Usage:
+ * Callers append the endpoint path:
  *   const ws = new WebSocket(`${getWsBase()}/ws/notifications?token=${token}`);
  */
 export function getWsBase(): string {
   const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
-  if (envUrl) return envUrl;
+  if (envUrl) return envUrl.replace(/\/+$/, '');
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}`;
 }

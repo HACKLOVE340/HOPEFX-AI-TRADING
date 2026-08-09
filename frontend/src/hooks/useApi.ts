@@ -6,9 +6,11 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import { useStore } from '../store';
+import { getApiBase } from '../lib/utils';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+// `?? '/api'` here resolved an empty VITE_API_URL to '' rather than '/api',
+// which makes axios resolve every path against the page origin. See getApiBase.
+const BASE_URL = getApiBase();
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,

@@ -10,6 +10,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
 import { tradingApi } from './useApi';
+import { getWsBase } from '../lib/utils';
 import type { PriceTick, Position, Signal, AccountMetrics, MicrostructureSnapshot } from '../types';
 import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAlert } from '../store';
 
@@ -35,11 +36,11 @@ function _setLastMid(symbol: string, mid: number): void {
 export const _setLastMid_testOnly = _setLastMid;
 export const _lastMid_testOnly    = _lastMid;
 
-const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
-const WS_URL: string = _envWsUrl ?? (() => {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}/ws/live`;
-})();
+// VITE_WS_URL is an origin, not a complete socket URL — `.env.example`
+// documents it as `wss://api.YOUR_DOMAIN`. Using it verbatim (the previous
+// `_envWsUrl ?? ...`) dropped the `/ws/live` path whenever it was set, and
+// resolved an empty value to '' rather than falling back. Both via getWsBase.
+const WS_URL: string = `${getWsBase()}/ws/live`;
 
 const HEARTBEAT_INTERVAL_MS  = 30_000;
 const INITIAL_RECONNECT_MS   = 1_000;

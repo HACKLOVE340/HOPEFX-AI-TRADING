@@ -9,6 +9,21 @@ WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
+# Frontend base URLs. Vite inlines VITE_* at build time, so these have to be
+# present here — setting them in .env only affects the running container, which
+# never sees them. `.env.example` documented VITE_API_URL / VITE_WS_URL as the
+# way to point the UI at a separate API domain, but nothing passed them into
+# this stage, so setting them had no effect at all.
+#
+# Left empty they stay empty, and lib/utils.ts treats empty as "not configured"
+# and falls back to same-origin — which is what the bundled deployment wants.
+ARG VITE_API_URL=""
+ARG VITE_WS_URL=""
+ARG VITE_NUCLEAR_WS_URL=""
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_WS_URL=$VITE_WS_URL \
+    VITE_NUCLEAR_WS_URL=$VITE_NUCLEAR_WS_URL
+
 # Copy source and build — output lands in /build/static (vite outDir: '../static')
 COPY frontend/ ./
 RUN npm run build

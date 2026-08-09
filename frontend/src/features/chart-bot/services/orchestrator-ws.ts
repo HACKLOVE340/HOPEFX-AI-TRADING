@@ -22,6 +22,8 @@
  *   - Subscriber ref-counting for clean teardown
  */
 
+import { getWsBase } from '../../../lib/utils';
+
 import type {
   WsEnvelope,
   WsMessageType,
@@ -141,9 +143,9 @@ class OrchestratorWSClient {
 
     this._status = 'connecting';
 
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
-    const url = envUrl ?? `${proto}//${window.location.host}/ws/live`;
+    // VITE_WS_URL is an origin; `envUrl ?? ...` used it as the complete URL and
+    // so dropped /ws/live whenever it was set. See getWsBase in lib/utils.
+    const url = `${getWsBase()}/ws/live`;
 
     const ws = new WebSocket(url);
     this.ws = ws;

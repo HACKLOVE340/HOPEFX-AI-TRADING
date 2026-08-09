@@ -8,6 +8,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Vite inlines these at build time, so env_file below is too late for
+      # them. Empty is the correct default: the UI then uses same-origin /api
+      # and wss://<page host>, which is how this compose file serves it. Set
+      # them in .env only when the API lives on a different domain.
+      args:
+        VITE_API_URL: "${VITE_API_URL:-}"
+        VITE_WS_URL: "${VITE_WS_URL:-}"
+        VITE_NUCLEAR_WS_URL: "${VITE_NUCLEAR_WS_URL:-}"
     restart: unless-stopped
     ports:
       - "8000:8000"
