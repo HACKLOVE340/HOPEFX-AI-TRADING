@@ -2,16 +2,26 @@
 
 ## Retraining
 
-Production retraining uses 50 years of XAUUSD history with an 8-year held-out
+Production retraining uses 25 years of XAUUSD history with an 8-year held-out
 OOS period. Run via:
 
 ```bash
-./scripts/retrain.sh                    # full production retrain (50Y, 8Y OOS)
+./scripts/retrain.sh                    # full production retrain (25Y, 8Y OOS)
 ./scripts/retrain.sh --smoke            # CI smoke test (2Y, no OOS)
 ```
 
 The Sharpe gate requires N ≥ 600 OOS trades before the model is considered
 credible for live deployment. The current model has N=2016 (gate PASSED).
+
+**Why 25 years and not 50.** `data/XAUUSD_50Y.csv` reaches back to 1968 and
+15.2% of the bars a 50-year window selects move more than 20% in one session —
+one by 519%; its 1990 rows dip to $81 in a year gold traded near $380.
+`api/trading.py` has always refused to serve that file to charts for exactly
+this reason, while training loaded it by preference. `ml/train_advanced.py` now
+rejects a source that corrupt, so 25 years (from 2001-08, 6,424 bars, zero
+implausible moves) is the deepest window that is actually real. The figures
+recorded below predate that gate and were measured over the wider, partly
+fictional window — treat them as unverified until the next retrain.
 
 ## Current Status: Active model `xgb_horizon5_v3`
 

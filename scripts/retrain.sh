@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # scripts/retrain.sh
-# Production model retraining with 50-year data and 8-year OOS evaluation.
+# Production model retraining with 25-year data and 8-year OOS evaluation.
 #
 # This script is the canonical entry point for scheduled retraining.
 # It enforces the full production training protocol:
-#   - 50 years of XAUUSD history (GC=F via yfinance or OANDA REST)
+#   - 25 years of XAUUSD history (GC=F via yfinance or OANDA REST)
+#     (pre-2001 bars in the bundled 50Y CSV are corrupt — see RETRAIN_YEARS)
 #   - 8-year held-out OOS period (16% of data, never seen during training)
 #   - Stacking ensemble: XGBoost + LightGBM + RandomForest + ExtraTrees
 #   - Sharpe gate: N >= 600 OOS trades required before deployment
@@ -29,7 +30,7 @@
 #   OANDA_ACCOUNT_ID    — OANDA account ID (optional)
 #   OANDA_PRACTICE      — "true" | "false" (default: "true")
 #   SKIP_VERIFY         — skip ml/verify_model.py after training (default: false)
-#   RETRAIN_YEARS       — years of history (default: 50)
+#   RETRAIN_YEARS       — years of history (default: 25; see note at RETRAIN_YEARS)
 #   RETRAIN_OOS_YEARS   — OOS hold-out years (default: 8)
 #   RETRAIN_STACKING    — "true" to use full stacking ensemble (default: true)
 
@@ -55,7 +56,27 @@ for arg in "$@"; do
 done
 
 # ── Config ────────────────────────────────────────────────────────────────────
-RETRAIN_YEARS="${RETRAIN_YEARS:-50}"
+# 25 years, not 50.
+#
+# data/XAUUSD_50Y.csv reaches back to 1968, and 15.2% of the bars a 50-year
+# window selects move more than 20% in a single session — one by 519%. Its 1990
+# rows dip to $81 in a year gold traded near $380. api/trading.py has always
+# refused to serve that file to charts for exactly this reason; training loaded
+# it anyway, which is how the production model came to report a 57.34%
+# out-of-sample accuracy measured partly over history that never happened.
+#
+# ml/train_advanced.py now refuses a source that corrupt, so the old default of
+# 50 does not produce a model at all — it produces an error. A default that
+# always fails is worse than a smaller one that works.
+#
+# 25 years starts at 2001-08 and yields 6,424 bars with zero implausible moves
+# (verified against the file). The corruption is confined to pre-2001, which is
+# also what the gate reports as its first clean index.
+#
+# RETRAIN_YEARS=50 still works if you set TRAIN_ALLOW_CORRUPT_HISTORY=true, and
+# will train on prices that are partly fictional. That is the point of making
+# it explicit.
+RETRAIN_YEARS="${RETRAIN_YEARS:-25}"
 RETRAIN_OOS_YEARS="${RETRAIN_OOS_YEARS:-8}"
 RETRAIN_STACKING="${RETRAIN_STACKING:-true}"
 SKIP_VERIFY="${SKIP_VERIFY:-false}"

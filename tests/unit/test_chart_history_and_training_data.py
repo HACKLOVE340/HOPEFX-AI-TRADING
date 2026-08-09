@@ -262,3 +262,39 @@ def test_the_chart_and_the_trainer_now_agree_about_the_file():
 
     trainer = (root / "ml/train_advanced.py").read_text()
     assert "_assert_price_history_is_plausible" in trainer, "trainer guard removed"
+
+
+# ── The canonical retrain entry point must satisfy its own gate ──────────────
+
+
+def test_retrain_defaults_to_a_window_the_gate_accepts():
+    """A default that always fails is worse than a smaller one that works.
+
+    scripts/retrain.sh is the documented entry point and defaulted to 50 years,
+    which selects the corrupt pre-2001 region and is now rejected. The gate and
+    the script have to agree, or the supported path is broken by the fix.
+    """
+    import pathlib
+    import re
+
+    src = (pathlib.Path(__file__).resolve().parents[2] / "scripts/retrain.sh").read_text()
+    match = re.search(r'RETRAIN_YEARS="\$\{RETRAIN_YEARS:-(\d+)\}"', src)
+    assert match, "RETRAIN_YEARS default not found"
+    years = int(match.group(1))
+    assert years <= 25, f"default of {years}y reaches back into the corrupt region"
+
+
+def test_the_default_window_really_passes_the_gate():
+    """Measured through the real loader, not inferred from the boundary date."""
+    from ml.train_advanced import fetch_gold_ohlcv
+
+    df = fetch_gold_ohlcv("GC=F", years=25, use_cached=True)
+    assert len(df) > 5000, f"only {len(df)} bars — too few to train on"
+    assert str(df.index[0].date()) >= "2001-01-01", f"window starts {df.index[0].date()}, inside the corrupt region"
+
+
+def test_fifty_years_is_still_refused_through_the_loader():
+    from ml.train_advanced import CorruptTrainingDataError, fetch_gold_ohlcv
+
+    with pytest.raises(CorruptTrainingDataError):
+        fetch_gold_ohlcv("GC=F", years=50, use_cached=True)
