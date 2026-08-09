@@ -91,6 +91,72 @@ _CV = 2 if _CI else 3
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class CorruptTrainingDataError(RuntimeError):
+    """Raised when a training source contains implausible price history."""
+
+
+def _assert_price_history_is_plausible(df, csv_path) -> None:
+    """Refuse to train on a price series containing impossible moves.
+
+    ``data/XAUUSD_50Y.csv`` is the first cache candidate below, and 23.5% of its
+    pre-2000 daily bars move more than 20% in a single day — one by 518%. Its
+    1990 rows dip to $81 in a year gold traded near $380; its 1999 rows dip to
+    $56. ``api/trading.py`` already declines to serve this same file to charts,
+    with a comment saying its "pre-2000 bars are corrupted (isolated bad prints,
+    e.g. $43 when gold was ~$270), which would feed bad data into charts."
+
+    So the corruption was known and the chart was defended from it, while
+    training loaded it by preference and no stage of the pipeline looked. The
+    model's reported 57.34% out-of-sample accuracy was measured over a history
+    a quarter of which never happened.
+
+    This raises rather than filtering. Dropping a quarter of the bars would
+    leave a series with silent multi-year gaps and train on it anyway, which
+    replaces a visible problem with an invisible one. Choosing the data is the
+    operator's call — ``data/XAUUSD_40Y.csv`` covers 2000→2026 with zero
+    implausible moves — and the message says so.
+
+    ``TRAIN_MAX_SPIKE_RATE`` raises the tolerance for a deliberate run;
+    ``TRAIN_ALLOW_CORRUPT_HISTORY=true`` disables the gate entirely.
+    """
+    import os as _os
+
+    if _os.getenv("TRAIN_ALLOW_CORRUPT_HISTORY", "").strip().lower() in ("1", "true", "yes"):
+        logger.warning("TRAIN_ALLOW_CORRUPT_HISTORY set — skipping price-history sanity gate")
+        return
+
+    try:
+        from data_layer.validation import detect_price_spikes
+    except ImportError:  # pragma: no cover - data_layer is always present in-repo
+        return
+
+    report = detect_price_spikes(df)
+    if not report["spike_count"]:
+        return
+
+    threshold = float(_os.getenv("TRAIN_MAX_SPIKE_RATE", "0.002"))
+    detail = (
+        f"{report['spike_count']} of {report['total_bars']} bars "
+        f"({report['spike_rate'] * 100:.2f}%) move more than 20% in one bar; "
+        f"largest move {report['max_abs_return'] * 100:.0f}%. "
+        f"Worst: {report['worst']}"
+    )
+    if report["spike_rate"] <= threshold:
+        logger.warning("Price history sanity: %s — %s", csv_path, detail)
+        return
+
+    clean_hint = ""
+    if report.get("first_clean_index"):
+        clean_hint = f" History appears clean from {report['first_clean_index']} onward."
+    raise CorruptTrainingDataError(
+        f"Refusing to train on {csv_path}: {detail}.{clean_hint}\n"
+        "A bar that moves 500% in one session is not data.\n"
+        "  Clean source:  --cached-csv data/XAUUSD_40Y.csv --years 25\n"
+        "                 (2000→2026, zero implausible moves)\n"
+        "  Override:      TRAIN_MAX_SPIKE_RATE=<rate> or TRAIN_ALLOW_CORRUPT_HISTORY=true"
+    )
+
+
 def fetch_gold_ohlcv(
     symbol: str,
     years: int,
@@ -140,6 +206,7 @@ def fetch_gold_ohlcv(
                         df.index[0].date(),
                         df.index[-1].date(),
                     )
+                    _assert_price_history_is_plausible(df, csv_path)
                     return df
                 logger.warning("Cached CSV empty after date filter — trying next source")
 

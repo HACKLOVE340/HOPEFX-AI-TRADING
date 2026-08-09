@@ -137,6 +137,85 @@ _PRICE_BOUNDS: dict[str, tuple[float, float]] = {
 }
 _DEFAULT_PRICE_BOUNDS = (0.0, 1_000_000.0)
 
+# Largest single-bar move treated as a real market event rather than a bad
+# print. Gold's worst daily move on record is around 10%; 20% leaves generous
+# headroom for genuine crisis sessions while still catching corruption.
+_MAX_PLAUSIBLE_BAR_RETURN = 0.20
+
+
+def detect_price_spikes(
+    df: pd.DataFrame,
+    *,
+    column: str = "close",
+    max_return: float = _MAX_PLAUSIBLE_BAR_RETURN,
+) -> dict[str, Any]:
+    """Report bar-to-bar moves no real market made.
+
+    ``validate_ohlcv`` checks absolute price bounds, which cannot catch this
+    class of corruption in a long history. ``data/XAUUSD_50Y.csv`` contains a
+    $43 print in an era when gold traded near $270 — and $43 is a perfectly
+    valid gold price, in 1971. Absolute bounds have no way to know it is wrong
+    on that particular day; they would have to be wide enough to admit both the
+    1968 and 2026 price levels, which is a factor of over 100.
+
+    Returns are scale-free, so they catch it: a 474% one-day move is not a
+    price level question, it is an impossible event.
+
+    This matters because the file is a *training* input.
+    ``ml/train_advanced.py`` loads it first, and 23.5% of its pre-2000 daily
+    bars move more than 20% in a day (max 518%). ``api/trading.py`` already
+    refuses to serve the same file to charts, with a comment explaining exactly
+    why — so the corruption was known, the chart was protected from it, and the
+    model was trained on it.
+
+    Returns a report; it never mutates the frame. What to do about a bad source
+    is the caller's decision, and for training data the right answer is usually
+    to stop rather than to quietly interpolate over a quarter of history.
+    """
+    if column not in df.columns or len(df) < 2:
+        return {
+            "total_bars": len(df),
+            "spike_count": 0,
+            "spike_rate": 0.0,
+            "max_abs_return": 0.0,
+            "worst": [],
+            "first_clean_index": None,
+        }
+
+    series = pd.to_numeric(df[column], errors="coerce")
+    returns = series.pct_change().abs()
+    spikes = returns > max_return
+    spike_count = int(spikes.sum())
+
+    worst: list[dict[str, Any]] = []
+    if spike_count:
+        for idx in returns.nlargest(min(5, spike_count)).index:
+            worst.append(
+                {
+                    "at": str(idx),
+                    "price": float(series.loc[idx]) if pd.notna(series.loc[idx]) else None,
+                    "return_pct": round(float(returns.loc[idx]) * 100, 1),
+                }
+            )
+
+    # Where does the series settle down? Useful for suggesting a usable window
+    # rather than only reporting that the file is bad.
+    first_clean_index = None
+    if spike_count:
+        last_spike_pos = int(np.argmax(spikes.values[::-1]))
+        pos = len(spikes) - last_spike_pos
+        if pos < len(df):
+            first_clean_index = str(df.index[pos])
+
+    return {
+        "total_bars": len(df),
+        "spike_count": spike_count,
+        "spike_rate": round(spike_count / max(len(df) - 1, 1), 4),
+        "max_abs_return": round(float(returns.max()) if returns.notna().any() else 0.0, 4),
+        "worst": worst,
+        "first_clean_index": first_clean_index,
+    }
+
 
 def validate_ohlcv(
     df: pd.DataFrame,

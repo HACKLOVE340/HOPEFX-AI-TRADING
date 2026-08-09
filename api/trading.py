@@ -2767,12 +2767,22 @@ async def get_ohlcv(
             # yfinance only provides 1h data for up to 730 days but fetching that
             # much is slow — cap at 60d which gives ~1440 bars (enough for any chart).
             _TF_MAP = {
+                # Periods are the maximum each interval supports at the source.
+                # 1h and 4h were pinned to "60d" with the note "~1440 bars —
+                # fast, plenty of history". It is not plenty: 60 days of hourly
+                # candles is what the deployed chart showed on the 1h tab —
+                # roughly Jul→Aug — and there was no way to scroll further back
+                # because the data had never been fetched. Yahoo serves 1h out
+                # to 730 days, so two years were available and unused.
+                #
+                # 1m/5m/15m/30m stay where they are: those are Yahoo's own hard
+                # limits, not ours.
                 "1m": ("1m", "7d"),
                 "5m": ("5m", "60d"),
                 "15m": ("15m", "60d"),
                 "30m": ("30m", "60d"),
-                "1h": ("1h", "60d"),  # ~1440 bars — fast, plenty of history
-                "4h": ("1h", "60d"),  # fetch 1h then resample → 4h
+                "1h": ("1h", "730d"),  # Yahoo's maximum for hourly (~2 years)
+                "4h": ("1h", "730d"),  # fetch 1h then resample → 4h
                 "1d": ("1d", "max"),  # full daily history (gold back to ~2000)
                 "1w": ("1wk", "max"),  # full weekly history
             }

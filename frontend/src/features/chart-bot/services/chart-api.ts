@@ -42,11 +42,17 @@ export interface OHLCVParams {
  */
 export function ohlcvLimitFor(timeframe: string): number {
   switch (timeframe) {
-    case '1d': return 8000;
-    case '1w': return 2000;
-    case '4h': return 2000;
-    case '1h': return 1500;
-    default:   return 1000;
+    case '1d': return 8000;   // ~31 years of trading days
+    case '1w': return 2000;   // ~38 years
+    // 4h and 1h were 2000 and 1500. Even after the backend was widened to
+    // Yahoo's 730-day maximum for hourly data, a 1500-bar limit would have
+    // clipped the response back to roughly 60 days — the same month the
+    // deployed chart showed. Both ends had to move; raising one alone changes
+    // nothing, which is worth stating because it is easy to "fix" only the
+    // server and conclude the limit is external.
+    case '4h': return 4500;   // 730d of 4h bars, with headroom
+    case '1h': return 13000;  // 730d of hourly bars for a ~23h/day market
+    default:   return 1000;   // 1m–30m are capped by the source, not by us
   }
 }
 
