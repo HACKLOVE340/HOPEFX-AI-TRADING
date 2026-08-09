@@ -152,6 +152,19 @@ _CORE_PACKAGES: list[str] = [
     "execution",
 ]
 
+# Endpoint families the frontend cannot work without, and the page that breaks
+# when one is absent. Checked by _check_route_families().
+_REQUIRED_ROUTE_FAMILIES: list[tuple[str, str]] = [
+    ("/api/auth", "login and session"),
+    ("/api/trading", "positions, orders, account"),
+    ("/api/billing", "Settings → Billing, Wallet balance"),
+    ("/api/notifications", "Notifications page"),
+    ("/api/signals", "Signal Feed and chart panel"),
+    ("/api/monetization", "Strategy Marketplace"),
+    ("/api/settings", "Settings pages"),
+    ("/api/health", "container health probe"),
+]
+
 # Log patterns → root cause + remediation
 _LOG_PATTERN_MAP: list[dict[str, Any]] = [
     {
@@ -371,6 +384,7 @@ class DiagnosticsEngine:
             ("auth_flow", self._check_auth_flow()),
             ("data_feeds", self._check_data_feeds()),
             ("log_patterns", self._check_log_patterns()),
+            ("route_families", self._check_route_families()),
         ]
         if parallel:
             for batch in await asyncio.gather(*[self._run_check(n, c) for n, c in checks]):
@@ -574,6 +588,70 @@ class DiagnosticsEngine:
                 check_name="import_chain",
                 status="ok",
                 message=f"All {ok_count} core packages import cleanly",
+                duration_ms=dur,
+            )
+        ]
+
+    # ------------------------------------------------------------------
+    # Check 2b: Endpoint families the UI depends on
+    # ------------------------------------------------------------------
+
+    async def _check_route_families(self) -> list[DiagnosticResult]:
+        """Verify every endpoint family the frontend needs is registered.
+
+        Routers here are registered inside ``try``/``except`` blocks and behind
+        feature flags, and a failure is a single ``logger.warning`` that nobody
+        reads. When a whole family goes missing — an import error, a flag left
+        off, a renamed prefix — every request under it 404s, and the pages that
+        depend on it show whatever generic message they happen to carry:
+        "Could not load your subscription", "Failed to load balance". Three
+        panels, three messages, one cause, and nothing that named it.
+
+        ``route_health`` does not cover this: it probes the routes that *are*
+        registered, so a family that is entirely absent is invisible to it —
+        there is nothing left to probe.
+        """
+        t0 = time.monotonic()
+        try:
+            from app import app as _app
+            from core.router_registry import iter_api_routes
+
+            registered = {r.path for r in iter_api_routes(_app.routes)}
+        except Exception as exc:
+            return [
+                DiagnosticResult(
+                    check_name="route_families",
+                    status="error",
+                    message=f"Could not read the route table: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
+
+        missing = [
+            f"{prefix} ({reason})"
+            for prefix, reason in _REQUIRED_ROUTE_FAMILIES
+            if not any(p.startswith(prefix) for p in registered)
+        ]
+        dur = (time.monotonic() - t0) * 1000
+        if missing:
+            return [
+                DiagnosticResult(
+                    check_name="route_families",
+                    status="critical",
+                    message=f"{len(missing)} endpoint famil(y/ies) are not registered",
+                    details={"missing": missing, "registered_count": len(registered)},
+                    remediation=(
+                        "Check the startup log for 'router not registered' warnings and the "
+                        "FEATURE_* flags in .env. Every page under a missing prefix will 404."
+                    ),
+                    duration_ms=dur,
+                )
+            ]
+        return [
+            DiagnosticResult(
+                check_name="route_families",
+                status="ok",
+                message=f"All {len(_REQUIRED_ROUTE_FAMILIES)} required endpoint families are registered",
                 duration_ms=dur,
             )
         ]
@@ -1025,23 +1103,50 @@ class DiagnosticsEngine:
         try:
             loop = asyncio.get_running_loop()
 
-            def _probe_feed() -> tuple[bool, str]:
+            def _probe_feed() -> tuple[bool | None, str]:
+                """Returns (healthy, message). ``None`` means the snapshot did
+                not report health at all, which is a different finding from
+                "unhealthy" and must not be collapsed into it.
+
+                It was collapsed into it: this read ``status.get("healthy",
+                False)`` against a snapshot that has never contained a
+                ``healthy`` key, so the check reported "Data feed module
+                unhealthy" permanently and identically in every state. A default
+                that silently answers the question is worse than no default —
+                the panel showed a red warning nobody could act on, and a real
+                feed outage would have looked exactly the same.
+                """
                 try:
                     from data_feed import get_feed_status
 
                     status = get_feed_status()
-                    return status.get("healthy", False), status.get("message", "")
+                    if "healthy" not in status:
+                        return None, (
+                            f"Feed status snapshot has no 'healthy' field — keys present: {sorted(status)[:8]}"
+                        )
+                    return bool(status["healthy"]), str(status.get("message", ""))
                 except ImportError:
                     return True, "data_feed module not present (optional)"
                 except Exception as exc2:
                     return False, str(exc2)[:200]
 
             ok, msg = await loop.run_in_executor(None, _probe_feed)
+            if ok is None:
+                _status, _default = "error", "Data feed module did not report health"
+            elif ok:
+                _status, _default = "ok", "Data feed module healthy"
+            else:
+                _status, _default = "warning", "Data feed module unhealthy"
             results.append(
                 DiagnosticResult(
                     check_name="data_feeds_module",
-                    status="ok" if ok else "warning",
-                    message=msg or ("Data feed module healthy" if ok else "Data feed module unhealthy"),
+                    status=_status,
+                    message=msg or _default,
+                    remediation=(
+                        "get_feed_status() must return a 'healthy' boolean; see data_feed/multi_source_feed.py::status"
+                        if ok is None
+                        else ""
+                    ),
                     duration_ms=(time.monotonic() - t0) * 1000,
                 )
             )

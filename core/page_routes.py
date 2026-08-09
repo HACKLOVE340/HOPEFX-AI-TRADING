@@ -22,7 +22,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
@@ -408,7 +408,28 @@ def register_page_routes(app: FastAPI) -> None:
                         url="/" + full_path + "/" + (f"?{_qs}" if _qs else ""),
                         status_code=307,
                     )
-                return Response(status_code=404)
+                # Say what was not found.
+                #
+                # This returned a bodiless 404, and the frontend's
+                # `extractApiError` has an explicit branch for exactly that:
+                #     // For 404 with no body, return the fallback rather than
+                #     // the raw Axios message
+                # so every missing endpoint surfaced as whatever generic string
+                # the calling page happened to pass — "Could not load
+                # notifications", "Could not load your subscription", "Failed to
+                # load balance." Three panels, three different messages, one
+                # cause, and nothing on screen or in the network tab that named
+                # it. A whole endpoint family can go missing — a feature flag
+                # off, a router that failed to import, a prefix renamed — and it
+                # is indistinguishable from a server error or a bad session.
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "detail": f"No route for {request.method} /{full_path}",
+                        "path": f"/{full_path}",
+                        "method": request.method,
+                    },
+                )
             # Serve real static assets (JS/CSS/images) from the build output.
             #
             # `full_path` is the raw catch-all segment. `Path / "x"` applies no

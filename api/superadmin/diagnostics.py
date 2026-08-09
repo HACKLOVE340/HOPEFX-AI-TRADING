@@ -63,7 +63,8 @@ _REDIS_REMEDIATION_KEY = "heal:diagnostics:remediation_log"
 _CHECK_DESCRIPTIONS: dict[str, str] = {
     "env_vars_required": "Verify all required environment variables are set",
     "env_vars_optional": "Warn about missing optional environment variables",
-    "import_chain": "Subprocess-import every core package to detect broken imports",
+    "import_chain": "Verify every core package imports cleanly, in-process",
+    "route_families": "Verify every endpoint family the frontend depends on is registered",
     "database": "Probe database connectivity with a SELECT 1 query",
     "redis": "Probe Redis connectivity and verify key namespaces exist",
     "frontend_build": "Check that static/index.html exists and is not stale",

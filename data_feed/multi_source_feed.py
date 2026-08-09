@@ -498,16 +498,69 @@ class MultiSourceTickFeed:
         return st.last_update if st else None
 
     def status(self) -> dict:
+        symbols = {sym: st.status() for sym, st in self._states.items()}
+        redis = self._tick_writer.status() if self._tick_writer else {"redis_connected": False}
+        healthy, message = self._health_summary(symbols, redis)
         return {
             "running": self._running,
-            "symbols": {sym: st.status() for sym, st in self._states.items()},
+            # `healthy` and `message` are part of this contract, not decoration.
+            # security/diagnostics.py has always read them:
+            #     return status.get("healthy", False), status.get("message", "")
+            # and this dict has never contained either key, so the check could
+            # only ever return False. The deployed superadmin page reported
+            # "data_feeds_module: Data feed module unhealthy" continuously,
+            # whether the feed was streaming perfectly or not running at all —
+            # a check with exactly one possible answer tells you nothing, and
+            # having it on screen in red trains you to ignore the panel.
+            "healthy": healthy,
+            "message": message,
+            "symbols": symbols,
             "sources": {n: s.status() if hasattr(s, "status") else {} for n, s in self._sources.items()},
             "source_enabled": self._source_enabled,
             "active_fallback_order": self._active_order,
-            "redis": (self._tick_writer.status() if self._tick_writer else {"redis_connected": False}),
+            "redis": redis,
             "subscriber_count": len(self._subscribers),
             "redis_errors": self._redis_errors,
+            "max_stale_seconds": self._max_stale_s,
         }
+
+    def _health_summary(self, symbols: dict, redis: dict) -> tuple[bool, str]:
+        """Reduce the status snapshot to one boolean and one sentence.
+
+        Healthy means the feed is running *and* at least one symbol has ticked
+        recently. "Running" alone is not health: the poll loop stays alive with
+        every source circuit-open, which is precisely the state worth alerting
+        on.
+        """
+        if not self._running:
+            return False, "Data feed is not running"
+        if not symbols:
+            return False, "Data feed is running but no symbols are configured"
+
+        # Twice max_stale_seconds: max_stale is the per-tick validity window,
+        # and a symbol one refresh past it is not yet a fault.
+        cutoff = max(self._max_stale_s * 2, 10.0)
+        now = datetime.now(UTC)
+        fresh: list[str] = []
+        stale: list[str] = []
+        for sym, st in symbols.items():
+            last = st.get("last_update")
+            if not last:
+                stale.append(sym)
+                continue
+            try:
+                age = (now - datetime.fromisoformat(last)).total_seconds()
+            except (TypeError, ValueError):
+                stale.append(sym)
+                continue
+            (fresh if age <= cutoff else stale).append(sym)
+
+        redis_note = "" if redis.get("redis_connected") else "; Redis not connected — ticks are not persisted"
+        if not fresh:
+            return False, (
+                f"Data feed is running but all {len(stale)} symbol(s) are stale (>{cutoff:.0f}s){redis_note}"
+            )
+        return True, (f"Data feed healthy — {len(fresh)}/{len(symbols)} symbol(s) fresh{redis_note}")
 
     # ── Internal polling ──────────────────────────────────────────────────────
 
@@ -699,5 +752,11 @@ def get_feed_status() -> dict:
     been initialised yet.  Used by security/diagnostics.py and health checks.
     """
     if _feed_instance is None:
-        return {"running": False, "symbols": {}, "redis": {"redis_connected": False}}
+        return {
+            "running": False,
+            "healthy": False,
+            "message": "Data feed singleton has not been initialised",
+            "symbols": {},
+            "redis": {"redis_connected": False},
+        }
     return _feed_instance.status()
