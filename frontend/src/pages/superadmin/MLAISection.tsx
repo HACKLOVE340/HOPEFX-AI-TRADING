@@ -217,7 +217,28 @@ const MLAISection: React.FC = () => {
               {models.map(m => (
                 <tr key={m.name} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '12px 12px', fontWeight: 600, color: '#f1f5f9' }}>{m.name}</td>
-                  <td style={{ padding: '12px 12px', color: '#64748b', fontSize: 12 }}>v{m.version}</td>
+                  <td style={{ padding: '12px 12px', color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>
+                    v{m.version}
+                    {/* sha256[:8] identifies the artifact, not the row. Four
+                        entries here share one file, so without this the table
+                        shows the same version against four different names. */}
+                    {m.shares_artifact_with && m.shares_artifact_with.length > 0 && (
+                      <span
+                        title={`Same artifact as: ${m.shares_artifact_with.join(', ')}`}
+                        style={{ marginLeft: 6, color: '#fbbf24', fontWeight: 700 }}
+                      >
+                        ×{m.shares_artifact_with.length + 1}
+                      </span>
+                    )}
+                    {m.metrics_conflict && (
+                      <span
+                        title="Entries over these identical bytes report different measured metrics — at least one is wrong"
+                        style={{ marginLeft: 6, color: '#f87171', fontWeight: 700 }}
+                      >
+                        ⚠ conflict
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: '12px 12px' }}><StatusBadge status={m.status} size="sm" /></td>
                   <td style={{ padding: '12px 12px', minWidth: 120 }}><AccuracyBar value={m.accuracy} /></td>
                   <td style={{ padding: '12px 12px', minWidth: 120 }}><DriftBar value={m.drift_score} /></td>

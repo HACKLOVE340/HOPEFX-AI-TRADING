@@ -88,6 +88,12 @@ export interface MLModel {
   predictions_today: number;
   drift_score: number;
   deployed_at: string | null;
+  /** Other registry entries pointing at the identical artifact. The VERSION
+   *  column is sha256[:8], so these rows are indistinguishable without it. */
+  shares_artifact_with?: string[];
+  /** True when entries over these identical bytes disagree about their
+   *  measured metrics — which cannot both be true. */
+  metrics_conflict?: boolean;
 }
 
 export interface EngineMetric {

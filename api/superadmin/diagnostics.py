@@ -65,6 +65,7 @@ _CHECK_DESCRIPTIONS: dict[str, str] = {
     "env_vars_optional": "Warn about missing optional environment variables",
     "import_chain": "Verify every core package imports cleanly, in-process",
     "route_families": "Verify every endpoint family the frontend depends on is registered",
+    "model_registry": "Detect registry entries over one artifact claiming different metrics",
     "database": "Probe database connectivity with a SELECT 1 query",
     "redis": "Probe Redis connectivity and verify key namespaces exist",
     "frontend_build": "Check that static/index.html exists and is not stale",

@@ -3957,13 +3957,25 @@ async def init_advanced_order_manager(s: Any) -> Any | None:
 async def init_continuous_learning(s: Any) -> Any | None:
     """Initialise the ML Continuous Learning Pipeline."""
     try:
-        from ml.continuous_learning import ContinuousLearningPipeline
+        from ml.continuous_learning import get_continuous_learning_pipeline
 
         inference_engine = getattr(s, "inference_engine", None)
         model_registry = getattr(s, "model_registry", None)
-        # ContinuousLearningPipeline takes no constructor args; inject the
-        # optional collaborators after construction if it exposes the attributes.
-        pipeline = ContinuousLearningPipeline()
+        # The module singleton, not a fresh ContinuousLearningPipeline().
+        #
+        # This constructed its own instance and started that, while every
+        # endpoint in api/ml_ops.py reads get_continuous_learning_pipeline() —
+        # a different object, lazily constructed on first request and never
+        # started. So the ML-Ops page reported the state of a pipeline nobody
+        # was running: PIPELINE Stopped, RETRAIN STATE idle, DRIFT CHECKS 0,
+        # "No shadow deployments", "No retrain history yet" — while the real
+        # pipeline ran unobserved, and the page's retrain button pushed work
+        # into the idle copy.
+        #
+        # Sharing one instance also stops two pipelines from independently
+        # running drift checks and promotions against the same models, which is
+        # the worse failure the split was one step away from.
+        pipeline = get_continuous_learning_pipeline()
         if inference_engine is not None and hasattr(pipeline, "inference_engine"):
             pipeline.inference_engine = inference_engine
         if model_registry is not None and hasattr(pipeline, "model_registry"):

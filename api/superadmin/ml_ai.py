@@ -186,7 +186,34 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
         except Exception as exc:
             logger.debug("list_ml_models: saved_models scan failed: %s", exc)
 
-    return {"models": models}
+    # ── Cross-entry integrity ────────────────────────────────────────────────
+    #
+    # The VERSION column shows sha256[:8]. Four entries in the shipped manifest
+    # share one digest because they point at one file, so the table printed
+    # "vdc7454d8" four times against four different model names — and two
+    # different accuracies. Per-entry verification cannot see that; only a
+    # comparison across entries can. Attach it so the page can say so instead of
+    # rendering the contradiction as ordinary rows.
+    integrity: dict = {"ok": True}
+    try:
+        from ml.model_registry import get_registry
+
+        integrity = get_registry().audit_manifest()
+        conflicted: set[str] = set()
+        for conflict in integrity.get("metric_conflicts", []):
+            conflicted.update(conflict["versions"])
+        duplicated: dict[str, list[str]] = {}
+        for names in integrity.get("duplicate_artifacts", {}).values():
+            for n in names:
+                duplicated[n] = [m for m in names if m != n]
+        for model in models:
+            name = model["name"]
+            model["shares_artifact_with"] = duplicated.get(name, [])
+            model["metrics_conflict"] = name in conflicted
+    except Exception as exc:
+        logger.debug("list_ml_models: manifest audit failed: %s", exc)
+
+    return {"models": models, "integrity": integrity}
 
 
 @router.post("/ml/retrain/{model_name}")

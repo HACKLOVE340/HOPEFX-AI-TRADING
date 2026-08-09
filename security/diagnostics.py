@@ -385,6 +385,7 @@ class DiagnosticsEngine:
             ("data_feeds", self._check_data_feeds()),
             ("log_patterns", self._check_log_patterns()),
             ("route_families", self._check_route_families()),
+            ("model_registry", self._check_model_registry()),
         ]
         if parallel:
             for batch in await asyncio.gather(*[self._run_check(n, c) for n, c in checks]):
@@ -652,6 +653,84 @@ class DiagnosticsEngine:
                 check_name="route_families",
                 status="ok",
                 message=f"All {len(_REQUIRED_ROUTE_FAMILIES)} required endpoint families are registered",
+                duration_ms=dur,
+            )
+        ]
+
+    # ------------------------------------------------------------------
+    # Check 2c: Model registry consistency
+    # ------------------------------------------------------------------
+
+    async def _check_model_registry(self) -> list[DiagnosticResult]:
+        """Report contradictions between registry entries.
+
+        Per-entry ``verify()`` only asks whether a file still hashes to its
+        recorded digest, so it passes on a manifest where four names share one
+        artifact and claim two different out-of-sample accuracies — which is
+        what ships. The figure that disagrees belongs to the version serving
+        inference and is what the dashboard prints as model accuracy.
+        """
+        t0 = time.monotonic()
+        try:
+            from ml.model_registry import get_registry
+
+            loop = asyncio.get_running_loop()
+            audit = await asyncio.wait_for(loop.run_in_executor(None, get_registry().audit_manifest), timeout=15.0)
+        except Exception as exc:
+            return [
+                DiagnosticResult(
+                    check_name="model_registry",
+                    status="warning",
+                    message=f"Model registry audit unavailable: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
+
+        dur = (time.monotonic() - t0) * 1000
+        conflicts = audit.get("metric_conflicts", [])
+        missing = audit.get("missing_artifacts", [])
+        stale = audit.get("stale_metrics", [])
+        if conflicts or missing or stale:
+            serving = any(c.get("active_among_them") for c in conflicts)
+            parts: list[str] = []
+            if conflicts:
+                parts.append(
+                    f"{len(conflicts)} artifact(s) carry conflicting metrics"
+                    + (" — including the version serving inference" if serving else "")
+                )
+            if stale:
+                parts.append(
+                    f"{len(stale)} entr(y/ies) disagree with their artifact's own metadata "
+                    f"({', '.join(s['version'] for s in stale[:4])})"
+                )
+            if missing:
+                parts.append(f"{len(missing)} artifact file(s) missing ({', '.join(missing[:4])})")
+            return [
+                DiagnosticResult(
+                    check_name="model_registry",
+                    # The serving model's own metrics being in dispute is a
+                    # different severity from two retired entries disagreeing.
+                    status="critical" if serving else "error",
+                    message="; ".join(parts),
+                    details={
+                        "metric_conflicts": conflicts,
+                        "stale_metrics": stale,
+                        "missing_artifacts": missing,
+                    },
+                    remediation=(
+                        "The <stem>_meta.json beside each artifact is the measurement; a registry "
+                        "entry is a copy of it. Entries listed under stale_metrics describe a model "
+                        "that was overwritten in place — delete or re-register them. Do not average "
+                        "conflicting scores."
+                    ),
+                    duration_ms=dur,
+                )
+            ]
+        return [
+            DiagnosticResult(
+                check_name="model_registry",
+                status="ok",
+                message=f"All {audit.get('total_versions', 0)} registry entries are self-consistent",
                 duration_ms=dur,
             )
         ]

@@ -13,25 +13,42 @@ OOS period. Run via:
 The Sharpe gate requires N ≥ 600 OOS trades before the model is considered
 credible for live deployment. The current model has N=2016 (gate PASSED).
 
-## Current Status: RESOLVED — Active model: `xgb_horizon5_v1`
+## Current Status: Active model `xgb_horizon5_v3`
 
-The pkl/meta mismatch documented here has been fixed. The model was retrained on
-2026-04-02 with `horizon=5` to match the execution engine's 5-bar hold period.
+`advanced_oos.pkl` was retrained **in place** on 2026-06-26 (`horizon=5`, to
+match the execution engine's 5-bar hold period). Retraining over the same
+filename left every older registry entry pointing at the new file while still
+describing the model it replaced:
+
+| Registry key      | Claims | Reality |
+|-------------------|--------|---------|
+| `advanced_oos_v1` | 56.5%  | stale — describes the pre-2026-06-26 model |
+| `advanced_oos_v2` | 56.5%  | stale |
+| `xgb_horizon5_v1` | 56.5%  | stale (this file previously named it active) |
+| `xgb_horizon5_v3` | **57.34%** | matches `advanced_oos_meta.json` — **active** |
+
+The authority is `advanced_oos_meta.json`, written by the trainer in the same
+run as the `.pkl`: `oos_accuracy 0.5734`, `oos_n 2016`, `horizon 5`, trained
+`2026-06-26T22:30:43Z`. The 59.9% previously quoted below belonged to the
+2026-04-02 model, which no longer exists on disk.
+
+`ModelRegistry.audit_manifest()` now detects this class of drift, and the
+superadmin diagnostics page reports it as `model_registry`.
 
 ## Active Production Model (`advanced_oos.pkl` ← `current.pkl`)
 
-Registry key: **`xgb_horizon5_v1`** (`active_version` in registry.json)
+Registry key: **`xgb_horizon5_v3`** (`active_version` in registry.json)
 
 | Property | Value |
 |----------|-------|
-| Trained at | 2026-04-02T15:10:56 UTC |
+| Trained at | 2026-06-26T22:30:43 UTC |
 | Training data | XAUUSD 50-year daily (15,197 rows → 9,410 after filtered-target) |
-| Features | 222 engineered |
+| Features | 193 engineered |
 | Horizon | **5 bars** (aligned with execution hold period) |
 | OOS period | 2018-04-12 → 2026-03-18 (8 years, 2,016 bars) |
-| OOS accuracy | **59.9%** (p = 0.0000) |
-| OOS F1 | 0.6885 |
-| OOS AUC | 0.6077 |
+| OOS accuracy | **57.34%** (p = 0.0000, SE 0.011) — per `advanced_oos_meta.json` |
+| OOS F1 | 0.6767 |
+| OOS AUC | 0.582 |
 | Walk-forward accuracy | 56.26% ± 6.26% (6 folds) |
 | Walk-forward Fold-2 | **44.4%** (below-chance — parabolic regime; see `docs/FOLD2_REGIME_ANALYSIS.md`) |
 | Sharpe gate | PASSED — N=2016 ≥ 600, SE=0.033 ≤ 0.10, Sharpe=1.52 |
@@ -39,7 +56,10 @@ Registry key: **`xgb_horizon5_v1`** (`active_version` in registry.json)
 
 ## Staged Model: MTF Ensemble (`mtf_ensemble.pkl`)
 
-Registry key: **`mtf_ensemble_v1`** (staging — pending Sharpe gate + promotion)
+Registry key: **`mtf_ensemble_v1`** — **retired in registry.json, and
+`ml/saved_models/mtf_ensemble.pkl` does not exist.** The 61.4% below is the
+highest figure the ML Models table displays and there is no artifact behind it.
+Either restore the file and re-register, or remove the entry.
 
 | Property | Value |
 |----------|-------|
