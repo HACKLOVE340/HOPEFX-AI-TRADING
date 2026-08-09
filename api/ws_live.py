@@ -592,8 +592,14 @@ def _get_live_price(symbol: str) -> float | None:
 
     Level 1 — price_engine.get_last_price()
         Real ticks from the connected data feed (NuclearStreamer / ProductionDataEngine).
-    Level 2 — broker.market_prices
-        Paper broker static prices (always available when broker is connected).
+    Level 2 — broker.market_prices, but only where a feed has written them
+        The paper broker seeds this dict with a hardcoded table so orders can
+        fill offline. Those seeds are not quotes. Being "always available when
+        the broker is connected" is precisely why they must not short-circuit
+        the chain: gold's seed is 3300.0 and never moves, so the header showed
+        "3,300.00 +0.00%" beside a candle series near 4,400 while the badge read
+        DISCONNECTED, and levels 3 and 4 below were unreachable in every
+        deployment. `has_live_price()` separates fed values from seeds.
     Level 3 — Redis tick cache
         Most recent tick stored by the data feed writer (hopefx:tick_cache:{symbol}).
     Level 4 — EventBus last-known price
@@ -626,7 +632,12 @@ def _get_live_price(symbol: str) -> float | None:
         broker = getattr(app_state, "broker", None)
         market_prices = getattr(broker, "market_prices", {}) if broker else {}
         live = market_prices.get(broker_key)
-        if live and float(live) > 0:
+        # Only trust this level for symbols a feed has actually written. A
+        # broker without has_live_price() is not the paper broker and keeps the
+        # old behaviour.
+        _checker = getattr(broker, "has_live_price", None)
+        _is_fed = _checker(broker_key) if callable(_checker) else True
+        if _is_fed and live and float(live) > 0:
             return float(live)
     except Exception as exc:
         logger.debug("_get_live_price L2 (%s): %s", symbol, exc)

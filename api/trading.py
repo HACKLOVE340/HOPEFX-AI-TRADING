@@ -28,7 +28,12 @@ UTC = timezone.utc
 from pathlib import Path as _Path
 from typing import Any
 
-from core.account_metrics import margin_level, margin_level as _margin_level
+# Imported only under the underscored alias. It used to be imported under both
+# names, and `get_account` assigns `margin_level` locally, which silently turned
+# every bare read in that function into an unbound local — a guaranteed 500 on
+# the paper branch. Keeping one name means the shadow cannot be reintroduced by
+# accident, and ruff's F811 now catches it if anyone tries.
+from core.account_metrics import margin_level as _margin_level
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -2238,7 +2243,18 @@ async def get_account(
             "equity": _equity,
             "margin_used": _margin_used,
             "margin_free": round(max(_equity - _margin_used, 0.0), 2),
-            "margin_level": margin_level(_equity, _margin_used),
+            # `_margin_level`, not `margin_level`. Both names are imported at the
+            # top of this module for the same function, but further down this
+            # same function `margin_level` is *assigned* (twice, in the live
+            # branch). An assignment anywhere in a function makes the name local
+            # for the whole function, so reading it here — before those lines
+            # run, and on a path where they never run — raised
+            #     UnboundLocalError: cannot access local variable 'margin_level'
+            # This is the paper branch, which is the branch that executes in the
+            # current deployment: GET /api/trading/account returned 500 for
+            # every user, every time. It is what the diagnostics suite reported
+            # as "route_health: 1 route(s) returning 5xx errors".
+            "margin_level": _margin_level(_equity, _margin_used),
             "daily_pnl": _daily_pnl,
             "daily_pnl_pct": _daily_pnl_pct,
             "total_pnl": _total_pnl,

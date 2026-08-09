@@ -18,6 +18,7 @@ Register with:
 import logging
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -116,6 +117,36 @@ class _CachingStaticFiles(StaticFiles):
         for header, value in _asset_cache_headers(rel).items():
             response.headers[header] = value
         return response
+
+
+@lru_cache(maxsize=512)
+def _slashed_paths(route_count: int, app_id: int) -> frozenset[str]:
+    """Every registered path, flattened. Cached per (route count, app identity).
+
+    A plain ``for route in app.routes`` walk does not see API routes: with this
+    FastAPI version, ``app.routes`` holds opaque ``_IncludedRouter`` wrappers
+    for each included router rather than flat ``APIRoute`` instances. The v1
+    alias registration in core/router_registry.py hit the same thing and
+    silently created zero aliases until it switched to ``iter_api_routes``.
+    """
+    from core.router_registry import iter_api_routes
+
+    app = _APP_BY_ID.get(app_id)
+    if app is None:
+        return frozenset()
+    return frozenset(r.path for r in iter_api_routes(app.routes))
+
+
+_APP_BY_ID: dict[int, FastAPI] = {}
+
+
+def _slashed_route_exists(app: FastAPI, path: str) -> bool:
+    """True when *path* (which ends in '/') is a real registered route."""
+    _APP_BY_ID[id(app)] = app
+    try:
+        return path in _slashed_paths(len(app.routes), id(app))
+    except Exception:  # nosec B110 — a redirect aid must never break a request
+        return False
 
 
 def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
@@ -352,6 +383,31 @@ def register_page_routes(app: FastAPI) -> None:
                 full_path == p or full_path.startswith(p + "/") or full_path.startswith(p)
                 for p in _passthrough_prefixes
             ):
+                # Restore the trailing-slash redirect this route otherwise eats.
+                #
+                # The comment here used to say returning 404 "passes through so
+                # Starlette tries the next matching route". It does not: this
+                # route has already matched, and returning a response ends the
+                # request. Starlette's automatic redirect for a path whose only
+                # registered form carries a trailing slash runs *after* no route
+                # matched, so a catch-all that matches everything disables it.
+                #
+                # Concretely: /api/notifications 404s while
+                # /api/notifications/ returns 200. api/notifications.py declares
+                # the route at both "" and "/" specifically to avoid this, and
+                # that mitigation does not survive router inclusion — both
+                # declarations end up registered as /api/notifications/, so the
+                # bare form has no route at all. The same holds for /api/admin,
+                # /api/alerts, /api/dom and /api/superadmin.
+                #
+                # Redirecting here fixes every such endpoint, including ones
+                # added later, instead of patching one router at a time.
+                if request.method == "GET" and _slashed_route_exists(request.app, "/" + full_path + "/"):
+                    _qs = request.url.query
+                    return RedirectResponse(
+                        url="/" + full_path + "/" + (f"?{_qs}" if _qs else ""),
+                        status_code=307,
+                    )
                 return Response(status_code=404)
             # Serve real static assets (JS/CSS/images) from the build output.
             #

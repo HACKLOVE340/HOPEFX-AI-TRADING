@@ -746,12 +746,48 @@ async def purchase_strategy(request: StrategyPurchaseRequest, user: TokenPayload
         )
 
     # Determine price — _StrategyListing uses .price; StrategyListing uses .price_monthly
-    price = getattr(strategy, "price", None) or getattr(strategy, "price_monthly", None)
-    if price is None or float(price) <= 0:
+    #
+    # `or` is wrong here: a genuinely free listing has price 0.0, which is
+    # falsy, so it fell through to price_monthly (None) and was rejected as
+    # "Strategy has no valid price configured." Read the attributes explicitly.
+    price = getattr(strategy, "price", None)
+    if price is None:
+        price = getattr(strategy, "price_monthly", None)
+    if price is None or float(price) < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Strategy has no valid price configured.",
         )
+
+    # ── Free listings never touch the payment provider ────────────────────────
+    #
+    # The marketplace ships free strategies (Golden Cross Trend is priced 0.0)
+    # and the UI renders them correctly — a green "Free" badge and an "Add to my
+    # strategies" button. That button then called this endpoint, which had only
+    # a paid path: a zero price failed the check above and the user was told
+    # "Strategy has no valid price configured", as if the listing were broken
+    # rather than free. There was no way to acquire a free strategy at all.
+    if float(price) == 0:
+        free_purchase = strategy_marketplace.purchase_strategy(
+            buyer_id=user.sub,
+            strategy_id=request.strategy_id,
+        )
+        if not free_purchase:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to add strategy. It may be unavailable or already in your library.",
+            )
+        logger.info("Free strategy %s added for user %s", request.strategy_id, user.sub)
+        return {
+            "success": True,
+            "purchase_id": free_purchase.purchase_id,
+            "payment_intent_id": None,
+            "client_secret": None,
+            "amount": 0.0,
+            "currency": request.currency.upper(),
+            "status": "succeeded",
+            "free": True,
+        }
 
     # 2. Create pending purchase record
     purchase = strategy_marketplace.purchase_strategy(
@@ -778,6 +814,17 @@ async def purchase_strategy(request: StrategyPurchaseRequest, user: TokenPayload
                 "strategy_id": request.strategy_id,
             },
         )
+    except RuntimeError as exc:
+        # Stripe is not configured on this deployment — no SDK, or no
+        # STRIPE_SECRET_KEY. Distinguished from a provider outage because the
+        # advice differs completely: "Please try again" is false here, and
+        # retrying a missing API key will never succeed. Every attempt to buy a
+        # paid strategy hit this and told the user to try again.
+        logger.error("Payments unavailable for purchase %s: %s", purchase.purchase_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Payments are not configured on this deployment. Contact support — retrying will not help.",
+        ) from exc
     except Exception as exc:
         logger.error("Stripe PaymentIntent creation failed for purchase %s: %s", purchase.purchase_id, exc)
         raise HTTPException(

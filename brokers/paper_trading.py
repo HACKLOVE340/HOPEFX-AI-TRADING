@@ -311,6 +311,9 @@ class PaperTradingBroker(BrokerConnector):
         # Tracks when each symbol's price was last updated by a LIVE feed.
         # Symbols absent from this dict are using hardcoded fallback prices.
         self._price_timestamps: dict[str, float] = {}
+        # Symbols whose market_prices entry came from a feed rather than the
+        # seed table below. See has_live_price().
+        self._fed_symbols: set[str] = set()
         self._price_stale_secs = float(os.getenv("PAPER_PRICE_STALE_SECONDS", "120"))
         # When True, raise StalePriceError instead of filling at a stale/fallback price.
         # Default False to preserve offline demo / backtest behaviour.
@@ -1154,7 +1157,30 @@ class PaperTradingBroker(BrokerConnector):
         """
         self.market_prices[symbol] = price
         self._price_timestamps[symbol] = time.time()
+        self._fed_symbols.add(symbol)
+        self._fed_symbols.add(symbol.upper())
         logger.debug("Updated %s price to $%s", symbol, price)
+
+    def has_live_price(self, symbol: str) -> bool:
+        """True when *symbol*'s entry in ``market_prices`` came from a feed.
+
+        ``market_prices`` is seeded with a hardcoded table so offline demos and
+        backtests can fill orders. Those seeds are not market data — the gold
+        seed is 3300.0, commented "~May 2026", against a spot price nearer 4400
+        — so anything presenting one as a quote shows a number that is both
+        wrong and frozen.
+
+        ``api/ws_live.py::_get_live_price`` did exactly that. It reads this dict
+        at level 2 of a four-level chain, above the Redis tick cache (level 3)
+        and the event bus (level 4). The seed is always present once the broker
+        connects, so those two levels were unreachable and the chart header sat
+        at "3,300.00  +0.00%" — beside a candle series drawn from real data
+        around 4,400 — with the badge reading DISCONNECTED throughout.
+
+        This lets a caller that wants live prices ask for live prices; the fill
+        path is unchanged and still uses the seeds when nothing better exists.
+        """
+        return symbol in self._fed_symbols or symbol.upper() in self._fed_symbols
 
     def _update_position(
         self,

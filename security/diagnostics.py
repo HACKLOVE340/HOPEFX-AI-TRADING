@@ -183,7 +183,21 @@ _LOG_PATTERN_MAP: list[dict[str, Any]] = [
         "remediation": "Check SECRET_KEY consistency across pods; verify system clock sync",
     },
     {
-        "pattern": re.compile(r"NaN|inf.*value|division by zero", re.IGNORECASE),
+        # Word-bounded. This was `NaN|inf.*value|division by zero`, and
+        # `inf.*value` matches any line containing "INF" followed later by
+        # "value" — which every log line of the form
+        #     ... - INFO - [prometheus_monitoring.py:333] - ... sync value=15s
+        # satisfies. The deployed superadmin diagnostics page reported
+        #     log_pattern_numeric_error  ERROR  [690x] Numeric instability in
+        #     trading calculations
+        # against a system with no numeric problem at all: 690 ordinary INFO
+        # lines that happened to contain the word "value". Because the finding
+        # is graded high, every one of them was pushed to `alerts:critical` and
+        # queued for the self-healer to "fix".
+        "pattern": re.compile(
+            r"\bNaN\b|\bdivision by zero\b|\bZeroDivisionError\b|[-+]?\binf(?:inity)?\b",
+            re.IGNORECASE,
+        ),
         "category": "numeric_error",
         "severity": "high",
         "root_cause": "Numeric instability in trading calculations",
@@ -197,14 +211,18 @@ _LOG_PATTERN_MAP: list[dict[str, Any]] = [
         "remediation": "Replace shift(-N) with shift(+N) in all feature engineering code",
     },
     {
-        "pattern": re.compile(r"rate.?limit|429|too many requests", re.IGNORECASE),
+        # `429` unbounded matched any line containing those three digits in a
+        # row — a latency of 429 ms, a byte count, a port, a timestamp.
+        "pattern": re.compile(r"rate.?limit|\b429\b|too many requests", re.IGNORECASE),
         "category": "rate_limit",
         "severity": "medium",
         "root_cause": "Rate limiting triggered — possible abuse or misconfigured client",
         "remediation": "Review rate limit config; check for runaway retry loops",
     },
     {
-        "pattern": re.compile(r"memory.*error|MemoryError|OOM", re.IGNORECASE),
+        # `OOM` case-insensitively and unbounded is a substring of "room",
+        # "zoom", "boom" and "broom".
+        "pattern": re.compile(r"memory.*error|\bMemoryError\b|\bOOM\b|out of memory", re.IGNORECASE),
         "category": "memory_pressure",
         "severity": "critical",
         "root_cause": "Out-of-memory condition",

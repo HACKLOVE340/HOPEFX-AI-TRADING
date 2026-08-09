@@ -371,6 +371,12 @@ const ReconciliationPanel: React.FC = () => {
   const [busy, setBusy]       = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [provider, setProvider] = useState('all');
+  // The run endpoint requires a period and rejects the request without one, so
+  // the button used to fail every time with "period is required (e.g.
+  // '2025-01')" — an error naming a parameter the UI gave you no way to supply.
+  // Defaulted to the current month rather than sent implicitly: reconciling a
+  // period the operator did not choose is worse than asking.
+  const [period, setPeriod]   = useState(() => new Date().toISOString().slice(0, 7));
   const [notes, setNotes]     = useState<Record<string, string>>({});
 
   const mountedRef = useRef(true);
@@ -395,9 +401,12 @@ const ReconciliationPanel: React.FC = () => {
   const runRecon = async () => {
     setRunBusy(true);
     try {
-      await superadminApi.runReconciliation({ provider: provider !== 'all' ? provider : undefined });
+      await superadminApi.runReconciliation({
+        period,
+        provider: provider !== 'all' ? provider : undefined,
+      });
       setMsgOk(true);
-      setMsg('Reconciliation run started — results will appear shortly');
+      setMsg(`Reconciliation run started for ${period} — results will appear shortly`);
       setTimeout(load, 3000);
     } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Reconciliation run failed')); }
     finally { setRunBusy(false); }
@@ -426,13 +435,21 @@ const ReconciliationPanel: React.FC = () => {
       subtitle={`${records.length} records · ${discrepancies.length} discrepancies · ${fmtMoney(totalDiscrepancy)} variance`}
       actions={
         <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="month"
+            value={period}
+            onChange={e => setPeriod(e.target.value)}
+            aria-label="Reconciliation period"
+            title="Period to reconcile (YYYY-MM)"
+            style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 10px', fontSize: 13, width: 150 }}
+          />
           <Select
             value={provider}
             onChange={e => setProvider(e.target.value)}
             options={[{ value: 'all', label: 'All Providers' }, ...providers.map(p => ({ value: p, label: p }))]}
             style={{ width: 160 }}
           />
-          <ActionBtn label="Run Reconciliation" onClick={runRecon} variant="primary" size="sm" loading={runBusy} icon="▶" />
+          <ActionBtn label="Run Reconciliation" onClick={runRecon} variant="primary" size="sm" loading={runBusy} icon="▶" disabled={!period} />
         </div>
       }
     >
