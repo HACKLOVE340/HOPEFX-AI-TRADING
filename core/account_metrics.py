@@ -24,6 +24,8 @@ holds the single definition both now use.
 
 from __future__ import annotations
 
+import time
+
 __all__ = ["NO_MARGIN_LEVEL", "margin_level"]
 
 
@@ -39,6 +41,55 @@ __all__ = ["NO_MARGIN_LEVEL", "margin_level"]
 # ratios produced by a negligible amount of margin — e.g. $0.81 used against
 # $10,000 equity is a true but useless 1234568%.
 NO_MARGIN_LEVEL: float = 9999.0
+
+
+def tick_age_seconds(ts_value: object, *, now: float | None = None) -> float | None:
+    """Age in seconds of a tick timestamp, whatever unit it was written in.
+
+    Returns ``None`` when the timestamp is absent or unusable — which is a
+    different fact from "zero seconds old" and must not be confused with it.
+
+    Two probes computed this inline as ``time.time() - float(ts)``, in
+    ``infrastructure/health_engine.py`` and ``api/superadmin/reliability.py``.
+    Tick writers store epoch **milliseconds**, so the subtraction mixed units
+    and the deployed Reliability page showed:
+
+        data_feed   ok   last tick age=-1784477523827.0s
+
+    an age of minus fifty-six thousand years, graded ``ok`` — because the
+    freshness test is ``age < 120`` and every negative number passes it. The
+    check was therefore guaranteed to report a healthy feed exactly when it
+    could not read the timestamp, which is the worst possible direction for it
+    to fail in.
+
+    ``api/superadmin/reliability.py`` also defaulted a missing timestamp to
+    ``time.time()``, producing an age of exactly 0.0 — a fresh-looking tick
+    conjured from no tick at all.
+
+    Units are inferred from magnitude: seconds since 1970 are ~1.7e9, so a
+    value past 1e11 is milliseconds and past 1e14 is microseconds. Both are far
+    beyond any plausible second-denominated timestamp.
+    """
+    if ts_value is None:
+        return None
+    try:
+        raw = float(ts_value)
+    except (TypeError, ValueError):
+        return None
+    if raw <= 0:
+        return None
+
+    if raw >= 1e14:  # microseconds
+        seconds = raw / 1_000_000.0
+    elif raw >= 1e11:  # milliseconds
+        seconds = raw / 1_000.0
+    else:
+        seconds = raw
+
+    age = (time.time() if now is None else now) - seconds
+    # A tick from the future is a clock or unit problem, not a fresh tick.
+    # Clamp to 0 rather than returning a negative that sails through "< 120".
+    return max(age, 0.0)
 
 
 def margin_level(equity: float, margin_used: float) -> float:

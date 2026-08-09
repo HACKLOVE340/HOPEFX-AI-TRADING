@@ -324,8 +324,19 @@ async def _probe_data_feed() -> dict[str, Any]:
             if tick:
                 import json
 
+                from core.account_metrics import tick_age_seconds
+
                 data = json.loads(tick) if isinstance(tick, str | bytes) else {}
-                age_s = time.time() - float(data.get("ts", data.get("timestamp", time.time())))
+                # Was: float(data.get("ts", data.get("timestamp", time.time())))
+                # — a missing timestamp defaulted to *now*, giving age 0.0 and a
+                # green light for a tick that carried no time at all.
+                age_s = tick_age_seconds(data.get("ts", data.get("timestamp")))
+                if age_s is None:
+                    return {
+                        "status": "warning",
+                        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                        "detail": "Tick found but it carries no usable timestamp",
+                    }
                 status = "ok" if age_s < 60 else "warning"
                 return {
                     "status": status,
@@ -438,8 +449,15 @@ async def _probe_celery() -> dict[str, Any]:
     try:
         from celery_app import celery_app
 
-        inspect = celery_app.control.inspect(timeout=3.0)
-        stats = inspect.stats()
+        # In a worker thread: inspect.stats() is a synchronous broadcast that
+        # waits for replies, and on the event loop it stalls every probe
+        # gathered beside it. See infrastructure/health_engine.py::_probe_celery
+        # for the measurement — a dozen unrelated probes all landing at ~2.0s.
+        def _inspect_stats():
+            return celery_app.control.inspect(timeout=3.0).stats()
+
+        _loop = asyncio.get_running_loop()
+        stats = await asyncio.wait_for(_loop.run_in_executor(None, _inspect_stats), timeout=5.0)
         if stats:
             worker_count = len(stats)
             return {
@@ -756,8 +774,23 @@ async def get_reliability_status(
 async def get_component_health(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    """Per-component health with labels and descriptions."""
-    return {"components": [{"name": name, "label": label} for name, label in _COMPONENT_LABELS.items()]}
+    """Per-component health with labels and descriptions.
+
+    It used to return ``{"name", "label"}`` and nothing else — a catalogue of
+    names, despite the route being called *components*, the handler
+    ``get_component_health`` and the docstring promising health. The Components
+    tab of the Reliability page prefers this endpoint over the status snapshot,
+    so every card read ``comp.status`` (undefined → the error icon and red
+    background), ``comp.latency_ms`` (undefined → a bare "ms") and
+    ``comp.detail`` (undefined → blank).
+
+    The result: all eighteen components displayed as hard failures with no
+    detail, on the same page whose Health Engine tab — reading a different
+    endpoint over the same probes — correctly showed 13 OK, 4 warning, 1 error.
+    Two views of one system contradicting each other, with the alarming one
+    being the view that had no data.
+    """
+    return await get_reliability_status(user)
 
 
 @router.post("/reliability/probe")

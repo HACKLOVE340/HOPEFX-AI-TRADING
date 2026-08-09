@@ -1336,11 +1336,53 @@ async def get_audit_log(
     event_type: str | None = None,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
-    """Return paginated audit log entries."""
-    from api.db_store import db_keys_prefix, db_get as _db_g5
+    """Return paginated audit log entries.
 
+    Reads the ``audit_log`` table first — the append-only, hash-chained record
+    ``AuditLogEntry`` writes, whose columns are annotated in database/models.py
+    as "Fields required by the superadmin audit/security APIs":
+    ``timestamp``, ``event_type``, ``user_id``, ``detail``, ``ip_address``.
+
+    This endpoint never queried it. It read ``db_store`` keys under
+    ``audit_event:`` — a prefix nothing in the codebase writes, so that branch
+    has always returned nothing — and then fell back to the in-memory
+    ``activity_log``, whose entries are ``{"time", "message"}`` and carry none
+    of the fields the page displays. The deployed Audit Log therefore reported
+    "16 events total" above sixteen rows of ``—``, ``UNKNOWN``, ``—``: the count
+    was right, every column was empty, and no actual audit record had ever been
+    shown.
+
+    Every source is now normalised to one shape, so a row either has a value or
+    the record genuinely lacks it.
+    """
     events: list[dict] = []
+
+    # ── Source 1: the real audit table ───────────────────────────────────────
     try:
+        from database.connection import SessionLocal
+        from database.models import AuditLogEntry
+
+        db = SessionLocal()
+        try:
+            q = db.query(AuditLogEntry)
+            if user_id:
+                q = q.filter(AuditLogEntry.user_id == user_id)
+            if event_type:
+                q = q.filter(AuditLogEntry.event_type == event_type)
+            total_rows = q.count()
+            rows = q.order_by(AuditLogEntry.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+            events = [_normalise_audit_row(r) for r in rows]
+        finally:
+            db.close()
+        if events or total_rows:
+            return {"events": events, "total": total_rows, "page": page, "limit": limit}
+    except Exception as exc:
+        logger.debug("get_audit_log: audit_log table unavailable: %s", exc)
+
+    # ── Source 2: db_store audit_event:* keys ────────────────────────────────
+    try:
+        from api.db_store import db_get as _db_g5, db_keys_prefix
+
         keys = sorted(db_keys_prefix("audit_event:"), reverse=True)
         for key in keys[: limit * 10]:  # over-fetch then filter
             ev = _db_g5(key)
@@ -1349,21 +1391,59 @@ async def get_audit_log(
                     continue
                 if event_type and ev.get("event_type") != event_type:
                     continue
-                events.append(ev)
+                events.append(_normalise_audit_dict(ev))
     except Exception as exc:
         logger.debug("get_audit_log: %s", exc)
 
-    # Fallback to activity_log
+    # ── Source 3: the in-memory activity log ─────────────────────────────────
     if not events:
-        events = list(activity_log)
+        raw = [_normalise_audit_dict(e) for e in activity_log]
         if user_id:
-            events = [e for e in events if e.get("user_id") == user_id]
+            raw = [e for e in raw if e.get("user_id") == user_id]
         if event_type:
-            events = [e for e in events if e.get("event_type") == event_type]
+            raw = [e for e in raw if e.get("event_type") == event_type]
+        events = raw
 
     total = len(events)
     offset = (page - 1) * limit
     return {"events": events[offset : offset + limit], "total": total, "page": page, "limit": limit}
+
+
+def _normalise_audit_row(row) -> dict:
+    """One ``AuditLogEntry`` → the shape the Audit Log page renders."""
+    ts = getattr(row, "timestamp", None) or getattr(row, "created_at", None)
+    return {
+        "id": str(getattr(row, "id", "") or ""),
+        "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else None),
+        "user_id": getattr(row, "user_id", None) or getattr(row, "actor", None),
+        "event_type": getattr(row, "event_type", None) or getattr(row, "action", None),
+        "detail": getattr(row, "detail", None) or getattr(row, "data_json", None),
+        "ip_address": getattr(row, "ip_address", None),
+        "level": getattr(row, "level", None),
+        "category": getattr(row, "category", None),
+    }
+
+
+def _normalise_audit_dict(ev: dict) -> dict:
+    """Any legacy record → the same shape.
+
+    ``activity_log`` entries are ``{"time": <float>, "message": <str>}``. Passed
+    through untouched they render as an entirely blank row; mapped, they are at
+    least a timestamped system message.
+    """
+    ts = ev.get("timestamp") or ev.get("time") or ev.get("created_at")
+    if isinstance(ts, int | float):
+        ts = _import_datetime().fromtimestamp(ts, _import_utc()).isoformat()
+    return {
+        "id": str(ev.get("id", "") or ""),
+        "timestamp": ts,
+        "user_id": ev.get("user_id") or ev.get("actor"),
+        "event_type": ev.get("event_type") or ev.get("action") or ("system" if ev.get("message") else None),
+        "detail": ev.get("detail") or ev.get("message") or ev.get("data_json"),
+        "ip_address": ev.get("ip_address") or ev.get("ip"),
+        "level": ev.get("level"),
+        "category": ev.get("category"),
+    }
 
 
 # ── System backup trigger ─────────────────────────────────────────────────────

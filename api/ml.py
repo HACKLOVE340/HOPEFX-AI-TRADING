@@ -376,7 +376,20 @@ class AccuracyResponse(BaseModel):
     recall: float
     f1: float
     sharpe: float
-    win_rate: float
+    # Optional, and it means it. Win rate is the fraction of *trades* that made
+    # money; accuracy is the fraction of directional predictions that were
+    # right. They answer different questions and only coincide by chance.
+    #
+    # This was `float`, and the code below filled it with `win_rate or accuracy`
+    # whenever the evaluation carried no win rate — so the dashboard rendered
+    # ACCURACY 57.3% beside WIN RATE 57.3%, identical to the decimal, and a
+    # reader had no way to tell that one of them was the other wearing a
+    # different label. Worse, `or` treats a real 0.0 win rate — every trade a
+    # loser — as missing, and replaces it with the accuracy figure.
+    #
+    # None now means "not measured", which the dashboard already renders as "—"
+    # via orDash().
+    win_rate: float | None = None
     total_signals: int
     evaluated_at: str
     note: str = ""
@@ -493,8 +506,14 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                     or sharpe_gate.get("sharpe")
                     or 0.0
                 )
-                # win_rate: prefer multi-symbol pooled win rate, else accuracy
-                win_rate = float(data.get("win_rate") or accuracy)
+                # win_rate: the pooled multi-symbol win rate when the evaluation
+                # measured one, otherwise nothing. Never accuracy — see the
+                # field comment on AccuracyResponse.win_rate. `is not None`
+                # rather than `or`, so a genuine 0.0 survives.
+                _wr = data.get("win_rate")
+                if _wr is None:
+                    _wr = multi.get("pooled_win_rate")
+                win_rate = float(_wr) if _wr is not None else None
                 # total_signals: prefer oos_n (number of OOS bars evaluated)
                 total_signals = int(
                     data.get("total_signals")
@@ -530,7 +549,10 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                                 fallback = h.get("fallback_count", 0)
                                 if total > 0:
                                     accuracy = round(1.0 - fallback / total, 4)
-                                    win_rate = accuracy
+                                    # Not a win rate: this is the non-fallback
+                                    # prediction ratio. Leave win_rate unmeasured
+                                    # rather than relabel accuracy as profit.
+                                    win_rate = None
                                     total_signals = total
                                     note = note or "Accuracy derived from live predict/fallback ratio"
                             except Exception as _exc:
@@ -581,7 +603,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                         recall=0.0,
                         f1=0.0,
                         sharpe=0.0,
-                        win_rate=live_accuracy,
+                        win_rate=None,  # a predict/fallback ratio is not a win rate
                         total_signals=total,
                         evaluated_at=datetime.now(UTC).isoformat(),
                         note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",

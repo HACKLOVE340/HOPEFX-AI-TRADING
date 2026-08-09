@@ -354,7 +354,10 @@ interface AccuracyResponse {
   recall:        number;
   f1:            number;
   sharpe:        number;
-  win_rate:      number;
+  // Nullable: the server sends null when the evaluation measured no win rate,
+  // rather than substituting accuracy for it. Rendering that as 0.0% would be
+  // its own lie, so the card below shows "—".
+  win_rate:      number | null;
   total_signals: number;
   evaluated_at:  string;
   note?:         string;
@@ -407,7 +410,8 @@ const MlAccuracyCard: React.FC = () => {
 
   const metrics = [
     { key: 'Accuracy',  val: (safeAccuracy  * 100).toFixed(1) + '%', good: safeAccuracy  >= 0.60 },
-    { key: 'Win Rate',  val: (safeWinRate   * 100).toFixed(1) + '%', good: safeWinRate   >= 0.55 },
+    { key: 'Win Rate',  val: data.win_rate == null ? '—' : (safeWinRate * 100).toFixed(1) + '%',
+      good: data.win_rate == null ? undefined : safeWinRate >= 0.55 },
     { key: 'F1',        val: safeF1.toFixed(3),                       good: safeF1        >= 0.60 },
     { key: 'Sharpe',    val: safeSharpe.toFixed(2),                   good: safeSharpe    >= 1.5  },
     { key: 'Precision', val: (safePrecision * 100).toFixed(1) + '%',  good: safePrecision >= 0.60 },

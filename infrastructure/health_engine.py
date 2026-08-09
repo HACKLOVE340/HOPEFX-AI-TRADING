@@ -417,8 +417,18 @@ def _register_default_probes(engine: HealthEngine) -> None:
                             data = json.loads(raw) if isinstance(raw, str | bytes) else {}
                         except (json.JSONDecodeError, ValueError):
                             data = {}
+                        from core.account_metrics import tick_age_seconds
+
                         ts_val = data.get("ts", data.get("timestamp", data.get("time")))
-                        age_s = time.time() - float(ts_val) if ts_val is not None else 0.0
+                        age_s = tick_age_seconds(ts_val)
+                        if age_s is None:
+                            # An unreadable timestamp is not a fresh tick. This
+                            # used to become 0.0 and grade "ok".
+                            return {
+                                "status": "warning",
+                                "detail": f"tick at {key} has no usable timestamp (ts={ts_val!r})",
+                                "key": key,
+                            }
                         return {
                             "status": "ok" if age_s < 120 else "warning",
                             "detail": f"last tick age={age_s:.1f}s key={key}",
@@ -467,14 +477,31 @@ def _register_default_probes(engine: HealthEngine) -> None:
             return {"status": "error", "detail": str(exc)}
 
     async def _probe_celery() -> dict[str, Any]:
+        """Ask the broker for workers — from a thread, not the event loop.
+
+        ``inspect.stats()`` is a synchronous broadcast that waits for replies up
+        to its timeout. Called directly inside ``async def`` it blocks the loop
+        for the whole wait, and every probe gathered alongside it stalls too.
+        That is visible in the deployed report: Redis Cache 2042ms (ERROR,
+        "Timeout reading from redis:6379"), Broker 2041ms, ML/AI 2124ms,
+        WebSocket 2112ms — a dozen unrelated probes all landing at ~2.0-2.1s,
+        which is not each being slow but all of them queued behind this one.
+        The Redis probe's own socket timeout then fires and reports an outage
+        that is really this function holding the loop.
+        """
         try:
             from celery_app import celery_app
 
-            inspect = celery_app.control.inspect(timeout=3.0)
-            stats = inspect.stats()
+            def _inspect_stats():
+                return celery_app.control.inspect(timeout=3.0).stats()
+
+            loop = asyncio.get_running_loop()
+            stats = await asyncio.wait_for(loop.run_in_executor(None, _inspect_stats), timeout=5.0)
             if stats:
                 return {"status": "ok", "detail": f"workers={len(stats)} active", "worker_count": len(stats)}
             return {"status": "warning", "detail": "No Celery workers responded", "worker_count": 0}
+        except TimeoutError:
+            return {"status": "warning", "detail": "Celery inspect timed out after 5s", "worker_count": 0}
         except Exception as exc:
             return {"status": "warning", "detail": f"Celery inspect failed: {exc}"}
 

@@ -101,8 +101,41 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
-RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+
+def _redis_url_with_db(db: int) -> str:
+    """Default a Celery URL from REDIS_URL, swapping in *db*.
+
+    The literal defaults were ``redis://localhost:6379/1`` and ``/2``.
+    docker-compose sets CELERY_BROKER_URL on the ``celery-worker`` and
+    ``celery-beat`` services but **not** on ``app`` — so inside the app
+    container the variable is unset, "localhost" means the app container
+    itself, and nothing listens there. The deployed Reliability page showed:
+
+        Celery Task Queue   WARNING
+        Celery inspect failed: Error 111 connecting to localhost:6379.
+        Connection refused.
+
+    while every other component reached ``redis:6379`` perfectly well. The app
+    always has REDIS_URL, so derive from it: one correctly-configured variable
+    is enough, and adding a service to compose cannot silently miss this again.
+    """
+    raw = os.getenv("REDIS_URL", "").strip()
+    if not raw:
+        return f"redis://localhost:6379/{db}"
+    base, _, _ = raw.partition("?")
+    scheme_sep = base.find("://")
+    if scheme_sep == -1:
+        return f"redis://localhost:6379/{db}"
+    host_part = base[scheme_sep + 3 :]
+    # Strip any existing /<db> suffix, taking care not to cut into credentials.
+    slash = host_part.rfind("/")
+    if slash != -1 and host_part[slash + 1 :].isdigit():
+        host_part = host_part[:slash]
+    return f"{base[:scheme_sep]}://{host_part}/{db}"
+
+
+BROKER_URL = os.getenv("CELERY_BROKER_URL") or _redis_url_with_db(1)
+RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND") or _redis_url_with_db(2)
 ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in ("true", "1")
 
 # ── App factory ───────────────────────────────────────────────────────────────

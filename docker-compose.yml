@@ -17,6 +17,15 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      # The app inspects the Celery broker for its health page. Without these it
+      # fell back to redis://localhost:6379/1 — the app container itself, where
+      # nothing listens — and reported "Celery inspect failed: Error 111
+      # connecting to localhost:6379" while every other component reached
+      # redis:6379 fine. celery_app.py now derives these from REDIS_URL when
+      # unset; they are stated here too so the three services that talk to the
+      # broker are configured identically and visibly.
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
       # TLS enforcement — auto-upgrades redis:// → rediss:// at runtime.
       # In production, set REDIS_URL=rediss://... in .env instead.
       IS_FORCE_TLS: ${IS_FORCE_TLS:-false}
