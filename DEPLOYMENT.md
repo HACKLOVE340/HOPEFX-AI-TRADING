@@ -84,6 +84,18 @@ Useful flags:
 
 ```bash
 # regenerate over an existing .env (keeps a timestamped backup)
+#
+# ONLY on a deployment that has never started. --force mints a NEW
+# POSTGRES_PASSWORD, and Postgres applies that variable exactly once, when it
+# initialises an empty data volume. Once the volume exists it keeps the password
+# it was created with, so regenerating leaves the app presenting a password the
+# database has never heard of:
+#
+#     FATAL:  password authentication failed for user "hopefx"
+#
+# If the stack has already run, either recreate the volume (destroys the data)
+# or keep the .env you have. Do not regenerate to "start clean" — that is what
+# breaks it.
 python3 scripts/bootstrap_env.py --domain your-domain.com --force
 
 # only the ~28 variables a production deploy requires, as bare NAME=VALUE
