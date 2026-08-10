@@ -71,6 +71,40 @@ health={{if .State.Health}}{{.State.Health.Status}} failing={{.State.Health.Fail
     fi
 fi
 
+# ── 2b. Is the running container built from the CURRENT config? ──────────────
+#
+# `docker compose up -d` recreates a container when the resolved service config
+# changes, and .env is part of that config — verified by computing
+# `config --hash=app` against two different .env files and seeing it move. So
+# `up -d` after editing .env is safe.
+#
+# `docker compose restart` is not: it stops and starts the SAME container, which
+# keeps the environment it was created with. Regenerate secrets, restart, and
+# every value the app sees is the old one — with nothing reporting a problem.
+# Compose records the hash it created each container from, so the two can be
+# compared directly.
+hr "2b. running config vs current config"
+if have docker; then
+    WANT="$(docker compose config --hash="${SERVICE}" 2>/dev/null | awk '{print $2}')"
+    CID2="$(docker compose ps -aq "${SERVICE}" 2>/dev/null | head -1)"
+    if [ -n "${CID2}" ] && [ -n "${WANT}" ]; then
+        HAVE="$(docker inspect "${CID2}" --format '{{index .Config.Labels "com.docker.compose.config-hash"}}' 2>/dev/null)"
+        echo "  container was created from : ${HAVE:-<unknown>}"
+        echo "  current compose config     : ${WANT}"
+        if [ -n "${HAVE}" ] && [ "${HAVE}" != "${WANT}" ]; then
+            echo ""
+            echo "  STALE: this container is running an older configuration." >&2
+            echo "  A 'docker compose restart' reuses the existing container and its" >&2
+            echo "  original environment. Recreate it so the current .env takes effect:" >&2
+            echo "      docker compose up -d --force-recreate ${SERVICE}" >&2
+        else
+            echo "  -> container matches the current configuration"
+        fi
+    else
+        echo "no container to compare (never created, or compose config failed)"
+    fi
+fi
+
 # ── 3. Where preflight stopped ───────────────────────────────────────────────
 hr "3. preflight progress (last attempt)"
 if have docker; then

@@ -118,8 +118,13 @@ Test markers: `unit`, `integration`, `e2e`, `slow`, `requires_redis`, `asyncio`.
   are **intentionally committed** (whitelisted in `.gitignore`, checksum-verified
   in CI). `dashboard/dist/` is **intentionally committed** so the server can
   serve the UI without a build step. Don't "clean these up."
-- `WORDMAP.json` and the live-credential `prop_firm_mode.json` overrides are
-  gitignored; copy from the `*.example` templates locally.
+- `WORDMAP.json` is gitignored; copy from `WORDMAP.json.example` locally.
+  `prop_firm_mode.json` is **not** — `.gitignore` commits it deliberately with
+  placeholder credentials so CI has a config to load. This file previously said
+  it was gitignored, and the file's own `_comment` said so too, which invites
+  putting real credentials in a tracked file. Keep credentials in environment
+  variables. Note it also ships `enabled: true` with the FTMO ruleset, so a
+  fresh deployment starts with those prop-firm limits active.
 - `test-results.xml` is a CI-generated artifact — never commit it.
 </content>
 </invoke>

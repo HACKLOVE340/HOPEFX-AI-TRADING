@@ -166,3 +166,54 @@ def test_no_probe_can_abort_the_report():
     it, which on a broken host is most of the report."""
     src = _SCRIPT.read_text()
     assert re.search(r"^set -uo pipefail", src, re.MULTILINE), "must not use -e"
+
+
+# ── Stale containers (the `restart` trap) ────────────────────────────────────
+
+
+def test_it_compares_the_running_config_against_the_current_one():
+    """`docker compose up -d` recreates when .env changes — the resolved service
+    config hash moves with it, verified against two generated .env files.
+
+    `docker compose restart` does not: it reuses the same container with the
+    environment it was created with. Regenerate secrets, restart, and every
+    value the app sees is the old one, with nothing reporting a problem.
+    Compose labels each container with the hash it was created from, so the
+    two can be compared.
+    """
+    src = _SCRIPT.read_text()
+    assert "com.docker.compose.config-hash" in src
+    assert "config --hash" in src
+    assert "force-recreate" in src, "must give the command that fixes it"
+
+
+def test_the_stale_check_appears_before_the_log_sections(report):
+    """A stale container makes the log tail misleading — it is evidence about
+    an older configuration — so this has to be read first."""
+    assert report.index("2b. running config") < report.index("3. preflight progress")
+
+
+# ── prop_firm_mode.json is tracked, whatever it used to claim ────────────────
+
+
+def test_prop_firm_config_does_not_claim_to_be_gitignored():
+    """It is committed deliberately (.gitignore says so) with placeholder
+    credentials for CI. Its own _comment said "This file is gitignored", which
+    invites typing real credentials into a tracked file.
+    """
+    import json
+
+    config = json.loads((_ROOT / "prop_firm_mode.json").read_text())
+    comment = config.get("_comment", "").lower()
+    assert "not" in comment and "gitignore" in comment, f"still misleading: {comment!r}"
+
+
+def test_prop_firm_config_carries_no_real_credentials():
+    """The placeholders are the point — this file is in the repository."""
+    import json
+    import re
+
+    config = json.loads((_ROOT / "prop_firm_mode.json").read_text())
+    for key in ("telegram_token", "telegram_chat_id"):
+        value = str(config.get(key, ""))
+        assert not value or re.match(r"^CHANGE_ME", value), f"{key} looks like a real credential"
