@@ -62,14 +62,28 @@ def _module():
 
 
 def _parse(text: str) -> dict[str, str]:
-    """Parse with the same inline-comment rule docker compose uses."""
+    """Parse the way docker compose does — including the part that surprises.
+
+    Compose strips an inline comment only when the value is NON-empty. When the
+    value is empty it takes the whole comment as the value:
+
+        FOO=          # a comment   ->  FOO='# a comment'
+        BAR=value     # a comment   ->  BAR='value'
+
+    Verified against a real `docker compose config`. This helper originally
+    stripped ` #...` unconditionally, which is more forgiving than compose and
+    hid the very defect these tests exist to catch — the generated env reached
+    the container with 33 variables holding their own descriptions.
+    """
     out: dict[str, str] = {}
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in stripped:
             continue
-        name, _, value = stripped.partition("=")
-        out[name.strip()] = re.sub(r"\s+#.*$", "", value).strip()
+        name, _, raw = stripped.partition("=")
+        body = raw.strip()
+        value = body if body.startswith("#") else re.sub(r"\s+#.*$", "", raw).strip()
+        out[name.strip()] = value
     return out
 
 
@@ -345,3 +359,80 @@ def test_no_variable_is_assigned_more_than_once():
     ]
     duplicates = {n: c for n, c in collections.Counter(names).items() if c > 1}
     assert duplicates == {}, f"assigned more than once: {duplicates}"
+
+
+# ── `NAME=   # comment` is not an empty value ────────────────────────────────
+
+
+def test_an_empty_value_with_a_trailing_comment_is_emitted_as_truly_empty():
+    """Docker compose strips an inline comment only when the value is NON-empty.
+
+    For an empty one it takes the whole comment as the value, so
+
+        OANDA_API_KEY=          # CANONICAL — set this one
+
+    reaches the container as OANDA_API_KEY='# CANONICAL — set this one', and
+    every ``if os.getenv("OANDA_API_KEY")`` reads it as configured. Thirty-three
+    variables in .env.example had this shape, among them the OANDA credentials,
+    LINEAGE_DB_URL, OTEL_EXPORTER_OTLP_ENDPOINT and both price-feed URLs —
+    values that get dialled, not merely read.
+    """
+    text, _ = _module().generate(_TEMPLATE, _DOMAIN)
+    offenders = [ln for ln in text.splitlines() if re.match(r"^[A-Z0-9_]+=[ \t]+#", ln)]
+    assert offenders == [], f"these reach the container holding their own comment: {offenders[:5]}"
+
+
+def test_no_generated_value_is_a_comment():
+    """The same property stated over parsed values rather than raw lines."""
+    text, _ = _module().generate(_TEMPLATE, _DOMAIN)
+    parsed = _parse(text)
+    assert [k for k, v in parsed.items() if v.startswith("#") and k != "ELITE_AM_SLACK"] == []
+
+
+def test_a_value_that_legitimately_starts_with_hash_survives():
+    """ELITE_AM_SLACK=#elite-support — the '#' is a Slack channel sigil.
+
+    The discriminator is whitespace between '=' and '#', which is exactly the
+    rule compose means to apply. Blanking on a bare '#' would lose this.
+    """
+    text, _ = _module().generate(_TEMPLATE, _DOMAIN)
+    assert _parse(text)["ELITE_AM_SLACK"] == "#elite-support"
+
+
+def test_a_non_empty_value_keeps_its_trailing_comment():
+    """Compose handles that case correctly, so it must not be disturbed."""
+    text, _ = _module().generate(_TEMPLATE, _DOMAIN)
+    assert any(re.match(r"^LOG_JSON=false\s+#", ln) for ln in text.splitlines())
+    assert _parse(text)["LOG_JSON"] == "false"
+
+
+def test_the_comment_is_kept_rather_than_discarded():
+    """The description is worth keeping; it just cannot share the line."""
+    text, _ = _module().generate(_TEMPLATE, _DOMAIN)
+    lines = text.splitlines()
+    idx = lines.index("OANDA_API_KEY=")
+    assert lines[idx - 1].lstrip().startswith("#"), "the explanation was dropped instead of moved"
+
+
+def test_the_template_itself_no_longer_has_the_pattern():
+    """Operators copy .env.example directly; fixing only the generator would
+    leave that path broken."""
+    offenders = [ln for ln in _TEMPLATE.splitlines() if re.match(r"^[A-Z0-9_]+=[ \t]+#", ln)]
+    assert offenders == [], f".env.example still has {len(offenders)} such lines"
+
+
+def test_the_generator_handles_the_pattern_independently_of_the_template():
+    """Fixing .env.example makes the generator's guard unreachable via the real
+    template, so this exercises it directly.
+
+    Without it, a `NAME=   # comment` line reintroduced to .env.example — or
+    present in any template passed with --template — would silently ship the
+    comment as the value again.
+    """
+    template = "POSTGRES_PASSWORD=CHANGE_ME_db_password\nFOO=          # a description\nBAR=#literal-value\n"
+    text, _ = _module().generate(template, _DOMAIN)
+    parsed = _parse(text)
+
+    assert parsed["FOO"] == "", f"comment shipped as the value: {parsed['FOO']!r}"
+    assert parsed["BAR"] == "#literal-value", "a value with no space before '#' must survive"
+    assert "# a description" in text, "the description should move, not vanish"

@@ -368,6 +368,28 @@ def generate(
                     value = value.replace(token, values[source])
             value = value.replace("YOUR_DOMAIN", domain)
 
+        # `NAME=   # description` does NOT mean "empty, with a note". Docker
+        # compose strips an inline comment only when the value is non-empty; for
+        # an empty one it takes the whole comment as the value. So
+        #
+        #     OANDA_API_KEY=          # CANONICAL — set this one
+        #
+        # reaches the container as OANDA_API_KEY='# CANONICAL — set this one',
+        # and every `if os.getenv("OANDA_API_KEY")` reads it as configured.
+        # 33 variables in .env.example have this shape, among them the OANDA
+        # credentials, LINEAGE_DB_URL, OTEL_EXPORTER_OTLP_ENDPOINT and both
+        # price-feed URLs — values that are dialled, not just read.
+        #
+        # The discriminator is whitespace between '=' and '#', which is exactly
+        # the rule compose means to apply. Without it, ELITE_AM_SLACK=#general
+        # would be blanked, where the '#' is a channel sigil and part of the
+        # value.
+        if sep.rstrip() != sep and value.startswith("#"):
+            if keep_comments:
+                out.append(f"{indent}{value}")
+            out.append(f"{indent}{name}=")
+            continue
+
         if not keep_comments:
             # The control-panel environment editors that need this mode parse
             # every line as NAME=VALUE, so a trailing comment becomes part of
