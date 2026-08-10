@@ -133,7 +133,7 @@ jobs:
       - name: Upload Trivy scan results to GitHub Security tab
         # continue-on-error: SARIF upload requires GHAS; fails gracefully
         # on repos without it rather than blocking CI.
-        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3  # v4.37.6
         if: always()
         continue-on-error: true
         with:
