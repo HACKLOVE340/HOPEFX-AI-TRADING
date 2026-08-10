@@ -32,8 +32,10 @@ echo ""
 # ── 1. Python version ─────────────────────────────────────────────────────────
 # Dockerfile uses python:3.12-slim. Require 3.12+ in production to match.
 echo "[ 1/9 ] Python version"
-PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
-PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
+# `|| echo 0` so a missing/broken python3 reaches the fail() below with a
+# message, instead of exiting the shell silently at the assignment.
+PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo 0)
+PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo 0)
 if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 12 ]; }; then
     fail "Python 3.12+ required (found $(python3 --version)). The Docker image uses python:3.12-slim."
 fi
@@ -107,6 +109,13 @@ ok "Core dependencies available (uvicorn + aiohttp confirmed)"
 # ── 5. Database connectivity + migrations ────────────────────────────────────
 echo "[ 5/9 ] Database"
 DB_ERR_FILE="$(mktemp)"
+# `set -e` plus `VAR=$(cmd)` exits the shell AT THE ASSIGNMENT when cmd fails,
+# so everything below — the error text, the diagnosis, `fail`'s own message —
+# was unreachable. The container died with its last line being
+# "[ 5/9 ] Database" and nothing after it, for every possible database problem.
+#
+# `|| DB_RC=$?` takes the assignment out of errexit's scope and keeps the status.
+DB_RC=0
 DB_CHECK=$(python3 - 2>"${DB_ERR_FILE}" <<'PYEOF'
 import sys, os
 try:
@@ -124,8 +133,8 @@ except Exception as e:
     print(f"error: {e}", file=sys.stderr)
     sys.exit(1)
 PYEOF
-)
-if [ "${DB_CHECK}" != "ok" ]; then
+) || DB_RC=$?
+if [ "${DB_CHECK}" != "ok" ] || [ "${DB_RC}" -ne 0 ]; then
     cat "${DB_ERR_FILE}" >&2
     # "password authentication failed" almost never means DATABASE_URL is wrong.
     # Postgres writes its password into the data directory on FIRST init only;
@@ -227,6 +236,12 @@ fi
 
 # ── 6. Redis connectivity ─────────────────────────────────────────────────────
 echo "[ 6/9 ] Redis"
+# Same errexit trap as the database check above, and here it silently defeated
+# a documented policy: the branch below deliberately warns instead of failing
+# because Redis is optional, but the shell exited at this assignment first, so
+# an unreachable Redis killed the container anyway — the exact behaviour the
+# comment says was removed.
+REDIS_RC=0
 REDIS_CHECK=$(python3 - <<'PYEOF'
 import sys, os
 try:
@@ -239,8 +254,8 @@ except Exception as e:
     print(f"error: {e}", file=sys.stderr)
     sys.exit(1)
 PYEOF
-)
-if [ "${REDIS_CHECK}" != "ok" ]; then
+) || REDIS_RC=$?
+if [ "${REDIS_CHECK}" != "ok" ] || [ "${REDIS_RC}" -ne 0 ]; then
     # Redis is OPTIONAL: the app degrades gracefully to an in-memory / ring-buffer
     # fallback when Redis is unavailable. A failed check must NOT crash-loop the
     # container (previously `fail` → exit 1). Warn instead and continue.
