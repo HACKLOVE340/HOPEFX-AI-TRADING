@@ -324,3 +324,24 @@ def test_the_written_file_is_not_world_readable(tmp_path):
     target = tmp_path / ".env"
     assert _module().main(["--domain", _DOMAIN, "--output", str(target)]) == 0
     assert target.stat().st_mode & 0o077 == 0
+
+
+# ── No variable is assigned twice ────────────────────────────────────────────
+
+
+def test_no_variable_is_assigned_more_than_once():
+    """A duplicate assignment in a .env is resolved by whichever line the parser
+    reads last, which differs between compose, python-dotenv and shell `source`.
+
+    This caught a real one: `_ADDITIONS` appended the bootstrap addresses
+    unconditionally, so once `.env.example` declared them too, each was emitted
+    twice.
+    """
+    import collections
+
+    text, _ = _module().generate(_TEMPLATE, _DOMAIN)
+    names = [
+        line.split("=", 1)[0].strip() for line in text.splitlines() if "=" in line and not line.strip().startswith("#")
+    ]
+    duplicates = {n: c for n, c in collections.Counter(names).items() if c > 1}
+    assert duplicates == {}, f"assigned more than once: {duplicates}"

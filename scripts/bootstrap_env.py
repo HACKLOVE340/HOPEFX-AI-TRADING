@@ -174,6 +174,63 @@ _FORCED: dict[str, str] = {
     "FEATURE_BILLING_SUBSCRIPTION": "false",
 }
 
+# Variables `.env.example` never declares but something else requires.
+#
+# scripts/bootstrap_prod.py — the documented final step of a deploy — reads
+# BOOTSTRAP_SUPERADMIN_EMAIL and exits(1) when it is empty, saying "Set it in
+# .env before running this script". `.env.example` names the three accounts by
+# address in a comment block but declares no variable for them, so following
+# that instruction was impossible: the password shipped in the template and the
+# address it belongs to did not. The addresses match bootstrap_dev.py's
+# DEFAULT_*_EMAIL so both paths seed the same accounts.
+_ADDITIONS: dict[str, str] = {
+    "BOOTSTRAP_SUPERADMIN_EMAIL": "superadmin@hopefx.io",
+    "BOOTSTRAP_ADMIN_EMAIL": "admin@hopefx.io",
+    "BOOTSTRAP_TRADER_EMAIL": "trader@hopefx.io",
+}
+
+# The variables a production deployment actually needs. Everything else in
+# `.env.example` either has a working default in code or configures a
+# third-party integration that is off until its credentials are supplied.
+#
+# This exists because `.env.example` is ~900 lines, and a control-panel
+# environment editor takes one Name/Value pair per row. Pasting the whole file
+# into one is what produced rows literally named `#` and `# VITE_API_URL`.
+#
+# Measured, not assumed: tests set exactly this list and require
+# validate_environment(strict=True) to pass, and require it to cover every
+# variable docker-compose.yml declares with no default.
+_MINIMAL: tuple[str, ...] = (
+    "APP_ENV",
+    "APP_BASE_URL",
+    "HOPEFX_DOMAIN",
+    "ALLOWED_ORIGINS",
+    "SECURITY_JWT_SECRET",
+    "CONFIG_ENCRYPTION_KEY",
+    "DB_ENCRYPTION_KEY",
+    "HOPEFX_KILL_SWITCH_TOKEN",
+    "CRYPTO_WEBHOOK_SECRET",
+    "DATABASE_URL",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DB",
+    "DB_HOST",
+    "DB_PASSWORD",
+    "REDIS_URL",
+    "REDIS_HOST",
+    "REDIS_PORT",
+    "REDIS_PASSWORD",
+    "GRAFANA_ADMIN_PASSWORD",
+    "BOOTSTRAP_SUPERADMIN_EMAIL",
+    "BOOTSTRAP_SUPERADMIN_PASSWORD",
+    "BOOTSTRAP_ADMIN_EMAIL",
+    "BOOTSTRAP_ADMIN_PASSWORD",
+    "BOOTSTRAP_TRADER_EMAIL",
+    "BOOTSTRAP_TRADER_PASSWORD",
+    "FEATURE_BILLING_SUBSCRIPTION",
+    "BROKER_TYPE",
+)
+
 _ASSIGN_RE = re.compile(r"^(\s*)([A-Z0-9_]+)(\s*=\s*)(.*)$")
 _PLACEHOLDER_RE = re.compile(r"CHANGE_ME\S*")
 
@@ -203,8 +260,18 @@ class GenerationError(RuntimeError):
     """Raised when the template contains something this script cannot fill."""
 
 
-def generate(template: str, domain: str, *, keep_comments: bool = True) -> tuple[str, dict[str, str]]:
+def generate(
+    template: str,
+    domain: str,
+    *,
+    keep_comments: bool = True,
+    minimal: bool = False,
+) -> tuple[str, dict[str, str]]:
     """Return ``(env_text, generated_values)`` for *template*.
+
+    With *minimal*, emit only ``_MINIMAL`` — the variables a production
+    deployment actually requires — as bare ``NAME=VALUE`` lines, ordered as
+    listed there rather than as they appear in the template.
 
     Pure: no filesystem access, so the tests can exercise the real template.
     """
@@ -267,6 +334,31 @@ def generate(template: str, domain: str, *, keep_comments: bool = True) -> tuple
 
         out.append(f"{indent}{name}{sep}{value}")
 
+    # Variables the template never declares, appended so they are subject to
+    # the same leftover check below.
+    resolved = dict(_ADDITIONS)
+    for line in out:
+        match = _ASSIGN_RE.match(line)
+        if match:
+            resolved[match.group(2)] = match.group(4)
+    declared = {m.group(2) for m in (_ASSIGN_RE.match(line) for line in out) if m}
+    for name, value in _ADDITIONS.items():
+        # Only when the template genuinely lacks it. `.env.example` now declares
+        # these, so appending unconditionally emitted each address twice — and a
+        # duplicate assignment in a .env is decided by whichever the parser reads
+        # last, which is not something to leave to chance.
+        if name not in declared:
+            out.append(f"{name}={value}")
+
+    if minimal:
+        missing = [n for n in _MINIMAL if n not in resolved]
+        if missing:
+            raise GenerationError(
+                f"_MINIMAL names variables the template does not produce: {missing}. "
+                f"Either .env.example dropped them or _ADDITIONS needs an entry."
+            )
+        out = [f"{name}={resolved[name]}" for name in _MINIMAL]
+
     text = "\n".join(out).rstrip("\n") + "\n"
 
     leftover = _PLACEHOLDER_RE.search(text)
@@ -284,6 +376,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", default=str(ROOT / ".env"))
     parser.add_argument("--force", action="store_true", help="overwrite an existing output file (keeps a backup)")
     parser.add_argument("--no-comments", action="store_true", help="emit NAME=VALUE lines only")
+    parser.add_argument(
+        "--minimal",
+        action="store_true",
+        help="emit only the variables a production deploy requires — for control-panel environment editors",
+    )
     args = parser.parse_args(argv)
 
     template_path, output_path = Path(args.template), Path(args.output)
@@ -304,7 +401,8 @@ def main(argv: list[str] | None = None) -> int:
         text, values = generate(
             template_path.read_text(encoding="utf-8"),
             args.domain,
-            keep_comments=not args.no_comments,
+            keep_comments=not args.no_comments and not args.minimal,
+            minimal=args.minimal,
         )
     except GenerationError as exc:
         print(f"error: {exc}", file=sys.stderr)
