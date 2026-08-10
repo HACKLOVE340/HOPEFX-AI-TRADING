@@ -171,7 +171,55 @@ ok "Database reachable"
 
 if [ "${SKIP_MIGRATIONS:-false}" != "true" ]; then
     echo "       Running Alembic migrations…"
-    python3 -m alembic upgrade head || fail "Alembic migration failed"
+
+    # Bounded three ways, because this step had no limit of any kind and the
+    # container runs `preflight.sh && python app.py` — so a migration that
+    # blocks forever is indistinguishable from a hung deploy: the last line of
+    # output stays "[ 5/9 ] Database", nothing listens on 8000, and the only
+    # external symptom is the healthcheck failing.
+    #
+    # lock_timeout is the one that matters. A migration waiting on a lock waits
+    # indefinitely by default, and a container stopped part-way through one
+    # leaves a Postgres backend holding locks, so the next attempt blocks on the
+    # previous attempt's debris — which sustains itself across restarts.
+    #
+    # statement_timeout bounds a single slow statement; MIGRATION_TIMEOUT bounds
+    # the whole run in case it stalls somewhere libpq's timeouts do not reach.
+    # All three are overridable: a genuinely long data migration should be given
+    # room deliberately rather than by removing the limits.
+    MIGRATION_LOCK_TIMEOUT="${MIGRATION_LOCK_TIMEOUT:-30s}"
+    MIGRATION_STATEMENT_TIMEOUT="${MIGRATION_STATEMENT_TIMEOUT:-300s}"
+    MIGRATION_TIMEOUT="${MIGRATION_TIMEOUT:-900}"
+
+    MIGRATION_RC=0
+    PGOPTIONS="-c lock_timeout=${MIGRATION_LOCK_TIMEOUT} -c statement_timeout=${MIGRATION_STATEMENT_TIMEOUT}" \
+        timeout "${MIGRATION_TIMEOUT}" python3 -m alembic upgrade head || MIGRATION_RC=$?
+
+    if [ "${MIGRATION_RC}" -eq 124 ]; then
+        echo "" >&2
+        echo "  Migrations did not finish within ${MIGRATION_TIMEOUT}s and were stopped." >&2
+        echo "" >&2
+        echo "  Usually this means another session holds a lock on a table being" >&2
+        echo "  migrated — most often a previous app container that was stopped" >&2
+        echo "  part-way through this same step. Its backend can outlive the" >&2
+        echo "  container and keep the lock, so every later attempt blocks on it." >&2
+        echo "" >&2
+        echo "  Show what is holding things up:" >&2
+        echo "      docker compose exec postgres psql -U ${POSTGRES_USER:-hopefx} -d ${POSTGRES_DB:-hopefx} -c \\" >&2
+        echo "        \"SELECT pid, state, wait_event_type, wait_event, left(query,60) AS query\\" >&2
+        echo "           FROM pg_stat_activity WHERE datname = current_database();\"" >&2
+        echo "" >&2
+        echo "  Clearing it is usually just a restart of the database, which drops" >&2
+        echo "  every backend and with them every stale lock:" >&2
+        echo "      docker compose restart postgres" >&2
+        echo "" >&2
+        echo "  A migration that legitimately needs longer:" >&2
+        echo "      MIGRATION_TIMEOUT=3600 docker compose up -d" >&2
+        echo "" >&2
+        fail "Alembic migration timed out after ${MIGRATION_TIMEOUT}s — see above."
+    elif [ "${MIGRATION_RC}" -ne 0 ]; then
+        fail "Alembic migration failed"
+    fi
     ok "Migrations up to date"
 else
     warn "SKIP_MIGRATIONS=true — skipping alembic upgrade"
