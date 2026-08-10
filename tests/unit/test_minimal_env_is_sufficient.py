@@ -198,3 +198,57 @@ def test_a_minimal_entry_the_template_lost_is_a_hard_error():
     message = str(excinfo.value)
     assert "_MINIMAL" in message
     assert dropped in message, f"the error must name what went missing: {message}"
+
+
+# ── The file the containers actually read ────────────────────────────────────
+
+
+def test_every_service_reads_the_repo_root_env_file():
+    """`env_file:` and the `--env-file` flag are different mechanisms.
+
+    docker-compose.yml declares ``env_file: .env`` per service, which always
+    resolves next to the compose file. ``--env-file`` only replaces the file
+    used for ``${VAR}`` substitution *inside* the compose file. Conflating them
+    fails silently: generate secrets elsewhere, pass --env-file, and every
+    container still comes up holding the old .env, with nothing reporting a
+    problem. Verified by resolving the config with --env-file pointed at a
+    freshly generated file and finding the previous values still in place.
+    """
+    import yaml
+
+    compose = yaml.safe_load((_ROOT / "docker-compose.yml").read_text())
+    services = compose["services"]
+    reading_env = {name for name, spec in services.items() if spec.get("env_file")}
+    assert reading_env, "no service declares env_file — has the compose file changed shape?"
+    for name in reading_env:
+        entry = services[name]["env_file"]
+        paths = [entry] if isinstance(entry, str) else [e if isinstance(e, str) else e.get("path") for e in entry]
+        assert ".env" in paths, f"service {name} reads {paths}, not .env"
+
+
+def test_the_default_output_is_the_file_compose_reads():
+    """The default has to be the working one; the caller opts out deliberately."""
+    module = _module()
+    import argparse
+    import contextlib
+    import io
+
+    parser_out = io.StringIO()
+    with contextlib.redirect_stderr(parser_out), contextlib.suppress(SystemExit, argparse.ArgumentError):
+        pass
+    assert module.COMPOSE_ENV_PATH.name == ".env"
+    assert module.COMPOSE_ENV_PATH.parent == _ROOT
+
+
+def test_writing_somewhere_else_warns(tmp_path, capsys):
+    module = _module()
+    assert module._warn_if_containers_will_not_read_it(tmp_path / ".env") is True
+    err = capsys.readouterr().err
+    assert "docker compose does not read" in err
+    assert "--env-file" in err, "the warning must name the flag that gives the false impression"
+
+
+def test_writing_to_the_compose_env_file_does_not_warn(capsys):
+    module = _module()
+    assert module._warn_if_containers_will_not_read_it(module.COMPOSE_ENV_PATH) is False
+    assert capsys.readouterr().err == ""

@@ -65,16 +65,39 @@ Three of those placeholders also have to agree with each other —
 three times — which is the part hand-editing tends to get wrong in a way that
 only shows up as a database the app cannot log in to. The generator handles it.
 
+### `.env` is the only file the containers read
+
+Every service in `docker-compose.yml` declares `env_file: .env`, which always
+resolves to `.env` next to the compose file. **That is not the same thing as the
+`--env-file` command-line flag**, which only replaces the file used for `${VAR}`
+substitution *inside* the compose file.
+
+Conflating the two fails silently. Generate secrets to some other path, start the
+stack with `--env-file` pointing at it, and every container comes up holding
+whatever the old `.env` contained. Nothing reports a problem — the deploy simply
+behaves as though the new values were never written, because for the containers
+they were not.
+
+So run the generator with its default output. It warns if you send it elsewhere.
+
 Useful flags:
 
 ```bash
 # regenerate over an existing .env (keeps a timestamped backup)
 python3 scripts/bootstrap_env.py --domain your-domain.com --force
 
-# NAME=VALUE lines only, for control-panel environment editors that
-# import every line and choke on the '#' comments
+# only the ~28 variables a production deploy requires, as bare NAME=VALUE
+# lines — for hosting control panels whose environment editor takes one
+# Name/Value pair per row and imports comment lines as variables named '#'
+python3 scripts/bootstrap_env.py --domain your-domain.com --minimal
+
+# NAME=VALUE lines only, full variable set
 python3 scripts/bootstrap_env.py --domain your-domain.com --no-comments
 ```
+
+If a hosting panel manages the environment for you, paste the `--minimal` output
+into it **and** make sure the panel is what writes `.env` — otherwise a stale
+`.env` on disk silently wins over everything you typed into the panel.
 
 Things the generator deliberately leaves for you, because they come from
 third-party accounts you set up after the platform is running:

@@ -260,6 +260,48 @@ class GenerationError(RuntimeError):
     """Raised when the template contains something this script cannot fill."""
 
 
+# The one path docker compose injects into the containers.
+COMPOSE_ENV_PATH = ROOT / ".env"
+
+
+def _warn_if_containers_will_not_read_it(output_path: Path) -> bool:
+    """Warn when the generated file is not the one the containers read.
+
+    docker-compose.yml declares ``env_file: .env`` on every service, which
+    always resolves to ``.env`` next to the compose file. That is a different
+    mechanism from the ``--env-file`` command-line flag, which only replaces the
+    file used for ``${VAR}`` substitution *inside* the compose file.
+
+    The two are easy to conflate, and the failure is silent: generate secrets to
+    some other path, point ``--env-file`` at it, and every container still comes
+    up holding whatever the old ``.env`` contained. Nothing reports a problem —
+    the deploy simply behaves as though the new values were never written,
+    because for the containers they were not.
+
+    Returns True when a warning was printed, so tests can assert on it.
+    """
+    try:
+        same = output_path.resolve() == COMPOSE_ENV_PATH.resolve()
+    except OSError:  # a path that does not exist yet still resolves; be safe
+        same = False
+    if same:
+        return False
+
+    print(
+        f"\n  WARNING: writing to {output_path}, which docker compose does not read.\n"
+        f"\n  Every service in docker-compose.yml declares `env_file: .env`, so the\n"
+        f"  containers are fed {COMPOSE_ENV_PATH} and nothing else. The --env-file\n"
+        f"  flag does NOT change that — it only affects ${{VAR}} substitution inside\n"
+        f"  the compose file itself.\n"
+        f"\n  If these values are meant to run the stack, write them there instead:\n"
+        f"      python3 scripts/bootstrap_env.py --domain <domain> --force\n"
+        f"\n  Generating elsewhere is correct only when you are pasting the values into\n"
+        f"  a hosting control panel that manages the environment itself.\n",
+        file=sys.stderr,
+    )
+    return True
+
+
 def generate(
     template: str,
     domain: str,
@@ -413,6 +455,8 @@ def main(argv: list[str] | None = None) -> int:
         backup = output_path.with_suffix(f".backup-{stamp}")
         shutil.copy2(output_path, backup)
         print(f"  backed up existing file -> {backup}")
+
+    _warn_if_containers_will_not_read_it(output_path)
 
     output_path.write_text(text, encoding="utf-8")
     try:
