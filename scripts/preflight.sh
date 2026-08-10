@@ -106,7 +106,8 @@ ok "Core dependencies available (uvicorn + aiohttp confirmed)"
 
 # ── 5. Database connectivity + migrations ────────────────────────────────────
 echo "[ 5/9 ] Database"
-DB_CHECK=$(python3 - <<'PYEOF'
+DB_ERR_FILE="$(mktemp)"
+DB_CHECK=$(python3 - 2>"${DB_ERR_FILE}" <<'PYEOF'
 import sys, os
 try:
     from sqlalchemy import create_engine, text
@@ -125,8 +126,47 @@ except Exception as e:
 PYEOF
 )
 if [ "${DB_CHECK}" != "ok" ]; then
+    cat "${DB_ERR_FILE}" >&2
+    # "password authentication failed" almost never means DATABASE_URL is wrong.
+    # Postgres writes its password into the data directory on FIRST init only;
+    # after that, changing POSTGRES_PASSWORD in the environment has no effect on
+    # the running database. A deploy that failed for some other reason, was
+    # given corrected secrets, and restarted therefore hits this: the app
+    # presents the new password to a volume that still holds the old one.
+    #
+    # The old message ("Check DATABASE_URL") pointed at the one thing that was
+    # correct, which is worse than no advice.
+    if grep -qi "password authentication failed" "${DB_ERR_FILE}" 2>/dev/null; then
+        DB_USER_HINT="${POSTGRES_USER:-hopefx}"
+        rm -f "${DB_ERR_FILE}"
+        echo "" >&2
+        echo "  Postgres rejected the password — DATABASE_URL is almost certainly fine." >&2
+        echo "" >&2
+        echo "  Postgres only applies POSTGRES_PASSWORD when it initialises an EMPTY" >&2
+        echo "  data volume. If the volume already exists from an earlier deploy, it" >&2
+        echo "  still holds the password it was created with, and changing the" >&2
+        echo "  environment afterwards does not update it." >&2
+        echo "" >&2
+        echo "  Fresh install, no data to keep — recreate the volume:" >&2
+        echo "      docker compose down" >&2
+        echo "      docker volume ls | grep postgres" >&2
+        echo "      docker volume rm <project>_postgres_data" >&2
+        echo "      docker compose up -d" >&2
+        echo "" >&2
+        echo "  Keeping existing data — change the password in place instead:" >&2
+        echo "      docker compose exec postgres psql -U ${DB_USER_HINT} -d ${POSTGRES_DB:-hopefx} \\" >&2
+        echo "        -c \"ALTER USER ${DB_USER_HINT} WITH PASSWORD '<value of POSTGRES_PASSWORD>';\"" >&2
+        echo "" >&2
+        echo "  Note that 'docker compose ps' can show postgres as healthy here:" >&2
+        echo "  its pg_isready healthcheck tests that the server answers, not that" >&2
+        echo "  the credentials work." >&2
+        echo "" >&2
+        fail "Database password rejected — see above."
+    fi
+    rm -f "${DB_ERR_FILE}"
     fail "Database connection failed. Check DATABASE_URL."
 fi
+rm -f "${DB_ERR_FILE}"
 ok "Database reachable"
 
 if [ "${SKIP_MIGRATIONS:-false}" != "true" ]; then
