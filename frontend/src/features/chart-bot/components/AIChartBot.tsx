@@ -123,11 +123,43 @@ TargetItem.displayName = 'TargetItem';
 
 // ─── Analysis Panel ───────────────────────────────────────────────────────────
 
+// ─── Provenance strip ─────────────────────────────────────────────────────────
+
+const Provenance = memo(({ analysis }: { analysis: AIAnalysis }) => {
+  const degraded = analysis.degraded === true;
+  const bars = analysis.barsAnalyzed;
+  const model = analysis.modelAvailable ? (analysis.modelVersion ?? 'model') : 'no model';
+  return (
+    <div style={{ ...ab.provenance, ...(degraded ? ab.provenanceDegraded : null) }}>
+      <span style={ab.provItem}>{degraded ? '⚠ DEGRADED' : '● LIVE'}</span>
+      <span style={ab.provItem}>model: {model}</span>
+      {bars !== undefined && <span style={ab.provItem}>bars: {bars}</span>}
+      {analysis.dataSource && <span style={ab.provItem}>src: {analysis.dataSource}</span>}
+    </div>
+  );
+});
+Provenance.displayName = 'Provenance';
+
+// ─── Analysis Panel ───────────────────────────────────────────────────────────
+
 const AnalysisPanel = memo(({ analysis }: { analysis: AIAnalysis }) => {
   const summary = useTypewriter(analysis.summary, 14);
 
+  // Server-supplied model importances win; the nearest signal's own features
+  // are the fallback so an older cached payload still renders something real.
+  const featureBars = React.useMemo(() => {
+    const src = analysis.features?.length
+      ? analysis.features
+      : (analysis.context.nearestSignal?.features ?? []);
+    return [...src].sort((a, b) => b.importance - a.importance).slice(0, 6);
+  }, [analysis.features, analysis.context.nearestSignal]);
+
   return (
     <div style={ab.analysisPanel}>
+      {/* Where this answer came from — shown before the answer itself, so a
+          placeholder can never be mistaken for a read of the market. */}
+      <Provenance analysis={analysis} />
+
       {/* Regime + Action row */}
       <div style={ab.topRow}>
         <RegimeBadge regime={analysis.regime} confidence={analysis.regimeConfidence} />
@@ -155,20 +187,25 @@ const AnalysisPanel = memo(({ analysis }: { analysis: AIAnalysis }) => {
         </div>
       )}
 
-      {/* Feature importance */}
-      {analysis.context.nearestSignal?.features?.length ? (
+      {/* Feature importance — from the model that produced this verdict.
+          Falls back to the nearest ML signal's own features when the server
+          did not supply any. Previously this read only
+          `context.nearestSignal.features`, which is part of the REQUEST and was
+          hard-coded null at the only place a click context is built, so the
+          section could never render. */}
+      {featureBars.length > 0 && (
         <div style={ab.section}>
-          <span style={ab.sectionLabel}>ML FEATURE IMPORTANCE</span>
+          <span style={ab.sectionLabel}>ML FEATURE IMPORTANCE · {analysis.modelVersion ?? 'model'}</span>
           <div style={{ marginTop: 6 }}>
-            {analysis.context.nearestSignal.features
-              .sort((a, b) => b.importance - a.importance)
-              .slice(0, 6)
-              .map((f) => (
-                <FeatureBar key={f.name} name={f.name} importance={f.importance} direction={f.direction} />
-              ))}
+            {featureBars.map((f) => (
+              <FeatureBar key={f.name} name={f.name} importance={f.importance} direction={f.direction} />
+            ))}
           </div>
+          <span style={ab.featureNote}>
+            Global model importance — which inputs this model relies on overall, not attribution for this call.
+          </span>
         </div>
-      ) : null}
+      )}
 
       {/* Price targets */}
       <div style={ab.section}>
@@ -423,6 +460,24 @@ const ab: Record<string, React.CSSProperties> = {
     color: COLORS.text.secondary, lineHeight: 1.4,
   },
   driverDot: { width: 4, height: 4, borderRadius: '50%', background: COLORS.neon.cyan, marginTop: 5, flexShrink: 0 },
+  provenance: {
+    display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+    padding: '4px 8px', borderRadius: 4,
+    background: COLORS.bg.elevated,
+    border: `1px solid ${COLORS.bg.divider}`,
+  },
+  provenanceDegraded: {
+    background: `${COLORS.neon.amber}0d`,
+    border: `1px solid ${COLORS.neon.amber}44`,
+  },
+  provItem: {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 8, color: COLORS.text.muted, letterSpacing: '0.06em',
+  },
+  featureNote: {
+    fontFamily: '"Inter", sans-serif', fontSize: 9,
+    color: COLORS.text.muted, lineHeight: 1.4, marginTop: 4, display: 'block',
+  },
   featureRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 },
   featureName: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted, width: 100, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   featureBarBg: { flex: 1, height: 4, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },

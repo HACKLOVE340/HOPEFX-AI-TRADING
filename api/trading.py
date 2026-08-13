@@ -3618,237 +3618,51 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
 # response: id, timestamp, context, regime, summary, keyDrivers, etc.
 
 
+_AI_ANALYSIS_RATE = {}  # user_id → [monotonic timestamps]
+_AI_ANALYSIS_MAX_PER_MIN = int(os.getenv("AI_ANALYSIS_RATE_PER_MIN", "30"))
+
+
+def _ai_analysis_rate_limit(user_id: str) -> None:
+    """Bound chart-click analyses per user per minute.
+
+    Each analysis loads 200 bars and runs a model. The endpoint previously had
+    no limit at all — only ``get_current_user`` — while the order endpoints next
+    to it carry ``_order_rate_limit_dep``. A user dragging across a chart could
+    issue one uncached 25-second-timeout fetch per click into the shared
+    executor pool.
+    """
+    import time as _t
+
+    now = _t.monotonic()
+    hits = [t for t in _AI_ANALYSIS_RATE.get(user_id, []) if now - t < 60.0]
+    if len(hits) >= _AI_ANALYSIS_MAX_PER_MIN:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Chart analysis is limited to {_AI_ANALYSIS_MAX_PER_MIN} requests per minute.",
+        )
+    hits.append(now)
+    _AI_ANALYSIS_RATE[user_id] = hits
+
+
 @router.post("/ai-analysis", response_model=None, summary="AI chart-click analysis")
 async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_current_user)):
     """
     Accept a ChartClickContext payload and return an AIAnalysis object.
 
-    Fetches real OHLCV via yfinance for regime detection and ATR calculation.
-    Falls back gracefully when the ML stack is unavailable.
+    Delegates to ``analysis.chart_analysis``: OHLCV from the platform price
+    engine, a real ``InferenceEngine`` prediction with calibrated confidence and
+    model version, feature importances from the loaded model, and the data
+    quality and drift gates surfaced as warnings.
+
+    This handler used to hold 230 lines of hand-rolled indicator maths and no ML
+    at all. See ``analysis/chart_analysis.py`` for what was wrong with it.
     """
-    import uuid as _uuid
-    import time as _time
+    from analysis.chart_analysis import ChartClickContext, analyze
 
-    symbol: str = context.get("symbol", "XAUUSD")
-    # Normalise XAU/USD, XAU_USD → XAUUSD
-    symbol_norm = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
-    price: float = float(context.get("price", 0.0))
-    timeframe: str = context.get("timeframe", "1h")
-    timestamp: int = int(context.get("timestamp", _time.time() * 1000))
+    _ai_analysis_rate_limit(user.sub)
 
-    # ── Fetch real OHLCV via yfinance for analysis ────────────────────────────
-    _YF_MAP = {
-        "XAUUSD": "GC=F",
-        "XAGUSD": "SI=F",
-        "EURUSD": "EURUSD=X",
-        "GBPUSD": "GBPUSD=X",
-        "USDJPY": "JPY=X",
-        "USDCHF": "CHF=X",
-        "AUDUSD": "AUDUSD=X",
-        "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD",
-        "US500": "ES=F",
-        "NAS100": "NQ=F",
-        "USOIL": "CL=F",
-    }
-    _TF_MAP = {
-        "1m": ("1m", "7d"),
-        "5m": ("5m", "60d"),
-        "15m": ("15m", "60d"),
-        "1h": ("1h", "60d"),
-        "4h": ("1h", "60d"),
-        "1d": ("1d", "1y"),
-    }
-    ticker_sym = _YF_MAP.get(symbol_norm, symbol_norm)
-    interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
-
-    ohlcv_bars: list[dict] = []
-    try:
-        import yfinance as _yf
-
-        loop = asyncio.get_running_loop()
-
-        def _fetch():
-            t = _yf.Ticker(ticker_sym)
-            df = t.history(period=period, interval=interval, auto_adjust=True)
-            if df.empty:
-                return []
-            df = df.tail(100)
-            return [
-                {
-                    "open": float(r["Open"]),
-                    "high": float(r["High"]),
-                    "low": float(r["Low"]),
-                    "close": float(r["Close"]),
-                    "volume": float(r.get("Volume", 0)),
-                }
-                for _, r in df.iterrows()
-            ]
-
-        ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except TimeoutError:
-        logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
-    except Exception as exc:
-        logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
-
-    # Use last close as price if not provided
-    if price <= 0 and ohlcv_bars:
-        price = ohlcv_bars[-1]["close"]
-
-    # ── ATR (14-period) ───────────────────────────────────────────────────────
-    atr_estimate = price * 0.005  # 0.5% fallback
-    if len(ohlcv_bars) >= 14:
-        trs = []
-        for i in range(1, min(15, len(ohlcv_bars))):
-            h = ohlcv_bars[-i]["high"]
-            l = ohlcv_bars[-i]["low"]
-            pc = ohlcv_bars[-i - 1]["close"] if i + 1 <= len(ohlcv_bars) else l
-            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-        if trs:
-            atr_estimate = sum(trs) / len(trs)
-
-    # ── Regime detection from OHLCV ───────────────────────────────────────────
-    regime = "ranging"
-    regime_confidence = 0.5
-    volatility = "medium"
-    trend = "neutral"
-
-    if len(ohlcv_bars) >= 20:
-        closes = [b["close"] for b in ohlcv_bars]
-        # EMA-based trend
-        ema20 = closes[-1]
-        for c in reversed(closes[-20:]):
-            ema20 = ema20 * 0.9 + c * 0.1
-        ema50 = closes[-1]
-        for c in reversed(closes[-min(50, len(closes)) :]):
-            ema50 = ema50 * 0.96 + c * 0.04
-
-        price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
-        ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
-
-        # Volatility: ATR as % of price
-        atr_pct = atr_estimate / price if price > 0 else 0
-        if atr_pct > 0.015:
-            volatility = "high"
-        elif atr_pct < 0.005:
-            volatility = "low"
-
-        # Regime classification
-        if abs(ema_spread) > 0.005 and abs(price_vs_ema20) > 0.003:
-            if ema_spread > 0:
-                regime = "trending_up"
-                trend = "bullish"
-                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
-            else:
-                regime = "trending_down"
-                trend = "bearish"
-                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
-        else:
-            regime = "ranging"
-            trend = "neutral"
-            regime_confidence = 0.6
-
-    # ── Signal / recommended action ───────────────────────────────────────────
-    recommended_action = "hold"
-    action_confidence = 0.5
-    key_drivers: list[str] = []
-    warnings: list[str] = []
-
-    if ohlcv_bars:
-        closes = [b["close"] for b in ohlcv_bars]
-        # RSI (14)
-        gains, losses = [], []
-        for i in range(1, min(15, len(closes))):
-            d = closes[-i] - closes[-i - 1]
-            (gains if d > 0 else losses).append(abs(d))
-        avg_gain = sum(gains) / 14 if gains else 0
-        avg_loss = sum(losses) / 14 if losses else 0.001
-        rsi = 100 - (100 / (1 + avg_gain / avg_loss))
-
-        if rsi < 35:
-            recommended_action = "buy"
-            action_confidence = round(0.5 + (35 - rsi) / 70, 3)
-            key_drivers.append(f"RSI oversold ({rsi:.1f})")
-        elif rsi > 65:
-            recommended_action = "sell"
-            action_confidence = round(0.5 + (rsi - 65) / 70, 3)
-            key_drivers.append(f"RSI overbought ({rsi:.1f})")
-        else:
-            key_drivers.append(f"RSI neutral ({rsi:.1f})")
-
-        if regime in ("trending_up",):
-            key_drivers.append("Uptrend confirmed by EMA alignment")
-            if recommended_action == "hold":
-                recommended_action = "buy"
-                action_confidence = 0.6
-        elif regime in ("trending_down",):
-            key_drivers.append("Downtrend confirmed by EMA alignment")
-            if recommended_action == "hold":
-                recommended_action = "sell"
-                action_confidence = 0.6
-
-        key_drivers.append(f"ATR: {atr_estimate:.4f} ({atr_estimate / price * 100:.2f}% of price)")
-        key_drivers.append(f"Volatility: {volatility}")
-
-        if volatility == "high":
-            warnings.append("High volatility — widen stops")
-
-    summary = (
-        f"{symbol} is in a {regime.replace('_', ' ')} regime "
-        f"({regime_confidence * 100:.0f}% confidence). "
-        f"Trend: {trend}. "
-        f"Recommended: {recommended_action.upper()} at {price:.4f}."
-    )
-
-    # Map buy/sell/hold → long/short/neutral for frontend AIResult.direction
-    _dir_map = {"buy": "long", "sell": "short", "hold": "neutral"}
-    direction = _dir_map.get(recommended_action, "neutral")
-
-    sl = round(price - atr_estimate * 1.5, 5)
-    tp = round(price + atr_estimate * 2.5, 5)
-    if direction == "short":
-        sl = round(price + atr_estimate * 1.5, 5)
-        tp = round(price - atr_estimate * 2.5, 5)
-
-    return {
-        "id": str(_uuid.uuid4()),
-        "timestamp": timestamp,
-        "context": context,
-        # Fields expected by AIResult interface
-        "direction": direction,
-        "confidence": round(min(action_confidence, 0.95), 3),
-        "reasoning": summary,
-        "regime": regime,
-        "stop_loss": sl,
-        "take_profit": tp,
-        "entry_zone": [round(price - atr_estimate * 0.3, 5), round(price + atr_estimate * 0.3, 5)],
-        "key_levels": [
-            round(price - atr_estimate * 2, 5),
-            round(price - atr_estimate, 5),
-            round(price + atr_estimate, 5),
-            round(price + atr_estimate * 2, 5),
-        ],
-        # Extended fields
-        "regimeConfidence": round(regime_confidence, 3),
-        "volatility": volatility,
-        "trend": trend,
-        "summary": summary,
-        "keyDrivers": key_drivers,
-        "riskAssessment": f"ATR({len(ohlcv_bars)}): {atr_estimate:.4f} | SL: {sl:.4f} | TP: {tp:.4f}",
-        "recommendedAction": recommended_action,
-        "actionConfidence": round(min(action_confidence, 0.95), 3),
-        "priceTargets": {
-            "bull": round(price + atr_estimate * 2, 5),
-            "bear": round(price - atr_estimate * 2, 5),
-            "base": round(price + atr_estimate * (1 if direction == "long" else -1), 5),
-            "stop_loss": sl,
-            "take_profit": tp,
-        },
-        "timeHorizon": "4H–1D",
-        "warnings": warnings,
-        "data_source": "yfinance" if ohlcv_bars else "fallback",
-        "bars_analyzed": len(ohlcv_bars),
-    }
+    ctx = ChartClickContext.model_validate(context)
+    return await analyze(ctx, app_state)
 
 
 # ── Regime status endpoint ────────────────────────────────────────────────────

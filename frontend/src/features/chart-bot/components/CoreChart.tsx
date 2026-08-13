@@ -192,6 +192,29 @@ const CoreChart: React.FC<CoreChartProps> = ({
 
   const { data: bars, isLoading, isError } = useOHLCV(symbol, timeframe, ohlcvLimitFor(timeframe));
 
+  // The click handler is registered once, inside the chart-init effect. Anything
+  // it reads from the closure is frozen at mount — which is how the analysis
+  // ended up pinned to a single instrument. These refs keep it current.
+  const symbolRef    = useRef(symbol);
+  const timeframeRef = useRef(timeframe);
+  const signalsRef   = useRef<MLSignal[]>(signals);
+  useEffect(() => { symbolRef.current = symbol; }, [symbol]);
+  useEffect(() => { timeframeRef.current = timeframe; }, [timeframe]);
+  useEffect(() => { signalsRef.current = signals; }, [signals]);
+
+  // Nearest ML signal to a clicked bar, within one hour. Populating this is what
+  // makes the bot's "ML FEATURE IMPORTANCE" panel render: it read
+  // `context.nearestSignal.features`, and this was hard-coded `null`.
+  const nearestSignalRef = useRef((clickMs: number): MLSignal | null => {
+    let best: MLSignal | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+    for (const s of signalsRef.current) {
+      const gap = Math.abs(new Date(s.generated_at).getTime() - clickMs);
+      if (gap < bestGap) { bestGap = gap; best = s; }
+    }
+    return bestGap <= 3_600_000 ? best : null;
+  });
+
   // ── Chart initialisation ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -310,11 +333,17 @@ const CoreChart: React.FC<CoreChartProps> = ({
       const cd = param.seriesData.get(candle) as CandlestickData | undefined;
       if (!cd) return;
       const bar = barsRef.current.find((b) => toUTC(b.time) === cd.time) ?? null;
+      const clickTime = (cd.time as number) * 1000;
       const ctx: ChartClickContext = {
+        // Read from refs, not the closure: this callback is registered once when
+        // the chart is created, so closing over `symbol`/`timeframe` would pin
+        // the analysis to whatever was selected at mount.
+        symbol:         symbolRef.current,
+        timeframe:      timeframeRef.current,
         price:          cd.close,
-        time:           (cd.time as number) * 1000,
+        time:           clickTime,
         bar:            bar,
-        nearestSignal:  null,
+        nearestSignal:  nearestSignalRef.current(clickTime),
         nearestLevel:   null,
         nearestPattern: null,
       };
