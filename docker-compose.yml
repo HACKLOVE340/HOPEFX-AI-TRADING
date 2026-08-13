@@ -124,7 +124,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      # start_period covers FIRST boot, which is the slowest: preflight runs 20
+      # alembic migrations (measured 23s on SQLite at full CPU; postgres here is
+      # capped at 0.5 CPU) before `python app.py` even starts, and importing the
+      # app costs a further 10.5s at full CPU. 60s did not cover that, so a
+      # first deploy was reported unhealthy while still legitimately starting.
+      # Raising it delays only when failures begin to COUNT; a genuinely broken
+      # app still fails, just later and without the false negative.
+      start_period: 180s
 
   # ── Trading engine — event-driven pipeline ────────────────────────────────
   # Runs core/main_loop.py: MarketIngest → StrategyEngine → Gatekeeper → FIXRouter
