@@ -768,7 +768,7 @@ def test_the_platform_classifier_is_used_when_available():
     detection, weighted per-timeframe voting, and its own reasoning."""
     from analysis.chart_analysis import classify_regime_platform
 
-    v = classify_regime_platform(_ohlcv_bars(), "XAUUSD")
+    v = classify_regime_platform({"1h": _ohlcv_bars()}, "XAUUSD")
     assert v is not None, "the platform classifier did not run"
     assert v.regime == "trending_up"
     assert v.reasons, "the platform verdict must carry its reasoning"
@@ -777,7 +777,7 @@ def test_the_platform_classifier_is_used_when_available():
 def test_the_platform_classifier_reads_a_downtrend_as_a_downtrend():
     from analysis.chart_analysis import classify_regime_platform
 
-    v = classify_regime_platform(_ohlcv_bars(start=4800.0, step=-4.0), "XAUUSD")
+    v = classify_regime_platform({"1h": _ohlcv_bars(start=4800.0, step=-4.0)}, "XAUUSD")
     assert v is not None and v.regime == "trending_down"
     assert v.trend == "bearish"
 
@@ -797,9 +797,9 @@ def test_consecutive_calls_do_not_contaminate_each_other():
     """
     from analysis.chart_analysis import classify_regime_platform
 
-    up = classify_regime_platform(_ohlcv_bars(), "XAUUSD")
-    down = classify_regime_platform(_ohlcv_bars(start=4800.0, step=-4.0), "XAUUSD")
-    flat = classify_regime_platform(_ohlcv_bars(step=0.0), "XAUUSD")
+    up = classify_regime_platform({"1h": _ohlcv_bars()}, "XAUUSD")
+    down = classify_regime_platform({"1h": _ohlcv_bars(start=4800.0, step=-4.0)}, "XAUUSD")
+    flat = classify_regime_platform({"1h": _ohlcv_bars(step=0.0)}, "XAUUSD")
 
     assert up is not None and down is not None and flat is not None
     assert up.regime == "trending_up"
@@ -821,7 +821,7 @@ def test_the_shared_singleton_is_not_referenced():
 def test_a_short_window_skips_the_platform_classifier():
     from analysis.chart_analysis import classify_regime_platform
 
-    assert classify_regime_platform(_ohlcv_bars(10), "XAUUSD") is None
+    assert classify_regime_platform({"1h": _ohlcv_bars(10)}, "XAUUSD") is None
 
 
 def test_the_local_read_takes_over_when_the_platform_stack_is_missing(monkeypatch):
@@ -839,7 +839,7 @@ def test_the_local_read_takes_over_when_the_platform_stack_is_missing(monkeypatc
 
     from analysis.chart_analysis import classify_regime_platform
 
-    assert classify_regime_platform(_ohlcv_bars(), "XAUUSD") is None
+    assert classify_regime_platform({"1h": _ohlcv_bars()}, "XAUUSD") is None
 
     monkeypatch.undo()
     out = compose(_ctx(), _ohlcv_bars(), ModelVerdict(), data_source="price_engine")
@@ -858,3 +858,392 @@ def test_the_regime_is_always_one_the_frontend_can_render():
     for bars in (_ohlcv_bars(), _ohlcv_bars(start=4800.0, step=-4.0), _ohlcv_bars(step=0.0), _ohlcv_bars(40)):
         out = compose(_ctx(), bars, ModelVerdict(), data_source="price_engine")
         assert out["regime"] in renderable, out["regime"]
+
+
+# ── Full multi-timeframe + honest macro ──────────────────────────────────────
+#
+# Wiring the classifier on a single timeframe was measurably wrong, and the
+# error was invisible in the output. MacroSnapshot defaults `vix = 0.0`, and
+# `_classify_macro` compares that against its thresholds:
+#
+#     if macro.vix < 12:  ->  LOW_VOL  ->  votes[low_vol] += 2.0
+#                                          votes[range_bound] += 1.0
+#
+# So supplying no macro does not abstain — it casts three votes for a calm
+# market from a field nobody filled in. Against one timeframe worth 2.0, that
+# fabrication *tied* the real evidence:
+#
+#     votes={'trending_up': 2.0, 'range_bound': 1.0, 'low_vol': 2.0}
+#
+# and `max()` broke the tie by ALL_REGIMES list order. The real series say the
+# opposite: MacroStore's VIX is 25.33, which is >= high_vol_vix_threshold and
+# classifies HIGH_VOL. It is also 141 days stale, so it must not vote either.
+
+
+def test_the_macro_default_would_vote_for_a_calm_market():
+    """Pins the trap, from the shared component's own code.
+
+    If MacroSnapshot ever stops defaulting vix to 0.0, or _classify_macro stops
+    treating a sub-12 VIX as LOW_VOL, the exclusion below becomes unnecessary
+    and this test says so.
+    """
+    from nuclear.redis_stream_reader import MacroSnapshot
+    from nuclear.regime_classifier import RegimeClassifier
+
+    assert MacroSnapshot().vix == 0.0
+    reasoning: list[str] = []
+    assert RegimeClassifier()._classify_macro(SimpleNamespace(vix=0.0), reasoning) == "low_vol"
+    assert any("LOW_VOL" in r for r in reasoning)
+
+
+def test_a_single_timeframe_is_outvoted_by_the_macro_layer():
+    """The measurement that justified feeding the ladder.
+
+    _TF_WEIGHTS gives 1h a weight of 2.0; the macro layer contributes 3.0. One
+    timeframe is a minority of its own verdict.
+    """
+    from nuclear.regime_classifier import _TF_WEIGHTS
+
+    assert _TF_WEIGHTS["1h"] == 2.0
+    assert _TF_WEIGHTS["daily"] + _TF_WEIGHTS["weekly"] > _TF_WEIGHTS["1h"]
+
+
+def test_the_ladder_outweighs_a_single_timeframe():
+    from nuclear.regime_classifier import _TF_WEIGHTS
+
+    ladder = _TF_WEIGHTS["1h"] + _TF_WEIGHTS["daily"] + _TF_WEIGHTS["weekly"]
+    assert ladder > 3.0, "the timeframe ladder must outweigh the macro layer's 3.0"
+
+
+def test_several_timeframes_all_contribute():
+    from analysis.chart_analysis import classify_regime_platform
+
+    v = classify_regime_platform(
+        {"1h": _ohlcv_bars(), "daily": _ohlcv_bars(120), "weekly": _ohlcv_bars(60)},
+        "XAUUSD",
+    )
+    assert v is not None
+    assert set(v.timeframes) == {"1h", "daily", "weekly"}, v.timeframes
+    assert any("Timeframes agreeing" in r for r in v.reasons)
+
+
+def test_a_timeframe_too_short_for_the_builder_is_dropped_not_faked():
+    from analysis.chart_analysis import classify_regime_platform
+
+    v = classify_regime_platform({"1h": _ohlcv_bars(), "weekly": _ohlcv_bars(5)}, "XAUUSD")
+    assert v is not None
+    assert "weekly" not in v.timeframes
+
+
+def test_agreeing_timeframes_beat_the_fabricated_macro_vote():
+    """The behavioural consequence: three agreeing timeframes carry 7.5 votes
+    against the macro layer's 3.0, so the verdict is no longer a coin flip."""
+    from analysis.chart_analysis import classify_regime_platform
+
+    down = {
+        "1h": _ohlcv_bars(200, 4800.0, -4.0),
+        "daily": _ohlcv_bars(120, 4800.0, -12.0),
+        "weekly": _ohlcv_bars(60, 4800.0, -40.0),
+    }
+    v = classify_regime_platform(down, "XAUUSD")
+    assert v is not None and v.regime == "trending_down"
+    assert v.trend == "bearish"
+
+
+# ── Macro: real, fresh, or excluded ──────────────────────────────────────────
+
+
+def test_macro_is_excluded_when_absent_and_the_response_says_so():
+    from analysis.chart_analysis import classify_regime_platform
+
+    v = classify_regime_platform({"1h": _ohlcv_bars()}, "XAUUSD", macro=None, macro_note="stale (141d old)")
+    assert v is not None
+    assert v.macro_used is False
+    assert any("Macro layer excluded" in r and "141d" in r for r in v.reasons)
+
+
+def test_no_fabricated_macro_line_reaches_the_reasoning():
+    """The classifier reports 'LOW_VOL: VIX=0.0 < 12' as if it were an
+    observation. Showing that to a user is a lie about market conditions."""
+    from analysis.chart_analysis import classify_regime_platform
+
+    v = classify_regime_platform({"1h": _ohlcv_bars()}, "XAUUSD", macro=None)
+    assert v is not None
+    assert not any("VIX=" in r for r in v.reasons), v.reasons
+
+
+def test_real_macro_is_used_and_named():
+    from analysis.chart_analysis import classify_regime_platform
+    from nuclear.redis_stream_reader import MacroSnapshot
+
+    v = classify_regime_platform(
+        {"1h": _ohlcv_bars()},
+        "XAUUSD",
+        macro=MacroSnapshot(vix=25.33, dxy=99.6, us10y=4.328),
+        macro_note="macro_store (1d old)",
+    )
+    assert v is not None
+    assert v.macro_used is True
+    assert any("macro_store" in r for r in v.reasons)
+
+
+def test_a_real_high_vix_reaches_the_verdict():
+    """VIX 25.33 is >= the classifier's high_vol threshold of 25.0. The
+    fabricated 0.0 classified LOW_VOL — the exact opposite regime."""
+    from analysis.chart_analysis import classify_regime_platform
+    from nuclear.redis_stream_reader import MacroSnapshot
+
+    v = classify_regime_platform(
+        {"1h": _ohlcv_bars(step=0.0)},
+        "XAUUSD",
+        macro=MacroSnapshot(vix=25.33),
+        macro_note="macro_store (1d old)",
+    )
+    assert v is not None
+    assert any("HIGH_VOL" in r for r in v.reasons), v.reasons
+
+
+def test_stale_macro_is_refused(monkeypatch):
+    """141 days old at the time of writing. There is no defensible way to
+    partially believe a five-month-old VIX, so it is refused, not scaled."""
+    from analysis import chart_analysis as ca
+
+    class _Store:
+        def __len__(self):
+            return 5
+
+        def load_defaults(self):
+            pass
+
+        def snapshot(self):
+            return {"vix": {"value": 25.33, "date": "2020-01-01"}}
+
+    monkeypatch.setattr("ml.macro_store.macro_store", _Store(), raising=False)
+    macro, note = ca.load_macro()
+    assert macro is None
+    assert "stale" in note and "limit" in note
+
+
+def test_fresh_macro_is_accepted(monkeypatch):
+    from datetime import date
+
+    from analysis import chart_analysis as ca
+
+    class _Store:
+        def __len__(self):
+            return 5
+
+        def load_defaults(self):
+            pass
+
+        def snapshot(self):
+            return {
+                "vix": {"value": 18.2, "date": date.today().isoformat()},
+                "dxy": {"value": 99.6, "date": date.today().isoformat()},
+            }
+
+    monkeypatch.setattr("ml.macro_store.macro_store", _Store(), raising=False)
+    macro, note = ca.load_macro()
+    assert macro is not None
+    assert macro.vix == pytest.approx(18.2)
+    assert macro.dxy == pytest.approx(99.6)
+    assert "macro_store" in note
+
+
+@pytest.mark.parametrize(
+    ("snapshot", "reason"),
+    [
+        ({}, "unavailable"),
+        ({"dxy": {"value": 99.6, "date": "2026-08-13"}}, "no vix"),
+        ({"vix": {"value": 20.0}}, "undated"),
+    ],
+)
+def test_incomplete_macro_is_refused_with_a_reason(monkeypatch, snapshot, reason):
+    from analysis import chart_analysis as ca
+
+    class _Store:
+        def __len__(self):
+            return 5
+
+        def load_defaults(self):
+            pass
+
+        def snapshot(self):
+            return snapshot
+
+    monkeypatch.setattr("ml.macro_store.macro_store", _Store(), raising=False)
+    macro, note = ca.load_macro()
+    assert macro is None
+    assert reason in note
+
+
+def test_load_macro_never_raises(monkeypatch):
+    from analysis import chart_analysis as ca
+
+    class _Boom:
+        def __len__(self):
+            raise RuntimeError("macro store exploded")
+
+    monkeypatch.setattr("ml.macro_store.macro_store", _Boom(), raising=False)
+    macro, note = ca.load_macro()
+    assert macro is None and note == "error"
+
+
+# ── The response reports the evidence base ───────────────────────────────────
+
+
+def test_the_response_names_the_timeframes_and_macro_state():
+    out = compose(
+        _ctx(),
+        _ohlcv_bars(),
+        ModelVerdict(),
+        data_source="price_engine",
+        higher_tf_bars={"daily": _ohlcv_bars(120), "weekly": _ohlcv_bars(60)},
+        macro_note="stale (141d old)",
+    )
+    assert set(out["regimeTimeframes"]) == {"1h", "daily", "weekly"}
+    assert out["macroUsed"] is False
+    assert "141d" in out["macroNote"]
+
+
+async def test_the_ladder_is_fetched_concurrently():
+    """Sequential fetches would stack their timeouts on an interactive click."""
+    import asyncio
+
+    from analysis.chart_analysis import load_higher_timeframes
+
+    class _Bar:
+        def __init__(self, c):
+            self.open = c - 1
+            self.high = c + 2
+            self.low = c - 2
+            self.close = c
+            self.volume = 1.0
+
+    calls: list[str] = []
+
+    async def _get_ohlcv(sym, tf, limit):
+        calls.append(tf)
+        await asyncio.sleep(0.15)
+        return [_Bar(4000.0 + i) for i in range(200)]
+
+    state = SimpleNamespace(price_engine=SimpleNamespace(get_ohlcv=_get_ohlcv))
+    started = asyncio.get_running_loop().time()
+    out = await load_higher_timeframes("XAUUSD", state)
+    elapsed = asyncio.get_running_loop().time() - started
+
+    assert set(out) == {"daily", "weekly"}
+    assert sorted(calls) == ["1d", "1w"]
+    assert elapsed < 0.30, f"{elapsed:.2f}s — the timeframes were fetched sequentially"
+
+
+async def test_one_failing_timeframe_degrades_the_ladder_not_the_analysis():
+    from analysis.chart_analysis import load_higher_timeframes
+
+    class _Bar:
+        def __init__(self, c):
+            self.open = self.high = self.low = self.close = c
+            self.volume = 1.0
+
+    async def _get_ohlcv(sym, tf, limit):
+        if tf == "1w":
+            raise ConnectionError("weekly feed down")
+        return [_Bar(4000.0 + i) for i in range(200)]
+
+    out = await load_higher_timeframes("XAUUSD", SimpleNamespace(price_engine=SimpleNamespace(get_ohlcv=_get_ohlcv)))
+    assert "daily" in out
+    assert "weekly" not in out
+
+
+async def test_no_price_engine_means_an_empty_ladder():
+    from analysis.chart_analysis import load_higher_timeframes
+
+    assert await load_higher_timeframes("XAUUSD", SimpleNamespace(price_engine=None)) == {}
+
+
+def test_fabricated_macro_votes_do_not_deflate_confidence():
+    """The gap a mutation check found in the tests above.
+
+    Every test before this one asserted the *regime*, and the regime rarely
+    flips — ALL_REGIMES happens to order the real regimes ahead of `low_vol`,
+    so the fabricated vote loses the tie it creates. The observable harm is in
+    the confidence, because those votes sit in the denominator:
+
+        classifier verdict   regime=trending_down  confidence=0.714
+                             votes={'trending_down': 7.5, 'range_bound': 1.0,
+                                    'low_vol': 2.0}
+        timeframe-only       regime=trending_down  confidence=1.000
+
+    Three timeframes agreeing unanimously were reported as 71% confident,
+    marked down by 3.0 votes cast on a `vix` field nobody filled in. Inheriting
+    the classifier's verdict when macro is absent reintroduces exactly that.
+    """
+    from analysis.chart_analysis import classify_regime_platform
+
+    down = {
+        "1h": _ohlcv_bars(200, 4800.0, -4.0),
+        "daily": _ohlcv_bars(120, 4800.0, -12.0),
+        "weekly": _ohlcv_bars(60, 4800.0, -40.0),
+    }
+    v = classify_regime_platform(down, "XAUUSD", macro=None)
+    assert v is not None
+    assert v.regime == "trending_down"
+    assert v.confidence == pytest.approx(1.0), (
+        f"unanimous timeframes reported at {v.confidence:.3f} — the fabricated macro votes are still in the denominator"
+    )
+
+
+def test_a_split_read_is_not_reported_as_unanimous():
+    """Guards the test above: confidence 1.0 must mean agreement, not a bug
+    that pins it high."""
+    from analysis.chart_analysis import classify_regime_platform
+
+    split = {
+        "1h": _ohlcv_bars(200, 4800.0, -4.0),
+        "daily": _ohlcv_bars(120, 4000.0, 12.0),
+        "weekly": _ohlcv_bars(60, 4000.0, 40.0),
+    }
+    v = classify_regime_platform(split, "XAUUSD", macro=None)
+    assert v is not None
+    assert v.confidence < 1.0, "disagreeing timeframes must not report full confidence"
+
+
+def test_real_macro_is_allowed_into_the_denominator():
+    """When macro is real, its votes belong in the verdict — the exclusion is
+    about fabrication, not about distrusting the macro layer.
+
+    VIX 26 clears the classifier's high_vol threshold of 25.0 and casts +3.0
+    high_vol / +1.5 breakout. A VIX between 12 and 25 classifies "normal" and
+    casts nothing at all, which is why the fabricated 0.0 was harmful and a
+    plausible reading would not have been: only the extremes vote.
+    """
+    from analysis.chart_analysis import classify_regime_platform
+    from nuclear.redis_stream_reader import MacroSnapshot
+
+    down = {
+        "1h": _ohlcv_bars(200, 4800.0, -4.0),
+        "daily": _ohlcv_bars(120, 4800.0, -12.0),
+        "weekly": _ohlcv_bars(60, 4800.0, -40.0),
+    }
+    v = classify_regime_platform(down, "XAUUSD", macro=MacroSnapshot(vix=26.0), macro_note="macro_store (1d old)")
+    assert v is not None
+    assert v.macro_used is True
+    assert v.confidence < 1.0, "real macro votes must count toward the total"
+    assert any("HIGH_VOL" in r for r in v.reasons)
+
+
+def test_a_normal_vix_casts_no_vote_either_way():
+    """Pins why the defaulted 0.0 mattered. _classify_macro only adds votes for
+    CRISIS/HIGH_VOL/LOW_VOL; "normal" is silent. A default of 15 would have
+    been harmless — 0.0 lands in LOW_VOL and votes."""
+    from analysis.chart_analysis import classify_regime_platform
+    from nuclear.redis_stream_reader import MacroSnapshot
+
+    down = {
+        "1h": _ohlcv_bars(200, 4800.0, -4.0),
+        "daily": _ohlcv_bars(120, 4800.0, -12.0),
+        "weekly": _ohlcv_bars(60, 4800.0, -40.0),
+    }
+    v = classify_regime_platform(down, "XAUUSD", macro=MacroSnapshot(vix=18.0), macro_note="macro_store (1d old)")
+    assert v is not None
+    assert v.confidence == pytest.approx(1.0)

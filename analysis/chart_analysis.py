@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -216,32 +217,180 @@ class RegimeVerdict:
     confidence: float
     trend: str
     reasons: list[str] = field(default_factory=list)
+    timeframes: list[str] = field(default_factory=list)
+    macro_used: bool = False
 
 
-def classify_regime_platform(bars: list[dict[str, float]], symbol: str) -> RegimeVerdict | None:
+# The frontend's MarketRegime union is narrower than the classifier's
+# vocabulary; anything outside it is mapped rather than leaked as an
+# unrenderable string.
+_REGIME_TO_UI = {
+    "trending_up": REGIME_TRENDING_UP,
+    "trending_down": REGIME_TRENDING_DOWN,
+    "range_bound": REGIME_RANGING,
+    "mean_reverting": REGIME_RANGING,
+    "low_vol": REGIME_RANGING,
+    "high_vol": REGIME_VOLATILE,
+    "breakout": REGIME_VOLATILE,
+    "crisis": REGIME_VOLATILE,
+}
+
+# Timeframes fed to the classifier, as (price-engine name, feature-builder key).
+# The builder keys are its own — "daily"/"weekly", not "1d"/"1w" — and its
+# _MIN_BARS gate is per key: 1h 30, daily 50, weekly 20.
+_MTF_LADDER: tuple[tuple[str, str, int], ...] = (
+    ("1h", "1h", 200),
+    ("1d", "daily", 200),
+    ("1w", "weekly", 120),
+)
+
+# Macro older than this is context from a different market. FRED series are
+# daily, so a week of slack covers a normal publication gap without letting a
+# months-old VIX vote on today's regime.
+MACRO_MAX_AGE_DAYS = int(os.getenv("CHART_MACRO_MAX_AGE_DAYS", "7"))
+
+
+def load_macro() -> tuple[Any | None, str]:
+    """Real macro context from MacroStore, or ``(None, reason)``. Never fabricates.
+
+    This exists because the obvious wiring is silently wrong. The classifier
+    reads ``mtf.macro.vix``, and ``MacroSnapshot`` defaults ``vix = 0.0``, which
+    ``_classify_macro`` compares against its thresholds::
+
+        if macro.vix < 12:  →  LOW_VOL  →  votes[low_vol] += 2.0, votes[range_bound] += 1.0
+
+    So passing no macro does not abstain — it casts three votes for a calm
+    market on the strength of a field nobody filled in. With a single timeframe
+    contributing 2.0, that fabrication *tied* the real evidence, and the winner
+    fell out of ``max()`` iterating ``ALL_REGIMES`` in list order. Measured:
+    ``votes={'trending_up': 2.0, 'range_bound': 1.0, 'low_vol': 2.0}`` — the
+    verdict decided by dict ordering.
+
+    The real series say the opposite. MacroStore holds FRED data with VIX at
+    25.33, which is ``>= high_vol_vix_threshold`` and classifies HIGH_VOL — the
+    inverse of the fabricated LOW_VOL, and worth 3.0 votes plus 1.5 for breakout.
+
+    It is also 141 days old at the time of writing, so freshness is checked
+    rather than assumed. Stale macro is refused, not scaled: there is no
+    defensible way to partially believe a five-month-old VIX.
+    """
+    try:
+        from datetime import date, datetime, timezone
+
+        from ml.macro_store import macro_store
+
+        if len(macro_store) == 0:
+            macro_store.load_defaults()
+        snap = macro_store.snapshot() or {}
+        if not snap:
+            return None, "unavailable"
+
+        values: dict[str, float] = {}
+        newest: date | None = None
+        for name, entry in snap.items():
+            if not isinstance(entry, dict):
+                continue
+            try:
+                values[name] = float(entry.get("value"))
+            except (TypeError, ValueError):
+                continue
+            raw_date = entry.get("date")
+            if raw_date:
+                try:
+                    parsed = datetime.fromisoformat(str(raw_date)).date()
+                    newest = parsed if newest is None or parsed > newest else newest
+                except ValueError:
+                    continue
+
+        if "vix" not in values:
+            return None, "no vix series"
+        if newest is None:
+            return None, "undated"
+
+        age_days = (datetime.now(tz=timezone.utc).date() - newest).days
+        if age_days > MACRO_MAX_AGE_DAYS:
+            return None, f"stale ({age_days}d old, limit {MACRO_MAX_AGE_DAYS}d)"
+
+        from nuclear.redis_stream_reader import MacroSnapshot
+
+        return (
+            MacroSnapshot(
+                vix=values.get("vix", 0.0),
+                dxy=values.get("dxy", 0.0),
+                us10y=values.get("us10y", 0.0),
+                spx=values.get("spx", 0.0),
+                gld=values.get("gold_etf_flow", 0.0),
+            ),
+            f"macro_store ({age_days}d old)",
+        )
+    except Exception as exc:
+        logger.debug("chart_analysis: macro unavailable: %s", exc)
+        return None, "error"
+
+
+def _winner_from_timeframes(tf_regimes: dict[str, str]) -> tuple[str, float] | None:
+    """Re-derive the regime from timeframe votes alone.
+
+    Used when macro is absent or stale. The alternative — taking the
+    classifier's own verdict — would be accepting a result that includes three
+    fabricated votes for a calm market. The per-timeframe *classification* still
+    comes from the shared component; only the aggregation is redone, over the
+    evidence that actually exists.
+    """
+    from nuclear.regime_classifier import _TF_WEIGHTS
+
+    votes: dict[str, float] = {}
+    for tf, regime in tf_regimes.items():
+        votes[regime] = votes.get(regime, 0.0) + _TF_WEIGHTS.get(tf, 1.0)
+    if not votes:
+        return None
+    total = sum(votes.values())
+    winner = max(votes, key=lambda r: votes[r])
+    return winner, min(votes[winner] / total, 1.0) if total else 0.0
+
+
+_TF_HOURS = {"1h": 1, "daily": 24, "weekly": 168}
+
+
+def classify_regime_platform(
+    bars_by_tf: dict[str, list[dict[str, float]]],
+    symbol: str,
+    *,
+    macro: Any | None = None,
+    macro_note: str = "unavailable",
+) -> RegimeVerdict | None:
     """Regime from the platform's own multi-layer classifier, or None.
 
     ``nuclear/regime_classifier.py`` is the real engine: macro override, crisis
-    detection, per-timeframe weighted voting, and human-readable ``reasoning``
-    that maps straight onto the bot's KEY DRIVERS panel. It beats an EMA
-    crossover and it is what the rest of the platform already uses.
+    detection, weighted per-timeframe voting, and human-readable ``reasoning``
+    that maps straight onto the bot's KEY DRIVERS panel.
 
-    **It is constructed fresh on every call, never through
-    ``get_regime_classifier()``.** That factory returns a process-wide singleton
-    carrying debounce state — ``_confirmed_regime`` only moves after three
-    consecutive agreeing calls, which is correct for the streaming agent that
-    calls it once per bar and prevents regime flapping. In a per-request path it
-    is not: the first caller's regime pins every later one, across unrelated
-    users, symbols and timeframes. Measured directly — the same three series
-    (clean uptrend, clean downtrend, flat) classify as trending_up /
-    trending_down / mean_reverting on fresh instances, and as trending_up /
-    trending_up / trending_up through the singleton, with the per-timeframe
-    reasoning still correctly reporting TRENDING_DOWN underneath.
+    **Fresh instance every call, never ``get_regime_classifier()``.** That
+    factory returns a process-wide singleton carrying debounce state —
+    ``_confirmed_regime`` only moves after three consecutive agreeing calls,
+    which is correct for the streaming agent that calls it once per bar and
+    prevents regime flapping. In a per-request path the first caller's regime
+    pins every later one, across unrelated users, symbols and timeframes.
+    Measured: the same three series classify as trending_up / trending_down /
+    mean_reverting on fresh instances, and trending_up / trending_up /
+    trending_up through the singleton, with the per-timeframe reasoning still
+    correctly reporting TRENDING_DOWN underneath.
+
+    **Several timeframes, not one.** ``_TF_WEIGHTS`` weights weekly 3.0, daily
+    2.5 and 1h 2.0, so a single timeframe contributes 2.0 against a macro layer
+    that contributes 3.0 — the minority of its own verdict. Feeding the ladder
+    puts the balance where the classifier's design intends it.
+
+    **Macro is used only when it is real and fresh** (see ``load_macro``). When
+    it is not, the classifier's own verdict is discarded and the winner is
+    re-derived from timeframe votes alone, because that verdict necessarily
+    includes three votes cast on a defaulted ``vix=0.0``.
 
     Returns None on any failure so the caller falls back to the local read; a
     chart click must not depend on the nuclear stack being importable.
     """
-    if len(bars) < 30:
+    usable = {tf: rows for tf, rows in bars_by_tf.items() if rows and len(rows) >= 30}
+    if not usable:
         return None
     try:
         from datetime import datetime, timedelta, timezone
@@ -250,53 +399,65 @@ def classify_regime_platform(bars: list[dict[str, float]], symbol: str) -> Regim
         from nuclear.redis_stream_reader import OHLCVBar
         from nuclear.regime_classifier import RegimeClassifier
 
-        utc = timezone.utc
-        now = datetime.now(tz=utc)
-        n = len(bars)
-        series = [
-            OHLCVBar(
-                symbol=symbol,
-                timeframe="1h",
-                open=float(b["open"]),
-                high=float(b["high"]),
-                low=float(b["low"]),
-                close=float(b["close"]),
-                volume=float(b.get("volume", 0.0) or 0.0),
-                open_time=now - timedelta(hours=n - i),
-            )
-            for i, b in enumerate(bars)
-        ]
-        mtf = build_features_from_bars({"1h": series}, symbol=symbol)
-        # Fresh instance — see the docstring above.
+        now = datetime.now(tz=timezone.utc)
+        series_by_tf: dict[str, list[Any]] = {}
+        for tf, rows in usable.items():
+            step = timedelta(hours=_TF_HOURS.get(tf, 1))
+            n = len(rows)
+            series_by_tf[tf] = [
+                OHLCVBar(
+                    symbol=symbol,
+                    timeframe=tf,
+                    open=float(b["open"]),
+                    high=float(b["high"]),
+                    low=float(b["low"]),
+                    close=float(b["close"]),
+                    volume=float(b.get("volume", 0.0) or 0.0),
+                    open_time=now - step * (n - i),
+                )
+                for i, b in enumerate(rows)
+            ]
+
+        mtf = build_features_from_bars(series_by_tf, macro=macro, symbol=symbol)
         result = RegimeClassifier().classify(mtf)
     except Exception as exc:
         logger.debug("chart_analysis: platform regime classifier unavailable: %s", exc)
         return None
 
-    trend = (
-        "bullish" if result.regime == "trending_up" else "bearish" if result.regime == "trending_down" else "neutral"
-    )
-    # The frontend's MarketRegime union is narrower than the classifier's
-    # vocabulary; anything outside it is mapped rather than leaked as an
-    # unrenderable string.
-    mapped = {
-        "trending_up": REGIME_TRENDING_UP,
-        "trending_down": REGIME_TRENDING_DOWN,
-        "range_bound": REGIME_RANGING,
-        "mean_reverting": REGIME_RANGING,
-        "low_vol": REGIME_RANGING,
-        "high_vol": REGIME_VOLATILE,
-        "breakout": REGIME_VOLATILE,
-        "crisis": REGIME_VOLATILE,
-    }.get(result.regime, REGIME_RANGING)
+    contributing = sorted(result.tf_regimes or {})
+    macro_used = macro is not None
 
-    reasons = [str(r) for r in (result.reasoning or [])][:4]
-    if result.sub_regime:
+    raw_regime = result.regime
+    confidence = float(result.confidence)
+    if not macro_used:
+        # The classifier already voted on a defaulted vix=0.0. Re-derive from
+        # the timeframe evidence rather than inherit those votes.
+        recomputed = _winner_from_timeframes(result.tf_regimes or {})
+        if recomputed is None:
+            return None
+        raw_regime, confidence = recomputed
+
+    trend = "bullish" if raw_regime == "trending_up" else "bearish" if raw_regime == "trending_down" else "neutral"
+    mapped = _REGIME_TO_UI.get(raw_regime, REGIME_RANGING)
+
+    reasons: list[str] = []
+    if contributing:
+        detail = ", ".join(f"{tf}→{result.tf_regimes[tf]}" for tf in contributing)
+        reasons.append(f"Timeframes agreeing: {detail}")
+    # Skip the classifier's macro line when macro was not real — it reports the
+    # defaulted value as if it were an observation.
+    for line in result.reasoning or []:
+        text = str(line)
+        if not macro_used and ("VIX=" in text or text.startswith("Macro")):
+            continue
+        reasons.append(text)
+        if len(reasons) >= 5:
+            break
+    reasons.append(f"Macro layer: {macro_note}" if macro_used else f"Macro layer excluded — {macro_note}")
+    if result.sub_regime and macro_used:
         reasons.append(f"Sub-regime: {result.sub_regime}")
-    if result.preferred_strategy:
-        reasons.append(f"Platform strategy for this regime: {result.preferred_strategy}")
 
-    return RegimeVerdict(mapped, float(result.confidence), trend, reasons)
+    return RegimeVerdict(mapped, confidence, trend, reasons, contributing, macro_used)
 
 
 def classify_regime(closes: list[float], atr_value: float | None, price: float) -> RegimeVerdict:
@@ -518,6 +679,9 @@ def compose(
     *,
     data_source: str,
     now_ms: int | None = None,
+    higher_tf_bars: dict[str, list[dict[str, float]]] | None = None,
+    macro: Any | None = None,
+    macro_note: str = "unavailable",
 ) -> dict[str, Any]:
     """Assemble the response the frontend renders. Pure — no I/O."""
     import uuid
@@ -530,9 +694,10 @@ def compose(
     closes = [float(b["close"]) for b in bars]
     atr_value = atr(bars)
     rsi_value = rsi(closes)
-    # Platform classifier first — it carries macro context, crisis detection and
+    # Platform classifier first — multi-timeframe voting, crisis detection and
     # its own reasoning. The local EMA read is the fallback, not the default.
-    platform_regime = classify_regime_platform(bars, symbol)
+    ladder = {"1h": bars, **(higher_tf_bars or {})}
+    platform_regime = classify_regime_platform(ladder, symbol, macro=macro, macro_note=macro_note)
     regime = platform_regime or classify_regime(closes, atr_value, price)
     regime_source = "platform" if platform_regime is not None else "local"
     volatility = classify_volatility(atr_value, price)
@@ -655,6 +820,9 @@ def compose(
         "modelVersion": model.model_version,
         "modelAvailable": model.available and not model.fallback,
         "regimeSource": regime_source,
+        "regimeTimeframes": regime.timeframes,
+        "macroUsed": regime.macro_used,
+        "macroNote": macro_note,
         "barsAnalyzed": len(bars),
         "dataSource": data_source,
         "degraded": degraded,
@@ -775,10 +943,51 @@ def cache_write(symbol: str, payload: dict[str, Any], ttl: int = CACHE_TTL_SECON
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
+async def load_higher_timeframes(symbol: str, app_state: Any) -> dict[str, list[dict]]:
+    """Daily and weekly bars for the regime ladder, fetched concurrently.
+
+    Concurrent because they are independent reads and a chart click is
+    interactive: sequential fetches would stack their timeouts. Each is
+    independently optional — one slow or empty timeframe degrades the ladder
+    rather than failing the analysis, and ``classify_regime_platform`` drops any
+    series too short for the feature builder's own minimum.
+    """
+    import asyncio
+
+    engine = getattr(app_state, "price_engine", None) if app_state is not None else None
+    if engine is None:
+        return {}
+
+    async def _one(engine_tf: str, key: str, limit: int) -> tuple[str, list[dict]]:
+        bars, _src = await load_bars(symbol, engine_tf, app_state, limit=limit)
+        return key, bars
+
+    tasks = [_one(engine_tf, key, limit) for engine_tf, key, limit in _MTF_LADDER if key != "1h"]
+    out: dict[str, list[dict]] = {}
+    for result in await asyncio.gather(*tasks, return_exceptions=True):
+        if isinstance(result, BaseException):
+            logger.debug("chart_analysis: higher timeframe fetch failed: %s", result)
+            continue
+        key, bars = result
+        if bars:
+            out[key] = bars
+    return out
+
+
 async def analyze(ctx: ChartClickContext, app_state: Any, *, engine: Any | None = None) -> dict[str, Any]:
     """Full pipeline: load bars → run the model → compose. Never raises."""
+    import asyncio
+
     symbol = ctx.canonical_symbol()
-    bars, data_source = await load_bars(symbol, ctx.timeframe, app_state)
+
+    # The clicked timeframe and the higher-timeframe ladder are independent
+    # reads; run them together so the ladder costs latency only once.
+    (bars, data_source), higher = await asyncio.gather(
+        load_bars(symbol, ctx.timeframe, app_state),
+        load_higher_timeframes(symbol, app_state),
+    )
+
+    macro, macro_note = load_macro()
 
     if engine is None:
         try:
@@ -790,6 +999,14 @@ async def analyze(ctx: ChartClickContext, app_state: Any, *, engine: Any | None 
             engine = None
 
     model = run_model(bars, symbol, engine)
-    payload = compose(ctx, bars, model, data_source=data_source)
+    payload = compose(
+        ctx,
+        bars,
+        model,
+        data_source=data_source,
+        higher_tf_bars=higher,
+        macro=macro,
+        macro_note=macro_note,
+    )
     cache_write(symbol, payload)
     return payload
