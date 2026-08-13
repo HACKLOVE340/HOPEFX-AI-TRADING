@@ -50,9 +50,28 @@ Usage
     # overwrite an existing file (keeps a timestamped backup)
     python3 scripts/bootstrap_env.py --domain example.com --force
 
-    # values only, no comment lines — for control panels whose environment
-    # editor parses every line as NAME=VALUE and rejects the '#' ones
-    python3 scripts/bootstrap_env.py --domain example.com --no-comments
+    # keep .env.example's explanatory comments (see below before using this)
+    python3 scripts/bootstrap_env.py --domain example.com --with-comments
+
+The output has no comment lines
+-------------------------------
+``.env.example`` is documentation and stays commented; the generated ``.env`` is
+machine configuration and is pure ``NAME=VALUE``.
+
+Hosting control panels display a compose project's ``.env`` as Name/Value rows,
+and at least one splits **every** line on the first ``=`` — comment lines
+included. 166 of ``.env.example``'s comments contain one, so importing a
+commented ``.env`` produced rows like::
+
+    NAME '# MetaTrader 5 (required when BROKER_TYPE'   VALUE 'mt5)'
+    NAME '#   superadmin@hopefx.io  role'              VALUE 'superadmin  → /superadmin'
+    NAME '#'                                           VALUE '========================'
+
+each flagged "Invalid variable name" — and if the panel writes back what it
+displays, that junk lands in the file the containers read.
+
+``--with-comments`` restores them for editing by hand. Do not use it for a
+deployment whose environment is managed through a panel.
 
 The generated file is written with mode 0600 and must never be committed.
 """
@@ -449,7 +468,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--template", default=str(ROOT / ".env.example"))
     parser.add_argument("--output", default=str(ROOT / ".env"))
     parser.add_argument("--force", action="store_true", help="overwrite an existing output file (keeps a backup)")
-    parser.add_argument("--no-comments", action="store_true", help="emit NAME=VALUE lines only")
+    parser.add_argument(
+        "--with-comments",
+        action="store_true",
+        help=(
+            "keep .env.example's explanatory comments in the output. Off by default: a "
+            "hosting control panel that splits every line on the first '=' turns each "
+            "comment containing one into a bogus Name/Value row."
+        ),
+    )
+    parser.add_argument("--no-comments", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--minimal",
         action="store_true",
@@ -475,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
         text, values = generate(
             template_path.read_text(encoding="utf-8"),
             args.domain,
-            keep_comments=not args.no_comments and not args.minimal,
+            keep_comments=args.with_comments and not args.minimal,
             minimal=args.minimal,
         )
     except GenerationError as exc:

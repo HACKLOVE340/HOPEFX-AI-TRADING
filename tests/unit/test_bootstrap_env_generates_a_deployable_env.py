@@ -434,7 +434,7 @@ def test_the_generator_handles_the_pattern_independently_of_the_template():
     # DB_PASSWORD tied to POSTGRES_PASSWORD.
     template = (
         "POSTGRES_PASSWORD=CHANGE_ME_db_password\n"  # pragma: allowlist secret
-        "SECURITY_JWT_SECRET=CHANGE_ME_generate_64_char_hex_secret\n"
+        "SECURITY_JWT_SECRET=CHANGE_ME_generate_64_char_hex_secret\n"  # pragma: allowlist secret
         "FOO=          # a description\n"
         "BAR=#literal-value\n"
     )

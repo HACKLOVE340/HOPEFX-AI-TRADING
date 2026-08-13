@@ -163,3 +163,93 @@ def test_every_proxy_location_lives_inside_the_tls_server():
     before, after = template[:tls_at], template[tls_at:]
     assert "proxy_pass" not in before, "a proxy location exists outside the TLS server — revisit this"
     assert after.count("proxy_pass") >= 3
+
+
+# ── The generated .env survives a naive Name/Value parser ────────────────────
+
+
+def _generated_text(**kwargs) -> str:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_be2", _ROOT / "scripts/bootstrap_env.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    text, _ = module.generate(_ENV_EXAMPLE, "t.example.com", **kwargs)
+    return text
+
+
+def test_every_line_splits_into_a_valid_variable_name():
+    """A hosting panel splits EVERY line on the first '=', comments included.
+
+    166 of .env.example's comment lines contain one, so a commented .env
+    imported into such a panel produced rows like
+
+        NAME '# MetaTrader 5 (required when BROKER_TYPE'  VALUE 'mt5)'
+        NAME '#'                                          VALUE '======================'
+
+    each rejected as an invalid variable name — and if the panel writes back
+    what it shows, that junk reaches the file the containers read.
+
+    This encodes the panel's parser rather than describing it.
+    """
+    offenders = [
+        line
+        for line in _generated_text(keep_comments=False).splitlines()
+        if line.strip() and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", line.split("=", 1)[0])
+    ]
+    assert offenders == [], f"{len(offenders)} lines become junk rows, e.g. {offenders[:3]}"
+
+
+def test_the_default_output_has_no_comment_lines():
+    """`.env.example` is documentation; the generated `.env` is configuration."""
+    assert [ln for ln in _generated_text(keep_comments=False).splitlines() if ln.lstrip().startswith("#")] == []
+
+
+def test_comments_can_still_be_requested_deliberately():
+    """--with-comments remains, for a file edited by hand rather than a panel."""
+    assert any(ln.lstrip().startswith("#") for ln in _generated_text(keep_comments=True).splitlines())
+
+
+def test_the_comment_free_output_still_carries_every_variable():
+    """Dropping comments must not drop assignments."""
+    with_comments = {
+        ln.split("=", 1)[0]
+        for ln in _generated_text(keep_comments=True).splitlines()
+        if "=" in ln and not ln.lstrip().startswith("#")
+    }
+    without = {ln.split("=", 1)[0] for ln in _generated_text(keep_comments=False).splitlines() if "=" in ln}
+    assert with_comments == without, f"lost: {sorted(with_comments - without)[:5]}"
+
+
+def test_the_documented_command_writes_a_comment_free_file(tmp_path):
+    """Exercises the CLI default, not generate()'s parameter.
+
+    The tests above call generate(keep_comments=False) directly, so they pass
+    whatever the command-line default is — which is where the behaviour that
+    reaches an operator actually lives.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_be3", _ROOT / "scripts/bootstrap_env.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+
+    out = tmp_path / ".env"
+    assert module.main(["--domain", "t.example.com", "--output", str(out)]) == 0
+
+    lines = out.read_text().splitlines()
+    assert [ln for ln in lines if ln.lstrip().startswith("#")] == [], "the documented command still emits comments"
+    junk = [ln for ln in lines if ln.strip() and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", ln.split("=", 1)[0])]
+    assert junk == [], f"lines a panel would reject: {junk[:3]}"
+
+
+def test_with_comments_is_opt_in_from_the_command_line(tmp_path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_be4", _ROOT / "scripts/bootstrap_env.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+
+    out = tmp_path / ".env"
+    assert module.main(["--domain", "t.example.com", "--output", str(out), "--with-comments"]) == 0
+    assert any(ln.lstrip().startswith("#") for ln in out.read_text().splitlines())
