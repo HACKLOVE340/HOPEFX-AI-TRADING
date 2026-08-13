@@ -44,7 +44,6 @@
 # works) or SSH + docker compose. This file is still useful for the GitHub
 # path, where the panel supplies env vars instead of a .env file.
 # ---------------------------------------------------------------------------
-version: '3.8'
 services:
   app:
     build:
