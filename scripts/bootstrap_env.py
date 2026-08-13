@@ -150,6 +150,13 @@ _GENERATORS: dict[str, object] = {
 # POSTGRES_PASSWORD to the postgres container and the app reads DB_PASSWORD.
 _ALIASES: dict[str, str] = {
     "DB_PASSWORD": "POSTGRES_PASSWORD",  # pragma: allowlist secret — variable names, not values
+    # A legacy alias for the same signing key: every consumer reads
+    # `SECURITY_JWT_SECRET or JWT_SECRET_KEY` (auth/jwt.py, api/gateway.py,
+    # config/settings.py, mobile/api_v2.py). Generating a second, different
+    # value would put two signing keys in the environment, and api/auth.py:107
+    # already documents a fallback that differs from auth.jwt's — exactly the
+    # setup where a token signed by one is rejected by the other.
+    "JWT_SECRET_KEY": "SECURITY_JWT_SECRET",  # pragma: allowlist secret — variable names, not values
 }
 
 # Placeholders for third-party credentials. There is nothing to generate — an
@@ -232,7 +239,10 @@ _MINIMAL: tuple[str, ...] = (
 )
 
 _ASSIGN_RE = re.compile(r"^(\s*)([A-Z0-9_]+)(\s*=\s*)(.*)$")
-_PLACEHOLDER_RE = re.compile(r"CHANGE_ME\S*")
+# Both spellings .env.example uses. `JWT_SECRET_KEY=change-me-in-production-
+# min-32-chars` matched neither the validator nor this generator, so a JWT
+# signing key shipped verbatim into every generated .env.
+_PLACEHOLDER_RE = re.compile(r"(?:CHANGE_ME|CHANGE-ME|CHANGEME)\S*", re.IGNORECASE)
 
 # An inline comment is a '#' preceded by whitespace — the rule docker compose
 # and python-dotenv both use. It matters: '.env.example' contains

@@ -429,7 +429,15 @@ def test_the_generator_handles_the_pattern_independently_of_the_template():
     present in any template passed with --template — would silently ship the
     comment as the value again.
     """
-    template = "POSTGRES_PASSWORD=CHANGE_ME_db_password\nFOO=          # a description\nBAR=#literal-value\n"
+    # Both alias sources must be present: the generator refuses to resolve an
+    # alias whose source was never generated, which is the guard that keeps
+    # DB_PASSWORD tied to POSTGRES_PASSWORD.
+    template = (
+        "POSTGRES_PASSWORD=CHANGE_ME_db_password\n"  # pragma: allowlist secret
+        "SECURITY_JWT_SECRET=CHANGE_ME_generate_64_char_hex_secret\n"
+        "FOO=          # a description\n"
+        "BAR=#literal-value\n"
+    )
     text, _ = _module().generate(template, _DOMAIN)
     parsed = _parse(text)
 

@@ -51,10 +51,17 @@ def _env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
-# The prefix every placeholder in .env.example carries. This is the value the
-# validator rejects, not a value it uses, so the placeholder hook exempts it the
+# The prefixes a placeholder in .env.example can carry. These are values the
+# validator rejects, not values it uses, so the placeholder hook exempts them the
 # same way it exempts its own detection regex.
-_PLACEHOLDER_PREFIX = "CHANGE_ME"  # healer: ignore
+#
+# Only CHANGE_ME was checked at first, which missed
+# ``JWT_SECRET_KEY=change-me-in-production-min-32-chars``: a different spelling
+# of the same idea, in the same file, for a JWT signing key. Neither the
+# validator nor the generator recognised it, so it shipped verbatim into every
+# generated .env. Matching is case-insensitive and covers the separator
+# variants, because the point is the intent, not the punctuation.
+_PLACEHOLDER_PREFIXES = ("CHANGE_ME", "CHANGE-ME", "CHANGEME")  # healer: ignore
 
 
 def is_placeholder(value: str) -> bool:
@@ -74,7 +81,7 @@ def is_placeholder(value: str) -> bool:
 
     Shared now, so a validator either calls it or visibly does not.
     """
-    return value.strip().upper().startswith(_PLACEHOLDER_PREFIX)
+    return value.strip().upper().startswith(_PLACEHOLDER_PREFIXES)
 
 
 # ---------------------------------------------------------------------------
