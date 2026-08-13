@@ -60,6 +60,16 @@ class AlphaVantageSource:
         # Track rate-limit hits so callers can back off.
         self._rate_limited: bool = False
 
+    def can_serve(self, symbol: str, cfg: dict[str, Any]) -> bool:
+        """Whether this source could price *symbol* at all — no I/O.
+
+        Both conditions are configuration, known before any request: an absent
+        API key disables the source entirely, and an absent
+        ``alpha_vantage_symbol`` disables it for this symbol. The caller uses
+        this to SKIP rather than fetch-and-fail.
+        """
+        return bool(self._api_key) and bool(cfg.get("alpha_vantage_symbol"))
+
     async def fetch(self, symbol: str, cfg: dict[str, Any]) -> float | None:
         """
         Return the latest exchange rate for *symbol* or None on failure.

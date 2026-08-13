@@ -55,6 +55,17 @@ class YFinanceSource:
         self._period = period
         self._interval = interval
 
+    def can_serve(self, symbol: str, cfg: dict[str, Any]) -> bool:
+        """Whether this source could price *symbol* at all — no I/O.
+
+        A blank ``yfinance_ticker`` is a deliberate configuration fact (Yahoo
+        delisted spot metals), not an outage. The caller uses this to SKIP the
+        source rather than call fetch() and treat the None as a failure.
+        """
+        if not _YF_AVAILABLE:
+            return False
+        return bool(cfg.get("yfinance_ticker"))
+
     async def fetch(self, symbol: str, cfg: dict[str, Any]) -> float | None:
         """
         Return the latest mid price for *symbol* or None on failure.

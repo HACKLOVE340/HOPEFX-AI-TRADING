@@ -1296,7 +1296,15 @@ class TestFetchMarketData:
         assert result is None
 
     async def test_broker_returns_bars(self):
-        bars = [{"open": 2000.0, "high": 2010.0, "low": 1990.0, "close": 2005.0, "volume": 100.0} for _ in range(5)]
+        # Each bar carries a different close. The original fixture repeated one
+        # identical bar five times, which _fetch_market_data now rejects: a flat
+        # close series is the signature of the price engine's synthetic
+        # last-resort tier, and zero-range bars corrupt the ML features. The
+        # assertions below are about bar shaping, so the flatness was incidental.
+        bars = [
+            {"open": 2000.0 + i, "high": 2010.0 + i, "low": 1990.0 + i, "close": 2005.0 + i, "volume": 100.0}
+            for i in range(5)
+        ]
         broker = MagicMock()
         broker.get_market_data.return_value = bars
         app_state = _make_app_state(broker=broker)

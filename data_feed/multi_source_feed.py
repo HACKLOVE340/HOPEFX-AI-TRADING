@@ -564,13 +564,71 @@ class MultiSourceTickFeed:
 
     # ── Internal polling ──────────────────────────────────────────────────────
 
+    def _serviceable_order(self, symbol: str, sym_cfg: dict) -> list[str]:
+        """The subset of the fallback chain that *could* price *symbol*.
+
+        A source with no ticker mapping for this symbol — or, for the keyed
+        sources, no API key — cannot answer, and that is knowable from config
+        without a single request. Asking it anyway and then calling
+        ``record_failure`` on the None it returns conflates "not configured"
+        with "upstream is down".
+
+        That conflation is what filled the production log: XAUUSD, XAGUSD,
+        XPTUSD and USOIL carry a blank ``yfinance_ticker`` on purpose, so every
+        2-second poll spent three retries on yfinance, tripped the breaker at 5
+        failures, waited out the 60 s cooldown, closed the breaker, and tripped
+        it again — for as long as the process ran. The visible cost was noise;
+        the real cost was that ``circuit OPEN for 'yfinance'`` and the
+        ``msf_source_errors`` counter, the two signals that would tell an
+        operator Yahoo had *actually* gone down, were saturated by design.
+
+        Sources that do not implement ``can_serve`` are assumed capable, so a
+        custom or stubbed adapter keeps its current behaviour.
+        """
+        out: list[str] = []
+        for name in self._active_order:
+            adapter = self._sources.get(name)
+            if adapter is None:
+                continue
+            check = getattr(adapter, "can_serve", None)
+            if check is None or check(symbol, sym_cfg):
+                out.append(name)
+        return out
+
     async def _poll_symbol(self, symbol: str) -> None:
         state = self._states[symbol]
         sym_cfg = self._symbol_cfgs.get(symbol, {})
 
+        # Serviceability is fixed once start() has built the sources: it depends
+        # only on the symbol config and the API keys, both read at build time.
+        # So decide once here rather than re-deciding every poll.
+        order = self._serviceable_order(symbol, sym_cfg)
+        if not order:
+            logger.warning(
+                "MultiSourceFeed[%s]: no configured source can price this symbol "
+                "(checked %s) — not polling. It will have no live price until a "
+                "source is configured for it: set ALPHA_VANTAGE_KEY or "
+                "TWELVE_API_KEY, or give it a ticker in config/multi_source_feed.yaml.",
+                symbol,
+                ", ".join(self._active_order) or "none",
+            )
+            return
+        if len(order) < len(self._active_order):
+            logger.info(
+                "MultiSourceFeed[%s]: chain=%s (skipping %s — not configured for this symbol)",
+                symbol,
+                order,
+                ", ".join(s for s in self._active_order if s not in order),
+            )
+        # _SymbolState defaults active_source to the head of the global chain,
+        # which status() would report as "yfinance" for a symbol yfinance can
+        # never serve. Start it on a source that could actually answer.
+        if state.active_source not in order:
+            state.active_source = order[0]
+
         while self._running:
             t0 = time.monotonic()
-            source = state.pick_source(self._active_order, self._cb_cooldown)
+            source = state.pick_source(order, self._cb_cooldown)
             price = await self._fetch_with_retry(symbol, source, sym_cfg)
 
             if price is not None:
@@ -617,7 +675,7 @@ class MultiSourceTickFeed:
                     await self._broadcast(symbol, price)
             else:
                 state.record_failure(source, self._cb_threshold)
-                nxt = state.pick_source(self._active_order, self._cb_cooldown)
+                nxt = state.pick_source(order, self._cb_cooldown)
                 if nxt != source:
                     state.active_source = nxt
                     logger.warning(
@@ -725,7 +783,12 @@ class MultiSourceTickFeed:
                             "MultiSourceFeed[%s]: still stale (%.0f s) — rotating source (suppressed)", sym, age_s
                         )
                     state.record_failure(state.active_source, self._cb_threshold)
-                    state.active_source = state.pick_source(self._active_order, self._cb_cooldown)
+                    # Rotate only among sources that could actually price this
+                    # symbol — rotating onto one with no ticker mapping just
+                    # guarantees the next poll fails too.
+                    order = self._serviceable_order(sym, self._symbol_cfgs.get(sym, {}))
+                    if order:
+                        state.active_source = state.pick_source(order, self._cb_cooldown)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

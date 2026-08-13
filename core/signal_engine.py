@@ -303,46 +303,109 @@ _INTERVAL_SECONDS = int(os.getenv("SIGNAL_ENGINE_INTERVAL", "60"))
 _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 
+def _is_degenerate(bars: list[dict[str, Any]]) -> bool:
+    """True when *bars* carry no price movement at all.
+
+    A flat close series across every bar is not a quiet market — it is the
+    signature of synthesised data (``RealTimePriceEngine._get_ohlcv_from_broker``
+    repeats the paper broker's static ``market_prices`` for every bar, with
+    ``volume=0``). Those bars produce zero ATR, zero range and zero volume
+    features, which the ML predictor consumes as if they were real.
+    """
+    if len(bars) < 2:
+        return True
+    closes = [float(b["close"]) for b in bars]
+    return max(closes) - min(closes) <= 0.0
+
+
+def _shape_bars(symbol: str, bars: list[dict[str, Any]]) -> dict[str, Any]:
+    last = bars[-1]
+    return {
+        "symbol": symbol,
+        "open": float(last["open"]),
+        "high": float(last["high"]),
+        "low": float(last["low"]),
+        "close": float(last["close"]),
+        "volume": float(last.get("volume", 0)),
+        "prices": [float(b["close"]) for b in bars],
+        "highs": [float(b["high"]) for b in bars],
+        "lows": [float(b["low"]) for b in bars],
+        "volumes": [float(b.get("volume", 0)) for b in bars],
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
 async def _fetch_market_data(
     symbol: str,
     app_state: Any | None = None,
 ) -> dict[str, Any] | None:
     """
-    Fetch latest OHLCV data for a symbol from the broker's market data feed.
+    Fetch the latest OHLCV history for *symbol* from a real market data source.
 
     Returns None when OHLCV history is unavailable — callers must skip the
     signal tick rather than proceeding with insufficient data. A single-point
     degenerate bar (open=high=low=close, volume=0) produces zero ATR, zero
     range, and zero volume features that corrupt ML model inputs.
-    """
-    broker = getattr(app_state, "broker", None) if app_state is not None else None
 
+    Resolution order is the price engine first, then the broker. It used to be
+    broker-only, which meant that under APP_ENV=production this function could
+    not return anything at all: ``PaperTradingBroker.get_market_data`` raises
+    there by design, precisely so synthetic bars never reach the predictor. The
+    engine caught that RuntimeError, logged it, and returned None on every tick,
+    so the signal loop ran to completion every cycle and produced ``signal=none,
+    approved=false`` forever. The refusal was right; there was simply no real
+    source wired up behind it. ``price_engine.get_ohlcv`` is that source, and it
+    is already serving the same bars to ``/api/trading/ohlcv``.
+
+    Its last-resort tier synthesises flat bars from the paper broker, so the
+    result is checked for movement before it is returned — otherwise this fix
+    would trade a loud refusal for the silent corruption the refusal existed to
+    prevent.
+    """
+    engine = getattr(app_state, "price_engine", None) if app_state is not None else None
+
+    if engine is not None:
+        try:
+            data = await asyncio.wait_for(engine.get_ohlcv(symbol, "1h", 100), timeout=25.0)
+            bars = [
+                {
+                    "open": d.open,
+                    "high": d.high,
+                    "low": d.low,
+                    "close": d.close,
+                    "volume": getattr(d, "volume", 0.0),
+                }
+                for d in (data or [])
+            ]
+            if bars and not _is_degenerate(bars):
+                return _shape_bars(symbol, bars)
+            if bars:
+                logger.warning(
+                    "Price engine returned %d flat bars for %s (no price movement) — "
+                    "discarding rather than feeding zero-range features to the predictor. "
+                    "This is the synthetic last-resort tier: no real OHLCV source is "
+                    "reachable for this symbol.",
+                    len(bars),
+                    symbol,
+                )
+        except TimeoutError:
+            logger.warning("Price engine OHLCV timed out for %s", symbol)
+        except Exception as exc:
+            logger.warning("Price engine OHLCV fetch failed for %s: %s", symbol, exc)
+
+    broker = getattr(app_state, "broker", None) if app_state is not None else None
     if broker is not None:
         try:
-            bars = broker.get_market_data(symbol, timeframe="1h", limit=100)
-            if bars:
-                last = bars[-1]
-                prices = [float(b["close"]) for b in bars]
-                highs = [float(b["high"]) for b in bars]
-                lows = [float(b["low"]) for b in bars]
-                volumes = [float(b.get("volume", 0)) for b in bars]
-                return {
-                    "symbol": symbol,
-                    "open": float(last["open"]),
-                    "high": float(last["high"]),
-                    "low": float(last["low"]),
-                    "close": float(last["close"]),
-                    "volume": float(last.get("volume", 0)),
-                    "prices": prices,
-                    "highs": highs,
-                    "lows": lows,
-                    "volumes": volumes,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
+            raw = broker.get_market_data(symbol, timeframe="1h", limit=100)
+            bars = [dict(b) for b in (raw or [])]
+            if bars and not _is_degenerate(bars):
+                return _shape_bars(symbol, bars)
         except Exception as exc:
+            # In production the paper broker refuses on purpose; that is the
+            # guard working, not an incident.
             logger.warning("Broker OHLCV fetch failed for %s: %s", symbol, exc)
-    else:
-        logger.warning("No broker available — cannot fetch market data for %s", symbol)
+    elif engine is None:
+        logger.warning("No price engine or broker available — cannot fetch market data for %s", symbol)
 
     return None
 
