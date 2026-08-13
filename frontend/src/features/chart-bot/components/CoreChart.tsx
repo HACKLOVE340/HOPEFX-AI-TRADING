@@ -34,7 +34,7 @@ import { ema, bollinger, rsi } from '../utils/indicators';
 import { COLORS, CHART_DIMS } from '../utils/design-tokens';
 import { fmtSpread } from '../../../lib/utils';
 import { formatPrice, formatTime } from '../utils/formatters';
-import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartClickContext } from '../types';
+import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartPattern, ChartClickContext } from '../types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -148,6 +148,8 @@ interface CoreChartProps {
   onChartReady?: (chart: IChartApi, series: ISeriesApi<'Candlestick'>) => void;
   signals?: MLSignal[];
   levels?: SupportResistanceLevel[];
+  /** Detected chart patterns, used to tell the bot what the click landed inside. */
+  patterns?: ChartPattern[];
   height?: number;
 }
 
@@ -156,6 +158,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
   onChartReady,
   signals = [],
   levels = [],
+  patterns = [],
   height = CHART_DIMS.mainHeight,
 }) => {
   const wrapperRef       = useRef<HTMLDivElement>(null);
@@ -198,9 +201,38 @@ const CoreChart: React.FC<CoreChartProps> = ({
   const symbolRef    = useRef(symbol);
   const timeframeRef = useRef(timeframe);
   const signalsRef   = useRef<MLSignal[]>(signals);
+  const levelsRef    = useRef<SupportResistanceLevel[]>(levels);
+  const patternsRef  = useRef<ChartPattern[]>(patterns);
   useEffect(() => { symbolRef.current = symbol; }, [symbol]);
   useEffect(() => { timeframeRef.current = timeframe; }, [timeframe]);
   useEffect(() => { signalsRef.current = signals; }, [signals]);
+  useEffect(() => { levelsRef.current = levels; }, [levels]);
+  useEffect(() => { patternsRef.current = patterns; }, [patterns]);
+
+  // Nearest support/resistance to the clicked price, within 1% of it. Beyond
+  // that the "nearest" level is not near anything and saying so is better than
+  // attaching an irrelevant one.
+  const nearestLevelRef = useRef((clickPrice: number): SupportResistanceLevel | null => {
+    let best: SupportResistanceLevel | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+    for (const l of levelsRef.current) {
+      const gap = Math.abs(l.price - clickPrice);
+      if (gap < bestGap) { bestGap = gap; best = l; }
+    }
+    return clickPrice > 0 && bestGap / clickPrice <= 0.01 ? best : null;
+  });
+
+  // A pattern whose span contains the clicked bar. No "nearest" fallback: a
+  // pattern the click is not inside is not the pattern the user asked about.
+  const nearestPatternRef = useRef((clickMs: number): ChartPattern | null => {
+    let best: ChartPattern | null = null;
+    for (const p of patternsRef.current) {
+      if (clickMs >= p.startTime && clickMs <= p.endTime) {
+        if (!best || p.confidence > best.confidence) best = p;
+      }
+    }
+    return best;
+  });
 
   // Nearest ML signal to a clicked bar, within one hour. Populating this is what
   // makes the bot's "ML FEATURE IMPORTANCE" panel render: it read
@@ -344,8 +376,8 @@ const CoreChart: React.FC<CoreChartProps> = ({
         time:           clickTime,
         bar:            bar,
         nearestSignal:  nearestSignalRef.current(clickTime),
-        nearestLevel:   null,
-        nearestPattern: null,
+        nearestLevel:   nearestLevelRef.current(cd.close),
+        nearestPattern: nearestPatternRef.current(clickTime),
       };
       setCtx(ctx);
       onChartClick?.(ctx);

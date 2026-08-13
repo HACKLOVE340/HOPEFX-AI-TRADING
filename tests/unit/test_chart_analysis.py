@@ -754,3 +754,107 @@ def test_the_old_implementation_is_gone_not_parked():
 
     src = (pathlib.Path(__file__).resolve().parents[2] / "api/trading.py").read_text()
     assert "_legacy_ai_analysis" not in src
+
+
+# ── The platform regime classifier ───────────────────────────────────────────
+
+
+def _ohlcv_bars(n=200, start=4000.0, step=4.0):
+    return _bars([start + i * step for i in range(n)])
+
+
+def test_the_platform_classifier_is_used_when_available():
+    """nuclear/regime_classifier.py is the real engine — macro override, crisis
+    detection, weighted per-timeframe voting, and its own reasoning."""
+    from analysis.chart_analysis import classify_regime_platform
+
+    v = classify_regime_platform(_ohlcv_bars(), "XAUUSD")
+    assert v is not None, "the platform classifier did not run"
+    assert v.regime == "trending_up"
+    assert v.reasons, "the platform verdict must carry its reasoning"
+
+
+def test_the_platform_classifier_reads_a_downtrend_as_a_downtrend():
+    from analysis.chart_analysis import classify_regime_platform
+
+    v = classify_regime_platform(_ohlcv_bars(start=4800.0, step=-4.0), "XAUUSD")
+    assert v is not None and v.regime == "trending_down"
+    assert v.trend == "bearish"
+
+
+def test_consecutive_calls_do_not_contaminate_each_other():
+    """The reason this does NOT go through get_regime_classifier().
+
+    That factory returns a process-wide singleton whose debounce only moves
+    _confirmed_regime after three consecutive agreeing calls — correct for the
+    streaming agent that calls it once per bar, catastrophic for a per-request
+    path, where the first caller's regime pins every later one across unrelated
+    users, symbols and timeframes.
+
+    Through the singleton these three series all return trending_up. Through
+    fresh instances they classify independently. This test fails if anyone
+    swaps in the singleton.
+    """
+    from analysis.chart_analysis import classify_regime_platform
+
+    up = classify_regime_platform(_ohlcv_bars(), "XAUUSD")
+    down = classify_regime_platform(_ohlcv_bars(start=4800.0, step=-4.0), "XAUUSD")
+    flat = classify_regime_platform(_ohlcv_bars(step=0.0), "XAUUSD")
+
+    assert up is not None and down is not None and flat is not None
+    assert up.regime == "trending_up"
+    assert down.regime == "trending_down", (
+        "a downtrend was classified as an uptrend — shared debounce state has leaked "
+        "between requests (see classify_regime_platform's docstring)"
+    )
+    assert flat.regime != "trending_up"
+
+
+def test_the_shared_singleton_is_not_referenced():
+    """Pinned as source, because the failure is invisible in a single call."""
+    import pathlib
+
+    code = _code_only(pathlib.Path(__file__).resolve().parents[2] / "analysis/chart_analysis.py")
+    assert "get_regime_classifier" not in code, "the shared classifier singleton carries debounce state across requests"
+
+
+def test_a_short_window_skips_the_platform_classifier():
+    from analysis.chart_analysis import classify_regime_platform
+
+    assert classify_regime_platform(_ohlcv_bars(10), "XAUUSD") is None
+
+
+def test_the_local_read_takes_over_when_the_platform_stack_is_missing(monkeypatch):
+    """A chart click must not depend on the nuclear stack being importable."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _blocked(name, *args, **kwargs):
+        if name.startswith("nuclear."):
+            raise ImportError("simulated: nuclear stack unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _blocked)
+
+    from analysis.chart_analysis import classify_regime_platform
+
+    assert classify_regime_platform(_ohlcv_bars(), "XAUUSD") is None
+
+    monkeypatch.undo()
+    out = compose(_ctx(), _ohlcv_bars(), ModelVerdict(), data_source="price_engine")
+    assert out["regime"] in ("trending_up", "trending_down", "ranging", "volatile")
+
+
+def test_the_response_states_which_regime_engine_spoke():
+    out = compose(_ctx(), _ohlcv_bars(), ModelVerdict(), data_source="price_engine")
+    assert out["regimeSource"] in ("platform", "local")
+
+
+def test_the_regime_is_always_one_the_frontend_can_render():
+    """The classifier's vocabulary is wider than the UI's MarketRegime union;
+    an unmapped value would render as an unstyled string."""
+    renderable = {"trending_up", "trending_down", "ranging", "volatile"}
+    for bars in (_ohlcv_bars(), _ohlcv_bars(start=4800.0, step=-4.0), _ohlcv_bars(step=0.0), _ohlcv_bars(40)):
+        out = compose(_ctx(), bars, ModelVerdict(), data_source="price_engine")
+        assert out["regime"] in renderable, out["regime"]

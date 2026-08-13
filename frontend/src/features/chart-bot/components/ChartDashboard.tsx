@@ -283,6 +283,7 @@ const ChartContainer: React.FC<{ onChartClick: (ctx: ChartClickContext) => void 
           onChartReady={handleChartReady}
           signals={signals}
           levels={levels}
+          patterns={patterns}
           height={540}
         />
       </PanelErrorBoundary>

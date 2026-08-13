@@ -218,6 +218,87 @@ class RegimeVerdict:
     reasons: list[str] = field(default_factory=list)
 
 
+def classify_regime_platform(bars: list[dict[str, float]], symbol: str) -> RegimeVerdict | None:
+    """Regime from the platform's own multi-layer classifier, or None.
+
+    ``nuclear/regime_classifier.py`` is the real engine: macro override, crisis
+    detection, per-timeframe weighted voting, and human-readable ``reasoning``
+    that maps straight onto the bot's KEY DRIVERS panel. It beats an EMA
+    crossover and it is what the rest of the platform already uses.
+
+    **It is constructed fresh on every call, never through
+    ``get_regime_classifier()``.** That factory returns a process-wide singleton
+    carrying debounce state — ``_confirmed_regime`` only moves after three
+    consecutive agreeing calls, which is correct for the streaming agent that
+    calls it once per bar and prevents regime flapping. In a per-request path it
+    is not: the first caller's regime pins every later one, across unrelated
+    users, symbols and timeframes. Measured directly — the same three series
+    (clean uptrend, clean downtrend, flat) classify as trending_up /
+    trending_down / mean_reverting on fresh instances, and as trending_up /
+    trending_up / trending_up through the singleton, with the per-timeframe
+    reasoning still correctly reporting TRENDING_DOWN underneath.
+
+    Returns None on any failure so the caller falls back to the local read; a
+    chart click must not depend on the nuclear stack being importable.
+    """
+    if len(bars) < 30:
+        return None
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        from nuclear.feature_builder import build_features_from_bars
+        from nuclear.redis_stream_reader import OHLCVBar
+        from nuclear.regime_classifier import RegimeClassifier
+
+        utc = timezone.utc
+        now = datetime.now(tz=utc)
+        n = len(bars)
+        series = [
+            OHLCVBar(
+                symbol=symbol,
+                timeframe="1h",
+                open=float(b["open"]),
+                high=float(b["high"]),
+                low=float(b["low"]),
+                close=float(b["close"]),
+                volume=float(b.get("volume", 0.0) or 0.0),
+                open_time=now - timedelta(hours=n - i),
+            )
+            for i, b in enumerate(bars)
+        ]
+        mtf = build_features_from_bars({"1h": series}, symbol=symbol)
+        # Fresh instance — see the docstring above.
+        result = RegimeClassifier().classify(mtf)
+    except Exception as exc:
+        logger.debug("chart_analysis: platform regime classifier unavailable: %s", exc)
+        return None
+
+    trend = (
+        "bullish" if result.regime == "trending_up" else "bearish" if result.regime == "trending_down" else "neutral"
+    )
+    # The frontend's MarketRegime union is narrower than the classifier's
+    # vocabulary; anything outside it is mapped rather than leaked as an
+    # unrenderable string.
+    mapped = {
+        "trending_up": REGIME_TRENDING_UP,
+        "trending_down": REGIME_TRENDING_DOWN,
+        "range_bound": REGIME_RANGING,
+        "mean_reverting": REGIME_RANGING,
+        "low_vol": REGIME_RANGING,
+        "high_vol": REGIME_VOLATILE,
+        "breakout": REGIME_VOLATILE,
+        "crisis": REGIME_VOLATILE,
+    }.get(result.regime, REGIME_RANGING)
+
+    reasons = [str(r) for r in (result.reasoning or [])][:4]
+    if result.sub_regime:
+        reasons.append(f"Sub-regime: {result.sub_regime}")
+    if result.preferred_strategy:
+        reasons.append(f"Platform strategy for this regime: {result.preferred_strategy}")
+
+    return RegimeVerdict(mapped, float(result.confidence), trend, reasons)
+
+
 def classify_regime(closes: list[float], atr_value: float | None, price: float) -> RegimeVerdict:
     """Technical regime from EMA alignment and volatility.
 
@@ -449,7 +530,11 @@ def compose(
     closes = [float(b["close"]) for b in bars]
     atr_value = atr(bars)
     rsi_value = rsi(closes)
-    regime = classify_regime(closes, atr_value, price)
+    # Platform classifier first — it carries macro context, crisis detection and
+    # its own reasoning. The local EMA read is the fallback, not the default.
+    platform_regime = classify_regime_platform(bars, symbol)
+    regime = platform_regime or classify_regime(closes, atr_value, price)
+    regime_source = "platform" if platform_regime is not None else "local"
     volatility = classify_volatility(atr_value, price)
 
     warnings: list[str] = list(model.warnings)
@@ -569,6 +654,7 @@ def compose(
         # Provenance — the UI can now tell a real analysis from a degraded one.
         "modelVersion": model.model_version,
         "modelAvailable": model.available and not model.fallback,
+        "regimeSource": regime_source,
         "barsAnalyzed": len(bars),
         "dataSource": data_source,
         "degraded": degraded,
