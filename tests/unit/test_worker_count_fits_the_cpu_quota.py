@@ -145,3 +145,40 @@ def test_the_overlay_is_covered_too():
     if not overlay.exists():
         pytest.skip("overlay not present")
     assert _app_healthcheck(overlay), "the overlay redefines app but has no healthcheck to check"
+
+
+# ── The connection budget multiplies per worker too ──────────────────────────
+
+
+def _db_connected_services() -> list[str]:
+    """Services that open their own SQLAlchemy pool."""
+    spec = yaml.safe_load((_ROOT / "docker-compose.yml").read_text())
+    return [
+        name for name, svc in (spec.get("services") or {}).items() if "DATABASE_URL" in (svc.get("environment") or {})
+    ]
+
+
+def test_the_connection_pools_fit_postgres():
+    """Every uvicorn worker opens its own pool, so API_WORKERS multiplies it.
+
+    .env.example sets DB_POOL_SIZE=10 and DB_POOL_MAX_OVERFLOW=20 — up to 30
+    connections per process. Postgres' max_connections is not configured
+    anywhere, so it is the default 100. At API_WORKERS=4 the API alone could
+    reach 120, before trading, celery-worker and celery-beat open theirs.
+
+    Asserted on steady state (pool_size), which must hold continuously, with
+    half of max_connections left for overflow bursts, superuser reserve and
+    anything else that connects.
+    """
+    pool = int(re.search(r"^DB_POOL_SIZE=(\d+)", _ENV_EXAMPLE, re.MULTILINE).group(1))
+    workers = int(_env_number("API_WORKERS"))
+    others = max(0, len(_db_connected_services()) - 1)  # each runs a single process
+    processes = workers + others
+    steady = processes * pool
+    budget = 100 // 2
+
+    assert steady <= budget, (
+        f"{processes} DB-connected processes x pool_size {pool} = {steady} steady connections, "
+        f"over the {budget} budget (half of postgres max_connections=100). "
+        f"API_WORKERS={workers} multiplies the API's share."
+    )
