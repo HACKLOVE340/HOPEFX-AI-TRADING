@@ -341,15 +341,26 @@ class SaveIndicatorRequest(BaseModel):
     color: str = "#60a5fa"
 
 
-def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
+async def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     """
     Load real OHLCV data for the indicator preview.
 
     Priority:
-    1. CSV files in data/ directory
-    2. Paper broker get_market_data()
+    1. Live price engine (app_state.price_engine)
+    2. CSV files in data/ directory
+    3. Paper broker get_market_data() — development only
 
     Raises ValueError when no real data is available.
+
+    The price engine tier is new. Before it, this function tried
+    ``data/XAU_USD_H1.csv`` (which is not in the repository — the committed
+    XAUUSD CSVs are ``_2Y``/``_5Y``/``_40Y``/``_50Y``, none matching the ``_H1``
+    pattern) and then the paper broker, which raises under APP_ENV=production by
+    design. That RuntimeError was caught and logged at DEBUG, so at production
+    log levels the only visible outcome was the ValueError below — "Connect a
+    broker or add a CSV file" — on a deployment that had a working broker and a
+    working OHLCV source all along. The engine is the same one already serving
+    /api/trading/ohlcv.
     """
     import pathlib
 
@@ -358,6 +369,43 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     from utils.symbol import canonical as _canonical, to_oanda as _to_oanda
 
     sym_key = _to_oanda(symbol)  # OANDA form (XAU_USD) matches CSV filenames
+
+    # 1. Live price engine
+    try:
+        import asyncio as _asyncio
+
+        from core.app_state import app_state
+
+        engine = getattr(app_state, "price_engine", None)
+        if engine is not None:
+            bars = await _asyncio.wait_for(
+                engine.get_ohlcv(_canonical(symbol), "1h", periods + 50),
+                timeout=25.0,
+            )
+            if bars and len(bars) >= 20:
+                closes = [b.close for b in bars]
+                # A flat close series is the engine's synthetic last-resort tier
+                # (static broker price, volume=0), not a market. Indicators built
+                # on it are all zero or undefined, which reads as a broken
+                # formula rather than as missing data.
+                if max(closes) - min(closes) > 0.0:
+                    return {
+                        "close": closes,
+                        "open": [b.open for b in bars],
+                        "high": [b.high for b in bars],
+                        "low": [b.low for b in bars],
+                        "volume": [getattr(b, "volume", 0.0) for b in bars],
+                    }
+                logger.warning(
+                    "Indicator preview: price engine returned %d flat bars for %s — "
+                    "no real OHLCV source is reachable for this symbol",
+                    len(bars),
+                    symbol,
+                )
+    except TimeoutError:
+        logger.warning("Indicator preview: price engine timed out for %s", symbol)
+    except Exception as exc:
+        logger.warning("Indicator preview: price engine load failed for %s: %s", symbol, exc)
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     candidates = [
@@ -379,28 +427,38 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
             except Exception as exc:
                 logger.debug("Indicator CSV load failed (%s): %s", csv_path, exc)
 
-    # Paper broker fallback
-    try:
-        from core.app_state import app_state
+    # 3. Paper broker fallback — development only.
+    # PaperTradingBroker.get_market_data() raises under APP_ENV=production so
+    # synthetic bars never reach the UI as market data. Skipping the call rather
+    # than catching its RuntimeError keeps the reason visible: this used to be
+    # swallowed at DEBUG level, which is why a production deployment reported
+    # only "no data available" and never why.
+    import os as _os
 
-        broker = getattr(app_state, "broker", None)
-        if broker and hasattr(broker, "get_market_data"):
-            raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
-            if raw and len(raw) >= 20:
-                df = pd.DataFrame(raw)
-                return {
-                    "close": df["close"].tolist(),
-                    "open": df["open"].tolist(),
-                    "high": df["high"].tolist(),
-                    "low": df["low"].tolist(),
-                    "volume": df.get("volume", pd.Series([0.0] * len(df))).tolist(),
-                }
-    except Exception as exc:
-        logger.debug("Indicator broker load failed: %s", exc)
+    if _os.getenv("APP_ENV", "development").lower() != "production":
+        try:
+            from core.app_state import app_state
+
+            broker = getattr(app_state, "broker", None)
+            if broker and hasattr(broker, "get_market_data"):
+                raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
+                if raw and len(raw) >= 20:
+                    df = pd.DataFrame(raw)
+                    return {
+                        "close": df["close"].tolist(),
+                        "open": df["open"].tolist(),
+                        "high": df["high"].tolist(),
+                        "low": df["low"].tolist(),
+                        "volume": df.get("volume", pd.Series([0.0] * len(df))).tolist(),
+                    }
+        except Exception as exc:
+            logger.warning("Indicator preview: broker load failed for %s: %s", symbol, exc)
 
     raise ValueError(
         f"No OHLCV data available for {symbol}. "
-        "Connect a broker or add a CSV file to data/ to use the indicator builder."
+        "Tried the live price engine, then data/ CSV files. "
+        "Check that the price engine is running (GET /api/trading/status) and that "
+        "a data source is configured for this symbol in config/multi_source_feed.yaml."
     )
 
 
@@ -592,7 +650,7 @@ def _interp_node(node: _ast.expr, name_map: dict) -> list | float:  # type: igno
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
+async def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     """Evaluate *formula* against real OHLCV data for *symbol*.
 
     Uses AST-based parsing — no eval() or exec().  Allowed syntax:
@@ -604,7 +662,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     """
     tree = _parse_formula(formula)
 
-    ohlcv = _load_ohlcv_for_indicator(symbol, periods)
+    ohlcv = await _load_ohlcv_for_indicator(symbol, periods)
     name_map: dict = {
         "close": ohlcv["close"],
         "open": ohlcv["open"],
@@ -637,7 +695,7 @@ async def preview_indicator(
     Returns HTTP 400 when the formula is invalid or data is unavailable.
     """
     try:
-        data = _eval_indicator(req.formula, req.symbol, req.periods)
+        data = await _eval_indicator(req.formula, req.symbol, req.periods)
         return {
             "formula": req.formula,
             "symbol": req.symbol,
@@ -730,7 +788,7 @@ async def apply_indicator(
     periods = int(payload.get("periods", 200))
 
     try:
-        result = _eval_indicator(formula, symbol, periods)
+        result = await _eval_indicator(formula, symbol, periods)
         return {
             "indicator_id": ind_id,
             "name": ind.get("name", "custom"),

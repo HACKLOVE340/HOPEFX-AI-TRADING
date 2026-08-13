@@ -403,8 +403,16 @@ def generate(
         #
         #     OANDA_API_KEY=          # CANONICAL — set this one
         #
-        # reaches the container as OANDA_API_KEY='# CANONICAL — set this one',
-        # and every `if os.getenv("OANDA_API_KEY")` reads it as configured.
+        # reaches the container with the comment text itself as the value — the
+        # literal characters starting at the hash — so every
+        # `if os.getenv("OANDA_API_KEY")` reads it as configured.
+        #
+        # (The illustration above deliberately avoids writing that out as an
+        # assignment with a quoted value: security/code_analyzer.py's
+        # hardcoded-secret regex matches the NAME='...' shape wherever it
+        # appears, comments included, and flags it critical. Suppressing that
+        # with an allowlist marker would blunt a detector that is doing its job;
+        # rewording the prose costs nothing.)
         # 33 variables in .env.example have this shape, among them the OANDA
         # credentials, LINEAGE_DB_URL, OTEL_EXPORTER_OTLP_ENDPOINT and both
         # price-feed URLs — values that are dialled, not just read.
