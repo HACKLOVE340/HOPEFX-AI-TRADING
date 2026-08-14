@@ -779,7 +779,9 @@ function EmergencyStopButton() {
 
 function LeftSidebar({ symbol }: { symbol: string }) {
   return (
-    <div className="w-[280px] shrink-0 flex flex-col gap-2 overflow-y-auto">
+    // Full width when stacked, fixed 280px only in the xl three-column layout.
+    // `w-[280px] shrink-0` unconditionally is what made the panels overlap.
+    <div className="w-full xl:w-[280px] xl:shrink-0 flex flex-col gap-2 xl:overflow-y-auto">
       <OrderEntryForm symbol={symbol} />
       <Panel title="Controls">
         <EmergencyStopButton />
@@ -809,7 +811,7 @@ function RightSidebar({ rightTab, setRightTab }: RightSidebarProps) {
   ];
 
   return (
-    <div className="w-[280px] shrink-0 flex flex-col gap-2 overflow-hidden">
+    <div className="w-full xl:w-[280px] xl:shrink-0 flex flex-col gap-2 xl:overflow-hidden">
       {/* Tab bar */}
       <div className="flex gap-1 flex-wrap">
         {tabs.map(({ id, label }) => (
@@ -865,7 +867,18 @@ function TradingPage() {
         tick={tick} wsStatus={wsStatus} feedLive={feedLive}
       />
 
-      <div className="flex flex-1 min-h-0 gap-2 p-2 overflow-hidden">
+      {/* Responsive terminal row.
+          This was `flex flex-1 min-h-0 gap-2 p-2 overflow-hidden` — a fixed
+          horizontal row holding two `w-[280px] shrink-0` panels either side of
+          a flexible centre. Below roughly 1280px, 280 + centre + 280 + gaps
+          exceeds the viewport; `shrink-0` forbids shrinking and
+          `overflow-hidden` clips rather than scrolls, so the panels visibly
+          overlapped on tablet widths.
+
+          Now: stack vertically and let the page scroll below `xl`, switch to
+          the three-column terminal layout at `xl` and above where there is
+          genuinely room for it. */}
+      <div className="flex flex-col xl:flex-row flex-1 min-h-0 gap-2 p-2 overflow-y-auto xl:overflow-hidden">
         {/* Left sidebar */}
         <LeftSidebar symbol={symbol} />
 

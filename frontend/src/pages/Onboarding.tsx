@@ -210,8 +210,24 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
     setRunning(true);
     setBacktestErr(null);
     try {
+      // The API requires explicit start_date/end_date (both `Field(...)` in
+      // api/backtesting.py::BacktestRequest). This sent `period_days: 30`
+      // instead, which the model does not declare, so every run 422'd with
+      // "Field required" for both dates and the onboarding wizard could never
+      // complete step 4. Derive the window here rather than inventing a
+      // `period_days` the backend does not accept.
+      const PERIOD_DAYS = 30;
+      const end = new Date();
+      const start = new Date(end.getTime() - PERIOD_DAYS * 24 * 60 * 60 * 1000);
+      const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+
       const res = await api.post<{ total_return?: number; total_trades?: number; win_rate?: number; metrics?: { total_return?: number; total_trades?: number; win_rate?: number } }>('/backtesting/run',
-        { symbol: 'XAUUSD', strategy: 'ml_ensemble', period_days: 30 }
+        {
+          symbol: 'XAUUSD',
+          strategy: 'ml_ensemble',
+          start_date: isoDate(start),
+          end_date: isoDate(end),
+        }
       );
       const data = res.data;
       setResult({

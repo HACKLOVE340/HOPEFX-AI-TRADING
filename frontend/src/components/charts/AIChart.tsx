@@ -142,6 +142,9 @@ export function AIChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
   const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  // Newest bar time currently in the candle series. Guards the live-tick
+  // update() against "Cannot update oldest data" after a timeframe switch.
+  const lastBarTimeRef = useRef<number | null>(null);
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const maRef        = useRef<ISeriesApi<'Line'> | null>(null);
   const rafRef       = useRef<number>(0);
@@ -237,8 +240,22 @@ export function AIChart({
         const data = Array.isArray(raw) ? raw : (raw.data ?? []);
         if (!data.length) { if (initial) setChartError('No OHLCV data'); return; }
 
-        const sorted = [...data].sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
+        // Drop bars whose timestamp will not convert. toUTC returns NaN for an
+        // unparseable value, and NaN times are what surface as
+        // "last time=[object Object], new time=[object Object]".
+        const sorted = [...data]
+          .filter((c) => Number.isFinite(toUTC(c.timestamp)))
+          .sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
         setCandles(sorted);
+
+        // Record the newest bar now in the series. The live-tick effect below
+        // compares against this before calling update(), because
+        // lightweight-charts rejects an update older than the series' last bar
+        // with "Cannot update oldest data" — which is what happens on a
+        // timeframe switch: setData() replaces the series while the tick effect
+        // still closes over the previous `candles`.
+        const newest = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
+        lastBarTimeRef.current = newest ? toUTC(newest.timestamp) : null;
 
         candleRef.current!.setData(sorted.map((c) => ({
           time: toUTC(c.timestamp),
@@ -279,7 +296,18 @@ export function AIChart({
     // candle rather than creating a phantom future candle.
     const last = candles[candles.length - 1];
     if (!tick || !candleRef.current || !last) return;
+
     const barTime = toUTC(last.timestamp);
+
+    // lightweight-charts throws "Cannot update oldest data" if the update is
+    // older than the series' newest bar. That happens on a timeframe switch:
+    // setData() replaces the series, but this effect still closes over the
+    // previous `candles`, so it tries to update a bar that no longer exists in
+    // the new series. Skip rather than throw — the next OHLCV refresh brings
+    // this effect back in sync.
+    if (!Number.isFinite(barTime)) return;
+    if (lastBarTimeRef.current !== null && barTime < lastBarTimeRef.current) return;
+
     const mid = tick.mid ?? ((tick.bid + tick.ask) / 2);
     candleRef.current.update({
       time:  barTime,

@@ -204,10 +204,65 @@ export async function fetchNews(symbol = 'XAUUSD', limit = 15): Promise<NewsItem
 // ─── Risk ─────────────────────────────────────────────────────────────────────
 
 export async function fetchRiskMetrics(): Promise<RiskMetrics> {
-  const res = await api.get<RiskMetrics | { data?: RiskMetrics }>('/trading/risk');
-  const raw = res.data;
-  if ('cvar95' in raw) return raw as RiskMetrics;
-  return (raw as { data?: RiskMetrics }).data ?? buildDefaultRisk();
+  const res = await api.get<unknown>('/trading/risk');
+  return normaliseRisk(res.data);
+}
+
+/**
+ * Merge whatever the server sent over a complete default.
+ *
+ * This read:
+ *
+ *     if ('cvar95' in raw) return raw as RiskMetrics;
+ *     return (raw as { data?: RiskMetrics }).data ?? buildDefaultRisk();
+ *
+ * — a test for ONE field followed by a cast asserting all fifteen. TypeScript
+ * accepts it because `res.data` is untyped, so a response carrying `cvar95` but
+ * not `positionSizePct` type-checks and then throws in the component:
+ *
+ *     undefined is not an object (evaluating 'n.positionSizePct.toFixed')
+ *
+ * RiskHeatmap's `if (!risk)` guard cannot catch that — the object exists, it is
+ * just incomplete. Same shape as the audit-trail and ML-Ops defects: an
+ * interface describing a response the server does not actually send.
+ *
+ * Normalising instead of casting makes the component's contract true by
+ * construction, whatever the server returns.
+ */
+export function normaliseRisk(payload: unknown): RiskMetrics {
+  const defaults = buildDefaultRisk();
+
+  // Accept either the object itself or a { data: … } envelope.
+  const container = (payload ?? {}) as Record<string, unknown>;
+  const raw = (
+    'cvar95' in container ? container : ((container.data as Record<string, unknown> | undefined) ?? {})
+  ) as Record<string, unknown>;
+
+  const num = (key: keyof RiskMetrics): number => {
+    const value = Number(raw[key]);
+    // NaN/Infinity reach .toFixed() happily and render "NaN%", which reads as
+    // a real reading rather than missing data.
+    return Number.isFinite(value) ? value : (defaults[key] as number);
+  };
+
+  return {
+    ...defaults,
+    cvar95: num('cvar95'),
+    cvar99: num('cvar99'),
+    var95: num('var95'),
+    var99: num('var99'),
+    positionSizePct: num('positionSizePct'),
+    maxPositionSize: num('maxPositionSize'),
+    currentDrawdown: num('currentDrawdown'),
+    maxDrawdown: num('maxDrawdown'),
+    dailyLossLimit: num('dailyLossLimit'),
+    dailyLossUsed: num('dailyLossUsed'),
+    dataQualityScore: num('dataQualityScore'),
+    marginUtilisation: num('marginUtilisation'),
+    riskScore: num('riskScore'),
+    killSwitchActive: Boolean(raw.killSwitchActive ?? defaults.killSwitchActive),
+    killSwitchReason: (raw.killSwitchReason as string | null) ?? defaults.killSwitchReason,
+  };
 }
 
 function buildDefaultRisk(): RiskMetrics {
