@@ -490,33 +490,18 @@ def _register_default_probes(engine: HealthEngine) -> None:
             return {"status": "error", "detail": str(exc)}
 
     async def _probe_celery() -> dict[str, Any]:
-        """Ask the broker for workers — from a thread, not the event loop.
+        """Delegates to the shared probe.
 
-        ``inspect.stats()`` is a synchronous broadcast that waits for replies up
-        to its timeout. Called directly inside ``async def`` it blocks the loop
-        for the whole wait, and every probe gathered alongside it stalls too.
-        That is visible in the deployed report: Redis Cache 2042ms (ERROR,
-        "Timeout reading from redis:6379"), Broker 2041ms, ML/AI 2124ms,
-        WebSocket 2112ms — a dozen unrelated probes all landing at ~2.0-2.1s,
-        which is not each being slow but all of them queued behind this one.
-        The Redis probe's own socket timeout then fires and reports an outage
-        that is really this function holding the loop.
+        This function used to hold its own copy of the check. So did
+        api/superadmin/reliability.py, and so did api/superadmin/system_health.py
+        with a shorter timeout and a blocking call — three implementations that
+        could not agree even when Celery was healthy, and did not, in the
+        deployed report: DOWN here, WARNING there, OK on this page, all within
+        twelve minutes.
         """
-        try:
-            from celery_app import celery_app
+        from infrastructure.service_probes import probe_celery
 
-            def _inspect_stats():
-                return celery_app.control.inspect(timeout=3.0).stats()
-
-            loop = asyncio.get_running_loop()
-            stats = await asyncio.wait_for(loop.run_in_executor(None, _inspect_stats), timeout=5.0)
-            if stats:
-                return {"status": "ok", "detail": f"workers={len(stats)} active", "worker_count": len(stats)}
-            return {"status": "warning", "detail": "No Celery workers responded", "worker_count": 0}
-        except TimeoutError:
-            return {"status": "warning", "detail": "Celery inspect timed out after 5s", "worker_count": 0}
-        except Exception as exc:
-            return {"status": "warning", "detail": f"Celery inspect failed: {exc}"}
+        return await probe_celery()
 
     async def _probe_env_vars() -> dict[str, Any]:
         required = ["SECURITY_JWT_SECRET", "DATABASE_URL"]

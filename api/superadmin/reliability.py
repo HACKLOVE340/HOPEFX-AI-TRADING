@@ -456,41 +456,17 @@ async def _probe_env_vars() -> dict[str, Any]:
 
 
 async def _probe_celery() -> dict[str, Any]:
-    """Check Celery worker availability via Redis broker ping."""
-    t0 = time.perf_counter()
-    try:
-        from celery_app import celery_app
+    """Delegates to the shared probe in infrastructure/service_probes.py.
 
-        # In a worker thread: inspect.stats() is a synchronous broadcast that
-        # waits for replies, and on the event loop it stalls every probe
-        # gathered beside it. See infrastructure/health_engine.py::_probe_celery
-        # for the measurement — a dozen unrelated probes all landing at ~2.0s.
-        def _inspect_stats():
-            return celery_app.control.inspect(timeout=3.0).stats()
+    Three pages each carried their own version of this check with different
+    timeouts and execution models, and reported DOWN / WARNING / OK for the same
+    broker within twelve minutes. The failing ones were right: the Redis broker
+    closes connections idle for 300s, so the first write to a reaped socket
+    fails instantly. The shared probe retries once on exactly that.
+    """
+    from infrastructure.service_probes import probe_celery
 
-        _loop = asyncio.get_running_loop()
-        stats = await asyncio.wait_for(_loop.run_in_executor(None, _inspect_stats), timeout=5.0)
-        if stats:
-            worker_count = len(stats)
-            return {
-                "status": "ok",
-                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                "detail": f"workers={worker_count} active",
-                "worker_count": worker_count,
-                "workers": list(stats.keys()),
-            }
-        return {
-            "status": "warning",
-            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": "No Celery workers responded",
-            "worker_count": 0,
-        }
-    except Exception as exc:
-        return {
-            "status": "warning",
-            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": f"Celery inspect failed: {exc}",
-        }
+    return await probe_celery()
 
 
 async def _probe_event_bus() -> dict[str, Any]:

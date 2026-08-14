@@ -191,6 +191,33 @@ if _CELERY_AVAILABLE:
             "interval_start": 0,
             "interval_step": 0.2,
             "interval_max": 2.0,
+            # ── Idle-connection survival ──────────────────────────────────────
+            # The Redis service runs with `--timeout 300`: it closes any
+            # connection that has been idle for five minutes. A Celery control
+            # connection from the app container is idle far longer than that —
+            # nothing uses it until an operator opens a health page — so by the
+            # time inspect() runs, the server has already hung up. The client
+            # only discovers it on write, which fails instantly.
+            #
+            # That is the "Celery: DOWN, RuntimeError" at 8ms on System Health
+            # and "Celery inspect failed: Connection closed by server" on
+            # Reliability. Both were correct. The 8ms is the tell: a 2-second
+            # inspect timeout that fails in 8ms never waited for anything, it
+            # wrote to a socket the server had closed.
+            #
+            # health_check_interval makes redis-py PING a connection that has
+            # been idle this long before handing it out, which both refreshes
+            # the server's idle timer and detects a dead socket early enough to
+            # reconnect transparently. It must stay comfortably below the
+            # server's timeout.
+            "socket_keepalive": True,
+            "retry_on_timeout": True,
+            "health_check_interval": int(os.getenv("CELERY_HEALTH_CHECK_INTERVAL", "60")),
+        },
+        result_backend_transport_options={
+            "socket_keepalive": True,
+            "retry_on_timeout": True,
+            "health_check_interval": int(os.getenv("CELERY_HEALTH_CHECK_INTERVAL", "60")),
         },
         # ── Result backend ────────────────────────────────────────────────────
         result_expires=timedelta(hours=24),

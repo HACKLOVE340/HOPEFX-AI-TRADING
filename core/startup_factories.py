@@ -1909,6 +1909,46 @@ async def init_macro_store(s: Any) -> Any:
     return macro_store
 
 
+# ml:model:status is read by three health surfaces. It was published once, at
+# startup, with ex=3600 and no refresh anywhere in the codebase — so it expired
+# after an hour of uptime and every reader fell to "unknown" until the next
+# restart. The TTL is now several times the refresh interval, so one missed
+# refresh (a transient Redis blip) does not blank it.
+_ML_STATUS_TTL = int(os.getenv("ML_STATUS_TTL_SECONDS", "900"))
+_ML_STATUS_REFRESH = int(os.getenv("ML_STATUS_REFRESH_SECONDS", "300"))
+
+
+async def _republish_ml_status(engine: Any) -> None:
+    """Keep ml:model:status fresh for as long as the process runs."""
+    import json as _json
+
+    from cache.redis_client import get_redis as _get_redis
+
+    while True:
+        await asyncio.sleep(_ML_STATUS_REFRESH)
+        try:
+            rc = await _get_redis()
+            if rc is None:
+                continue
+            health = engine.health()
+            await rc.set(
+                "ml:model:status",
+                _json.dumps(
+                    {
+                        "model_available": health.get("model_available", False),
+                        "model_version": health.get("model_version", "none"),
+                        "calibrator": health.get("calibrator_available", False),
+                        "online_learning": health.get("online_learning_enabled", False),
+                    }
+                ),
+                ex=_ML_STATUS_TTL,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.debug("ml:model:status refresh failed (non-fatal): %s", exc)
+
+
 async def init_inference_engine(s: Any) -> Any:
     """
     Eagerly initialise the InferenceEngine singleton at startup.
@@ -1966,10 +2006,22 @@ async def init_inference_engine(s: Any) -> Any:
                         "online_learning": health.get("online_learning_enabled", False),
                     }
                 )
-                await _rc.set("ml:model:status", _payload, ex=3600)
+                # TTL deliberately generous relative to the refresh interval
+                # below, so a single missed refresh does not blank the key.
+                await _rc.set("ml:model:status", _payload, ex=_ML_STATUS_TTL)
                 logger.debug("ml:model:status published to Redis")
+            else:
+                logger.warning(
+                    "ml:model:status not published — the async Redis client is unavailable. "
+                    "Health pages reading this key will fall back to a live predictor check."
+                )
         except Exception as _ml_redis_exc:
             logger.debug("ML status Redis publish failed (non-fatal): %s", _ml_redis_exc)
+
+        # Keep it fresh. Without this the key expires and every health surface
+        # that reads it reports "unknown" for the rest of the process's life.
+        _refresher = asyncio.create_task(_republish_ml_status(engine), name="ml_status_refresh")
+        s.background_tasks.append(_refresher)
 
         return engine
     except Exception as exc:

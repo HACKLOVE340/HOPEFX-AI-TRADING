@@ -85,15 +85,90 @@ def _check_redis():
     return {"detail": "PONG ok"}
 
 
-def _check_celery():
-    try:
-        from celery_app import celery_app
+async def _celery_service_row() -> dict:
+    """Celery status via the shared probe in infrastructure/service_probes.py.
 
-        inspect = celery_app.control.inspect(timeout=2)
-        active = inspect.active()
-        return {"workers": len(active) if active else 0}
+    This used to be its own implementation: ``inspect.active()`` with a 2-second
+    timeout, called synchronously from inside an ``async def`` endpoint. Two
+    faults came from that.
+
+    It blocked the event loop for the whole wait — the harm both other Celery
+    probes already document in their own docstrings.
+
+    And it reported a dropped connection as a hard outage. The Redis broker runs
+    with ``--timeout 300`` and closes idle connections; the first write to a
+    reaped socket fails instantly, which is why this rendered "Celery DOWN,
+    RuntimeError" at **8ms** — a 2-second timeout that returns in 8ms never
+    waited for anything. Meanwhile the Health Engine's probe reconnected and
+    reported ``workers=1 active``. Both were accurate about what they saw; only
+    one of them retried.
+
+    Sharing one probe is the point. Three implementations with three timeouts
+    cannot agree even when Celery is perfectly healthy.
+    """
+    from infrastructure.service_probes import probe_celery
+
+    result = await probe_celery()
+    status_map = {"ok": "healthy", "warning": "degraded", "error": "down"}
+    return {
+        "name": "celery",
+        "status": status_map.get(result["status"], "unknown"),
+        "latency_ms": result["latency_ms"],
+        "last_check": _utcnow().isoformat(),
+        "detail": result["detail"],
+        "workers": result["worker_count"],
+    }
+
+
+async def _ml_engine_service_row() -> dict:
+    """ML engine status, cache first and engine second.
+
+    ``ml:model:status`` is published by ``core/startup_factories.py`` exactly
+    once, at startup, with ``ex=3600`` and nothing to refresh it — there is only
+    one write site in the codebase. So the key is absent whenever the process
+    has been up for more than an hour, and this row reported ``unknown``
+    forever after, while ``infrastructure/health_engine.py`` asked the predictor
+    directly and reported it ready.
+
+    An absent cache entry means the status was not published. Falling back to
+    the predictor turns "nobody told me" into an actual observation.
+    """
+    from cache.redis_client import get_sync_redis_client
+
+    t0 = time.perf_counter()
+    detail = ""
+    status = "unknown"
+
+    try:
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get("ml:model:status")
+            if raw:
+                data = json.loads(raw)
+                status = "healthy" if data.get("model_available") else "degraded"
+                detail = f"model={data.get('model_version', 'unknown')} (from cache)"
     except Exception as exc:
-        raise RuntimeError(f"Celery: {exc}") from exc
+        logger.debug("ml_engine: cache read failed: %s", exc)
+
+    if status == "unknown":
+        try:
+            from ml.advanced_predictor import get_predictor
+
+            pred = get_predictor()
+            ready = getattr(pred, "is_ready", lambda: True)()
+            status = "healthy" if ready else "degraded"
+            detail = f"predictor ready={ready} (live check — status cache is cold)"
+        except Exception as exc:
+            status = "degraded"
+            detail = f"predictor unavailable: {safe_error(exc)}"
+
+    return {
+        "name": "ml_engine",
+        "status": status,
+        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+        "last_check": _utcnow().isoformat(),
+        "detail": detail,
+    }
 
 
 @router.get("/system-health/services")
@@ -110,7 +185,7 @@ async def get_service_statuses(
     services.append(_probe_service("redis", _check_redis))
 
     # Celery
-    services.append(_probe_service("celery", _check_celery))
+    services.append(await _celery_service_row())
 
     # FastAPI (self — always healthy if we're here)
     services.append(
@@ -124,23 +199,17 @@ async def get_service_statuses(
     )
 
     # ML engine
-    try:
-        from cache.redis_client import get_sync_redis_client
-
-        rc = get_sync_redis_client()
-        ml_status = "unknown"
-        if rc:
-            raw = rc.get("ml:model:status")
-            if raw:
-                data = json.loads(raw)
-                ml_status = "healthy" if data.get("status") == "active" else "degraded"
-        services.append(
-            {"name": "ml_engine", "status": ml_status, "latency_ms": 0.0, "last_check": _utcnow().isoformat()}
-        )
-    except Exception:
-        services.append(
-            {"name": "ml_engine", "status": "unknown", "latency_ms": 0.0, "last_check": _utcnow().isoformat()}
-        )
+    #
+    # This read a Redis key and gave up if it was absent, which is why the page
+    # showed "ML Engine UNKNOWN" while the Health Engine reported
+    # "predictor ready=True" on the same deployment. The key is published once,
+    # at startup, with a one-hour TTL and no refresh — so it is missing whenever
+    # the app has been up longer than an hour, or whenever the async Redis
+    # client was unavailable during startup. Neither means the ML engine is in
+    # an unknown state; it means nobody asked it.
+    #
+    # Ask the engine when the cache is cold, exactly as the Health Engine does.
+    services.append(await _ml_engine_service_row())
 
     # WebSocket server
     services.append(
@@ -522,11 +591,13 @@ async def get_dependency_graph(
             except Exception:
                 node["status"] = "down"
         elif node["id"] == "celery":
-            try:
-                _check_celery()
-                node["status"] = "healthy"
-            except Exception:
-                node["status"] = "degraded"
+            # Same shared probe as the services list above, so the topology view
+            # and the service list cannot disagree with each other.
+            from infrastructure.service_probes import probe_celery
+
+            _celery = await probe_celery()
+            node["status"] = {"ok": "healthy", "warning": "degraded"}.get(_celery["status"], "down")
+            node["detail"] = _celery["detail"]
         elif node["id"] == "ml":
             try:
                 from cache.redis_client import get_sync_redis_client
