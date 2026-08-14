@@ -431,8 +431,12 @@ def get_live_manager() -> LiveConnectionManager:
 # USD/CHF, AUD/USD, USD/CAD, NZD/USD or ETH/USD showed "No feed" for ever, and
 # Watchlist showed live prices for five of its ten symbols for the same reason.
 #
-# `price` is only a pre-feed seed; every broadcast value comes from
-# `_get_live_price`. `spread` is the quoted bid/ask width around the mid.
+# `price` is scratch space, NOT a quote. Every broadcast mid comes from
+# `_get_live_price`, and `_make_tick` overwrites this field with it. Nothing may
+# read `price` as if it were a price: it was read exactly once, to initialise
+# the `_open_prices` change-percentage baseline, and that one read put gold's
+# 3300.0 behind the header's "+33%" against a real 4,390 tick. `spread` is the
+# quoted bid/ask width around the mid and IS used.
 _SYMBOLS: dict[str, dict[str, float]] = {
     # ── Precious metals ──────────────────────────────────────────────────────
     "XAU/USD": {"price": 3300.0, "spread": 0.30},
@@ -558,8 +562,33 @@ def _to_slash(raw: str) -> str:
     return raw  # indices, futures codes: no pair structure to infer
 
 
-_open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
+#: Previous-close baseline per symbol, used only for `change_pct`.
+#:
+#: This used to be initialised from `_SYMBOLS` — i.e. from the same synthetic
+#: seed table whose gold entry is 3300.0. Stopping `_seed_from_broker` from
+#: writing broker seeds in here closed one writer and left this one, which runs
+#: unconditionally at import. On a fresh process the gold baseline was therefore
+#: 3300.0, and the first real tick near 4,390 rendered as roughly +33%.
+#:
+#: It now starts empty and is filled by `_baseline_for()` from the first *real*
+#: price each symbol receives. Not knowing the change yet is reported as 0.00%,
+#: which is what we actually know — as opposed to a number computed against a
+#: price that was never quoted.
+_open_prices: dict[str, float] = {}
 _prices_seeded = False
+
+
+def _baseline_for(symbol: str, mid: float) -> float:
+    """Previous-close baseline for *symbol*, seeded from the first real price.
+
+    Returns *mid* itself the first time a symbol is seen, so `change_pct` is
+    0.00% rather than a percentage against a fabricated open.
+    """
+    existing = _open_prices.get(symbol)
+    if existing and existing > 0:
+        return existing
+    _open_prices[symbol] = mid
+    return mid
 
 
 def _seed_from_broker() -> None:
@@ -703,7 +732,7 @@ def _make_tick(symbol: str) -> dict | None:
 
     spread = _spread_for(symbol, mid)
     half = spread / 2
-    prev = _open_prices.get(symbol, mid)
+    prev = _baseline_for(symbol, mid)
     change = (mid - prev) / prev * 100 if prev > 0 else 0.0
     return {
         "type": "price_tick",
@@ -1102,7 +1131,7 @@ async def _price_broadcaster_live_only() -> None:
                     _no_feed_warned.discard(symbol)
                     cfg = _SYMBOLS.get(symbol, {})
                     spread = cfg.get("spread", yf_price * 0.0002)
-                    prev = _open_prices.get(symbol, yf_price)
+                    prev = _baseline_for(symbol, yf_price)
                     change_pct = ((yf_price - prev) / prev * 100) if prev > 0 else 0.0
                     await _manager.broadcast(
                         "prices",
