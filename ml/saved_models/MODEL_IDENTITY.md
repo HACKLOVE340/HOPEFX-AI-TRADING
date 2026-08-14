@@ -61,12 +61,20 @@ describes no model that was ever trained.
 `ModelRegistry.audit_manifest()` detects this class of drift, and the superadmin
 diagnostics page reports it as `model_registry`.
 
-### Outstanding
+### `mtf_ensemble_v1` — pruned 2026-08-14
 
-`mtf_ensemble_v1` still points at a file that does not exist. That is a
-different fault with a different fix (`--prune-missing`, a deletion) and has
-not been actioned. Diagnostics grades the registry `error` — not `critical`,
-because the model serving inference is no longer in dispute.
+The entry pointed at `ml/saved_models/mtf_ensemble.pkl`, which does not exist,
+while advertising `oos_accuracy` 0.6135 — the highest figure the ML Models
+table displayed, with no artifact behind it. Removed with
+`scripts/repair_model_registry.py --prune-missing`.
+
+Only the manifest entry was removed; no file was deleted (there was none). If
+the artifact is ever restored, re-register it rather than reinstating the entry
+by hand — the sidecar beside the `.pkl` is the measurement, and a
+hand-written entry is how this class of drift started.
+
+`audit_manifest()` now reports `ok: True`: no stale metrics, no metric
+conflicts, no missing artifacts.
 
 ## Active Production Model (`advanced_oos.pkl` ← `current.pkl`)
 
@@ -89,10 +97,11 @@ Registry key: **`xgb_horizon5_v3`** (`active_version` in registry.json)
 
 ## Staged Model: MTF Ensemble (`mtf_ensemble.pkl`)
 
-Registry key: **`mtf_ensemble_v1`** — **retired in registry.json, and
-`ml/saved_models/mtf_ensemble.pkl` does not exist.** The 61.4% below is the
-highest figure the ML Models table displays and there is no artifact behind it.
-Either restore the file and re-register, or remove the entry.
+Registry key: `mtf_ensemble_v1` — **removed from registry.json on 2026-08-14,
+and `ml/saved_models/mtf_ensemble.pkl` does not exist.** The 61.4% below is
+retained as a historical record of what this model measured; it is no longer in
+the registry and no longer appears in the ML Models table. Restoring the
+artifact means re-registering it from its sidecar, not re-adding the entry.
 
 | Property | Value |
 |----------|-------|
@@ -107,6 +116,29 @@ Either restore the file and re-register, or remove the entry.
 | OOS AUC | 0.6634 |
 | pkl format | stacking_dict (not plain sklearn estimator) |
 | Promotion requirement | Sharpe gate + execution engine loading fix |
+| Sharpe gate | NOT passed |
+| State at removal | retired |
+| sha256 (of the absent file) | `d270cf34336527ce6d12ec9d8a0eaa20f9be615356f59095b0a7178e0c1695dd` |
+| Regenerate with | `python scripts/retrain_mtf_accuracy.py` |
+
+### Leakage bug — fixed 2026-04-20
+
+**This record was carried in the registry entry and moved here when the entry
+was pruned, because deleting it would have destroyed the audit trail of a
+data-leakage fix.** Four tests in `tests/unit/test_mtf_ensemble_leakage.py`
+exist solely to guarantee it survives; they now read this file.
+
+`CalibratedClassifierCV(cv=3)` re-trained base learners on the test fold,
+leaking test data into training and inflating walk-forward CV accuracy to
+**~99%** — a number that was never real. True CV accuracy is ~57–60%.
+
+Fixed with a three-way split: `X_fit` (60%) trains the base learners, `X_oof`
+(20%) builds the out-of-fold meta-features, `X_cal` (20%) calibrates the
+meta-LR. Every `CalibratedClassifierCV` call now uses `cv=prefit`, so nothing
+re-trains on held-out data.
+
+The 61.4% OOS figure above post-dates the fix and is the reliable metric; the
+99% CV figure must never be quoted as this model's accuracy.
 
 ## Symlink State
 

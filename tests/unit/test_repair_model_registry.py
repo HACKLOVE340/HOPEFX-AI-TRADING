@@ -234,20 +234,25 @@ def test_a_clean_registry_reports_ok_and_exits_zero(tmp_path, monkeypatch, capsy
 # ── The real registry ────────────────────────────────────────────────────────
 
 
-def test_the_shipped_registry_still_has_the_finding_this_tool_is_for():
-    """If someone repairs it, this test says so rather than silently passing.
+def test_the_shipped_registry_is_repaired_and_stays_that_way():
+    """The findings this tool exists for have been applied to the real manifest.
 
-    It also pins the reassuring half: the version serving inference is the one
-    whose recorded accuracy matches its artifact.
+    ``--resync`` settled the three entries whose recorded accuracy disagreed
+    with their artifact, and ``--prune-missing`` removed ``mtf_ensemble_v1``,
+    which pointed at a file that does not exist. The audit is now clean.
+
+    This asserts rather than skips. An earlier version skipped once the registry
+    was repaired, which meant the moment the fix landed the test stopped
+    checking anything at all — including the invariant below, which is the one
+    that actually matters.
     """
     from ml.model_registry import get_registry
 
     audit = get_registry().audit_manifest()
-    if audit["ok"]:
-        pytest.skip("registry already repaired")
 
     stale_names = {item["version"] for item in audit["stale_metrics"]}
     assert audit["active_version"] not in stale_names, (
-        f"the active version {audit['active_version']!r} now carries metrics that disagree with its "
+        f"the active version {audit['active_version']!r} carries metrics that disagree with its "
         "artifact — inference is serving a mislabelled model"
     )
+    assert audit["ok"] is True, f"the shipped registry has regressed: {audit}"

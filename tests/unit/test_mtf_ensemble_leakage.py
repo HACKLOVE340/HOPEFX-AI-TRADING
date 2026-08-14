@@ -22,7 +22,6 @@ These tests verify:
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -325,44 +324,52 @@ class TestEvaluateRouting:
 
 
 class TestRegistryLeakageFix:
-    """Verify the model registry records the leakage fix."""
+    """The leakage fix must stay on the record.
+
+    These four tests read ``MODEL_IDENTITY.md``, not ``registry.json``.
+
+    The record used to live on the ``mtf_ensemble_v1`` registry entry
+    (``leakage_bug_fixed``, ``leakage_fix_date``, ``leakage_fix_description``,
+    and the ``notes`` field). That entry pointed at
+    ``ml/saved_models/mtf_ensemble.pkl``, which does not exist, and was pruned
+    on 2026-08-14 with ``repair_model_registry.py --prune-missing`` — which
+    deleted the leakage-fix provenance along with it.
+
+    Losing an audit trail of a data-leakage fix is worse than the dangling
+    entry was, so the record was moved to MODEL_IDENTITY.md rather than
+    dropped, and these tests follow it there. The artifact is gone; the reason
+    its CV accuracy cannot be trusted must not be.
+    """
+
+    @staticmethod
+    def _identity_doc() -> str:
+        path = ROOT / "ml" / "saved_models" / "MODEL_IDENTITY.md"
+        assert path.exists(), "MODEL_IDENTITY.md not found"
+        return path.read_text(encoding="utf-8")
 
     def test_registry_records_leakage_fix(self):
-        """registry.json must record leakage_bug_fixed=True for mtf_ensemble_v1."""
-        reg_path = ROOT / "ml" / "saved_models" / "registry.json"
-        assert reg_path.exists(), "registry.json not found"
-
-        reg = json.loads(reg_path.read_text())
-        mtf = reg.get("versions", {}).get("mtf_ensemble_v1", {})
-
-        assert mtf.get("leakage_bug_fixed") is True, "registry.json: mtf_ensemble_v1.leakage_bug_fixed must be True"
+        """The fix must be recorded as done, not merely described."""
+        doc = self._identity_doc()
+        assert "Leakage bug — fixed" in doc, "MODEL_IDENTITY.md no longer records that the MTF leakage bug was fixed"
 
     def test_registry_records_fix_date(self):
-        """registry.json must record the leakage fix date."""
-        reg_path = ROOT / "ml" / "saved_models" / "registry.json"
-        reg = json.loads(reg_path.read_text())
-        mtf = reg.get("versions", {}).get("mtf_ensemble_v1", {})
-
-        assert "leakage_fix_date" in mtf, "registry.json: mtf_ensemble_v1 missing leakage_fix_date"
-        assert mtf["leakage_fix_date"], "leakage_fix_date must not be empty"
+        doc = self._identity_doc()
+        assert "2026-04-20" in doc, "the leakage fix date is no longer recorded"
 
     def test_registry_records_fix_description(self):
-        """registry.json must describe the three-way split fix."""
-        reg_path = ROOT / "ml" / "saved_models" / "registry.json"
-        reg = json.loads(reg_path.read_text())
-        mtf = reg.get("versions", {}).get("mtf_ensemble_v1", {})
-
-        desc = mtf.get("leakage_fix_description", "")
-        assert "prefit" in desc.lower() or "three-way" in desc.lower() or "oof" in desc.lower(), (
-            "leakage_fix_description must mention the fix mechanism (prefit/three-way/OOF)"
+        """The mechanism, so a future reader can tell whether a retrain kept it."""
+        doc = self._identity_doc().lower()
+        assert "prefit" in doc or "three-way" in doc or "oof" in doc, (
+            "the fix mechanism (prefit / three-way split / OOF) is no longer described"
         )
 
     def test_registry_mtf_notes_mention_fix(self):
-        """mtf_ensemble_v1 notes must mention the leakage fix."""
-        reg_path = ROOT / "ml" / "saved_models" / "registry.json"
-        reg = json.loads(reg_path.read_text())
-        notes = reg.get("versions", {}).get("mtf_ensemble_v1", {}).get("notes", "")
+        """The spurious 99% must stay labelled as spurious.
 
-        assert "leakage" in notes.lower() or "fixed" in notes.lower(), (
-            "mtf_ensemble_v1 notes must mention the leakage fix"
-        )
+        It is the highest accuracy figure anywhere in this repo. Without the
+        explanation attached, someone will eventually quote it.
+        """
+        doc = self._identity_doc()
+        assert "99%" in doc, "the spurious CV figure is no longer mentioned"
+        lowered = doc.lower()
+        assert "leakage" in lowered, "the 99% figure is no longer tied to the leakage that caused it"

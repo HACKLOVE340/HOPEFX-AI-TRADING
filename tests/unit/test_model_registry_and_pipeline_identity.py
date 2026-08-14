@@ -40,10 +40,20 @@ something a migration can infer, and averaging two numbers when one is known to
 be wrong would only bury it.
 
 The same audit found a second problem nobody had reported: ``mtf_ensemble_v1``
-claims ``oos_accuracy`` 0.6135 — the highest figure in the ML Models table, and
-displayed there as 61.4% — while ``ml/saved_models/mtf_ensemble.pkl`` does not
-exist. It is retired, so it is not serving; it is still the best-looking number
-on the page with no model behind it.
+claimed ``oos_accuracy`` 0.6135 — the highest figure in the ML Models table, and
+displayed there as 61.4% — while ``ml/saved_models/mtf_ensemble.pkl`` did not
+exist. Retired, so not serving; still the best-looking number on the page with
+no model behind it.
+
+**Both findings are now repaired in the shipped manifest** (2026-08-14):
+``--resync`` copied each artifact's own measured accuracy onto the three
+entries that disagreed with it, and ``--prune-missing`` removed the dangling
+``mtf_ensemble_v1``. ``audit_manifest()`` reports ``ok: True``.
+
+That repair is why the conflict-detection and severity-grading tests below are
+driven from injected fixtures rather than the shipped file. They used to ride
+on the deployment being broken; once it was fixed they would have passed
+forever while exercising nothing.
 """
 
 from __future__ import annotations
@@ -197,8 +207,9 @@ def test_a_conflict_that_excludes_the_active_model_is_flagged_differently(tmp_pa
 
 
 def test_a_registry_entry_whose_file_is_gone_is_reported(tmp_path):
-    """mtf_ensemble_v1 claims 61.4% — the best number in the table — and its
-    .pkl does not exist."""
+    """The shape of the mtf_ensemble_v1 finding: an entry advertising 61.4% —
+    the best number in the table — whose .pkl does not exist. Kept on a fixture
+    so the detector stays covered now that the real entry has been pruned."""
     reg = _registry_with(tmp_path, {"ghost_v1": _entry("ffff" * 16, str(tmp_path / "nope.pkl"), 0.6135)})
     audit = reg.audit_manifest()
     assert audit["missing_artifacts"] == ["ghost_v1"]
@@ -315,10 +326,10 @@ def test_model_identity_doc_names_the_actual_active_version():
 def test_the_shipped_manifest_is_audited_and_the_known_faults_are_found():
     """Against the real committed registry.json, not a fixture.
 
-    The metric conflict is gone — `--resync` settled it. What remains is a
-    separate finding with a separate fix: `mtf_ensemble_v1` points at a file
-    that does not exist, which needs `--prune-missing` (a deletion, and a
-    different operator decision).
+    Both findings are now repaired: `--resync` settled the three entries that
+    disagreed with their artifact, and `--prune-missing` removed
+    `mtf_ensemble_v1`, which pointed at a file that does not exist. The audit is
+    clean, and this asserts that rather than skipping once it went green.
 
     Note the four entries still share one artifact after the repair — resync
     changed recorded metrics, not sha256 — so the shared-artifact finding is
@@ -333,13 +344,10 @@ def test_the_shipped_manifest_is_audited_and_the_known_faults_are_found():
         f"a metrics conflict is back: {audit['metric_conflicts']} — the serving model's score is in dispute again"
     )
     assert audit["stale_metrics"] == []
-
-    if audit["ok"]:
-        pytest.skip("the shipped manifest is fully repaired — the missing artifact was pruned too")
-
-    assert audit["missing_artifacts"] == ["mtf_ensemble_v1"], (
-        f"expected only the known dangling entry, got {audit['missing_artifacts']}"
+    assert audit["missing_artifacts"] == [], (
+        f"an entry points at a file that does not exist: {audit['missing_artifacts']}"
     )
+    assert audit["ok"] is True, f"the shipped manifest has a new finding: {audit}"
 
 
 # ── The findings must reach a screen ─────────────────────────────────────────
@@ -455,11 +463,11 @@ def test_the_diagnostics_check_grades_a_serving_conflict_as_critical(tmp_path, m
 
 
 def test_the_diagnostics_check_on_the_repaired_registry_is_not_critical():
-    """After --resync the serving model's score is no longer disputed.
+    """After --resync and --prune-missing the shipped registry is clean.
 
-    A dangling historical entry (mtf_ensemble_v1) is a real finding and still
-    reported — but grading it the same as "the model serving live inference has
-    a contested accuracy" would make the critical grade meaningless.
+    Grading a repaired registry the same as "the model serving live inference
+    has a contested accuracy" would make the critical grade meaningless. The
+    fixture-driven test above is what keeps the critical path covered.
     """
     from security.diagnostics import DiagnosticsEngine
 
