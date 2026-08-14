@@ -175,47 +175,87 @@ class ABTestRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
+async def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
     """
     Run a real backtest for a named strategy using the backtesting engine.
 
     Returns a result dict compatible with the A/B test response schema.
     Raises ValueError when the strategy is not registered or data is unavailable.
+
+    Three defects lived in the previous version of this function, and together
+    they meant the endpoint could never succeed and could never have been
+    meaningful if it had:
+
+    1. ``strategy_name`` was accepted and never used. No ``add_strategy()`` call
+       was made, so both arms of every A/B test ran the same empty backtest, and
+       the winner was decided by the ``>=`` tie-break — always ``strategy_a``.
+    2. ``asyncio.run(engine.run())`` was called from inside the running event
+       loop of an ``async def`` endpoint. That raises
+       ``RuntimeError: asyncio.run() cannot be called from a running event
+       loop`` on every request, which the blanket ``except Exception`` turned
+       into a 422 reading "check strategy names and data availability" — a
+       message that sent every reader looking in the wrong place.
+    3. Even with a strategy attached, ``BacktestEngine`` calls
+       ``generate_signals(timestamp, prices, data)`` and nothing in
+       ``strategies/`` implements it; the resulting ``AttributeError`` was
+       swallowed per-bar into a flat curve. ``BacktestStrategyAdapter`` bridges
+       the two contracts.
     """
+    from datetime import timedelta
+
+    from backtesting.engine_config import BacktestConfig, BacktestEngine
+    from backtesting.strategy_adapter import BacktestStrategyAdapter
+    from strategies.registry import UnknownStrategyError, build as build_strategy
+    from utils.symbol import canonical as _canonical
+
+    engine_symbol = _canonical(symbol)
+
     try:
-        from datetime import timedelta
+        strategy = build_strategy(strategy_name, engine_symbol)
+    except UnknownStrategyError as exc:
+        # Propagated verbatim: it already names what was asked for and what is
+        # available, which is the whole content of a useful 422 here.
+        raise ValueError(str(exc)) from None
 
-        from backtesting.engine_config import BacktestConfig, BacktestEngine
+    end_dt = datetime.now(UTC)
+    start_dt = end_dt - timedelta(days=duration_days)
+    config = BacktestConfig(
+        start_date=start_dt,
+        end_date=end_dt,
+        symbols=[engine_symbol],
+        initial_capital=initial_capital,
+    )
+    engine = BacktestEngine(config=config)
+    adapter = BacktestStrategyAdapter(strategy, engine_symbol)
+    engine.add_strategy(adapter)
 
-        end_dt = datetime.now(UTC)
-        start_dt = end_dt - timedelta(days=duration_days)
-        config = BacktestConfig(
-            start_date=start_dt,
-            end_date=end_dt,
-            symbols=[symbol],
-            initial_capital=initial_capital,
-        )
-        engine = BacktestEngine(config=config)
-        import asyncio
-
-        result = asyncio.run(engine.run())
-        return {
-            "strategy": strategy_name,
-            "final_equity": round(float(initial_capital * (1 + result.total_return)), 2),
-            "total_return": round(float(result.total_return * 100), 2),
-            "sharpe_ratio": round(float(result.sharpe_ratio), 3),
-            "max_drawdown": round(float(result.max_drawdown * 100), 2),
-            "total_trades": int(result.total_trades),
-            "win_rate": round(float(result.win_rate * 100), 2),
-            "equity_curve": result.equity_curve,
-        }
-    except ImportError:
-        raise ValueError(
-            "BacktestEngine is not available. Ensure the backtest module is installed and configured."
-        ) from None
+    try:
+        result = await engine.run()
     except Exception as exc:
         logger.error("Backtest failed for strategy '%s': %s", strategy_name, exc)
-        raise ValueError(f"Backtest failed for strategy '{strategy_name}' — check server logs") from None
+        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}") from None
+
+    # A run in which the strategy raised on every bar is not a flat result.
+    errors = list(engine.strategy_errors) + list(adapter.errors)
+    if errors and result.total_trades == 0:
+        raise ValueError(
+            f"Strategy '{strategy_name}' raised on every bar and placed no trades. First error: {errors[0]}"
+        )
+
+    return {
+        "strategy": strategy_name,
+        "final_equity": round(float(initial_capital * (1 + result.total_return)), 2),
+        "total_return": round(float(result.total_return * 100), 2),
+        "sharpe_ratio": round(float(result.sharpe_ratio), 3),
+        "max_drawdown": round(float(result.max_drawdown * 100), 2),
+        "total_trades": int(result.total_trades),
+        "win_rate": round(float(result.win_rate * 100), 2),
+        "equity_curve": result.equity_curve,
+        # Reported rather than hidden: a strategy that traded but also raised on
+        # some bars produced a real result from partial coverage, and the reader
+        # is entitled to know that before acting on the Sharpe.
+        "strategy_errors": len(errors),
+    }
 
 
 @router.post("/api/advanced/ab-tests/run", status_code=201)
@@ -231,13 +271,15 @@ async def start_ab_test(
     historical data is unavailable for the requested period.
     """
     try:
-        result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
-        result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
+        result_a = await _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
+        result_b = await _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
     except ValueError as exc:
         logger.warning("ab_test start failed: %s", exc)
-        raise HTTPException(
-            status_code=422, detail="A/B test failed — check strategy names and data availability"
-        ) from None
+        # The detail used to be the fixed sentence "A/B test failed — check
+        # strategy names and data availability". The actual cause was almost
+        # never either of those, so the message sent every reader to the wrong
+        # place. `exc` already names the strategy and the reason.
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
     # Winner by Sharpe ratio (risk-adjusted)
     winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b

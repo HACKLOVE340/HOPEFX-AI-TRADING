@@ -95,6 +95,26 @@ class BreakoutStrategy(BaseStrategy):
 
         return float(np.nan_to_num(atr.iloc[-1], nan=0.0))
 
+    def analyze(self, data: Any) -> dict[str, Any]:
+        """Return the current support/resistance and volatility snapshot.
+
+        ``BaseStrategy`` declares ``analyze`` abstract and this class did not
+        implement it, so ``BreakoutStrategy(...)`` raised
+        ``TypeError: Can't instantiate abstract class`` — the strategy was
+        listed as available and could not be constructed at all.
+        """
+        frame = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        if frame.empty or not {"high", "low", "close"} <= set(frame.columns):
+            return {"support": None, "resistance": None, "error": "insufficient OHLC data"}
+        support, resistance = self.identify_support_resistance(frame)
+        return {
+            "support": float(support),
+            "resistance": float(resistance),
+            "atr": float(self.calculate_atr(frame)),
+            "price": float(frame["close"].iloc[-1]),
+            "breakout_threshold": self.breakout_threshold,
+        }
+
     def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         market_data = analysis
         """

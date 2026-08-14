@@ -546,6 +546,12 @@ class BacktestEngine:
         # Event log
         self.events: list[dict] = []
 
+        # Errors raised by strategies during the simulation loop. These used to
+        # be logged and dropped, so a run in which every bar raised produced a
+        # flat equity curve and a 0.00% return — reported as a result rather
+        # than a failure. Callers can read this back after run().
+        self.strategy_errors: list[str] = []
+
     def add_strategy(self, strategy: Any):
         """Add strategy to backtest"""
         self.strategies.append(strategy)
@@ -558,6 +564,16 @@ class BacktestEngine:
             progress_callback: Called with (current_step, total_steps, current_time)
         """
         logger.info("Starting backtest: %s to %s", self.config.start_date, self.config.end_date)
+
+        # A backtest with no strategy attached is a misconfiguration, not a
+        # 0.00% return. api/advanced_trading.py built the config, never called
+        # add_strategy(), and reported the empty result as the performance of a
+        # named strategy — both arms of every A/B test were this.
+        if not self.strategies:
+            raise ValueError(
+                "No strategies added to the backtest. Call add_strategy() before run() — "
+                "an empty run is a configuration error, not a flat result."
+            )
 
         # Load data for all symbols
         all_data: dict[str, pd.DataFrame] = {}
@@ -630,6 +646,10 @@ class BacktestEngine:
 
                 except Exception as e:
                     logger.error("Strategy error at %s: %s", timestamp, e)
+                    # Kept, not just logged. A run where this fired on every bar
+                    # used to be indistinguishable from a strategy that chose
+                    # not to trade.
+                    self.strategy_errors.append(f"{timestamp}: {type(e).__name__}: {e}")
 
             # Progress callback
             if progress_callback and i % 100 == 0:
@@ -739,7 +759,19 @@ class BacktestEngine:
                     return
 
         # ── Position sizing ───────────────────────────────────────────────────
-        quantity = self._kelly_position_size(signal, current_price)
+        # An exit closes what is actually open. Kelly sizing computes an *entry*
+        # quantity from current equity, so using it to close would part-close a
+        # position by an unrelated amount and leave a residual the strategy
+        # never asked to hold.
+        if signal.get("exit"):
+            open_position = self.broker.positions.get(symbol)
+            if not open_position:
+                return
+            quantity = float(open_position["quantity"])
+            if quantity <= 0:
+                return
+        else:
+            quantity = self._kelly_position_size(signal, current_price)
 
         # ── Bar high/low for variable slippage ────────────────────────────────
         bar_high = bar_low = 0.0

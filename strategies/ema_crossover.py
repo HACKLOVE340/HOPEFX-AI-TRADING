@@ -51,6 +51,26 @@ class EMAcrossoverStrategy(BaseStrategy):
         self.slow_period = slow_period
         self.logger.info("EMA Crossover Strategy initialized: fast=%s, slow=%s", fast_period, slow_period)
 
+    def analyze(self, data: Any) -> dict[str, Any]:
+        """Return the current fast/slow EMA snapshot.
+
+        ``BaseStrategy`` declares ``analyze`` abstract and this class did not
+        implement it, so ``EMAcrossoverStrategy(...)`` raised
+        ``TypeError: Can't instantiate abstract class`` — the strategy was
+        listed as available and could not be constructed at all.
+        """
+        frame = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        if frame.empty or "close" not in frame.columns:
+            return {"fast_ema": None, "slow_ema": None, "error": "no close prices"}
+        close = frame["close"]
+        fast = close.ewm(span=self.fast_period, adjust=False).mean().fillna(close)
+        slow = close.ewm(span=self.slow_period, adjust=False).mean().fillna(close)
+        return {
+            "fast_ema": float(fast.iloc[-1]),
+            "slow_ema": float(slow.iloc[-1]),
+            "price": float(close.iloc[-1]),
+        }
+
     def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         market_data = analysis
         """

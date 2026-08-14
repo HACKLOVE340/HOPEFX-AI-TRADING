@@ -167,12 +167,12 @@ def create_api_app(trading_app=None) -> Any | None:
             "Set ALLOWED_ORIGINS=https://app.yourdomain.com before deploying."
         )
         _sys.exit(1)
-    _ALLOWED_SYMBOLS = frozenset(
-        os.getenv(
-            "ALLOWED_SYMBOLS",
-            "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF",
-        ).split(","),
-    )
+    # Imported, not repeated. The literal that used to live here omitted ETHUSD
+    # while api/auth.py's included it, so the order routes and
+    # validate_order_symbol() enforced two different instrument lists.
+    from api.auth import DEFAULT_ALLOWED_SYMBOLS, parse_allowed_symbols
+
+    _ALLOWED_SYMBOLS = parse_allowed_symbols(os.getenv("ALLOWED_SYMBOLS", DEFAULT_ALLOWED_SYMBOLS))
     _MAX_QTY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
     # ── Health checker resolved before lifespan ───────────────────────────────

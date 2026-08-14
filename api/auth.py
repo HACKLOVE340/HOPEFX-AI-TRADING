@@ -62,12 +62,29 @@ _LOWEST_ROLE: str = min(_ROLE_RANK, key=lambda r: _ROLE_RANK[r])
 # required for FastAPI dependency_overrides to work correctly in tests.
 _ROLE_DEPS: dict = {}
 
-ALLOWED_SYMBOLS = frozenset(
-    os.getenv(
-        "ALLOWED_SYMBOLS",
-        "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,ETHUSD,AUDUSD,USDCHF",
-    ).split(","),
-)
+# The one default instrument allowlist. `api/server.py` imports this rather
+# than repeating the literal: it previously carried its own copy that omitted
+# ETHUSD, so with no env var set the order routes and validate_order_symbol()
+# disagreed about whether ETH/USD existed. `.env.example` must also list the
+# same set — a deployment copies that file, and its copy was the one the live
+# site was running, which is why the terminal offered ETH/USD in the symbol
+# dropdown and then answered "Symbol 'ETHUSD' is not in the permitted
+# instrument list." Kept in sync by tests/unit/test_instrument_allowlist_agrees.py.
+DEFAULT_ALLOWED_SYMBOLS = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,ETHUSD,AUDUSD,USDCHF"
+
+
+def parse_allowed_symbols(raw: str | None) -> frozenset[str]:
+    """Parse an ALLOWED_SYMBOLS value into a canonical set.
+
+    Entries are stripped and upper-cased, and blanks dropped. Without the
+    strip, the natural way to write the variable — ``XAUUSD, ETHUSD`` with a
+    space after the comma — produced the member ``" ETHUSD"``, which no
+    canonicalised symbol can ever equal, silently disabling the instrument.
+    """
+    return frozenset(s.strip().upper() for s in (raw or "").split(",") if s.strip())
+
+
+ALLOWED_SYMBOLS = parse_allowed_symbols(os.getenv("ALLOWED_SYMBOLS", DEFAULT_ALLOWED_SYMBOLS))
 MAX_ORDER_QUANTITY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
 

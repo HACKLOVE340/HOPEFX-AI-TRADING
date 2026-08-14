@@ -53,6 +53,32 @@ class MeanReversionStrategy(BaseStrategy):
         self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
         self.logger.info("Mean Reversion Strategy initialized: period=%s, std_dev=%s", period, std_dev)
 
+    def analyze(self, data: Any) -> dict[str, Any]:
+        """Return the current band snapshot.
+
+        ``BaseStrategy`` declares ``analyze`` abstract and this class did not
+        implement it, so ``MeanReversionStrategy(...)`` raised
+        ``TypeError: Can't instantiate abstract class`` — the strategy was
+        listed as available and could not be constructed at all.
+        """
+        frame = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        if frame.empty or "close" not in frame.columns:
+            return {"sma": None, "upper_band": None, "lower_band": None, "error": "no close prices"}
+        close = frame["close"]
+        sma = close.rolling(window=self.period).mean().fillna(close)
+        std = close.rolling(window=self.period).std().fillna(0.0)
+        price = float(np.nan_to_num(close.iloc[-1], nan=0.0))
+        mean = float(np.nan_to_num(sma.iloc[-1], nan=price))
+        dev = float(np.nan_to_num(std.iloc[-1], nan=0.0))
+        return {
+            "price": price,
+            "sma": mean,
+            "std": dev,
+            "upper_band": mean + dev * self.std_dev,
+            "lower_band": mean - dev * self.std_dev,
+            "zscore": (price - mean) / dev if dev > 0 else 0.0,
+        }
+
     def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         market_data = analysis
         """

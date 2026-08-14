@@ -133,6 +133,53 @@ export function calculate(
   };
 }
 
+/**
+ * Why `calculate` returned nothing.
+ *
+ * `calculate` has six independent `return null` branches and the page rendered
+ * one sentence for all of them: "Fill in all fields to see results." For four of
+ * those branches that sentence is wrong — the fields *are* filled — so a user
+ * who typed a stop loss equal to their entry, or picked an instrument the server
+ * catalogue does not carry, saw a blank Results panel and an instruction they
+ * had already followed. This is the same shape as the drift banner reading
+ * "Stable" when no statistics existed: absence rendered as a tidy answer instead
+ * of a reason.
+ *
+ * Returns `null` when a result is computable, so `explainMissingResult(...) ===
+ * null` and `calculate(...) !== null` must always agree — pinned by a test.
+ */
+export function explainMissingResult(
+  state: CalcState,
+  specs: Record<string, InstrumentSpec> = BUILTIN_SPECS,
+): string | null {
+  if (!specs[state.symbol]) {
+    return `No contract specification for ${state.symbol}. Pick an instrument from the list — sizing needs its pip and lot size.`;
+  }
+
+  const fields: Array<[keyof CalcState, string]> = [
+    ['accountBalance', 'account balance'],
+    ['entryPrice',     'entry price'],
+    ['stopLoss',       'stop loss'],
+    ['takeProfit',     'take profit'],
+  ];
+  const missing = fields
+    .filter(([key]) => !Number.isFinite(parseFloat(state[key])))
+    .map(([, label]) => label);
+  if (missing.length > 0) {
+    return `Enter the ${missing.join(', ')} to see results.`;
+  }
+
+  const entry = parseFloat(state.entryPrice);
+  if (entry <= 0) return 'Entry price must be greater than zero.';
+  if (parseFloat(state.stopLoss) === entry) {
+    return 'Stop loss is the same as the entry price, so the trade risks nothing and cannot be sized.';
+  }
+  if (parseFloat(state.takeProfit) === entry) {
+    return 'Take profit is the same as the entry price, so there is no reward to compare the risk against.';
+  }
+  return null;
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 const Label: React.FC<{ text: string }> = ({ text }) => (
@@ -456,7 +503,9 @@ const RiskCalculator: React.FC = () => {
               <ResultRow label="Max Loss"         value={`$${result.maxLoss.toFixed(2)}`} />
             </>
           ) : (
-            <div style={s.placeholder}>Fill in all fields to see results.</div>
+            <div style={s.placeholder} role="status" aria-live="polite">
+              {explainMissingResult(state, instruments.specs) ?? 'Fill in all fields to see results.'}
+            </div>
           )}
         </div>
 
