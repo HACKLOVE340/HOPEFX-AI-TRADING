@@ -171,3 +171,95 @@ describe('the trading terminal does not overlap its panels on narrow viewports',
     expect(code).toContain('overflow-y-auto xl:overflow-hidden');
   });
 });
+
+// ── 5. The chart behaves like a real chart ───────────────────────────────────
+
+describe('the terminal chart is configured like a real trading chart', () => {
+  const load = async () => {
+    const fs = await import('node:fs/promises');
+    const url = await import('node:url');
+    const path = await import('node:path');
+    const here = path.dirname(url.fileURLToPath(import.meta.url));
+    const src = await fs.readFile(path.join(here, '../pages/Trading.tsx'), 'utf-8');
+    return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  };
+
+  it('formats price per instrument instead of a flat 2 decimals', async () => {
+    const code = await load();
+    // Default precision rendered EUR/USD as 1.08, collapsing the price scale.
+    expect(code).toContain('priceFormatFor');
+    expect(code).toMatch(/priceFormat:\s*\{\s*type:\s*'price'/);
+  });
+
+  it('re-applies precision when the symbol changes', async () => {
+    const code = await load();
+    // The chart is created with deps [], so precision was frozen at mount.
+    expect(code).toMatch(/applyOptions\(\{\s*priceFormat/);
+  });
+
+  it('sizes to its container rather than a hard-coded height', async () => {
+    const code = await load();
+    expect(code).toContain('containerRef.current.clientHeight');
+    expect(code).not.toMatch(/height:\s*340,\s*\}\);/);
+  });
+
+  it('does not discard the user zoom on every refresh', async () => {
+    const code = await load();
+    // fitContent() ran on every 30s poll, resetting zoom and pan.
+    expect(code).toContain('didFitRef');
+  });
+
+  it('refuses a tick that disagrees with the series about the instrument', async () => {
+    const code = await load();
+    // XAU/USD header at 3,299.85 with candles at ~4,390 drew a vertical line.
+    expect(code).toContain('tickIsOffScale');
+  });
+
+  it('stores candles sorted, since the tick updates the last one', async () => {
+    const code = await load();
+    expect(code).toContain('setCandles(sorted)');
+    expect(code).not.toContain('setCandles(data)');
+  });
+});
+
+describe('priceFormatFor covers the instrument classes the terminal offers', () => {
+  it('gives FX 5 decimals, JPY 3, metals and crypto 2', async () => {
+    // SYMBOLS in Trading.tsx: XAU/USD, EUR/USD, GBP/USD, USD/JPY, BTC/USD, ETH/USD
+    const { priceFormatFor } = await import('../pages/Trading');
+
+    expect(priceFormatFor('EUR/USD').precision).toBe(5);
+    expect(priceFormatFor('GBP/USD').precision).toBe(5);
+    expect(priceFormatFor('USD/JPY').precision).toBe(3);
+    expect(priceFormatFor('XAU/USD').precision).toBe(2);
+    expect(priceFormatFor('BTC/USD').precision).toBe(2);
+    expect(priceFormatFor('ETH/USD').precision).toBe(2);
+  });
+
+  it('minMove matches the precision', async () => {
+    const { priceFormatFor } = await import('../pages/Trading');
+    for (const sym of ['EUR/USD', 'USD/JPY', 'XAU/USD', 'BTC/USD']) {
+      const { precision, minMove } = priceFormatFor(sym);
+      expect(minMove).toBeCloseTo(Math.pow(10, -precision), 10);
+    }
+  });
+});
+
+describe('tickIsOffScale separates a price move from a source mismatch', () => {
+  it('rejects the deployed XAU/USD case', async () => {
+    const { tickIsOffScale } = await import('../pages/Trading');
+    // Header 3,299.85 against candles at 4,390 — a 25% gap.
+    expect(tickIsOffScale(3299.85, 4390.20)).toBe(true);
+  });
+
+  it('accepts a normal intrabar move', async () => {
+    const { tickIsOffScale } = await import('../pages/Trading');
+    expect(tickIsOffScale(4392.10, 4390.20)).toBe(false);
+    expect(tickIsOffScale(1.08512, 1.08490)).toBe(false);
+  });
+
+  it('rejects non-finite or zero references rather than dividing by them', async () => {
+    const { tickIsOffScale } = await import('../pages/Trading');
+    expect(tickIsOffScale(NaN, 100)).toBe(true);
+    expect(tickIsOffScale(100, 0)).toBe(true);
+  });
+});

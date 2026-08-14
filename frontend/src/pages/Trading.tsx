@@ -76,6 +76,41 @@ function toUTC(ts: number | string): UTCTimestamp {
   return Math.floor(ts > 1_000_000_000_000 ? ts / 1000 : ts) as UTCTimestamp;
 }
 
+/**
+ * Price formatting per instrument class.
+ *
+ * The chart used lightweight-charts' default (2 decimals, minMove 0.01) for
+ * every symbol. On EUR/USD that renders 1.08 instead of 1.08512 — the price
+ * scale collapses to a handful of distinct labels and the candles look flat,
+ * which is a large part of why this did not read like a real chart. JPY pairs
+ * need 3, metals 2, crypto 2, and everything else 5.
+ */
+export function priceFormatFor(symbol: string): { precision: number; minMove: number } {
+  const s = symbol.toUpperCase().replace('/', '');
+  if (s.includes('JPY')) return { precision: 3, minMove: 0.001 };
+  if (s.startsWith('XAU') || s.startsWith('XAG')) return { precision: 2, minMove: 0.01 };
+  if (s.startsWith('BTC') || s.startsWith('ETH')) return { precision: 2, minMove: 0.01 };
+  return { precision: 5, minMove: 0.00001 };
+}
+
+/**
+ * True when a live tick is too far from the bar it would update to be the same
+ * instrument.
+ *
+ * The deployed terminal showed XAU/USD with the header reading Bid 3,299.85
+ * while the candles sat around 4,390 — and drew a vertical line plunging
+ * between the two, because the tick was written straight onto the last bar. A
+ * 25% gap is not a price move, it is two sources disagreeing about what the
+ * symbol is. Drawing it as a candle presents a data fault as a market event.
+ */
+export function tickIsOffScale(tickPrice: number, barClose: number): boolean {
+  if (!Number.isFinite(tickPrice) || !Number.isFinite(barClose) || barClose === 0) return true;
+  return Math.abs(tickPrice - barClose) / Math.abs(barClose) > TICK_MAX_DIVERGENCE;
+}
+
+/** Beyond this fractional gap, a tick is treated as a different instrument. */
+const TICK_MAX_DIVERGENCE = 0.10;
+
 // ── TopBar ────────────────────────────────────────────────────────────────────
 
 interface TopBarProps {
@@ -193,6 +228,14 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const maRef        = useRef<ISeriesApi<'Line'> | null>(null);
+  // Newest bar time in the series — guards update() against "Cannot update
+  // oldest data" after a timeframe switch.
+  const lastBarTimeRef = useRef<number | null>(null);
+  // fitContent() belongs to the first load only; re-running it on every
+  // refresh discards the user's zoom and pan.
+  const didFitRef = useRef(false);
+  // One warning per mount when the tick and the OHLCV disagree on instrument.
+  const offScaleWarnedRef = useRef(false);
   const rafRef       = useRef<number>(0);
 
   const isAuth   = useStore(selectIsAuth);
@@ -207,18 +250,52 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   useEffect(() => {
     if (!containerRef.current) return;
     const chart = createChart(containerRef.current, {
-      layout: { background: { color: '#060d18' }, textColor: '#64748b' },
-      grid:   { vertLines: { color: '#0d1421' }, horzLines: { color: '#0d1421' } },
-      rightPriceScale: { borderColor: '#1e2d3d' },
-      timeScale: { borderColor: '#1e2d3d', timeVisible: true, secondsVisible: false },
-      crosshair: { mode: 1 },
-      width:  containerRef.current.clientWidth,
-      height: 340,
+      layout: {
+        background: { color: '#060d18' },
+        textColor: '#9ca3af',
+        attributionLogo: false,
+      },
+      grid: { vertLines: { color: '#0d1421' }, horzLines: { color: '#0d1421' } },
+      rightPriceScale: {
+        borderColor: '#1e2d3d',
+        // Headroom above and below the series so candles never touch the edge —
+        // the default 0.2/0.1 crowds the last bar against the axis.
+        scaleMargins: { top: 0.12, bottom: 0.12 },
+        entireTextOnly: true,
+      },
+      timeScale: {
+        borderColor: '#1e2d3d',
+        timeVisible: true,
+        secondsVisible: false,
+        // Breathing room to the right of the last bar, as TradingView leaves,
+        // so the live candle and its price label are not against the scale.
+        rightOffset: 6,
+        barSpacing: 8,
+        minBarSpacing: 2,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+      },
+      crosshair: {
+        mode: 1, // magnet — snaps to OHLC values like TradingView's default
+        vertLine: { color: '#4b5563', width: 1, style: 3, labelBackgroundColor: '#1e3a5f' },
+        horzLine: { color: '#4b5563', width: 1, style: 3, labelBackgroundColor: '#1e3a5f' },
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+      width: containerRef.current.clientWidth,
+      height: containerRef.current.clientHeight || 340,
     });
     const candle = chart.addSeries(CandlestickSeries, {
       upColor: '#00e676', downColor: '#ff1744',
       borderUpColor: '#00e676', borderDownColor: '#ff1744',
       wickUpColor: '#00e676', wickDownColor: '#ff1744',
+      // Per-instrument precision. The default 2dp rendered EUR/USD as 1.08 and
+      // flattened the price scale to a few labels.
+      priceFormat: { type: 'price', ...priceFormatFor(symbol) },
+      lastValueVisible: true,
+      priceLineVisible: true,
+      priceLineWidth: 1,
+      priceLineStyle: 2,
     });
     const vol = chart.addSeries(HistogramSeries, {
       color: '#1e2d3d', priceFormat: { type: 'volume' }, priceScaleId: 'vol',
@@ -233,7 +310,13 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         if (containerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+          // Height as well as width. It was fixed at 340px at construction, so
+          // the chart never grew with its container and left dead space below
+          // on tall viewports while staying cramped in the stacked layout.
+          chartRef.current.applyOptions({
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight || 340,
+          });
         }
       });
     });
@@ -248,6 +331,20 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
       maRef.current     = null;
     };
   }, []);
+
+  // Keep per-instrument precision in sync with the selected symbol.
+  //
+  // The chart is created once (deps `[]`), so priceFormat was frozen to
+  // whatever symbol was selected at mount: switching XAU/USD → EUR/USD kept
+  // 2dp and rendered 1.08 instead of 1.08512. Also re-fit the viewport, since
+  // a new instrument is a new price range and the previous zoom is meaningless.
+  useEffect(() => {
+    candleRef.current?.applyOptions({
+      priceFormat: { type: 'price', ...priceFormatFor(symbol) },
+    });
+    didFitRef.current = false;
+    offScaleWarnedRef.current = false;
+  }, [symbol, timeframe]);
 
   useEffect(() => {
     if (!candleRef.current || !hydrated || !isAuth) return;
@@ -269,8 +366,18 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
           setChartError('No OHLCV data for this symbol/timeframe');
           return;
         }
-        setCandles(data);
-        const sorted = [...data].sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
+        // Sort BEFORE storing. This did `setCandles(data)` with the unsorted
+        // array while the series received `sorted`, so `candles[length - 1]`
+        // was not necessarily the newest bar — and that is the bar the live
+        // tick effect below updates.
+        const sorted = [...data]
+          .filter((c) => Number.isFinite(toUTC(c.timestamp)))
+          .sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
+        setCandles(sorted);
+
+        const newest = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
+        lastBarTimeRef.current = newest ? toUTC(newest.timestamp) : null;
+
         candleRef.current!.setData(sorted.map((c) => ({
           time: toUTC(c.timestamp), open: c.open, high: c.high, low: c.low, close: c.close,
         })));
@@ -288,7 +395,14 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
           }).filter(Boolean) as { time: UTCTimestamp; value: number }[];
           maRef.current.setData(maData);
         }
-        chartRef.current?.timeScale().fitContent();
+        // Fit once, then leave the viewport alone. This ran fitContent() on
+        // every 30s refresh, which threw away the user's zoom and pan each
+        // time — no real chart does that. After the first load, only follow
+        // real time.
+        if (!didFitRef.current) {
+          chartRef.current?.timeScale().fitContent();
+          didFitRef.current = true;
+        }
         chartRef.current?.timeScale().scrollToRealTime();
       })
       .catch((err) => {
@@ -310,8 +424,34 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
     // existing candle rather than creating a phantom future candle.
     const last = candles[candles.length - 1];
     if (!tick || !candleRef.current || !last) return;
+
     const barTime = toUTC(last.timestamp);
     const mid = (tick.bid + tick.ask) / 2;
+
+    // lightweight-charts throws "Cannot update oldest data" if this is older
+    // than the series' newest bar — which happens on a timeframe switch, when
+    // setData() has replaced the series but this effect still closes over the
+    // previous `candles`.
+    if (!Number.isFinite(barTime)) return;
+    if (lastBarTimeRef.current !== null && barTime < lastBarTimeRef.current) return;
+
+    // Refuse a tick that cannot belong to this series. The deployed terminal
+    // showed XAU/USD with the header at 3,299.85 and the candles at ~4,390, and
+    // drew a vertical line plunging between them, because this wrote the tick
+    // straight onto the last bar. A 25% gap is not a price move — it is two
+    // sources disagreeing about the instrument, and rendering it as a candle
+    // presents a data fault as a market event.
+    if (tickIsOffScale(mid, last.close)) {
+      if (!offScaleWarnedRef.current) {
+        console.warn(
+          `[Trading] ignoring off-scale tick for ${symbol}: tick mid=${mid} vs last bar close=${last.close}. ` +
+          'The live feed and the OHLCV history disagree about this instrument.',
+        );
+        offScaleWarnedRef.current = true;
+      }
+      return;
+    }
+
     candleRef.current.update({
       time:  barTime,
       open:  last.open,
