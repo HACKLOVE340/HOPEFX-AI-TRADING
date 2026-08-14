@@ -1577,7 +1577,12 @@ async def resume_subscription(user: TokenPayload = Depends(get_current_user)):
 @router.post("/subscription/change", summary="Change subscription plan")
 async def change_subscription_plan(body: dict, user: TokenPayload = Depends(get_current_user)):
     plan = body.get("plan", "")
-    valid_plans = {"free", "starter", "professional", "enterprise", "elite"}
+    # Derived, not transcribed. The other hand-written copy of this set — in
+    # api/superadmin/users.py — had drifted and was missing "elite", so the same
+    # plan was valid here and rejected there.
+    from monetization.pricing import SubscriptionTier
+
+    valid_plans = {t.value for t in SubscriptionTier}
     if plan not in valid_plans:
         raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {', '.join(sorted(valid_plans))}")
     try:

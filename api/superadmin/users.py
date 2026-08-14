@@ -262,11 +262,24 @@ async def set_user_plan(
 ) -> dict[str, Any]:
     """Persist a plan change immediately on the User row.
 
-    Valid plans: free, starter, professional, enterprise.
     The billing layer reads ``User.plan`` on the next sync cycle; writing it
     here ensures the superadmin dashboard reflects the change instantly.
+
+    The accepted set is derived from ``SubscriptionTier`` rather than written
+    out. It used to be a hard-coded ``{"free", "starter", "professional",
+    "enterprise"}`` — missing ``elite``, which is a real tier: it is in the
+    enum, it has a price, it has its own ``/api/billing/elite/*`` endpoints, and
+    the superadmin dropdown offers it. So selecting Elite and pressing Apply
+    always failed with
+
+        Invalid plan. Must be one of: ['enterprise', 'free', 'professional', 'starter']
+
+    while ``api/billing.py`` accepted the same value from a different endpoint.
+    Two hand-maintained copies of one enum, one of them stale.
     """
-    valid_plans = {"free", "starter", "professional", "enterprise"}
+    from monetization.pricing import SubscriptionTier
+
+    valid_plans = {t.value for t in SubscriptionTier}
     if body.plan not in valid_plans:
         raise HTTPException(
             status_code=400,

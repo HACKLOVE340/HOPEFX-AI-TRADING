@@ -384,10 +384,20 @@ async def get_hsm_status(
             key_count = len(list(rc.scan_iter("hsm:key:*")))
     except Exception:  # nosec B110  # noqa: S110
         pass
+    # hsm_type / key_count / initialized are the names the Sec. Infra panel
+    # reads. It read `hsm.hsm_type.toUpperCase()` against a response whose field
+    # is called `type`, so the whole section crashed with
+    # "undefined is not an object (evaluating 'i.hsm_type.toUpperCase')".
+    # Both spellings are returned: the aliases keep the page working, `type` and
+    # `keys_managed` keep any existing consumer working.
     return {
         "type": hsm_type,
+        "hsm_type": hsm_type,
         "status": "active" if hsm_type != "software" else "software_only",
+        "initialized": hsm_type != "software",
         "keys_managed": key_count,
+        "key_count": key_count,
+        "keys": [],
         "fips_compliant": hsm_type in ("pkcs11", "aws_cloudhsm", "azure_hsm"),
         "provider": os.getenv("HSM_PROVIDER", "software"),
         "checked_at": _utcnow().isoformat(),
@@ -398,12 +408,38 @@ async def get_hsm_status(
 async def get_antivirus_status(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
+    # clamav_available and yara_rules_loaded are read by the Antivirus panel and
+    # were never sent, so it rendered "CLAMAV N/A" and the literal text
+    # "YARA RULES: undefined". Both are knowable — security/antivirus.py already
+    # tracks whether each engine loaded — so they are reported rather than
+    # dropped from the UI.
+    clamav_available = False
+    yara_rules_loaded = 0
+    engines_detail = ""
+    try:
+        from security.antivirus import CLAMD_AVAILABLE, YARA_AVAILABLE, get_scanner
+
+        scanner = get_scanner()
+        clamav_available = bool(CLAMD_AVAILABLE and getattr(scanner, "_clamd", None) is not None)
+        rules = getattr(scanner, "_yara_rules", None)
+        yara_rules_loaded = 0 if rules is None else getattr(rules, "num_rules", 1)
+        if not YARA_AVAILABLE:
+            engines_detail = "yara-python not installed"
+        elif not clamav_available:
+            engines_detail = "ClamAV daemon not reachable"
+    except Exception as exc:
+        logger.debug("antivirus status: scanner unavailable: %s", exc)
+        engines_detail = "antivirus module unavailable"
+
     status: dict[str, Any] = {
         "status": "unknown",
         "engine": "clamav",
         "last_scan": None,
         "threats_found": 0,
         "files_scanned": 0,
+        "clamav_available": clamav_available,
+        "yara_rules_loaded": yara_rules_loaded,
+        "engines_detail": engines_detail,
         "checked_at": _utcnow().isoformat(),
     }
     try:

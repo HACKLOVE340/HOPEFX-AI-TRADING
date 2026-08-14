@@ -25,17 +25,35 @@ interface SelfHealerStatus {
 interface AVStatus {
   status: string;
   last_scan: string | null;
-  threats_found: number;
-  files_scanned: number;
-  clamav_available: boolean;
-  yara_rules_loaded: number;
+  threats_found?: number;
+  files_scanned?: number;
+  /** Neither of these was ever sent, so the panel showed "N/A" and the literal
+      word "undefined". security/antivirus.py knows both; the endpoint reports
+      them now. */
+  clamav_available?: boolean;
+  yara_rules_loaded?: number;
+  engines_detail?: string;
 }
 
+/**
+ * GET /superadmin/security-infra/hsm.
+ *
+ * Every field here was optimistic. The endpoint returned `type`, `status`,
+ * `keys_managed`, `fips_compliant` and `provider`; this declared `hsm_type`,
+ * `initialized`, `key_count` and `keys`. TypeScript accepted it because the
+ * response is read untyped, so `hsm.hsm_type.toUpperCase()` threw and took the
+ * whole Sec. Infra section down with it.
+ *
+ * The backend now returns both spellings. The fields stay optional so a shape
+ * mismatch degrades a label instead of crashing a page.
+ */
 interface HSMStatus {
-  hsm_type: string;
-  initialized: boolean;
-  key_count: number;
-  keys: { key_id: string; created_at: string; size_bytes: number; active: boolean }[];
+  hsm_type?: string;
+  type?: string;
+  initialized?: boolean;
+  key_count?: number;
+  keys_managed?: number;
+  keys?: { key_id: string; created_at: string; size_bytes: number; active: boolean }[];
 }
 
 interface InfraLogEntry {
@@ -240,10 +258,14 @@ const SecurityInfraSection: React.FC = () => {
             {[
               { label: 'Status',          value: av.status,                                    color: STATUS_COLOR(av.status) },
               { label: 'Last Scan',       value: fmtDate(av.last_scan),                        color: '#94a3b8' },
-              { label: 'Files Scanned',   value: av.files_scanned.toLocaleString(),            color: '#60a5fa' },
-              { label: 'Threats Found',   value: av.threats_found,                             color: av.threats_found ? '#f87171' : '#22c55e' },
+              { label: 'Files Scanned',   value: (av.files_scanned ?? 0).toLocaleString(),     color: '#60a5fa' },
+              { label: 'Threats Found',   value: av.threats_found ?? 0,                        color: av.threats_found ? '#f87171' : '#22c55e' },
               { label: 'ClamAV',          value: av.clamav_available ? 'Available' : 'N/A',   color: av.clamav_available ? '#22c55e' : '#64748b' },
-              { label: 'YARA Rules',      value: av.yara_rules_loaded,                         color: '#a78bfa' },
+              /* Rendered the literal string "undefined": the API never sent
+                 yara_rules_loaded, and `String(undefined)` is "undefined". It
+                 sends it now; the fallback keeps a missing field readable
+                 rather than turning it into a word the user has to interpret. */
+              { label: 'YARA Rules',      value: av.yara_rules_loaded ?? '—',                   color: '#a78bfa' },
             ].map(item => (
               <div key={item.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' }}>
                 <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
@@ -256,8 +278,14 @@ const SecurityInfraSection: React.FC = () => {
 
       {tab === 'hsm' && hsm && (
         <SectionCard title="HSM Vault — Key Management" icon="🔑" accent="#a78bfa"
-          subtitle={`${hsm.hsm_type.toUpperCase()} HSM · ${hsm.initialized ? 'Initialized' : 'Not initialized'}`}>
-          {hsm.keys.length === 0 ? (
+          /* `hsm.hsm_type.toUpperCase()` crashed the entire section with
+             "undefined is not an object": the API's field is `type`, not
+             `hsm_type`, and `keys` was never sent at all. The backend now
+             returns both spellings, but an unguarded read is what turned a
+             field-name mismatch into a whole page that would not load — so the
+             optional chaining stays regardless. */
+          subtitle={`${(hsm.hsm_type ?? hsm.type ?? 'unknown').toUpperCase()} HSM · ${hsm.initialized ? 'Initialized' : 'Not initialized'}`}>
+          {(hsm.keys?.length ?? 0) === 0 ? (
             <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No keys in vault</div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -269,7 +297,7 @@ const SecurityInfraSection: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {hsm.keys.map(k => (
+                {(hsm.keys ?? []).map(k => (
                   <tr key={k.key_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                     <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: '#a78bfa' }}>{k.key_id}</td>
                     <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(k.created_at)}</td>
