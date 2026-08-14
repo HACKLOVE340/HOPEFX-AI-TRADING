@@ -936,11 +936,55 @@ async def get_env_audit(
         "trading": ["TRADING_MODE", "BROKER_DEFAULT", "INITIAL_BALANCE"],
         "security": ["ALLOWED_ORIGINS", "CSRF_SECRET"],
     }
+    # An unset variable that has a working default is not a fault, and the page
+    # rendered every one of them as a red "MISSING". SECRET_KEY and
+    # DB_MAX_OVERFLOW showed that way on a healthy deployment:
+    # DB_MAX_OVERFLOW defaults to 20 in database/async_connection.py, and
+    # SECRET_KEY is read only by security_service.py, which nothing in the
+    # codebase imports. Neither absence affects anything.
+    #
+    # `effect` says what actually happens when the variable is unset, so an
+    # operator can tell "you must set this" from "this has a default" without
+    # reading the source.
+    _REQUIRED = {"SECURITY_JWT_SECRET", "DATABASE_URL"}
+    _DEFAULTS = {
+        "DB_POOL_SIZE": "10",
+        "DB_MAX_OVERFLOW": "20",
+        "OTEL_SERVICE_NAME": "hopefx-trading",
+        "OTEL_SAMPLING_RATE": "1.0",
+        "PROMETHEUS_PORT": "9090",
+        "TRADING_MODE": "paper",
+        "BROKER_DEFAULT": "paper",
+        "ML_MODEL_DIR": "ml/saved_models",
+    }
+    _UNUSED = {
+        # Read only by security_service.py, which nothing imports.
+        "SECRET_KEY": "read only by security_service.py, which is not imported anywhere",
+    }
+
     result: dict[str, Any] = {}
     for group, keys in env_groups.items():
-        result[group] = {
-            k: {"set": bool(os.getenv(k)), "required": k in ["SECURITY_JWT_SECRET", "DATABASE_URL"]} for k in keys
-        }
+        entries: dict[str, Any] = {}
+        for k in keys:
+            is_set = bool(os.getenv(k))
+            required = k in _REQUIRED
+            if is_set:
+                effect = "set"
+            elif required:
+                effect = "REQUIRED — the application cannot run without it"
+            elif k in _UNUSED:
+                effect = f"no effect — {_UNUSED[k]}"
+            elif k in _DEFAULTS:
+                effect = f"optional — defaults to {_DEFAULTS[k]}"
+            else:
+                effect = "optional — the feature it configures is disabled"
+            entries[k] = {
+                "set": is_set,
+                "required": required,
+                "severity": "error" if (required and not is_set) else ("ok" if is_set else "info"),
+                "effect": effect,
+            }
+        result[group] = entries
     return {"groups": result, "checked_at": _utcnow().isoformat()}
 
 

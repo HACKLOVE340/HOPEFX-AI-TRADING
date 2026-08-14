@@ -3526,13 +3526,25 @@ async def init_multi_source_feed(s: Any) -> Any:
             logger.info(msg)
 
     try:
-        from data_feed.multi_source_feed import MultiSourceTickFeed
-
         # Allow operator to restrict symbols via env var (comma-separated).
         symbols_env = os.getenv("MULTI_FEED_SYMBOLS", "").strip()
         symbols = [s.strip() for s in symbols_env.split(",") if s.strip()] if symbols_env else None
 
-        feed = MultiSourceTickFeed(symbols=symbols)
+        # Construct through the factory so the module-level singleton is set.
+        #
+        # This used to call MultiSourceTickFeed(...) directly, which leaves
+        # `_feed_instance` as None. get_feed_status() reads that singleton, so
+        # every consumer of it — security/diagnostics.py and the health checks —
+        # reported
+        #
+        #     data_feeds_module  WARNING
+        #     Data feed singleton has not been initialised
+        #
+        # on a deployment whose feed was constructed, started, and polling. The
+        # feed was fine; the status accessor was looking at a different object.
+        from data_feed.multi_source_feed import get_multi_source_feed
+
+        feed = get_multi_source_feed(symbols=symbols)
 
         # Bridge: push every validated tick into the broker price table and
         # execution engine last-tick cache so all downstream components see

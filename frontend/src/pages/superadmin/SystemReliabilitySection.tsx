@@ -1343,7 +1343,12 @@ const SystemReliabilitySection: React.FC = () => {
           {envErr && <ActionBanner message={envErr} ok={false} onDismiss={() => setEnvErr('')} />}
           {envAudit && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {Object.entries((envAudit.groups ?? {}) as Record<string, Record<string, { set: boolean; required: boolean }>>).map(([group, vars]) => (
+              {/* `effect` and `severity` are new. An unset variable with a working
+                  default is not a fault, but every one of them rendered as a red
+                  "✗ MISSING" — SECRET_KEY and DB_MAX_OVERFLOW did so on a healthy
+                  deployment, which reads as two broken settings. The label now
+                  reflects what actually happens when the variable is absent. */}
+              {Object.entries((envAudit.groups ?? {}) as Record<string, Record<string, { set: boolean; required: boolean; severity?: string; effect?: string }>>).map(([group, vars]) => (
                 <div key={group}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
                     {group}
@@ -1356,13 +1361,18 @@ const SystemReliabilitySection: React.FC = () => {
                         background: info.set ? '#052e16' : (info.required ? '#450a0a' : '#1e293b'),
                         border: `1px solid ${info.set ? '#16a34a33' : (info.required ? '#dc262633' : '#334155')}`,
                       }}>
-                        <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#e2e8f0' }}>{key}</span>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#e2e8f0' }}>{key}</span>
+                          {!info.set && info.effect && (
+                            <span style={{ fontSize: 10, color: '#64748b' }}>{info.effect}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                           {info.required && (
                             <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#1e3a5f', color: '#60a5fa' }}>REQUIRED</span>
                           )}
-                          <span style={{ fontSize: 12, fontWeight: 700, color: info.set ? '#22c55e' : '#ef4444' }}>
-                            {info.set ? '✓ SET' : '✗ MISSING'}
+                          <span style={{ fontSize: 12, fontWeight: 700, color: info.set ? '#22c55e' : (info.required ? '#ef4444' : '#64748b') }}>
+                            {info.set ? '✓ SET' : (info.required ? '✗ MISSING' : '— not set')}
                           </span>
                         </div>
                       </div>
