@@ -161,21 +161,51 @@ class AsyncPoolMetrics:
 # ── Pool configuration ────────────────────────────────────────────────────────
 
 
+#: Sync PostgreSQL drivers that must be swapped for asyncpg before the URL
+#: reaches ``create_async_engine``. Handing it a sync driver raises
+#: ``InvalidRequestError: The asyncio extension requires an async driver to be
+#: used``, which the caller in app.py logs as "Async DB pool init failed
+#: (non-fatal)" — with the real cause hidden behind an exception summary.
+_SYNC_PG_SCHEMES = (
+    "postgresql+psycopg2://",
+    "postgresql+psycopg://",
+    "postgresql+pg8000://",
+    "postgresql+psycopg2cffi://",
+    # Legacy Heroku-style scheme. SQLAlchemy 2.x dropped it entirely:
+    # `NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:postgres`.
+    "postgres://",
+)
+
+
 def _resolve_async_db_url() -> str:
     """Return an async-compatible database URL.
 
     Priority:
     1. ASYNC_DATABASE_URL env var (explicit async DSN)
-    2. DATABASE_URL — auto-converted: sqlite:// → sqlite+aiosqlite://
+    2. DATABASE_URL — driver rewritten to an async one
     3. Default PostgreSQL asyncpg DSN
+
+    The rewrite used to cover exactly two shapes: ``sqlite://`` and bare
+    ``postgresql://``. Every other spelling of a PostgreSQL DSN — the
+    ``+psycopg2`` form a sync SQLAlchemy setup writes, the ``+psycopg`` form
+    psycopg 3 uses, or the legacy ``postgres://`` scheme still emitted by
+    several hosts — fell through unchanged and blew up inside
+    ``create_async_engine``.
     """
     url = os.environ.get("ASYNC_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+
     if url.startswith("sqlite:///") and "+aiosqlite" not in url:
         url = url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
     elif url.startswith("sqlite://") and "+aiosqlite" not in url:
         url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
     elif url.startswith("postgresql://") and "asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    else:
+        for scheme in _SYNC_PG_SCHEMES:
+            if url.startswith(scheme):
+                url = "postgresql+asyncpg://" + url[len(scheme) :]
+                break
+
     return url or "postgresql+asyncpg://hopefx:hopefx@localhost:5432/hopefx"
 
 
@@ -410,17 +440,22 @@ class AsyncConnectionPool:
 
     @staticmethod
     def _redact_url(url: str) -> str:
-        """Redact password from a database URL for safe logging."""
-        try:
-            from urllib.parse import urlparse, urlunparse
+        """Redact credentials from a database URL for safe logging.
 
-            parsed = urlparse(url)
-            if parsed.password:
-                netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
-                return urlunparse(parsed._replace(netloc=netloc))
-        except Exception:  # nosec B110  # noqa: S110
-            pass
-        return url
+        This was the codebase's *only* redaction, private to this class, while
+        nine other call sites logged connection URLs in the clear — including
+        the Redis password a log scan later found in production. Kept as a thin
+        delegate so existing callers and tests keep working, but the logic now
+        lives in ``utils.redaction`` where anything can reach it.
+
+        The previous body was correct on every URL shape in use here — the
+        problem was location, not logic. The shared version adds one behaviour
+        it lacked: text that does not parse as a URL but carries an ``@`` is
+        withheld rather than returned verbatim.
+        """
+        from utils.redaction import redact_url
+
+        return redact_url(url)
 
 
 # ── Session factory helper ────────────────────────────────────────────────────

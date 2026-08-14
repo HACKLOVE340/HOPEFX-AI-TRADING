@@ -54,6 +54,7 @@ import socket
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Awaitable
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ class TickPublisher:
         self._connected = True
         logger.info(
             "TickPublisher connected: url=%s maxlen=%d",
-            self.config.redis_url,
+            redact_url(self.config.redis_url),
             self.config.maxlen,
         )
 

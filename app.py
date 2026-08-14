@@ -810,7 +810,26 @@ async def startup_event():
             app_state.async_db_pool = _async_pool
             logger.info("Async DB pool initialised and registered as default pool")
         except Exception as _pool_err:
-            logger.warning("Async DB pool init failed (non-fatal): %s", _pool_err)
+            # The old message was "Async DB pool init failed (non-fatal): %s"
+            # with nothing but the exception's own text. On the deployed box
+            # that read as a shrug, and left the reader with no way to tell
+            # whether the DSN, the driver or the database was at fault — the
+            # three causes need three different fixes. It also asserted
+            # "non-fatal" without saying what stops working, which is the same
+            # habit as reporting an empty backtest as a 0% return.
+            from database.async_connection import _resolve_async_db_url as _dsn
+            from utils.redaction import redact_url as _redact
+
+            logger.warning(
+                "Async DB pool init failed — %s: %s (resolved DSN: %s). "
+                "/api/health/ready will report db_pool degraded and anything "
+                "depending on get_async_db() will raise until this is fixed. "
+                "A sync driver in the DSN is the usual cause; set "
+                "ASYNC_DATABASE_URL to a postgresql+asyncpg:// URL to override.",
+                type(_pool_err).__name__,
+                _pool_err,
+                _redact(_dsn()),
+            )
 
         # Populate _tasks_done / _tasks_failed from the registry results so
         # mark_startup_complete() and the health endpoint report accurate state.

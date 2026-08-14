@@ -4,7 +4,16 @@ For an existing server. First-time provisioning is `deploy.sh` (installs Docker,
 clones the repo, installs `hopefx.service`); do not re-run it to update.
 
 Defaults from `deploy.sh`: app dir `/opt/hopefx`, systemd unit `hopefx.service`,
-start command `docker compose up -d --scale nginx=0`.
+start command `docker compose up -d`.
+
+**`--scale nginx=0` is no longer needed.** The `nginx` service now sits behind
+the `standalone-proxy` compose profile, so a plain `docker compose up -d` skips
+it. The flag was folklore — forget it once and Docker creates a container that
+can never start, because something else already owns ports 80 and 443. That is
+what left `hopefx-ai-trading-nginx-1` sitting in `Created` on the production
+box, with an audit reasonably reading it as "the site's entry point is down".
+Start it explicitly with `docker compose --profile standalone-proxy up -d` only
+on a host where nothing else is listening on 80/443.
 
 ---
 
@@ -37,9 +46,9 @@ docker compose pull
 # 3. Rebuild the application images. This is the step that ships the change.
 docker compose build
 
-# 4. Restart. Keep --scale nginx=0: host nginx terminates SSL, and running the
-#    containerised one too collides on ports 80/443.
-docker compose up -d --scale nginx=0
+# 4. Restart. The containerised nginx is profile-gated and stays out of the
+#    way; the host proxy (Traefik) keeps terminating SSL.
+docker compose up -d
 ```
 
 Database migrations need no separate step — the app container runs
@@ -118,7 +127,7 @@ cd /opt/hopefx
 git log --oneline -5          # find the commit to return to
 git checkout <commit>
 docker compose build
-docker compose up -d --scale nginx=0
+docker compose up -d
 ```
 
 Postgres and Redis data live in named volumes and are untouched by a rebuild.

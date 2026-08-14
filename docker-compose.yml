@@ -514,6 +514,21 @@ services:
           memory: 64M
 
   nginx:
+    # Opt-in. Start it with:  docker compose --profile standalone-proxy up -d
+    #
+    # This service binds host ports 80 and 443. On a host that already runs a
+    # reverse proxy on those ports — Traefik in `network_mode: host`, which is
+    # how the production VPS is set up — the bind fails and the container never
+    # leaves the `Created` state. That is exactly what a container audit found:
+    # `hopefx-ai-trading-nginx-1  Created`, no restart loop, no logs, and a
+    # reader reasonably concluding the site's entry point was down when in fact
+    # Traefik was serving it.
+    #
+    # The workaround in circulation was `--scale nginx=0` on every single
+    # `docker compose up`, which is folklore: forget it once and the stack
+    # half-starts a container that cannot run. A profile states the rule in the
+    # file instead. Use this service only when nothing else owns 80/443.
+    profiles: ["standalone-proxy"]
     build:
       context: ./nginx
       dockerfile: Dockerfile

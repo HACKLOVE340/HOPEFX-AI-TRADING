@@ -104,6 +104,7 @@ from data_layer.sentiment.engine import (  # noqa: F401 — FinBERTScorer re-exp
     news_sentiment_engine,
 )
 from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -450,7 +451,7 @@ class MarketDataOrchestrator:
             self._redis_store._r = r
             self._calendar._redis = r
             self._redis_healthy = True
-            logger.info("MarketDataOrchestrator: Redis connected (%s)", _REDIS_URL)
+            logger.info("MarketDataOrchestrator: Redis connected (%s)", redact_url(_REDIS_URL))
         except Exception as exc:
             self._redis_healthy = False
             # Warn (not error) — degraded mode is expected in dev/offline environments.

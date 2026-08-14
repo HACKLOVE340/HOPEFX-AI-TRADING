@@ -42,6 +42,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ async def _get_redis():
         await client.ping()
         _redis_client = client
         _redis_available = True
-        logger.info("Rate limiter: Redis backend connected at %s", REDIS_URL)
+        logger.info("Rate limiter: Redis backend connected at %s", redact_url(REDIS_URL))
     except Exception as exc:
         logger.warning(
             "Rate limiter: Redis unavailable (%s) — using in-process fallback. "

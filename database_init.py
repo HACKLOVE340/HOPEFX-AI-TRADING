@@ -25,6 +25,7 @@ import contextlib
 import logging
 import os
 from pathlib import Path
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def initialize_database(db_url: str | None = None) -> None:
                 "SQLite does not support concurrent writes and will corrupt "
                 "under multi-worker load. "
                 "Set DATABASE_URL=postgresql://user:pass@host:5432/hopefx for production.",  # pragma: allowlist secret
-                db_url,
+                redact_url(db_url),
             )
 
     from sqlalchemy import create_engine

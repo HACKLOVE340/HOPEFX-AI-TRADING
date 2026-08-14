@@ -31,6 +31,7 @@ from typing import Any
 
 import secrets as _secrets_mod
 import contextlib
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -1652,7 +1653,7 @@ async def init_position_manager(s: Any) -> Any:
 
         _pm._redis = redis_client
         _pm._redis_store = AsyncRedisStateStore(redis_client)
-        logger.info("PositionManager: Redis client wired (%s)", redis_url)
+        logger.info("PositionManager: Redis client wired (%s)", redact_url(redis_url))
     except Exception as exc:
         if _redis_url_explicit:
             logger.warning(
