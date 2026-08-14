@@ -69,6 +69,80 @@ class CodeIssue:
         }
 
 
+# ── Suppression ───────────────────────────────────────────────────────────────
+
+# Every marker this analyzer has ever honoured, in one place.
+#
+# `tests/unit/test_fixes.py::TestCodeAnalyzerClean` requires zero findings
+# repo-wide. That is a good forcing function and it is only workable if a false
+# positive can be annotated with something obvious. It could not be: each rule
+# had grown its own vocabulary —
+#
+# (markers written below without their leading "#", so this table is not itself
+#  parsed as a pile of lint directives)
+#
+#   null-object         healer: ignore, noqa: healer
+#   look-ahead (line)   lookahead-ok, noqa
+#   bare except         nosec, noqa
+#   silent except       noqa, healer: ignore
+#   look-ahead (block)  lookahead-ok, nosec, intentional, noqa
+#   nan leak            healer: ignore  ONLY
+#
+# so "noqa", honoured by four of them and the ordinary Python idiom, did
+# nothing for nan_leak. A developer hitting that rule got a CI failure they
+# could not resolve without reading this file, and the natural next move is to
+# weaken the gate rather than annotate the line.
+#
+# This is a union of the existing markers, so it only ever widens what is
+# accepted — no line that suppresses today stops suppressing.
+_SUPPRESSION_MARKERS = (
+    "# noqa",
+    "# healer: ignore",
+    "nosec",
+    "lookahead-ok",
+    "intentional",
+)
+
+
+def _strip_string_literals(line: str) -> str:
+    """Blank out quoted spans so a marker inside data is not read as an annotation.
+
+    ``MESSAGE = "add # noqa to silence this"`` documents the marker; it does not
+    apply it to that statement.
+    """
+    out: list[str] = []
+    quote: str | None = None
+    escaped = False
+    for ch in line:
+        if quote is None:
+            if ch in ("'", '"'):
+                quote = ch
+                out.append(" ")
+                continue
+            out.append(ch)
+        else:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
+                quote = None
+            out.append(" ")
+    return "".join(out)
+
+
+def _is_suppressed(line_text: str) -> bool:
+    """True when a line carries an explicit reviewer annotation.
+
+    One predicate, used by every rule, so the escape hatch is the same wherever
+    a finding lands.
+    """
+    if not line_text:
+        return False
+    scannable = _strip_string_literals(line_text)
+    return any(marker in scannable for marker in _SUPPRESSION_MARKERS)
+
+
 # ── Regex-based detectors (fast, no AST needed) ───────────────────────────────
 
 # Look-ahead bias: shift(-N) on price/return columns
@@ -675,7 +749,12 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
             # only (never backward) so an unrelated ignore comment placed
             # above a different, prior finding can't falsely suppress this one.
             _forward_window = "\n".join(lines[i - 1 : min(len(lines), i + 3)])
-            _ignored = "# healer: ignore" in _forward_window
+            # Any of the analyzer's suppression markers, not just
+            # "healer: ignore". This rule accepted that one alone, so a plain
+            # "noqa" — honoured by four other rules here, and the ordinary
+            # Python idiom — silently did nothing and left the finding
+            # unresolvable without reading this file.
+            _ignored = _is_suppressed(_forward_window)
             if not _extended_guard and not _ignored:
                 issues.append(
                     CodeIssue(

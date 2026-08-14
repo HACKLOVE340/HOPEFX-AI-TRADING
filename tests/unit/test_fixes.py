@@ -202,14 +202,28 @@ class TestAuthCookieFallback:
 
 
 class TestCodeAnalyzerClean:
+    # A zero-tolerance gate is only workable if a false positive can be
+    # annotated. This message says how, because the alternative — a developer
+    # who cannot resolve a bad finding — ends with the gate being weakened
+    # rather than the line being marked. See
+    # tests/unit/test_code_analyzer_suppression_is_uniform.py.
+    _HOW_TO_SUPPRESS = (
+        "\n\nIf a finding is a false positive, annotate the line with '# noqa' "
+        "(or '# healer: ignore' / 'nosec' / 'lookahead-ok') and say why in the "
+        "same comment. If the detector itself is wrong, fix the rule in "
+        "security/code_analyzer.py — do not relax this gate."
+    )
+
     def test_no_high_severity_issues(self):
         """After fixes, code_analyzer must report 0 critical/high issues."""
         from security.code_analyzer import scan_codebase
 
         issues = scan_codebase()
         high_or_critical = [i for i in issues if i.severity in ("critical", "high")]
-        assert high_or_critical == [], f"Expected 0 critical/high issues, found {len(high_or_critical)}:\n" + "\n".join(
-            f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in high_or_critical
+        assert high_or_critical == [], (
+            f"Expected 0 critical/high issues, found {len(high_or_critical)}:\n"
+            + "\n".join(f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in high_or_critical)
+            + self._HOW_TO_SUPPRESS
         )
 
     def test_total_issues_zero(self):
@@ -217,8 +231,10 @@ class TestCodeAnalyzerClean:
         from security.code_analyzer import scan_codebase
 
         issues = scan_codebase()
-        assert len(issues) == 0, f"Expected 0 issues, found {len(issues)}:\n" + "\n".join(
-            f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in issues
+        assert len(issues) == 0, (
+            f"Expected 0 issues, found {len(issues)}:\n"
+            + "\n".join(f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in issues)
+            + self._HOW_TO_SUPPRESS
         )
 
 
