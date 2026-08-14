@@ -220,9 +220,25 @@ def test_celery_probes_do_not_block_the_event_loop():
     assert beats > 20, f"only {beats} loop turns during 0.6s of blocking work"
 
 
-@pytest.mark.parametrize("path", ["infrastructure/health_engine.py", "api/superadmin/reliability.py"])
+@pytest.mark.parametrize(
+    "path",
+    ["infrastructure/health_engine.py", "api/superadmin/reliability.py", "api/superadmin/system_health.py"],
+)
 def test_inspect_stats_is_never_awaited_inline(path):
     """The mechanism is the defect: inspect.stats() must reach a worker thread.
+
+    The check now follows the code. Each of these files used to carry its own
+    copy of the probe, and this test verified the executor hop in each one.
+    Three copies with three timeouts could not agree even when Celery was
+    healthy — and did not, reporting DOWN / WARNING / OK for the same broker
+    within twelve minutes — so they were consolidated into
+    ``infrastructure/service_probes.probe_celery``.
+
+    A file therefore satisfies this either by doing the executor hop itself, or
+    by delegating to the shared probe, which is asserted separately below to do
+    it. Accepting delegation is not a weakening: the property is still checked,
+    once, where the work now happens. What would weaken it is dropping the
+    assertion because the refactor moved the code.
 
     Located by AST rather than by slicing the file around a name — the name also
     appears in comments and in the probe registry, and a text window is as
@@ -231,21 +247,47 @@ def test_inspect_stats_is_never_awaited_inline(path):
     import ast
     import pathlib
 
-    tree = ast.parse((pathlib.Path(__file__).resolve().parents[2] / path).read_text())
+    root = pathlib.Path(__file__).resolve().parents[2]
+    tree = ast.parse((root / path).read_text())
     funcs = [
         n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef | ast.FunctionDef) and n.name == "_probe_celery"
     ]
-    assert funcs, f"{path} has no _probe_celery"
+    if not funcs:
+        # system_health.py names its wrapper differently; find whatever calls
+        # the shared probe.
+        source = (root / path).read_text()
+        assert "from infrastructure.service_probes import probe_celery" in source, (
+            f"{path} has neither a _probe_celery nor a delegation to the shared probe"
+        )
+        return
+
+    source = ast.unparse(funcs[0])
+    if "probe_celery" in source and "service_probes" in source:
+        return  # delegates — the executor hop is asserted on the shared probe below
+
     body = ast.dump(funcs[0])
     assert "run_in_executor" in body, f"{path} still calls the broker on the event loop"
-    # The blocking call must live inside the function handed to the executor,
-    # not sit beside it on the loop.
-    source = ast.unparse(funcs[0])
     assert ".stats()" in source, "precondition: the probe still asks for worker stats"
     inner = [n for n in ast.walk(funcs[0]) if isinstance(n, ast.FunctionDef)]
     assert inner and any(".stats()" in ast.unparse(f) for f in inner), (
         f"{path} calls .stats() outside the worker function"
     )
+
+
+def test_the_shared_probe_does_the_executor_hop():
+    """Where the property now lives. Every delegating file above depends on it."""
+    import ast
+    import inspect
+
+    import infrastructure.service_probes as probes
+
+    tree = ast.parse(inspect.getsource(probes.probe_celery))
+    dumped = ast.dump(tree)
+    assert "run_in_executor" in dumped, "the shared Celery probe blocks the event loop"
+
+    stats_src = inspect.getsource(probes._inspect_stats)
+    assert ".stats()" in stats_src, "precondition: the probe still asks for worker stats"
+    assert "run_in_executor" not in stats_src, "the blocking call must be the function handed to the executor"
 
 
 # ── 4. Component health ──────────────────────────────────────────────────────
