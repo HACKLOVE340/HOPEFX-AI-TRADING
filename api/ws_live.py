@@ -572,10 +572,22 @@ def _seed_from_broker() -> None:
 
         broker = getattr(app_state, "broker", None)
         market_prices = getattr(broker, "market_prices", {}) if broker else {}
+        # Only adopt values a feed actually wrote. `market_prices` is seeded
+        # with a hardcoded table so offline fills work, and those seeds are not
+        # quotes — gold's is 3300.0 against a spot nearer 4400.
+        #
+        # `_get_live_price` level 2 already screens them with has_live_price().
+        # This did not, so the seeds were copied into `_SYMBOLS[sym]["price"]`
+        # and, worse, into `_open_prices` — the previous-close baseline for
+        # change_pct. That is why the header read "3,300.00 +0.00%": the
+        # baseline and the price were the same fabricated number, so the change
+        # was structurally zero and stayed zero even once real prices arrived.
+        _checker = getattr(broker, "has_live_price", None)
         for sym, cfg in _SYMBOLS.items():
             broker_key = _BROKER_KEY.get(sym, sym.replace("/", ""))
             live = market_prices.get(broker_key)
-            if live and live > 0:
+            is_fed = _checker(broker_key) if callable(_checker) else True
+            if is_fed and live and live > 0:
                 cfg["price"] = float(live)
                 _open_prices[sym] = float(live)
         _prices_seeded = True
