@@ -209,8 +209,12 @@ class TestMacroStoreWiring:
         assert aligned["dxy"].iloc[0] == pytest.approx(102.5)
         assert aligned["dxy"].iloc[24] == pytest.approx(103.0)
 
-    def test_missing_series_fills_zero(self):
-        """Missing series in align_to_hourly() fills with 0.0."""
+    def test_missing_series_is_nan(self):
+        """Missing series in align_to_hourly() are NaN, not 0.0.
+
+        0.0 is a real macro reading (an extreme one), not an absent value.
+        NaN reaches the engine's existing abstain guard instead.
+        """
         import pandas as pd
 
         from ml.macro_store import MacroStore
@@ -220,7 +224,7 @@ class TestMacroStoreWiring:
         ohlcv = pd.DataFrame({"close": 1.0}, index=idx)
         aligned = store.align_to_hourly(ohlcv, series=["nonexistent"])
         assert "nonexistent" in aligned.columns
-        assert (aligned["nonexistent"] == 0.0).all()
+        assert aligned["nonexistent"].isna().all()
 
     def test_macro_store_api_endpoint(self, monkeypatch):
         """GET /api/macro/store returns store state via TestClient."""
@@ -301,10 +305,18 @@ class TestMacroStoreWiring:
         app = FastAPI()
         app.include_router(macro_router)
 
+        # A recent date, not a hard-coded one. This used to write 2026-01-02,
+        # which the macro-staleness filter now omits from ML features — so the
+        # test would have been asserting that stale data is served rather than
+        # its actual intent, that the endpoint prefers store values.
+        from datetime import datetime, timezone
+
+        today = datetime.now(tz=timezone.utc).date().isoformat()
+
         original = _ms.macro_store
         _ms.macro_store = MacroStore()
-        _ms.macro_store.update("dxy", "2026-01-02", 102.5)
-        _ms.macro_store.update("us10y", "2026-01-02", 4.25)
+        _ms.macro_store.update("dxy", today, 102.5)
+        _ms.macro_store.update("us10y", today, 4.25)
 
         try:
             client = TestClient(app)

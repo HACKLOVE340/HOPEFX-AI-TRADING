@@ -52,6 +52,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import hashlib
+import shutil
 import sys
 import warnings
 from datetime import datetime, timedelta, timezone
@@ -77,7 +79,7 @@ MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 import os as _os
-from typing import ClassVar
+from typing import Any, ClassVar
 
 # When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
 # every test that trains a model finishes well within the 20 s timeout.
@@ -662,6 +664,113 @@ def extract_feature_importance(model, feature_names: list[str]) -> dict:
     return {}
 
 
+def archive_artifact_before_overwrite(path: Path, registry: Any | None = None) -> Path | None:
+    """Preserve the artifact about to be overwritten, and repoint its registry entries.
+
+    This is the mechanism that produced the registry corruption repaired by
+    ``repair_model_registry.py --resync``, rather than the damage it caused.
+
+    This module writes ``advanced_oos.pkl`` with ``joblib.dump`` and never
+    touches the registry — a grep for "registry" here returns nothing. So each
+    retrain replaces the bytes that existing entries describe, in place and
+    silently. Four entries ended up pointing at one file with two different
+    recorded accuracies because three of them described a model that no longer
+    existed at that path. ``MODEL_IDENTITY.md`` says the same in prose:
+    retraining in place *"left every older registry entry pointing at the new
+    file while still describing the model it replaced."*
+
+    Repairing the manifest without fixing this means the next retrain
+    reproduces it.
+
+    So before the overwrite, the current artifact is copied to a
+    content-addressed name — ``advanced_oos.<sha12>.pkl`` — and every registry
+    entry whose recorded ``sha256`` matches those bytes is repointed at the
+    copy. Each entry then describes a file that still exists and still contains
+    what the entry says it does.
+
+    The sidecar travels with it, for provenance rather than for the audit.
+    ``audit_manifest`` resolves ``<stem>_meta.json`` from the *artifact's own*
+    stem, so an archived ``advanced_oos.<sha12>.pkl`` looks for
+    ``advanced_oos.<sha12>_meta.json`` and simply finds nothing if it was not
+    archived — it does not fall back to the new model's metadata, and a missing
+    sidecar is explicitly not treated as a mismatch.
+
+    The cost of dropping it is quieter and worse: the archived bytes would have
+    no record of what they measured, so the accuracy on the registry entry
+    could never again be checked against anything. That is precisely the
+    situation ``--resync`` had to guess its way out of.
+
+    Scope, stated plainly: archives match ``ml/saved_models/*.pkl`` in
+    ``.gitignore`` and are deliberately **not** committed — a copy of every
+    historical model would bloat the repository. They are runtime state on the
+    machine that trained. After a fresh clone the repointed entries will be
+    reported by ``audit_manifest`` as ``missing_artifacts``, and can be cleared
+    with ``repair_model_registry.py --prune-missing``.
+
+    That is the intended trade. An entry naming a file that is honestly absent
+    is a reportable finding; an entry naming a file that exists and contains a
+    different model is a silent lie, and is what this codebase actually had.
+
+    Returns the archive path, or ``None`` when there was nothing to preserve
+    (the first training run). Never raises: failing to update the manifest must
+    not abort a training run, and must not lose the archived bytes either.
+    """
+    path = Path(path)
+    if not path.exists():
+        return None
+
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    archive = path.with_name(f"{path.stem}.{digest[:12]}{path.suffix}")
+
+    # Content-addressed, so re-archiving identical bytes is a no-op rather than
+    # a second copy.
+    if not archive.exists():
+        shutil.copy2(path, archive)
+        logger.info("Archived previous artifact %s → %s", path.name, archive.name)
+
+    sidecar = path.with_name(f"{path.stem}_meta.json")
+    archived_sidecar = archive.with_name(f"{archive.stem}_meta.json")
+    if sidecar.exists() and not archived_sidecar.exists():
+        shutil.copy2(sidecar, archived_sidecar)
+        logger.info("Archived sidecar %s → %s", sidecar.name, archived_sidecar.name)
+
+    if registry is None:
+        return archive
+
+    try:
+        manifest = registry._load()
+        versions = manifest.get("versions", {})
+        repointed = []
+        for name, entry in versions.items():
+            # Match on the digest, not the filename: the entry's own record of
+            # which bytes it describes is the authority. An entry pointing at
+            # this path with a *different* digest was already inconsistent and
+            # is not this function's to rewrite.
+            if entry.get("sha256") == digest:
+                entry["file"] = str(archive)
+                repointed.append(name)
+
+        if repointed:
+            registry._save(manifest)
+            logger.info(
+                "Repointed %d registry entr(y/ies) at the archived artifact so they still describe "
+                "the bytes they were registered with: %s",
+                len(repointed),
+                repointed,
+            )
+    except Exception as exc:
+        # The bytes are already safe on disk; a manifest problem must not abort
+        # training or undo the archive.
+        logger.warning(
+            "Could not repoint registry entries at %s (%s). The archived artifact is intact; "
+            "run scripts/repair_model_registry.py to reconcile the manifest.",
+            archive.name,
+            exc,
+        )
+
+    return archive
+
+
 def write_feature_stats(X: pd.DataFrame, path: Path | None = None) -> dict[str, dict[str, float]]:
     """Write the per-feature training distribution the drift guard compares against.
 
@@ -1037,8 +1146,21 @@ def oos_eval_advanced(
     oos_start = X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
     oos_end = X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
 
-    # Save OOS model with metadata sidecar
+    # Save OOS model with metadata sidecar.
+    #
+    # Preserve whatever is already at this path first. Overwriting it in place
+    # is what left older registry entries describing a model that no longer
+    # existed there — the defect repaired by repair_model_registry.py --resync.
     out_path = MODEL_DIR / "advanced_oos.pkl"
+    try:
+        from ml.model_registry import get_registry
+
+        _registry = get_registry()
+    except Exception as _reg_exc:
+        logger.debug("registry unavailable for archival: %s", _reg_exc)
+        _registry = None
+    archive_artifact_before_overwrite(out_path, registry=_registry)
+
     joblib.dump(model, out_path)
     logger.info("Saved OOS model → %s", out_path)
 

@@ -132,7 +132,14 @@ class TestAlignToHourly:
         monday_bars = result[result.index.date == pd.Timestamp("2026-01-05").date()]
         assert np.allclose(monday_bars["dxy"].values, 102.34)
 
-    def test_missing_series_filled_with_zeros(self):
+    def test_missing_series_is_nan_not_zero(self):
+        """A series that is not loaded is unknown, and 0.0 is not unknown.
+
+        This asserted 0.0 until the macro-staleness work. A US 10Y yield of
+        0.0 — or a VIX of 0.0 — is not "no data", it is an extreme real
+        reading, and `_classify_macro` reads a zero VIX as LOW_VOL. NaN routes
+        to `InferenceEngine._features_are_unusable`, which abstains.
+        """
         store = _make_store()
         # Only load dxy, not us10y
         store.update("dxy", "2026-01-05", 102.34)
@@ -141,7 +148,8 @@ class TestAlignToHourly:
         result = store.align_to_hourly(ohlcv, series=["dxy", "us10y"])
 
         assert "us10y" in result.columns
-        assert (result["us10y"] == 0.0).all()
+        assert result["us10y"].isna().all()
+        assert not (result["us10y"] == 0.0).any()
 
     def test_empty_store_returns_empty_dataframe(self):
         store = _make_store()

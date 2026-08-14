@@ -53,6 +53,31 @@ _STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
 # of the bridge benefits from it.
 MACRO_MAX_AGE_DAYS = int(os.getenv("MACRO_MAX_AGE_DAYS", "7"))
 
+
+def _parse_date(raw: object) -> date | None:
+    """Parse an observation date, or None if it is absent/unparseable.
+
+    Shared by newest_observation() and get_ml_features() so a series cannot be
+    considered fresh by one and stale by the other.
+    """
+    if not raw:
+        return None
+    if isinstance(raw, date):
+        return raw
+    try:
+        return date.fromisoformat(str(raw)[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def _age_days(raw: object) -> int | None:
+    """Age in days of an observation date, or None if it cannot be established."""
+    parsed = _parse_date(raw)
+    if parsed is None:
+        return None
+    return (datetime.now(tz=UTC).date() - parsed).days
+
+
 # Local cache file for last-known-good FRED data.
 # Must point to a .json FILE, not a directory.
 # Default resolves to <repo_root>/data/macro/fred_cache.json.
@@ -98,6 +123,9 @@ class MacroStoreBridge:
         self._source: str = "none"
         # Suppress repeated "WGC returned no series" warnings
         self._wgc_offline_warned: bool = False
+        # One warning per process when macro series are omitted from ML
+        # features — get_ml_features() is called on every prediction.
+        self._features_omitted_warned: bool = False
 
         # Prometheus
         self._prom_series_count = None
@@ -406,11 +434,48 @@ class MacroStoreBridge:
 
             snap = macro_store.snapshot()
             features: dict[str, float] = {}
+            omitted: list[str] = []
+
             for name, info in snap.items():
-                if info and info.get("value") is not None:
-                    features[f"macro_{name}"] = float(info["value"])
-                else:
-                    features[f"macro_{name}"] = 0.0
+                key = f"macro_{name}"
+
+                # A series with no value used to become 0.0. That is not
+                # "unknown" — a VIX of 0.0 is the calmest reading possible, and
+                # _classify_macro reads it as LOW_VOL. Omit the key so a
+                # consumer can see the series is absent instead of trusting a
+                # fabricated reading.
+                if not info or info.get("value") is None:
+                    omitted.append(name)
+                    continue
+
+                # Same for a value that is real but too old to describe today.
+                age = _age_days(info.get("date"))
+                if age is None or age > MACRO_MAX_AGE_DAYS:
+                    omitted.append(name)
+                    continue
+
+                features[key] = float(info["value"])
+
+            # Omission is not silent: state the age and the fact of staleness so
+            # a consumer that got fewer keys than it expected knows why. These
+            # are floats because the return type is dict[str, float] and these
+            # values reach JSON API responses — NaN is not valid JSON, which is
+            # why absent series are omitted rather than emitted as NaN.
+            age_days = self.data_age_days()
+            features["macro_data_age_days"] = float(age_days) if age_days is not None else -1.0
+            features["macro_stale"] = 1.0 if self.is_stale() else 0.0
+
+            if omitted and not self._features_omitted_warned:
+                logger.warning(
+                    "MacroStoreBridge: %d macro series omitted from ML features (missing or older "
+                    "than %d days): %s. They were previously emitted as 0.0, which is a real "
+                    "reading rather than a missing one.",
+                    len(omitted),
+                    MACRO_MAX_AGE_DAYS,
+                    sorted(omitted)[:10],
+                )
+                self._features_omitted_warned = True
+
             return features
         except Exception as exc:
             logger.debug("MacroStoreBridge.get_ml_features error: %s", exc)
@@ -486,12 +551,8 @@ class MacroStoreBridge:
         for info in snap.values():
             if not info:
                 continue
-            raw = info.get("date")
-            if not raw:
-                continue
-            try:
-                parsed = raw if isinstance(raw, date) else date.fromisoformat(str(raw)[:10])
-            except (ValueError, TypeError):
+            parsed = _parse_date(info.get("date"))
+            if parsed is None:
                 continue
             newest = parsed if newest is None else max(newest, parsed)
         return newest

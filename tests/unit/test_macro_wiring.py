@@ -78,7 +78,9 @@ def test_macro_store_align_to_hourly():
     assert aligned["dxy"].iloc[24] == pytest.approx(103.0)
 
 
-def test_macro_store_missing_series_fills_zero():
+def test_macro_store_missing_series_is_nan():
+    """Unloaded series are NaN, not 0.0 — 0.0 is a real reading, not a missing
+    one, and the engine abstains on NaN rather than scoring a fabrication."""
     from ml.macro_store import MacroStore
 
     store = MacroStore()
@@ -87,7 +89,7 @@ def test_macro_store_missing_series_fills_zero():
 
     aligned = store.align_to_hourly(ohlcv, series=["nonexistent"])
     assert "nonexistent" in aligned.columns
-    assert (aligned["nonexistent"] == 0.0).all()
+    assert aligned["nonexistent"].isna().all()
 
 
 # ── unit: _push_snapshot_to_store ────────────────────────────────────────────
