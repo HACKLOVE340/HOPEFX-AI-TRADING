@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
@@ -40,6 +41,26 @@ except ImportError:
     WEBSOCKETS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+# ── yfinance OHLCV cache ──────────────────────────────────────────────────────
+#
+# Shared across instances and keyed by symbol+timeframe only. TTL is scaled to
+# the bar it serves: a 1h candle changes once an hour, so refetching it every
+# few seconds is pure waste and the main reason the deployed logs showed
+# yfinance being called several times a second for the same series.
+#
+# Overridable per deployment; the defaults are roughly one refresh per bar.
+_YF_CACHE: dict[str, tuple[float, list]] = {}
+_YF_CACHE_TTL: dict[str, int] = {
+    "1m": int(os.getenv("OHLCV_TTL_1M", "30")),
+    "5m": int(os.getenv("OHLCV_TTL_5M", "120")),
+    "15m": int(os.getenv("OHLCV_TTL_15M", "300")),
+    "30m": int(os.getenv("OHLCV_TTL_30M", "600")),
+    "1h": int(os.getenv("OHLCV_TTL_1H", "900")),
+    "4h": int(os.getenv("OHLCV_TTL_4H", "1800")),
+    "1d": int(os.getenv("OHLCV_TTL_1D", "3600")),
+    "1w": int(os.getenv("OHLCV_TTL_1W", "3600")),
+}
 
 
 @dataclass
@@ -824,6 +845,28 @@ class RealTimePriceEngine:
 
     async def _get_ohlcv_yfinance(self, symbol: str, timeframe: str, limit: int) -> list[OHLCV]:
         """Fetch OHLCV from yfinance in a thread pool (non-blocking)."""
+        # Cache consulted BEFORE importing yfinance, so a cached series is still
+        # served when the library is unavailable — the import raises first
+        # otherwise and a perfectly good cached result is thrown away.
+        #
+        # Keyed by symbol+timeframe only — NOT by limit.
+        #
+        # This path had no cache at all, and the Coinbase feed's cache above
+        # keys on f"{symbol}_{timeframe}_{limit}", so callers asking for
+        # different depths each triggered their own fetch. The deployed logs
+        # showed XAUUSD 1h fetched at 50 bars and at 100 bars within the same
+        # second, repeatedly — well past what yfinance tolerates, and about
+        # to get much worse now that a single call can pull 2,000+ bars.
+        #
+        # One fetch at full depth serves every caller; shallower requests are
+        # sliced from the tail on the way out.
+        cache_key = f"{symbol}:{timeframe}"
+        ttl = _YF_CACHE_TTL.get(timeframe, 60)
+        cached = _YF_CACHE.get(cache_key)
+        if cached and (time.time() - cached[0]) < ttl:
+            bars = cached[1]
+            return bars[-limit:] if limit else bars
+
         try:
             import yfinance as yf
             import pandas as pd
@@ -832,14 +875,18 @@ class RealTimePriceEngine:
             interval = self._YF_INTERVAL_MAP.get(timeframe, "1h")
 
             # Determine period based on limit + interval.
-            # 1h capped at 60d (~1440 bars) — 730d is too slow for a REST fallback.
             _period_map = {
                 "1m": "7d",
                 "5m": "60d",
                 "15m": "60d",
                 "30m": "60d",
-                "1h": "60d",
-                "1d": "5y",
+                # 1h was "60d" — about 1,440 bars at best, and far fewer for
+                # instruments that only trade in session hours. That capped the
+                # chart no matter how large a `limit` the caller asked for.
+                # yfinance serves 1h back to 730 days, which is ~17,500 bars
+                # continuous and comfortably over the 2,000 the charts want.
+                "1h": "730d",
+                "1d": "10y",
                 "1wk": "10y",
             }
             period = _period_map.get(interval, "60d")
@@ -868,13 +915,15 @@ class RealTimePriceEngine:
 
             data = await loop.run_in_executor(None, _fetch)
             if data:
+                _YF_CACHE[cache_key] = (time.time(), data)
                 logger.info(
-                    "OHLCV yfinance: %s %s — %d bars fetched",
+                    "OHLCV yfinance: %s %s — %d bars fetched (cached %ds)",
                     symbol,
                     timeframe,
                     len(data),
+                    ttl,
                 )
-            return data
+            return data[-limit:] if limit else data
         except Exception as exc:
             logger.warning("OHLCV yfinance fallback failed for %s: %s", symbol, exc)
             return []
