@@ -248,17 +248,48 @@ def test_an_artifact_without_a_sidecar_is_not_guessed_at(tmp_path):
 
 
 def test_the_shipped_artifact_metadata_resolves_the_conflict():
-    """Which accuracy is right is answerable, and the answer is on disk."""
+    """Which accuracy is right is answerable, and the answer is on disk.
+
+    Repaired by `scripts/repair_model_registry.py --resync`: the three entries
+    that disagreed with their artifact (advanced_oos_v1, advanced_oos_v2,
+    xgb_horizon5_v1, all recorded 0.5650) now carry the artifact's own measured
+    0.5734, which is what xgb_horizon5_v3 — the serving entry — already had.
+
+    This previously asserted the *unrepaired* set. The enduring claim is the one
+    that survives the repair: no entry contradicts the sidecar beside its own
+    artifact. If a future retrain reintroduces a disagreement, this fails.
+    """
     from ml.model_registry import get_registry
 
     audit = get_registry().audit_manifest()
     stale = {s["version"] for s in audit["stale_metrics"]}
-    assert stale == {"advanced_oos_v1", "advanced_oos_v2", "xgb_horizon5_v1"}, stale
+    assert stale == set(), f"entries disagree with their artifact's metadata again: {stale}"
     assert audit["active_version"] not in stale, (
-        "the serving entry should be the one that matches the artifact's own metadata"
+        "the serving entry must be one that matches the artifact's own metadata"
     )
-    for finding in audit["stale_metrics"]:
-        assert finding["artifact_oos_accuracy"] == pytest.approx(0.5734)
+
+
+def test_the_serving_entry_records_the_measured_accuracy():
+    """Pins the number the repair settled on, so a silent edit is visible.
+
+    0.5734 is the artifact's own `_meta.json` measurement, written by the
+    trainer in the same run that produced the .pkl — not an average of the two
+    disputed values, which would describe no model that was ever trained.
+    """
+    import json
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    reg = json.loads((root / "ml/saved_models/registry.json").read_text())
+
+    for name in ("advanced_oos_v1", "advanced_oos_v2", "xgb_horizon5_v1", "xgb_horizon5_v3"):
+        entry = reg["versions"].get(name)
+        if entry is None:
+            continue
+        assert entry["oos_accuracy"] == pytest.approx(0.5734), f"{name}: {entry['oos_accuracy']}"
+        assert entry["oos_accuracy"] != pytest.approx(0.5692), (
+            f"{name} carries the average of the two disputed scores, which describes no trained model"
+        )
 
 
 def test_model_identity_doc_names_the_actual_active_version():
@@ -282,15 +313,32 @@ def test_model_identity_doc_names_the_actual_active_version():
 
 
 def test_the_shipped_manifest_is_audited_and_the_known_faults_are_found():
-    """Against the real committed registry.json, not a fixture."""
+    """Against the real committed registry.json, not a fixture.
+
+    The metric conflict is gone — `--resync` settled it. What remains is a
+    separate finding with a separate fix: `mtf_ensemble_v1` points at a file
+    that does not exist, which needs `--prune-missing` (a deletion, and a
+    different operator decision).
+
+    Note the four entries still share one artifact after the repair — resync
+    changed recorded metrics, not sha256 — so the shared-artifact finding is
+    unchanged. Sharing a file is a fact to display, not a fault; the fault was
+    that they disagreed about what the file scored.
+    """
     from ml.model_registry import get_registry
 
     audit = get_registry().audit_manifest()
-    assert audit["ok"] is False, "the shipped manifest is self-consistent now — update this test"
-    conflicts = audit["metric_conflicts"]
-    assert conflicts, "the four-entries-one-file conflict is no longer detected"
-    assert any(c["active_among_them"] for c in conflicts), (
-        "the serving version is no longer among the conflicting entries"
+
+    assert audit["metric_conflicts"] == [], (
+        f"a metrics conflict is back: {audit['metric_conflicts']} — the serving model's score is in dispute again"
+    )
+    assert audit["stale_metrics"] == []
+
+    if audit["ok"]:
+        pytest.skip("the shipped manifest is fully repaired — the missing artifact was pruned too")
+
+    assert audit["missing_artifacts"] == ["mtf_ensemble_v1"], (
+        f"expected only the known dangling entry, got {audit['missing_artifacts']}"
     )
 
 
@@ -320,13 +368,83 @@ def test_the_models_endpoint_marks_shared_artifacts_and_conflicts():
     assert r.status_code == 200, r.text[:200]
     body = r.json()
     assert "integrity" in body, "the page cannot show what it is not told"
+    # Still true after --resync: the repair changed recorded metrics, not
+    # sha256, so four entries still point at one file and the rows must say so.
     shared = [m for m in body["models"] if m.get("shares_artifact_with")]
     assert shared, "four entries share one artifact and no row says so"
+
+
+def test_the_models_endpoint_marks_a_metrics_conflict(tmp_path, monkeypatch):
+    """The conflict marker, proven against an injected conflict.
+
+    This assertion used to ride on the shipped registry actually being broken.
+    Repairing it with --resync would have silently removed the only coverage of
+    the marker, so it is driven from a fixture now — the display path is tested
+    whether or not the deployed manifest happens to be faulty.
+    """
+    import os
+
+    os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
+    os.environ.setdefault("CSRF_PROTECTION", "false")
+    os.environ["STARTUP_GATE"] = "false"
+    import jwt
+    from fastapi.testclient import TestClient
+
+    import ml.model_registry as mr
+    from app import app
+
+    art = tmp_path / "shared.pkl"
+    art.write_bytes(b"x")
+    (tmp_path / "shared_meta.json").write_text(json.dumps({"oos_accuracy": 0.61}))
+    sha = "abcd" * 16
+    conflicted = _registry_with(
+        tmp_path,
+        {
+            "a_v1": _entry(sha, str(art), 0.50),
+            "a_v2": _entry(sha, str(art), 0.61),
+        },
+        active="a_v2",
+    )
+    monkeypatch.setattr(mr, "get_registry", lambda: conflicted)
+
+    headers = {
+        "Authorization": "Bearer "
+        + jwt.encode(
+            {"sub": "superadmin", "role": "superadmin", "type": "access", "exp": int(time.time()) + 3600},
+            os.environ["SECURITY_JWT_SECRET"],
+            algorithm="HS256",
+        )
+    }
+    r = TestClient(app, raise_server_exceptions=False).get("/api/superadmin/ml/models", headers=headers)
+    assert r.status_code == 200, r.text[:200]
+    body = r.json()
     assert any(m.get("metrics_conflict") for m in body["models"]), "the conflicting rows are unmarked"
 
 
-def test_the_diagnostics_check_grades_a_serving_conflict_as_critical():
+def test_the_diagnostics_check_grades_a_serving_conflict_as_critical(tmp_path, monkeypatch):
+    """Severity is driven from an injected conflict, not from the shipped file.
+
+    This used to depend on the deployed registry being broken. `--resync` fixed
+    it, which would have quietly turned this into a test of nothing — the whole
+    point is that a *serving* model whose score is in dispute grades critical,
+    and that has to stay provable after the deployment is clean.
+    """
+    import ml.model_registry as mr
     from security.diagnostics import DiagnosticsEngine
+
+    art = tmp_path / "shared.pkl"
+    art.write_bytes(b"x")
+    (tmp_path / "shared_meta.json").write_text(json.dumps({"oos_accuracy": 0.61}))
+    sha = "beef" * 16
+    conflicted = _registry_with(
+        tmp_path,
+        {
+            "a_v1": _entry(sha, str(art), 0.50),
+            "a_v2": _entry(sha, str(art), 0.61),
+        },
+        active="a_v2",  # the serving entry is among the disputed ones
+    )
+    monkeypatch.setattr(mr, "get_registry", lambda: conflicted)
 
     results = asyncio.run(DiagnosticsEngine()._check_model_registry())
     assert results[0].check_name == "model_registry"
@@ -334,6 +452,22 @@ def test_the_diagnostics_check_grades_a_serving_conflict_as_critical():
         f"the serving model's metrics are in dispute; got {results[0].status}: {results[0].message}"
     )
     assert results[0].remediation
+
+
+def test_the_diagnostics_check_on_the_repaired_registry_is_not_critical():
+    """After --resync the serving model's score is no longer disputed.
+
+    A dangling historical entry (mtf_ensemble_v1) is a real finding and still
+    reported — but grading it the same as "the model serving live inference has
+    a contested accuracy" would make the critical grade meaningless.
+    """
+    from security.diagnostics import DiagnosticsEngine
+
+    results = asyncio.run(DiagnosticsEngine()._check_model_registry())
+    assert results[0].check_name == "model_registry"
+    assert results[0].status != "critical", f"still critical after the repair: {results[0].message}"
+    if results[0].status != "ok":
+        assert results[0].remediation, "a non-ok result with no remediation tells an operator nothing"
 
 
 def test_the_check_runs_in_the_full_suite():

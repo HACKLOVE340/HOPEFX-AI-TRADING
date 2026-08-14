@@ -30,20 +30,43 @@ match the execution engine's 5-bar hold period). Retraining over the same
 filename left every older registry entry pointing at the new file while still
 describing the model it replaced:
 
-| Registry key      | Claims | Reality |
-|-------------------|--------|---------|
-| `advanced_oos_v1` | 56.5%  | stale — describes the pre-2026-06-26 model |
-| `advanced_oos_v2` | 56.5%  | stale |
-| `xgb_horizon5_v1` | 56.5%  | stale (this file previously named it active) |
-| `xgb_horizon5_v3` | **57.34%** | matches `advanced_oos_meta.json` — **active** |
+| Registry key      | Claimed (before) | Now | History |
+|-------------------|------------------|-----|---------|
+| `advanced_oos_v1` | 56.5% | **57.34%** | originally described the pre-2026-06-26 model |
+| `advanced_oos_v2` | 56.5% | **57.34%** | same |
+| `xgb_horizon5_v1` | 56.5% | **57.34%** | same (this file previously named it active) |
+| `xgb_horizon5_v3` | 57.34% | **57.34%** | always matched the artifact — **active** |
 
 The authority is `advanced_oos_meta.json`, written by the trainer in the same
 run as the `.pkl`: `oos_accuracy 0.5734`, `oos_n 2016`, `horizon 5`, trained
 `2026-06-26T22:30:43Z`. The 59.9% previously quoted below belonged to the
 2026-04-02 model, which no longer exists on disk.
 
-`ModelRegistry.audit_manifest()` now detects this class of drift, and the
-superadmin diagnostics page reports it as `model_registry`.
+**Repaired 2026-08-14** with `scripts/repair_model_registry.py --resync`. All
+four entries point at the same `advanced_oos.pkl`, so every one of them now
+records that file's own measured 0.5734 rather than a score from a model it no
+longer refers to. `audit_manifest()` reports zero `stale_metrics` and zero
+`metric_conflicts`; the previous manifest is kept beside it as a timestamped
+`.bak` (gitignored).
+
+The trade-off is worth stating, because `--resync` is not the only reading. It
+asserts each entry describes the artifact it currently points at, which is true
+— but it means the manifest no longer records that `v1`/`v2` were *originally*
+measured at 56.5% against a model that has since been overwritten. That history
+now lives only in this table. The alternative, `--prune-stale`, would have
+deleted those entries instead; resync was chosen so the version lineage stays
+intact. Nothing was averaged: 0.5692 (the midpoint of the two disputed scores)
+describes no model that was ever trained.
+
+`ModelRegistry.audit_manifest()` detects this class of drift, and the superadmin
+diagnostics page reports it as `model_registry`.
+
+### Outstanding
+
+`mtf_ensemble_v1` still points at a file that does not exist. That is a
+different fault with a different fix (`--prune-missing`, a deletion) and has
+not been actioned. Diagnostics grades the registry `error` — not `critical`,
+because the model serving inference is no longer in dispute.
 
 ## Active Production Model (`advanced_oos.pkl` ← `current.pkl`)
 
