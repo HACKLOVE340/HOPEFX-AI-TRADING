@@ -61,6 +61,47 @@ logger = logging.getLogger(__name__)
 # All routes are mounted under /api/billing — no /api/ prefix in path strings.
 router = APIRouter(prefix="/api/billing", tags=["Billing"])
 
+
+# ── Payment configuration gate ────────────────────────────────────────────────
+
+
+def payments_configured() -> bool:
+    """Whether a payment provider is actually usable.
+
+    Read-only account views do not need one. ``/balance`` reads the broker's
+    account, and ``/transactions`` documents that it "returns an empty list when
+    no payment provider is configured" — both are built to work on a deployment
+    that has not set up payments yet.
+    """
+    return bool(
+        os.getenv("STRIPE_SECRET_KEY") or os.getenv("FLUTTERWAVE_SECRET_KEY") or os.getenv("CRYPTO_WEBHOOK_SECRET")
+    )
+
+
+def require_payments_configured() -> None:
+    """Guard for endpoints that move money. Returns 503, not 404.
+
+    The distinction matters. This router used to be hidden entirely behind
+    ``FEATURE_BILLING_SUBSCRIPTION``, so with billing off every one of its 31
+    endpoints 404'd — including ``/balance`` and ``/transactions``, which the
+    Wallet page calls unconditionally. A 404 tells the client the feature does
+    not exist; the truth is that it exists and is not configured yet, which is a
+    503. The platform's own diagnostics flagged the same thing from the other
+    side: "route_families CRITICAL — 1 endpoint family are not registered. Every
+    page under a missing prefix will 404."
+    """
+    if not payments_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Payments are not configured on this deployment. Set STRIPE_SECRET_KEY "
+                "(and STRIPE_WEBHOOK_SECRET in production) or FLUTTERWAVE_SECRET_KEY to "
+                "enable payment processing. Account balance and transaction history do "
+                "not require this."
+            ),
+        )
+
+
 # ── Lazy imports (graceful if packages missing) ───────────────────────────────
 
 
@@ -329,7 +370,7 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
-@router.get("/stripe/config")
+@router.get("/stripe/config", dependencies=[Depends(require_payments_configured)])
 async def stripe_config():
     """
     Return safe Stripe configuration for the frontend (no secret keys).
@@ -352,7 +393,7 @@ class CreatePaymentIntentRequest(BaseModel):
     idempotency_key: str | None = None
 
 
-@router.post("/stripe/payment-intent")
+@router.post("/stripe/payment-intent", dependencies=[Depends(require_payments_configured)])
 async def create_payment_intent(
     body: CreatePaymentIntentRequest,
     request: Request,
@@ -554,7 +595,7 @@ class FlutterwaveVerifyBody(BaseModel):
     plan: str = Field("professional", description="Plan purchased")
 
 
-@router.post("/payments/flutterwave/init")
+@router.post("/payments/flutterwave/init", dependencies=[Depends(require_payments_configured)])
 async def flutterwave_init(
     body: FlutterwaveInitBody,
     user: TokenPayload = Depends(get_current_user),
@@ -602,7 +643,7 @@ async def flutterwave_init(
         raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from exc
 
 
-@router.post("/payments/flutterwave/verify")
+@router.post("/payments/flutterwave/verify", dependencies=[Depends(require_payments_configured)])
 async def flutterwave_verify(
     body: FlutterwaveVerifyBody,
     user: TokenPayload = Depends(get_current_user),
@@ -677,7 +718,7 @@ async def flutterwave_verify(
         raise HTTPException(status_code=500, detail="Verification failed — check server logs") from exc
 
 
-@router.get("/payments/flutterwave/status")
+@router.get("/payments/flutterwave/status", dependencies=[Depends(require_payments_configured)])
 async def flutterwave_status():
     """Return whether Flutterwave is configured."""
     key = os.getenv("FLUTTERWAVE_SECRET_KEY", "")
@@ -1608,7 +1649,11 @@ async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_
 # frontend cryptoCheckoutApi can use a single /billing prefix.
 
 
-@router.get("/crypto/rates", summary="Live crypto exchange rates for checkout")
+@router.get(
+    "/crypto/rates",
+    summary="Live crypto exchange rates for checkout",
+    dependencies=[Depends(require_payments_configured)],
+)
 async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
     """Return live BTC/ETH/USDT rates in USD for the crypto checkout flow."""
     try:
@@ -1641,7 +1686,9 @@ async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
         }
 
 
-@router.post("/crypto/order", summary="Create a crypto payment order")
+@router.post(
+    "/crypto/order", summary="Create a crypto payment order", dependencies=[Depends(require_payments_configured)]
+)
 async def create_crypto_order(
     payload: dict,
     user: TokenPayload = Depends(get_current_user),

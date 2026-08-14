@@ -377,13 +377,34 @@ def register_routers(
     else:
         logger.debug("TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable")
 
-    if feature_flags.BILLING_SUBSCRIPTION:
-        from api.billing import router as billing_router
+    # Billing is registered unconditionally. It used to sit behind
+    # FEATURE_BILLING_SUBSCRIPTION, which hid all 31 of its endpoints — including
+    # /balance and /transactions, which the Wallet page calls on every load and
+    # which need no payment provider at all (/balance reads the broker account;
+    # /transactions documents that it returns an empty list when nothing is
+    # configured). With billing off, that page showed the user two red 404s.
+    #
+    # The flag's own description says it governs "GET /api/billing/subscription",
+    # a single endpoint — so its blast radius was 31x its stated scope, and the
+    # platform's diagnostics reported the consequence as
+    # "route_families CRITICAL — every page under a missing prefix will 404".
+    #
+    # Money-moving endpoints now carry require_payments_configured and answer 503
+    # ("exists, not configured yet") instead of 404 ("does not exist"). The Stripe
+    # webhook keeps its own fail-closed check: verify_webhook raises in production
+    # when STRIPE_WEBHOOK_SECRET is absent, so registering it never accepts an
+    # unsigned event.
+    from api.billing import router as billing_router
 
-        _include_router_deduped(app, billing_router)
+    _include_router_deduped(app, billing_router)
+    if feature_flags.BILLING_SUBSCRIPTION:
         logger.info("Billing router registered (/api/billing)")
     else:
-        logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
+        logger.info(
+            "Billing router registered (/api/billing) — FEATURE_BILLING_SUBSCRIPTION is off, "
+            "so payment endpoints answer 503 until a provider is configured. Account balance "
+            "and transaction history are unaffected."
+        )
 
     # ── Public pricing catalogue (/api/pricing) — no auth required ────────────
     try:

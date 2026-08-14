@@ -43,17 +43,34 @@ interface AuditRecord {
   signature: string | null;
 }
 
+/**
+ * The shape GET /api/superadmin/audit actually returns.
+ *
+ * This interface previously described a different API entirely — `id`,
+ * `timestamp`, `username`, `resource`, `resource_id`, `ip`, `status`, `details`
+ * — none of which the endpoint has ever sent. TypeScript did not catch it
+ * because the response is read from `res.data` as `any`, so every field
+ * resolved to `undefined` at runtime and the table rendered blank cells under
+ * a heading that claimed "15 total admin actions".
+ *
+ * `resource_id` and `status` are gone rather than renamed: `AuditLogEntry` has
+ * no column for either, so any column bound to them can only ever be empty.
+ */
 interface SystemAuditEntry {
-  id: string;
-  timestamp: string;
-  user_id: string;
-  username: string;
+  event_id: string;
+  created_at: string;
+  /** user_id or system component — NOT NULL on AuditLogEntry. */
+  actor: string;
+  user_id: string | null;
+  /** NOT NULL on AuditLogEntry; `event_type` is the nullable secondary label. */
   action: string;
-  resource: string;
-  resource_id: string;
-  ip: string;
-  status: string;
-  details: Record<string, unknown>;
+  event_type: string | null;
+  /** ORDER | RISK | KYC | SYSTEM */
+  category: string;
+  /** INFO | COMPLIANCE | CRITICAL */
+  level: string;
+  ip_address: string | null;
+  detail: string;
 }
 
 const AuditTrailSection: React.FC = () => {
@@ -342,29 +359,41 @@ const AuditTrailSection: React.FC = () => {
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
+                  {/* 'Resource ID' is gone: AuditLogEntry has no such column, so it
+                      rendered '—' on every row forever. Every other header here read a
+                      field the API never sent — username, action, resource, ip, status —
+                      while the API sent event_type, ip_address, created_at and (now)
+                      actor, action, category, level. The result was a page reporting
+                      "15 total admin actions" above 15 rows showing a bare UUID and
+                      nothing else: no action, no resource, no time. The records were
+                      complete the whole time; only the read was wrong. */}
                   <tr style={{ borderBottom: '1px solid #1e293b' }}>
-                    {['User', 'Action', 'Resource', 'Resource ID', 'IP', 'Status', 'Timestamp'].map(h => (
+                    {['User', 'Action', 'Category', 'IP', 'Level', 'Timestamp'].map(h => (
                       <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {sysEntries.map((e) => (
-                    <tr key={e.id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                    <tr key={e.event_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                       <td style={{ padding: '8px 12px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{e.username}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{e.actor || '—'}</div>
                         <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{e.user_id}</div>
                       </td>
-                      <td style={{ padding: '8px 12px', fontWeight: 600, color: '#a78bfa', fontSize: 12 }}>{e.action}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: 600, color: '#a78bfa', fontSize: 12 }}>
+                        <div>{e.action || e.event_type || '—'}</div>
+                        {e.detail && <div style={{ fontSize: 10, fontWeight: 400, color: '#64748b' }}>{e.detail}</div>}
+                      </td>
                       <td style={{ padding: '8px 12px', fontSize: 11 }}>
-                        <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 3, color: '#94a3b8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.resource}</span>
+                        {e.category
+                          ? <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 3, color: '#94a3b8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.category}</span>
+                          : <span style={{ color: '#334155' }}>—</span>}
                       </td>
-                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{e.resource_id || '—'}</td>
-                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#334155' }}>{e.ip}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#334155' }}>{e.ip_address || '—'}</td>
                       <td style={{ padding: '8px 12px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: e.status === 'success' ? '#4ade80' : '#f87171' }}>{e.status}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: e.level === 'CRITICAL' ? '#f87171' : e.level === 'COMPLIANCE' ? '#fbbf24' : '#4ade80' }}>{e.level || '—'}</span>
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(e.timestamp)}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(e.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
