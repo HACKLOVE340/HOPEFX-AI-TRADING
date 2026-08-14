@@ -959,7 +959,10 @@ async def get_env_audit(
     }
     _UNUSED = {
         # Read only by security_service.py, which nothing imports.
-        "SECRET_KEY": "read only by security_service.py, which is not imported anywhere",
+        # detect-secrets' keyword detector sees `"SECRET_KEY": "<string>"` and
+        # assumes the string is the key. It is the explanation of why the
+        # variable is inert — no value is read or stored here.
+        "SECRET_KEY": "read only by security_service.py, which is not imported anywhere",  # pragma: allowlist secret
     }
 
     result: dict[str, Any] = {}

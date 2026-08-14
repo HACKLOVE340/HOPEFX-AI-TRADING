@@ -142,6 +142,22 @@ const WatchlistPage: React.FC = () => {
     return () => clearInterval(id);
   }, [fetchWatchlist, freshness]);
 
+  // Live tick history per symbol, accumulated across renders. Capped at 60
+  // points, which is what the sparkline draws.
+  //
+  // Declared HERE, above `enrichedItems`, and not below it. `enrichedItems` is
+  // a render-time computation that reads `tickHistory`; with the declaration
+  // underneath, that read hit the const's temporal dead zone and threw
+  // "Cannot access 'tickHistory' before initialization" on every render where
+  // the branch was reachable — i.e. whenever the watchlist had a symbol and the
+  // feed was live. A blank page for every user with a non-empty watchlist.
+  //
+  // Neither tsc nor the build caught it: TS2448 fires only for a direct
+  // reference in the same scope, and this read is inside a `.map()` callback,
+  // whose call time TypeScript cannot know. There is no ESLint in this project
+  // to run `no-use-before-define`. Keep the declaration above its first read.
+  const [tickHistory, setTickHistory] = useState<Record<string, number[]>>({});
+
   // Overlay live store prices for real-time feel.
   // Store keys on 'XAU/USD'; the watchlist stores 'XAUUSD'. The mapping used to
   // be a hardcoded chain of five .replace() calls against ten offered symbols,
@@ -187,10 +203,7 @@ const WatchlistPage: React.FC = () => {
     }
   };
 
-  // Live tick history per symbol, accumulated across renders. Capped at 60
-  // points, which is what the sparkline draws.
-  const [tickHistory, setTickHistory] = useState<Record<string, number[]>>({});
-
+  // Accumulates into `tickHistory`, declared above `enrichedItems`.
   useEffect(() => {
     setTickHistory((prev) => {
       let changed = false;

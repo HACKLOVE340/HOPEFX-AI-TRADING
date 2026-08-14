@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "sweep": "node scripts/page_sweep.mjs"
+    "sweep": "node scripts/page_sweep.mjs",
+    "check:tdz": "node scripts/find_tdz_reads.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
