@@ -25,6 +25,7 @@ const MLDashboard: React.FC = () => {
   const [history, setHistory] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [failedParts, setFailedParts] = useState<string[]>([]);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const mountedRef = useRef(true);
@@ -33,12 +34,45 @@ const MLDashboard: React.FC = () => {
     setErr('');
     const [h, s, r] = await Promise.allSettled([mlOpsApi.health(), mlOpsApi.shadow(), mlOpsApi.retrainHistory()]);
     if (!mountedRef.current) return;
-    if (h.status === 'fulfilled') setHealth(h.value.data ?? null);
-    if (s.status === 'fulfilled') setShadows(s.value.data?.shadows ?? {});
-    if (r.status === 'fulfilled') setHistory(r.value.data?.history ?? []);
-    if (h.status === 'rejected' && s.status === 'rejected' && r.status === 'rejected') {
-      setErr(extractApiError(h.reason, 'Failed to load ML-Ops data.'));
+
+    // Each request is reported on its own. The banner used to require all three
+    // to reject, so a dead health endpoint with shadow and history up produced
+    // no banner at all — `health` stayed null and every health-derived tile
+    // rendered a dash or "Stable" as though that were the answer.
+    const failed: string[] = [];
+    let firstReason: unknown = null;
+
+    if (h.status === 'fulfilled') {
+      setHealth(h.value.data ?? null);
+    } else {
+      // Clear rather than keep: stale values under a live-looking tile are the
+      // thing to avoid. A dash is honest, the last known state is not.
+      setHealth(null);
+      failed.push('pipeline health');
+      firstReason ??= h.reason;
     }
+
+    if (s.status === 'fulfilled') {
+      setShadows(s.value.data?.shadows ?? {});
+    } else {
+      setShadows({});
+      failed.push('shadow deployments');
+      firstReason ??= s.reason;
+    }
+
+    if (r.status === 'fulfilled') {
+      setHistory(r.value.data?.history ?? []);
+    } else {
+      setHistory([]);
+      failed.push('retrain history');
+      firstReason ??= r.reason;
+    }
+
+    setFailedParts(failed);
+    // Headline stays the server's message (or the stable fallback); the detail
+    // line below names which parts are affected. Keeping them separate avoids
+    // repeating the part list when the server had nothing to say.
+    setErr(failed.length ? extractApiError(firstReason, 'Failed to load ML-Ops data.') : '');
     setLoading(false);
   }, []);
 
@@ -68,11 +102,35 @@ const MLDashboard: React.FC = () => {
     finally { if (mountedRef.current) setBusy(''); }
   };
 
+  /**
+   * "Stable" has to be earned.
+   *
+   * This read `health?.latest_drift?.is_drifted ? '⚠️ Drifted' : 'Stable'`,
+   * which reports Stable in two states where nothing is known:
+   *
+   *   - the request failed, so `health` is null and `?.` short-circuits — the
+   *     page tells an operator drift is stable while unable to reach the
+   *     pipeline at all;
+   *   - the pipeline replied honestly with `drift_history_count: 0,
+   *     latest_drift: null` (its current live state — no drift check has ever
+   *     run) and the absence was rendered as a clean result.
+   *
+   * Absence of a drift signal is not absence of drift. Same failure the
+   * inference engine's drift guard was just fixed for, on the surface an
+   * operator actually reads.
+   */
+  const driftValue = (): string => {
+    if (!health) return '—';
+    if (health.latest_drift?.is_drifted) return '⚠️ Drifted';
+    if (!health.drift_history_count) return 'No checks yet';
+    return 'Stable';
+  };
+
   const tiles = [
     { label: 'Pipeline', value: health?.running == null ? '—' : health.running ? 'Running' : 'Stopped' },
     { label: 'Retrain state', value: health?.retraining_state ?? '—' },
     { label: 'Drift checks', value: health?.drift_history_count != null ? String(health.drift_history_count) : '—' },
-    { label: 'Drift', value: health?.latest_drift?.is_drifted ? '⚠️ Drifted' : 'Stable' },
+    { label: 'Drift', value: driftValue() },
   ];
 
   return (
@@ -91,7 +149,16 @@ const MLDashboard: React.FC = () => {
       {msg && <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: '#60a5fa', marginBottom: 16 }}>{msg}</div>}
       {loading && <div style={{ color: '#64748b', padding: 20 }}>Loading pipeline…</div>}
       {!loading && err && (
-        <div style={{ padding: '12px 16px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16 }}>{err}</div>
+        <div style={{ padding: '12px 16px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: failedParts.length ? 4 : 0 }}>{err}</div>
+          {/* Name the parts. A partial outage used to render no banner at all,
+              and the tiles it fed simply went blank with no explanation. */}
+          {failedParts.length > 0 && (
+            <div style={{ fontSize: 12, opacity: 0.85 }}>
+              Could not load: {failedParts.join(', ')}. Tiles below show “—” for anything unavailable.
+            </div>
+          )}
+        </div>
       )}
 
       {!loading && (
