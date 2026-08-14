@@ -28,7 +28,7 @@ import contextlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -43,6 +43,15 @@ logger = logging.getLogger(__name__)
 # Startup retry config
 _STARTUP_MAX_RETRIES = int(os.getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
 _STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
+
+# Macro observations older than this are context from a different market.
+# FRED series are daily, so a week of slack covers a normal publication gap.
+#
+# This threshold already existed in analysis/chart_analysis.py, which computed
+# the true age itself and refused stale macro — which is why the chart bot was
+# the only consumer that got this right. It belongs here, where every consumer
+# of the bridge benefits from it.
+MACRO_MAX_AGE_DAYS = int(os.getenv("MACRO_MAX_AGE_DAYS", "7"))
 
 # Local cache file for last-known-good FRED data.
 # Must point to a .json FILE, not a directory.
@@ -83,6 +92,10 @@ class MacroStoreBridge:
         self._last_refresh: datetime | None = None
         self._series_loaded: int = 0
         self._wgc_series_loaded: int = 0
+        # Where the numbers currently in MacroStore came from. "loaded: true"
+        # does not distinguish live FRED from the bundled CSVs that end in
+        # March, and the remedy for each is completely different.
+        self._source: str = "none"
         # Suppress repeated "WGC returned no series" warnings
         self._wgc_offline_warned: bool = False
 
@@ -181,11 +194,32 @@ class MacroStoreBridge:
             if loaded > 0:
                 self._loaded = True
                 self._series_loaded = loaded
+                # When we read the files — deliberately not a freshness claim.
+                # health() reports data_age_days separately for that.
                 self._last_refresh = datetime.now(UTC)
-                logger.info(
-                    "MacroStoreBridge: CSV fallback loaded %d series from data/macro/",
-                    loaded,
-                )
+                self._source = "csv_fallback"
+
+                age = self.data_age_days()
+                if age is None or age > MACRO_MAX_AGE_DAYS:
+                    # The deployed condition. Logging this at INFO with no age
+                    # is how 142-day-old macro data stayed invisible: every
+                    # downstream consumer saw "loaded" and a fresh
+                    # last_refresh, and nothing anywhere stated the real age.
+                    logger.warning(
+                        "MacroStoreBridge: CSV fallback loaded %d series from data/macro/, but the "
+                        "newest observation is %s (%s days old, limit %d) — macro features are STALE. "
+                        "Set FRED_API_KEY to fetch live series, or refresh the bundled CSVs.",
+                        loaded,
+                        self.newest_observation() or "unknown",
+                        "unknown" if age is None else age,
+                        MACRO_MAX_AGE_DAYS,
+                    )
+                else:
+                    logger.info(
+                        "MacroStoreBridge: CSV fallback loaded %d series from data/macro/ (%d days old)",
+                        loaded,
+                        age,
+                    )
             else:
                 logger.warning(
                     "MacroStoreBridge: CSV fallback found no series in data/macro/ — "
@@ -235,7 +269,12 @@ class MacroStoreBridge:
             except Exception as fred_exc:
                 logger.warning("MacroStoreBridge: FRED fetch failed (%s) — trying local cache", fred_exc)
 
-            if fetch_ok and all_series:
+            # `fetch_ok and all_series` is true even when every series is empty:
+            # without FRED_API_KEY each fetch_series returns an empty Series
+            # rather than raising, so the dict is populated with nothing in it.
+            any_data = any(not s.empty for s in all_series.values())
+
+            if fetch_ok and any_data:
                 # Persist a "last known good" snapshot for future fallbacks
                 try:
                     cache_data = {
@@ -243,10 +282,16 @@ class MacroStoreBridge:
                         for name, series in all_series.items()
                         if not series.empty
                     }
-                    os.makedirs(os.path.dirname(_FRED_CACHE_PATH) or ".", exist_ok=True)
-                    with open(_FRED_CACHE_PATH, "w", encoding="utf-8") as _cf:
-                        json.dump(cache_data, _cf)
-                    logger.debug("MacroStoreBridge: FRED cache written to %s", _FRED_CACHE_PATH)
+                    # Never write an empty cache. The filter above drops empty
+                    # series, so an all-empty fetch produced `{}` and wrote it
+                    # over the real snapshot — the fallback destroying itself.
+                    # data/macro/fred_cache.json is 3 bytes of "{}" for exactly
+                    # this reason.
+                    if cache_data:
+                        os.makedirs(os.path.dirname(_FRED_CACHE_PATH) or ".", exist_ok=True)
+                        with open(_FRED_CACHE_PATH, "w", encoding="utf-8") as _cf:
+                            json.dump(cache_data, _cf)
+                        logger.debug("MacroStoreBridge: FRED cache written to %s", _FRED_CACHE_PATH)
                 except Exception as cache_write_exc:
                     logger.debug("MacroStoreBridge: could not write FRED cache: %s", cache_write_exc)
             else:
@@ -258,6 +303,7 @@ class MacroStoreBridge:
                         name: pd.Series({pd.Timestamp(k): v for k, v in vals.items()}, dtype=float)
                         for name, vals in cache_data.items()
                     }
+                    self._source = "cache"
                     logger.info("MacroStoreBridge: loaded %d FRED series from local cache", len(all_series))
                 except FileNotFoundError:
                     logger.warning(
@@ -286,9 +332,23 @@ class MacroStoreBridge:
                     float(series.iloc[-1]) if not series.empty else 0.0,
                 )
 
+            if loaded == 0:
+                # Zero series injected is not a successful load. `start()`
+                # breaks its retry loop on `self._loaded`, so setting it here
+                # unconditionally meant an all-empty FRED response (the
+                # no-API-key case) skipped the CSV fallback entirely and left
+                # MacroStore with nothing.
+                logger.warning(
+                    "MacroStoreBridge: FRED returned no usable series (%d requested) — "
+                    "not marking as loaded. Check FRED_API_KEY.",
+                    len(FRED_SERIES),
+                )
+                return
+
             self._loaded = True
             self._series_loaded = loaded
             self._last_refresh = datetime.now(UTC)
+            self._source = "fred"
 
             if self._prom_series_count:
                 self._prom_series_count.set(loaded)
@@ -409,6 +469,58 @@ class MacroStoreBridge:
     def is_loaded(self) -> bool:
         return self._loaded
 
+    def newest_observation(self) -> date | None:
+        """Date of the most recent observation across all loaded series.
+
+        ``None`` when nothing is loaded or every series is undated — which is
+        "unknown", never "today".
+        """
+        try:
+            from ml.macro_store import macro_store
+
+            snap = macro_store.snapshot()
+        except ImportError:
+            return None
+
+        newest: date | None = None
+        for info in snap.values():
+            if not info:
+                continue
+            raw = info.get("date")
+            if not raw:
+                continue
+            try:
+                parsed = raw if isinstance(raw, date) else date.fromisoformat(str(raw)[:10])
+            except (ValueError, TypeError):
+                continue
+            newest = parsed if newest is None else max(newest, parsed)
+        return newest
+
+    def data_age_days(self) -> int | None:
+        """Age in days of the freshest macro observation, or ``None`` if unknown.
+
+        This is the number that was missing. ``_last_refresh`` records when the
+        bridge last *read* a source, which the CSV fallback sets to
+        ``datetime.now()`` — so a health endpoint reported a refresh seconds ago
+        while serving observations 142 days old. Freshness has to be measured on
+        the data, not on the read.
+        """
+        newest = self.newest_observation()
+        if newest is None:
+            return None
+        return (datetime.now(tz=UTC).date() - newest).days
+
+    def is_stale(self) -> bool:
+        """True when the macro data is too old to describe today's market.
+
+        Fails closed: an age that cannot be established counts as stale, because
+        the alternative is asserting freshness with no evidence.
+        """
+        age = self.data_age_days()
+        if age is None:
+            return True
+        return age > MACRO_MAX_AGE_DAYS
+
     def health(self) -> dict:
         try:
             from ml.macro_store import macro_store
@@ -416,11 +528,22 @@ class MacroStoreBridge:
             snap = macro_store.snapshot()
         except ImportError:
             snap = {}
+
+        newest = self.newest_observation()
+        age = self.data_age_days()
         return {
             "loaded": self._loaded,
             "series_loaded": self._series_loaded,
             "wgc_series_loaded": self._wgc_series_loaded,
+            # When the bridge last read a source. NOT a freshness signal — the
+            # CSV fallback sets this to now while loading months-old files.
             "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
+            # How old the data actually is. This is the freshness signal.
+            "newest_observation": newest.isoformat() if newest else None,
+            "data_age_days": age,
+            "stale": self.is_stale(),
+            "max_age_days": MACRO_MAX_AGE_DAYS,
+            "source": self._source,
             "series_count": len(snap),
             "wgc_health": self._wgc.health(),
             "series": {name: info.get("date") if info else None for name, info in snap.items()},
