@@ -53,6 +53,18 @@ _connection_mode: str = "none"  # "cluster" | "sentinel" | "direct" | "none"
 _last_health_check: float = 0.0
 _health_check_interval: float = float(os.getenv("REDIS_HEALTH_INTERVAL", "30"))
 
+# Why the most recent get_redis() returned None, as (code, human explanation).
+#
+# get_redis() can return None for reasons that need different fixes — the
+# circuit breaker being open, Redis not being configured, or being configured
+# but unreachable — and every caller reported all of them with one hard-coded
+# string. The Health Engine's Redis probe said "Redis client not initialised —
+# check REDIS_URL" while three other probes on other pages reported the same
+# Redis as healthy, because they use get_sync_redis(), which has no circuit
+# breaker. An operator comparing those pages had no way to tell that they were
+# testing different clients, let alone which answer to believe.
+_last_unavailable: tuple[str, str] = ("unknown", "No connection attempt has been made yet.")
+
 # Suppress repeated "no config" / "connection failed" log noise.
 # After the first warning we downgrade subsequent identical messages to DEBUG.
 _no_config_warned: bool = False
@@ -365,6 +377,24 @@ async def _try_direct(
         return None
 
 
+def _set_unavailable_reason(code: str, explanation: str) -> None:
+    global _last_unavailable
+    _last_unavailable = (code, explanation)
+
+
+def redis_unavailable_reason() -> tuple[str, str]:
+    """Why the async client is unavailable, as ``(code, explanation)``.
+
+    Codes: ``circuit_open`` | ``connect_failed`` | ``not_configured`` |
+    ``none_available`` | ``unknown``.
+
+    Health probes should report this instead of guessing. "check REDIS_URL" is
+    actively misleading when the URL is correct and the breaker has simply
+    tripped.
+    """
+    return _last_unavailable
+
+
 async def get_redis(
     *,
     db: int = 0,
@@ -386,6 +416,11 @@ async def get_redis(
         if _rb.is_open:
             logger.debug(
                 "get_redis: Redis circuit breaker OPEN — returning None. Retry in %.0fs.", _rb._seconds_until_probe()
+            )
+            _set_unavailable_reason(
+                "circuit_open",
+                "The Redis circuit breaker is OPEN after repeated failures; connection attempts are "
+                f"suspended for another {_rb._seconds_until_probe():.0f}s. The URL is not necessarily wrong.",
             )
             return None
     except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
@@ -432,14 +467,32 @@ async def get_redis(
             _no_config_warned = False
             return _redis_instance
 
-    if not _no_config_warned:
-        logger.warning(
-            "Redis: no connection configured (REDIS_CLUSTER_HOSTS / "
-            "REDIS_SENTINEL_HOSTS / REDIS_URL) — trying fakeredis fallback"
+    # "Configured but unreachable" and "not configured at all" are different
+    # faults with different fixes, and this used to report both as the second.
+    _configured = bool(cluster_hosts or sentinel_hosts or redis_url)
+    if _configured:
+        _set_unavailable_reason(
+            "connect_failed",
+            "Redis is configured but every connection attempt failed "
+            f"(mode tried: {'cluster' if cluster_hosts else 'sentinel' if sentinel_hosts else 'direct URL'}). "
+            "Check that the server is reachable and the credentials are correct.",
         )
-        _no_config_warned = True
+        if not _no_config_warned:
+            logger.warning("Redis: configured but unreachable — connection attempts failed. Falling back to fakeredis.")
+            _no_config_warned = True
     else:
-        logger.debug("Redis: still unconfigured — trying fakeredis (suppressed repeat)")
+        _set_unavailable_reason(
+            "not_configured",
+            "No Redis connection is configured. Set REDIS_URL (or REDIS_CLUSTER_HOSTS / REDIS_SENTINEL_HOSTS).",
+        )
+        if not _no_config_warned:
+            logger.warning(
+                "Redis: no connection configured (REDIS_CLUSTER_HOSTS / "
+                "REDIS_SENTINEL_HOSTS / REDIS_URL) — trying fakeredis fallback"
+            )
+            _no_config_warned = True
+        else:
+            logger.debug("Redis: still unconfigured — trying fakeredis (suppressed repeat)")
 
     # Async fakeredis fallback — keeps all cache-dependent code paths working
     # in development/CI environments without a real Redis server.
@@ -455,6 +508,10 @@ async def get_redis(
         pass
 
     _connection_mode = "none"
+    _set_unavailable_reason(
+        "none_available",
+        f"{_last_unavailable[1]} The fakeredis fallback is also unavailable (pip install fakeredis).",
+    )
     return None
 
 

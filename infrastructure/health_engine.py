@@ -246,7 +246,20 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
             rc = await get_redis()
             if rc is None:
-                return {"status": "error", "detail": "Redis client not initialised — check REDIS_URL"}
+                # Report the actual reason. This used to say "check REDIS_URL"
+                # unconditionally, which is wrong whenever the URL is fine and
+                # the circuit breaker has tripped — and it disagreed with three
+                # other pages that probe the *sync* client, which has no
+                # breaker. Naming the client removes the ambiguity.
+                from cache.redis_client import redis_unavailable_reason
+
+                code, explanation = redis_unavailable_reason()
+                return {
+                    "status": "error",
+                    "client": "async",
+                    "reason": code,
+                    "detail": f"async Redis client unavailable ({code}): {explanation}",
+                }
             pong = await rc.ping()
             info = await rc.info("server")
             mem_info = await rc.info("memory")

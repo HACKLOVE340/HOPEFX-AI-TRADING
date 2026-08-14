@@ -92,7 +92,19 @@ async def _probe_redis() -> dict[str, Any]:
 
         rc = get_sync_redis_client()
         if rc is None:
-            return {"status": "error", "latency_ms": 0, "detail": "Redis client not initialised"}
+            # Naming the client matters: this probe tests the SYNC client, which
+            # has no circuit breaker, while infrastructure/health_engine.py
+            # probes the ASYNC one, which does. The two can legitimately
+            # disagree — an open breaker makes the async client unavailable
+            # while the sync client still connects — and neither page used to
+            # say which it had tested, so the contradiction looked like a bug in
+            # whichever page the operator happened to trust less.
+            return {
+                "status": "error",
+                "latency_ms": 0,
+                "client": "sync",
+                "detail": "sync Redis client unavailable — the redis package is missing or the URL is unset",
+            }
         pong = rc.ping()
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         mode = get_connection_mode()
