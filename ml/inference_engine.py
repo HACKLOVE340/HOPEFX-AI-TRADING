@@ -81,6 +81,13 @@ _DRIFT_Z_THRESHOLD = float(os.getenv("DRIFT_Z_THRESHOLD", "4.0"))
 _DRIFT_BLOCK = os.getenv("DRIFT_BLOCK", "false").lower() == "true"
 # Rolling window of recent feature vectors for drift detection
 _DRIFT_WINDOW = int(os.getenv("DRIFT_WINDOW", "50"))
+# Fraction of the live feature vector that must be present in the training
+# stats before the guard counts as running. `_check_feature_drift` skips any
+# live feature it has no training stats for; if that skips most of them, the
+# guard produces a clean result from measuring almost nothing while still
+# reporting itself active — the S4-05 mistake one level down. Coverage below
+# this floor is treated as "guard off", not "no drift".
+_DRIFT_MIN_COVERAGE = float(os.getenv("DRIFT_MIN_COVERAGE", "0.5"))
 
 # ── Prometheus metrics (optional — degrades gracefully if not installed) ──────
 
@@ -207,6 +214,14 @@ class InferenceEngine:
         # otherwise reports indistinguishably from 'no drift' (S4-05).
         self._drift_stats_available: bool = False
         self._drift_stats_warned: bool = False
+        # How much of the live feature vector the training stats actually cover.
+        # A stats file whose feature names do not match what the model produces
+        # leaves the guard measuring nothing while looking healthy, so coverage
+        # is part of "active" rather than a separate diagnostic.
+        self._drift_covered: int = 0
+        self._drift_total: int = 0
+        self._drift_reason: str = "no_training_stats"
+        self._drift_coverage_warned: bool = False
         # Uptime tracking — set on first predict call
         self._first_predict_at: float | None = None
         # Rolling window of signal directions for non-neutral rate
@@ -527,8 +542,33 @@ class InferenceEngine:
         training-stats file is absent, which is indistinguishable from a clean
         result. Exposing this lets health checks and operators see that the
         guard is disabled rather than passing. See S4-05.
+
+        "Running" requires both halves: stats that loaded, *and* stats that
+        cover enough of the live feature vector to be measuring the model. A
+        file describing a stale feature schema satisfies the first and not the
+        second, and would otherwise report a clean result from comparing
+        nothing.
         """
         return bool(getattr(self, "_drift_stats_available", False))
+
+    def drift_status(self) -> dict[str, Any]:
+        """Why the drift guard is or is not running.
+
+        ``drift_guard_active()`` answers yes/no; the fixes for the two "no"
+        cases are different. ``no_training_stats`` means the artifact is absent
+        — regenerate it by retraining. ``insufficient_coverage`` means the
+        artifact is present but describes features the model no longer
+        produces — the schema moved and the stats were not regenerated with it.
+        """
+        return {
+            "active": self.drift_guard_active(),
+            "reason": self._drift_reason,
+            "covered": self._drift_covered,
+            "total": self._drift_total,
+            "min_coverage": _DRIFT_MIN_COVERAGE,
+            "drift_detected": bool(getattr(self, "_drift_detected", False)),
+            "z_max": float(getattr(self, "_drift_z_max", 0.0) or 0.0),
+        }
 
     # ── Calibration ───────────────────────────────────────────────────────────
 
@@ -768,13 +808,46 @@ class InferenceEngine:
                 )
                 self._drift_stats_warned = True
             self._drift_stats_available = False
+            self._drift_reason = "no_training_stats"
+            self._drift_covered = 0
+            self._drift_total = len(X_row.columns)
+            return False
+
+        # Coverage check, before anything else. `_check_feature_drift` skips
+        # every live feature it has no training stats for. If that skips most of
+        # them the loop below still completes, max_z stays 0.0 and the result is
+        # "no drift" — computed from almost nothing. Stats that describe a
+        # different feature schema (an older artifact, a renamed block) are not
+        # a working guard, and reporting one as active is the same error as
+        # reporting a missing file as "no drift".
+        col_names = list(X_row.columns)
+        self._drift_total = len(col_names)
+        self._drift_covered = sum(1 for name in col_names if name in train_stats)
+        coverage = self._drift_covered / self._drift_total if self._drift_total else 0.0
+
+        if coverage < _DRIFT_MIN_COVERAGE:
+            if not self._drift_coverage_warned:
+                logger.warning(
+                    "InferenceEngine: feature-drift guard DISABLED — training stats cover only "
+                    "%d of %d live features (%.0f%%, floor %.0f%%). The stats file describes a "
+                    "different feature schema than the model produces; retrain to regenerate "
+                    "ml/saved_models/feature_stats.json.",
+                    self._drift_covered,
+                    self._drift_total,
+                    coverage * 100,
+                    _DRIFT_MIN_COVERAGE * 100,
+                )
+                self._drift_coverage_warned = True
+            self._drift_stats_available = False
+            self._drift_reason = "insufficient_coverage"
             return False
 
         self._drift_stats_available = True
+        self._drift_reason = "ok"
+        self._drift_coverage_warned = False
 
         try:
             row_values = X_row.values[0].astype(float)
-            col_names = list(X_row.columns)
             self._drift_buffer.append(row_values)
 
             if len(self._drift_buffer) < _DRIFT_WINDOW:

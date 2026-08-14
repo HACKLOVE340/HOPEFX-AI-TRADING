@@ -662,6 +662,95 @@ def extract_feature_importance(model, feature_names: list[str]) -> dict:
     return {}
 
 
+def write_feature_stats(X: pd.DataFrame, path: Path | None = None) -> dict[str, dict[str, float]]:
+    """Write the per-feature training distribution the drift guard compares against.
+
+    ``ml/saved_models/feature_stats.json`` had four readers — the inference
+    engine's drift guard, ``DriftMonitor.from_feature_stats``, the model-card
+    endpoint, and two retrain workflows that list it as a build output — and no
+    writer anywhere in the codebase. ``InferenceEngine._load_train_stats``'s
+    docstring even named this module as the producer. The file never existed, so
+    ``drift_guard_active()`` was False in every deployment and drift went
+    unmonitored for the life of the project. The workflows' ``git add ... ||
+    true`` swallowed the missing path on every run.
+
+    Format is fixed by the reader::
+
+        {"feature_name": {"mean": float, "std": float}, ...}
+
+    Two classes of column are deliberately omitted rather than written, because
+    both produce a guard that runs and can never fire correctly:
+
+    * **No finite values.** A NaN mean makes every z-score NaN, and
+      ``NaN > threshold`` is False, so the feature is silently exempt while
+      appearing covered.
+    * **Zero variance.** The guard divides by ``max(train_std, 1e-9)``, so a
+      constant feature yields either z=0 or z≈1e9 — never a meaningful signal,
+      and the latter would pin the guard to permanent drift.
+
+    Omitting them lets the coverage check in ``_check_feature_drift`` see the
+    real picture instead of counting dead columns as monitored.
+
+    Std is the population standard deviation (``ddof=0``): the guard compares a
+    live window mean against the training distribution itself, not against a
+    sample estimate of a wider one.
+    """
+    path = Path(path) if path is not None else MODEL_DIR / "feature_stats.json"
+
+    stats: dict[str, dict[str, float]] = {}
+    skipped_nonfinite: list[str] = []
+    skipped_constant: list[str] = []
+
+    for col in X.columns:
+        series = pd.to_numeric(X[col], errors="coerce")
+        finite = series[np.isfinite(series)]
+        if finite.empty:
+            skipped_nonfinite.append(str(col))
+            continue
+
+        mean = float(finite.mean())
+        std = float(finite.std(ddof=0))
+        if not np.isfinite(mean) or not np.isfinite(std) or std <= 0.0:
+            skipped_constant.append(str(col))
+            continue
+
+        stats[str(col)] = {"mean": mean, "std": std}
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with Path(path).open("w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2, sort_keys=True)
+
+    logger.info("Saved drift-guard feature stats (%d features) → %s", len(stats), path)
+    if skipped_nonfinite:
+        logger.warning(
+            "feature_stats: %d column(s) had no finite values and are NOT monitored for drift: %s",
+            len(skipped_nonfinite),
+            skipped_nonfinite[:10],
+        )
+    if skipped_constant:
+        logger.warning(
+            "feature_stats: %d constant column(s) are NOT monitored for drift: %s",
+            len(skipped_constant),
+            skipped_constant[:10],
+        )
+    return stats
+
+
+def write_feature_importances(importance: dict, path: Path | None = None) -> None:
+    """Persist feature importances, the other artifact the workflows claim to produce.
+
+    ``retrain.yml`` and ``quarterly_retrain.yml`` both upload and commit
+    ``ml/saved_models/feature_importances.json``. Like ``feature_stats.json`` it
+    was never written by anything; ``extract_feature_importance`` computed the
+    values, logged the top ten, and dropped them into the training report only.
+    """
+    path = Path(path) if path is not None else MODEL_DIR / "feature_importances.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with Path(path).open("w", encoding="utf-8") as f:
+        json.dump(importance or {}, f, indent=2, sort_keys=True)
+    logger.info("Saved feature importances (%d features) → %s", len(importance or {}), path)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1223,6 +1312,13 @@ def main():
     importance = extract_feature_importance(final_model, list(X_cv.columns))
     if importance:
         logger.info("Top features: %s", list(importance.keys())[:10])
+    write_feature_importances(importance)
+
+    # The drift guard's only input. Computed from the CV training matrix —
+    # the distribution the final model was actually fitted on, which is what
+    # live feature means must be compared against. Without this file
+    # InferenceEngine.drift_guard_active() is False and drift is undetected.
+    write_feature_stats(X_cv)
 
     # ── Held-out OOS evaluation ───────────────────────────────────────────────
     oos_metrics: ClassVar[dict] = {}

@@ -234,6 +234,28 @@ jobs:
             ml/saved_models/feature_importances.json
           retention-days: 90
 
+      # `git add <path> || true` reported success for feature_stats.json every
+      # run for the life of this workflow, because nothing wrote the file. The
+      # drift guard's only input was silently absent and
+      # InferenceEngine.drift_guard_active() was False in every deployment.
+      # Assert the artifacts exist before adding them, so a trainer that stops
+      # producing one fails the run instead of committing nothing.
+      - name: Verify training artifacts were produced
+        run: |
+          missing=0
+          for f in \
+            ml/saved_models/registry.json \
+            ml/saved_models/advanced_training_report.json \
+            ml/saved_models/feature_stats.json \
+            ml/saved_models/feature_importances.json
+          do
+            if [ ! -s "$f" ]; then
+              echo "::error::expected training artifact is missing or empty: $f"
+              missing=1
+            fi
+          done
+          exit $missing
+
       - name: Commit updated model registry back to branch
         run: |
           git config user.name  "github-actions[bot]"
@@ -242,7 +264,7 @@ jobs:
             ml/saved_models/registry.json \
             ml/saved_models/advanced_training_report.json \
             ml/saved_models/feature_stats.json \
-            ml/saved_models/feature_importances.json || true
+            ml/saved_models/feature_importances.json
           if git diff --cached --quiet; then
             echo "No model registry changes to commit."
           else

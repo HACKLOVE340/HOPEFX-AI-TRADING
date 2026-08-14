@@ -624,7 +624,25 @@ def run_model(bars: list[dict[str, float]], symbol: str, engine: Any | None) -> 
         logger.debug("chart_analysis: is_safe_to_trade unavailable: %s", exc)
     try:
         if not engine.drift_guard_active():
-            verdict.warnings.append("Feature-drift monitoring is not running — model drift would go undetected")
+            # Say which failure it is. "Not running" has two causes with
+            # opposite fixes: the stats artifact is absent (retrain to produce
+            # it), or it is present but describes a feature schema the model no
+            # longer produces (the stats are stale relative to the model).
+            status = engine.drift_status() if hasattr(engine, "drift_status") else {}
+            reason = status.get("reason")
+            if reason == "insufficient_coverage":
+                detail = (
+                    f" — training stats cover only {status.get('covered', 0)} of "
+                    f"{status.get('total', 0)} live features, so the stats are stale "
+                    "relative to the model"
+                )
+            elif reason == "no_training_stats":
+                detail = " — no training-stats artifact (ml/saved_models/feature_stats.json)"
+            else:
+                detail = ""
+            verdict.warnings.append(
+                f"Feature-drift monitoring is not running{detail} — model drift would go undetected"
+            )
     except Exception as exc:
         logger.debug("chart_analysis: drift_guard_active unavailable: %s", exc)
 

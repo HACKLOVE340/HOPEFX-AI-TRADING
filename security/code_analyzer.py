@@ -100,7 +100,20 @@ _NAN_LEAK_RE = re.compile(
     |(?<=[)\w])\.merge\(
     """,
 )
-_NAN_GUARD_RE = re.compile(r"""dropna\(|fillna\(|isnan\(|notna\(|notnull\(|np\.nan_to_num\(|\.replace\(.*np\.nan""")
+# `isfinite(` is accepted alongside `isnan(` because it is a strictly stronger
+# guard: it excludes NaN *and* ±inf, where isnan() lets an infinity through.
+# Without it, code that guards correctly —
+#
+#     if not np.isfinite(mean) or not np.isfinite(var) or var <= 0:
+#         continue
+#     stats[key] = {"mean": float(mean), "std": float(np.sqrt(var))}
+#
+# — was reported as an unguarded NaN leak at HIGH severity. The codebase has
+# ~57 isfinite guards, including in risk/manager.py and invariants/constitution.py,
+# so this was a repo-wide false-positive waiting on proximity to a matching op.
+_NAN_GUARD_RE = re.compile(
+    r"""dropna\(|fillna\(|isnan\(|isfinite\(|notna\(|notnull\(|np\.nan_to_num\(|\.replace\(.*np\.nan"""
+)
 
 # Division by zero risk — dividing by a variable without a zero-check nearby
 _DIV_ZERO_RE = re.compile(r"""(?<![=!<>])/(?![/=])""")  # bare / operator

@@ -340,13 +340,34 @@ jobs:
           q = (d.month - 1) // 3 + 1
           print(f'Q{q}-{d.year}')
           ")
+          # `|| true` here reported success for feature_stats.json on every run
+          # for the life of this workflow, because nothing wrote the file. The
+          # drift guard's only input was silently absent and
+          # InferenceEngine.drift_guard_active() was False in every deployment.
+          # Assert first, so a trainer that stops producing one fails the run.
+          missing=0
+          for f in \
+            ml/saved_models/registry.json \
+            ml/saved_models/advanced_training_report.json \
+            ml/saved_models/advanced_oos_meta.json \
+            ml/saved_models/feature_stats.json \
+            ml/saved_models/feature_importances.json \
+            ml/saved_models/feature_stability.json
+          do
+            if [ ! -s "$f" ]; then
+              echo "::error::expected training artifact is missing or empty: $f"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+
           git add \
             ml/saved_models/registry.json \
             ml/saved_models/advanced_training_report.json \
             ml/saved_models/advanced_oos_meta.json \
             ml/saved_models/feature_stats.json \
             ml/saved_models/feature_importances.json \
-            ml/saved_models/feature_stability.json || true
+            ml/saved_models/feature_stability.json
           if git diff --cached --quiet; then
             echo "No model registry changes to commit."
           else
