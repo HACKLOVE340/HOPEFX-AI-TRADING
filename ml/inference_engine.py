@@ -92,6 +92,20 @@ _DRIFT_MIN_COVERAGE = float(os.getenv("DRIFT_MIN_COVERAGE", "0.5"))
 # ── Prometheus metrics (optional — degrades gracefully if not installed) ──────
 
 
+def _prefix_counts(names: list[str]) -> dict[str, int]:
+    """Group feature names by their leading token, most common first.
+
+    Feature names in this codebase are prefixed by origin (``dl_`` for
+    data-layer injections, ``cot_`` for positioning, ``im_`` for intermarket…),
+    so the prefix is what tells an operator whether a coverage gap is one block
+    of features from a single source or scattered noise.
+    """
+    from collections import Counter
+
+    counts = Counter(name.split("_")[0] for name in names)
+    return dict(counts.most_common())
+
+
 def _init_prometheus():
     """
     Initialise Prometheus counters/gauges/histograms with dedup guard.
@@ -222,6 +236,10 @@ class InferenceEngine:
         self._drift_total: int = 0
         self._drift_reason: str = "no_training_stats"
         self._drift_coverage_warned: bool = False
+        # Names of the live features with no training stats, so an operator can
+        # see *which* are unwatched rather than only how many.
+        self._drift_uncovered: list[str] = []
+        self._drift_uncovered_logged: bool = False
         # Uptime tracking — set on first predict call
         self._first_predict_at: float | None = None
         # Rolling window of signal directions for non-neutral rate
@@ -568,6 +586,11 @@ class InferenceEngine:
             "min_coverage": _DRIFT_MIN_COVERAGE,
             "drift_detected": bool(getattr(self, "_drift_detected", False)),
             "z_max": float(getattr(self, "_drift_z_max", 0.0) or 0.0),
+            # Which features are unwatched. "170 of 229 covered" does not tell
+            # an operator whether the gap is one stale block or scattered
+            # across the vector, and the two have different remedies.
+            "uncovered": sorted(getattr(self, "_drift_uncovered", [])),
+            "uncovered_by_prefix": _prefix_counts(getattr(self, "_drift_uncovered", [])),
         }
 
     # ── Calibration ───────────────────────────────────────────────────────────
@@ -822,8 +845,38 @@ class InferenceEngine:
         # reporting a missing file as "no drift".
         col_names = list(X_row.columns)
         self._drift_total = len(col_names)
-        self._drift_covered = sum(1 for name in col_names if name in train_stats)
+        uncovered = [name for name in col_names if name not in train_stats]
+        self._drift_covered = self._drift_total - len(uncovered)
+        self._drift_uncovered = uncovered
         coverage = self._drift_covered / self._drift_total if self._drift_total else 0.0
+
+        # Which features are unwatched, not just how many. Measured on the
+        # shipped stats: 59 of 229 are uncovered, from two different causes with
+        # two different remedies —
+        #
+        #   36 dl_*  data-layer injections (microstructure, macro, sentiment)
+        #            added after this model was fitted, so the training
+        #            distribution genuinely has no entry for them. Only a
+        #            retrain can cover these.
+        #   23 others (im_, cot_, oi_, of_, ri_, inst_, amihud) which ARE in the
+        #            scaler but were dropped as zero-variance: constant across
+        #            the whole training set, so a z-score against them is either
+        #            0 or 1e9 and never a signal.
+        #
+        # Reporting the count alone made those look like one problem.
+        if uncovered and not self._drift_uncovered_logged:
+            from collections import Counter
+
+            groups = Counter(name.split("_")[0] for name in uncovered)
+            logger.info(
+                "InferenceEngine: %d/%d features are not drift-monitored (no training stats). "
+                "By prefix: %s. Features added since the last retrain cannot be covered until "
+                "the next one.",
+                len(uncovered),
+                self._drift_total,
+                dict(groups.most_common(8)),
+            )
+            self._drift_uncovered_logged = True
 
         if coverage < _DRIFT_MIN_COVERAGE:
             if not self._drift_coverage_warned:

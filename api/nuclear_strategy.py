@@ -367,13 +367,28 @@ async def start_agent(
     try:
         from nuclear.nuclear_agent import get_nuclear_agent
 
-        agent = get_nuclear_agent(symbol=req.symbol)
+        try:
+            agent = get_nuclear_agent(symbol=req.symbol)
+        except ValueError as mismatch:
+            # An agent for a different instrument is already running. This used
+            # to return that agent and report `symbol: req.symbol` — a success
+            # response naming an instrument the process was not trading.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(mismatch),
+            ) from mismatch
+
         await agent.start()
         return {
             "status": "started",
-            "symbol": req.symbol,
+            # The agent's own symbol, not the requested one. They are now
+            # guaranteed equal, and echoing the request would reintroduce the
+            # defect the moment that guarantee changes.
+            "symbol": agent._symbol,
             "agent": agent.status(),
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("agent/start error: %s", exc)
         raise HTTPException(

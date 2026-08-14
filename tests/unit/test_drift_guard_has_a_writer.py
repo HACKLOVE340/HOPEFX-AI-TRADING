@@ -547,3 +547,42 @@ def test_the_retrain_workflow_does_not_swallow_a_missing_artifact(workflow):
             f"{workflow}: `git add ... || true` hides a missing feature_stats.json — "
             "the artifact the drift guard depends on can vanish without failing the run"
         )
+
+
+# ── Which features are unwatched, not just how many ──────────────────────────
+
+
+def test_drift_status_names_the_uncovered_features(monkeypatch):
+    """ "170 of 229 covered" does not say whether the gap is one stale block from
+    a single source or scattered across the vector — and those have different
+    remedies. Measured on the shipped stats the gap is 59 features from two
+    distinct causes: 36 ``dl_*`` added after the model was fitted, and 23 that
+    are in the scaler but were dropped as zero-variance."""
+    import ml.inference_engine as ie
+
+    live = ["dl_a", "dl_b", "cot_x"] + [f"f{i}" for i in range(17)]
+    eng = _engine()
+    eng._train_stats = _stats([f"f{i}" for i in range(17)])
+
+    for _ in range(ie._DRIFT_WINDOW + 1):
+        eng._check_feature_drift(_row(live))
+
+    status = eng.drift_status()
+    assert set(status["uncovered"]) == {"dl_a", "dl_b", "cot_x"}
+    assert status["uncovered_by_prefix"] == {"dl": 2, "cot": 1}
+
+
+def test_full_coverage_reports_no_uncovered_features():
+    """Control."""
+    import ml.inference_engine as ie
+
+    live = [f"f{i}" for i in range(10)]
+    eng = _engine()
+    eng._train_stats = _stats(live)
+
+    for _ in range(ie._DRIFT_WINDOW + 1):
+        eng._check_feature_drift(_row(live))
+
+    status = eng.drift_status()
+    assert status["uncovered"] == []
+    assert status["uncovered_by_prefix"] == {}

@@ -162,11 +162,21 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
 // ── Container ─────────────────────────────────────────────────────────────────
 
 export const ToastContainer: React.FC = () => {
+  // Both hooks unconditionally, before any early return.
+  //
+  // This read `useContext(ToastContext)`, returned null if it was absent, and
+  // only then called `useContext(ToastListContext)`. React identifies hooks by
+  // call order, so the hook count changed between renders — 1 when the toast
+  // context was missing, 2 once it appeared — and React throws "Rendered more
+  // hooks than during the previous render." Reachable whenever the provider
+  // mounts after this component, or its value starts undefined.
+  //
+  // Found by eslint react-hooks/rules-of-hooks; nothing else in this project
+  // was positioned to see it.
   const ctx = useContext(ToastContext);
-  if (!ctx) return null;
-  // Access internal toasts via a separate internal context
   const toasts = useContext(ToastListContext);
-  if (!toasts) return null;
+
+  if (!ctx || !toasts) return null;
 
   return (
     <div

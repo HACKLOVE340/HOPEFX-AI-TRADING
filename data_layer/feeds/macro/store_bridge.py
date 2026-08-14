@@ -126,6 +126,10 @@ class MacroStoreBridge:
         # One warning per process when macro series are omitted from ML
         # features — get_ml_features() is called on every prediction.
         self._features_omitted_warned: bool = False
+        # Strong references to in-flight force_refresh tasks. The event loop
+        # holds only weak ones, so a task nobody references can be collected
+        # mid-await. Entries are discarded by a done-callback.
+        self._refresh_tasks: set[asyncio.Task] = set()
 
         # Prometheus
         self._prom_series_count = None
@@ -517,18 +521,35 @@ class MacroStoreBridge:
         """
         Schedule an immediate FRED refresh outside the daily cycle.
 
-        Creates a fire-and-forget asyncio task.  Safe to call from sync
-        code — does nothing if no event loop is running.
+        Two problems this used to have, neither of which has fired yet because
+        nothing calls it — which is the reason to close them now rather than
+        after the first caller arrives.
+
+        * ``asyncio.ensure_future(...)`` with the result discarded. The event
+          loop holds only a **weak** reference to a task, so a task nobody else
+          references can be garbage-collected mid-await: the refresh silently
+          never completes. The task is kept in ``_refresh_tasks`` and discarded
+          by a done-callback, which is the documented way to keep one alive
+          without leaking it.
+
+        * ``asyncio.run()`` in the no-loop branch, which blocks the calling
+          thread for the whole FRED fetch including its retries. A sync caller
+          asking to "schedule" a refresh does not expect to wait on the
+          network. With no loop there is nothing to schedule onto, so this now
+          declines and says so instead of quietly blocking.
         """
         try:
             loop = asyncio.get_running_loop()
-            asyncio.ensure_future(
-                self._load_fred_into_store(),
-                loop=loop,
-            )
         except RuntimeError:
-            logger.debug("MacroStoreBridge.force_refresh: no running event loop — using asyncio.run()")
-            asyncio.run(self._load_fred_into_store())
+            logger.warning(
+                "MacroStoreBridge.force_refresh: no running event loop — nothing scheduled. "
+                "Call this from async code, or await _load_fred_into_store() directly."
+            )
+            return
+
+        task = loop.create_task(self._load_fred_into_store(), name="macro_bridge_force_refresh")
+        self._refresh_tasks.add(task)
+        task.add_done_callback(self._refresh_tasks.discard)
 
     @property
     def is_loaded(self) -> bool:

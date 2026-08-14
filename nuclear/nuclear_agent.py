@@ -448,17 +448,52 @@ class NuclearStrategyAgent:
 _agent_instance: NuclearStrategyAgent | None = None
 
 
+_DEFAULT_AGENT_SYMBOL = "XAU_USD"
+
+
 def get_nuclear_agent(
-    symbol: str = "XAU_USD",
+    symbol: str | None = None,
     reader: RedisStreamReader | None = None,
 ) -> NuclearStrategyAgent:
     """
     Return the process-wide NuclearStrategyAgent singleton.
 
-    Thread-safe: safe to call from multiple coroutines.
-    The first call creates the instance; subsequent calls return the cached one.
+    Two different questions used to share one signature, and the second was
+    answered wrongly:
+
+    * ``get_nuclear_agent()`` — "give me whatever agent is running". Used by
+      ``api/nuclear_strategy._get_agent()`` for status, history and stop.
+    * ``get_nuclear_agent(symbol="EUR_USD")`` — "give me the agent for THIS
+      instrument". Used by the ``/agent/start`` endpoint with a
+      **request-supplied** symbol.
+
+    The old implementation took ``symbol="XAU_USD"`` as a default and ignored
+    it entirely once an instance existed, so the second form silently returned
+    another instrument's agent. The endpoint then reported
+    ``{"status": "started", "symbol": req.symbol}`` — confirming an instrument
+    it was not running.
+
+    Now an explicit symbol that disagrees with the running agent raises, so the
+    caller gets an error instead of a false success. A bare call still returns
+    whatever is running, because "the current agent" is a legitimate question
+    and must not start failing because a different instrument is active.
+
+    Raises
+    ------
+    ValueError
+        When ``symbol`` is given and an agent for a different symbol is running.
     """
     global _agent_instance
     if _agent_instance is None:
-        _agent_instance = NuclearStrategyAgent(symbol=symbol, reader=reader)
+        _agent_instance = NuclearStrategyAgent(symbol=symbol or _DEFAULT_AGENT_SYMBOL, reader=reader)
+        return _agent_instance
+
+    if symbol is not None and symbol != _agent_instance._symbol:
+        raise ValueError(
+            f"a NuclearStrategyAgent is already running for {_agent_instance._symbol!r}; "
+            f"cannot return one for {symbol!r}. This process supports one agent at a time — "
+            "stop the running agent first, or call get_nuclear_agent() with no symbol to "
+            "operate on whichever is active."
+        )
+
     return _agent_instance
