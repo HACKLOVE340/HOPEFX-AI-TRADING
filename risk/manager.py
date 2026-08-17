@@ -62,6 +62,35 @@ logger = logging.getLogger(__name__)
 _ACCOUNT_EQUITY = float(os.getenv("RISK_ACCOUNT_EQUITY") or os.getenv("INITIAL_BALANCE") or "100000")
 _MAX_POSITION_PCT = float(os.getenv("RISK_MAX_POSITION_PCT", "0.05"))
 _MIN_POSITION_PCT = float(os.getenv("RISK_MIN_POSITION_PCT", "0.001"))
+
+
+def _executable_lot_ceiling() -> float:
+    """The largest lot count the order validator will actually accept.
+
+    Sizing here is expressed in percent-of-equity; ``validation.OrderValidator``
+    rejects on an absolute lot count. Read its limit rather than restating the
+    number, so the two cannot drift into disagreeing — which is exactly what had
+    happened (see the clamp in ``calculate_position_size``).
+
+    ``ORDER_MAX_QTY`` overrides both when set, so an operator raising the ceiling
+    raises it in one place. Imported lazily to keep ``risk`` free of an
+    import-time dependency on ``validation``.
+    """
+    env = os.getenv("ORDER_MAX_QTY")
+    if env:
+        try:
+            return float(env)
+        except ValueError:
+            logger.warning("ORDER_MAX_QTY=%r is not a number — using the validator default", env)
+    try:
+        from validation import OrderValidatorConfig
+
+        return float(OrderValidatorConfig().max_qty)
+    except Exception as exc:  # validation unavailable — fail open to the known default
+        logger.debug("could not read OrderValidatorConfig.max_qty (%s) — using 10.0", exc)
+        return 10.0
+
+
 _KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
 # Cap on the raw Kelly *bankroll fraction*, distinct from _MAX_POSITION_PCT
 # which caps the resulting *position notional*. These were previously the same
@@ -1253,6 +1282,38 @@ class RiskManager:
                     result.quantity,
                     max_notional,
                 )
+
+        # Clamp to the absolute lot ceiling the order validator enforces.
+        #
+        # Every cap above this point is expressed as a *percentage of equity*;
+        # validation.OrderValidator rejects on an *absolute lot count*
+        # (max_qty, default 10.0). Two different units, never reconciled — so on a
+        # large account the percentage sizing legitimately exceeds the lot
+        # ceiling and the order is rejected downstream. At $1M equity this
+        # produced a recommendation of 10.2564 lots against a maximum of 10.0:
+        # the risk engine reported `approved`, and the executor answered
+        # "Quantity 10.2564 exceeds maximum 10.0". A correctly sized trade simply
+        # did not execute, and nothing in the sizing result said why.
+        #
+        # Clamping here rather than raising the validator's ceiling: the ceiling
+        # is a real safety limit, and reducing a size can never create risk that
+        # was not already approved. Read from the same config the validator uses
+        # so the two cannot drift apart again.
+        max_lots = _executable_lot_ceiling()
+        if max_lots > 0 and result.quantity > max_lots:
+            _original = result.quantity
+            scale = max_lots / result.quantity
+            result.quantity = max_lots
+            if result.notional_usd > 0:
+                result.notional_usd *= scale
+            logger.info(
+                "calculate_position_size: clamped %.4f -> %.4f lots to stay inside "
+                "the order validator's max_qty (%.4f); the unclamped size would "
+                "have been rejected at execution",
+                _original,
+                result.quantity,
+                max_lots,
+            )
 
         # Patch stop/take-profit if supplied
         if stop_loss_price is not None:

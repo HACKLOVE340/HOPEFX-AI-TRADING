@@ -4457,3 +4457,100 @@ rate-limit budget.
   runtime role is the shape to aim for. Not changed here — it is deployment
   configuration, and getting it wrong locks the app out of its own tables.
 - **Bot protection on signup** (carried over from Round 5, still open).
+
+---
+
+## Round 6 — backend-fundamentals audit (Top 50 backend concepts)
+
+Scope: the 50-concept backend handbook applied to this repo. Most concepts were
+already implemented, several better than the reference: connection pooling
+(pool_size 20 / max_overflow 40 / pool_pre_ping / pool_recycle 3600), pagination
+(97 limit/offset/cursor parameters across the API), API versioning (`/api/v1`
+aliases), API gateway, circuit breaker, health checks (liveness / readiness /
+startup / deep), observability (metrics + logs + traces), distributed lock (the
+kill-switch Redis latch), CDN, cache-aside, and webhook signature verification.
+
+Four real findings.
+
+### R-01 — a retried order was a second order (HIGH) — FIXED
+
+Migration `b2c3d4e5f6a7` adds `UNIQUE(client_order_id)` and states its scope in
+its own docstring: *"Prevents duplicate order submission on broker retry (network
+timeout **between API and broker**)"*. That is one hop. Nothing covered
+client → API: a lost response, a load-balancer timeout or a double-tap arrived as
+a genuinely new request, the engine minted a fresh `client_order_id`, the UNIQUE
+constraint had nothing to collide with, and a **second real position opened**.
+
+The per-user order rate limit does not close this — two distinct requests inside
+the window are both legitimate to a limiter, which bounds frequency, not
+duplication. And the other half of the pair already existed: this codebase
+retries upstream calls with exponential backoff, as does any mobile client on a
+timeout. Concepts #10 and #41 are a pair, and only #41 was present.
+
+`POST /api/trading/orders` now honours an `Idempotency-Key` header
+(`core/idempotency.py`): first use executes and stores; a replay returns the
+original response with `Idempotency-Replayed: true`; an in-flight replay gets
+409; the same key with a different body gets 422. The key is claimed before any
+side effect, and released on failure so a risk-gate rejection stays retryable.
+Optional rather than mandatory, because making it required is a breaking API
+change that belongs to whoever owns the mobile release.
+
+### R-02 — sizing recommended trades the executor rejects (HIGH) — FIXED
+
+`RiskManager.calculate_position_size` caps by *percentage of equity*;
+`validation.OrderValidator` rejects on an *absolute lot count* (`max_qty`,
+default 10.0). Two different units, never reconciled. At $1M equity the sizing
+engine returned **10.2564 lots**, reported `approved`, and the executor answered
+`"Quantity 10.2564 exceeds maximum 10.0"` — a correctly sized trade that simply
+did not execute, with nothing in the sizing result explaining why.
+
+Sizing now clamps to `_executable_lot_ceiling()`, which reads
+`OrderValidatorConfig.max_qty` (overridable via `ORDER_MAX_QTY`) so the two
+limits cannot drift apart again. Clamping down rather than raising the
+validator's ceiling: the ceiling is a real safety limit, and reducing a size
+cannot create risk that was not already approved.
+
+**This was invisible until the environment was fixed.** `test_risk_manager.py`
+could not even be collected without `xgboost` installed, so the assertion that
+caught it had never run in a web session.
+
+### R-03 — one Redis blip disabled distributed rate limiting for good (HIGH) — FIXED
+
+`rate_limiting/advanced.py` had two switches that only turned off:
+
+1. **Permanent disable.** Any exception set `_redis_available = False`, and
+   `_get_redis()` then returned `None` for the rest of the process's life — the
+   cached client was non-None, so the reconnect branch was unreachable. A Redis
+   failover of a few seconds therefore turned a fleet-wide rate limit into
+   per-worker counting **indefinitely**, with no further log line saying so.
+   This matters more now that P-03 made this limiter the default for every
+   endpoint rather than a handful.
+2. **Loop rebinding.** The async client was cached once and `redis.asyncio` binds
+   its pool to the loop it was created on, so any second event loop in the
+   process raised "Event loop is closed" on every call — silently falling back.
+
+Failures now set a cooldown (`RATE_LIMIT_REDIS_RETRY_SECONDS`, default 30s) and
+re-probe; the client is rebuilt when the running loop changes.
+
+### R-04 — two of my own tests were not hermetic (MEDIUM) — FIXED
+
+`core.idempotency.reset_for_testing()` cleared only the in-process dict, and the
+rate-limiter fixture did the same. Both stores prefer Redis when one is
+reachable, so state survived between tests and between whole pytest runs (24 h
+and window TTLs). The tests passed on a machine with no Redis and failed on one
+with it — backwards, since the Redis path is the one production uses. Both now
+purge their own key prefix (never `FLUSHDB`, which would take the kill-switch
+latch with it).
+
+### Environment, not defects
+
+The ~360 failures and ~82 collection errors a fresh web session showed were
+**all** environmental. Every missing module is declared in `requirements-ci.txt`;
+the container simply never installed it. `.claude/hooks/session-start.sh` now
+provisions a session (venv + requirements-ci.txt + npm + Redis + PYTHONPATH +
+a per-session JWT secret), so a web session sees what CI sees.
+
+A venv is used deliberately: this image's pip, setuptools and wheel are all
+Debian-packaged without RECORD files, so `pip install --upgrade pip` fails
+outright and `ta`, `crcmod` and `ed25519-blake2b` fail to build against the
+system setuptools.

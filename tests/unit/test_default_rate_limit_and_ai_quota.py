@@ -35,24 +35,50 @@ quota bounds total spend, and neither substitutes for the other.
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 
-@pytest.fixture(autouse=True)
-def _reset_limiter_state():
-    """Clear the shared in-process window between tests.
+def _purge_limiter_state() -> None:
+    """Clear both limiter backends.
 
-    The fallback limiter in rate_limiting/advanced.py is a module-level
-    singleton, so counts leak across tests without this and the assertions
-    become order-dependent.
+    Clearing only the in-process window was not enough: rate_limiting/advanced.py
+    prefers Redis when one is reachable, so on a machine with Redis running the
+    counters survived between tests and between whole pytest runs (the sorted
+    sets carry a TTL), and these assertions became order-dependent. They passed
+    where no Redis existed and failed where one did — the wrong way round, since
+    the Redis path is the one production uses.
+
+    Scoped to the limiter's own key prefix rather than FLUSHDB, which would also
+    wipe the kill-switch latch, the idempotency store and anything else sharing
+    the instance.
     """
     from rate_limiting.advanced import _fallback_limiter
 
     _fallback_limiter._windows.clear()
+    try:
+        import redis as _redis_lib
+
+        from rate_limiting_configuration import KEY_PREFIX, REDIS_URL
+
+        client = _redis_lib.from_url(REDIS_URL, decode_responses=True, socket_timeout=1.0)
+        client.ping()
+        for key in client.scan_iter(match=f"{KEY_PREFIX}*", count=500):
+            client.delete(key)
+    except Exception:
+        # No Redis reachable — the in-process clear above is the whole story.
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _reset_limiter_state():
+    """Isolate each test from limiter state left by any other."""
+    _purge_limiter_state()
     yield
-    _fallback_limiter._windows.clear()
+    _purge_limiter_state()
 
 
 # ── P-03: default rate limit ──────────────────────────────────────────────────
@@ -153,6 +179,45 @@ class TestDefaultRateLimit:
         cm.setup_default_rate_limit(app)
         classes = {m.cls for m in app.user_middleware}
         assert cm.DefaultRateLimitMiddleware not in classes
+
+
+@pytest.mark.unit
+class TestLimiterRedisResilience:
+    """Pins the two ways the Redis backend used to switch itself off silently.
+
+    Both downgraded a fleet-wide limit to per-worker counting with no ongoing
+    signal that it had happened — which matters more now that this limiter is
+    the default for every endpoint (P-03), not just a few.
+    """
+
+    def test_a_transient_failure_is_not_permanent(self):
+        """One error used to disable Redis for the life of the process.
+
+        _redis_available was set False on any exception, and _get_redis() then
+        returned None forever because the cached client was non-None so the
+        reconnect branch was unreachable. A few seconds of Redis failover cost
+        distributed rate limiting until the next deploy.
+        """
+        import rate_limiting.advanced as adv
+
+        assert hasattr(adv, "_redis_retry_after"), (
+            "the failure path must set a retry deadline, not disable Redis outright"
+        )
+        src = inspect.getsource(adv._redis_is_allowed)
+        assert "_redis_retry_after" in src, (
+            "a failed check must schedule a re-probe; setting _redis_available=False "
+            "alone is the one-way switch this test exists to prevent"
+        )
+
+    def test_client_is_rebound_when_the_event_loop_changes(self):
+        """redis.asyncio binds its pool to a loop; reuse across loops raises."""
+        import rate_limiting.advanced as adv
+
+        assert hasattr(adv, "_redis_loop"), (
+            "the cached client must record its event loop so it can be rebuilt when a different loop is running"
+        )
+        src = inspect.getsource(adv._get_redis)
+        assert "get_running_loop" in src and "loop_changed" in src
 
 
 # ── P-04: per-user AI quota ───────────────────────────────────────────────────

@@ -38,7 +38,9 @@ Usage
 """
 
 import asyncio
+import contextlib
 import logging
+import os
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
@@ -133,28 +135,81 @@ _fallback_limiter = _InMemoryRateLimiter()
 
 _redis_client = None
 _redis_available: bool = False
+# The event loop the cached client was created on. redis.asyncio binds its
+# connection pool to a loop; using it from another raises "Event loop is closed".
+_redis_loop = None
+# When Redis is marked unavailable, the earliest time to try again. Without this
+# the first failure was permanent for the process — see _redis_is_allowed.
+_redis_retry_after: float = 0.0
+# How long to stay on the fallback before re-probing.
+_REDIS_RETRY_COOLDOWN = float(os.getenv("RATE_LIMIT_REDIS_RETRY_SECONDS", "30"))
 
 
 async def _get_redis():
-    """Lazy-initialise the async Redis client."""
-    global _redis_client, _redis_available
-    if _redis_client is not None:
-        return _redis_client if _redis_available else None
+    """Return a Redis client bound to the *current* event loop, or None.
+
+    Two failure modes this guards against, both of which silently downgraded the
+    limiter to per-process counting:
+
+    1. **Loop rebinding.** The client used to be cached once, forever.
+       ``redis.asyncio`` ties its pool to the loop it was created on, so any
+       second loop in the process (a worker that recreates its loop, anything
+       driving the app under test) hit "Event loop is closed" on every call.
+       The client is now rebuilt when the running loop changes.
+
+    2. **Permanent disable.** A single exception set ``_redis_available = False``
+       and this function then returned None for the rest of the process's life,
+       because the cached client was non-None so the reconnect branch was never
+       reached again. One Redis failover — seconds of downtime — therefore turned
+       a fleet-wide rate limit into a per-worker one indefinitely, with no
+       further log line to say so. Availability is now re-probed after a
+       cooldown.
+    """
+    global _redis_client, _redis_available, _redis_loop, _redis_retry_after
+
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
+    loop_changed = _redis_client is not None and running_loop is not _redis_loop
+    if loop_changed:
+        logger.debug("Rate limiter: event loop changed — rebuilding the Redis client")
+        with contextlib.suppress(Exception):
+            await _redis_client.aclose()
+        _redis_client = None
+        _redis_available = False
+        _redis_retry_after = 0.0
+
+    if _redis_client is not None and _redis_available:
+        return _redis_client
+
+    # Marked unavailable and still inside the cooldown — stay on the fallback.
+    if _redis_client is not None and not _redis_available and time.monotonic() < _redis_retry_after:
+        return None
+
     try:
         import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
         client = aioredis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1.0)
         await client.ping()
         _redis_client = client
+        _redis_loop = running_loop
         _redis_available = True
+        _redis_retry_after = 0.0
         logger.info("Rate limiter: Redis backend connected at %s", redact_url(REDIS_URL))
     except Exception as exc:
         logger.warning(
-            "Rate limiter: Redis unavailable (%s) — using in-process fallback. "
-            "This does NOT enforce limits across multiple pods.",
+            "Rate limiter: Redis unavailable (%s) — using in-process fallback for "
+            "%.0fs. This does NOT enforce limits across multiple pods.",
             exc,
+            _REDIS_RETRY_COOLDOWN,
         )
         _redis_available = False
+        _redis_retry_after = time.monotonic() + _REDIS_RETRY_COOLDOWN
+        # Keep a non-None client so the cooldown branch above is reachable; it is
+        # only ever returned once _redis_available flips back to True.
+        _redis_client = _redis_client or object()
     return _redis_client if _redis_available else None
 
 
@@ -187,9 +242,17 @@ async def _redis_is_allowed(key: str, limit: int, window_seconds: int) -> bool:
             return False
         return True
     except Exception as exc:
-        logger.warning("Redis rate-limit check failed (%s) — falling back", exc)
-        global _redis_available
+        logger.warning(
+            "Redis rate-limit check failed (%s) — falling back for %.0fs",
+            exc,
+            _REDIS_RETRY_COOLDOWN,
+        )
+        global _redis_available, _redis_retry_after
         _redis_available = False
+        # Set the cooldown rather than disabling outright: this used to be a
+        # one-way switch, so a single transient error left the whole process on
+        # per-worker counting permanently.
+        _redis_retry_after = time.monotonic() + _REDIS_RETRY_COOLDOWN
         return await _fallback_limiter.is_allowed(key, limit, window_seconds)
 
 
