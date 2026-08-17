@@ -84,7 +84,7 @@ class IdempotencyKeyReused(Exception):
     """The same key was presented with a different request body."""
 
 
-def _redis():
+def _redis() -> Any:
     try:
         import redis as _redis_lib
 
@@ -124,7 +124,11 @@ def _get(full: str) -> str | None:
     r = _redis()
     if r is not None:
         try:
-            return r.get(full)
+            # One round trip. Calling r.get() twice to satisfy a type checker
+            # would both double the latency on the order path and open a race
+            # where the value changes between the two reads.
+            raw = r.get(full)
+            return None if raw is None else str(raw)
         except Exception as exc:
             logger.warning("idempotency: Redis read failed (%s) — falling back", exc)
     entry = _local.get(full)
@@ -163,7 +167,7 @@ def _overwrite(full: str, payload: str) -> None:
     _local[full] = (time.time() + _TTL_SECONDS, payload)
 
 
-def begin(user_id: str, key: str, body: Any) -> dict | None:
+def begin(user_id: str, key: str, body: Any) -> dict[str, Any] | None:
     """Claim *key* for this request.
 
     Returns:

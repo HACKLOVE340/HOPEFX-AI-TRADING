@@ -268,12 +268,34 @@ class TestEmailVerification:
         rv = client.post("/api/auth/resend-verification", json={"email": email})
         assert rv.status_code == 200
 
-    def test_resend_verification_unknown_email_returns_400(self, client):
-        rv = client.post(
+    def test_resend_verification_does_not_reveal_whether_an_email_exists(self, client):
+        """Unknown and known addresses must be indistinguishable.
+
+        This test previously asserted ``status_code == 400`` for an unknown
+        address, which pinned the exact behaviour that made this endpoint a user
+        enumeration oracle: a 400 "Email not found" for anyone not registered,
+        against a 200 for anyone who is. Anyone could test an address list
+        against it.
+
+        Pre-launch finding Q-02. The endpoint now answers uniformly and logs the
+        real reason server-side, so the assertion is inverted: the two responses
+        must match in both status and body. Comparing them directly is stronger
+        than asserting a single status code — it fails if any future change
+        reintroduces a distinguishing detail anywhere in the response.
+        """
+        _, known_email, _ = _register(client)
+
+        known = client.post("/api/auth/resend-verification", json={"email": known_email})
+        unknown = client.post(
             "/api/auth/resend-verification",
-            json={"email": "nobody@example.com"},
+            json={"email": "definitely-not-registered@example.com"},
         )
-        assert rv.status_code == 400
+
+        assert known.status_code == unknown.status_code == 200
+        assert known.json() == unknown.json(), (
+            "The response for a registered address differs from an unregistered "
+            "one, which is all an attacker needs to enumerate the user table (Q-02)."
+        )
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────
