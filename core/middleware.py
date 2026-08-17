@@ -275,6 +275,89 @@ def setup_metrics_middleware(app: FastAPI) -> None:
         logger.warning("Metrics middleware not available: %s", exc)
 
 
+# ── Request body size cap ─────────────────────────────────────────────────────
+
+# nginx sets `client_max_body_size 10M`, which is the right place for this — but
+# it is the *only* place it was set, and nginx is not always in the path.
+# docker-compose publishes the app on `8000:8000`, so anyone reaching the host
+# directly bypasses nginx entirely; setup_compression() in this same file already
+# documents that exact bypass as the reason it compresses in-app rather than
+# relying on nginx's gzip. The same reasoning applies to body size: without an
+# app-level cap, a direct caller can post a body of any size and the worker will
+# buffer it (pre-launch finding Q-03).
+_MAX_BODY_BYTES: int = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 1024)))
+
+# Uploads legitimately carry the largest bodies in the product. These already
+# enforce their own per-route caps (avatars 2 MiB, journal screenshots 10 MiB,
+# KYC documents), so the global limit only needs to not undercut them.
+_BODY_LIMIT_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "/api/kyc/",
+    "/api/profiles/me/avatar",
+    "/api/journal/trades/",
+    "/api/voice/stt",
+)
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject oversized request bodies with 413 before reading them.
+
+    Checks Content-Length when present, which is the cheap path and covers
+    ordinary clients. A chunked request omits it, so the body is also metered as
+    it streams and cut off once it exceeds the cap — otherwise the header check
+    would be trivially skipped by sending `Transfer-Encoding: chunked`.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path.startswith(_BODY_LIMIT_EXEMPT_PREFIXES):
+            return await call_next(request)
+
+        declared = request.headers.get("content-length")
+        if declared is not None:
+            try:
+                if int(declared) > _MAX_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": f"Request body exceeds {_MAX_BODY_BYTES} bytes"},
+                    )
+            except ValueError:
+                return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
+
+        # No Content-Length (chunked) — meter the stream. Starlette caches the
+        # body on the request, so replacing the receive channel here does not
+        # prevent the route from reading it again downstream.
+        if declared is None:
+            total = 0
+            chunks: list[bytes] = []
+            async for chunk in request.stream():
+                total += len(chunk)
+                if total > _MAX_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": f"Request body exceeds {_MAX_BODY_BYTES} bytes"},
+                    )
+                chunks.append(chunk)
+            body = b"".join(chunks)
+
+            async def _receive() -> dict:
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            # Replacing the receive channel is the documented way to replay a
+            # body that has already been consumed by the middleware.
+            request._receive = _receive
+
+        return await call_next(request)
+
+
+def setup_body_size_limit(app: FastAPI) -> None:
+    """Install the app-level request body cap (MAX_REQUEST_BODY_BYTES)."""
+    if os.getenv("BODY_SIZE_LIMIT_ENABLED", "true").lower() in ("false", "0", "no"):
+        logger.warning("Request body size limit DISABLED via BODY_SIZE_LIMIT_ENABLED")
+        return
+    app.add_middleware(BodySizeLimitMiddleware)
+    logger.info("Request body size limit registered (%d bytes)", _MAX_BODY_BYTES)
+
+
 # ── Default API rate limit ────────────────────────────────────────────────────
 
 # rate_limiting_configuration.GLOBAL_DEFAULT_RATE has always documented itself as
@@ -731,6 +814,9 @@ def register_all(app: FastAPI) -> None:
     # Outside CSRF so a flood is rejected before any per-request work, but inside
     # the security-header and CORS layers so a 429 still carries both.
     setup_default_rate_limit(app)
+    # Outside the rate limiter: an oversized body should be refused on the header
+    # alone, without first spending a token from the caller's rate-limit budget.
+    setup_body_size_limit(app)
     setup_metrics_middleware(app)
     setup_security_headers(app)
     # Outside the security-header middleware so it compresses the final body,
