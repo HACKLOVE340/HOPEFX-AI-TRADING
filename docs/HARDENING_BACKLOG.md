@@ -4589,3 +4589,48 @@ suite is **15,991 passed, 0 failed, 0 errors** (49 skipped, 11 deselected). The
 ~364 failures and ~82 collection errors a bare container showed were
 environmental in their entirety — and, as R-02 proved, they were also hiding a
 real money-path defect.
+
+### R-06 — a recurring pattern: reset helpers that clear one of two backends
+
+Four separate places had the same defect, found one after another once a Redis
+and a database were actually present in the test environment:
+
+| where | cleared | missed |
+|---|---|---|
+| `core.idempotency.reset_for_testing()` | in-process dict | Redis namespace |
+| the rate-limiter test fixture | in-process window | Redis sorted sets |
+| `social.leaderboards` (per-test `LeaderboardManager()`) | instance dict | Redis sorted set |
+| `api.watchlist._reset_watchlists()` | in-memory dict | `watchlists` table |
+
+Each store is "backend with a fallback", and each reset cleared only the
+fallback. The symptom is identical every time and reads backwards: **the tests
+pass where the real backend is missing and fail where it is present.** CI gets a
+fresh database and an empty Redis per run, so they stay green there; anyone
+running twice locally sees failures.
+
+`tests/integration/test_api_db_flow.py::TestWatchlistFlow::test_add_symbol_persists_in_get`
+is the clearest case — it adds a fixed symbol for a fixed user and asserts
+`201 Created`, so it could only ever pass against a database that had never seen
+it. Second run onwards: `409 already in watchlist`, permanently.
+
+All four now clear both backends, scoped to their own key prefix or table —
+never `FLUSHDB`, which would take the kill-switch latch with it.
+
+### R-07 — an integration test asserted the enumeration bug — FIXED
+
+`test_resend_verification_unknown_email_returns_400` pinned exactly the behaviour
+Q-02 removed: 400 for an address that is not registered, 200 for one that is.
+The test encoded the oracle as the contract.
+
+Rewritten to assert the opposite and more strongly than the original: the
+responses for a known and an unknown address must be **identical in status and
+body**, which fails if any future change reintroduces a distinguishing detail
+anywhere in the response rather than only in the status code.
+
+### Coverage note — what "green" covers
+
+Earlier runs in this backlog said "the suite is green" while meaning
+`tests/unit` with `slow` and `e2e` deselected. Running the tiers that had never
+been run (`tests/integration`, `tests/system`, 810 tests) surfaced R-06 and R-07
+immediately. Frontend Playwright specs (`frontend/e2e`, 5 files) and the 4
+`slow`-marked tests remain unrun.
