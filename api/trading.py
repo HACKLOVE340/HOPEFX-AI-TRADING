@@ -34,8 +34,11 @@ from typing import Any
 # the paper branch. Keeping one name means the shadow cannot be reintroduced by
 # accident, and ruff's F811 now catches it if anyone tries.
 from core.account_metrics import margin_level as _margin_level
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+
+from core import idempotency as _idem
 from pydantic import BaseModel, Field, field_validator
 
 from api.auth import (
@@ -976,9 +979,21 @@ def _check_subscription_gate(user_id: str, role: str = "user") -> None:
 )
 async def place_order(
     order: OrderRequest,
+    response: Response,
     user: TokenPayload = Depends(require_kyc),
     _role: TokenPayload = Depends(require_role("trader")),
     _rl: None = Depends(_order_rate_limit_dep),
+    idempotency_key: str | None = Header(
+        None,
+        alias="Idempotency-Key",
+        max_length=200,
+        description=(
+            "Optional. Send a unique value per intended order and this endpoint "
+            "will place it at most once, returning the original response if the "
+            "request is retried. Strongly recommended for any client that retries "
+            "on timeout."
+        ),
+    ),
 ):
     """
     Place a new order.
@@ -1000,11 +1015,44 @@ async def place_order(
     _check_trading_paused()  # soft halt set by superadmin /engine/pause
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
     # Rate limit enforced via Depends(_order_rate_limit_dep) above.
-    await _validate_order(order, user.sub)
-    await _apply_risk_checks(order, user.sub)
-    _log_compliance(order, user.sub)
-    result = await _route_to_broker(order, user.sub)
-    return await _record_fill(order, result, user.sub)
+
+    # ── Idempotency ───────────────────────────────────────────────────────────
+    # Claimed before any side effect, so a retry cannot slip past the checks and
+    # reach the broker a second time. UNIQUE(client_order_id) from migration
+    # b2c3d4e5f6a7 guards the engine→broker hop; this guards client→API, which
+    # nothing covered.
+    body = order.model_dump()
+    if idempotency_key:
+        try:
+            replayed = _idem.begin(user.sub, idempotency_key, body)
+        except _idem.IdempotencyKeyReused as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
+        except _idem.IdempotencyConflict as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        if replayed is not None:
+            # The order already exists. Return the original response rather than
+            # placing a second one.
+            response.headers["Idempotency-Replayed"] = "true"
+            logger.info("order replay served from idempotency store for user %s", user.sub)
+            return replayed
+
+    try:
+        await _validate_order(order, user.sub)
+        await _apply_risk_checks(order, user.sub)
+        _log_compliance(order, user.sub)
+        result = await _route_to_broker(order, user.sub)
+        placed = await _record_fill(order, result, user.sub)
+    except Exception:
+        # Release rather than cache the failure: a rejected order (risk gate,
+        # broker error) must remain retryable with the same key, otherwise the
+        # client is locked out of ever placing it.
+        if idempotency_key:
+            _idem.release(user.sub, idempotency_key)
+        raise
+
+    if idempotency_key:
+        _idem.complete(user.sub, idempotency_key, body, jsonable_encoder(placed))
+    return placed
 
 
 @router.get("/orders", summary="List open and recent orders")
