@@ -306,7 +306,19 @@ class MobileAPIServer:
         @self.app.post("/api/v2/auth/register", response_model=AuthToken, tags=["Auth"])
         async def register(user: MobileUserRegistration):
             try:
-                if self.db and self.db.user_exists(user.email):
+                # Fail closed with no store to write to. Previously the db
+                # checks were all `if self.db`, so with none configured the
+                # duplicate check and save_user() were both skipped and the
+                # handler still issued tokens for a user that was never
+                # created. login() in this class already returns 503 in that
+                # state; register must not be more permissive than login.
+                # (Same defect as mobile/api_v2.py; this module is not
+                # currently mounted by core/router_registry.py, but it is the
+                # same code one wiring change away from being live.)
+                if not self.db:
+                    raise HTTPException(status_code=503, detail="Database unavailable")
+
+                if self.db.user_exists(user.email):
                     raise HTTPException(status_code=409, detail="User already exists")
 
                 salt = bcrypt.gensalt()

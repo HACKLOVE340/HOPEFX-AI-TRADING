@@ -284,8 +284,29 @@ class MobileAPIServer:
             """Register new mobile user"""
 
             try:
+                # Fail closed when there is nowhere to persist the account.
+                #
+                # This used to be `if self.db and ...`, so with no database the
+                # duplicate check was skipped, save_user() was skipped, and the
+                # handler still fell through to _generate_token() — returning a
+                # signed 24 h access token and a 7 day refresh token for a user
+                # that was never created. Anyone could POST here and be handed
+                # credentials for a random uuid.
+                #
+                # The module-level app is built by _build_module_app() as
+                # MobileAPIServer(jwt_secret=...) with no `db` argument, so
+                # self.db is None in exactly the app that core/router_registry.py
+                # mounts — this was the live configuration, not a hypothetical.
+                #
+                # login() in this same class already got it right ("Database
+                # unavailable", 503). Register now matches it. Issuing a
+                # credential is the one thing that must not happen when the
+                # store backing it is missing.
+                if not self.db:
+                    raise HTTPException(status_code=503, detail="Database unavailable")
+
                 # Check if user exists
-                if self.db and self.db.user_exists(user.email):
+                if self.db.user_exists(user.email):
                     raise HTTPException(status_code=409, detail="User already exists")
 
                 # Hash password
@@ -295,19 +316,20 @@ class MobileAPIServer:
                 # Create user
                 user_id = str(uuid.uuid4())
 
-                if self.db:
-                    self.db.save_user(
-                        {
-                            "user_id": user_id,
-                            "email": user.email,
-                            "username": user.username,
-                            "password_hash": password_hash.decode(),
-                            "device_id": user.device_id,
-                            "platform": user.platform,
-                            "created_at": datetime.now(UTC),
-                            "notification_preferences": NotificationPreferences().dict(),
-                        }
-                    )
+                # Unconditional: self.db is guaranteed above, and a token must
+                # never be issued for a user that was not written.
+                self.db.save_user(
+                    {
+                        "user_id": user_id,
+                        "email": user.email,
+                        "username": user.username,
+                        "password_hash": password_hash.decode(),
+                        "device_id": user.device_id,
+                        "platform": user.platform,
+                        "created_at": datetime.now(UTC),
+                        "notification_preferences": NotificationPreferences().dict(),
+                    }
+                )
 
                 # Generate tokens
                 access_token = self._generate_token(user_id, expires_hours=24)
