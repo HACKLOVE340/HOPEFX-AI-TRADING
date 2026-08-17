@@ -118,6 +118,13 @@ _SALT_PASSWORD_RESET = "hopefx-password-reset-v1"  # noqa: S105
 _EMAIL_VERIFY_TTL = int(os.getenv("EMAIL_VERIFY_TTL_SECONDS", str(24 * 3600)))  # 24 h
 _PASSWORD_RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", str(3600)))  # 1 h
 
+# Fixed responses for the two unauthenticated endpoints that take an email
+# address. They are constants rather than inline literals so the "same string in
+# every branch" property is visible in one place and testable — the whole point
+# is that no code path can accidentally return something more specific.
+_ENUMERATION_SAFE_RESET_MESSAGE = "If that email is registered, a reset link has been sent."
+_ENUMERATION_SAFE_VERIFY_MESSAGE = "If that email is registered and unverified, a verification link has been sent."
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 _bearer = HTTPBearer(auto_error=False)
@@ -562,10 +569,25 @@ async def verify_email(token: str):
 
 @router.post("/resend-verification")
 async def resend_verification(body: ForgotPasswordRequest, request: Request):
+    """Re-send the email-verification link.
+
+    Answers uniformly whether or not the address exists. Previously an unknown
+    address got 400 "Email not found" while a known one got 200 — so this
+    endpoint enumerated the user table for anyone who could call it, even though
+    its sibling /forgot-password was written specifically to avoid that
+    (pre-launch finding Q-02).
+
+    "Email already verified" is also folded into the uniform response: it is a
+    different message, and knowing an address is registered *and* verified is
+    strictly more than the caller should learn from an unauthenticated endpoint.
+    """
     _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, raw_verify_token = await asyncio.to_thread(_svc().resend_verification, body.email)
     if not ok:
-        raise HTTPException(status_code=400, detail=msg) from None
+        # Log the real reason server-side; tell the caller nothing that
+        # distinguishes a known address from an unknown one.
+        logger.info("resend-verification declined: %s", msg)
+        return {"message": _ENUMERATION_SAFE_VERIFY_MESSAGE}
     if raw_verify_token:
         signed_verify_token = _make_signed_token(
             {"tok": raw_verify_token, "email": body.email},
@@ -580,7 +602,7 @@ async def resend_verification(body: ForgotPasswordRequest, request: Request):
             send_verification_email(body.email, username, signed_verify_token)
         except Exception as _e:
             logger.warning("Resend verification email failed: %s", _e)
-    return {"message": msg}
+    return {"message": _ENUMERATION_SAFE_VERIFY_MESSAGE}
 
 
 @router.post("/login")
@@ -893,7 +915,14 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     else:
         signed_reset_token = None
 
-    response = {"message": msg}
+    # Return one fixed string rather than `msg`. The status code was already
+    # always 200 and the docstring above already claimed enumeration was
+    # prevented, but the *body* still distinguished the two cases:
+    # request_password_reset() returns "Password reset email sent" for a known
+    # address and "If that email is registered, a reset link has been sent." for
+    # an unknown one. Two different strings is all an attacker needs, so the
+    # uniform status code bought nothing (pre-launch finding Q-02).
+    response = {"message": _ENUMERATION_SAFE_RESET_MESSAGE}
     if signed_reset_token and os.getenv("APP_ENV", "").lower() == "test":
         response["_dev_reset_token"] = signed_reset_token
     return response

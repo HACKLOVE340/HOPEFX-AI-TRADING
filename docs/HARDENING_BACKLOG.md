@@ -4338,3 +4338,122 @@ pre-launch pass has a record of what code cannot close:
 - **Bot protection** on public signup. `auth/router.py` rate-limits registration
   per IP, which slows a single-source flood but not a distributed one. Worth a
   CAPTCHA before open signup, verified server-side.
+
+---
+
+## Round 5b — pre-launch checklist, second 20-item list
+
+The first list (Round 5, P-01…P-05) covered secrets, access control, injection,
+payments and deployment. This second list covers the auth *flow* — session
+lifecycle, reset links, enumeration, lockout — plus request limits and
+surface reduction.
+
+**Already satisfied**, verified rather than assumed:
+
+| item | state |
+|---|---|
+| HSTS, CSRF tokens, CORS lockdown, secure cookie flags | done, and covered in Round 5 (both nginx and `core/middleware.py`) |
+| Expire reset links | `password_reset_expires = now + 1 h`, checked on redemption, **and** the token is stored as a hash (`_hash_token`) rather than in the clear, with a signed outer envelope carrying its own expiry |
+| Rate limit password resets | `_check_ip_rate_limit` on `/forgot-password` and `/reset-password`, plus nginx `limit_req zone=auth` |
+| Lock accounts after failed logins | 5 failures → 15-minute lockout, Redis-backed with a DB fallback so it holds across pods |
+| Reset sessions on password change | correct on the `/reset-password` path — `AuthService.reset_password` calls `logout_all`. **Not** on the authenticated change-password path; see Q-01 |
+| Disable directory listing | no `autoindex` in nginx (off by default) and `StaticFiles` does not index |
+| Remove default admin routes | no adminer/phpMyAdmin/pgAdmin exposed; the `/admin` string in `core/page_routes.py` is an SPA client-side route in the history-fallback list, and the admin *API* is `require_role`-gated |
+| Sanitize before storing, whitelist upload types, verify payment webhooks, set prices server-side, block prompt injection, cap AI usage | covered in Round 5 (items 13–22 there) |
+| Log security events | login attempts are recorded (`_record`), plus the hash-chained audit log and Sentry with PII scrubbing |
+
+### Q-01 — change-password could not work, three ways (HIGH) — FIXED
+
+`POST /api/auth/change-password` in `api/settings_extended.py`. Each defect
+below is independently fatal:
+
+1. **It used a column that does not exist.** It read and wrote
+   `user.password_hash`; the column on `database.user_models.User` is
+   `hashed_password`. `hasattr(User, "password_hash")` is `False`, so the first
+   comparison raised `AttributeError`, the route's broad `except Exception`
+   caught it, and **every request returned 500** — "Password change failed.
+   Please try again." Nobody could change their password, ever. That is not
+   merely a broken feature: a user who believes their credential is compromised
+   had no way to rotate it, and the error told them to retry.
+
+2. **It used a second hashing scheme.** It hashed with bare
+   `bcrypt.hashpw(password)`. Registration and login go through
+   `auth.jwt.hash_password`/`verify_password`, which BLAKE2b pre-hash the input
+   before bcrypt to avoid bcrypt's 72-byte truncation. So with the column fixed
+   but the scheme left alone, `checkpw` would reject every correct current
+   password, and any hash it did write would not verify at login — **locking the
+   user out of their own account**. `auth/service.py` already carries a comment
+   about this exact class of failure happening once before, when that module
+   used `pbkdf2_sha256` while `auth.jwt` used bcrypt. The test suite now pins
+   that a raw-bcrypt hash does *not* verify through `auth.jwt`, so the
+   incompatibility is a checked property rather than a claim.
+
+3. **It did not revoke sessions.** Changing a password is what someone does when
+   they think another party has access; leaving existing sessions valid means
+   that party keeps it. `logout_all` now runs after a successful change, *after*
+   the commit and outside the DB block — a revocation failure must not turn a
+   completed change into a 500 that tells the user it did not happen, so it is
+   logged at ERROR and reported as `sessions_revoked: false` instead.
+
+Also fixed in passing: `mgr.session()` was entered via `ctx.__enter__()` and
+never exited, leaking a DB session on every call; and the route accepted a
+`current_password` guess with no rate limit, so it is now throttled like login.
+
+Two other modules — `mobile/api.py` and `mobile/api_v2.py` — also hash with raw
+bcrypt. Left alone deliberately: they are self-consistent (both register and
+verify with the same raw scheme), so they are not broken today. They *are* the
+same latent trap if they ever share a user store with the main auth service.
+Recorded rather than changed, because unifying them touches the mobile login
+path and deserves its own change.
+
+### Q-02 — two endpoints enumerated the user table (MEDIUM) — FIXED
+
+`/forgot-password` always returned 200 and its docstring said "Always returns
+200 to prevent email enumeration". The status code was uniform; **the body was
+not.** `request_password_reset` returns `"Password reset email sent"` for a
+known address and `"If that email is registered, a reset link has been sent."`
+for an unknown one, and the route returned that string verbatim. Two different
+responses is all an attacker needs, so the uniform status bought nothing. The
+defence was real, sincerely intended, and undone one layer up.
+
+`/resend-verification` was blunter: `raise HTTPException(400, detail=msg)` where
+`msg` is `"Email not found"`. A plain existence oracle.
+
+Both now return a single fixed string held in a module constant
+(`_ENUMERATION_SAFE_RESET_MESSAGE`, `_ENUMERATION_SAFE_VERIFY_MESSAGE`) so the
+"same response on every path" property lives in one place and is testable. The
+real reason is logged server-side. `"Email already verified"` is folded into the
+uniform response too — that an address is registered *and* verified is more than
+an unauthenticated caller should learn.
+
+The fix is at the HTTP boundary, not in the service: `AuthService` still returns
+distinct messages to its own callers, and a test pins that, so the next person
+does not "fix" it by making the service lie internally.
+
+### Q-03 — request bodies were capped only by nginx (MEDIUM) — FIXED
+
+`client_max_body_size 10M` was set in nginx and nowhere else. `docker-compose`
+publishes the app on `8000:8000`, so a caller reaching the host directly
+bypassed it entirely and could post a body of any size for the worker to buffer.
+This is not a hypothetical: `setup_compression()` in `core/middleware.py`
+already documents that exact bypass as its own reason for compressing in-app
+rather than trusting nginx's `gzip`. The same argument applies to body size and
+had not been carried across.
+
+`BodySizeLimitMiddleware` now enforces `MAX_REQUEST_BODY_BYTES` (default 10 MiB,
+matching nginx). It checks `Content-Length` on the cheap path and **also meters
+the stream when the header is absent** — otherwise `Transfer-Encoding: chunked`
+skips the check, which is the usual way a header-only guard is defeated. Upload
+routes that legitimately carry the largest bodies and already enforce their own
+per-route caps are exempt. Registered outside the rate limiter so an oversized
+body is refused on its header without first spending a token from the caller's
+rate-limit budget.
+
+### Operator actions from this list
+
+- **Restrict database permissions.** `docker-compose` and `DEPLOYMENT.md` use a
+  single role with `GRANT ALL PRIVILEGES`. The app needs DML on its own schema,
+  not ownership of the database; a separate migration role and a least-privilege
+  runtime role is the shape to aim for. Not changed here — it is deployment
+  configuration, and getting it wrong locks the app out of its own tables.
+- **Bot protection on signup** (carried over from Round 5, still open).

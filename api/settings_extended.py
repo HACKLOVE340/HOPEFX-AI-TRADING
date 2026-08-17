@@ -336,8 +336,40 @@ class ChangePasswordBody(BaseModel):
 
 
 @router.post("/api/auth/change-password", summary="Change authenticated user password")
-async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends(get_current_user)):
-    """Change the password for the currently authenticated user."""
+async def change_password(
+    body: ChangePasswordBody,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Change the password for the currently authenticated user.
+
+    This route was non-functional in three independent ways, each of which alone
+    would have broken it (pre-launch finding Q-01):
+
+    1. It read and wrote ``user.password_hash``. The column on
+       ``database.user_models.User`` is ``hashed_password``; no ``password_hash``
+       attribute exists, so line one of the check raised AttributeError, the
+       broad ``except Exception`` below caught it, and every single request
+       returned 500 "Password change failed. Please try again." Nobody could
+       change their password, ever.
+
+    2. It hashed with bare ``bcrypt.hashpw(password)``. Registration and login go
+       through ``auth.jwt.hash_password`` / ``verify_password``, which BLAKE2b
+       pre-hash the input before bcrypt to dodge bcrypt's 72-byte truncation. So
+       even with the column name fixed, the ``checkpw`` would have rejected every
+       correct current password, and any hash it did write would not verify at
+       login — locking the user out of their own account. auth/service.py already
+       carries a comment about this exact failure happening once before, when
+       that module used pbkdf2_sha256 while auth.jwt used bcrypt.
+
+    3. It did not revoke sessions. Changing a password is what a user does when
+       they believe someone else has access; leaving existing sessions valid
+       means the attacker keeps it. ``logout_all`` now runs after the change.
+
+    Also fixed: ``mgr.session()`` was entered with ``ctx.__enter__()`` and never
+    exited, leaking a DB session per call, and the route had no rate limit while
+    accepting a password guess.
+    """
     uid = user.sub
 
     if len(body.new_password) < 8:
@@ -346,9 +378,22 @@ async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends
             detail="New password must be at least 8 characters",
         )
 
+    # The current_password field makes this a credential-guessing surface, so it
+    # is throttled like the login route rather than left open.
     try:
-        import bcrypt
+        from auth.router import _check_ip_rate_limit, _get_client_ip
 
+        _check_ip_rate_limit(_get_client_ip(request))
+    except HTTPException:
+        raise
+    except Exception as exc:  # limiter unavailable — do not fail the request closed
+        logger.debug("change-password rate limit unavailable: %s", exc)
+
+    try:
+        # The one hashing scheme the rest of auth uses. Importing it rather than
+        # reimplementing bcrypt here is the point: a second scheme in a second
+        # file is how defect 2 above happened.
+        from auth.jwt import hash_password, verify_password
         from database.connection import get_db_manager
         from database.models import User
 
@@ -356,22 +401,20 @@ async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends
         if not mgr:
             raise HTTPException(status_code=503, detail="Database unavailable")
 
-        ctx = mgr.session()
-        session = ctx.__enter__()
-        user = session.query(User).filter_by(id=uid).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        with mgr.session() as session:
+            row = session.query(User).filter_by(id=uid).first()
+            if not row:
+                raise HTTPException(status_code=404, detail="User not found")
 
-        if not bcrypt.checkpw(body.current_password.encode(), user.password_hash.encode()):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Current password is incorrect",
-            )
+            if not verify_password(body.current_password, row.hashed_password):
+                logger.warning("change-password: wrong current password for user %s", uid)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is incorrect",
+                )
 
-        user.password_hash = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
-        session.commit()
-        logger.info("Password changed for user %s", uid)
-        return {"status": "updated"}
+            row.hashed_password = hash_password(body.new_password)
+            session.commit()
 
     except HTTPException:
         raise
@@ -381,6 +424,33 @@ async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Password change failed. Please try again.",
         ) from exc
+
+    # Outside the DB block: the password is already committed, so a failure to
+    # revoke must not turn a successful change into a 500 that tells the user it
+    # did not happen. It is logged loudly instead, because a change that leaves
+    # old sessions alive is the security-relevant half of this endpoint.
+    revoked = False
+    try:
+        import asyncio
+
+        from auth.router import _svc
+
+        # _svc() is the initialised singleton — AuthService requires a
+        # session_factory, so constructing one here would raise. logout_all is
+        # blocking SQLAlchemy, which auth/service.py's threading model requires
+        # callers in async contexts to wrap.
+        await asyncio.to_thread(_svc().logout_all, uid)
+        revoked = True
+    except Exception as exc:
+        logger.error(
+            "Password changed for user %s but session revocation FAILED (%s) — "
+            "pre-existing sessions may still be valid",
+            uid,
+            exc,
+        )
+
+    logger.info("Password changed for user %s (sessions_revoked=%s)", uid, revoked)
+    return {"status": "updated", "sessions_revoked": revoked}
 
 
 # ── Account deletion ──────────────────────────────────────────────────────────
