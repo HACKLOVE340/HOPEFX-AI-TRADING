@@ -237,5 +237,24 @@ def release(user_id: str, key: str) -> None:
 
 
 def reset_for_testing() -> None:
-    """Clear the in-process store. Test-teardown helper."""
+    """Clear the store — both backends. Test-teardown helper.
+
+    Clearing only ``_local`` made this a lie whenever Redis was reachable, and
+    the tests that relied on it passed on a machine with no Redis and failed on
+    one with it. Entries carry a 24 h TTL, so they also leaked across separate
+    pytest runs. Purge the namespace wherever it actually lives.
+
+    Scoped to ``_KEY_PREFIX`` — never ``FLUSHDB``, which would wipe rate-limit
+    counters, the kill-switch latch and anything else sharing the instance.
+    """
     _local.clear()
+    r = _redis()
+    if r is None:
+        return
+    try:
+        # scan_iter rather than KEYS: KEYS blocks the server, and this helper may
+        # run against a shared development instance.
+        for key in r.scan_iter(match=f"{_KEY_PREFIX}*", count=500):
+            r.delete(key)
+    except Exception as exc:
+        logger.warning("idempotency: could not clear Redis namespace (%s)", exc)
