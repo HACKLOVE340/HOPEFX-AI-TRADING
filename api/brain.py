@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user, require_role
+from core.ai_quota import ai_quota
 
 logger = logging.getLogger(__name__)
 
@@ -391,7 +392,7 @@ def _keyless_chat_reply(message: str) -> str:
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
-    user: TokenPayload = Depends(require_role("starter")),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> ChatResponse:
     """
     Free-form chat with the HOPEFX AI trading assistant.
@@ -611,7 +612,7 @@ class CompleteResponse(BaseModel):
 @router.post("/complete", response_model=CompleteResponse, summary="Raw LLM completion")
 async def brain_complete(
     body: CompleteRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> CompleteResponse:
     """Send a raw prompt to the configured LLM backend and return the completion."""
     backend, model = _detect_llm_runtime()
@@ -714,7 +715,7 @@ class EmbedResponse(BaseModel):
 @router.post("/embed", response_model=EmbedResponse, summary="Generate text embeddings")
 async def brain_embed(
     body: EmbedRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> EmbedResponse:
     """Generate embeddings for one or more texts using the configured LLM backend.
 
@@ -815,7 +816,7 @@ class AnalyzeRequest(BaseModel):
 @router.post("/analyze", summary="Run AI analysis on a symbol/timeframe")
 async def analyze_market(
     req: AnalyzeRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> dict:
     """
     Fetch recent OHLCV data and return structured market analysis:

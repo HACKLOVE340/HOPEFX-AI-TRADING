@@ -105,6 +105,26 @@ http {
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.qrserver.com; connect-src 'self' wss://${HOPEFX_DOMAIN} https://api.qrserver.com; font-src 'self'; worker-src 'self' blob:;"
             always;
 
+        # ── Hidden files (.git, .env, .DS_Store, …) ───────────────────────────
+        # Defence in depth. Today every unmatched path is proxied to FastAPI,
+        # which serves the built SPA from its own static mount and has no route
+        # that would hand back a dotfile — so nothing here is reachable. That
+        # stops being true the moment anyone adds a `root`/`alias` block to
+        # serve assets straight off disk, at which point /.git/config and
+        # /.env become live URLs and the repo (including its history) is
+        # readable. Denying the pattern up front costs nothing and removes the
+        # failure mode rather than relying on that block never being added.
+        # The (?!well-known) exclusion is load-bearing, not decoration: a blanket
+        # /. deny also swallows /.well-known/acme-challenge/, which is how
+        # certbot proves domain ownership — so the "hardening" would silently
+        # break TLS renewal and take the site down ~60 days later.
+        location ~ /\.(?!well-known) {
+            deny all;
+            access_log off;
+            log_not_found off;
+            return 404;
+        }
+
         # ── Auth rate limiting ────────────────────────────────────────────────
         location ~ ^/api/auth/(login|register|refresh) {
             limit_req zone=auth burst=5 nodelay;

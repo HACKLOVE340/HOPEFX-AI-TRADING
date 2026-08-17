@@ -275,6 +275,131 @@ def setup_metrics_middleware(app: FastAPI) -> None:
         logger.warning("Metrics middleware not available: %s", exc)
 
 
+# ── Default API rate limit ────────────────────────────────────────────────────
+
+# rate_limiting_configuration.GLOBAL_DEFAULT_RATE has always documented itself as
+# "applied to every endpoint that has no explicit decorator", and
+# api/platform.py::setup_rate_limiting() builds a slowapi Limiter and stores it
+# on app.state. But nothing ever consumed either one: there is not a single
+# @limiter.limit() decorator in the codebase, so the Limiter only ever installed
+# its 429 exception handler. The endpoints that do enforce a limit each brought
+# their own — auth/router.py has a per-IP limiter on login/register/reset,
+# api/payments.py uses rate_limit_dependency(WITHDRAWAL_RATE), and the WS
+# handshakes use rate_limiting.websocket_limiter. Everything else — every ML
+# inference route, every backtest submission, every LLM-backed endpoint — was
+# unmetered. This middleware supplies the documented default so an endpoint has
+# to opt *out* rather than remember to opt in.
+
+# Paths that must not be metered by the default limit.
+_RL_EXEMPT_PREFIXES: tuple[str, ...] = (
+    # Liveness/readiness probes: an orchestrator polls these far faster than any
+    # human, and a 429 to Kubernetes reads as an unhealthy pod.
+    "/health",
+    "/api/health",
+    "/metrics",
+    # WebSocket upgrades carry their own per-IP handshake limiter.
+    "/ws",
+    # Provider webhooks retry in bursts after an outage and are authenticated by
+    # HMAC signature, not by session. Throttling them drops real payment and
+    # KYC events; the signature check is what protects these.
+    "/api/billing/webhook",
+    "/api/monetization/webhook",
+    "/api/payments/webhook",
+    "/api/email/webhook",
+    "/api/kyc/webhooks",
+)
+
+
+class DefaultRateLimitMiddleware(BaseHTTPMiddleware):
+    """Apply GLOBAL_DEFAULT_RATE to every request not covered by a tighter limit.
+
+    Keyed per bearer token when the caller presents one, else per client IP.
+    Keying solely on IP would put an entire office behind one NAT address into a
+    single bucket, which is a denial of service against paying users rather than
+    protection from anyone; keying on the token gives each session its own
+    allowance and still leaves anonymous traffic metered per address.
+
+    Backed by the same Redis sliding window as rate_limiting/advanced.py, so the
+    limit holds across replicas. When Redis is unreachable that module falls back
+    to an in-process counter, which is per-worker — degraded but not open.
+
+    Fails open on an unexpected internal error: a bug in the limiter must not be
+    able to take the whole API down. A limiter that 500s every request is a worse
+    outage than one that briefly stops counting, and the exemption is logged.
+    """
+
+    def __init__(self, app, rate: str | None = None) -> None:
+        super().__init__(app)
+        from rate_limiting_configuration import GLOBAL_DEFAULT_RATE
+
+        self._rate_str = rate or GLOBAL_DEFAULT_RATE
+        from rate_limiting.advanced import _parse_rate
+
+        self._limit, self._window = _parse_rate(self._rate_str)
+
+    def _key(self, request: Request) -> str:
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            import hashlib
+
+            token = auth[7:].strip()
+            if token:
+                # Hash rather than store the token: this key reaches Redis, and a
+                # raw JWT sitting in a rate-limit key is a credential at rest.
+                return "default:tok:" + hashlib.sha256(token.encode()).hexdigest()[:32]
+        from rate_limiting.websocket_limiter import get_client_ip
+
+        # get_client_ip() reads .client and .headers, which Request and WebSocket
+        # both expose, so the trusted-proxy handling is shared rather than
+        # reimplemented (and X-Forwarded-For is honoured only behind a proxy in
+        # TRUSTED_PROXY_IPS — otherwise any client could forge its own key).
+        return "default:ip:" + get_client_ip(request)
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if request.method == "OPTIONS" or path.startswith(_RL_EXEMPT_PREFIXES):
+            return await call_next(request)
+
+        try:
+            from rate_limiting.advanced import _redis_is_allowed
+
+            allowed = await _redis_is_allowed(self._key(request), self._limit, self._window)
+        except Exception as exc:
+            logger.warning("Default rate limiter errored (%s) — allowing request", exc)
+            return await call_next(request)
+
+        if not allowed:
+            logger.info("Default rate limit exceeded: %s %s", request.method, path)
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Rate limit exceeded ({self._rate_str})"},
+                headers={"Retry-After": str(self._window)},
+            )
+        return await call_next(request)
+
+
+def setup_default_rate_limit(app: FastAPI) -> None:
+    """Install the default per-caller rate limit.
+
+    Set RATE_LIMIT_DEFAULT_ENABLED=false to disable, and RATE_GLOBAL_DEFAULT to
+    retune it (both read at startup). Load tests that deliberately exceed the
+    limit are the reason the escape hatch exists.
+    """
+    if os.getenv("RATE_LIMIT_DEFAULT_ENABLED", "true").lower() in ("false", "0", "no"):
+        logger.warning(
+            "Default API rate limiting DISABLED via RATE_LIMIT_DEFAULT_ENABLED — "
+            "endpoints without their own limiter are unmetered.",
+        )
+        return
+    try:
+        app.add_middleware(DefaultRateLimitMiddleware)
+        from rate_limiting_configuration import GLOBAL_DEFAULT_RATE
+
+        logger.info("Default API rate limit registered (%s per caller)", GLOBAL_DEFAULT_RATE)
+    except Exception as exc:
+        logger.error("Could not register default rate limit middleware: %s", exc)
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
@@ -598,11 +723,14 @@ def register_all(app: FastAPI) -> None:
     Order matters — Starlette applies middleware in reverse registration order
     (last registered = outermost = first to process the request).
     We want:
-      startup_gate → CSRF → metrics → security headers → gzip → CORS (outermost)
+      startup_gate → CSRF → rate limit → metrics → security headers → gzip → CORS (outermost)
     """
     setup_startup_gate(app)  # innermost — gate before CSRF so 503 beats 403
     setup_paywall(app)  # after the startup gate: "still booting" beats "pay up"
     setup_csrf_middleware(app)
+    # Outside CSRF so a flood is rejected before any per-request work, but inside
+    # the security-header and CORS layers so a 429 still carries both.
+    setup_default_rate_limit(app)
     setup_metrics_middleware(app)
     setup_security_headers(app)
     # Outside the security-header middleware so it compresses the final body,

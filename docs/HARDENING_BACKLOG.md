@@ -4157,3 +4157,184 @@ not a defect, and is deliberately unchanged here.
   migration `o1p2q3r4s5t6`; the model never declared it, so the ORM had no
   attribute to filter on. Schema was right, model was blind. No new migration
   was needed — the one drafted for it was deleted once that was established.
+
+---
+
+## Round 5 — pre-launch security checklist (30-item external checklist)
+
+Scope: a general-purpose pre-launch checklist for web apps, applied to this
+repo — secrets, database access, auth/authorization, rate limiting and abuse,
+input/output handling, payments, AI features, and deployment/ops. 915 route
+decorators across 70 routers in `api/`, plus the frontend and mobile bundles,
+the nginx config, and the middleware stack.
+
+**Most of the checklist was already satisfied**, and several items were
+satisfied *better* than the checklist asks. Recorded rather than tested, because
+re-verifying them is a grep and inventing tests for them adds no signal:
+
+| checklist item | state in this repo |
+|---|---|
+| Secrets in frontend | none. `frontend/src` and `mobile-app/src` reference only `VITE_API_URL`, `VITE_WS_URL`, `VITE_NUCLEAR_WS_URL`, `import.meta.env.DEV` |
+| Secrets in git history | clean. Only `.env.example` / `.env.production.example` were ever committed; `k8s/k8s-secrets.yaml` is a `<BASE64_...>` placeholder template |
+| Session tokens | already stronger than the checklist. Access token is held in Zustand **memory only** — `AuthGuard.tsx` and `useApi.ts` both say so explicitly — with refresh over an http-only cookie. Nothing auth-shaped in `localStorage` |
+| Password hashing | bcrypt cost 12 with a BLAKE2b pre-hash to dodge bcrypt's 72-byte truncation |
+| SQL injection | parameterized throughout. The two dynamic `UPDATE`s (`api/accounts.py`, `api/journal.py`) allowlist column names and bind every value |
+| XSS | no `dangerouslySetInnerHTML` or `innerHTML` in any production component |
+| File uploads | type allowlist, size cap, and filename sanitisation to a safe alphabet; avatar names are derived from a hash of the user id, so no user-controlled path component |
+| Webhook signatures | verified on every provider — Stripe via `construct_event`, Sumsub/Onfido/Paystack via `hmac.compare_digest` |
+| Server-side pricing | plans resolve server-side; the checkout amount is additionally bounded by `MAX_CHECKOUT_AMOUNT_USD` |
+| Error messages | `api/error_details.py::safe_error()` returns an exception *class name* plus a log reference, keeping DSNs, paths and SQL fragments off the wire |
+| Security headers | CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, at both nginx and `core/middleware.py` |
+| Debug/docs in prod | `docs_url`, `redoc_url` and `openapi_url` are all `None` when `APP_ENV=production`; Vite emits no source maps |
+| Prometheus `/metrics` | already restricted to private ranges at nginx |
+| Prompt injection | user input stays in a `user`-role message and never interpolates into the system prompt; chat sessions are keyed per authenticated user so histories cannot bleed |
+
+Row-level security (checklist items 3–4) does not map here: this is SQLAlchemy
+against Postgres/SQLite with authorization in the application layer, not a
+Supabase-style client-direct database with an anon key on the frontend. The
+equivalent control is per-record ownership, which `core/tenancy.py` centralises
+(Round 3 T-03) and which is enforced in the handlers.
+
+### P-01 — operator telemetry and model internals were anonymous (HIGH) — FIXED
+
+22 GET endpoints across five routers answered with no token:
+
+```
+/api/observability/{traces,metrics,alerts,services,latency-histogram}
+/api/mlops/{health,drift,shadow,retrain/history,models/{id}/metrics}
+/api/tracing/{config,spans}
+/api/ml/{drift-report,drift/status,sharpe-circuit-breaker/status,model-drift,
+         ab-tests,training-jobs,explain/{model},feature-importance/{model}}
+/api/transparency/audit-log
+```
+
+**Round 4 Slice F4 looked directly at this and found it clean** — and was right
+about what it checked. F4 audited `App.tsx`: `/observability` and `/ml-ops` both
+go through `adminOnly()`, all four guards render a spinner while the role is
+unresolved, and tests pin the composition. The restriction was real. It was just
+**only in the SPA**. Skipping the React app and requesting the JSON directly
+returned it. This is the exact shape the checklist warns about — a rule that
+lives in the frontend is not an access control — and a frontend-only audit
+cannot see it, because from inside `App.tsx` everything looks correctly gated.
+
+Two of the 22 are worth naming:
+
+- **`/api/ml/explain/{model}` returned SHAP feature importances.** On a trading
+  system that is not diagnostics, it is the edge. The same data was *already*
+  gated at `require_role("trader")` on the sibling `/api/ml/feature-importances`
+  — so the codebase already held the opinion that this is not public, and one
+  route disagreed with the other.
+- **`/api/transparency/audit-log` returned config changes and risk events.** Its
+  neighbours in that router (`/decisions`, `/explain/{trade}`, `/stats`,
+  `/statement`) are public *on purpose* — the router exists so a client or
+  auditor can verify behaviour without an account. So the fix is one route, not
+  the router, and the test suite pins **both** halves: `/audit-log` must 401 and
+  the other three must still 200. Over-correcting here would have removed a
+  product feature in the name of security.
+
+Guards were placed to match what the code already implied: router-level on
+`observability`, `ml_ops` and `tracing` (wholly operator-facing, so it also
+covers routes added later), route-level on `ml` and `transparency` (mixed-access
+routers, where a router-level guard would wrongly raise the floor for the
+user-facing routes). Levels follow the existing convention — `admin` for the ops
+views the superadmin pages consume, `trader` for the two model-explanation
+routes, matching their already-gated sibling. `trader` is the default role at
+registration, so no ordinary user lost access.
+
+`tests/unit/test_internal_telemetry_requires_auth.py` asserts on the resolved
+dependency graph, not source text, so moving a guard between route and router
+keeps it passing while removing one fails.
+
+### P-02 — an unauthenticated route burned a third-party quota (MEDIUM) — FIXED
+
+`GET /api/macro/refresh` invalidated the 1-hour FRED cache (`feed._cache_ts =
+None`) and re-fetched on every call, with no token — then pushed the result into
+`MacroStore`, which live inference reads. Two problems in one: a free lever for
+exhausting the FRED API quota, and an anonymous write into a path that feeds the
+model. The sibling `/api/macro/features` already required a token; `/refresh`
+was shaped like a health check and got treated as one. Now requires auth.
+
+### P-03 — rate limiting was configured but never applied (HIGH) — FIXED
+
+`rate_limiting_configuration.GLOBAL_DEFAULT_RATE` documents itself as *"applied
+to every endpoint that has no explicit decorator"*, and
+`api/platform.py::setup_rate_limiting()` builds a Redis-backed slowapi `Limiter`
+and stores it on `app.state`. **Neither was consumed.** There is not one
+`@limiter.limit()` decorator in the repository, so the Limiter's only effect was
+installing a 429 handler for an exception nothing raised.
+
+What made this invisible is that the important endpoints *were* limited — each
+by a different mechanism it brought itself:
+
+| surface | mechanism |
+|---|---|
+| login / register / password reset | `auth/router.py` per-IP limiter + nginx `limit_req zone=auth` |
+| withdrawals | `rate_limit_dependency(WITHDRAWAL_RATE)` |
+| WS handshakes | `rate_limiting/websocket_limiter.py` |
+| **everything else** | **nothing** |
+
+So spot-checking rate limiting found a working limiter every time, while ML
+inference, backtest submission and every LLM-backed route were unmetered.
+
+`core/middleware.DefaultRateLimitMiddleware` now supplies the documented
+default, registered in `register_all()`. Keyed per bearer token when present,
+falling back to client IP — keying on IP alone would put an office behind one
+NAT address into a single bucket, which is a denial of service against paying
+users rather than protection from anyone. The key is a SHA-256 prefix, not the
+raw JWT, because it is stored in Redis. Health probes and provider webhooks are
+exempt: a 429 to a Kubernetes probe reads as an unhealthy pod, and providers
+retry webhooks in bursts after an outage where the HMAC signature is the real
+control. The limiter fails **open** on internal error — a broken counter must
+not be able to take the API down — and logs when it does.
+
+### P-04 — no per-user cap on LLM spend (HIGH) — FIXED
+
+`api/chat.py`'s own docstring reasoned about this risk — *"without auth, any bot
+that discovers the URL can run up OpenAI charges indefinitely"* — and solved it
+with authentication. But auth answers **who**, not **how much**. A single
+registered account could loop `/api/brain/complete` (a raw prompt passthrough)
+and drain the provider budget overnight. P-03's rate limiter does not close it
+either: rate bounds burst, and a caller staying just under the limit still runs
+unbounded over a day. The two controls measure different things and neither
+substitutes for the other.
+
+`core/ai_quota.py` adds the cumulative dimension — a rolling 24-hour per-user
+count over the same Redis window — applied to the routes that actually spend:
+`/api/chat`, `/api/brain/{chat,complete,embed,analyze}`, `/api/voice/{tts,stt}`.
+Operators are exempt by default (`AI_QUOTA_EXEMPT_ROLES`); they run the system
+and are not the abuse case. `AI_DAILY_LIMIT_PER_USER=0` is treated as a
+misconfigured env var rather than a silent shutdown of every AI feature, since
+the deliberate version has its own switch.
+
+### P-05 — nginx served dotfiles (LOW, defence in depth) — FIXED
+
+No `location` block denied hidden paths. Nothing is exposed today, because every
+unmatched path is proxied to FastAPI, which serves the SPA from its own static
+mount and has no route that would return a dotfile. It stops being true the
+moment anyone adds a `root`/`alias` block to serve assets from disk — at which
+point `/.git/config` and `/.env` become live URLs and the repository, history
+included, is readable.
+
+The rule is `location ~ /\.(?!well-known)`, and **the exclusion is
+load-bearing**: a blanket `/.` deny also swallows
+`/.well-known/acme-challenge/`, which is how certbot proves domain ownership —
+so the "hardening" would have silently broken TLS renewal and taken the site
+down about 60 days later. Verified by rendering the template and running nginx
+against it: dotfiles 404, ACME challenge 200.
+
+### Operator actions — not code, cannot be fixed in-repo
+
+Four checklist items are account/console settings. They are listed here so the
+pre-launch pass has a record of what code cannot close:
+
+- **Billing caps and usage alerts** on Anthropic/OpenAI, the FRED key, Stripe,
+  the email provider, and the hosting account. P-03 and P-04 bound abuse from
+  outside and from users; neither bounds a bug in our own retry logic. A
+  provider-side cap is the only control that does.
+- **Automatic backups**, with a restore actually rehearsed.
+- **Two-factor** on hosting, database, domain registrar, email, GitHub, and the
+  payment provider. Note that this repo ships `api/two_factor.py` for *end
+  users*, which is a different thing from 2FA on the operator accounts.
+- **Bot protection** on public signup. `auth/router.py` rate-limits registration
+  per IP, which slows a single-source flood but not a distributed one. Worth a
+  CAPTCHA before open signup, verified server-side.

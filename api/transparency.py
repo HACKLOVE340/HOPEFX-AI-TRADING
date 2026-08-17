@@ -17,7 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from api.auth import TokenPayload, require_role
 from api.error_details import safe_error
 
 UTC = timezone.utc
@@ -121,9 +122,17 @@ async def explain_trade(trade_id: str):
 async def get_audit_log(
     limit: int = Query(50, ge=1, le=500),
     action_type: str | None = Query(None),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """
     Retrieve the audit log of all system actions (trades, config changes, risk events).
+
+    Admin-only. The rest of this router is deliberately public — decisions,
+    per-trade explanations, aggregate stats and the client statement exist so a
+    client or auditor can verify the system's behaviour without an account. The
+    audit log is a different kind of record: it carries config changes and risk
+    events, i.e. operator actions rather than published trading conduct, so it
+    is gated even though its neighbours are not.
     """
     try:
         from core.app_state import app_state
