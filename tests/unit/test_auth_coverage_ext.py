@@ -54,6 +54,10 @@ from __future__ import annotations
 import inspect
 import os
 
+# Module-level so the dependency-graph walk in _is_auth_dep can use it too;
+# _collect_auth_deps imports it locally as well, which is harmless.
+from fastapi.params import Depends as _Depends
+
 # Must be set before any app module is imported so startup validators and
 # feature-flag checks see the test environment.
 os.environ.setdefault("APP_ENV", "test")
@@ -295,10 +299,15 @@ def _collect_auth_deps(route) -> list:
     return dep_callables
 
 
-def _is_auth_dep(dep) -> bool:
+# How far to follow a dependency chain looking for an auth dependency. Auth
+# wrappers nest one or two deep in practice; the cap just bounds the walk.
+_MAX_DEP_DEPTH = 5
+
+
+def _is_auth_dep(dep, _depth: int = 0, _seen: set | None = None) -> bool:
     """
     Return True if *dep* is any recognised authentication/authorisation
-    dependency used across the HOPEFX codebase.
+    dependency used across the HOPEFX codebase, **or depends on one**.
 
     Recognised dependencies
     -----------------------
@@ -350,7 +359,47 @@ def _is_auth_dep(dep) -> bool:
     if module in _AUTH_MODULES and any(kw in name.lower() for kw in _AUTH_KEYWORDS):
         return True
 
-    return "require_role" in qualname or "require_plan" in qualname or "require_kyc" in qualname
+    if "require_role" in qualname or "require_plan" in qualname or "require_kyc" in qualname:
+        return True
+
+    # Transitive: a dependency that itself depends on an auth dependency IS an
+    # auth dependency.
+    #
+    # Everything above this point is a one-level, name-based heuristic: it asks
+    # what the dependency is *called* and which module it lives in. That misses
+    # any wrapper that enforces auth by depending on it, which is how FastAPI
+    # composition normally works — `core.ai_quota.ai_quota()` returns a closure
+    # whose own signature carries `user: TokenPayload = Depends(get_current_user)`,
+    # so the route genuinely cannot be reached without a valid token, but the
+    # closure is named `_check` and lives in a module not on the list above.
+    #
+    # Resolving that by adding those paths to WHITELIST would have been wrong:
+    # the whitelist exempts a path from this gate permanently, so it would have
+    # recorded seven authenticated routes as known-unauthenticated and stopped
+    # checking them. Walking the graph instead makes the gate strictly stronger
+    # — it now recognises any wrapper that requires auth, and still fails a route
+    # that has none, which `test_the_gate_still_catches_a_truly_open_route`
+    # below pins.
+    if _depth >= _MAX_DEP_DEPTH:
+        return False
+    seen = set() if _seen is None else _seen
+    if id(dep) in seen:  # guard against a dependency cycle
+        return False
+    seen.add(id(dep))
+    try:
+        sub_sig = inspect.signature(dep)
+    except (ValueError, TypeError):
+        return False
+    for param in sub_sig.parameters.values():
+        default = param.default
+        if (
+            isinstance(default, _Depends)
+            and default.dependency is not None
+            and _is_auth_dep(default.dependency, _depth + 1, seen)
+        ):
+            return True
+
+    return False
 
 
 def _ws_endpoint_has_auth(route) -> bool:
@@ -385,6 +434,46 @@ def _ws_endpoint_has_auth(route) -> bool:
 # ---------------------------------------------------------------------------
 # Gate A1 — mutating routes require auth
 # ---------------------------------------------------------------------------
+
+
+def test_the_gate_still_catches_a_truly_open_route() -> None:
+    """The transitive walk must not turn this gate into a rubber stamp.
+
+    _is_auth_dep now follows sub-dependencies, which is what lets it see through
+    a wrapper like core.ai_quota.ai_quota(). The risk of that change is that it
+    starts calling everything authenticated. These cases pin both directions on
+    real callables rather than on the app, so a future loosening of the heuristic
+    fails here rather than silently passing every route.
+    """
+    from core.ai_quota import ai_quota
+
+    # A wrapper that requires auth via a sub-dependency → recognised.
+    assert _is_auth_dep(ai_quota(feature="test")), (
+        "ai_quota() depends on get_current_user, so a route using it cannot be "
+        "reached without a token. The gate must see that."
+    )
+
+    # Plain dependencies with nothing auth-shaped anywhere → still rejected.
+    def _pagination(limit: int = 50):
+        return limit
+
+    def _wraps_something_harmless(page=_Depends(_pagination)):
+        return page
+
+    assert not _is_auth_dep(_pagination), "a plain query dependency is not auth"
+    assert not _is_auth_dep(_wraps_something_harmless), (
+        "the transitive walk must only return True when an auth dependency is "
+        "actually reachable — otherwise this gate stops protecting anything."
+    )
+
+    # A cycle must terminate rather than recurse forever.
+    def _cyclic():  # pragma: no cover - shape only
+        return None
+
+    _cyclic.__signature__ = inspect.Signature(
+        [inspect.Parameter("self_ref", inspect.Parameter.KEYWORD_ONLY, default=_Depends(_cyclic))]
+    )
+    assert not _is_auth_dep(_cyclic), "a dependency cycle must terminate and report no auth"
 
 
 def test_all_mutating_routes_require_auth(app) -> None:
