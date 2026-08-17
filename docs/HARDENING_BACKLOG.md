@@ -4634,3 +4634,70 @@ Earlier runs in this backlog said "the suite is green" while meaning
 been run (`tests/integration`, `tests/system`, 810 tests) surfaced R-06 and R-07
 immediately. Frontend Playwright specs (`frontend/e2e`, 5 files) and the 4
 `slow`-marked tests remain unrun.
+
+### R-08 — mobile registration issued tokens for users it never created (HIGH) — FIXED
+
+`MobileAPIServer._register_auth_routes` guarded every database call with
+`if self.db`, and did **not** guard the token issuance:
+
+```python
+if self.db and self.db.user_exists(user.email): ...   # duplicate check
+if self.db: self.db.save_user({...})                  # persistence
+access_token = self._generate_token(user_id, ...)     # NOT guarded
+```
+
+With no database the first two were skipped and the third still ran. The
+endpoint returned a signed 24-hour access token and a 7-day refresh token for a
+freshly minted uuid that exists nowhere.
+
+**That was the live configuration.** `_build_module_app()` constructs
+`MobileAPIServer(jwt_secret=...)` with no `db` argument, and
+`core/router_registry.py` mounts precisely that app at `/mobile`. Verified by
+running it: `register → 200` with a token, `db is None`.
+
+`login()` in the same class already returned 503 "Database unavailable" in that
+state. The two disagreed and register was the permissive one — issuing a
+credential is the single operation that must not proceed when its store is
+missing. Both now fail closed, and `save_user` is unconditional so a token can
+never be issued for a user that was not written. The duplicate check also
+becomes reachable for the first time.
+
+`mobile/api.py` carries the identical code and is fixed too; it is not currently
+mounted, but it is one wiring change from being live.
+
+**Scope, checked rather than assumed.** The token carries `{sub, exp, iat}` and
+no `type` claim, while `api.auth._decode_token` requires `type == "access"`.
+Running it confirms the main API rejects these tokens with 401. This was **not**
+a cross-surface authentication bypass, and the report should not have claimed
+one. A test now pins that boundary so it cannot erode silently.
+
+### Verified clean — read, not assumed
+
+Things checked in this pass that turned out to be correct, recorded so nobody
+re-audits them from scratch:
+
+* **`exec` in `strategies/dynamic_registry.py`.** Bandit flags it (B102) and it
+  does compile caller-supplied Python. The surrounding docstring already
+  contains a better analysis than a fresh audit would produce: it names the
+  `ASTSafetyValidator` denylist as *"defence in depth, not a boundary… must not
+  be described as a sandbox"*, documents a real hole it found and closed
+  (`type.__dict__['__subclasses__']` reaching 715 classes, now caught by
+  `visit_Subscript`), and states that the actual control is reachability —
+  `_require_admin()` on `register_strategy`, `require_plan("professional")` on
+  the nocode path. `test_route_auth_closed.py` verifies that gating. No change.
+* **Mobile token storage.** Tokens live in memory in `apiClient.ts` with
+  `expo-secure-store` as the persistence layer (`authStore.ts`,
+  `biometricAuth.ts`). AsyncStorage holds only watchlist symbols and the offline
+  orchestrator cache. The mobile checklist item is correctly implemented.
+* **`slow`-marked tests** — 10 passed, first run this session.
+* **`pip-audit`** — one advisory (`ecdsa` 0.19.2, PYSEC-2026-1325) with no fixed
+  version published. Nothing to upgrade to.
+* **`bandit` repo-wide** — 65 findings, none HIGH severity; the three
+  MEDIUM/HIGH-confidence ones are the `exec` above, a `urlopen` scheme check in
+  a script, and `0.0.0.0` binding in `app.py` (intended for containers).
+* **`mobile-app` typecheck** — `tsc --noEmit` clean.
+
+**`mobile-app` has no tests at all.** `package.json` defines `test` and
+`test:coverage` scripts and depends on `jest` + `jest-expo`, but there is no test
+file anywhere under `mobile-app/`. Recorded rather than fixed: writing that suite
+is a project, not a checklist item.
