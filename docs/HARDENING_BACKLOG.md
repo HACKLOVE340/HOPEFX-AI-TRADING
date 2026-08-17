@@ -4554,3 +4554,38 @@ A venv is used deliberately: this image's pip, setuptools and wheel are all
 Debian-packaged without RECORD files, so `pip install --upgrade pip` fails
 outright and `ta`, `crcmod` and `ed25519-blake2b` fail to build against the
 system setuptools.
+
+### R-05 — the kill switch could halt one pod and tell no one (HIGH) — FIXED
+
+`KillSwitch._write_redis_latch()` writes the key every other pod polls to halt
+itself. Both of its failure paths were effectively invisible:
+
+* `_get_latch_redis()` swallows every exception and returns `None`. The write sat
+  behind `if r is not None:` with no `else`, so an unreachable Redis produced
+  **no write and no log line at all** — the quietest possible failure for the
+  loudest possible control.
+* The exception path logged at `warning` and called itself *"(non-fatal)"*. It is
+  not non-fatal. This pod has stopped trading; the others have not been told and
+  keep trading against a book the operator believes is flat.
+
+That outcome already has a name here: **S2-01, "Split-brain kill switch",
+CRITICAL**. It was reached then by having two `KillSwitch` instances. An
+unwritable latch reaches the same destination by a different route, and the code
+described it as routine.
+
+Now: `CRITICAL` on both paths, naming the consequence ("other pods have NOT been
+told and may still be trading"), plus a `latch_broadcast_ok` field on `status()`
+— `None` before any attempt, `False` when the halt was local-only. A log line
+alone is too easy to miss for this control; an operator checking kill-switch
+status has to be able to see that the broadcast failed.
+
+Deliberately still does **not** raise: the local halt has already succeeded, and
+throwing would unwind the one stop that did work.
+
+### Suite status after provisioning
+
+With `.claude/hooks/session-start.sh` provisioning the environment, the full unit
+suite is **15,991 passed, 0 failed, 0 errors** (49 skipped, 11 deselected). The
+~364 failures and ~82 collection errors a bare container showed were
+environmental in their entirety — and, as R-02 proved, they were also hiding a
+real money-path defect.

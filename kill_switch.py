@@ -118,6 +118,11 @@ class KillSwitch:
         self._active: bool = False
         self._reason: str = ""
         self._activated_at: datetime | None = None
+        # None = no activation attempted yet. False = this pod halted but could
+        # not write the Redis latch, so other pods were never told (split-brain).
+        # Surfaced through status() because a log line is too easy to miss for
+        # the one control whose job is to stop everything, everywhere.
+        self._latch_broadcast_ok: bool | None = None
 
         self._callbacks: list[Callable[[str], None]] = []
         self._running: bool = False
@@ -432,14 +437,39 @@ class KillSwitch:
         indefinitely after an intended manual reset.
         """
         _LATCH_TTL = 7 * 24 * 3600  # 7 days
+        # Failure to write this latch is the definition of split-brain: this pod
+        # has stopped trading and no other pod has been told to. S2-01 recorded
+        # exactly that outcome as CRITICAL, reached by a different route (two
+        # KillSwitch instances). A latch that cannot be written reaches the same
+        # place, so it is neither logged quietly nor described as "non-fatal".
+        #
+        # It still does not raise: the local halt has already succeeded, and
+        # throwing here would unwind the one stop that did work.
         try:
             r = self._get_latch_redis()
-            if r is not None:
-                r.set(self._REDIS_LATCH_KEY, "true", ex=_LATCH_TTL)
-                r.set(self._REDIS_REASON_KEY, reason, ex=_LATCH_TTL)
-                logger.info("Kill switch: Redis distributed latch written (TTL=%ds)", _LATCH_TTL)
+            if r is None:
+                # _get_latch_redis() swallows every exception and returns None,
+                # so this branch used to write nothing and log nothing at all —
+                # the quietest possible failure for the loudest possible control.
+                self._latch_broadcast_ok = False
+                logger.critical(
+                    "KILL SWITCH NOT BROADCAST — no Redis client available. This pod has "
+                    "halted, but other pods have NOT been told to and may still be trading. "
+                    "Halt them manually and check REDIS_URL / REDIS_PASSWORD.",
+                )
+                return
+            r.set(self._REDIS_LATCH_KEY, "true", ex=_LATCH_TTL)
+            r.set(self._REDIS_REASON_KEY, reason, ex=_LATCH_TTL)
+            self._latch_broadcast_ok = True
+            logger.info("Kill switch: Redis distributed latch written (TTL=%ds)", _LATCH_TTL)
         except Exception as exc:
-            logger.warning("Kill switch: could not write Redis latch (non-fatal): %s", exc)
+            self._latch_broadcast_ok = False
+            logger.critical(
+                "KILL SWITCH NOT BROADCAST — writing the Redis latch failed (%s). This pod "
+                "has halted, but other pods have NOT been told to and may still be trading. "
+                "Halt them manually and check Redis connectivity.",
+                exc,
+            )
 
     def _clear_redis_latch(self) -> None:
         """Remove the Redis kill-switch latch on deactivation."""
@@ -515,6 +545,11 @@ class KillSwitch:
             "state_file": str(self._state_file),
             "state_file_exists": self._state_file.exists(),
             "deactivation_token_configured": bool(self._deactivation_token),
+            # None until an activation has been attempted; False means this pod
+            # halted without being able to tell the others. A log line alone is
+            # not enough for that — an operator looking at kill-switch status
+            # needs to see that the halt was local-only.
+            "latch_broadcast_ok": self._latch_broadcast_ok,
         }
 
     # ---------------------------------------------------------------------- #
