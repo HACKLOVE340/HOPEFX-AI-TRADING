@@ -400,7 +400,18 @@ def _require_auth(
 
 # ── Router ─────────────────────────────────────────────────────────────────────
 
-router = APIRouter(prefix="/api/tracing", tags=["Observability"])
+# _require_auth was defined above but only ever attached to the POST test-span
+# route, leaving GET /config and GET /spans open. /spans returns the in-memory
+# span buffer — operation names, routes, and timings for real traffic — and
+# /config returns the OTel exporter endpoint. Both are operator data, so the
+# dependency moves to the router where it covers every route. FastAPI caches a
+# dependency per request, so the POST route's own Depends(_require_auth) still
+# resolves exactly once.
+router = APIRouter(
+    prefix="/api/tracing",
+    tags=["Observability"],
+    dependencies=[Depends(_require_auth)],
+)
 
 
 @router.get(

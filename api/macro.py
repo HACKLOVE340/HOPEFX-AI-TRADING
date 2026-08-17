@@ -211,10 +211,16 @@ async def macro_snapshot():
 
 
 @router.get("/refresh", summary="Force-refresh macro data from FRED and update MacroStore")
-async def macro_refresh():
+async def macro_refresh(user: TokenPayload = Depends(get_current_user)):
     """
     Force a fresh pull from FRED, bypassing the 1-hour cache, and push
     the new values into MacroStore for immediate use by live inference.
+
+    Requires auth: this route deliberately invalidates the 1-hour cache and
+    hits FRED on every call, so unauthenticated it was a free lever for
+    burning the account's FRED quota — and it writes the result into
+    MacroStore, which live inference reads. The sibling /features route
+    already required a token; this one only read like a health check.
     """
     try:
         from data.feeds.macro import get_macro_feed

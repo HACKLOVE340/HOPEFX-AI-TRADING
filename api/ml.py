@@ -1767,7 +1767,7 @@ async def get_model_card(
     summary="Real-time feature drift report (PSI + KS-test)",
     tags=["ML Models"],
 )
-async def get_drift_report() -> dict:
+async def get_drift_report(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Compute and return a statistical drift report for the live feature distribution.
 
@@ -1835,7 +1835,7 @@ async def get_drift_report() -> dict:
     summary="Live feature drift status",
     tags=["ML Models"],
 )
-async def get_drift_status() -> dict:
+async def get_drift_status(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Return the current feature drift status from the inference engine and drift monitor.
 
@@ -1878,7 +1878,7 @@ async def get_drift_status() -> dict:
     summary="Sharpe circuit breaker state for all tracked model versions",
     tags=["ML Models"],
 )
-async def get_sharpe_circuit_breaker_status() -> dict:
+async def get_sharpe_circuit_breaker_status(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Return the current state of the Sharpe circuit breaker for every tracked
     model version.
@@ -1923,7 +1923,11 @@ async def get_sharpe_circuit_breaker_status() -> dict:
     summary="SHAP feature importance for a deployed model",
     tags=["ML Models"],
 )
-async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
+async def get_model_explanation(
+    model_name: str,
+    top_n: int = 30,
+    user: TokenPayload = Depends(require_role("trader")),
+) -> dict:
     """
     Return SHAP TreeExplainer global feature importance for the named model.
 
@@ -1941,7 +1945,11 @@ async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
     summary="Built-in feature importances for a deployed model (fast)",
     tags=["ML Models"],
 )
-async def get_model_feature_importance(model_name: str, top_n: int = 30) -> dict:
+async def get_model_feature_importance(
+    model_name: str,
+    top_n: int = 30,
+    user: TokenPayload = Depends(require_role("trader")),
+) -> dict:
     """Return XGBoost/RF built-in feature_importances_ (faster than SHAP)."""
     from ml.explainability import get_feature_importance
 
@@ -1956,7 +1964,7 @@ async def get_model_feature_importance(model_name: str, top_n: int = 30) -> dict
     summary="KS-test model-output drift across all production models",
     tags=["ML Models"],
 )
-async def get_model_drift() -> dict:
+async def get_model_drift(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Return per-model prediction distribution drift using Kolmogorov-Smirnov
     tests on a sliding window of recent predictions vs the reference distribution.
@@ -1976,7 +1984,7 @@ async def get_model_drift() -> dict:
     summary="List all active A/B tests",
     tags=["ML Models"],
 )
-async def list_ab_tests() -> dict:
+async def list_ab_tests(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Return all active A/B model comparison tests."""
     from ml.ab_testing import get_ab_test_manager
 
@@ -2054,7 +2062,7 @@ async def stop_ab_test(
     summary="List all training jobs (active + recent)",
     tags=["ML Models"],
 )
-async def list_training_jobs() -> dict:
+async def list_training_jobs(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Return all active and recently completed model training jobs."""
     from ml.training_manager import get_training_manager
 
