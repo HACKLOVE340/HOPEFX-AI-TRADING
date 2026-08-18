@@ -325,36 +325,7 @@ MA Crossover · EMA Crossover · Bollinger Bands · Breakout · MACD · RSI · *
 </details>
 
 ---
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.10+
-- Redis 7+
-- PostgreSQL 16+ (optional for paper trading)
-
-### 1. Clone and install
-
-```bash
-git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
-cd HOPEFX-AI-TRADING
-python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements-ci.txt
-```
-
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-# Minimum required for paper trading:
-#   SECURITY_JWT_SECRET  (≥32 chars)
-#   OANDA_API_KEY + OANDA_ACCOUNT_ID  (for OANDA paper mode)
-#   POLYGON_API_KEY  (for L2 order book)
-#   FINNHUB_API_KEY  (for trade tape / cumulative delta)
-```
-
-### 3. Start paper trading
+### 2. Start paper trading
 
 ```bash
 python quickstart.py
