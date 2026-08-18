@@ -6009,3 +6009,201 @@ both bulk operations return `{"succeeded": [...], "failed": [...], "total": N}`,
 and `POST /api/superadmin/users/someuser/ban` still reaches the single-user
 handler. The scan reports 3 shadowed routes before the fix and 0 after;
 reverting the two source files fails the new test.
+
+---
+
+## Round 14 — the CI failures
+
+Two of the three failing checks on this branch were real and are fixed. The
+third is not a code problem at all, and is recorded here because the evidence
+took some digging.
+
+### S-35 — two tests depended on a ticker symbol not existing (MEDIUM) — FIXED
+
+`tests/unit/test_risk_calculator_prices_the_symbol_asked_for.py` failed on both
+Python 3.11 and 3.12 in CI while passing locally:
+
+    FAILED test_an_unknown_symbol_returns_none_rather_than_someone_elses_price
+      AssertionError: assert 8.3715 is None
+    FAILED test_a_zero_or_negative_price_is_not_accepted_as_live
+      AssertionError: assert 8.3715 is None
+
+Both stubbed level 3 of `api/risk_calculator._get_live_price` by pointing
+`_yahoo_ticker` at the string `"NOPE"` and assuming Yahoo does not list it,
+with a comment reading "orchestrator and yfinance both unavailable in the test
+environment". NOPE *is* a listed ticker. On a runner with network access
+yfinance answered 8.3715 and the assertion failed; locally, where the fallback
+cannot reach the internet, it returned `None` and the tests passed.
+
+Green locally, red in CI, for a reason nothing in the test names — the worst
+shape a test failure can take, because it trains you to distrust the CI rather
+than the test.
+
+Replaced with a `yfinance_prices_nothing` fixture that installs a stub module
+whose `Ticker.fast_info` carries no price, so level 3 cannot answer regardless
+of what the network can reach. Verified both ways: with a stub that *does*
+answer, `_get_live_price("ZZZ_QQQ")` returns 8.3715 exactly as CI saw; with the
+fixture's stub it returns `None`.
+
+This was failing on `main` too — the same two tests, same values, in the
+2026-08-17 CI run. It is not specific to this branch.
+
+### S-36 — Gate A reported seven authenticated endpoints as unprotected (MEDIUM) — FIXED
+
+    Gate A FAILED — 7 mutating endpoint(s) missing auth:
+      api/brain.py  chat(), brain_complete(), brain_embed(), analyze_market()
+      api/chat.py   ai_chat()
+      api/voice.py  tts(), stt()
+
+All seven authenticate through `Depends(ai_quota(feature=...))`, and
+`core/ai_quota.py::ai_quota` returns
+`async def _check(user: TokenPayload = Depends(get_current_user))`. The routes
+were never unprotected. `scripts/ci/gate_a_auth_coverage.py` matches the
+*source text* of a dependency default against `AUTH_DEPENDS_MARKERS`, and that
+list had not learned the helper's name when the AI quota shipped
+(commit `dea2f3f`, 2026-08-17) — so the gate has been red ever since.
+
+The tempting fix is the wrong one: a red auth gate invites bolting a second
+`Depends(require_role(...))` onto each route, which changes nothing except to
+make the scanner happy. Read the helper first.
+
+Fixed by adding `ai_quota` to the marker list. But a marker is an **assertion
+the gate cannot verify** — it is an AST scan and cannot follow the indirection.
+If `ai_quota` ever stopped resolving `get_current_user`, the gate would keep
+passing every route that uses it: a security gate silently switched off, which
+is worse than not having one.
+
+So `tests/unit/test_gate_a_markers_really_authenticate.py` pins the claim. It
+asserts `ai_quota(...)` really does depend on `get_current_user`, that the gate
+passes on the current tree, and — the important pair — that the gate still
+*fails* on a fabricated unauthenticated mutating route and *passes* on a
+guarded one, so it cannot be green merely because it stopped looking.
+
+That last check caught itself: the first version used pytest's `tmp_path`,
+whose directory is named after the test function, and the gate skips any file
+with a `test_`-prefixed path component. It scanned zero files, printed
+"Gate A PASSED", and the test went green. The fixture now uses a neutral
+directory name, and the gate's `REPO_ROOT` is moved with `SCAN_DIRS` because
+violations are rendered via `relative_to(REPO_ROOT)`.
+
+### Not a code problem — no job on this repository has been assigned a runner since ~03:25 UTC
+
+Every workflow on the branch shows `failure`, but the runs are 2–6 seconds
+long. Reading the jobs rather than the conclusions:
+
+  * `runner_id: 0`, `runner_name: ""` — no runner was ever assigned;
+  * log download returns HTTP 404 — there is no log, because nothing executed;
+  * the check-run `output` is empty (no title, summary or text);
+  * it affects **every** workflow at once, including CodeQL, whose two jobs
+    also died in 2 seconds even though the run's own conclusion reads
+    "success";
+  * the inflection is sharp: the run at 03:01 UTC executed for 19 minutes; from
+    03:29 UTC onward every run dies in about 5 seconds;
+  * no commit on this branch touches `.github/` — the last workflow change was
+    four days earlier.
+
+The workflows themselves are fine. Security Scan last executed 2026-08-17 and
+**passed** (49s); Docker Compose Smoke Test last executed on this very branch
+at 01:27 today and **passed** (38s). Only `Tests` and `CI` were genuinely
+failing, on the two items above.
+
+Runs being created and jobs being created and then immediately failed — rather
+than not being queued at all — is the account-level billing path, not the
+"Actions disabled" path. This needs someone with access to
+**Settings → Billing → Actions** (spending limit, included minutes, payment
+method) on the HACKLOVE340 account; it cannot be fixed from inside the
+repository. Once runners are available again, re-run the checks: the two real
+failures above are already fixed.
+
+#### Measured while there: no route relies on Gate A's loose markers
+
+Three entries in `AUTH_DEPENDS_MARKERS` are substrings rather than identifiers
+— `security`, `_auth`, `_Depends` — so any dependency default whose source
+merely *contains* one of them counts as authenticated. Gate A passes with all
+three removed, so nothing in the tree needs them today. They are left in place
+(they were added for the dynamic builders in `api/gateway.py` and
+`api/signals.py`, which may grow mutating routes later), and the measurement is
+pinned by a test: if a route ever starts passing only because of one, a person
+has to confirm it really authenticates the caller.
+
+### S-37 — the risk calculator's middle price source never ran (MEDIUM) — FIXED
+
+Found while fixing S-35, in the same function. `api/risk_calculator._get_live_price`
+has three levels; level 2 opened with
+
+```python
+from data_layer.orchestrator import get_orchestrator
+orch = get_orchestrator()
+```
+
+There is no `get_orchestrator` in that module. It exposes the singleton
+directly, and `data_layer/__init__.py` spells the supported forms out in its
+own docstring:
+
+```
+OK:  from data_layer import orchestrator
+OK:  from data_layer.orchestrator import orchestrator
+```
+
+So the import raised `ImportError` on every call, the level's own
+`except Exception` swallowed it into a `logger.debug`, and the level never ran
+once. The chain was really L1 → L3: the shared ws_live price chain, then
+**yfinance**, with the tick store skipped entirely. A fallback that cannot fire
+is not a fallback, and this is the entry price the Risk/Reward calculator sizes
+every position from.
+
+It also explains the shape of S-35 — the two tests reached the yfinance level
+because the level above them was dead.
+
+Fixed to import the singleton. `get_latest_tick(symbol="XAU_USD")` is
+symbol-aware, so this does not reintroduce the one-global-tick bug the function
+was rewritten to remove; a test asserts the symbol is passed through, since the
+parameter has a default and dropping it would silently price everything as gold.
+
+Verified: with L1 and L3 stubbed to answer nothing, the orchestrator is now
+asked — for `XAUUSD` and `EURUSD` respectively — and returns their own mids.
+Reverting the one-line import fails both new tests.
+
+`api/risk_calculator.py:114` was the only place in the repo importing that
+name; everywhere else uses a local `_get_orchestrator()` helper or the
+singleton.
+
+#### Related, not fixed: `scripts/ci/gate_broken_imports.py` is not wired into CI
+
+It reports 50 broken local imports, and spot-checking confirmed the reports are
+real — S-37 is one of them, and it sat there long enough to matter. No workflow
+runs it: `.github/workflows/tests.yml` invokes gates A through M and never this
+one. Either it should run (and the 50 need triage — several are `from X import
+Y` inside `try/except ImportError` fallbacks, which may be intentional) or it
+should be deleted. Left alone here because triaging 50 imports is its own piece
+of work, but it found a genuine defect the moment it was run.
+
+#### Codacy has never completed a scan — it times out on every run
+
+Measured across every run since 2026-07: the `Codacy Security Scan` job ends
+`cancelled` after ~920 seconds, every time, never once `success`. Reading the
+job steps rather than the run conclusion:
+
+    Run Codacy Analysis CLI   02:25:46 → 02:40:49   cancelled  (15m 3s)
+
+That is the job's own `timeout-minutes: 15` firing. `continue-on-error: true`
+does not soften it — a timeout is a cancellation, not an error — so the whole
+workflow run reports `cancelled`.
+
+Two consequences worth naming:
+
+1. The scan produces nothing. There has never been a SARIF upload from it.
+2. It costs 15 minutes of runner time on **every** push to `main` and every PR
+   to `main`, on a private repository where Actions minutes are metered. The
+   workflow already has a weekly `schedule:` trigger.
+
+The other job in that workflow, `PR Quality Gate (ruff + bandit on changed
+files)`, succeeds in 14 seconds — and is masked by the run-level `cancelled`.
+(On the run inspected its ruff and bandit steps were *skipped*, because the
+changed-file list came back empty for a push event; worth a look separately.)
+
+Not changed here: raising the timeout burns more metered minutes on a scan
+that may not finish at any limit, and narrowing the triggers is a policy call
+for whoever owns the Actions spend. The recommendation is to drop the
+per-push/per-PR triggers and keep the weekly schedule plus
+`workflow_dispatch`, which preserves the capability and stops the waste.

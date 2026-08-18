@@ -109,11 +109,24 @@ def _get_live_price(symbol: str) -> float | None:
     except Exception as exc:
         logger.debug("risk _get_live_price L1 (%s): %s", symbol, exc)
 
-    # 2. Try the data layer orchestrator
+    # 2. Try the data layer orchestrator.
+    #
+    #    This used to be `from data_layer.orchestrator import get_orchestrator`.
+    #    There is no such factory — the module exposes the singleton directly,
+    #    and `data_layer/__init__.py` spells the supported forms out:
+    #
+    #        OK:  from data_layer import orchestrator
+    #        OK:  from data_layer.orchestrator import orchestrator
+    #
+    #    So the import raised ImportError on every call, the bare `except`
+    #    below swallowed it into a debug log, and this level never ran once:
+    #    the chain was really L1 → L3, with the yfinance fallback standing in
+    #    for the tick store. `get_latest_tick(symbol=...)` is symbol-aware, so
+    #    restoring it does not reintroduce the one-global-tick bug this
+    #    function was rewritten to fix.
     try:
-        from data_layer.orchestrator import get_orchestrator
+        from data_layer.orchestrator import orchestrator as orch
 
-        orch = get_orchestrator()
         tick = orch.get_latest_tick(sym)
         mid = getattr(tick, "mid", None) if tick else None
         if mid and float(mid) > 0:
