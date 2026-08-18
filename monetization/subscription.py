@@ -763,7 +763,7 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         app.include_router(create_subscription_router(), prefix="/billing")
     """
     try:
-        from fastapi import APIRouter, Header, HTTPException, Request
+        from fastapi import APIRouter, Depends, Header, HTTPException, Request
         from pydantic import BaseModel
     except ImportError:
         raise ImportError("fastapi and pydantic are required. pip install fastapi pydantic") from None
@@ -771,6 +771,31 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
     _mgr = manager or subscription_manager
     _validator = LicenseValidator(_mgr)
     router = APIRouter(tags=["Subscriptions"])
+
+    # Every endpoint below is authenticated, and the four that name a user act
+    # only on the caller's own records unless the caller is staff.
+    #
+    # Nothing calls this factory today — `api/monetization.py` serves the
+    # mounted, already-guarded equivalents. But the module docstring tells you
+    # to wire it up (`app.include_router(create_subscription_router(),
+    # prefix="/billing")`), and until now that would have published, with no
+    # authentication at all:
+    #
+    #     POST   /subscribe                 — start a paid subscription for any user_id
+    #     GET    /license/validate          — read any user's tier and entitlements
+    #     GET    /subscription/{user_id}    — read any user's subscription
+    #     DELETE /subscription/{user_id}    — **cancel any user's subscription**
+    #
+    # An unmounted router with weaker guards than the mounted one is the same
+    # landmine as the duplicate /api/alerts router removed in S-21: harmless
+    # until somebody follows the instructions next to it.
+    from api.auth import TokenPayload, get_current_user
+
+    def _self_or_operator(target_user_id: str, caller: TokenPayload) -> None:
+        if caller.role in ("admin", "superadmin") or target_user_id == caller.sub:
+            return
+        # 404, not 403 — do not confirm that the account exists.
+        raise HTTPException(status_code=404, detail="Not found")
 
     class SubscribeRequest(BaseModel):
         user_id: str
@@ -787,11 +812,12 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         reason: str
 
     @router.post("/subscribe")
-    async def subscribe(req: SubscribeRequest):
+    async def subscribe(req: SubscribeRequest, user: TokenPayload = Depends(get_current_user)):
         """
         Activate free tier immediately, or create a Stripe Checkout Session
         for PROFESSIONAL / ENTERPRISE tiers.
         """
+        _self_or_operator(req.user_id, user)
         try:
             tier = SubscriptionTier(req.tier.lower())
         except ValueError:
@@ -848,11 +874,16 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         return result
 
     @router.get("/license/validate", response_model=LicenseValidateResponse)
-    async def validate_license(user_id: str, license_key: str | None = None):
+    async def validate_license(
+        user_id: str,
+        license_key: str | None = None,
+        user: TokenPayload = Depends(get_current_user),
+    ):
         """
         Validate a license key for a user.
         Free tier requires no key. Paid tiers require a matching key.
         """
+        _self_or_operator(user_id, user)
         result = _validator.validate(user_id=user_id, license_key=license_key)
         return LicenseValidateResponse(
             valid=result.valid,
@@ -863,8 +894,9 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         )
 
     @router.get("/subscription/{user_id}")
-    async def get_subscription(user_id: str):
+    async def get_subscription(user_id: str, user: TokenPayload = Depends(get_current_user)):
         """Return the current subscription state for a user."""
+        _self_or_operator(user_id, user)
         sub = _mgr.get_user_subscription(user_id)
         if not sub:
             return {
@@ -876,8 +908,9 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         return sub.to_dict()
 
     @router.delete("/subscription/{user_id}")
-    async def cancel_subscription(user_id: str):
+    async def cancel_subscription(user_id: str, user: TokenPayload = Depends(get_current_user)):
         """Cancel the active subscription for a user."""
+        _self_or_operator(user_id, user)
         sub = _mgr.get_user_subscription(user_id)
         if not sub:
             raise HTTPException(status_code=404, detail="No subscription found")
