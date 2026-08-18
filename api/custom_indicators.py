@@ -6,18 +6,41 @@
 """
 api/custom_indicators.py
 ========================
-Custom indicator management API.
+Custom indicator management API — parameterised instances of built-in
+indicators (``{"name": ..., "type": "ema", "params": {...}}``).
 
 Routes
 ------
-GET    /api/indicators                    — list user's custom indicators
-POST   /api/indicators                    — create a new custom indicator
-GET    /api/indicators/{id}               — get a specific indicator
-PATCH  /api/indicators/{id}               — update an indicator
-DELETE /api/indicators/{id}               — delete an indicator
-POST   /api/indicators/{id}/apply         — apply indicator to a symbol/timeframe
-GET    /api/indicators/builtin            — list all built-in indicators
-POST   /api/indicators/calculate          — calculate a built-in indicator on data
+GET    /api/custom-indicators                 — list user's custom indicators
+POST   /api/custom-indicators                 — create a new custom indicator
+GET    /api/custom-indicators/{id}            — get a specific indicator
+PUT    /api/custom-indicators/{id}            — replace an indicator
+PATCH  /api/custom-indicators/{id}            — update an indicator
+DELETE /api/custom-indicators/{id}            — delete an indicator
+POST   /api/custom-indicators/{id}/apply      — apply indicator to a symbol/timeframe
+POST   /api/custom-indicators/{id}/test       — test against recent data
+POST   /api/custom-indicators/{id}/deploy     — deploy to the live chart engine
+GET    /api/custom-indicators/builtin         — list all built-in indicators
+POST   /api/custom-indicators/calculate       — calculate a built-in indicator on data
+POST   /api/custom-indicators/preview         — preview a custom indicator formula
+
+Why not ``/api/indicators`` (S-32)
+----------------------------------
+That prefix already belonged to ``api/advanced_trading.py``, which serves a
+*different* product from a *different* store: formula-based chart overlays
+(``{"name": ..., "formula": "close - close", "symbol": ..., "color": ...}``)
+kept in ``advanced:indicator:*``. Both routers were mounted, advanced_trading
+first, so Starlette matched its routes first and this module's `DELETE`,
+`PATCH` and `/{id}/apply` were shadowed outright — while `GET /{id}`, `PUT`,
+`/{id}/test` and `/{id}/deploy`, which advanced_trading does not define,
+stayed reachable but answered 404 for every indicator the app actually
+creates, because they read the other store.
+
+The two APIs were never the same API. Splitting the prefix fixes both halves;
+merging them would have meant picking one schema and orphaning the other's
+data. `/api/indicators/*` is unchanged and still served by
+`api/advanced_trading.py`, which is what `frontend/src/hooks/useApi.ts`
+(`indicatorsApi`) calls.
 """
 
 from __future__ import annotations
@@ -49,7 +72,7 @@ from api.error_details import safe_error
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
 
-router = APIRouter(prefix="/api/indicators", tags=["Custom Indicators"])
+router = APIRouter(prefix="/api/custom-indicators", tags=["Custom Indicators"])
 
 _INDICATORS_KEY = "custom_indicators:{uid}"
 

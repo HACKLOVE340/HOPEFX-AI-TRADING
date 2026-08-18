@@ -24,7 +24,7 @@ advertised in ``frontend/src/lib/subscription.ts`` as paid features and all
 depending on ``get_current_user`` alone:
 
     /api/copy-trading/*             copy-trading   professional
-    /api/indicators (user CRUD)     indicators     professional
+    /api/custom-indicators/*        indicators     professional
     /api/risk/prop-firm/*           prop-firm      professional
     /api/accounts/sub-accounts/*    sub-accounts   elite
     /api/accounts/teams/*           teams          enterprise
@@ -35,7 +35,7 @@ A free-tier account could reach every one of them.
 
 Deliberately **not** gated, and worth stating so the omissions read as decisions:
 
-  * ``/api/indicators/builtin`` — a list of standard indicator definitions, no
+  * ``/api/custom-indicators/builtin`` — a list of standard indicator definitions, no
     user data and nothing proprietary. It has no auth dependency at all today
     and that is left alone.
   * ``/api/risk/live-price/{symbol}`` — a mid price, not the paid feature. The
@@ -101,8 +101,8 @@ def _client(module_name: str, user_id: str, role: str = "user") -> TestClient:
 GATED = [
     ("copy_trading", "get", "/api/copy-trading/my-copies", None, "professional"),
     ("copy_trading", "post", "/api/copy-trading/copies/c1/pause", None, "professional"),
-    ("custom_indicators", "get", "/api/indicators", None, "professional"),
-    ("custom_indicators", "post", "/api/indicators", {"name": "x", "formula": "close"}, "professional"),
+    ("custom_indicators", "get", "/api/custom-indicators", None, "professional"),
+    ("custom_indicators", "post", "/api/custom-indicators", {"name": "x", "formula": "close"}, "professional"),
     ("accounts", "get", "/api/accounts/sub-accounts", None, "elite"),
     ("accounts", "post", "/api/accounts/sub-accounts", {"name": "x"}, "elite"),
     ("alerts", "get", "/api/alerts/", None, "starter"),
@@ -200,7 +200,7 @@ def test_builtin_indicators_stay_open():
     """Not a paid feature: standard indicator definitions, no user data. Pinned
     so the gate above does not creep onto it."""
     c = _client("custom_indicators", FREE_USER)
-    res = c.get("/api/indicators/builtin")
+    res = c.get("/api/custom-indicators/builtin")
     assert res.status_code != 403, (
         "the built-in indicator list is not the 'indicators' paid feature — "
         "gating it locks free users out of the chart's standard toolset"

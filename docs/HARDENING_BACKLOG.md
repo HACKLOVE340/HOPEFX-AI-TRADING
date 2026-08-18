@@ -5822,3 +5822,190 @@ endpoint never breaks the test — documenting a fictional one does.
 
 Verified: restoring the `subscription/me` row and the `Auth: None` cell fails
 2 of the 4 new tests.
+
+---
+
+## Round 13 — one path, two owners
+
+### S-32 — two routers owned `/api/indicators`, and half the API answered from the wrong store (HIGH) — FIXED
+
+Two modules mounted routes on `/api/indicators`, serving **different products
+from different stores**:
+
+| Module | Shape | Storage |
+|---|---|---|
+| `api/advanced_trading.py` | formula chart overlays — `{"name", "formula": "close - close", "symbol", "color"}` | `advanced:indicator:*` (Redis) + in-memory mirror |
+| `api/custom_indicators.py` | parameterised built-ins — `{"name", "type": "ema", "params": {"period": 20}}` | `db_get`/`db_set` under `custom_indicators:{uid}` |
+
+`advanced_trading` is registered first, so Starlette matched its routes first
+and the outcome was:
+
+| Path | Winner | Effect |
+|---|---|---|
+| `DELETE /{id}`, `PATCH /{id}`, `POST /{id}/apply` | advanced_trading | custom_indicators' versions shadowed outright — the path parameter is named `{ind_id}` on one side and `{indicator_id}` on the other, so dedup did not even notice they were the same URL |
+| `POST /preview` | advanced_trading | identical path string, so this one *was* deduped away |
+| `GET /{id}`, `PUT /{id}`, `POST /{id}/test`, `POST /{id}/deploy` | custom_indicators | reachable, but they read the other store, so they answered 404 for every indicator the app actually creates |
+| `GET`/`POST` `/api/indicators` vs `/api/indicators/` | advanced_trading vs custom_indicators | **the trailing slash chose the subsystem** |
+
+Reproduced before the fix over the fully registered app: create through
+`POST /api/indicators` (which is what `frontend/src/hooks/useApi.ts`
+`indicatorsApi` calls), then `GET /api/indicators/{id}` → 404 "Indicator not
+found", `POST /{id}/test` → 404, while `PATCH` and `DELETE` succeed against a
+different store. `GET /api/indicators/` returned an empty list next to a
+`GET /api/indicators` that returned the record.
+
+**Fixed by separating the prefixes**, not by merging: `api/custom_indicators.py`
+now owns `/api/custom-indicators`. Merging would have meant picking one schema
+and orphaning the other's data, and these were never the same API. `/api/indicators/*`
+is untouched and still served by `api/advanced_trading.py`, so the only live
+consumer keeps working; the four endpoints that used to 404 on real data now
+resolve against their own store.
+
+Why the existing tests missed it: `tests/unit/test_custom_indicators_api.py`
+mounts that router **alone**. A router mounted in isolation cannot collide with
+anything. The new check is at registry level.
+
+#### S-32a — a route at the bare prefix was remounted one character off
+
+The mechanism behind the trailing-slash split, in
+`core/router_registry.py::_include_router_deduped`. When the function has to
+drop a duplicate it rebuilds the router, and `_relative_path` returned `"/"`
+for a route sitting exactly at the router's prefix (`@router.get("")`). The
+rebuild therefore re-added it at `/api/indicators/` rather than
+`/api/indicators`. Starlette only redirects a trailing slash when no exact
+match exists — both existed, so nothing collapsed them.
+
+Fixed to return the empty string, with `_full_path` handling it, plus a
+segment-boundary guard so a router at `/api/ml` cannot mangle a route at
+`/api/mlops`.
+
+#### S-32b — the same collision on the endpoint that approves code changes
+
+Found by generalising S-32 into "which normalised paths are served by more than
+one module?". Four hits: three on `/api/indicators`, and one more —
+
+`security/global_fortress.py` and `api/security/fixes.py` both declared
+`/api/security/fixes`, `/fixes/approve` and `/fixes/decline`, and global_fortress
+won on registration order. **Both carry `require_role("admin")`, so this was
+never an auth hole.** The winner was simply worse:
+
+- the listing takes no `limit`, caps at 50, and calls `json.loads` unguarded —
+  one malformed queue record 500s the whole endpoint, where the dedicated
+  implementation skips it;
+- decline takes an untyped `dict` and drops the reason field;
+- **approve answers 503 "Security brain not started" unless the brain is
+  running**, while the shadowed implementation publishes the GitHub PR without
+  it.
+
+Fixed by registering `api/security/fixes.py` first, so all seven paths now come
+from the dedicated module. The global_fortress copies are deduped away and left
+in place rather than deleted — removing a router from a security module is a
+larger change than the defect warranted — with the module's own comment
+corrected: it claimed these routes were "unique to the HOPEFXBrain", which was
+the false premise the duplication rested on.
+
+Verified: `_by_normalised_path` over the registered app reports **4** paths with
+two owners before the fix and **0** after. Reverting the three source files
+fails 7 of the 16 tests in `tests/unit/test_router_prefix_ownership.py`.
+
+### S-33 — a third of the endpoint reference was fiction, and its generator was a stub — FIXED
+
+`scripts/api_documentation_generator.py` contained five comment lines and
+`# ... code implementation ...`. `docs/API_ENDPOINTS.md` sat next to it looking
+generated. Measured against the fully registered app, **148 of its 440 rows**
+named a (method, path) pair with no route behind it:
+
+- the prefix was built from the *module* name rather than the router's real one
+  — `/api/two-factor/setup` for `/api/2fa/setup`, `/api/community-chat/rooms`
+  for `/api/chat/rooms`, `/api/pnl-dashboard/*`, `/api/whitelabel-admin/*`;
+- that same guess was prepended to routes whose paths were already absolute,
+  producing `/api/advanced-trading/api/indicators`,
+  `/api/platform/api/admin/users`, `/api/settings-extended/api/settings/trading`;
+- routes that had moved or been deleted were never removed.
+
+It also covered less than half the surface: 440 rows against 1,043 real
+non-alias `/api` routes.
+
+The generator is implemented and the file regenerated from
+`register_routers` + `iter_api_routes` — 1,060 endpoints, under default feature
+flags, with the `/api/v1/*` alias layer omitted (it mirrors every path above
+it). `--check` mode exits 1 on drift and every `FEATURE_*` override is stripped
+while rendering, so the output does not depend on the shell it runs in.
+
+The table gained an **Auth** column. Getting it right took three passes, and
+the two wrong ones are worth recording because both failed in the dangerous
+direction — reporting a gated endpoint as open:
+
+1. **Match `get_current_user` by name.** Marked `/api/auth/me`,
+   `/api/auth/sessions` and the whole 2FA surface as unauthenticated:
+   `auth/router.py` resolves callers through its own `_get_current_user_id`.
+2. **Walk the dependency tree for a `fastapi.security.SecurityBase`.** Better,
+   but still wrong for the routers that parse the `Authorization` header
+   themselves and declare no scheme — `security/self_healer.py`
+   (`_heal_require_admin`) and `security/antivirus.py` (`_av_require_auth`).
+   That version reported `POST /api/security/heal/scan/now`,
+   `/heal/baseline/rebuild` and `POST /api/security/av/scan` as open. They are
+   not; reading the helpers confirmed both verify the JWT and require an admin
+   role. A doc that says otherwise is an invitation to "add the missing gate"
+   to code that already has one, or to treat the endpoints as safe to expose.
+3. **All three mechanisms** — a security scheme in the tree, a dependency whose
+   source verifies a token, or a guard called in the handler body
+   (`_require_admin(request)`, which FastAPI records nothing about). This is
+   what shipped. It is a static approximation and can over-report; that is the
+   safe direction, and the docstring says so.
+
+The count of unauthenticated endpoints fell from 149 to 137 to 108 across those
+three passes. All 108 were then read and grouped: token-issuing auth routes,
+health and status probes, aggregate market data, the public product surface
+(pricing, profiles, leaderboard, transparency), and signature-authenticated
+inbound webhooks.
+
+`tests/unit/test_api_endpoint_doc_is_generated.py` pins the file to the
+generator, re-checks every documented path against the app independently of the
+generator, guards against a generator that writes nothing, and holds an
+allowlist of the deliberately-open endpoints so a new unauthenticated route has
+to be justified in the test rather than slipping in unnoticed.
+
+That allowlist had its own bug, caught before it shipped and worth the same
+honesty: it began with `"/"` in a `startswith(tuple)` check, which matches every
+path in the repo, so the assertion could not fail — it passed while
+`/api/stream/*` was not on the list at all. Exact paths and prefixes are now
+separate, and a further test rejects any prefix broad enough to void the check.
+
+Verified: restoring the old file fails 5 of the 8 new tests — including the
+"realistic number of endpoints" guard, because the old 4-column format parses
+as zero rows.
+
+### S-34 — three endpoints could never be reached (MEDIUM) — FIXED
+
+Found by generalising S-32 the other way: instead of "two modules on one
+path", ask "which literal path is swallowed by a parameterised route declared
+earlier?" Starlette matches in registration order and takes the first match, so
+`@router.get("/stats")` written *below* `@router.get("/{symbol}")` never runs.
+
+Three hits across 1,060 routes, all confirmed by calling them on the fully
+registered app:
+
+| Endpoint | What actually answered |
+|---|---|
+| `GET /api/dom/stats` | `/api/dom/{symbol}` with `symbol="stats"` → 404 "No order book for stats" |
+| `POST /api/superadmin/users/bulk/ban` | `/api/superadmin/users/{user_id}/ban` with `user_id="bulk"` → 404 "User not found" |
+| `POST /api/superadmin/users/bulk/unban` | same shape |
+
+`POST /api/superadmin/users/bulk/export` was fine — but only because no
+`/users/{user_id}/export` happens to exist. That is the character of this bug:
+whether an endpoint works depends on what else is declared above it, which no
+reader can tell from looking at the route.
+
+Fixed by moving the literal paths above the parameterised ones — the `/` and
+`/stats` handlers in `data/depth_of_market.py`, and the whole "Bulk user
+operations" block in `api/superadmin/users.py` — each with a comment at the
+move site saying why the order matters, since the natural instinct on a later
+edit is to tidy them back to the bottom.
+
+Verified after the fix: `GET /api/dom/stats` returns the stats payload,
+`GET /api/dom/XAUUSD` and `GET /api/dom/` still route to their own handlers,
+both bulk operations return `{"succeeded": [...], "failed": [...], "total": N}`,
+and `POST /api/superadmin/users/someuser/ban` still reaches the single-user
+handler. The scan reports 3 shadowed routes before the fix and 0 after;
+reverting the two source files fails the new test.

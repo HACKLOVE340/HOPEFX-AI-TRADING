@@ -206,3 +206,252 @@ class TestFlagStatusIsALabelNotADefault:
         assert live["default"] is False, (
             "LIVE_TRADING must stay off by default — it is the flag that lets real orders reach a broker."
         )
+
+
+# ── S-32: two routers owned /api/indicators, and /api/security/fixes ─────────
+
+
+def _by_normalised_path(app) -> dict[str, set[str]]:
+    """{path with params collapsed: {serving module}} for the whole app.
+
+    Params are collapsed so `/{ind_id}` and `/{indicator_id}` — the same URL,
+    named differently by two routers — compare equal. A trailing slash is
+    stripped for the same reason: Starlette treats `/x` and `/x/` as distinct
+    routes when both are registered, so a one-character difference is enough
+    to publish two subsystems on what a caller reads as one endpoint.
+    """
+    import re
+
+    from core.router_registry import iter_api_routes
+
+    found: dict[str, set[str]] = collections.defaultdict(set)
+    for route in iter_api_routes(app.routes):
+        if route.path.startswith("/api/v1/"):  # documented alias layer
+            continue
+        key = re.sub(r"\{[^}]*\}", "{}", route.path.rstrip("/")) or "/"
+        found[key].add(getattr(route.endpoint, "__module__", "?"))
+    return dict(found)
+
+
+@pytest.mark.unit
+class TestNoPathIsServedByTwoModules:
+    """The general form of S-21, S-32 and the `/api/security/fixes` overlap.
+
+    Sharing a *prefix* is normal and expected here — `/api/superadmin` alone is
+    served by 27 modules, and `/api/settings` by three. What is never right is
+    two modules answering the **same path**, because then which one runs is
+    decided by registration order rather than by anyone's intent.
+    """
+
+    def test_every_path_has_exactly_one_owner(self):
+        collisions = {
+            path: sorted(modules) for path, modules in _by_normalised_path(_build_app()).items() if len(modules) > 1
+        }
+
+        assert not collisions, (
+            "these paths are served by more than one module, so which handler "
+            f"answers depends on registration order: {collisions}. Four existed "
+            "before S-32 — three on /api/indicators (api.advanced_trading vs "
+            "api.custom_indicators) and one on /api/security/fixes."
+        )
+
+
+@pytest.mark.unit
+class TestTheIndicatorApisAreSeparate:
+    """S-32: `/api/indicators` and `/api/custom-indicators` are two products.
+
+    `api/advanced_trading.py` serves formula-based chart overlays
+    (`{"formula": "close - close", "color": ...}`) from `advanced:indicator:*`.
+    `api/custom_indicators.py` serves parameterised built-ins
+    (`{"type": "ema", "params": {"period": 20}}`) from its own store. Both were
+    mounted on `/api/indicators`, advanced_trading first, so:
+
+      * `DELETE`, `PATCH` and `/{id}/apply` from custom_indicators were
+        shadowed outright;
+      * `GET /{id}`, `PUT`, `/{id}/test` and `/{id}/deploy` — which
+        advanced_trading does not define — stayed reachable but answered 404
+        for every indicator the app actually creates, because they read the
+        other store;
+      * `GET /api/indicators` and `GET /api/indicators/` returned different
+        users' data from different subsystems.
+
+    Merging them would have meant picking one schema and orphaning the other's
+    data. Splitting the prefix fixes both halves.
+    """
+
+    @staticmethod
+    def _owners(app, prefix: str) -> set[str]:
+        from core.router_registry import iter_api_routes
+
+        return {
+            getattr(route.endpoint, "__module__", "?")
+            for route in iter_api_routes(app.routes)
+            if route.path == prefix or route.path.startswith(prefix + "/")
+        }
+
+    def test_api_indicators_belongs_to_advanced_trading(self):
+        """It is what frontend/src/hooks/useApi.ts calls, so it must not move."""
+        assert self._owners(_build_app(), "/api/indicators") == {"api.advanced_trading"}
+
+    def test_custom_indicators_has_its_own_prefix(self):
+        assert self._owners(_build_app(), "/api/custom-indicators") == {"api.custom_indicators"}
+
+    def test_the_full_custom_indicator_surface_is_reachable(self):
+        """The four endpoints that used to 404 on real data included."""
+        from core.router_registry import iter_api_routes
+
+        paths = {
+            route.path
+            for route in iter_api_routes(_build_app().routes)
+            if route.path.startswith("/api/custom-indicators")
+        }
+
+        for suffix in ("", "/builtin", "/calculate", "/preview", "/{indicator_id}", "/{indicator_id}/test"):
+            assert f"/api/custom-indicators{suffix}" in paths, f"{suffix or '(root)'} is missing"
+
+
+@pytest.mark.unit
+class TestSecurityFixesHaveOneOwner:
+    """S-32: the same collision, on the endpoint that approves code changes.
+
+    `security/global_fortress.py` and `api/security/fixes.py` both declared
+    `/api/security/fixes`, `/fixes/approve` and `/fixes/decline`, and the
+    global_fortress copies won on registration order. Both carry
+    `require_role("admin")`, so this was never an auth hole — but the winner
+    was worse in three ways: the listing took no `limit` and 500'd on a single
+    malformed queue record, decline accepted an untyped dict with no reason
+    field, and **approve answered 503 "Security brain not started"** unless the
+    brain was running, while the shadowed implementation publishes the GitHub
+    PR without it.
+
+    Fixed by registering the dedicated router first.
+    """
+
+    def test_all_of_them_come_from_the_dedicated_module(self):
+        from core.router_registry import iter_api_routes
+
+        owners = {
+            route.path: getattr(route.endpoint, "__module__", "?")
+            for route in iter_api_routes(_build_app().routes)
+            if route.path.startswith("/api/security/fixes")
+        }
+
+        assert owners, "no /api/security/fixes routes found — the check is not checking anything"
+        assert set(owners.values()) == {"api.security.fixes"}, (
+            f"a global_fortress copy is winning again: {owners}. Approving a fix "
+            "then needs the security brain running or answers 503 (S-32)."
+        )
+
+    def test_approving_a_fix_does_not_depend_on_the_brain(self):
+        """The behavioural difference, asserted on the handler that is mounted."""
+        import inspect
+
+        from core.router_registry import iter_api_routes
+
+        approve = next(
+            route
+            for route in iter_api_routes(_build_app().routes)
+            if route.path == "/api/security/fixes/approve" and "POST" in route.methods
+        )
+        source = inspect.getsource(approve.endpoint)
+
+        assert "Security brain not started" not in source
+        assert "get_pr_publisher" in source, "the mounted approve handler no longer publishes the PR"
+
+
+@pytest.mark.unit
+class TestARouteAtTheBarePrefixKeepsItsPath:
+    """S-32's mechanism: `@router.get("")` was remounted one character off.
+
+    `_include_router_deduped` rebuilds a router when it has to drop a duplicate
+    route. `_relative_path` returned `"/"` for a route sitting exactly at the
+    router's prefix, so the rebuild re-added it at `/api/indicators/` — a
+    second, distinct path answered by a different subsystem than
+    `/api/indicators`. Starlette only redirects a trailing slash when no exact
+    match exists, so nothing collapsed them.
+    """
+
+    def test_the_helper_returns_an_empty_relative_path(self):
+        import core.router_registry as registry
+        from fastapi import APIRouter, FastAPI
+
+        source = APIRouter(prefix="/api/thing")
+
+        @source.get("")
+        async def _root():
+            return {}
+
+        @source.get("/leaf")
+        async def _leaf():
+            return {}
+
+        app = FastAPI()
+        # Pre-claim /leaf so the dedup rebuild path is exercised, which is the
+        # only path on which the bug appeared.
+        registry._registered_routes.clear()
+        registry._registered_routes.add(("GET", "/api/thing/leaf"))
+        registry._include_router_deduped(app, source)
+
+        paths = {route.path for route in registry.iter_api_routes(app.routes)}
+        registry._registered_routes.clear()
+
+        assert "/api/thing" in paths, f"the bare-prefix route moved: {paths}"
+        assert "/api/thing/" not in paths
+
+
+# ── S-34: a literal path declared after a parameterised one never runs ───────
+
+
+@pytest.mark.unit
+class TestNoLiteralPathIsShadowedByAParameterisedOne:
+    """Starlette matches in registration order, first match wins.
+
+    So `@router.get("/stats")` declared *after* `@router.get("/{symbol}")`
+    never runs — the request is handed to the parameterised handler with
+    `symbol="stats"`. Three endpoints were dead this way (S-34), confirmed by
+    calling them on the fully registered app:
+
+        GET  /api/dom/stats                    404 "No order book for stats"
+        POST /api/superadmin/users/bulk/ban    404 "User not found"   (user_id="bulk")
+        POST /api/superadmin/users/bulk/unban  404 "User not found"
+
+    `/users/bulk/export` was fine only because no `/users/{user_id}/export`
+    exists — which is the point: this is a property of declaration order, not
+    something a reader can see from one route.
+    """
+
+    @staticmethod
+    def _pattern(path: str):
+        import re
+
+        out = ""
+        for part in re.split(r"(\{[^}]*\})", path):
+            if part.startswith("{") and part.endswith("}"):
+                out += ".*" if ":path" in part else "[^/]+"
+            else:
+                out += re.escape(part)
+        return re.compile("^" + out + "$")
+
+    def test_every_literal_route_is_reachable(self):
+        from core.router_registry import iter_api_routes
+
+        routes = [r for r in iter_api_routes(_build_app().routes) if not r.path.startswith("/api/v1/")]
+        compiled = [(r, self._pattern(r.path)) for r in routes]
+
+        shadowed = []
+        for index, (later, _) in enumerate(compiled):
+            if "{" in later.path:
+                continue
+            for earlier, pattern in compiled[:index]:
+                if "{" not in earlier.path:
+                    continue
+                overlap = earlier.methods & later.methods
+                if overlap and pattern.match(later.path):
+                    shadowed.append(f"{sorted(overlap)} {later.path} is swallowed by {earlier.path}")
+                    break
+
+        assert not shadowed, (
+            "these routes can never be reached — a parameterised route declared "
+            f"earlier matches them first: {shadowed}. Move the literal path above "
+            "the parameterised one in its module (S-34)."
+        )
