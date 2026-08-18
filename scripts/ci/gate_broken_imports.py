@@ -52,6 +52,67 @@ EXCLUDED_DIR_PARTS: frozenset[str] = frozenset(
 )
 
 
+# ── Known-broken baseline ────────────────────────────────────────────────────
+# Imports that name a symbol the target module does not define, recorded with a
+# justification so this gate can run in CI and block *new* occurrences without
+# first requiring every historical one to be fixed.
+#
+# This is a baseline, not an excuse list. Two rules keep it from rotting:
+#   1. Every entry needs a reason a reviewer can check, and a backlog reference
+#      where the fix is tracked.
+#   2. A stale entry — one that is no longer broken — FAILS the gate, so fixing
+#      an import forces the entry to be deleted in the same change.
+#
+# Keyed by (file, imported name, source module); no line numbers, so ordinary
+# edits above an entry do not invalidate it.
+KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
+    # Deliberate forward compatibility. KillSwitch._resolve_active_broker tries
+    # these two accessors before the one that resolves today
+    # (core.app_state.app_state.broker). Documented in HARDENING_BACKLOG S-38,
+    # which is the defect caused by the chain NOT having that third step.
+    ("kill_switch.py", "get_active_broker", "execution.engine"): "S-38 forward-compat step 1 of 3; step 3 resolves",
+    ("kill_switch.py", "get_router", "execution.smart_router"): "S-38 forward-compat step 2 of 3; step 3 resolves",
+    # ── Features written against an API that was never built (S-41) ──────────
+    # Each degrades to a documented no-op today. Fixing them is implementation
+    # work, not a rename, and several need a product decision first.
+    (
+        "api/admin.py",
+        "email_service",
+        "core.email_service",
+    ): "S-41 admin password reset; module is functions, needs a reset token",
+    ("api/admin.py", "get_email_service", "core.email_service"): "S-41 SMTP test; no public generic send_email",
+    (
+        "api/news_feed.py",
+        "NewsFeedManager",
+        "data_layer.feeds.news.base",
+    ): "S-41 no manager class exists; NewsFeedBase is abstract",
+    ("api/nocode.py", "StateMachineEngine", "nocode.state_machine"): "S-41 validate_graph exists nowhere in the repo",
+    (
+        "api/settings_new_endpoints.py",
+        "_last_health_result",
+        "health_check_service",
+    ): "S-41 health results are computed on demand, never cached",
+    (
+        "api/superadmin/risk_management.py",
+        "_GLOBAL_REGISTRY",
+        "risk.circuit_breakers",
+    ): "S-41 reset/force-open call methods CircuitBreaker lacks",
+    ("api/ws_live.py", "_data_buffers", "core.signal_engine"): "S-41 no such buffer anywhere; ATR falls back to CSV",
+    ("ml/continuous_learning.py", "train_model", "ml.training"): "S-41 train_ml_pipeline has a different signature",
+    (
+        "ml/training_manager.py",
+        "retrain_advanced_predictor",
+        "ml.train_advanced",
+    ): "S-41 no programmatic retrain entry point",
+    ("ml/training_manager.py", "retrain_lstm", "ml.lstm_signal_layer"): "S-41 no retrain function exists",
+    (
+        "strategies/dynamic_registry.py",
+        "DynamicStrategy",
+        "database.models",
+    ): "S-41 no such model or migration; registry is memory-only",
+}
+
+
 def _is_excluded(path: Path) -> bool:
     return any(part in EXCLUDED_DIR_PARTS for part in path.parts)
 
@@ -223,26 +284,46 @@ def _check_file(py_file: Path, root: Path) -> list[tuple[int, str, str]]:
 
 
 def main() -> int:
-    total = 0
     findings: list[tuple[str, int, str, str]] = []
 
     for py_file in sorted(_iter_py_files(REPO_ROOT)):
-        # Don't check this gate against itself or other CI gate scaffolding.
         for lineno, name, module in _check_file(py_file, REPO_ROOT):
             rel = str(py_file.relative_to(REPO_ROOT))
             findings.append((rel, lineno, name, module))
-            total += 1
 
-    if findings:
-        print(f"Gate broken-imports FAILED — {total} broken local import(s):")
-        for rel, lineno, name, module in sorted(findings):
+    new_findings = [f for f in findings if (f[0], f[2], f[3]) not in KNOWN_BROKEN]
+    seen = {(rel, name, module) for rel, _, name, module in findings}
+    stale = [key for key in KNOWN_BROKEN if key not in seen]
+
+    failed = False
+
+    if new_findings:
+        failed = True
+        print(f"Gate broken-imports FAILED — {len(new_findings)} new broken local import(s):")
+        for rel, lineno, name, module in sorted(new_findings):
             print(f"  {rel}:{lineno}  imports '{name}' from '{module}' — not defined there")
         print()
         print("Fix the import name (find the real symbol) or guard it with a")
         print("clear degradation path instead of a hard failure.")
+        print("If it is genuinely intentional, add it to KNOWN_BROKEN in this")
+        print("file with a reason and a backlog reference.")
+
+    if stale:
+        failed = True
+        print(f"Gate broken-imports FAILED — {len(stale)} stale KNOWN_BROKEN entr(ies):")
+        for rel, name, module in sorted(stale):
+            print(f"  {rel}  '{name}' from '{module}' — no longer broken; delete this entry")
+        print()
+        print("An allowlist entry that no longer describes a real defect hides")
+        print("the next one. Remove it in the change that fixed the import.")
+
+    if failed:
         return 1
 
-    print("Gate broken-imports PASSED — no broken local imports found.")
+    print(
+        f"Gate broken-imports PASSED — no new broken local imports "
+        f"({len(KNOWN_BROKEN)} known, tracked in docs/HARDENING_BACKLOG.md)."
+    )
     return 0
 
 
