@@ -79,14 +79,39 @@ def test_each_offered_instrument_resolves_to_its_own_quote(risk_calc, monkeypatc
         assert risk_calc._get_live_price(slash.replace("/", "_")) == pytest.approx(expected)
 
 
-def test_an_unknown_symbol_returns_none_rather_than_someone_elses_price(risk_calc, monkeypatch):
+@pytest.fixture
+def yfinance_prices_nothing(monkeypatch):
+    """Stub level 3 so it cannot answer, whatever the network can reach.
+
+    Both tests below used to do this by pointing `_yahoo_ticker` at the string
+    `"NOPE"` and assuming Yahoo does not list it. NOPE *is* a listed ticker, so
+    on a runner with network access level 3 returned 8.3715 and the assertions
+    failed — green locally where yfinance cannot reach the internet, red in CI.
+    A test must not depend on which symbols a third party happens to quote.
+    """
+
+    class _NoQuote:
+        # Attribute names mirror yfinance's own `fast_info`.
+        class fast_info:
+            last_price = None
+            regularMarketPrice = None
+
+        def __init__(self, _symbol):
+            pass
+
+    stub = types.ModuleType("yfinance")
+    stub.Ticker = _NoQuote  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "yfinance", stub)
+
+
+def test_an_unknown_symbol_returns_none_rather_than_someone_elses_price(
+    risk_calc, monkeypatch, yfinance_prices_nothing
+):
     from api import ws_live
 
     monkeypatch.setattr(ws_live, "_get_live_price", lambda s: 4390.20 if s == "XAU/USD" else None)
-    monkeypatch.setattr(risk_calc, "_yahoo_ticker", lambda s: "NOPE")
 
-    # Orchestrator and yfinance both unavailable in the test environment; the
-    # point is that the XAUUSD price must not leak out for a different symbol.
+    # The point is that the XAUUSD price must not leak out for a different symbol.
     assert risk_calc._get_live_price("ZZZ_QQQ") is None
 
 
@@ -111,11 +136,10 @@ def test_it_defers_to_the_ws_live_chain(risk_calc, monkeypatch):
     )
 
 
-def test_a_zero_or_negative_price_is_not_accepted_as_live(risk_calc, monkeypatch):
+def test_a_zero_or_negative_price_is_not_accepted_as_live(risk_calc, monkeypatch, yfinance_prices_nothing):
     from api import ws_live
 
     monkeypatch.setattr(ws_live, "_get_live_price", lambda s: 0.0)
-    monkeypatch.setattr(risk_calc, "_yahoo_ticker", lambda s: "NOPE")
     assert risk_calc._get_live_price("XAU/USD") is None
 
 
@@ -166,3 +190,57 @@ def test_yfinance_level_is_reached_and_uses_the_mapped_ticker(risk_calc, monkeyp
 
     assert risk_calc._get_live_price("BTC_USD") == pytest.approx(96_250.0)
     assert asked == ["BTC-USD"]
+
+
+# ── Level 2 exists ────────────────────────────────────────────────────────────
+
+
+def test_the_orchestrator_level_actually_runs(risk_calc, monkeypatch, yfinance_prices_nothing):
+    """It never had, until the import was fixed.
+
+    Level 2 read `from data_layer.orchestrator import get_orchestrator`. No such
+    factory exists — the module exposes the singleton directly, which is what
+    `data_layer/__init__.py` documents — so the import raised ImportError on
+    every call, the level's own `except Exception` logged it at debug, and the
+    chain was really L1 → L3. A fallback that cannot fire is not a fallback.
+    """
+    import importlib
+
+    from api import ws_live
+
+    monkeypatch.setattr(ws_live, "_get_live_price", lambda s: None)
+
+    orchestrator_module = importlib.import_module("data_layer.orchestrator")
+    asked: list[str] = []
+
+    def _tick(symbol: str = "XAU_USD"):
+        asked.append(symbol)
+        return types.SimpleNamespace(mid=4390.20)
+
+    monkeypatch.setattr(orchestrator_module.orchestrator, "get_latest_tick", _tick)
+
+    assert risk_calc._get_live_price("XAU_USD") == pytest.approx(4390.20)
+    assert asked == ["XAUUSD"], f"level 2 did not run, or dropped the symbol: {asked!r}"
+
+
+def test_the_orchestrator_level_is_asked_for_the_right_symbol(risk_calc, monkeypatch, yfinance_prices_nothing):
+    """`get_latest_tick` defaults to XAU_USD, so a dropped argument would
+    silently price everything as gold — the exact bug this module was rewritten
+    to remove, one level further down."""
+    import importlib
+
+    from api import ws_live
+
+    monkeypatch.setattr(ws_live, "_get_live_price", lambda s: None)
+
+    orchestrator_module = importlib.import_module("data_layer.orchestrator")
+    quotes = {"XAUUSD": 4390.20, "EURUSD": 1.08512}
+
+    monkeypatch.setattr(
+        orchestrator_module.orchestrator,
+        "get_latest_tick",
+        lambda symbol="XAU_USD": types.SimpleNamespace(mid=quotes[symbol]),
+    )
+
+    assert risk_calc._get_live_price("EUR_USD") == pytest.approx(1.08512)
+    assert risk_calc._get_live_price("XAU_USD") == pytest.approx(4390.20)

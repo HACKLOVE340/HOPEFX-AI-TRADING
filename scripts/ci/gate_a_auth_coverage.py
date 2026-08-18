@@ -41,6 +41,18 @@ AUTH_DEPENDS_MARKERS: frozenset[str] = frozenset(
         # Subscription-gated auth (monetization/subscription.py)
         "require_plan",
         "_require_plan",
+        # Quota-gated auth (core/ai_quota.py). `ai_quota(...)` returns a
+        # dependency whose own signature is
+        # `_check(user: TokenPayload = Depends(get_current_user))`, so a route
+        # using it is authenticated — this gate reads source, not the resolved
+        # dependency graph, so it cannot see through the indirection itself.
+        # That claim is asserted, not assumed:
+        # tests/unit/test_gate_a_markers_really_authenticate.py fails if
+        # ai_quota ever stops resolving get_current_user, so this entry cannot
+        # quietly become a hole. Adding it here fixed seven false positives on
+        # api/brain.py, api/chat.py and api/voice.py, which have been
+        # authenticated since the commit that introduced the quota.
+        "ai_quota",
         # Module-level aliases (api/superadmin/_shared.py, api/platform.py, etc.)
         "_require_superadmin",
         "_require_admin",
