@@ -70,16 +70,58 @@ def _load_results_from_db() -> None:
     _results_loaded = True
 
 
-def _persist_result(run_id: str, result: dict) -> None:
+def _owner_of(store: dict, run_id: str, result: dict, user_id: str | None) -> str | None:
+    """Resolve the owner to stamp on *result*.
+
+    An explicit *user_id* wins; otherwise keep whatever the payload already
+    carries, and failing that whatever the previous revision of this run
+    carried. Status updates are written as fresh, sparse dicts
+    (``{"run_id": ..., "status": "error"}``), so without that last step a run
+    would lose its owner the moment it failed or completed.
+    """
+    return user_id or result.get("user_id") or (store.get(run_id) or {}).get("user_id")
+
+
+def _persist_result(run_id: str, result: dict, user_id: str | None = None) -> None:
     """Write a result to both the in-process cache and the DB."""
+    owner = _owner_of(_results, run_id, result, user_id)
+    if owner is not None:
+        result["user_id"] = owner
     _results[run_id] = result
     db_set(f"{_DB_PREFIX}{run_id}", result, changed_by="backtesting_api")
 
 
-def _persist_wf_result(run_id: str, result: dict) -> None:
+def _persist_wf_result(run_id: str, result: dict, user_id: str | None = None) -> None:
     """Write a walk-forward result to both cache and DB."""
+    owner = _owner_of(_wf_results, run_id, result, user_id)
+    if owner is not None:
+        result["user_id"] = owner
     _wf_results[run_id] = result
     db_set(f"{_WF_DB_PREFIX}{run_id}", result, changed_by="backtesting_api")
+
+
+def _visible_run(record: dict, user_id: str) -> bool:
+    """Whether *user_id* may see this run.
+
+    A record with no ``user_id`` predates the field or was written by an
+    internal path; it stays visible rather than becoming unreachable. This is
+    an authorisation check, not a data migration.
+    """
+    owner = record.get("user_id")
+    return owner is None or owner == user_id
+
+
+def _owned_run(store: dict, run_id: str, user_id: str, kind: str = "Result") -> dict:
+    """Return the caller's run or raise 404.
+
+    404 rather than 403 for another user's run, so the response does not
+    disclose which run ids exist — the same choice `api/alerts._get_owned_alert`
+    makes.
+    """
+    record = store.get(run_id)
+    if record is None or not _visible_run(record, user_id):
+        raise HTTPException(status_code=404, detail=f"{kind} not found")
+    return record
 
 
 # Walk-forward write-through cache
@@ -134,6 +176,9 @@ class BacktestResult(BaseModel):
     status: str
     error: str | None = None
     created_at: str
+    # Who ran it. Optional so results stored before this field still load;
+    # those stay visible to everyone rather than becoming unreachable.
+    user_id: str | None = None
 
 
 # ── Strategy registry ─────────────────────────────────────────────────────────
@@ -456,7 +501,7 @@ async def run_backtest(
             "created_at": created_at,
         }
 
-    _persist_result(run_id, result)
+    _persist_result(run_id, result, user_id=_user.sub)
     return BacktestResult(**result)
 
 
@@ -465,9 +510,10 @@ async def list_walk_forward_results(
     _user: TokenPayload = Depends(get_current_user),
     limit: int = 20,
 ):
-    """Return all walk-forward results, newest first. Used by the WalkForward list view."""
+    """Return the caller's walk-forward results, newest first."""
     _load_wf_results_from_db()
-    items = sorted(_wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True)
+    mine = [r for r in _wf_results.values() if _visible_run(r, _user.sub)]
+    items = sorted(mine, key=lambda r: r.get("created_at", ""), reverse=True)
     return {"results": items[:limit], "total": len(items)}
 
 
@@ -479,9 +525,10 @@ async def get_latest_walk_forward(_user: TokenPayload = Depends(get_current_user
     Trigger a run via POST /api/backtest/walk-forward/run first.
     """
     _load_wf_results_from_db()
-    if _wf_results:
+    mine = [r for r in _wf_results.values() if _visible_run(r, _user.sub)]
+    if mine:
         latest = sorted(
-            _wf_results.values(),
+            mine,
             key=lambda r: r.get("created_at", ""),
             reverse=True,
         )[0]
@@ -494,11 +541,9 @@ async def get_latest_walk_forward(_user: TokenPayload = Depends(get_current_user
 
 @router.get("/walk-forward/{run_id}")
 async def get_walk_forward(run_id: str, _user: TokenPayload = Depends(get_current_user)):
-    """Return walk-forward results for a specific run_id."""
+    """Return one of the caller's walk-forward results."""
     _load_wf_results_from_db()
-    if run_id in _wf_results:
-        return _wf_results[run_id]
-    raise HTTPException(status_code=404, detail="Walk-forward result not found")
+    return _owned_run(_wf_results, run_id, _user.sub, kind="Walk-forward result")
 
 
 class WalkForwardRequest(BaseModel):
@@ -531,13 +576,13 @@ async def run_walk_forward(
         "created_at": created_at,
         "folds": [],
     }
-    _persist_wf_result(run_id, pending)
+    _persist_wf_result(run_id, pending, user_id=_user.sub)
 
     def _execute() -> None:
         try:
             _load_strategy(req.strategy, req.strategy_params)
         except ValueError as exc:
-            _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)})
+            _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)}, user_id=_user.sub)
             return
 
         # Build a synthetic date range spanning 3 years for the walk-forward splits
@@ -604,6 +649,7 @@ async def run_walk_forward(
                 },
                 "completed_at": datetime.now(UTC).isoformat(),
             },
+            user_id=_user.sub,
         )
 
     background_tasks.add_task(_execute)
@@ -615,9 +661,14 @@ async def list_results(
     _user: TokenPayload = Depends(get_current_user),
     limit: int = 20,
 ):
-    """Return the most recent backtest results, newest first."""
+    """Return the caller's most recent backtest results, newest first.
+
+    This returned every user's runs: a result carries the strategy, symbol,
+    date range, return, Sharpe, drawdown and win rate — one user's research.
+    """
     _load_results_from_db()
-    items = sorted(_results.values(), key=lambda r: r["created_at"], reverse=True)
+    mine = [r for r in _results.values() if _visible_run(r, _user.sub)]
+    items = sorted(mine, key=lambda r: r["created_at"], reverse=True)
     return [BacktestResult(**r) for r in items[:limit]]
 
 
@@ -635,7 +686,7 @@ async def get_result(
     run_id: str,
     _user: TokenPayload = Depends(get_current_user),
 ):
-    """Get a specific backtest result by run_id."""
+    """Get one of the caller's backtest results by run_id."""
     _load_results_from_db()
     if run_id not in _results:
         # Try a direct DB lookup in case the cache was cold
@@ -644,7 +695,7 @@ async def get_result(
             _results[run_id] = value
         else:
             raise HTTPException(status_code=404, detail="Result not found")
-    return BacktestResult(**_results[run_id])
+    return BacktestResult(**_owned_run(_results, run_id, _user.sub))
 
 
 @router.get(
@@ -670,7 +721,7 @@ async def download_pdf_report(
         else:
             raise HTTPException(status_code=404, detail="Backtest result not found")
 
-    result = _results[run_id]
+    result = _owned_run(_results, run_id, _user.sub, kind="Backtest result")
     pdf_bytes = _build_pdf(result)
 
     filename = f"backtest_{result['strategy']}_{result['symbol']}_{run_id[:8]}.pdf"
@@ -1004,12 +1055,17 @@ async def run_replay_backtest(
                     else {},
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
+                user_id=_user.sub,
             )
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception("Replay backtest %s failed", run_id)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
+            _persist_result(
+                run_id,
+                {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"},
+                user_id=_user.sub,
+            )
 
-    _persist_result(run_id, {"run_id": run_id, "status": "running"})
+    _persist_result(run_id, {"run_id": run_id, "status": "running"}, user_id=_user.sub)
     background_tasks.add_task(_run)
     return {
         "run_id": run_id,
@@ -1091,12 +1147,17 @@ async def run_regime_stress_test(
                     ],
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
+                user_id=_user.sub,
             )
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception("Regime stress %s failed", run_id)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
+            _persist_result(
+                run_id,
+                {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"},
+                user_id=_user.sub,
+            )
 
-    _persist_result(run_id, {"run_id": run_id, "status": "running"})
+    _persist_result(run_id, {"run_id": run_id, "status": "running"}, user_id=_user.sub)
     background_tasks.add_task(_run)
     return {
         "run_id": run_id,
