@@ -108,9 +108,22 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
         to include_router() as older versions did. Detect and strip it so the
         rest of this function can keep treating route paths as relative,
         regardless of which behaviour the installed FastAPI version has.
+
+        A route declared as ``@router.get("")`` sits exactly at the prefix, so
+        its relative path is the empty string — **not** ``"/"``. Returning
+        ``"/"`` there is what published `/api/indicators/` alongside
+        `/api/indicators` when the two indicator routers collided (S-32): the
+        remount below re-added the route one character off its real path, and
+        two different subsystems then answered the same URL with and without a
+        trailing slash.
+
+        The prefix is only stripped on a segment boundary, so a router at
+        ``/api/ml`` does not mangle a route at ``/api/mlops``.
         """
         if router_prefix and route_path.startswith(router_prefix):
-            return route_path[len(router_prefix) :] or "/"
+            remainder = route_path[len(router_prefix) :]
+            if remainder == "" or remainder.startswith("/"):
+                return remainder
         return route_path
 
     def _full_path(route_path: str) -> str:
@@ -121,7 +134,9 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
         else:
             prefix = mount_prefix or router_prefix
         if not prefix:
-            return rel
+            return rel or "/"
+        if not rel:
+            return prefix.rstrip("/")
         return prefix.rstrip("/") + "/" + rel.lstrip("/")
 
     skipped = 0
@@ -474,6 +489,26 @@ def register_routers(
     elif graphql_available and not feature_flags.GRAPHQL_API:
         logger.debug("GRAPHQL_API disabled — set FEATURE_GRAPHQL_API=true to enable")
 
+    # ── Security fixes (LLM auto-heal queue + GitHub PR pipeline) ─────────────
+    #
+    # Registered BEFORE security.global_fortress deliberately. Both declare
+    # /api/security/fixes, /fixes/approve and /fixes/decline, so whichever is
+    # included first wins and the other's copies are deduped away. This one is
+    # the dedicated implementation and is the better winner on every count
+    # (S-32): it takes a `limit`, tolerates a malformed queue record instead of
+    # 500ing the whole listing, validates bodies through typed models (the
+    # decline reason among them), and — the one that matters — approves a fix
+    # without requiring the security brain to be running, where the
+    # global_fortress copy answers 503 "Security brain not started". Both carry
+    # the same require_role("admin") gate, so this is not an auth question.
+    try:
+        from api.security.fixes import router as fixes_router
+
+        _include_router_deduped(app, fixes_router)
+        logger.info("Security fixes router registered (/api/security/fixes)")
+    except Exception as _fixes_err:
+        logger.warning("Security fixes router not registered: %s", _fixes_err)
+
     # ── Security: HOPEFXBrain (/api/security/*) ───────────────────────────────
     # Eager module-level router — delegates to get_brain() at request time so
     # the live instance created by start_brain() is used once startup completes.
@@ -503,12 +538,17 @@ def register_routers(
     except Exception as _av_err:
         logger.warning("Antivirus router not registered: %s", _av_err)
 
-    # ── Custom Indicators (/api/indicators) ──────────────────────────────────
+    # ── Custom Indicators (/api/custom-indicators) ───────────────────────────
+    #
+    # Deliberately *not* /api/indicators: that prefix belongs to
+    # api/advanced_trading.py, which serves formula-based chart overlays from
+    # a different store. Both used to be mounted on it — see S-32 and the
+    # module docstring in api/custom_indicators.py.
     try:
         from api.custom_indicators import router as custom_indicators_router
 
         _include_router_deduped(app, custom_indicators_router)
-        logger.info("Custom indicators router registered (/api/indicators)")
+        logger.info("Custom indicators router registered (/api/custom-indicators)")
     except Exception as _ci_err:
         logger.warning("Custom indicators router not registered: %s", _ci_err)
 
@@ -596,14 +636,8 @@ def register_routers(
     except Exception as _dl_err:
         logger.warning("Data layer router not registered: %s", _dl_err)
 
-    # ── Security fixes (LLM auto-heal queue + GitHub PR pipeline) ─────────────
-    try:
-        from api.security.fixes import router as fixes_router
-
-        _include_router_deduped(app, fixes_router)
-        logger.info("Security fixes router registered (/api/security/fixes)")
-    except Exception as _fixes_err:
-        logger.warning("Security fixes router not registered: %s", _fixes_err)
+    # (api/security/fixes.py is registered further up, ahead of
+    # security.global_fortress — see the note there.)
 
     # ── Security dashboard (attacks, lockdown, heal, AV) ──────────────────────
     try:

@@ -825,8 +825,19 @@ def _build_eager_router() -> APIRouter:
 
     NOTE: /attacks, /alerts, /lockdown, /lockdown/clear, and /blocked-ips are
     intentionally omitted here — they are registered by api/security_dashboard.py
-    with proper authentication and richer data sources. This router only exposes
-    the /fixes endpoints that are unique to the HOPEFXBrain.
+    with proper authentication and richer data sources.
+
+    The three /fixes routes below are **not** unique to the HOPEFXBrain, though
+    this note used to say they were. api/security/fixes.py serves the same
+    three paths plus /approved, /declined, /stats and /scan, from the same
+    Redis queue, and does it better: a `limit` on the listing, tolerance for a
+    malformed record, typed request bodies, and an approve that does not
+    require the brain to be running. Since S-32 the registry includes that
+    router first, so these three are deduped away and never dispatch — which
+    is the intended outcome, not an accident. They are left in place rather
+    than deleted so this module keeps working standalone, and because deleting
+    a router out of a security module is a larger change than the defect
+    warranted. Do not re-order the registration to bring them back.
     """
     from fastapi import APIRouter as _APIRouter, Depends as _Depends
     from api.auth import require_role as _require_role

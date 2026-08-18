@@ -691,6 +691,21 @@ def create_dom_router(dom_service: DepthOfMarketService):
 
     router = APIRouter(prefix="/api/dom", tags=["Depth of Market"])
 
+    # Literal paths are declared BEFORE `/{symbol}` deliberately. Starlette
+    # matches in registration order, so `/stats` declared after `/{symbol}`
+    # never ran: `GET /api/dom/stats` answered 404 "No order book for stats"
+    # from the order-book handler with symbol="stats" (S-34).
+
+    @router.get("/")
+    async def get_all_symbols():
+        """Get all tracked symbols."""
+        return {"symbols": dom_service.get_symbols()}
+
+    @router.get("/stats")
+    async def get_stats():
+        """Get service statistics."""
+        return dom_service.get_stats()
+
     @router.get("/{symbol}")
     async def get_order_book(symbol: str, levels: int = 10):
         """Get order book for a symbol."""
@@ -727,16 +742,6 @@ def create_dom_router(dom_service: DepthOfMarketService):
         if imbalance is None:
             raise HTTPException(status_code=404, detail=f"No order book for {symbol}")
         return {"symbol": symbol, "imbalance": imbalance}
-
-    @router.get("/")
-    async def get_all_symbols():
-        """Get all tracked symbols."""
-        return {"symbols": dom_service.get_symbols()}
-
-    @router.get("/stats")
-    async def get_stats():
-        """Get service statistics."""
-        return dom_service.get_stats()
 
     return router
 
