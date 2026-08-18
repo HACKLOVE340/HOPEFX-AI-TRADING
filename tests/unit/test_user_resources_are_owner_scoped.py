@@ -456,3 +456,109 @@ class TestBacktestResultsAreOwnerScoped:
             and "user_id" not in {kw.arg for kw in node.keywords}
         ]
         assert not missing, f"persist calls without an owner at lines {missing} (S-28)"
+
+
+# ── S-29: the unmounted subscription router factory ──────────────────────────
+
+
+@pytest.fixture
+def billing_client():
+    from monetization.subscription import SubscriptionManager, SubscriptionTier, create_subscription_router
+
+    manager = SubscriptionManager()
+    manager.create_subscription("alice", SubscriptionTier.FREE)
+
+    app = FastAPI()
+    app.include_router(create_subscription_router(manager), prefix="/billing")
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.unit
+class TestTheSubscriptionFactoryCannotBeWiredIntoAHole:
+    """S-29: an unmounted router with weaker guards than the mounted one.
+
+    `monetization/subscription.py::create_subscription_router()` is called
+    nowhere — `api/monetization.py` serves the guarded equivalents. But the
+    module docstring tells you to mount it
+    (``app.include_router(create_subscription_router(), prefix="/billing")``),
+    and doing so published, with **no authentication at all**:
+
+        POST   /subscribe               start a paid subscription for any user_id
+        GET    /license/validate        read any user's tier and entitlements
+        GET    /subscription/{user_id}  read any user's subscription
+        DELETE /subscription/{user_id}  cancel any user's subscription
+
+    Same landmine as the duplicate `/api/alerts` router removed in S-21:
+    harmless until somebody follows the instructions written next to it. The
+    endpoints are authenticated and self-or-operator scoped now, so wiring it
+    up is safe rather than merely unlikely.
+    """
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("get", "/billing/subscription/alice"),
+            ("delete", "/billing/subscription/alice"),
+            ("get", "/billing/license/validate?user_id=alice"),
+            ("post", "/billing/subscribe"),
+        ],
+    )
+    def test_no_endpoint_answers_without_a_token(self, billing_client, method, path):
+        response = getattr(billing_client, method)(path)
+
+        assert response.status_code == 401, (
+            f"{method.upper()} {path} answered {response.status_code} unauthenticated (S-29)"
+        )
+
+    def test_another_user_cannot_read_a_subscription(self, billing_client, alice, bob):
+        assert billing_client.get("/billing/subscription/alice", headers=bob).status_code == 404
+        assert billing_client.get("/billing/subscription/alice", headers=alice).status_code == 200
+
+    def test_another_user_cannot_cancel_a_subscription(self, billing_client, alice, bob):
+        assert billing_client.delete("/billing/subscription/alice", headers=bob).status_code == 404, (
+            "cancelling someone else's paid subscription is the sharpest edge here (S-29)"
+        )
+        assert billing_client.delete("/billing/subscription/alice", headers=alice).status_code == 200
+
+    def test_another_user_cannot_subscribe_on_your_behalf(self, billing_client, alice, bob):
+        assert (
+            billing_client.post(
+                "/billing/subscribe", json={"user_id": "alice", "tier": "free"}, headers=bob
+            ).status_code
+            == 404
+        )
+        assert (
+            billing_client.post(
+                "/billing/subscribe", json={"user_id": "alice", "tier": "free"}, headers=alice
+            ).status_code
+            == 200
+        )
+
+    def test_another_user_cannot_read_entitlements(self, billing_client, bob):
+        assert billing_client.get("/billing/license/validate?user_id=alice", headers=bob).status_code == 404
+
+    def test_staff_may_act_on_behalf_of_a_customer(self, billing_client):
+        admin = _headers("root", role="admin")
+
+        assert billing_client.get("/billing/subscription/alice", headers=admin).status_code == 200
+
+    def test_the_stripe_webhook_stays_unauthenticated(self):
+        """It is authenticated by signature, not by a bearer token."""
+        from monetization.subscription import create_subscription_router
+
+        routes = {r.path: r for r in create_subscription_router().routes}
+        webhook = routes["/webhook"]
+
+        assert not webhook.dependant.dependencies, (
+            "the Stripe webhook must stay tokenless — Stripe cannot present one; "
+            "handle_stripe_webhook verifies the stripe-signature header instead"
+        )
+
+    def test_every_other_route_requires_a_token(self):
+        from monetization.subscription import create_subscription_router
+
+        for route in create_subscription_router().routes:
+            if route.path == "/webhook":
+                continue
+            names = {getattr(d.call, "__name__", "") for d in route.dependant.dependencies}
+            assert "get_current_user" in names, f"{route.path} has no auth dependency (S-29)"

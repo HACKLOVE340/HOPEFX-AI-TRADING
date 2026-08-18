@@ -5656,3 +5656,80 @@ Verified over HTTP with two users: each lists only their own runs, Bob gets 404
 on Alice's result and on her PDF report, unowned legacy runs stay visible to
 both, and the owner survives a sparse status update. Reverting the check fails
 5 of the 8 new tests.
+
+---
+
+## Round 11 — the mirror scan: who does the caller *claim* to be?
+
+S-23 through S-28 were "binds the caller and ignores it". The mirror shape is
+"trusts an identity the caller supplied": a handler taking `user_id`,
+`creator_id`, `trader_id` etc. from the path or body and looking data up with
+it, without comparing it to the token.
+
+Scanned the same way. 50 handlers take such a parameter. Two results worth
+recording, one of them a correction to my own scanner.
+
+### Scanner false negatives — read, don't trust the tool
+
+The scan flagged five `api/monetization.py` endpoints as unchecked:
+`/affiliate/{user_id}`, `/marketplace/submissions/creator/{creator_id}`, and
+the creator `balance` / `transactions` / `payouts` trio — a creator's earnings,
+which would be a serious disclosure.
+
+**All five are correctly guarded.** Every one calls
+`_assert_self_or_operator(target_id, user)`, which returns 404 (not 403) for
+another user's records. The scanner missed it because it looked for
+`user.sub` / `user.role` textually and the guard passes `user` whole to a
+helper. `_assert_affiliate_owner` next to it does the same for affiliate ids,
+with a comment recording that the check was added after an earlier audit.
+
+Likewise `GET /api/monetization/subscription/{user_id}` and
+`POST /subscription/{subscription_id}/cancel`, both mounted and both guarded —
+the latter with a comment saying exactly why.
+
+Most of the remaining rows were flagged `auth=False` only because the scanner
+does not recognise `_get_current_user_id` (`auth/router.py`) or router-level
+superadmin dependencies (`api/superadmin/*`, `api/platform.py`). Checked by
+building the app and reading, not by trusting the column.
+
+### S-29 — an unmounted router factory published unauthenticated billing endpoints — FIXED
+
+`monetization/subscription.py::create_subscription_router()` is called
+**nowhere**; `api/monetization.py` serves the guarded equivalents. But the
+module docstring instructs you to mount it:
+
+```python
+app.include_router(create_subscription_router(), prefix="/billing")
+```
+
+and until now doing so published, with **no authentication at all**:
+
+| Endpoint | Effect |
+|---|---|
+| `POST /subscribe` | start a paid subscription for any `user_id` |
+| `GET /license/validate` | read any user's tier and entitlements |
+| `GET /subscription/{user_id}` | read any user's subscription |
+| `DELETE /subscription/{user_id}` | **cancel any user's subscription** |
+
+This is the same landmine as the duplicate `/api/alerts` router removed in
+S-21: an importable router carrying weaker guards than the mounted one,
+harmless right up until somebody follows the instructions written next to it.
+
+Hardened rather than deleted — deletion would break any out-of-tree importer,
+and hardening achieves the same end. All four now require a token and are
+self-or-operator scoped, answering 404 for another user so the response does
+not confirm the account exists. `POST /webhook` deliberately stays tokenless:
+Stripe cannot present a bearer token, and `handle_stripe_webhook` verifies the
+`stripe-signature` header instead — a test pins that distinction so the webhook
+is not "fixed" into being unreachable.
+
+Verified: unauthenticated calls get 401; Bob gets 404 on Alice's subscription,
+cancel, subscribe-on-behalf and entitlements; Alice and an admin get 200.
+Neutering the guard fails 4 of the 11 new tests.
+
+### Also noticed, not fixed
+
+`GET /license/validate` exists **only** in this unmounted factory, so license
+validation has no HTTP surface anywhere in the running app. In-process gating
+goes through `require_plan`, so nothing is broken — recorded in case a client
+was expected to call it.
