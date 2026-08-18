@@ -773,7 +773,7 @@ class HopeFXEngine:
             )
             # Publish breach event so monitoring / alerting picks it up.
             try:
-                from core.event_bus import event_bus as _eb
+                from core.event_bus import bus as _eb
 
                 await _eb.publish_breach(
                     {
