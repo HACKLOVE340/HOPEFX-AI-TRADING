@@ -2,14 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" href="/godmode/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="description" content="HOPEFX GodMode - Professional AI Trading Platform" />
 
-    <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <!-- PWA. The manifest is injected by vite-plugin-pwa (manifest.webmanifest)
+         and is scoped to the /godmode/ base. A second, hand-written
+         public/manifest.json used to be linked here as well: it declared
+         scope "/" — wrong for a bundle mounted at /godmode/ — and listed eight
+         icon sizes of which only two were ever shipped. Two competing manifests
+         with the first one wrong is worse than one correct one. -->
+    <link rel="apple-touch-icon" href="/godmode/icon-192.png" />
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -41,9 +45,9 @@
         to { transform: rotate(360deg); }
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-qGLJ30qG.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-ClqWLFI1.css">
-  <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
+    <script type="module" crossorigin src="/godmode/assets/index-BhYtLwGf.js"></script>
+    <link rel="stylesheet" crossorigin href="/godmode/assets/index-Y-o15G4X.css">
+  <link rel="manifest" href="/godmode/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/godmode/registerSW.js"></script></head>
   <body>
     <div id="loading">
       <div class="spinner"></div>

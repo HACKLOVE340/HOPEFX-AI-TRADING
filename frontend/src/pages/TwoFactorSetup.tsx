@@ -51,7 +51,9 @@ type Step = 'idle' | 'setup' | 'active' | 'backup';
 interface SetupData {
   secret: string;
   otpauth_uri: string;
-  qr_url: string;
+  // No `qr_url`: the API no longer returns a third-party image URL with the
+  // otpauth URI (i.e. the TOTP shared secret) in its query string. The QR is
+  // encoded locally from `otpauth_uri` — see components/QRCode.tsx.
 }
 
 interface StatusData {

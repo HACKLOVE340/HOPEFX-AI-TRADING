@@ -13,16 +13,22 @@ import { test, expect } from '@playwright/test';
 import { captureConsoleErrors } from './helpers';
 
 test.describe('Marketplace', () => {
+  // Attached before the navigation below, so the console errors this collects
+  // are the ones from the load every test in this describe actually runs on.
+  // Previously `renders without JS errors` attached its listener afterwards and
+  // then navigated to /marketplace a *second* time to have something to observe
+  // — two full page loads inside one 30s test timeout, which is what tipped it
+  // over on a slow runner while its siblings (one load each) passed.
+  let consoleErrors: string[] = [];
+
   test.beforeEach(async ({ page }) => {
+    consoleErrors = captureConsoleErrors(page);
     await page.goto('/marketplace');
     await page.waitForLoadState('networkidle');
   });
 
-  test('renders without JS errors', async ({ page }) => {
-    const errors = captureConsoleErrors(page);
-    await page.goto('/marketplace');
-    await page.waitForLoadState('networkidle');
-    expect(errors).toHaveLength(0);
+  test('renders without JS errors', async () => {
+    expect(consoleErrors).toHaveLength(0);
   });
 
   test('page title is visible', async ({ page }) => {

@@ -17,7 +17,12 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      {/* Served under /godmode/ (see vite.config.ts `base` and the mount in
+          core/page_routes.py). Without a basename every route below — declared
+          as "/", "/checkout", "/dashboard" — is matched against the full
+          "/godmode/..." pathname and nothing matches, so the shell renders
+          empty. BASE_URL comes from the same `base`, keeping the two in step. */}
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <App />
       </BrowserRouter>
     </QueryClientProvider>

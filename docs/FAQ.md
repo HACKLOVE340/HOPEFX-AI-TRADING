@@ -644,7 +644,9 @@ JWTs are signed with HS256 using `SECURITY_JWT_SECRET`. Tokens expire after 24 h
 
 ### Is there two-factor authentication?
 
-TOTP-based 2FA is available on Professional and above. Enable via `POST /api/auth/2fa/enable`. Required for admin accounts.
+TOTP-based 2FA is available on Professional and above. Enrol via `POST /api/2fa/setup` then `POST /api/2fa/verify` (or `POST /api/auth/2fa/setup` then `/confirm` on the other surface). Required for admin accounts.
+
+Note that 2FA today gates the `/2fa/*` endpoints; there is **no** second-factor challenge on password login. See the 2FA section of docs/SECURITY.md.
 
 ### How is the kill switch token protected?
 

@@ -148,9 +148,24 @@ def _otpauth_uri(secret: str, user_id: str, issuer: str = "HOPEFX") -> str:
 
 
 class SetupResponse(BaseModel):
+    """Everything the client needs to render the enrolment QR *locally*.
+
+    There is deliberately no ``qr_url`` field. This response used to carry
+    ``https://api.qrserver.com/v1/create-qr-code/?...&data=<otpauth uri>``, and
+    the otpauth URI **is** the TOTP shared secret — handing it to a third-party
+    image service, together with the user identifier, defeats the second factor
+    for anyone able to read those request logs. (It was not even URL-encoded, so
+    the secret sat in the query string verbatim.)
+
+    ``api/mobile.py`` uses the same service for the app-store QR codes and that
+    remains fine: those encode public URLs with nothing confidential in them.
+
+    Clients must encode ``otpauth_uri`` themselves. The web UI does this with
+    the ``qrcode`` package on a canvas — see ``frontend/src/components/QRCode.tsx``.
+    """
+
     secret: str
     otpauth_uri: str
-    qr_url: str
 
 
 class VerifyRequest(BaseModel):
@@ -197,10 +212,9 @@ async def setup_2fa(
     _set_enabled(user.sub, False)
 
     uri = _otpauth_uri(secret, user.sub)
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={uri}"
 
     logger.info("2FA setup initiated for user %s", user.sub)
-    return SetupResponse(secret=secret, otpauth_uri=uri, qr_url=qr_url)
+    return SetupResponse(secret=secret, otpauth_uri=uri)
 
 
 @router.post("/verify", response_model=VerifyResponse)

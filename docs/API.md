@@ -73,11 +73,29 @@ curl http://localhost:8000/api/status \
 | POST | `/api/auth/logout` | JWT | Invalidate token |
 | GET | `/api/auth/me` | JWT | Current user profile |
 | POST | `/api/auth/register` | None | Create account |
-| POST | `/api/auth/2fa/enable` | JWT | Enable TOTP 2FA (Professional+) |
-| POST | `/api/auth/2fa/verify` | JWT | Verify TOTP code |
+| POST | `/api/auth/2fa/setup` | JWT | Generate TOTP secret (returns `provisioning_uri`) |
+| POST | `/api/auth/2fa/confirm` | JWT | Activate 2FA with a valid code |
 | POST | `/api/auth/2fa/disable` | JWT | Disable 2FA |
-| POST | `/api/auth/password/change` | JWT | Change password |
-| POST | `/api/auth/password/reset` | None | Request password reset |
+| POST | `/api/auth/change-password` | JWT | Change password (`api/settings_extended.py`) |
+| POST | `/api/auth/forgot-password` | None | Request a password-reset link |
+| POST | `/api/auth/reset-password` | None | Set a new password with the emailed token |
+| POST | `/api/auth/logout-all` | JWT | Revoke every session |
+| GET | `/api/auth/sessions` | JWT | List active sessions |
+| DELETE | `/api/auth/sessions/{session_id}` | JWT | Revoke one session |
+| GET | `/api/auth/verify-email` | None | Verify an email address from its link |
+| POST | `/api/auth/resend-verification` | None | Re-send the verification email |
+| GET | `/api/auth/csrf-token` | None | Issue the CSRF token the SPA echoes as `X-CSRF-Token` |
+
+A second, separate TOTP implementation is mounted at `/api/2fa`
+(`api/two_factor.py`): `POST /setup`, `POST /verify`, `POST /disable`,
+`GET /backup-codes`, `POST /backup-codes/regenerate`, `GET /status`. Backup
+codes live only on that surface. The rows above were `/2fa/enable` and
+`/2fa/verify`, which exist under neither prefix — see docs/SECURITY.md.
+The password rows were `/api/auth/password/change` and
+`/api/auth/password/reset`, which also do not exist; the table above is now
+the full set of routes `auth/router.py` registers, plus the change-password
+endpoint that lives in `api/settings_extended.py`.
+
 
 ---
 
