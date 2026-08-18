@@ -30,6 +30,44 @@ from pydantic import BaseModel, Field
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
+
+def _require_position_ownership(position_id: str, user_id: str) -> None:
+    """Refuse to attach an order to a position the caller does not own.
+
+    Mirrors the check in ``api/trading.py::close_position`` — same table, same
+    "row exists and names a different owner" condition, same non-fatal
+    behaviour when the DB is unavailable. It is duplicated rather than imported
+    because the original is inline in that endpoint, and reaching into another
+    router's internals to share four lines would couple the two more tightly
+    than copying them.
+
+    Positions with no DB row (broker-native) fall through, as they do there:
+    this is an authorisation check, not a completeness guarantee.
+    """
+    from core.app_state import app_state
+
+    if getattr(app_state, "db_session_factory", None) is None:
+        return
+
+    try:
+        from database.models import Position as _Position
+
+        with app_state.db_session_factory() as db:
+            row = db.query(_Position).filter(_Position.id == position_id).first()
+            if row is not None and row.user_id and row.user_id != user_id:
+                logger.warning(
+                    "IDOR blocked: user=%s tried to attach an advanced order to position=%s owned by user=%s",
+                    user_id,
+                    position_id,
+                    row.user_id,
+                )
+                raise HTTPException(status_code=403, detail="You do not own this position")
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover — DB shape/availability
+        logger.debug("Advanced-order ownership check skipped (non-fatal): %s", exc)
+
+
 # Authentication is declared at the ROUTER level so a new route cannot be
 # added here without it. These endpoints expose live stop-loss, take-profit
 # and trailing levels — on a trading platform the most sensitive data in
@@ -97,9 +135,11 @@ async def submit_oco(request: OCORequest, user: TokenPayload = Depends(get_curre
     from execution.advanced_orders import get_advanced_order_manager
 
     manager = get_advanced_order_manager()
+    _require_position_ownership(request.position_id, user.sub)
 
     try:
         order_id = await manager.submit_oco(
+            user_id=user.sub,
             position_id=request.position_id,
             symbol=request.symbol,
             side=request.side,
@@ -128,9 +168,11 @@ async def submit_trailing_stop(request: TrailingStopRequest, user: TokenPayload 
     from execution.advanced_orders import get_advanced_order_manager
 
     manager = get_advanced_order_manager()
+    _require_position_ownership(request.position_id, user.sub)
 
     try:
         order_id = await manager.submit_trailing_stop(
+            user_id=user.sub,
             position_id=request.position_id,
             symbol=request.symbol,
             side=request.side,
@@ -159,6 +201,7 @@ async def submit_stop_limit(request: StopLimitRequest, user: TokenPayload = Depe
     from execution.advanced_orders import get_advanced_order_manager
 
     manager = get_advanced_order_manager()
+    _require_position_ownership(request.position_id, user.sub)
 
     expires = None
     if request.expires_at:
@@ -169,6 +212,7 @@ async def submit_stop_limit(request: StopLimitRequest, user: TokenPayload = Depe
 
     try:
         order_id = await manager.submit_stop_limit(
+            user_id=user.sub,
             position_id=request.position_id,
             symbol=request.symbol,
             side=request.side,
@@ -194,7 +238,7 @@ async def cancel_advanced_order(order_id: str, user: TokenPayload = Depends(get_
 
     manager = get_advanced_order_manager()
 
-    success = await manager.cancel_order(order_id)
+    success = await manager.cancel_order(order_id, user_id=user.sub)
     if not success:
         raise HTTPException(
             status_code=404,
@@ -208,12 +252,19 @@ async def cancel_advanced_order(order_id: str, user: TokenPayload = Depends(get_
 
 
 @router.get("/active", response_model=dict)
-async def list_active_orders(position_id: str | None = Query(default=None)):
-    """List all active advanced orders, optionally filtered by position."""
+async def list_active_orders(
+    position_id: str | None = Query(default=None),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """List the caller's active advanced orders, optionally filtered by position.
+
+    This used to return **every** user's active orders — symbols, sizes and
+    stop levels, which disclose other traders' positions.
+    """
     from execution.advanced_orders import get_advanced_order_manager
 
     manager = get_advanced_order_manager()
-    orders = manager.get_active_orders(position_id=position_id)
+    orders = manager.get_active_orders(position_id=position_id, user_id=user.sub)
 
     return {
         "count": len(orders),
@@ -231,12 +282,16 @@ async def advanced_orders_health():
 
 
 @router.get("/{order_id}", response_model=dict)
-async def get_order_details(order_id: str):
-    """Get details of a specific advanced order."""
+async def get_order_details(order_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Get details of one of the caller's advanced orders.
+
+    Answers 404 for an order belonging to someone else, so the response does
+    not disclose which order ids exist.
+    """
     from execution.advanced_orders import get_advanced_order_manager
 
     manager = get_advanced_order_manager()
-    order = manager.get_order(order_id)
+    order = manager.get_order(order_id, user_id=user.sub)
 
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order '{order_id}' not found.")

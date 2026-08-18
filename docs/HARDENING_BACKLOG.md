@@ -5433,7 +5433,7 @@ when it expires mid-stream. Removing the check from `account_updates` fails two
 tests, including the structural one that requires all three subscriptions to
 call it.
 
-### S-23 — advanced orders ignore who is asking (HIGH) — OPEN, fix in progress
+### S-23 — advanced orders ignored who was asking (HIGH) — FIXED
 
 `api/advanced_orders.py` (`/api/orders/advanced`) is mounted
 **unconditionally** — no feature flag — and guarded by
@@ -5474,8 +5474,35 @@ position rather than opening exposure — and blocking them during a halt would
 leave positions unprotected, which is worse than the alternative. That is a
 defensible design difference, unlike the missing ownership check.
 
-Fix approach: the owner belongs on the order, not in a side index that can
-drift, and `api/advanced_orders.py` is the **only** caller of the manager
-(verified by grep across the repo), so threading a `user_id` through the three
-dataclasses and three submit methods has a small blast radius. Being done as
-its own change so it can be verified on its own.
+**Fix.** The owner belongs on the order, not in a side index that can drift out
+of step with it, and `api/advanced_orders.py` is the **only** caller of the
+manager anywhere in the repo, so threading it through had a small blast radius:
+
+* `user_id` added to `OCOOrder`, `TrailingStopOrder` and `StopLimitOrder`, and
+  to the three `submit_*` methods that construct them.
+* `get_order`, `get_active_orders` and `cancel_order` take an optional
+  `user_id`. When given, they only see and act on that user's orders.
+  `get_order` returns None and `cancel_order` returns False for someone else's
+  order — indistinguishable from "no such order", so ids cannot be enumerated,
+  the same choice `api/alerts._get_owned_alert` makes.
+* `user_id=None` still matches everything, because the price-monitor loops have
+  no user context. Request-facing callers must pass one; all six data endpoints
+  now do.
+* The three submits additionally call `_require_position_ownership`, mirroring
+  the check in `close_position` so a trader cannot attach an order to someone
+  else's position in the first place.
+
+`GET /health` stays unscoped on purpose: counts and capability flags, no order
+ids, owners or price levels. A test pins its exact shape.
+
+Verified with two users against the real manager: each sees only their own
+active orders, Bob cannot read or cancel Alice's, Alice's order survives Bob's
+cancel, and internal callers still see everything. Reverting the owner check
+fails 8 of the 19 tests.
+
+**Left as-is, and worth knowing.** `AdvancedOrderManager` is a process-wide
+singleton wrapping a single broker adapter — it has no per-user account
+resolution, unlike `api/trading.py`'s `_user_broker_call`. The ownership checks
+bound the damage but do not change that: this subsystem was built for a
+single-account model, and on a multi-account deployment the orders it places
+still go through one broker. That is an architectural gap, not a patch.
