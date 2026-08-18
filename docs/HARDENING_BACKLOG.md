@@ -6207,3 +6207,118 @@ that may not finish at any limit, and narrowing the triggers is a policy call
 for whoever owns the Actions spend. The recommendation is to drop the
 per-push/per-PR triggers and keep the weekly schedule plus
 `workflow_dispatch`, which preserves the capability and stops the waste.
+
+---
+
+## Round 15 — the kill switch could not reach the broker
+
+Found by running `scripts/ci/gate_broken_imports.py` — the gate S-37 flagged as
+wired into nothing. Two of its reports were in `kill_switch.py`. They were real.
+
+### S-38 — the kill switch never cancelled anything at the broker (CRITICAL) — FIXED
+
+`KillSwitch._broker_cancel_all` is the last step of activation: after the halt
+flag, the Redis latch, the Sentry alert and the risk-halt email, it calls the
+broker's mass-cancel so resting orders and open positions do not survive the
+halt. It resolved the broker through exactly two paths:
+
+```python
+from execution.engine import get_active_broker      # not defined there
+from execution.smart_router import get_router       # not defined there
+```
+
+`execution/engine.py` defines `ExecutionEngine` and no module-level accessor.
+`execution/smart_router.py` defines `SmartRouter` and no module-level accessor.
+Both imports raised `ImportError` on every call; both were caught by a bare
+`except Exception: pass`; resolution fell through to
+
+```python
+if broker is None:
+    logger.warning("... no active broker found — skipping broker cancel")
+    return
+```
+
+So every activation, against a fully connected broker, logged one warning and
+returned. The operator saw a successful kill switch — flag set, latch written,
+alert sent — while the orders it exists to pull stayed live at the broker.
+
+The sibling resolver `check_broker_cod` documents a three-step order and has
+all three:
+
+```
+1. execution.engine.get_active_broker()
+2. execution.smart_router.get_router()._primary_broker
+3. core.app_state.app_state.broker        <- the one that actually resolves
+```
+
+Step 3 works because `ComponentRegistry` publishes the broker onto the
+`app_state` singleton at startup. `_broker_cancel_all` inlined its own copy of
+the chain and stopped at step 2. Two copies of one resolution order drifted,
+and the copy guarding the money lost the only working path.
+
+The async/sync dispatch below the resolution was already correct (S12-04e) —
+it was simply unreachable.
+
+Fixed by extracting `KillSwitch._resolve_active_broker()` and calling it from
+both sites, so the chain cannot drift from itself again. Steps 1 and 2 stay as
+forward compatibility rather than as the only hope.
+
+Verified: with a broker on `app_state`, `_broker_cancel_all` now resolves it and
+calls `cancel_all_orders` — sync brokers, async brokers, and async brokers
+reached from inside a running event loop. Reverting the resolver fails three of
+the seven new tests in
+`tests/unit/test_kill_switch_broker_cancel_resolution.py`. The remaining four
+pin the degradation contract: no broker, a broker without the method, and a
+broker that raises must all leave activation intact. Runtime transcript:
+`evidence/flows/kill_switch_broker_cancel/runtime-proof.txt`.
+
+### S-39 — Gate A exempted a whole file when one of its routers had auth (MEDIUM) — FIXED
+
+`_file_has_router_level_auth` walked every `APIRouter(...)` in a file and
+returned True on the first one carrying `dependencies=[Depends(<auth>)]`.
+`check_file` then returned immediately, examining no endpoint in that file.
+
+A file with two routers is the normal way to expose a public endpoint beside
+authenticated ones, and `api/advanced_trading.py` is exactly that shape:
+
+```python
+router        = APIRouter(dependencies=[Depends(get_current_user)])
+public_router = APIRouter()      # no auth; mounted at core/router_registry.py:452
+```
+
+`public_router` carries one route today — `GET /api/backtesting/shared/{slug}`,
+the shared backtest view — so nothing is currently exposed. But the file was
+not passing because its routes are safe; it was passing because the gate
+stopped looking. Any `@public_router.post` added later would have been waved
+through, in the one file whose whole design is "some of these are public".
+
+Fixed by replacing the file-wide question with `_guarded_router_names()` plus
+`_route_owner()`, so a route is exempt only when its own router carries auth.
+
+Verified: Gate A still passes on the real tree (126 files) under the tightened
+rule, which is the useful result — nothing in the repo was relying on the
+loophole, so this closes a latent hole rather than papering over a live one. A
+mutating route on an auth-free second router is now caught; routes on the
+guarded router still pass; and a third test pins `public_router` itself, failing
+if it ever grows a mutating route. All in
+`tests/unit/test_gate_a_markers_really_authenticate.py`.
+
+### Still not fixed: `gate_broken_imports.py` is still wired into nothing
+
+Re-measured this round: **49** broken local imports (S-37 counted 50; its own
+fix accounts for the difference). It remains absent from
+`.github/workflows/tests.yml`, which runs gates A through M, and from
+`.pre-commit-config.yaml`.
+
+S-38 is the second genuine defect this gate has found on the two occasions
+anyone has run it, and the more expensive of the two. Two of the 49 reports
+still point at `kill_switch.py` by design — the forward-compatibility steps in
+`_resolve_active_broker` — which is the shape of the triage problem: the gate
+cannot tell a dead-and-dangerous import from a guarded fallback, so wiring it
+in as-is turns CI red on 49 findings of mixed severity.
+
+The recommendation is unchanged from S-37 and now better evidenced: triage the
+49 into (a) real defects, (b) intentional guarded fallbacks worth an allowlist
+entry, then wire it into `tests.yml` beside the other gates. Until that happens
+this class of defect — an import that has never resolved, silently swallowed —
+is caught only when someone runs the gate by hand.
