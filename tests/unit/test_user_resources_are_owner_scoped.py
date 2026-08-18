@@ -562,3 +562,146 @@ class TestTheSubscriptionFactoryCannotBeWiredIntoAHole:
                 continue
             names = {getattr(d.call, "__name__", "") for d in route.dependant.dependencies}
             assert "get_current_user" in names, f"{route.path} has no auth dependency (S-29)"
+
+
+# ── S-30: license validation had no HTTP surface ─────────────────────────────
+
+
+@pytest.fixture
+def _isolated_subscriptions():
+    """Give each test a clean copy of the process-wide subscription store."""
+    from monetization.subscription import subscription_manager
+
+    subs = dict(subscription_manager._subscriptions)
+    by_user = dict(subscription_manager._user_subscriptions)
+    subscription_manager._subscriptions.clear()
+    subscription_manager._user_subscriptions.clear()
+    try:
+        yield subscription_manager
+    finally:
+        subscription_manager._subscriptions.clear()
+        subscription_manager._subscriptions.update(subs)
+        subscription_manager._user_subscriptions.clear()
+        subscription_manager._user_subscriptions.update(by_user)
+
+
+@pytest.fixture
+def monetization_client(_isolated_subscriptions):
+    from api.monetization import router
+
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+_VALIDATE = "/api/monetization/license/validate"
+
+
+@pytest.mark.unit
+class TestLicenseValidationIsReachable:
+    """S-30: the subscription license validator was unreachable over HTTP.
+
+    Two different classes are named `LicenseValidator` in `monetization/`:
+
+        license.py      — access codes and feature gating. Exported as
+                          `license_validator`; reachable via
+                          `/activate-code` and `/validate-code/{code}`.
+        subscription.py — subscription **license keys** and tier entitlements
+                          (`allows_live`, `allows_rl`). Not exported, and its
+                          only endpoint lived in `create_subscription_router()`
+                          — the factory nothing calls (S-29).
+
+    So no client could ask "does this key entitle me to live trading?" from
+    anywhere in the running app. Nothing was broken by that — in-process gating
+    goes through `require_plan` and the risk manager, neither of which consults
+    this validator — but the capability the module advertises did not exist as
+    an API.
+
+    It is mounted now at `POST /api/monetization/license/validate`, guarded by
+    the same `_assert_self_or_operator` as the rest of that router. POST rather
+    than the factory's GET, so the key is not written into access logs, proxy
+    logs and browser history by a `?license_key=` query string.
+    """
+
+    def test_the_route_exists_in_the_fully_registered_app(self):
+        """Not just on the router — on the app the server actually serves."""
+        from config.feature_flags import FeatureFlags
+        from core.router_registry import iter_api_routes, register_routers
+
+        app = FastAPI()
+        register_routers(app, FeatureFlags())
+
+        routes = {r.path: r for r in iter_api_routes(app.routes) if r.path.endswith("/license/validate")}
+
+        assert "/api/monetization/license/validate" in routes, (
+            "license validation has no HTTP surface in the running app (S-30)"
+        )
+        route = routes["/api/monetization/license/validate"]
+        assert route.methods == {"POST"}
+        assert "get_current_user" in {getattr(d.call, "__name__", "") for d in route.dependant.dependencies}
+
+    def test_it_answers_nothing_without_a_token(self, monetization_client):
+        assert monetization_client.post(_VALIDATE, json={}).status_code == 401
+
+    def test_no_subscription_reports_free_tier_and_no_live_trading(self, monetization_client, alice):
+        body = monetization_client.post(_VALIDATE, json={}, headers=alice).json()
+
+        assert body["valid"] is True
+        assert body["tier"] == "free"
+        assert body["allows_live"] is False
+        assert body["allows_rl"] is False
+
+    def test_a_paid_tier_needs_a_matching_key(self, monetization_client, alice, _isolated_subscriptions):
+        from monetization.subscription import SubscriptionStatus, SubscriptionTier
+
+        sub = _isolated_subscriptions.create_subscription("alice", SubscriptionTier.PROFESSIONAL)
+        sub.status = SubscriptionStatus.ACTIVE
+
+        no_key = monetization_client.post(_VALIDATE, json={}, headers=alice).json()
+        assert no_key["valid"] is False
+        assert no_key["allows_live"] is False
+
+        wrong = monetization_client.post(
+            _VALIDATE, json={"license_key": "HOPEFX-PRO-DEADBEEFDEADBEEF"}, headers=alice
+        ).json()
+        assert wrong["valid"] is False
+        assert wrong["allows_live"] is False, "a forged key must not unlock live trading (S-30)"
+
+        right = monetization_client.post(_VALIDATE, json={"license_key": sub.license_key}, headers=alice).json()
+        assert right["valid"] is True
+        assert right["tier"] == "professional"
+        assert right["allows_live"] is True
+        assert right["allows_rl"] is True
+
+    def test_a_bad_key_is_a_verdict_not_an_error(self, monetization_client, alice, _isolated_subscriptions):
+        """A client must be able to tell "no licence" from "the call failed"."""
+        from monetization.subscription import SubscriptionStatus, SubscriptionTier
+
+        sub = _isolated_subscriptions.create_subscription("alice", SubscriptionTier.PROFESSIONAL)
+        sub.status = SubscriptionStatus.ACTIVE
+
+        response = monetization_client.post(_VALIDATE, json={"license_key": "nope"}, headers=alice)
+
+        assert response.status_code == 200
+        assert response.json()["reason"] == "Invalid license key"
+
+    def test_one_user_cannot_read_anothers_entitlements(self, monetization_client, bob):
+        assert monetization_client.post(_VALIDATE, json={"user_id": "alice"}, headers=bob).status_code == 404, (
+            "tier and entitlements are billing data — and 404, not 403, so the "
+            "route cannot be used to enumerate account ids"
+        )
+
+    def test_staff_may_validate_on_behalf_of_a_customer(self, monetization_client):
+        admin = _headers("root", role="admin")
+
+        assert monetization_client.post(_VALIDATE, json={"user_id": "alice"}, headers=admin).status_code == 200
+
+    def test_the_key_is_never_taken_from_the_query_string(self):
+        """Query strings land in logs; the key is a shared secret."""
+        from api.monetization import router
+
+        route = next(r for r in router.routes if r.path.endswith("/license/validate"))
+        query_params = {p.name for p in route.dependant.query_params}
+
+        assert "license_key" not in query_params
+        assert "user_id" not in query_params

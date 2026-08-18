@@ -228,6 +228,7 @@ Production REST API for the HOPEFX AI Trading platform. All endpoints require JW
 | `GET` | `/api/monetization/analytics/report` | /analytics/report | monetization |
 | `GET` | `/api/monetization/analytics/revenue` | /analytics/revenue | monetization |
 | `GET` | `/api/monetization/enterprise/stats` | /enterprise/stats | monetization |
+| `POST` | `/api/monetization/license/validate` | /license/validate | monetization |
 | `POST` | `/api/monetization/marketplace/creators/stripe-account` | /marketplace/creators/stripe-account | monetization |
 | `GET` | `/api/monetization/marketplace/creators/{creator_id}/balance` | /marketplace/creators/{creator_id}/balance | monetization |
 | `GET` | `/api/monetization/marketplace/creators/{creator_id}/payouts` | /marketplace/creators/{creator_id}/payouts | monetization |

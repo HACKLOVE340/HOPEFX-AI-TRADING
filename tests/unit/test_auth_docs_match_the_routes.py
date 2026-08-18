@@ -153,3 +153,90 @@ class TestTheFictionalPathsAreGoneEverywhere:
                     f"nothing within {self._CONTEXT_LINES} lines saying it does "
                     f"not exist:\n  {line.strip()}"
                 )
+
+
+# ── S-31: the same check, applied to the Monetization Endpoints table ─────────
+
+
+def _documented_rows(heading: str) -> list[tuple[str, str]]:
+    """(method, path) rows from any `## <heading>` table in docs/API.md."""
+    lines = _API_DOC.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == heading)
+
+    rows: list[tuple[str, str]] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        match = _TABLE_ROW_RE.match(line)
+        if match:
+            rows.append((match.group(1), match.group(2)))
+    return rows
+
+
+@pytest.mark.unit
+class TestMonetizationEndpointTable:
+    """S-31 turned up six fictional rows and an understated auth requirement.
+
+    Checked against the **fully registered app** rather than a regex over one
+    module's source: this table spans `api/monetization.py` and
+    `api/billing.py`, and a path that exists on a router but is never mounted
+    is not an endpoint. `app.routes` alone would see almost nothing — Starlette
+    keeps each inclusion as an opaque wrapper — hence `iter_api_routes`.
+    """
+
+    @staticmethod
+    def _registered() -> set[tuple[str, str]]:
+        from fastapi import FastAPI
+
+        from config.feature_flags import FeatureFlags
+        from core.router_registry import iter_api_routes, register_routers
+
+        app = FastAPI()
+        register_routers(app, FeatureFlags())
+        return {(method, _normalise(route.path)) for route in iter_api_routes(app.routes) for method in route.methods}
+
+    def test_the_table_was_found_and_is_not_empty(self):
+        rows = _documented_rows("## Monetization Endpoints")
+        assert len(rows) >= 12, f"only parsed {len(rows)} rows — the table format changed"
+
+    def test_every_documented_path_exists(self):
+        registered = self._registered()
+
+        missing = [
+            f"{method} {path}"
+            for method, path in _documented_rows("## Monetization Endpoints")
+            if (method, _normalise(path)) not in registered
+        ]
+
+        assert not missing, (
+            f"docs/API.md documents monetization endpoints that do not exist: {missing}. "
+            "Six such rows shipped, including `/api/monetization/subscription/me` and "
+            "`/api/monetization/stripe/webhook` (the real path is `/webhook/stripe`) — see S-31."
+        )
+
+    def test_the_pricing_endpoints_are_not_advertised_as_public(self):
+        """They require a JWT. A doc that under-states auth invites removing it."""
+        import os
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        os.environ.setdefault("SECURITY_JWT_SECRET", "docs-vs-routes-test-secret-min-32-chars")
+
+        from api.monetization import router
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app, raise_server_exceptions=False)
+
+        assert client.get("/api/monetization/pricing").status_code == 401
+
+        rows = _documented_rows("## Monetization Endpoints")
+        assert ("GET", "/api/monetization/pricing") in rows
+        lines = _API_DOC.read_text(encoding="utf-8").splitlines()
+        pricing_row = next(line for line in lines if "`/api/monetization/pricing`" in line and line.startswith("|"))
+        assert "None" not in pricing_row, f"docs/API.md still calls pricing unauthenticated: {pricing_row.strip()}"
+
+    def test_license_validation_is_documented(self):
+        """It had no HTTP surface at all before S-30, so it was in no table."""
+        assert ("POST", "/api/monetization/license/validate") in _documented_rows("## Monetization Endpoints")

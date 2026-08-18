@@ -5727,9 +5727,98 @@ Verified: unauthenticated calls get 401; Bob gets 404 on Alice's subscription,
 cancel, subscribe-on-behalf and entitlements; Alice and an admin get 200.
 Neutering the guard fails 4 of the 11 new tests.
 
-### Also noticed, not fixed
+### Also noticed — carried into Round 12 as S-30
 
 `GET /license/validate` exists **only** in this unmounted factory, so license
-validation has no HTTP surface anywhere in the running app. In-process gating
-goes through `require_plan`, so nothing is broken — recorded in case a client
-was expected to call it.
+validation has no HTTP surface anywhere in the running app.
+
+---
+
+## Round 12 — closing S-29's leftover
+
+### S-30 — license validation had no HTTP surface (LOW) — FIXED
+
+Two different classes are named `LicenseValidator` inside `monetization/`:
+
+| Module | What it validates | Reachable before? |
+|---|---|---|
+| `monetization/license.py` | access codes, feature gating | yes — `POST /api/monetization/activate-code`, `GET /api/monetization/validate-code/{code}` |
+| `monetization/subscription.py` | subscription **license keys**, tier entitlements (`allows_live`, `allows_rl`) | **no** |
+
+Only the first is exported from `monetization/__init__.py`, as
+`license_validator`. The second is instantiated at
+`monetization/subscription.py` as a module-level singleton and its only
+endpoint lived in `create_subscription_router()` — the factory nothing calls
+(S-29). So no client could ask "does this key entitle me to live trading?"
+from anywhere in the running app.
+
+Severity is LOW deliberately, and the reason matters: **nothing was broken by
+this.** Live trading is gated in-process by `require_plan` and the risk
+manager's pre-trade checks, and neither consults this validator. The gap was a
+capability the module advertises that did not exist as an API — not a bypassed
+gate.
+
+Fixed by mounting it on the router that is actually served:
+
+```
+POST /api/monetization/license/validate     {user_id?, license_key?}
+  → {valid, tier, allows_live, allows_rl, reason}
+```
+
+Two deliberate departures from the factory's version:
+
+- **POST, not GET.** The factory took `?license_key=`, which writes a shared
+  secret into access logs, proxy logs, `Referer` headers and browser history.
+  The key travels in the body.
+- **`user_id` is optional** and defaults to the authenticated caller, so the
+  common case names nobody. When supplied it goes through the same
+  `_assert_self_or_operator` as the rest of that router — 404, not 403, so the
+  route cannot be used to enumerate account ids.
+
+A missing or forged key returns `valid: false` with a reason at HTTP 200
+rather than an error status, so a client can distinguish "no licence" from
+"the call failed".
+
+Verified against the fully registered app (`register_routers` +
+`iter_api_routes`): the route resolves at both `/api/monetization/license/validate`
+and the `/api/v1/` alias, carrying `get_current_user`. Behaviourally —
+unauthenticated 401; no subscription reports free tier with `allows_live:
+false`; an active PROFESSIONAL subscription reports `valid: false` for both a
+missing and a forged key and `valid: true, allows_live: true` only for the key
+the subscription actually carries; Bob gets 404 on Alice; an admin gets 200.
+Reverting `api/monetization.py` fails 7 of the 8 new tests.
+
+### S-31 — the monetization endpoint table documented six routes that do not exist — FIXED
+
+Found while adding the S-30 endpoint to `docs/API.md`: measured against the
+fully registered app, six of that table's rows named nothing.
+
+| Documented | Reality |
+|---|---|
+| `GET /api/monetization/subscription/me` | does not exist — the caller's own subscription is `GET /api/billing/subscription` |
+| `GET /api/monetization/invoices/{user_id}` | invoices live on the billing router — `GET /api/billing/invoices` |
+| `GET /api/monetization/invoices/{id}/pdf` | does not exist |
+| `GET /api/monetization/affiliate/dashboard` | does not exist — `GET /api/monetization/affiliate/{user_id}` |
+| `POST /api/monetization/subscription/{id}/cancel` | path parameter is `{subscription_id}` |
+| `POST /api/monetization/stripe/webhook` | the real path is `/api/monetization/webhook/stripe` |
+
+and both pricing endpoints were listed as **`Auth: None`** when each requires a
+JWT — an unauthenticated `GET /api/monetization/pricing` answers 401. That row
+is the one worth calling out: a doc that under-states an endpoint's auth is
+worse than no doc, because the obvious way to make the code agree with it is
+to delete the dependency.
+
+This is the same defect S-09 fixed in the Authentication Endpoints table, in
+the table directly below it. The regression test written for S-09
+(`tests/unit/test_auth_docs_match_the_routes.py`) only covered the auth table,
+so it was extended to this one — against `register_routers` + `iter_api_routes`
+rather than a regex over one module, since this table spans
+`api/monetization.py` and `api/billing.py`, and a route that exists on an
+unmounted router is not an endpoint (S-29's whole point).
+
+The check runs in the direction that matters: every documented path must
+exist. The reverse is not asserted, so a table may summarise, and adding an
+endpoint never breaks the test — documenting a fictional one does.
+
+Verified: restoring the `subscription/me` row and the `Auth: None` cell fails
+2 of the 4 new tests.

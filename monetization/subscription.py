@@ -776,7 +776,10 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
     # only on the caller's own records unless the caller is staff.
     #
     # Nothing calls this factory today — `api/monetization.py` serves the
-    # mounted, already-guarded equivalents. But the module docstring tells you
+    # mounted, already-guarded equivalents, including
+    # `POST /api/monetization/license/validate`, which reaches the same
+    # `LicenseValidator` below. Prefer that router; this one is kept only so
+    # out-of-tree importers do not break. But the module docstring tells you
     # to wire it up (`app.include_router(create_subscription_router(),
     # prefix="/billing")`), and until now that would have published, with no
     # authentication at all:
