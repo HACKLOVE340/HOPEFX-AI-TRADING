@@ -218,28 +218,3 @@ class TestPositionSizing:
             assert sizer is not None
         except ImportError:
             pytest.skip("PositionSizer not exported from risk.position_sizing")
-
-    def test_calculate_position_size_basic(self):
-        """calculate_position_size returns a positive float."""
-        try:
-            from risk.position_sizing import calculate_position_size
-
-            size = calculate_position_size(
-                account_balance=100_000.0,
-                risk_per_trade=0.01,
-                stop_loss_pips=50,
-                pip_value=10.0,
-            )
-            assert size > 0
-        except (ImportError, TypeError):
-            pytest.skip("calculate_position_size signature differs")
-
-    def test_kelly_criterion_basic(self):
-        """kelly_criterion returns a fraction between 0 and 1."""
-        try:
-            from risk.position_sizing import kelly_criterion
-
-            f = kelly_criterion(win_rate=0.55, win_loss_ratio=1.5)
-            assert 0.0 <= f <= 1.0
-        except ImportError:
-            pytest.skip("kelly_criterion not exported")

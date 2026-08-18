@@ -6322,3 +6322,142 @@ The recommendation is unchanged from S-37 and now better evidenced: triage the
 entry, then wire it into `tests.yml` beside the other gates. Until that happens
 this class of defect — an import that has never resolved, silently swallowed —
 is caught only when someone runs the gate by hand.
+
+---
+
+## Round 16 — triaging the gate nobody ran
+
+S-37 flagged `scripts/ci/gate_broken_imports.py` as wired into nothing and left
+its findings untriaged because "triaging 50 imports is its own piece of work".
+This round is that work. It started at 47 findings (S-38 removed two by
+consolidating a duplicated resolution chain): 24 were fixed, 10 were deleted as
+dead tests, and 13 remain recorded in the gate's baseline with an owner and a
+reason. The gate now blocks in CI.
+
+### S-40 — eleven package exports resolved to None, and nothing noticed — FIXED
+
+Seven package `__init__` files re-exported submodule symbols behind
+`try/except`, naming symbols the target modules never defined:
+
+| Package | Advertised | Real |
+|---|---|---|
+| `compliance` | `AMLEngine`, `ComplianceAuditor` | `AMLGate`, `ImmutableAuditLog` |
+| `deployment` | `HelmChartGenerator` | `generate_chart` |
+| `events` | `DomainEvent` | `EventEnvelope` |
+| `infrastructure` | `Summary`, `StructuredLogger` | *(none)*, `HOPEFXLogger` |
+| `market_data` | `IBKRFeed` | `IBKRMarketDataFeed` |
+| `visualization` | `EquityCurve` | `EquityCurvePlotter` |
+| `data_layer.feeds.news` | `NewsBaseFeed`, `FinnhubNewsFeed`, `FMPNewsFeed` | `NewsFeedBase`, `FinnhubFeed`, `FMPFeed` |
+
+Each import raised on every interpreter start, the handler logged at DEBUG and
+bound the name to `None` (or left it unbound), and `__all__` went on listing it.
+
+`infrastructure` showed the compounding case. Its metrics import listed six
+names ending in `Summary`, which does not exist. CPython binds each name in
+turn and raises on that one, so `MetricsRegistry` imported fine and was then
+overwritten with `None` by the handler, and `get_metrics_registry` was never
+reached — one nonexistent name nulled the package's own documented entry point.
+
+Nothing consumed any of them: every real caller imports from the submodule
+(`from infrastructure.metrics import get_metrics_registry`), which is why it
+survived. False advertising rather than a live outage.
+
+Fixed by exporting the real names. `tests/unit/test_package_exports_resolve.py`
+pins the rule rather than the instances — a name in `__all__` must resolve and
+must not be `None`.
+
+### S-41 — features written against APIs that were never built (OPEN)
+
+Distinct from a rename: there is no symbol to point these at. Each degrades to
+a documented no-op, so the product looks healthy while the feature is absent.
+All are recorded in the gate's `KNOWN_BROKEN` baseline.
+
+| Site | Wanted | Reality | Effect today |
+|---|---|---|---|
+| `api/nocode.py:198` | `StateMachineEngine.validate_graph` | `validate_graph` exists nowhere in the repo | `/api/nocode/validate` always returns its internal-error branch |
+| `api/news_feed.py:32` | `NewsFeedManager` | only the abstract `NewsFeedBase` | `_get_news_manager()` always returns `None`; the news API is dead |
+| `api/ws_live.py:881,953` | `core.signal_engine._data_buffers` | no such buffer anywhere | ATR-from-buffer never runs; falls back to CSV |
+| `api/superadmin/risk_management.py:182,209` | `CircuitBreaker.reset()` / `.force_open()` | neither method exists; the control is `manual_override()` | superadmin reset and force-open update a Redis cache only — the live breaker is never touched |
+| `api/settings_new_endpoints.py:710` | `_last_health_result` | health is computed on demand, never cached | the `components` block is always absent |
+| `api/admin.py:1319,1668` | `email_service` object | module of functions; no generic `send_email` | admin password-reset email never sends; SMTP test never sends |
+| `ml/training_manager.py:239,243` | `retrain_advanced_predictor`, `retrain_lstm` | neither exists; `train_advanced` has a CLI `main()` only | retrain jobs for `advanced_oos` and `lstm_signal` always fail |
+| `ml/continuous_learning.py:489` | `train_model(data, path)` | `train_ml_pipeline(df, …, model_dir)` — different signature and return | the fallback training path cannot run |
+| `strategies/dynamic_registry.py:611,659` | `database.models.DynamicStrategy` | no such model and no migration | dynamic strategies are memory-only; nothing survives restart |
+
+Two of these need a product decision before code, and are the reason this item
+is open rather than fixed:
+
+1. **Superadmin circuit-breaker controls.** `CircuitBreaker` has no reset or
+   force-open. The nearest real control is
+   `manual_override(enable, reason, authorized_by)`, and `_trigger_circuit_breaker`
+   is private and async. Mapping "force open" onto either one **halts live
+   trading**; mapping "reset" onto `manual_override(False, …)` re-evaluates
+   limits. Choosing wrong halts or un-halts real trading from an admin button,
+   so the mapping needs an owner's decision, not a guess. Until then the
+   buttons remain honest no-ops against a cache.
+
+2. **Admin-triggered password reset.** Making it work means minting a signed
+   reset token for an arbitrary user from an admin endpoint — `auth/router.py`
+   already does this for the self-service flow via `_make_signed_token` with
+   `_SALT_PASSWORD_RESET`. That is a real change to the authentication surface
+   and needs sign-off before it is wired up.
+
+The rest are ordinary implementation work: build the missing function, model, or
+migration, then delete the matching `KNOWN_BROKEN` entry.
+
+### S-42 — ten tests had never executed, and were redundant — FIXED (deleted)
+
+`tests/unit/test_auth_analytics_backtest_coverage.py` (8) and
+`tests/unit/test_risk_coverage.py` (2) import module-level functions that do not
+exist, inside `try/except ImportError -> pytest.skip`. They have always skipped,
+so they contribute nothing while reading as coverage:
+
+    analytics.performance.PerformanceAnalyzer   -> PerformanceAnalytics
+    analytics.simulations.MonteCarloSimulation  -> SimulationEngine
+    backtesting.plots.plot_equity_curve/_drawdown -> PerformancePlotter
+    backtesting.reports.generate_report / PerformanceReport -> ReportGenerator
+    risk.position_sizing.calculate_position_size -> PositionSizer.calculate_size
+    risk.position_sizing.kelly_criterion        -> PositionSizer._kelly_size
+
+Every real module exposes a class; the tests were written against an imagined
+functional API.
+
+They were deleted rather than rewritten, because every one of them was already
+covered properly elsewhere:
+
+| Real class | Existing coverage |
+|---|---|
+| `PositionSizer` | `test_risk_position_sizing.py` — 25 tests across atr, kelly, percent, fixed |
+| `PerformanceAnalytics` | `test_performance_analytics.py`, `test_analytics_deep_coverage.py` |
+| `SimulationEngine` | `test_analytics.py`, `test_analytics_deep_coverage.py` |
+| `PerformancePlotter`, `ReportGenerator` | `test_simple_backtesting_modules.py` — 57 tests |
+
+The deleted bodies were also weak on their own terms — `assert callable(x)` and
+`assert x is not None` against symbols that do not exist. Rewriting them would
+have duplicated real coverage with worse assertions; keeping them meant ten
+entries in a skip list that read as coverage in the report and proved nothing.
+
+Deleting them removed their eight baseline entries, which is what surfaced the
+stale-entry check working as intended: the gate failed on the now-stale entries
+until they were removed in the same change.
+
+A related trap, already fixed under S-39's commit: the `_collect_ledger_pnl`
+tests patched `sys.modules["core.app_state"]` with a `MagicMock` and set
+`get_position_manager.return_value`. A `MagicMock` answers any attribute, so
+the test manufactured the very function the source was failing to import and
+passed while the real path returned zero. The lesson generalises to any test in
+this repository: patch the real symbol, never a `MagicMock` module — a
+`MagicMock` will happily manufacture whatever broken name the source asks for.
+
+### The gate now runs in CI
+
+`scripts/ci/gate_broken_imports.py` gained a `KNOWN_BROKEN` baseline — 13
+entries, each with a reason and a backlog reference — and a
+`gate-broken-imports` job in `.github/workflows/tests.yml`. New broken imports
+now fail CI.
+
+The baseline cannot rot: a **stale** entry, one that no longer describes a real
+defect, fails the gate too, so fixing an import forces its entry to be deleted
+in the same change instead of lingering to mask the next one.
+`tests/unit/test_gate_broken_imports_baseline.py` pins both properties, plus the
+requirement that every entry carries a justification and an `S-NN` reference.

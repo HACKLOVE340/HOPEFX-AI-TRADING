@@ -229,11 +229,13 @@ CI skips `e2e` and `slow` markers automatically (`-m "not slow and not e2e"`).
 | Gate L | `gate_l_safety_invariants.py` | Safety-critical env defaults stay safe (`BROKER_TYPE`, `FEATURE_LIVE_TRADING`, `DRIFT_BLOCK`, `STALE_MODEL_BLOCK`, `WS_AUTH_REQUIRED`, `REDIS_FORCE_TLS`) |
 | Gate M | `gate_m_ml_edge.py` | ML still beats the rule baseline on the leakage-safe OOS split |
 
-`scripts/ci/gate_broken_imports.py` also exists but is wired into **nothing** —
-not `tests.yml`, not pre-commit. It currently reports 49 broken local imports.
-Run it by hand before touching import-heavy code: it has found a genuine defect
-on both occasions anyone ran it, most recently the kill switch being unable to
-resolve a broker to cancel against (S-38). See `docs/HARDENING_BACKLOG.md`.
+| Broken imports | `gate_broken_imports.py` | No `from x import Y` where `Y` is undefined in `x` |
+
+`gate_broken_imports.py` carries a `KNOWN_BROKEN` baseline of imports that are
+still broken on purpose or awaiting implementation (see S-41/S-42 in
+`docs/HARDENING_BACKLOG.md`). Every entry needs a reason and a backlog
+reference. Fixing an import means **deleting its entry in the same change** — a
+stale entry fails the gate, so the list cannot quietly become an excuse list.
 
 ---
 
