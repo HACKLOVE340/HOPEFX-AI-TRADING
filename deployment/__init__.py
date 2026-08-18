@@ -8,7 +8,7 @@ deployment — Helm chart generation and challenge launch automation.
 
 Public API
 ----------
-    HelmChartGenerator    Generates Kubernetes Helm charts for HOPEFX deployments.
+    generate_chart        Generates Kubernetes Helm charts for HOPEFX deployments.
     ChallengeLauncher     Automates prop firm challenge account setup and launch.
 """
 
@@ -18,7 +18,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from deployment.helm_chart import HelmChartGenerator
+    from deployment.helm_chart import generate_chart
 except Exception as _exc:
     logger.debug("deployment.helm_chart unavailable: %s", _exc)
 
@@ -27,4 +27,4 @@ try:
 except Exception as _exc:
     logger.debug("deployment.challenge_launch unavailable: %s", _exc)
 
-__all__ = ["ChallengeLauncher", "HelmChartGenerator"]
+__all__ = ["ChallengeLauncher", "generate_chart"]

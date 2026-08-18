@@ -33,9 +33,9 @@ except Exception as _exc:
 try:
     # Merged from the former case-colliding ``Visualization/`` package
     # (equity-curve / performance chart utilities).
-    from visualization.equity_curve import EquityCurve
+    from visualization.equity_curve import EquityCurvePlotter
 except Exception as _exc:
     logger.debug("visualization.equity_curve unavailable: %s", _exc)
-    EquityCurve = None  # type: ignore[assignment,misc]
+    EquityCurvePlotter = None  # type: ignore[assignment,misc]
 
-__all__ = ["ChartGenerator", "DashboardServer", "EquityCurve"]
+__all__ = ["ChartGenerator", "DashboardServer", "EquityCurvePlotter"]
