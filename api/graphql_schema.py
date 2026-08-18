@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -263,6 +264,31 @@ def _require_auth(info: Info) -> dict:
     if user is None:
         raise PermissionError("Authentication required")
     return user
+
+
+# How often a live subscription re-checks the credential it opened with.
+# Subscriptions authenticated once, at subscribe time, and then streamed for as
+# long as the socket stayed up: a token that expired, or a session revoked
+# through logout-all, kept receiving data indefinitely. `account_updates` in
+# particular streams equity and balance.
+#
+# Re-checking on every emission would mean a JWT verify plus a Redis blacklist
+# lookup per tick — `price_ticks` defaults to one per second. An interval keeps
+# the cost bounded while capping how long a withdrawn credential stays useful.
+_SUBSCRIPTION_REAUTH_SECONDS = float(os.getenv("GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS", "30"))
+
+
+def _subscription_credential_expired(info: Info, last_checked: float) -> tuple[bool, float]:
+    """Re-validate a streaming subscription's token, at most once per interval.
+
+    Returns ``(expired, new_last_checked)``. ``expired`` is True when the check
+    ran and the credential no longer validates — the caller should stop the
+    generator, which closes the stream cleanly.
+    """
+    now = time.monotonic()
+    if now - last_checked < _SUBSCRIPTION_REAUTH_SECONDS:
+        return False, last_checked
+    return _get_current_user(info) is None, now
 
 
 # ── Custom error formatter ────────────────────────────────────────────────────
@@ -1247,8 +1273,14 @@ class Subscription:
             return
 
         interval = max(0.5, interval_ms / 1000.0)
+        _checked_at = time.monotonic()
 
         while True:
+            _expired, _checked_at = _subscription_credential_expired(info, _checked_at)
+            if _expired:
+                logger.info("GraphQL price_ticks: credential no longer valid, closing stream")
+                return
+
             state = _get_broker_state()
             mid: float | None = None
             spread = 0.0002 if "EUR" in symbol else 0.30
@@ -1287,7 +1319,13 @@ class Subscription:
         except PermissionError:
             return
 
+        _checked_at = time.monotonic()
         while True:
+            _expired, _checked_at = _subscription_credential_expired(info, _checked_at)
+            if _expired:
+                logger.info("GraphQL signals_stream: credential no longer valid, closing stream")
+                return
+
             state = _get_broker_state()
             sig = None
 
@@ -1318,7 +1356,15 @@ class Subscription:
             return
 
         _uid = str(_user.get("sub") or _user.get("user_id") or "")
+        _checked_at = time.monotonic()
         while True:
+            # Equity and balance — the stream where a withdrawn session
+            # continuing to receive data matters most.
+            _expired, _checked_at = _subscription_credential_expired(info, _checked_at)
+            if _expired:
+                logger.info("GraphQL account_updates: credential no longer valid, closing stream")
+                return
+
             acct = _live_account(_uid)
             yield AccountEvent(
                 balance=acct.balance,

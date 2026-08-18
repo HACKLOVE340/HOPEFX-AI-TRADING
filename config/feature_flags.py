@@ -26,10 +26,26 @@ Usage::
 
 Status levels
 -------------
-STABLE       Feature is production-ready and on by default.
-BETA         Feature is functional but still under active development; on by default.
-EXPERIMENTAL Feature exists but is not yet reliable; off by default.
-DISABLED     Feature has been intentionally turned off or removed from the active product.
+``status`` is a **maturity label only**. It does not determine whether a flag is
+on: every flag carries its own explicit ``default=``, and the two are set
+independently.
+
+STABLE       Production-ready.
+BETA         Functional but still under active development.
+EXPERIMENTAL Exists but is not yet proven in production.
+DISABLED     Intentionally turned off or removed from the active product.
+
+This section used to say "EXPERIMENTAL … off by default", which is not what the
+definitions below do: 7 of the 11 experimental flags default to **True** —
+ADVANCED_TRADING, BILLING_SUBSCRIPTION, GRAPHQL_API, PRICE_ALERTS,
+TRADE_JOURNAL, TWO_FACTOR_AUTH and WATCHLIST. An operator reading the old text
+would have believed those seven were off. GRAPHQL_API is the cautionary case:
+it read as experimental-and-therefore-off while being live, and the endpoint
+was broken end to end (see docs/HARDENING_BACKLOG.md, S-15/S-17).
+
+The reverse also happens on purpose: LIVE_TRADING is STABLE and defaults to
+False, and says so in its own description. Read each flag's ``default``, not
+its status.
 """
 
 from __future__ import annotations

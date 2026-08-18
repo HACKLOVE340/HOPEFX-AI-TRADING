@@ -5305,3 +5305,177 @@ REST routes always have one; the GraphQL mutation does not. Step 3 of that
 function already lazy-initialises an engine precisely so a missing one is not
 fatal — a missing request now falls through to it instead of blowing up on the
 way there.
+
+---
+
+## Round 9 — feature flags and router-prefix ownership
+
+Following the two items left open at the end of Round 8: the 62 default-on
+feature flags, and whether any other default-on feature is broken or
+mis-wired the way GraphQL was.
+
+Method note, because the first two attempts were wrong and the corrections are
+the useful part: enumerating `app.routes` directly shows almost nothing —
+this FastAPI version stores opaque `_IncludedRouter` wrappers, which the
+registry's own comment says, and which is why `iter_api_routes()` exists. And
+`/api/v1/*` is an *alias* layer added by a loop at the end of
+`register_routers`, not the primary mount, so a naive listing looks like every
+route lives under `/api/v1`. Both first passes produced a table of "MISS" rows
+that were entirely artefacts of my own prefix guesses.
+
+Built properly, **every flag-gated router mounts as its flag says** — 975 base
+paths plus 940 v1 aliases. One exception, below.
+
+### S-21 — two routers owned `/api/alerts`, and turning the flag off swapped in the unsafe one (HIGH) — FIXED
+
+`PRICE_ALERTS` mounts `api/alerts.py`. `PUSH_NOTIFICATIONS` mounted
+`notifications.alert_engine.router`, which declares the **same** `/api/alerts`
+prefix. `_include_router_deduped` silently skips already-registered paths, so
+the winner depended on registration order. Built under each combination:
+
+| Flags | `/api/alerts` served by |
+|---|---|
+| both on | 8 of 9 paths `api.alerts`, but `GET /api/alerts/stats` from `notifications.alert_engine` |
+| `FEATURE_PRICE_ALERTS=false` | **all 9 paths** from `notifications.alert_engine` |
+| `FEATURE_PUSH_NOTIFICATIONS=false` | `api.alerts` |
+| both off | none |
+
+The second row is the defect. `FEATURE_PRICE_ALERTS=false` is the documented
+way to switch price alerts off — its own flag description says "Mounts
+api/alerts.py router". Instead of disabling the feature it replaced a correctly
+scoped implementation with one that has **no ownership checks at all**:
+
+```python
+@router.get("/{alert_id}")
+async def get_alert(alert_id: str):          # any id, any caller
+@router.delete("/{alert_id}")
+async def delete_alert(alert_id: str):       # any id, any caller
+@router.get("/")
+async def list_alerts(symbol=None, status=None):   # no user filter
+@router.post("/")
+async def create_alert(request: CreateAlertRequest):  # no user_id stored
+```
+
+Router-level `Depends(get_current_user)` means *authenticated*, not
+*authorised*: any logged-in user could read, delete, pause or resume any other
+user's alerts, and list everyone's symbols and thresholds — which reveal other
+traders' intentions. It also skips `require_plan("starter")`.
+
+`api/alerts.py` does all of this properly via `_get_owned_alert`, which returns
+404 rather than 403 so it does not leak which ids exist.
+
+Fixed by removing the duplicate mount. `/api/alerts` now has exactly one owner
+under every flag combination, and the off switch genuinely switches it off.
+Nothing is lost: `api/notifications.py` (`/api/notifications`) is already
+mounted unconditionally with the core routers — the two `notifications_router`
+imports sharing a name is the likely origin of the mistake — and no client
+calls `/api/alerts/stats`; both SPAs use only the six paths `api/alerts.py`
+serves. `PUSH_NOTIFICATIONS` now gates nothing, which is recorded here rather
+than papered over with a fake mount: push delivery is a service concern, not a
+router.
+
+### S-20 — the flag docstring contradicted the flag definitions — FIXED
+
+`config/feature_flags.py` documented "EXPERIMENTAL … off by default". Seven of
+the eleven experimental flags default to **True**: ADVANCED_TRADING,
+BILLING_SUBSCRIPTION, GRAPHQL_API, PRICE_ALERTS, TRADE_JOURNAL,
+TWO_FACTOR_AUTH, WATCHLIST. An operator reading that header would have believed
+2FA, price alerts, watchlists, the journal, billing, advanced order types and
+GraphQL were all off. GRAPHQL_API is the cautionary case — it read as
+experimental-and-therefore-off while being live and completely broken (S-15/S-17).
+
+`status` is a maturity label; the default is set per flag and the two are
+independent. The reverse case is deliberate and must stay: LIVE_TRADING is
+STABLE and defaults to False, and says so in its own description.
+
+### Checked and found correct — read, not assumed
+
+* **`/api/v1/*` aliases preserve authentication.** They are re-registered with
+  `app.add_api_route(..., endpoint=route.endpoint)`, so FastAPI re-inspects the
+  endpoint signature and its `Depends(...)` guards come with it.
+* **`/api/portfolio/allocator/pods/update-metrics`** appeared to be the odd one
+  out — `get_current_user` where its siblings have `require_role`. Reading the
+  handler shows `_require_admin(request)` called in the body, which raises 403
+  for non-admins. A guard applied in the body does not appear in
+  `route.dependant.dependencies`; the dependency listing was misleading, not
+  the code.
+* **`/api/security/fixes*`** is split across `api/security/fixes.py` and
+  `security/global_fortress.py`, including a `GET /api/security/fixes` vs
+  `GET /api/security/fixes/` trailing-slash pair served by different modules.
+  Every one of the eight routes is gated by the *same* `require_role(...)`
+  closure instance, so there is no authorisation asymmetry. Untidy, no
+  demonstrated harm — recorded rather than churned.
+* **41 (method, path) pairs are declared by more than one module.** Declaring is
+  not mounting; for each pair that is actually live, the guards were compared
+  and matched. Only the `/api/alerts` pair had a real difference.
+
+### S-22 — subscriptions authenticated once and streamed forever (MEDIUM) — FIXED
+
+The second item left open at the end of Round 8, now closed.
+
+All three GraphQL subscriptions — `price_ticks`, `signals_stream`,
+`account_updates` — called `_require_auth` at subscribe time and never again.
+A token that expired, or a session revoked through `logout-all`, kept receiving
+data for as long as the socket stayed up. `account_updates` streams equity and
+balance every ten seconds, so a logged-out session kept watching the account.
+
+Fixed with an interval-based re-check rather than a per-emission one:
+re-validating on every tick would cost a JWT verify plus a Redis blacklist
+lookup each time, and `price_ticks` defaults to one tick per second.
+`GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS` (default 30) bounds how long a withdrawn
+credential stays useful while keeping the cost flat. When the check fails the
+generator returns, which closes the stream cleanly — as opposed to raising,
+which is what an invalid token used to do before S-13.
+
+Verified by driving the real async generator with a token that expires between
+emissions: two events on a valid credential, and exactly one event then close
+when it expires mid-stream. Removing the check from `account_updates` fails two
+tests, including the structural one that requires all three subscriptions to
+call it.
+
+### S-23 — advanced orders ignore who is asking (HIGH) — OPEN, fix in progress
+
+`api/advanced_orders.py` (`/api/orders/advanced`) is mounted
+**unconditionally** — no feature flag — and guarded by
+`require_role("trader")`. All **seven** of its endpoints bind `user` for
+authentication and then never consult it:
+
+| Endpoint | What it does with the id it is given |
+|---|---|
+| `POST /oco` | attaches a stop-loss/take-profit pair to `request.position_id` |
+| `POST /trailing-stop` | attaches a trailing stop to `request.position_id` |
+| `POST /stop-limit` | attaches a stop-limit to `request.position_id` |
+| `DELETE /{order_id}` | cancels it |
+| `GET /{order_id}` | returns it |
+| `GET /active` | returns **every** active advanced order |
+| `GET /health` | (no id) |
+
+Checked with an AST pass: none of the seven reference `user.sub`, `user.role`,
+`user_id` or any owner concept. The manager's own API has no place to put one —
+`submit_oco(position_id, symbol, side, quantity, stop_loss_price,
+take_profit_price)`, `cancel_order(order_id)`.
+
+**This is not single-tenancy.** `api/trading.py` routes every position, order
+and balance call through `_user_broker_call(user_id, ...)`, which resolves an
+account belonging to that user on a paper deployment, and `close_position`
+carries an explicit ownership check that logs `"IDOR blocked: user=%s tried to
+close position=%s owned by user=%s"`. The same class of bug was found and fixed
+on the REST path; this router never got it.
+
+So on a paper deployment a trader can attach or cancel protective orders on
+another user's position, and list every user's active advanced orders —
+including symbols, sizes and stop levels, which disclose other traders'
+positions.
+
+Deliberately **not** treated as a finding, having read it: these endpoints do
+not run the kill switch or the risk gate the way `POST /api/trading/order`
+does. OCO and trailing-stop are protective — they attach a stop to an existing
+position rather than opening exposure — and blocking them during a halt would
+leave positions unprotected, which is worse than the alternative. That is a
+defensible design difference, unlike the missing ownership check.
+
+Fix approach: the owner belongs on the order, not in a side index that can
+drift, and `api/advanced_orders.py` is the **only** caller of the manager
+(verified by grep across the repo), so threading a `user_id` through the three
+dataclasses and three submit methods has a small blast radius. Being done as
+its own change so it can be verified on its own.

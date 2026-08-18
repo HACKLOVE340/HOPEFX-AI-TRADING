@@ -405,3 +405,132 @@ class TestNoUnreachableCode:
             "for long enough that the query answered 'no trades' whenever the "
             "broker was not attached (S-14)."
         )
+
+
+@pytest.mark.unit
+class TestSubscriptionsStopWhenTheCredentialDoes:
+    """S-22: subscriptions authenticated once and then streamed forever.
+
+    ``price_ticks``, ``signals_stream`` and ``account_updates`` called
+    ``_require_auth`` at subscribe time and never again, so a token that expired
+    — or a session revoked through logout-all — kept receiving data for as long
+    as the socket stayed up. ``account_updates`` streams equity and balance.
+
+    Re-checking on every emission would cost a JWT verify plus a Redis blacklist
+    lookup per tick (``price_ticks`` defaults to one per second), so the check
+    is interval-based: ``GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS``, 30 by default.
+    """
+
+    class _MutableInfo:
+        """Info whose token can change mid-stream, as a real one effectively can."""
+
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        @property
+        def context(self) -> dict:
+            request = type("R", (), {"headers": {"authorization": f"Bearer {self.token}"}})()
+            return {"request": request}
+
+    @staticmethod
+    def _expired_token() -> str:
+        from auth.jwt import ALGORITHM, _get_secret
+
+        return pyjwt.encode(
+            {"sub": "u1", "type": "access", "exp": int(time.time()) - 60},
+            _get_secret(),
+            algorithm=ALGORITHM,
+        )
+
+    @pytest.fixture
+    def module(self, monkeypatch):
+        """Reload with a zero interval so every iteration re-checks."""
+        import importlib
+
+        monkeypatch.setenv("GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS", "0")
+        import api.graphql_schema as schema
+
+        reloaded = importlib.reload(schema)
+        yield reloaded
+        monkeypatch.delenv("GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS", raising=False)
+        importlib.reload(schema)
+
+    @staticmethod
+    async def _drain(agen, limit: int, on_event=None) -> int:
+        count = 0
+        try:
+            async for _ in agen:
+                count += 1
+                if on_event is not None:
+                    on_event()
+                if count >= limit:
+                    break
+        finally:
+            await agen.aclose()
+        return count
+
+    @pytest.mark.asyncio
+    async def test_a_valid_credential_keeps_streaming(self, module):
+        info = self._MutableInfo(_token())
+        stream = module.Subscription.account_updates(module.Subscription(), info)
+
+        assert await self._drain(stream, limit=2) == 2
+
+    @pytest.mark.asyncio
+    async def test_the_stream_closes_once_the_credential_stops_validating(self, module):
+        info = self._MutableInfo(_token())
+        expired = self._expired_token()
+
+        def _expire():
+            info.token = expired
+
+        stream = module.Subscription.account_updates(module.Subscription(), info)
+        emitted = await self._drain(stream, limit=6, on_event=_expire)
+
+        assert emitted == 1, (
+            f"the stream emitted {emitted} events after the credential expired. "
+            "A revoked session must stop receiving equity and balance (S-22)."
+        )
+
+    def test_the_interval_is_configurable_and_defaults_to_thirty_seconds(self, monkeypatch):
+        import importlib
+
+        import api.graphql_schema as schema
+
+        monkeypatch.delenv("GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS", raising=False)
+        reloaded = importlib.reload(schema)
+        assert reloaded._SUBSCRIPTION_REAUTH_SECONDS == 30.0
+
+        monkeypatch.setenv("GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS", "5")
+        reloaded = importlib.reload(schema)
+        assert reloaded._SUBSCRIPTION_REAUTH_SECONDS == 5.0
+
+        monkeypatch.delenv("GRAPHQL_SUBSCRIPTION_REAUTH_SECONDS", raising=False)
+        importlib.reload(schema)
+
+    def test_the_check_is_rate_limited_not_per_emission(self):
+        """Otherwise a 1/sec stream would verify a JWT and hit Redis every tick."""
+        from api.graphql_schema import _subscription_credential_expired
+
+        info = self._MutableInfo(self._expired_token())
+        # last_checked is "now", so the interval has not elapsed: no check runs
+        # and the caller is told to keep going even though the token is dead.
+        expired, checked = _subscription_credential_expired(info, time.monotonic())
+        assert expired is False, "the check ran before its interval had elapsed"
+        assert checked > 0
+
+    @pytest.mark.parametrize("subscription", ["price_ticks", "signals_stream", "account_updates"], ids=lambda s: s)
+    def test_every_subscription_rechecks(self, subscription):
+        import ast
+        import inspect
+
+        import api.graphql_schema as schema
+
+        source = inspect.getsource(getattr(schema.Subscription, subscription))
+        tree = ast.parse(inspect.cleandoc(source))
+        called = {
+            node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        assert "_subscription_credential_expired" in called, (
+            f"{subscription} authenticates once and then streams indefinitely (S-22)."
+        )
