@@ -52,6 +52,19 @@ from monetization import (
     subscription_manager,
 )
 
+# Two different validators share the name `LicenseValidator` in this package:
+#
+#   monetization/license.py     — access codes, feature gating   (exported as
+#                                 `license_validator`, imported above)
+#   monetization/subscription.py — subscription *license keys*, tier
+#                                 entitlements (not exported)
+#
+# The second one had no HTTP surface anywhere in the mounted app: its only
+# endpoint lived in `create_subscription_router()`, which nothing calls. It is
+# imported here under an unambiguous name so `POST /license/validate` below can
+# reach it without shadowing the access-code validator.
+from monetization.subscription import license_validator as subscription_license_validator
+
 # Create router
 router = APIRouter(prefix="/api/monetization", tags=["Monetization"])
 
@@ -94,6 +107,35 @@ class SubscribeResponse(BaseModel):
     status: str
     tier: str
     billing_cycle: str
+
+
+class LicenseValidateRequest(BaseModel):
+    """Validate a subscription license key.
+
+    The key travels in the request body rather than the query string. The
+    unmounted `create_subscription_router()` version took `?license_key=`,
+    which writes the secret into access logs, proxy logs, `Referer` headers
+    and browser history.
+    """
+
+    user_id: str | None = Field(
+        default=None,
+        description="Whose license to validate. Defaults to the authenticated caller.",
+    )
+    license_key: str | None = Field(
+        default=None,
+        description="Omit on the free tier — no key is required there.",
+    )
+
+
+class LicenseValidateResponse(BaseModel):
+    """Result of validating a subscription license key."""
+
+    valid: bool
+    tier: str
+    allows_live: bool
+    allows_rl: bool
+    reason: str
 
 
 class ActivateCodeRequest(BaseModel):
@@ -428,6 +470,38 @@ async def cancel_subscription(subscription_id: str, user: TokenPayload = Depends
         )
 
     return {"success": True, "message": "Subscription cancelled"}
+
+
+# ==========================
+# License Endpoints
+# ==========================
+
+
+@router.post("/license/validate", response_model=LicenseValidateResponse)
+async def validate_license(
+    request: LicenseValidateRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Validate a subscription license key and report what it entitles.
+
+    Free tier needs no key and is always `valid` with live trading and the RL
+    agent off. Paid tiers require a key matching the active subscription; a
+    missing or wrong key comes back `valid: false` with the reason, not an
+    error status, so a client can tell "no licence" from "call failed".
+
+    This is an entitlement *report*, not a gate. Nothing here grants access:
+    live trading is gated in-process by `require_plan` and the risk manager's
+    pre-trade checks, and this endpoint deliberately does not touch either.
+    """
+    target_user_id = request.user_id or user.sub
+    _assert_self_or_operator(target_user_id, user)
+
+    result = subscription_license_validator.validate(
+        user_id=target_user_id,
+        license_key=request.license_key,
+    )
+    return LicenseValidateResponse(**result.to_dict())
 
 
 # ==========================
