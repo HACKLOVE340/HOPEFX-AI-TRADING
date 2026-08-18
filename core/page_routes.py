@@ -257,6 +257,29 @@ def register_page_routes(app: FastAPI) -> None:
         # lookup to this directory without re-resolving on each request.
         _frontend_dist_resolved = _frontend_dist.resolve()
 
+        # ── Legacy GodMode dashboard — mounted BEFORE the catch-all ──────────
+        #
+        # This mount used to be registered after `_spa_catchall`, and Starlette
+        # matches routes in registration order, so `/{full_path:path}` claimed
+        # every /godmode/* request before the mount could see it. The catch-all
+        # does list "godmode/" among its passthrough prefixes, but as the long
+        # comment down there already explains for the /api case, returning 404
+        # from a route that has *matched* does not hand the request onward —
+        # the response ends it. Net effect: GET /godmode/ answered
+        # `{"detail": "No route for GET /godmode/"}` in exactly the deployment
+        # that has both UIs built, which is the Docker/production one.
+        #
+        # Registering it here makes the mount win, and leaves the catch-all's
+        # "godmode" passthrough entry as the correct answer for the case where
+        # dashboard/dist was never built and no mount exists.
+        if _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
+            app.mount(
+                "/godmode",
+                StaticFiles(directory=str(_dashboard_dist), html=True),
+                name="godmode_dashboard",
+            )
+            logger.info("GodMode dashboard mounted at /godmode/ (dashboard/dist/)")
+
         # ── SPA catch-all: serve index.html for every React Router path ──────
         #
         # Starlette's StaticFiles(html=True) only serves index.html for the
@@ -473,15 +496,8 @@ def register_page_routes(app: FastAPI) -> None:
             name="frontend_spa",
         )
         logger.info("Main React app mounted at / (static/)")
-
-        # Also expose legacy GodMode at /godmode/ if it exists
-        if _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
-            app.mount(
-                "/godmode",
-                StaticFiles(directory=str(_dashboard_dist), html=True),
-                name="godmode_dashboard",
-            )
-            logger.info("GodMode dashboard mounted at /godmode/ (dashboard/dist/)")
+        # The GodMode mount is registered further up, before the catch-all —
+        # putting it here left it unreachable.
 
     elif _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
         # Fallback: only legacy dashboard is built

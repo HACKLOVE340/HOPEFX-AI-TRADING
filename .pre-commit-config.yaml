@@ -2,10 +2,18 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
+      # Generated artifacts are excluded from the whitespace fixers below.
+      # They are regenerated verbatim by their producers (vite, the retrain
+      # workflows, the tutorial generator), so a hook that appends a newline
+      # does not "fix" anything: it makes the committed file differ from the
+      # build output, and the difference reappears on the next regeneration.
+      # `pre-commit run --all-files` was failing on five such files every time,
+      # which is exactly the pressure that gets people reaching for
+      # `--no-verify` — the thing CLAUDE.md forbids.
       - id: trailing-whitespace
-        exclude: ^frontend/package-lock\.json$
+        exclude: ^(frontend/package-lock\.json|dashboard/dist/|ml/saved_models/|tutorials/generated/)
       - id: end-of-file-fixer
-        exclude: ^frontend/package-lock\.json$
+        exclude: ^(frontend/package-lock\.json|dashboard/dist/|ml/saved_models/|tutorials/generated/)
       - id: check-yaml
         # Helm templates use Go {{ }} syntax — not valid YAML.
         # config/ultimate_config.yaml and deployment/k8s_config.yaml have
@@ -13,6 +21,15 @@ repos:
         args: [--unsafe]
         exclude: ^(helm/|config/ultimate_config\.yaml|deployment/k8s_config\.yaml)
       - id: check-added-large-files
+        # This hook only inspects files with `--diff-filter=A`, i.e. newly
+        # *added* paths. Vite gives every rebuilt bundle a new content hash, so
+        # `dashboard/dist/assets/index-<hash>.js` is an added file on every
+        # single rebuild and trips the 500 KB limit every time — while its
+        # 738 KB predecessor sat in the tree unchallenged. The same applies to
+        # retrained model artifacts. Both trees are committed on purpose
+        # (see CLAUDE.md); this exclusion is what makes that decision and this
+        # hook consistent, instead of unbuildable.
+        exclude: ^(dashboard/dist/|ml/saved_models/|ml/rl_models/)
       - id: check-json
         # devcontainer.json uses JSONC (comments) — excluded; kept as plain JSON now.
         exclude: ^\.devcontainer/

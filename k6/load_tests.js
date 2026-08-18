@@ -175,10 +175,14 @@ function testPublicStatus() {
 function testMarketData() {
   group('market_data', () => {
     const symbol = randomItem(SYMBOLS);
-    const res = http.get(BASE_URL + '/api/market-data/' + symbol, {
+    // /api/market-data/<symbol> does not exist and never did — every request
+    // to it 404'd, and checkOk accepted 404, so this scenario reported
+    // comfortable latency for a route that does no work. The real
+    // bid/ask endpoint is /api/trading/prices; OHLCV takes the symbol.
+    const res = http.get(BASE_URL + '/api/trading/ohlcv/' + symbol + '?timeframe=M5&limit=100', {
       headers: headers(), tags: { name: 'market_data' },
     });
-    checkOk(res, 'market_data', [200, 404, 503]);
+    checkOk(res, 'market_data', [200, 401, 403, 503]);
   });
 }
 
@@ -305,10 +309,13 @@ function testAccountInfo() {
 
 function testRiskStatus() {
   group('risk_status', () => {
-    const res = http.get(BASE_URL + '/api/risk/status', {
+    // Was /api/risk/status, which is not a registered route. The /api/risk
+    // prefix belongs to the prop-firm and calculator routers; the risk metrics
+    // snapshot is /api/trading/risk.
+    const res = http.get(BASE_URL + '/api/trading/risk', {
       headers: headers(), tags: { name: 'risk_status' },
     });
-    checkOk(res, 'risk_status', [200, 401, 403, 404, 503]);
+    checkOk(res, 'risk_status', [200, 401, 403, 503]);
   });
 }
 

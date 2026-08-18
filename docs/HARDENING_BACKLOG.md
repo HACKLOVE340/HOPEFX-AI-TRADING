@@ -4701,3 +4701,402 @@ re-audits them from scratch:
 `test:coverage` scripts and depends on `jest` + `jest-expo`, but there is no test
 file anywhere under `mobile-app/`. Recorded rather than fixed: writing that suite
 is a project, not a checklist item.
+
+---
+
+## Round 7 — shipped artefacts, dependency manifests, e2e
+
+Everything above was audited in source. This round follows the same code into
+what is actually *served*: the committed `dashboard/dist/` bundle, the four npm
+lockfiles, the requirements files, and the Playwright suite that had never been
+run in this environment.
+
+### S-01 — the 2FA secret and a payment address went to a third party (HIGH) — FIXED
+
+`api/two_factor.py` returned this in `SetupResponse`:
+
+```python
+qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={uri}"
+```
+
+`uri` is the otpauth URI — which **is** the TOTP shared secret, alongside the
+user identifier — and it was interpolated raw, not percent-encoded. Any client
+that renders that field hands the second factor to someone else's request log.
+
+The web UI had already been moved to local encoding
+(`frontend/src/components/QRCode.tsx`), which is why this survived: the leak was
+no longer visible in the browser. But the field stayed in the response model and
+therefore in the OpenAPI schema, so the mobile app, an integrator, or anyone
+reading the docs was still being handed the leaking URL. `qr_url` is now gone;
+clients encode `otpauth_uri` themselves.
+
+`dashboard/src/pages/CryptoCheckout.tsx` did the same for a crypto **deposit
+address**, under a comment reading *"in production use a real QR library"*. That
+is the production bundle — `dashboard/dist/` is committed and served. Whoever
+controls that image controls the address a customer's wallet actually scans,
+while the address text printed underneath still reads correctly, so the usual
+"check the address" advice does not catch the swap. Now encoded in-browser via a
+local `QRCode` component mirroring the frontend's.
+
+**Not a finding, checked rather than assumed:** `api/mobile.py` uses the same
+service for the App Store and Play Store QR codes. Those encode public URLs and
+are correctly percent-encoded; `_qr_url`'s own docstring already draws the
+distinction. The tests pin that line rather than banning the host.
+
+### S-02 — the GodMode dashboard was unreachable (MEDIUM) — FIXED
+
+Three independent faults, each enough on its own to leave `/godmode/` blank.
+
+1. **Route order.** `core/page_routes.py` mounted `dashboard/dist` at
+   `/godmode` *after* registering the `/{full_path:path}` catch-all. Starlette
+   matches in registration order, so the catch-all claimed every `/godmode/*`
+   request. It does list `"godmode/"` among its passthrough prefixes — but as
+   the comment beside that list already explains for the `/api` case, returning
+   404 from a route that has **matched** does not hand the request onward.
+   `GET /godmode/` answered `{"detail": "No route for GET /godmode/"}`.
+   Reproduced against the real router before changing anything.
+
+   This only bites in the branch where `static/` exists — the Docker/production
+   configuration. The fallback branch (dashboard built, main app not) registers
+   the mount before any catch-all exists and always worked, which is why it went
+   unnoticed.
+
+2. **Asset base.** `dashboard/vite.config.ts` set no `base`, so the bundle
+   emitted absolute `/assets/…` URLs. Served from `/godmode/` those resolve
+   against the *root* mount — the main app's build, with different content
+   hashes — fall through to the catch-all, and come back as `index.html`. HTML
+   delivered for a `<script src>`.
+
+3. **Router basename.** `BrowserRouter` had none, so routes declared
+   `/checkout`, `/dashboard` were matched against `/godmode/...` and matched
+   nothing.
+
+Fixed by moving the mount ahead of the catch-all, setting `base: '/godmode/'`
+(PWA `start_url`/`scope`/icons with it), and passing `basename={import.meta.env.BASE_URL}`.
+Verified over `TestClient`: `/godmode/` now 200s and every asset it references
+resolves with a non-HTML content type, while `/`, `/dashboard`, `/login` and the
+JSON 404 for unknown `/api` paths are unchanged.
+
+Also removed a second, hand-written `public/manifest.json` that the page linked
+ahead of the generated one: it declared `scope: "/"` and listed eight icon sizes
+of which two were ever shipped.
+
+### S-03 — dependency advisories, per manifest — FIXED where a fix exists
+
+| Manifest | Before | After |
+|---|---|---|
+| `dashboard/` | 3 high, 1 moderate | 0 |
+| `frontend/` | 0 | 0 (floors raised so it cannot regress) |
+| `mobile-app/` | 11 high | 11 high — see below |
+| `requirements*.txt` | 2 | 2 — see below |
+
+`dashboard/` was the stale one: `react-router` 7.15.1 (a **production**
+dependency, shipped in the bundle) against `frontend/`'s already-patched 7.18.2,
+plus dev-only `fast-uri` 3.1.4 and a `brace-expansion` override pinned to the
+exact version that later became vulnerable. All three fixed by raising the
+declared floors; `dashboard/dist/` was rebuilt so the fix reaches the artefact
+that actually ships, not just the lockfile.
+
+Of the five react-router advisories, only the moderate open-redirect via
+backslash in `<Link>`/`useNavigate` applies to a client-only SPA — the DoS, the
+RSC CSRF bypass, the RSC XSS and the SSR `deserializeErrors()` injection all
+require framework or RSC mode. Upgrading regardless; the point is recorded so
+the severity is not overstated.
+
+**`mobile-app`: no fix exists.** All 11 trace to `image-size`, whose advisories
+(`<=2.0.2`, ICNS/JXL/HEIF infinite loops) cover every published version. npm's
+only suggested remedy is a semver-major *downgrade* of react-native to 0.72.17.
+Forcing `image-size@2.0.2` was tried and rejected: it still audits as
+vulnerable, and 2.x changed its export shape under a metro that expects 1.x —
+real breakage for zero security gain. It is a bundler-time dependency, not
+shipped app code. Left alone deliberately.
+
+**Python:** `ecdsa` PYSEC-2026-1325 (Minerva timing attack; upstream considers
+side channels out of scope, no fix planned) and `chromadb` PYSEC-2026-311. The
+chromadb advisory is a pre-auth RCE in its **HTTP server** endpoint;
+`research/vector_store.py` uses `chromadb.PersistentClient` and no server is
+run. Both were already triaged in `requirements.txt` comments.
+
+### S-04 — `enterprise-requirements.txt` was not a requirements file — FIXED
+
+A Markdown wishlist of **Node.js** packages sat in the repo root with a `.txt`
+name, so every dependency tool treated it as pip input.
+`pip install -r enterprise-requirements.txt` fails at line 5 (`1. GraphQL` is
+not a requirement specifier) and `pip-audit -r` refuses to parse it. Nothing
+referenced it.
+
+All ten items already exist — `api/graphql_schema.py`, `api/ws_live.py`,
+`k6/load_tests.js` + `locust/load_tests.py`, OpenTelemetry,
+`config/feature_flags.py`, `rate_limiting/`, bandit + detect-secrets +
+pip-audit, `database/system_events.py`, `prometheus_client`, `chaos/` — each
+verified by reading the module. Moved to `docs/ENTERPRISE_CAPABILITIES.md` as a
+status table.
+
+**Correction to this entry.** It first said load testing was the one real gap.
+That was wrong. `k6/load_tests.js` (413 lines: smoke, load, soak, spike, stress
+and breakpoint scenarios, thresholds, a rate-limit probe, a WebSocket test) and
+`locust/load_tests.py` (330 lines, three weighted user classes) both exist, with
+`tests/unit/test_k6_load_tests.py` validating the k6 config. The error was a bad
+measurement, not a judgement: the search grepped file *contents* for the tool
+names while restricting itself to `.py`, `.txt`, `.toml` and `.yml`, and the k6
+suite is JavaScript. Caught when `test_k6_load_tests.py` scrolled past in a test
+run.
+
+The real gap is narrower: **nothing in `.github/workflows/` invokes either**, so
+the load tests run only when someone runs them by hand. Recorded, not fixed —
+wiring a load test into CI needs a target environment to point it at.
+
+### S-05 — two e2e tests navigated twice inside one timeout — FIXED
+
+The Playwright suite had never been run here. It first appeared to pass with
+exit code 0 while every test errored — the browser was missing — so it was
+re-run capturing full output. Against the container's chromium (build 1194, vs
+the 1223 headless shell `@playwright/test` 1.60 expects) the real result was
+**40 passed / 5 failed** on the dev-server path, and **44 passed / 1 flaky** on
+the CI path (built bundle + `vite preview`), which is what CI actually runs.
+
+Three of the five were dev-server slowness only — they pass on the CI path. The
+remaining one is a genuine test defect, and it reproduced on both paths:
+`Marketplace › renders without JS errors` and its twin in `trading.spec.ts` sat
+in a `describe` whose `beforeEach` already navigates, then navigated to the same
+URL a *second* time so their late-attached console listener had something to
+observe. Two full page loads inside one 30 s timeout; their single-load siblings
+passed. The listener now attaches in `beforeEach` before the navigation, so
+there is one load and it is the one every test in the block runs on — strictly
+more coverage, half the wall time. Re-run: 14/14 pass, no retries, and the test
+that took 32 s takes 15.1 s.
+
+The browser mismatch itself is environmental. It was worked around with an
+untracked throwaway config pointing at the installed binary, never by editing
+the tracked one, and the throwaway was deleted afterwards.
+
+### S-06 — a dead order panel that could not authenticate and swallowed failures — REMOVED
+
+`dashboard/src/components/OrderPanel.tsx` posted to `/api/trading/order` with:
+
+```ts
+'Authorization': `Bearer ${localStorage.getItem('token')}`
+...
+if (response.ok) {
+  // Show success notification
+}
+```
+
+Three things wrong, in ascending order of seriousness:
+
+* Nothing in the dashboard ever writes `localStorage['token']`. The store
+  persists under `hopefx-store` via zustand's `persist`, and `useApi.ts`
+  attaches the token from the store. Every order this component sent carried
+  `Authorization: Bearer null`.
+* It bypassed the shared axios client, so it also skipped the 401 auto-logout
+  interceptor.
+* There is no `else`. A rejected order produced no message, no toast, no console
+  line — the button simply did nothing. On an order ticket that is the worst
+  available failure mode.
+
+It is **not rendered**: `pages/Trading.tsx` uses `AdvancedOrderPanel`, which
+goes through `tradingApi.placeOrder`, catches errors and shows an error toast.
+Nothing anywhere imports `OrderPanel` — checked across the whole `dashboard/`
+tree including tests and config, and `tsc --noEmit` is clean after removal.
+
+Deleted rather than repaired. Leaving a superseded, unreachable order path in
+the tree is a trap: the next person to wire it up ships a Buy button that
+authenticates as nobody and reports nothing.
+
+The other raw `fetch('/api/...')` calls in the dashboard (`MacroPanel`,
+`EquityChart`, `DrawdownChart`, `BrokerWizard`, `Marketplace`,
+`MultiTimeframeChart`) are read-only and were left alone; `FeedSettings` builds
+its own `authHeaders` from the store token correctly. Consolidating them onto
+the axios client is a refactor, not a fix, and is recorded here rather than
+done.
+
+### S-07 — token rotation dropped the `Secure` cookie flag (HIGH) — FIXED
+
+`auth/router.py` sets five auth cookies from four `secure` assignments, and
+those four read **two different environment variables**:
+
+```python
+login:          os.getenv("APP_ENV",     "development")   # access + refresh
+get_csrf_token: os.getenv("APP_ENV",     "development")
+refresh:        os.getenv("ENVIRONMENT", "development")   # access + refresh
+```
+
+`.env.example` sets both, but not equally: `APP_ENV=production` is line 15,
+while `ENVIRONMENT=production` sits at line 1008 annotated "controls uvicorn
+reload". `APP_ENV` is what the other ~100 environment checks in this codebase
+read. So a deployment configured with `APP_ENV` alone — the natural reading of
+that file — got `Secure` cookies at login, and then had both the access and the
+refresh cookie **silently re-issued without it on every rotation**.
+
+That is the wrong half to lose. `/auth/refresh` mints the freshest credentials
+in the system, and the refresh cookie is the long-lived one
+(`REFRESH_TOKEN_EXPIRE_DAYS`, default 30). Without `Secure` the browser attaches
+both to any plain-HTTP request to the domain.
+
+All four now call one `_cookies_require_secure()`, reading `APP_ENV` with
+`ENVIRONMENT` as fallback — the precedence `api/admin.py` and `api/trading.py`
+already use for the same pair. The tests assert the behaviour *and* that no
+cookie site resolves the environment inline again, since divergence, not any
+single value, was the defect.
+
+### S-08 — the Sharpe circuit breaker's test opt-out read the wrong variable — FIXED
+
+Found by the full unit suite failing on `test_critical_paths.py`:
+`assert 320 == 60`, on a *circuit breaker* counting trades.
+
+`SharpeCircuitBreaker.__init__` restores persisted state from Redis unless
+`SHARPE_CB_RESTORE` says otherwise or the environment is a test one:
+
+```python
+env = os.environ.get("ENVIRONMENT", "").strip().lower()
+restore_enabled = env not in {"test", "testing"}
+```
+
+Nothing in the suite sets `ENVIRONMENT`. `tests/conftest.py` declares
+`APP_ENV=test`. The two never meet, so the opt-out never opted out — a fresh
+breaker restored whatever a previous run had left in Redis, and
+`state.total_trades` came back as the accumulated total.
+
+This had been invisible because no Redis was reachable in a bare container;
+it surfaced only once the session-start hook started one, and it is the same
+`APP_ENV`/`ENVIRONMENT` split as S-07. `tests/unit/test_sharpe_circuit_breaker.py`
+had already worked around it with an autouse Redis flush;
+`test_critical_paths.py` and `tests/system/test_smoke_critical.py` construct the
+same class without one.
+
+Fixed in the production code (`APP_ENV` first, `ENVIRONMENT` as fallback) rather
+than by bolting another flush onto each test module, so every present and future
+caller is isolated. Verified with the stale `sharpe_cb:state:*` keys left in
+Redis on purpose: 86 tests pass across both modules.
+
+Worth noting for whoever touches this next: `SharpeCircuitBreaker(redis_client=None)`
+does **not** disable Redis — `__init__` builds a client from `REDIS_URL` when the
+argument is `None`. Two system tests pass it expecting isolation and do not get
+it. Recorded, not changed.
+
+### S-09 — the 2FA section of `docs/SECURITY.md` described an API that does not exist — FIXED
+
+Found while checking whether removing `qr_url` (S-01) left documentation stale.
+It did, but the field was the least of it. The section documented four endpoints
+under `/api/auth`:
+
+```
+POST /api/auth/2fa/enable
+POST /api/auth/2fa/verify
+POST /api/auth/2fa/complete
+POST /api/auth/2fa/backup-codes/regenerate
+```
+
+None of them exist. Enumerating every `@router.<verb>("...")` in the tree turns
+up two separate 2FA surfaces, neither matching:
+
+| Prefix | Module | Endpoints |
+|---|---|---|
+| `/api/2fa` | `api/two_factor.py` | `setup`, `verify`, `disable`, `backup-codes`, `backup-codes/regenerate`, `status` |
+| `/api/auth/2fa` | `auth/router.py` | `setup`, `confirm`, `disable` |
+
+The documented response shapes were wrong too — `{"qr_url": ..., "backup_codes": [...]}`
+against actual `{"secret", "otpauth_uri"}` and `{"provisioning_uri", "secret", "message"}`.
+
+The most consequential error was the **"Login with 2FA"** flow: a
+`POST /api/auth/login` returning `{"requires_2fa": true, "partial_token": ...}`,
+completed by `POST /api/auth/2fa/complete`. `requires_2fa` and `partial_token`
+appear in **no** Python file in the repository. There is no second-factor
+challenge at login at all — enrolling gates the `/2fa/*` endpoints, not the
+password login — while the same document states two paragraphs earlier that 2FA
+is *"**required** for all admin accounts."*
+
+Rewritten against the code, with the missing login challenge left in as an
+explicit "not implemented" heading rather than silently deleted. An operator
+reading the old text would reasonably have believed admin logins were
+second-factor protected; deleting the paragraph would remove the claim without
+recording that the protection is absent.
+
+### S-10 — `cli.py start` installed a committed encryption key when it misread the environment (MEDIUM) — FIXED
+
+The same `APP_ENV`/`ENVIRONMENT` split as S-07 and S-08, third occurrence, this
+time fail-open:
+
+```python
+environment = os.getenv("ENVIRONMENT", "development")
+if not os.getenv("CONFIG_ENCRYPTION_KEY"):
+    if environment == "production":
+        ...return 1                      # refuse to start
+    logger.warning("... Using default for development only.")
+    os.environ["CONFIG_ENCRYPTION_KEY"] = "dev-key-minimum-32-characters-long-for-testing"
+```
+
+Started with `APP_ENV=production` and no `ENVIRONMENT`, the guard does not fire.
+The process continues and silently adopts a hardcoded key **that is committed to
+this repository** as the config-encryption key, behind a `warning` in the log.
+
+Now reads `APP_ENV` first with `ENVIRONMENT` as fallback, and treats `staging`
+as production for this gate too — staging holds real credentials.
+
+Scope, checked rather than assumed: `Dockerfile` runs
+`scripts/preflight.sh && python app.py`, not the CLI, so the container was never
+exposed. `start.sh` names `cli.py` among the root-level entry points, so a manual
+or scripted start could reach it.
+
+Also checked and found correct, recorded so they are not re-audited:
+`risk/manager.py` (already reads both, APP_ENV first),
+`compliance/kyc_provider.py` and `news/geopolitical_risk.py` (ENVIRONMENT plus
+`HOPEFX_CI`, and both fail *safe* — an unset variable means the live path runs).
+
+### S-11 — the load tests measured 404s — FIXED
+
+`k6/load_tests.js` and `locust/load_tests.py` requested endpoints that are not
+registered anywhere:
+
+| Path | In | Reality |
+|---|---|---|
+| `GET /api/market-data/<symbol>` | both | no such route; OHLCV is `/api/trading/ohlcv/<symbol>` |
+| `GET /api/risk/status` | both | `/api/risk` belongs to `api/prop_firm.py` and `api/risk_calculator.py`; the metrics snapshot is `/api/trading/risk` |
+| `GET /api/risk/metrics` | locust | same prefix, also not declared |
+
+Every one of those scenarios listed `404` among its acceptable statuses, so
+nothing ever failed. They reported comfortable latency for routes that do no
+work — worse than not testing them, because the numbers look like coverage. A
+breakpoint scenario tuned against three free 404s tells you nothing about where
+the API actually breaks.
+
+`tests/unit/test_k6_load_tests.py` could not catch this: it asserts the paths
+appear *in the script*, which they did. `tests/unit/test_load_tests_target_real_routes.py`
+now checks the other half — every `/api/...` path either script requests must
+correspond to a route the application registers. The third dead path,
+`/api/risk/metrics`, was found by that test rather than by reading, which is the
+point of writing it.
+
+The 404s were also removed from the accepted-status lists for these scenarios,
+so the same thing cannot pass silently again.
+
+### S-12 — `pre-commit run --all-files` could not pass, on any working tree — FIXED
+
+Surfaced by running the gate that CLAUDE.md requires before committing.
+
+Two hooks fought the repository's own deliberate decisions:
+
+* **`check-added-large-files`.** Reading the hook's source
+  (`find_large_added_files`) rather than guessing: it intersects its file list
+  with `added_files()`, which is `git diff --staged --diff-filter=A` — only
+  *newly added* paths. Vite gives every rebuilt bundle a new content hash, so
+  `dashboard/dist/assets/index-<hash>.js` is an "added file" on **every**
+  rebuild and trips the 500 KB limit every time, while its 738 KB predecessor
+  sat in the tree unchallenged because it was never re-added. Nine tracked files
+  already exceed the limit, including 25 MB of committed model artifacts.
+* **`end-of-file-fixer` / `trailing-whitespace`.** These modified five
+  generated files on every run — `dashboard/dist/registerSW.js`,
+  `dashboard/dist/assets/index-*.js`, `ml/saved_models/feature_stats.json`,
+  `ml/saved_models/feature_importances.json`, `tutorials/generated/registry.json`
+  — appending newlines their producers do not write. The "fix" makes the
+  committed file differ from the build output, and the difference reappears the
+  next time anything regenerates them.
+
+Net effect: nobody could rebuild the dashboard, retrain a model, or regenerate
+tutorials and commit through the hooks. That is precisely the pressure that
+produces `git commit --no-verify`, which CLAUDE.md forbids and which the earlier
+audit blames for merge-conflict markers reaching the tree.
+
+Both hooks now exclude the intentionally-committed artifact trees
+(`dashboard/dist/`, `ml/saved_models/`, `ml/rl_models/`, `tutorials/generated/`).
+The gate passes clean on the full tree, modifying nothing.

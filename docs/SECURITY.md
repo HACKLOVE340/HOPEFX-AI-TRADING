@@ -305,44 +305,69 @@ We will acknowledge receipt within 48 hours and provide a fix timeline.
 TOTP-based 2FA is available on Professional and above. It is **required** for all
 admin accounts.
 
-### Enable 2FA
+### Two 2FA surfaces
+
+There are two, mounted under different prefixes. They are separate
+implementations, not aliases, and this section previously documented a third set
+of paths (`/2fa/enable`, `/2fa/verify`, `/2fa/complete`,
+`/2fa/backup-codes/regenerate` under `/api/auth`) that does not exist in either.
+
+| Prefix | Module | Endpoints |
+|---|---|---|
+| `/api/2fa` | `api/two_factor.py` | `POST /setup`, `POST /verify`, `POST /disable`, `GET /backup-codes`, `POST /backup-codes/regenerate`, `GET /status` |
+| `/api/auth/2fa` | `auth/router.py` | `POST /setup`, `POST /confirm`, `POST /disable` |
+
+### Enable 2FA (`/api/2fa`)
 
 ```bash
-# Step 1 — generate TOTP secret
-POST /api/auth/2fa/enable
+# Step 1 — generate the TOTP secret
+POST /api/2fa/setup
 Authorization: Bearer <token>
+# {"secret": "JBSWY3DPEHPK3PXP", "otpauth_uri": "otpauth://totp/HOPEFX:user@..."}
 
-# Response includes a QR code URL and backup codes
-# {"qr_url": "otpauth://totp/HOPEFX:user@...", "backup_codes": [...]}
-
-# Step 2 — verify with your authenticator app
-POST /api/auth/2fa/verify
+# Step 2 — verify with your authenticator app to activate
+POST /api/2fa/verify
 Authorization: Bearer <token>
 {"code": "123456"}
 ```
 
-### Login with 2FA
+The response deliberately carries **no** QR image URL. The `otpauth_uri` *is*
+the TOTP shared secret, so it must be encoded into a QR code by the client and
+never handed to a third-party image service (finding S-01). The web UI does this
+locally with the `qrcode` package — `frontend/src/components/QRCode.tsx`.
+
+### Enable 2FA (`/api/auth/2fa`)
 
 ```bash
-# Step 1 — password login returns a partial token
-POST /api/auth/login
-{"username": "user", "password": "pass"}
-# {"requires_2fa": true, "partial_token": "..."}
+POST /api/auth/2fa/setup
+Authorization: Bearer <token>
+# {"provisioning_uri": "otpauth://totp/HOPEFX:user@...", "secret": "...", "message": "..."}
 
-# Step 2 — complete with TOTP code
-POST /api/auth/2fa/complete
-{"partial_token": "...", "code": "123456"}
-# {"access_token": "...", "token_type": "bearer"}
+POST /api/auth/2fa/confirm
+Authorization: Bearer <token>
+{"code": "123456"}
 ```
+
+### Login with 2FA — not implemented
+
+There is no 2FA challenge at login. This section used to document a
+`POST /api/auth/login` returning `{"requires_2fa": true, "partial_token": ...}`
+followed by `POST /api/auth/2fa/complete`. Neither the fields nor the endpoint
+exist anywhere in the codebase — `requires_2fa` and `partial_token` appear in no
+Python file. Enrolling in 2FA today gates the `/2fa/*` endpoints themselves, not
+the password login.
+
+Recorded as a gap rather than quietly deleted: an operator reading the old text
+would reasonably have believed admin logins were second-factor protected.
 
 ### Backup Codes
 
-Backup codes are generated when 2FA is enabled. Each code is single-use.
-Store them securely — they cannot be retrieved after initial generation.
+Backup codes belong to the `/api/2fa` surface. Each code is single-use and is
+consumed on verification.
 
 ```bash
-# Regenerate backup codes (invalidates old ones)
-POST /api/auth/2fa/backup-codes/regenerate
+GET  /api/2fa/backup-codes              # list remaining
+POST /api/2fa/backup-codes/regenerate   # invalidates the old set
 Authorization: Bearer <token>
 ```
 

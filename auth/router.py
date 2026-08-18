@@ -125,6 +125,28 @@ _PASSWORD_RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", str(3600)))  #
 _ENUMERATION_SAFE_RESET_MESSAGE = "If that email is registered, a reset link has been sent."
 _ENUMERATION_SAFE_VERIFY_MESSAGE = "If that email is registered and unverified, a verification link has been sent."
 
+
+def _cookies_require_secure() -> bool:
+    """Whether auth cookies get the ``Secure`` flag.
+
+    One definition for every ``set_cookie`` in this module. There used to be
+    two: ``login`` and ``get_csrf_token`` read ``APP_ENV``, while the two
+    rotations inside ``refresh`` read ``ENVIRONMENT``. ``.env.example`` sets
+    both — ``APP_ENV=production`` on line 15, ``ENVIRONMENT=production`` far
+    down at line 1008 where it is described as controlling uvicorn reload — so
+    a deployment that sets only the first (the primary one, and the one the
+    other 100-odd call sites in this codebase read) got Secure cookies at login
+    and then had them silently re-issued **without** Secure on every refresh.
+    Token rotation mints the freshest credentials in the system; those are the
+    last ones that should be allowed to travel in cleartext.
+
+    ``APP_ENV`` wins, falling back to ``ENVIRONMENT`` — the same precedence
+    ``api/admin.py`` and ``api/trading.py`` already use to reconcile the two.
+    """
+    env = os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "development"
+    return env.strip().lower() in ("production", "staging")
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 _bearer = HTTPBearer(auto_error=False)
@@ -688,7 +710,7 @@ async def login(
     # page refresh. Secure flag is set in production/staging only.
     access_token = tokens.get("access_token", "")
     refresh_token_val = tokens.get("refresh_token", "")
-    _secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
+    _secure = _cookies_require_secure()
 
     if access_token:
         # Cookie max_age must match the JWT TTL exactly — use the canonical
@@ -765,7 +787,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     # Rotate the access token cookie to match the new token TTL exactly.
     new_access = tokens.get("access_token", "")
     if new_access:
-        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _secure = _cookies_require_secure()
         from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
 
         _max_age = _jwt_expire_min() * 60
@@ -781,7 +803,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     # Rotate the refresh token cookie as well so the new token is persisted.
     new_refresh = tokens.get("refresh_token", "")
     if new_refresh:
-        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _secure = _cookies_require_secure()
         _refresh_max_age = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")) * 86400
         response.set_cookie(
             key="hopefx_refresh_token",
@@ -1098,7 +1120,7 @@ async def get_csrf_token(response: Response) -> dict:
     Call once on page load before submitting any form.
     """
     token = secrets.token_hex(_CSRF_TOKEN_BYTES)
-    secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
+    secure = _cookies_require_secure()
     response.set_cookie(
         key=_CSRF_COOKIE_NAME,
         value=token,

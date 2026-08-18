@@ -2,13 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" href="/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="description" content="HOPEFX GodMode - Professional AI Trading Platform" />
 
-    <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
+    <!-- PWA. The manifest is injected by vite-plugin-pwa (manifest.webmanifest)
+         and is scoped to the /godmode/ base. A second, hand-written
+         public/manifest.json used to be linked here as well: it declared
+         scope "/" — wrong for a bundle mounted at /godmode/ — and listed eight
+         icon sizes of which only two were ever shipped. Two competing manifests
+         with the first one wrong is worse than one correct one. -->
     <link rel="apple-touch-icon" href="/icon-192.png" />
 
     <!-- Fonts -->
