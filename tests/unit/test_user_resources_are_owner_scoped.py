@@ -337,3 +337,122 @@ class TestSendingAMessageSurvivesATokenWithoutAnEmail:
 
         response = chat_client.post(f"/api/chat/rooms/{room_id}/messages", json={"content": "hi"}, headers=headers)
         assert response.json()["username"] == "alice"
+
+
+# ── S-28: backtest results ───────────────────────────────────────────────────
+
+
+@pytest.fixture
+def backtest_client(monkeypatch):
+    from api import backtesting
+
+    app = FastAPI()
+    app.include_router(backtesting.router)
+
+    # Isolate the module-level write-through caches per test.
+    monkeypatch.setattr(backtesting, "_results", {}, raising=False)
+    monkeypatch.setattr(backtesting, "_wf_results", {}, raising=False)
+    monkeypatch.setattr(backtesting, "_results_loaded", True, raising=False)
+    monkeypatch.setattr(backtesting, "_wf_results_loaded", True, raising=False)
+    monkeypatch.setattr(backtesting, "db_set", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(backtesting, "db_get", lambda *a, **k: None, raising=False)
+
+    return TestClient(app, raise_server_exceptions=False), backtesting
+
+
+_RUN = {
+    "strategy": "S",
+    "symbol": "XAUUSD",
+    "start_date": "2024-01-01",
+    "end_date": "2024-06-01",
+    "initial_capital": 10_000.0,
+    "final_equity": 11_000.0,
+    "total_return_pct": 10.0,
+    "max_drawdown_pct": 2.0,
+    "sharpe_ratio": 1.5,
+    "total_trades": 10,
+    "win_rate_pct": 60.0,
+    "status": "completed",
+    "created_at": "2024-06-01",
+}
+
+
+@pytest.mark.unit
+class TestBacktestResultsAreOwnerScoped:
+    """S-28: `api/backtesting.py` had no reference to a user anywhere in it."""
+
+    def test_the_list_shows_only_the_callers_runs(self, backtest_client, alice, bob):
+        client, backtesting = backtest_client
+        backtesting._persist_result("ra", {**_RUN, "run_id": "ra"}, user_id="alice")
+        backtesting._persist_result("rb", {**_RUN, "run_id": "rb"}, user_id="bob")
+
+        mine = [r["run_id"] for r in client.get("/api/backtesting/results", headers=alice).json()]
+        theirs = [r["run_id"] for r in client.get("/api/backtesting/results", headers=bob).json()]
+
+        assert mine == ["ra"]
+        assert theirs == ["rb"], (
+            "a backtest result carries the strategy, symbol, return, Sharpe and "
+            "drawdown — one user's research, listed to everyone (S-28)"
+        )
+
+    @pytest.mark.parametrize("path", ["/api/backtesting/results/ra", "/api/backtesting/ra/report.pdf"])
+    def test_another_user_gets_404(self, backtest_client, alice, bob, path):
+        client, backtesting = backtest_client
+        backtesting._persist_result("ra", {**_RUN, "run_id": "ra"}, user_id="alice")
+
+        assert client.get(path, headers=bob).status_code == 404
+        assert client.get(path, headers=alice).status_code == 200
+
+    def test_walk_forward_runs_are_scoped_too(self, backtest_client, alice, bob):
+        client, backtesting = backtest_client
+        backtesting._persist_wf_result(
+            "wf1",
+            {"run_id": "wf1", "strategy": "S", "status": "completed", "created_at": "2024-06-01"},
+            user_id="alice",
+        )
+
+        assert client.get("/api/backtesting/walk-forward/wf1", headers=bob).status_code == 404
+        assert client.get("/api/backtesting/walk-forward/wf1", headers=alice).status_code == 200
+        # The list endpoint answers {"results": [...], "total": N} — asserted
+        # against the endpoint rather than an assumed bare list.
+        theirs = client.get("/api/backtesting/walk-forward", headers=bob).json()
+        assert theirs == {"results": [], "total": 0}
+
+        mine = client.get("/api/backtesting/walk-forward", headers=alice).json()
+        assert [r["run_id"] for r in mine["results"]] == ["wf1"]
+
+    def test_runs_stored_before_the_field_stay_visible(self, backtest_client, bob):
+        """Authorisation check, not a data migration."""
+        client, backtesting = backtest_client
+        backtesting._persist_result("legacy", {**_RUN, "run_id": "legacy"})
+
+        assert [r["run_id"] for r in client.get("/api/backtesting/results", headers=bob).json()] == ["legacy"]
+
+    def test_the_owner_survives_a_sparse_status_update(self, backtest_client):
+        """The failure paths persist `{"run_id": ..., "status": "error"}`.
+
+        Without carrying the previous owner forward, a run would become
+        unowned — and so visible to everyone — the moment it failed.
+        """
+        _client, backtesting = backtest_client
+        backtesting._persist_result("ra", {**_RUN, "run_id": "ra"}, user_id="alice")
+
+        backtesting._persist_result("ra", {"run_id": "ra", "status": "error", "error": "boom"})
+
+        assert backtesting._results["ra"]["user_id"] == "alice"
+
+    def test_every_persist_call_site_records_an_owner(self):
+        """Structural: a new write path cannot quietly create an unowned run."""
+        import ast
+        from pathlib import Path
+
+        tree = ast.parse((Path(__file__).resolve().parents[2] / "api" / "backtesting.py").read_text())
+        missing = [
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("_persist_result", "_persist_wf_result")
+            and "user_id" not in {kw.arg for kw in node.keywords}
+        ]
+        assert not missing, f"persist calls without an owner at lines {missing} (S-28)"

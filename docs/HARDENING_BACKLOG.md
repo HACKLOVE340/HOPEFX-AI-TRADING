@@ -5605,7 +5605,7 @@ Now `(user.email or user.sub).split("@")[0]`. The same misuse in
 (`api/billing.py`, `teams/`, `api/superadmin/auto_healing.py`) pass the value
 somewhere that accepts None, or already use `or`, and were left alone.
 
-### S-28 — backtest results have no owner (MEDIUM) — OPEN
+### S-28 — backtest results had no owner (MEDIUM) — FIXED
 
 Fourth instance of the S-23 shape, found in the same pass but held back so it
 can be changed and verified on its own.
@@ -5625,10 +5625,34 @@ A backtest result carries the strategy name, symbol, date range, return,
 Sharpe, max drawdown, trade count and win rate — one user's research output,
 readable by any other `professional`-plan account.
 
-Not fixed in this round because it is larger than the other three: eight
-`_persist_result` / `_persist_wf_result` call sites, several of them inside
-background-task closures, plus a `_compat_router` with its own aliases, plus
-`BacktestResult` is a response model so adding a field changes the public
-schema (additively). The same pattern applies — optional `user_id` on the
-model, threaded through the persist helpers, a shared `_owned_result()` helper
-answering 404, unowned results staying visible.
+**Fix.** Same pattern as S-23 through S-25, with one wrinkle worth naming.
+
+* `user_id` added to `BacktestResult` as an optional field, so results stored
+  before it still load and stay visible rather than becoming unreachable.
+* `_persist_result` / `_persist_wf_result` take an optional `user_id` and stamp
+  it. All nine call sites now pass one — several are inside background-task
+  closures, which capture the endpoint's `_user`.
+* `_visible_run()` and `_owned_run()` filter the list endpoints
+  (`/results`, `/list`, `/walk-forward`, `/walk-forward/latest`) and guard the
+  by-id ones (`/results/{run_id}`, `/walk-forward/{run_id}`,
+  `/{run_id}/report.pdf`), answering 404 rather than 403.
+* The `_compat_router` aliases needed no changes: every one of them delegates
+  to the handler it aliases, passing the caller's token, so the scoping flows
+  through. Verified by reading each.
+
+**The wrinkle:** the failure and progress paths persist *sparse* dicts —
+`{"run_id": ..., "status": "error"}` — rather than the full record. A naive
+implementation loses the owner the moment a run fails or updates, which would
+silently make it visible to everyone at exactly the point it becomes
+interesting. `_owner_of()` therefore falls back to the previous revision's
+owner, and a test pins that a sparse update preserves it.
+
+Left alone deliberately: `/multi-symbol`, `/multi-symbol/latest` and the
+reconciled-investigation endpoints read a single saved report file from disk
+(`data/backtest_investigation.json`). Those are platform-level artefacts, not
+per-user runs.
+
+Verified over HTTP with two users: each lists only their own runs, Bob gets 404
+on Alice's result and on her PDF report, unowned legacy runs stay visible to
+both, and the owner survives a sparse status update. Reverting the check fails
+5 of the 8 new tests.
