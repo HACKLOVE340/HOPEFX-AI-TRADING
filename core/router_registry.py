@@ -743,16 +743,37 @@ def register_routers(
     else:
         logger.debug("REPLAY_ENGINE disabled — set FEATURE_REPLAY=true to enable")
 
-    # ── Notifications / Alert Engine (/api/alerts) ────────────────────────────
-    if feature_flags.PUSH_NOTIFICATIONS:
-        try:
-            from notifications.alert_engine import router as notifications_router
-
-            _include_router_deduped(app, notifications_router)
-            logger.info("Notifications/alert engine router registered (/api/alerts)")
-        except Exception as _notif_err:
-            logger.warning("Notifications router not registered: %s", _notif_err)
-    else:
+    # ── Push notifications ────────────────────────────────────────────────────
+    # PUSH_NOTIFICATIONS used to mount `notifications.alert_engine.router`, a
+    # SECOND router claiming the /api/alerts prefix that PRICE_ALERTS already
+    # gives to api/alerts.py. Two problems, both verified by building the app
+    # under each flag combination:
+    #
+    #   1. The two implementations blended. `_include_router_deduped` skipped
+    #      the eight paths api/alerts.py had already claimed, so with default
+    #      flags GET /api/alerts/stats — the one path api/alerts.py lacks — was
+    #      served by the other module while its eight siblings were not.
+    #   2. `FEATURE_PRICE_ALERTS=false` did not disable price alerts. It handed
+    #      all nine paths to `notifications.alert_engine` instead, and that
+    #      router has **no ownership checks**: GET/DELETE/pause/resume take any
+    #      alert id and act on it, `GET /` lists every user's alerts with no
+    #      user filter, and `POST /` stores alerts with no user_id at all. It
+    #      also skips the require_plan("starter") gate. api/alerts.py does all
+    #      of that correctly via `_get_owned_alert`, which returns 404 rather
+    #      than 403 so it does not leak which ids exist.
+    #
+    # So the documented way to switch the feature off actually replaced a
+    # scoped implementation with an unscoped one. /api/alerts now has exactly
+    # one owner: api/alerts.py, under FEATURE_PRICE_ALERTS.
+    #
+    # Nothing is lost here. `api/notifications.py` (/api/notifications) is
+    # mounted unconditionally with the core routers above — the name collision
+    # between the two `notifications_router` imports is probably how this
+    # happened. No client calls /api/alerts/stats: both SPAs use only the six
+    # paths api/alerts.py serves. Push delivery itself is a service concern,
+    # not a router, so this flag currently gates nothing; that is recorded in
+    # docs/HARDENING_BACKLOG.md rather than papered over with a fake mount.
+    if not feature_flags.PUSH_NOTIFICATIONS:
         logger.debug("PUSH_NOTIFICATIONS disabled — set FEATURE_PUSH_NOTIFICATIONS=true to enable")
 
     # ── Transparency Reports (/api/transparency) ──────────────────────────────
