@@ -83,11 +83,11 @@ def _executable_lot_ceiling() -> float:
         except ValueError:
             logger.warning("ORDER_MAX_QTY=%r is not a number — using the validator default", env)
     try:
-        from validation import OrderValidatorConfig
+        from validation import ValidatorConfig
 
-        return float(OrderValidatorConfig().max_qty)
+        return float(ValidatorConfig().max_qty)
     except Exception as exc:  # validation unavailable — fail open to the known default
-        logger.debug("could not read OrderValidatorConfig.max_qty (%s) — using 10.0", exc)
+        logger.debug("could not read ValidatorConfig.max_qty (%s) — using 10.0", exc)
         return 10.0
 
 

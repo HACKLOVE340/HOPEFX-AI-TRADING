@@ -50,9 +50,9 @@ def _load_cb_states() -> list[dict]:
     try:
         # Attempt to get the global registry if it exists
         try:
-            from risk.circuit_breakers import _GLOBAL_REGISTRY
+            from risk.circuit_breakers import get_circuit_breakers
 
-            for name, cb in _GLOBAL_REGISTRY.items():
+            for name, cb in get_circuit_breakers().items():
                 states.append(
                     {
                         "name": name,
