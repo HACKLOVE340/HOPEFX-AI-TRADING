@@ -194,13 +194,6 @@ class APIGateway:
                 "timestamp": datetime.now(UTC).isoformat(),
             }
 
-            return {
-                "system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {},
-                "orchestra": self.orchestra.get_heatmap_data(),
-                "portfolio": self.pms.get_portfolio_summary(),
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-
     def _setup_strategy_routes(self) -> None:
         """Register strategy control routes."""
 

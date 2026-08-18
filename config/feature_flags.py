@@ -16,12 +16,6 @@ False for experimental/disabled ones).
 Usage::
 
     from config.feature_flags import flags
-try:
-    from enum import StrEnum
-except ImportError:
-    from enum import Enum
-    class StrEnum(str, Enum):  # Python 3.10 compat
-        pass
 
     if flags.ORDER_FLOW_DASHBOARD:
         result = dashboard.get_complete_analysis("XAUUSD")

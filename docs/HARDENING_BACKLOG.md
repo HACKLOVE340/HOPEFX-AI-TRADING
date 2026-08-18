@@ -5100,3 +5100,208 @@ audit blames for merge-conflict markers reaching the tree.
 Both hooks now exclude the intentionally-committed artifact trees
 (`dashboard/dist/`, `ml/saved_models/`, `ml/rl_models/`, `tutorials/generated/`).
 The gate passes clean on the full tree, modifying nothing.
+
+---
+
+## Round 8 — the GraphQL surface
+
+Feature-flagged behind `FEATURE_GRAPHQL_API`, which **defaults to `"true"`**
+(`api/graphql_schema.py:192`), and mounted at `/graphql` by
+`core/router_registry.py`. It had never been exercised end-to-end.
+
+### S-13 — every rejected token was reported as a server fault (MEDIUM) — FIXED
+
+`_get_current_user` documents "returns user dict … or None if unauthenticated"
+and guarded its body with `except (RuntimeError, ValueError, OSError, AttributeError)`.
+
+`decode_access_token` signals every rejection with a `jwt.PyJWTError` subclass —
+`ExpiredSignatureError`, `InvalidSignatureError`, `DecodeError`, and the
+explicit `InvalidTokenError("Not an access token")` it raises for a refresh
+token. Checked rather than assumed: none of them inherit from `ValueError` or
+`RuntimeError`. So all four escaped the handler and `_require_auth`, and were
+classified `INTERNAL_ERROR` / "An internal error occurred".
+
+Fail-closed, so never a bypass. But an expired session was indistinguishable
+from a server fault, so no client could know to refresh, and the three
+subscriptions — which catch only `PermissionError` — raised out of the async
+generator instead of closing cleanly.
+
+### S-14 — 44 lines of unreachable database fallback (MEDIUM) — FIXED
+
+`Query.trades` ended with `return await loader.load(...)`, followed by a DB
+fallback that could never run. `_batch_load_trades` returns `[]` when
+`app_state.broker` is None and never consults the database, so with no broker
+attached the query answered "no trades" while closed trades sat in the `Trade`
+table. Now taken when the loader comes back empty.
+
+An AST scan of 488 files across the main packages found exactly one other site:
+a duplicated `return` block in `api/gateway.py` (reachable via
+`core/startup_helpers.py`), removed. The third hit — `raise` then `yield` in
+`database/connection.py` — is the documented idiom for making a stub an async
+generator so FastAPI treats it as a yield-dependency, and is correct; the test
+allows that shape specifically rather than allowlisting the file.
+
+Ruff has no unreachable-code rule enabled here, which is why neither showed up.
+`tests/unit/test_graphql_auth_and_reachability.py` now scans for it.
+
+### S-15 — the entire GraphQL API was inert (HIGH) — FIXED
+
+Found by issuing a real query through `GraphQLRouter` rather than by reading
+the helper in isolation. **A valid access token was rejected.** Every query,
+mutation and subscription answered "Authentication required" regardless of
+credentials.
+
+`_get_context()` returns a **dict**, and strawberry's FastAPI integration
+injects `request` / `ws` into it as dict *keys* — verified against strawberry
+0.324 with a probe resolver, whose context came back as
+`dict` with keys `['background_tasks', 'my_loader', 'request', 'response']` and
+`getattr(ctx, "request", None) is None`. `_get_current_user` read them with
+`getattr`, so no Authorization header was ever found.
+
+Fail-closed, so not a security hole — but a shipped, default-on feature that
+did nothing. The resolvers all use `info.context.get(...)`, the dict API, which
+is why the mismatch lived in this one helper and why every unit-level check of
+it passed: they all built object-style contexts. The helper now handles both.
+
+Verified over the router: valid token → `{"signals": []}`; expired, refresh and
+absent tokens → "Authentication required".
+
+### S-16 — the error formatter was never wired up (LOW) — FIXED
+
+`_format_error` stamps `error_code` on every error and replaces internal
+messages with "An internal error occurred" unless `DEBUG=true`. Nothing called
+it. Neither `strawberry.Schema` (whose `__init__` takes `extensions`,
+`exception_handlers`, `config` — no formatter) nor `GraphQLRouter` accepts one;
+the response shape comes from `process_result`. So no `error_code` ever reached
+a client and the production message suppression never ran — confirmed by
+observing `error_code: None` in a real response.
+
+`_FormattingGraphQLRouter` now applies it in `process_result`. A real request
+without a token returns
+`{"message": "Authentication required", …, "extensions": {"error_code": "UNAUTHORIZED"}}`.
+
+### Verified clean in this pass
+
+* **GraphiQL is correctly disabled in production** — `_graphql_ide` is `None`
+  when `APP_ENV=production`; the comment explaining why (introspection needs no
+  JWT) is accurate. Confirmed by reloading the module under that env.
+* **`decode_access_token` enforces `type == "access"`** and checks the
+  Redis-backed JTI blacklist, so GraphQL does not accept refresh tokens.
+* **Resolver coverage** — all 14 queries/mutations and all 3 subscriptions call
+  `_require_auth`; there is no unauthenticated field.
+
+### Noted, not changed
+
+Subscriptions authenticate **once**, at subscribe time, then stream
+indefinitely. A revoked or expired session keeps receiving `account_updates`
+until the socket drops. Re-checking the token per emission is a behavioural
+change to a streaming path, so it is recorded here rather than made unilaterally.
+
+### S-17 — GraphQL order mutations bypassed every risk gate and always claimed success (CRITICAL) — FIXED
+
+Found immediately after S-15, and the reason S-15 could not be fixed on its own.
+
+`Mutation.place_order` called `state.broker.place_order(...)` directly, then
+returned `OrderResult(placed=True, ...)` unconditionally.
+
+**Every gate was bypassed.** `POST /api/trading/order` runs, in this order:
+
+```
+_check_subscription_gate → _check_kill_switch (hard block, must be first)
+→ _check_trading_paused → _check_live_deployment_gates
+→ _validate_order (broker availability, prop-firm rules)
+→ _apply_risk_checks (RiskManager + CVaR gate) → _log_compliance
+→ _route_to_broker → _record_fill
+```
+
+The mutation ran **none** of them. An order placed over GraphQL went to the
+broker with the kill switch engaged, past the CVaR gate, past prop-firm limits,
+past the subscription check, with no compliance record and no idempotency.
+
+**It always reported success.** `placed=True` was hardcoded. If the broker call
+raised — caught at `except (RuntimeError, ValueError, OSError, AttributeError)`
+and logged at *warning* — or if no broker was attached at all, the client still
+received `placed=True`, a fabricated `uuid.uuid4()[:8]` order id,
+`fill_price=0.0` and the message "Order placed". A trader would believe they
+held a position they did not hold, or that a hedge was on when it was not.
+`cancel_order` and `modify_order` had the same shape: `cancelled=True` /
+`modified=True` regardless of outcome.
+
+It was unreachable in practice only because the auth helper rejected every
+request (S-15). Fixing that made it live — so this had to be fixed in the same
+change, not filed.
+
+All three mutations now delegate to the REST helpers rather than reimplementing
+anything, so the two paths cannot drift. `_as_graphql_error` converts the
+`HTTPException` the gates raise into a `ValueError`, which `_format_error` maps
+to `VALIDATION_ERROR` with the reason intact — otherwise a kill-switch refusal
+would have reached the trader as "An internal error occurred".
+
+One genuine bug surfaced by the rewrite: `OrderRequest.side` validates against
+`^(buy|sell)$`, and the mutation was passing `side.upper()`. GraphQL has always
+advertised `BUY`/`SELL`/`LONG`/`SHORT`, so the values are now normalised.
+
+Verified against the running router:
+
+| Condition | Before | After |
+|---|---|---|
+| Kill switch engaged | order sent to broker, `placed=true` | refused: "Trading halted — kill switch active: …" |
+| No broker attached | `placed=true`, fabricated order id | refused: "Broker not initialised…" |
+| `cancelOrder`, no broker | `cancelled=true` | refused: "Broker unavailable — order not cancelled" |
+| `modifyOrder`, no broker | `modified=true` | refused: "Broker unavailable — order not modified" |
+
+A note on the regression test, because the first version of it was wrong: the
+structural check originally searched the mutation's source text for each gate
+name. Deleting all four `_check_*()` calls left it green, because the gates are
+imported *inside* the function so their names appear either way. It now walks
+the AST for actual `Call` nodes. Re-verified by deleting the calls: five tests
+fail, one per gate plus the live kill-switch test.
+
+### S-18 — a code block was pasted into the middle of a docstring — FIXED
+
+`config/feature_flags.py`'s usage example had the module's own
+`try: from enum import StrEnum / except ImportError: …` block spliced into it,
+between `from config.feature_flags import flags` and the example that follows.
+Harmless at runtime — the real import appears again below — but the usage
+example was unreadable. Removed.
+
+For the record while reading that file: **62 of its 67 flags are on by
+default**, `GRAPHQL_API` among them. That is what made S-15/S-17 a live concern
+rather than a dormant one.
+
+### S-19 — `createAlert` stored nothing and said it had (HIGH) — FIXED
+
+The fourth GraphQL mutation, same family as S-17 but worse in kind: it did not
+merely mis-report an outcome, it performed no work at all.
+
+```python
+alert_id = str(uuid.uuid4())[:8]
+logger.info("GraphQL createAlert user=%s: %s ...", ...)
+return AlertResult(created=True, alert_id=alert_id, ...)
+```
+
+There is a real `AlertEngine` behind `POST /api/alerts/` that persists alerts,
+evaluates them against live prices, and notifies. This mutation never touched
+it. Every price alert created over GraphQL silently did not exist and would
+never fire — while the caller was told it had been created and handed an id
+that matched nothing.
+
+Now delegates to the same `AlertEngine`, behind the same `require_plan("starter")`
+gate the REST endpoint uses (`_resolve_plan_and_raise`, adapted for the dict
+context). Verified: the alert appears in `engine.get_alerts(user_id=...)` with
+`PRICE_ABOVE`, the right threshold, channel and owner, and the returned id is
+the engine's own (`ALERT-C7548879`), not a uuid.
+
+**`crosses` is no longer accepted.** The engine distinguishes
+`price_cross_above` from `price_cross_below`, and a bare "crosses" with one
+threshold cannot say which. Silently picking a direction on a price alert is
+the same class of error as the phantom success being fixed, so the two explicit
+forms are required and the error names them. Nothing breaks: no alert created
+by the old code path exists to migrate.
+
+Found on the way: `api/alerts._get_engine` did `request.app.state` with no None
+check, so it raised `AttributeError` when called without a FastAPI request. The
+REST routes always have one; the GraphQL mutation does not. Step 3 of that
+function already lazy-initialises an engine precisely so a missing one is not
+fatal — a missing request now falls through to it instead of blowing up on the
+way there.
