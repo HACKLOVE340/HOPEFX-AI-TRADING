@@ -84,8 +84,11 @@ def _get_or_create(user: TokenPayload) -> TraderProfile:
     if not profile:
         profile = _manager.create_profile(
             trader_id=user.sub,
-            username=getattr(user, "username", user.sub),
-            email=getattr(user, "email", ""),
+            # Both fields are declared Optional on TokenPayload, so the
+            # attribute exists and a getattr default never applies — `or` is
+            # what actually supplies the fallback.
+            username=user.username or user.sub,
+            email=user.email or "",
         )
     return profile
 

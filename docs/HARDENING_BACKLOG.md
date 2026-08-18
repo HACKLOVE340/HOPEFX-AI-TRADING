@@ -5506,3 +5506,129 @@ resolution, unlike `api/trading.py`'s `_user_broker_call`. The ownership checks
 bound the damage but do not change that: this subsystem was built for a
 single-account model, and on a multi-account deployment the orders it places
 still go through one broker. That is an architectural gap, not a patch.
+
+---
+
+## Round 10 — generalising S-23: who owns a resource?
+
+S-23 was an endpoint that bound `user` for authentication and then never
+consulted it. That is a shape a scanner can find, so this round ran it across
+the repo: every `@router` handler that binds a parameter to an auth dependency
+(`get_current_user`, `require_role`, `require_plan`, `require_kyc`) and never
+references it, narrowed to those that also take a resource-id parameter.
+
+36 candidates. Most were correct — market data, model explanations, marketplace
+listings, the security dashboard: authenticated reads of genuinely global data.
+Three were per-user resources with no ownership check at all.
+
+### S-24 — every trader could read, edit and delete every other trader's strategies (HIGH) — FIXED
+
+`nocode/router.py`, the No-Code Strategy Builder at `/api/nocode`
+(`FEATURE_NOCODE_BUILDER`, stable, on by default). All strategies live in one
+shared `builder.strategies` dict:
+
+| Endpoint | Before |
+|---|---|
+| `GET /strategies` | **no user parameter at all** — returned every strategy in the dict |
+| `POST /strategies` | bound `user`, recorded no owner |
+| `PATCH /strategies/{id}` | mutated any strategy by id |
+| `DELETE /strategies/{id}` | deleted any strategy by id |
+| `POST /strategies/{id}/compile` | returned the generated **Python source** of any strategy |
+| `POST /strategies/{id}/backtest` | backtested any strategy |
+| `GET /strategies/{id}/export` | **no role gate either** — only the router-level `Depends(get_current_user)` — exported any strategy as Python |
+
+`builder.create_strategy(name, description, symbol, timeframe)` had nowhere to
+put an owner, so nothing could have checked one.
+
+A no-code strategy *is* the user's trading logic, and this platform sells
+strategies through `/api/monetization/marketplace` — the export endpoint handed
+any authenticated account, of any role, the source of anyone's.
+
+Fixed the same way as S-23: `user_id` on `NoCodeStrategy`, threaded through
+`create_strategy`, `create_from_template` and `parse_plain_english` (all three
+funnel through `create_strategy`, so one parameter covers them); a
+`_owned_strategy()` helper that answers 404 rather than 403 so ids cannot be
+enumerated; and `require_role("trader")` added to `export`. Strategies with no
+owner stay visible to everyone, because `_create_templates()` puts the built-in
+templates in the same dict at builder init.
+
+Verified with two users: Alice creates a strategy, Bob's list omits it, and his
+export/compile/patch/delete all get 404 while Alice's succeed and the two
+built-in templates stay visible to both.
+
+### S-25 — research notebooks, same shape (MEDIUM) — FIXED
+
+`research/__init__.py`, `/api/research`. `create_notebook` took `author` from
+the **request body** — a caller could claim any name — and nothing recorded who
+actually made it. `list_notebooks` returned everyone's. `add_cell`,
+`execute_cell`, `execute_all`, `delete_notebook` and `run_notebook` acted on any
+id, and `GET /notebooks/{id}` and `GET /notebooks/{id}/export` had no user
+parameter at all, returning full cell contents — the latter as runnable Python.
+
+Cell execution itself is sandboxed in a subprocess (`_simulate_execution`), so
+this was disclosure and tampering with other people's research, not remote code
+execution. Checked rather than assumed.
+
+`user_id` is now a separate field from the display `author`, taken from the
+token; a `_owned_notebook()` helper guards the rest; templates stay shared. A
+test pins that passing someone else's name as `author` neither grants them the
+notebook nor takes it from its creator.
+
+### S-26 — anyone could delete anyone's chat message (MEDIUM) — FIXED
+
+`api/community_chat.py`. `DELETE /rooms/{room_id}/messages/{msg_id}` bound
+`user` and never looked at it, even though `send_message` already stamps
+`user_id` on every message. Now the author or an admin/superadmin, with 404 for
+anyone else so a caller cannot learn that a message they may not touch exists.
+
+Rooms and their history stay readable by any authenticated user — it is a
+community chat, and that is the point.
+
+### S-27 — sending a chat message 500'd without an email claim (MEDIUM) — FIXED
+
+Found while probing S-26; unrelated to ownership:
+
+```python
+"username": getattr(user, "email", user.sub).split("@")[0],
+```
+
+`TokenPayload.email` is declared `str | None`, so the attribute **always
+exists** and the `getattr` default never fires. A token carrying no `email`
+claim yields `None`, and `.split` raises — `POST /api/chat/rooms/{id}/messages`
+returned 500. Tokens minted by `AuthService._create_access_token` do include
+`email`, which is why ordinary web logins were unaffected; anything minted
+through `auth.jwt.create_access_token({"sub": ...})` is not.
+
+Now `(user.email or user.sub).split("@")[0]`. The same misuse in
+`api/profiles.py` — `email=getattr(user, "email", "")` yielding `None` where
+`""` was intended — is fixed alongside it. The remaining instances
+(`api/billing.py`, `teams/`, `api/superadmin/auto_healing.py`) pass the value
+somewhere that accepts None, or already use `or`, and were left alone.
+
+### S-28 — backtest results have no owner (MEDIUM) — OPEN
+
+Fourth instance of the S-23 shape, found in the same pass but held back so it
+can be changed and verified on its own.
+
+`api/backtesting.py` contains **no reference to `user.sub` or `user_id`
+anywhere in the file**. Every run lands in one shared `_results` /
+`_wf_results` dict (write-through to a KV store keyed only by `run_id`), and:
+
+| Endpoint | Behaviour |
+|---|---|
+| `GET /results`, `GET /list` | return the most recent runs across **all** users |
+| `GET /results/{run_id}` | any run by id |
+| `GET /walk-forward`, `/walk-forward/latest`, `/walk-forward/{run_id}` | same |
+| `GET /{run_id}/report.pdf` | renders any run as a PDF report |
+
+A backtest result carries the strategy name, symbol, date range, return,
+Sharpe, max drawdown, trade count and win rate — one user's research output,
+readable by any other `professional`-plan account.
+
+Not fixed in this round because it is larger than the other three: eight
+`_persist_result` / `_persist_wf_result` call sites, several of them inside
+background-task closures, plus a `_compat_router` with its own aliases, plus
+`BacktestResult` is a response model so adding a field changes the public
+schema (additively). The same pattern applies — optional `user_id` on the
+model, threaded through the persist helpers, a shared `_owned_result()` helper
+answering 404, unowned results staying visible.
