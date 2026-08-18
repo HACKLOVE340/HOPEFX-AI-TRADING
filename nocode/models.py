@@ -180,6 +180,13 @@ class NoCodeStrategy:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     enabled: bool = True
+    # Who created this strategy. None means "built-in template" — those are
+    # created by _create_templates() at builder init and are meant to be
+    # visible to everyone. Every strategy created through the API carries the
+    # caller's id, because before this field the whole builder was one shared
+    # dict: any authenticated trader could list, edit, delete and export the
+    # generated Python of every other trader's strategy.
+    user_id: str | None = None
 
     @property
     def is_active(self) -> bool:
@@ -194,6 +201,7 @@ class NoCodeStrategy:
         """Convert to dictionary."""
         return {
             "strategy_id": self.strategy_id,
+            "user_id": self.user_id,
             "name": self.name,
             "description": self.description,
             "symbol": self.symbol,

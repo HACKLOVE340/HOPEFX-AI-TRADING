@@ -331,7 +331,10 @@ async def send_message(
         "id": str(uuid.uuid4()),
         "room_id": room_id,
         "user_id": user.sub,
-        "username": getattr(user, "email", user.sub).split("@")[0],
+        # `TokenPayload.email` is declared `str | None`, so the attribute always
+        # exists and the getattr default never fired: a token without an email
+        # claim gave None and `.split` raised, 500-ing every message send.
+        "username": (user.email or user.sub).split("@")[0],
         "content": body.message_text,
         "attachments": body.attachments or [],
         "created_at": datetime.now(UTC).isoformat(),
@@ -358,9 +361,19 @@ async def delete_message(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
     msgs = _get_messages(room_id, 1000)
-    new_msgs = [m for m in msgs if m.get("id") != msg_id]
-    if len(new_msgs) == len(msgs):
+
+    # Only the author may delete their message; admins may moderate. This
+    # endpoint bound `user` for authentication and then never looked at it, so
+    # any authenticated account could delete anybody's message in any room.
+    target = next((m for m in msgs if m.get("id") == msg_id), None)
+    if target is None:
         raise HTTPException(status_code=404, detail="Message not found")
+    if target.get("user_id") != user.sub and getattr(user, "role", "") not in ("admin", "superadmin"):
+        # 404, not 403: a caller should not learn that a message they cannot
+        # touch exists.
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    new_msgs = [m for m in msgs if m.get("id") != msg_id]
     r = _redis()
     key = f"{_MSG_PREFIX}{room_id}"
     if r:

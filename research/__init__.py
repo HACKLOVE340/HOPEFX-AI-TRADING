@@ -68,6 +68,10 @@ class ResearchNotebook:
     tags: list[str] = field(default_factory=list)
     is_template: bool = False
     version: int = 1
+    # Owner, taken from the access token. `author` is a display string the
+    # client supplies and can therefore claim freely; it must not be used for
+    # authorisation. None means a built-in template, visible to everyone.
+    user_id: str | None = None
 
 
 class ResearchNotebookEngine:
@@ -288,7 +292,14 @@ logger.info("Feature engineering functions ready")
 
         logger.info("Created %s notebook templates", len(self.templates))
 
-    def create_notebook(self, title: str, description: str, author: str, is_template: bool = False) -> ResearchNotebook:
+    def create_notebook(
+        self,
+        title: str,
+        description: str,
+        author: str,
+        is_template: bool = False,
+        user_id: str | None = None,
+    ) -> ResearchNotebook:
         """
         Create a new research notebook.
 
@@ -312,6 +323,7 @@ logger.info("Feature engineering functions ready")
             updated_at=datetime.now(UTC),
             author=author,
             is_template=is_template,
+            user_id=user_id,
         )
 
         self.notebooks[notebook_id] = notebook
@@ -446,13 +458,19 @@ logger.info("Feature engineering functions ready")
 
         return results
 
-    def create_from_template(self, template_id: str, title: str, author: str) -> ResearchNotebook | None:
+    def create_from_template(
+        self,
+        template_id: str,
+        title: str,
+        author: str,
+        user_id: str | None = None,
+    ) -> ResearchNotebook | None:
         """Create a notebook from a template."""
         template = self.templates.get(template_id)
         if not template:
             return None
 
-        notebook = self.create_notebook(title=title, description=template.description, author=author)
+        notebook = self.create_notebook(title=title, description=template.description, author=author, user_id=user_id)
 
         # Copy cells from template
         for cell in template.cells:
@@ -579,6 +597,21 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     router = APIRouter(prefix="/api/research", tags=["Research"], dependencies=[Depends(require_role("trader"))])
 
+    def _visible_notebook(nb, user_id: str) -> bool:
+        """Templates are shared; everything else belongs to whoever made it."""
+        return nb.is_template or getattr(nb, "user_id", None) in (None, user_id)
+
+    def _owned_notebook(notebook_id: str, user_id: str):
+        """Return the caller's notebook or raise 404.
+
+        404 rather than 403 so the response does not disclose which notebook
+        ids exist — the same choice `api/alerts._get_owned_alert` makes.
+        """
+        nb = engine.notebooks.get(notebook_id)
+        if nb is None or not _visible_notebook(nb, user_id):
+            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+        return nb
+
     class CreateNotebookRequest(BaseModel):
         title: str
         description: str = ""
@@ -598,7 +631,11 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         query: str | None = None, author: str | None = None, user: TokenPayload = Depends(require_role("trader"))
     ):
         """List all research notebooks (excluding templates)."""
-        notebooks = engine.search_notebooks(query=query, author=author)
+        notebooks = [
+            nb
+            for nb in engine.search_notebooks(query=query, author=author)
+            if _visible_notebook(engine.notebooks[nb["notebook_id"]], user.sub)
+        ]
         # Enrich with status field expected by the frontend
         for nb in notebooks:
             nb.setdefault("status", "draft")
@@ -611,10 +648,13 @@ def create_research_router(engine: "ResearchNotebookEngine"):
     @router.post("/notebooks")
     async def create_notebook(req: CreateNotebookRequest, user: TokenPayload = Depends(require_role("trader"))):
         """Create a new research notebook."""
+        # `req.author` stays a display string, but it is client-supplied and
+        # a caller can claim any name, so it must not decide ownership.
         nb = engine.create_notebook(
             title=req.title,
             description=req.description,
             author=req.author,
+            user_id=user.sub,
         )
         if req.tags:
             nb.tags = req.tags
@@ -638,6 +678,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
             cell_type = CellType(req.cell_type)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid cell_type '{req.cell_type}'") from None
+        _owned_notebook(notebook_id, user.sub)
         cell = engine.add_cell(notebook_id, cell_type, req.content)
         if not cell:
             raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
@@ -649,7 +690,8 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         cell_id: str,
         user: TokenPayload = Depends(require_role("trader")),
     ):
-        """Execute a single notebook cell. Requires: role >= 'trader'."""
+        """Execute a single cell in one of the caller's notebooks."""
+        _owned_notebook(notebook_id, user.sub)
         result = engine.execute_cell(notebook_id, cell_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Notebook or cell not found")
@@ -661,15 +703,18 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Execute all cells in a notebook. Requires: role >= 'trader'."""
+        _owned_notebook(notebook_id, user.sub)
         results = engine.execute_all(notebook_id)
         return {"notebook_id": notebook_id, "results": results}
 
     @router.get("/notebooks/{notebook_id}")
-    async def get_notebook(notebook_id: str):
-        """Return a single notebook by ID including all cells and results."""
-        nb = engine.notebooks.get(notebook_id)
-        if nb is None:
-            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+    async def get_notebook(notebook_id: str, user: TokenPayload = Depends(require_role("trader"))):
+        """Return one of the caller's notebooks, including all cells and results.
+
+        This took no user parameter, so any authenticated account could read
+        any notebook's full cell contents and outputs.
+        """
+        nb = _owned_notebook(notebook_id, user.sub)
         cells = nb.cells
         # Determine overall status from cells
         if any(c.status.value == "error" for c in cells):
@@ -713,8 +758,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Delete a notebook. Requires: role >= 'trader'."""
-        if notebook_id not in engine.notebooks:
-            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+        _owned_notebook(notebook_id, user.sub)
         del engine.notebooks[notebook_id]
 
     @router.post("/notebooks/{notebook_id}/run")
@@ -723,10 +767,8 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Execute all cells in a notebook (alias for /execute). Requires: role >= 'trader'."""
+        nb = _owned_notebook(notebook_id, user.sub)
         results = engine.execute_all(notebook_id)
-        nb = engine.notebooks.get(notebook_id)
-        if nb is None:
-            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
         cells = nb.cells
         nb_status = "completed" if all(r.get("status") == "completed" for r in results) else "error"
         return {
@@ -765,8 +807,17 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         }
 
     @router.get("/notebooks/{notebook_id}/export")
-    async def export_notebook(notebook_id: str, export_format: str = "json"):
-        """Export a notebook as JSON or Python script."""
+    async def export_notebook(
+        notebook_id: str,
+        export_format: str = "json",
+        user: TokenPayload = Depends(require_role("trader")),
+    ):
+        """Export one of the caller's notebooks as JSON or a Python script.
+
+        This took no user parameter, so any authenticated account could export
+        any notebook — including as runnable Python.
+        """
+        _owned_notebook(notebook_id, user.sub)
         exported = engine.export_notebook(notebook_id, export_format)
         if exported is None:
             raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
@@ -782,7 +833,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         template_id: str, req: CreateNotebookRequest, user: TokenPayload = Depends(require_role("trader"))
     ):
         """Create a notebook from a template."""
-        nb = engine.create_from_template(template_id, req.title, req.author)
+        nb = engine.create_from_template(template_id, req.title, req.author, user_id=user.sub)
         if nb is None:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
         return {"notebook_id": nb.notebook_id, "title": nb.title}

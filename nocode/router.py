@@ -24,6 +24,28 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
 
     router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"], dependencies=[Depends(get_current_user)])
 
+    def _visible_to(strategy, user_id: str) -> bool:
+        """Whether *user_id* may see or act on *strategy*.
+
+        A strategy with no owner is a built-in template — `_create_templates()`
+        puts those in the same dict at builder init — and stays visible to
+        everyone. Everything else belongs to whoever created it.
+        """
+        owner = getattr(strategy, "user_id", None)
+        return owner is None or owner == user_id
+
+    def _owned_strategy(strategy_id: str, user_id: str):
+        """Return the caller's strategy or raise 404.
+
+        404 rather than 403 for someone else's strategy, so the response does
+        not disclose which strategy ids exist — the same choice
+        `api/alerts._get_owned_alert` makes.
+        """
+        strategy = builder.strategies.get(strategy_id)
+        if strategy is None or not _visible_to(strategy, user_id):
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        return strategy
+
     class CreateStrategyRequest(BaseModel):
         name: str
         description: str = ""
@@ -41,8 +63,12 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         timeframe: str = "1h"
 
     @router.get("/strategies")
-    async def list_strategies():
-        """List all no-code strategies."""
+    async def list_strategies(user: TokenPayload = Depends(require_role("trader"))):
+        """List the caller's no-code strategies, plus the built-in templates.
+
+        This took no user parameter at all and returned every strategy in the
+        shared `builder.strategies` dict — every other trader's included.
+        """
         return [
             {
                 "strategy_id": sid,
@@ -55,6 +81,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
                 "created_at": s.created_at.isoformat(),
             }
             for sid, s in builder.strategies.items()
+            if _visible_to(s, user.sub)
         ]
 
     @router.post("/strategies")
@@ -68,6 +95,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
             description=req.description,
             symbol=req.symbol,
             timeframe=req.timeframe,
+            user_id=user.sub,
         )
         return {
             "strategy_id": strategy.strategy_id,
@@ -91,9 +119,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Update strategy metadata (name, description, symbol, timeframe)."""
-        strategy = builder.strategies.get(strategy_id)
-        if strategy is None:
-            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        strategy = _owned_strategy(strategy_id, user.sub)
         if req.name:
             strategy.name = req.name
         if req.description is not None:
@@ -110,8 +136,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Delete a strategy."""
-        if strategy_id not in builder.strategies:
-            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        _owned_strategy(strategy_id, user.sub)
         del builder.strategies[strategy_id]
 
     @router.post("/strategies/{strategy_id}/compile")
@@ -120,10 +145,10 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Compile a strategy to Python and validate it."""
+        strategy = _owned_strategy(strategy_id, user.sub)
         code = builder.export_to_python(strategy_id)
         if not code:
             raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
-        strategy = builder.strategies.get(strategy_id)
         return {
             "strategy_id": strategy_id,
             "status": "compiled",
@@ -137,9 +162,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Queue a backtest for a no-code strategy."""
-        strategy = builder.strategies.get(strategy_id)
-        if strategy is None:
-            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        strategy = _owned_strategy(strategy_id, user.sub)
         try:
             from backtesting.engine import BacktestEngine
 
@@ -181,8 +204,19 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         }
 
     @router.get("/strategies/{strategy_id}/export")
-    async def export_strategy(strategy_id: str):
-        """Export a no-code strategy as Python code."""
+    async def export_strategy(
+        strategy_id: str,
+        user: TokenPayload = Depends(require_role("trader")),
+    ):
+        """Export one of the caller's no-code strategies as Python code.
+
+        This had no user parameter and no role gate — only the router-level
+        `Depends(get_current_user)` — so any authenticated account, of any
+        role, could dump the generated source of any strategy. A strategy is
+        the user's trading logic, and the platform sells strategies through
+        /api/monetization/marketplace.
+        """
+        _owned_strategy(strategy_id, user.sub)
         code = builder.export_to_python(strategy_id)
         if code is None:
             raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
@@ -194,7 +228,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Parse a plain-English strategy description into a structured strategy."""
-        strategy = builder.parse_plain_english(req.description, req.symbol, req.timeframe)
+        strategy = builder.parse_plain_english(req.description, req.symbol, req.timeframe, user_id=user.sub)
         if strategy is None:
             raise HTTPException(
                 status_code=422,
@@ -225,7 +259,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         user: TokenPayload = Depends(require_role("trader")),
     ):
         """Create a strategy from a built-in template."""
-        strategy = builder.create_from_template(template_id, req.name, req.symbol, req.timeframe)
+        strategy = builder.create_from_template(template_id, req.name, req.symbol, req.timeframe, user_id=user.sub)
         if strategy is None:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
         return {
