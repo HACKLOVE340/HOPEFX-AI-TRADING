@@ -203,23 +203,55 @@ def _get_current_user(info: Info) -> dict | None:
     Works for both HTTP queries/mutations and WebSocket subscriptions.
     """
     try:
-        request = getattr(info.context, "request", None)
-        if request is None:
-            ws = getattr(info.context, "ws", None)
-            if ws is None:
-                return None
+        # `_get_context()` returns a **dict**, and strawberry's FastAPI
+        # integration injects `request` / `ws` into it as dict *keys*. This used
+        # to read them with `getattr(info.context, "request", None)`, which on a
+        # dict is always None — so no Authorization header was ever found and
+        # every single GraphQL request, valid token or not, was rejected with
+        # "Authentication required". The whole API was inert while
+        # FEATURE_GRAPHQL_API defaults to "true". (Fail-closed, so never a
+        # bypass.) The resolvers below already use `info.context.get(...)`,
+        # which is why the mismatch was only in this one helper.
+        context = info.context
+        if isinstance(context, dict):
+            request = context.get("request")
+            ws = context.get("ws")
+        else:  # object-style context, e.g. a BaseContext subclass
+            request = getattr(context, "request", None)
+            ws = getattr(context, "ws", None)
+
+        if request is not None:
+            auth_header = request.headers.get("authorization", "")
+        elif ws is not None:
             auth_header = ws.headers.get("authorization", "")
         else:
-            auth_header = request.headers.get("authorization", "")
+            return None
 
         if not auth_header.startswith("Bearer "):
             return None
 
         token = auth_header[7:]
+        import jwt as _pyjwt
+
         from auth.jwt import decode_access_token
 
-        payload = decode_access_token(token)
-        return payload
+        try:
+            return decode_access_token(token)
+        except _pyjwt.PyJWTError as exc:
+            # Every rejection `decode_access_token` can produce is a PyJWTError
+            # subclass — expired, bad signature, malformed, revoked JTI, and the
+            # explicit `InvalidTokenError("Not an access token")` it raises for a
+            # refresh token. None of them inherit from ValueError or RuntimeError,
+            # so the tuple below never caught them: they escaped this function and
+            # `_require_auth`, and `_format_error` labelled them INTERNAL_ERROR
+            # with the message "An internal error occurred".
+            #
+            # It failed closed, so this was never an authentication bypass — but
+            # an expired session was indistinguishable from a server fault, so no
+            # client could know to refresh its token, and the subscriptions below
+            # (which catch only PermissionError) errored out instead of closing.
+            logger.debug("GraphQL auth rejected token: %s", exc)
+            return None
     except (RuntimeError, ValueError, OSError, AttributeError) as exc:
         logger.debug("GraphQL auth failed: %s", exc)
         return None
@@ -600,9 +632,18 @@ class Query:
         user = _require_auth(info)
         user_id = user.get("sub", "default")
         loader: DataLoader = info.context.get("trades_loader") or DataLoader(load_fn=_batch_load_trades)
-        return await loader.load((user_id, limit))
+        loaded = await loader.load((user_id, limit))
+        if loaded:
+            return loaded
 
-        # DB fallback: read closed trades from the Trade table
+        # DB fallback: read closed trades from the Trade table.
+        #
+        # This block was unreachable: the line above used to be
+        # `return await loader.load(...)`, so the 40-odd lines below it never
+        # ran. `_batch_load_trades` returns `[]` when `app_state.broker` is
+        # None and never consults the database, so with no broker attached the
+        # query answered "no trades" while closed trades sat in the Trade
+        # table. Ruff does not flag unreachable code, so nothing caught it.
         try:
             from core.app_state import app_state as _gql_app_state
             from database.models import Trade as DBTrade, TradeStatus
@@ -896,10 +937,29 @@ class Query:
 # ── Mutation ──────────────────────────────────────────────────────────────────
 
 
+def _as_graphql_error(exc: Exception) -> Exception:
+    """Turn a REST-layer rejection into an error a GraphQL client can read.
+
+    The trading helpers signal every refusal with ``HTTPException`` — kill
+    switch, trading paused, subscription gate, risk gate, prop-firm rules. Left
+    alone, ``_format_error`` would classify those as ``INTERNAL_ERROR`` and
+    replace the message with "An internal error occurred" outside DEBUG, so a
+    trader would be told the server broke rather than that the kill switch is
+    on. Re-raised as ``ValueError`` they come back as ``VALIDATION_ERROR`` with
+    the real reason intact.
+    """
+    from fastapi import HTTPException
+
+    if isinstance(exc, HTTPException):
+        detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        return ValueError(detail)
+    return exc
+
+
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description="Place a market or limit order")
-    def place_order(
+    async def place_order(
         self,
         info: Info,
         symbol: str,
@@ -909,58 +969,115 @@ class Mutation:
         stop_loss: float | None = None,
         take_profit: float | None = None,
     ) -> OrderResult:
+        """Place an order through the same pipeline as ``POST /api/trading/order``.
+
+        This used to call ``state.broker.place_order(...)`` directly and then
+        ``return OrderResult(placed=True, ...)`` unconditionally. Two problems,
+        both serious on a money-moving system:
+
+        1. **Every gate was bypassed.** The REST path runs
+           ``_check_subscription_gate`` → ``_check_kill_switch`` (hard block,
+           first) → ``_check_trading_paused`` → ``_check_live_deployment_gates``
+           → ``_validate_order`` (broker availability, prop-firm rules) →
+           ``_apply_risk_checks`` (RiskManager + CVaR) → ``_log_compliance``.
+           This mutation ran none of them, so an order placed over GraphQL went
+           to the broker with the kill switch engaged.
+        2. **It always claimed success.** ``placed=True`` was hardcoded. If the
+           broker raised — caught below and logged at warning — or if no broker
+           was attached at all, the client still got ``placed=True`` with a
+           fabricated ``uuid4()[:8]`` order id and the message "Order placed".
+           A trader would believe they held a position they did not hold.
+
+        It was unreachable in practice because the auth helper rejected every
+        request (S-15). Fixing that made it live, so it had to be fixed with it.
+        """
         user = _require_auth(info)
-        if side.upper() not in ("BUY", "SELL", "LONG", "SHORT"):
+        user_id = str(user.get("sub", ""))
+
+        # GraphQL has always accepted LONG/SHORT as aliases, but OrderRequest
+        # validates `side` against `^(buy|sell)$` — lowercase, no aliases — so
+        # the value has to be normalised on the way in rather than passed
+        # through as `side.upper()`.
+        _SIDES = {"BUY": "buy", "LONG": "buy", "SELL": "sell", "SHORT": "sell"}
+        normalised_side = _SIDES.get(side.upper())
+        if normalised_side is None:
             raise ValueError(f"Invalid side: {side}")
         if lots <= 0 or lots > 100:
             raise ValueError(f"Invalid lot size: {lots}")
 
-        order_id = str(uuid.uuid4())[:8]
-        fill_price = 0.0
+        from api.trading import (
+            OrderRequest,
+            _apply_risk_checks,
+            _check_kill_switch,
+            _check_live_deployment_gates,
+            _check_subscription_gate,
+            _check_trading_paused,
+            _log_compliance,
+            _record_fill,
+            _route_to_broker,
+            _validate_order,
+        )
 
-        state = _get_broker_state()
-        if state and hasattr(state, "broker"):
-            try:
-                result = state.broker.place_order(
-                    symbol=symbol,
-                    side=side.upper(),
-                    lots=lots,
-                    order_type=order_type,
-                    stop_loss=stop_loss,
-                    take_profit=take_profit,
-                )
-                order_id = str(result.get("order_id", order_id))
-                fill_price = float(result.get("fill_price", 0))
-            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
-                logger.warning("Broker place_order failed: %s", exc)
+        try:
+            _check_subscription_gate(user_id, str(user.get("role", "user")))
+            _check_kill_switch()  # hard block — must be first
+            _check_trading_paused()
+            _check_live_deployment_gates()
+
+            order = OrderRequest(
+                symbol=symbol,
+                side=normalised_side,
+                quantity=lots,
+                order_type=order_type,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
+
+            await _validate_order(order, user_id)
+            await _apply_risk_checks(order, user_id)
+            _log_compliance(order, user_id)
+            result = await _route_to_broker(order, user_id)
+            placed = await _record_fill(order, result, user_id)
+        except Exception as exc:
+            raise _as_graphql_error(exc) from None
 
         logger.info(
             "GraphQL placeOrder user=%s: %s %s %s lots %s",
-            user.get("sub", "?"),
-            order_id,
+            user_id,
+            placed.get("order_id"),
             side,
             lots,
             symbol,
         )
         return OrderResult(
             placed=True,
-            order_id=order_id,
+            order_id=str(placed.get("order_id", "")),
             symbol=symbol,
             side=side,
-            lots=lots,
-            fill_price=fill_price,
+            lots=float(placed.get("filled_quantity", lots) or lots),
+            fill_price=float(placed.get("filled_price", 0) or 0),
             message=f"Order placed: {side} {lots} lots of {symbol}",
         )
 
     @strawberry.mutation(description="Cancel a pending order")
     def cancel_order(self, info: Info, order_id: str) -> CancelResult:
+        """Report what actually happened.
+
+        This returned ``cancelled=True`` whether or not the broker call
+        succeeded, and even when no broker was attached — see ``place_order``
+        above for the same defect on the placement path.
+        """
         user = _require_auth(info)
         state = _get_broker_state()
-        if state and hasattr(state, "broker"):
-            try:
-                state.broker.cancel_order(order_id)
-            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
-                logger.warning("Broker cancel_order failed: %s", exc)
+        if not (state and hasattr(state, "broker")):
+            raise ValueError("Broker unavailable — order not cancelled")
+
+        try:
+            state.broker.cancel_order(order_id)
+        except Exception as exc:
+            logger.warning("Broker cancel_order failed: %s", exc)
+            raise _as_graphql_error(exc) from None
+
         logger.info("GraphQL cancelOrder user=%s: %s", user.get("sub", "?"), order_id)
         return CancelResult(
             cancelled=True,
@@ -976,20 +1093,28 @@ class Mutation:
         stop_loss: float | None = None,
         take_profit: float | None = None,
     ) -> ModifyResult:
+        """Report what actually happened — see ``cancel_order``.
+
+        Moving a stop-loss is a risk decision: a client told the stop moved
+        when it did not is worse off than one told the call failed.
+        """
         user = _require_auth(info)
         if stop_loss is None and take_profit is None:
             raise ValueError("Provide at least one of stop_loss or take_profit")
 
         state = _get_broker_state()
-        if state and hasattr(state, "broker"):
-            try:
-                state.broker.modify_order(
-                    order_id,
-                    stop_loss=stop_loss,
-                    take_profit=take_profit,
-                )
-            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
-                logger.warning("Broker modify_order failed: %s", exc)
+        if not (state and hasattr(state, "broker")):
+            raise ValueError("Broker unavailable — order not modified")
+
+        try:
+            state.broker.modify_order(
+                order_id,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
+        except Exception as exc:
+            logger.warning("Broker modify_order failed: %s", exc)
+            raise _as_graphql_error(exc) from None
 
         logger.info(
             "GraphQL modifyOrder user=%s: %s SL=%s TP=%s",
@@ -1015,13 +1140,73 @@ class Mutation:
         price: float,
         channel: str = "email",
     ) -> AlertResult:
+        """Create a price alert in the alert engine.
+
+        This used to **store nothing**. It generated ``uuid4()[:8]``, wrote a
+        log line, and returned ``created=True`` with that id. There is a real
+        ``AlertEngine`` behind ``POST /api/alerts/`` that persists and evaluates
+        alerts; this mutation never touched it. Every alert created over
+        GraphQL silently did not exist and would never fire — and the caller was
+        told it had been created.
+
+        ``crosses`` is no longer accepted. The engine distinguishes
+        ``price_cross_above`` from ``price_cross_below``, and a bare "crosses"
+        with a single threshold cannot say which. Picking a direction silently
+        would be the same class of mistake as the phantom success above, so the
+        two explicit forms are required instead. Nothing is broken by this:
+        no alert created through the old code path exists to migrate.
+        """
         user = _require_auth(info)
-        if condition not in ("above", "below", "crosses"):
-            raise ValueError(f"Invalid condition: {condition}")
-        alert_id = str(uuid.uuid4())[:8]
+        user_id = str(user.get("sub", ""))
+
+        _CONDITIONS = {
+            "above": "price_above",
+            "below": "price_below",
+            "crosses_above": "price_cross_above",
+            "crosses_below": "price_cross_below",
+        }
+        condition_name = _CONDITIONS.get(condition)
+        if condition_name is None:
+            raise ValueError(f"Invalid condition: {condition}. Use one of: {', '.join(sorted(_CONDITIONS))}")
+
+        from types import SimpleNamespace
+
+        from monetization.subscription import _resolve_plan_and_raise
+
+        from api.alerts import _get_engine
+
+        try:
+            # The REST endpoint gates this behind require_plan("starter").
+            # `_resolve_plan_and_raise` reads `.sub`/`.role` off a TokenPayload,
+            # so the GraphQL context dict is adapted rather than duplicated.
+            _resolve_plan_and_raise(
+                SimpleNamespace(sub=user_id, role=str(user.get("role", "user"))),
+                "starter",
+            )
+
+            from notifications.alert_engine import AlertConditionType
+
+            context = info.context
+            request = context.get("request") if isinstance(context, dict) else getattr(context, "request", None)
+            engine = _get_engine(request)
+            alert = engine.create_alert(
+                name=f"{symbol} {condition} {price}",
+                symbol=symbol,
+                condition_type=AlertConditionType(condition_name),
+                threshold=price,
+                notify_channels=[channel],
+                user_id=user_id,
+            )
+        except Exception as exc:
+            raise _as_graphql_error(exc) from None
+
+        # notifications.alert_engine.Alert names the field `id` (values look
+        # like "ALERT-C7548879"); `alert_id` is accepted too so a rename does
+        # not silently start returning an empty string.
+        alert_id = str(getattr(alert, "id", None) or getattr(alert, "alert_id", ""))
         logger.info(
             "GraphQL createAlert user=%s: %s %s %s @ %.5f via %s",
-            user.get("sub", "?"),
+            user_id,
             alert_id,
             symbol,
             condition,
@@ -1172,7 +1357,31 @@ async def _get_context() -> dict:
     return _make_context_loaders()
 
 
-graphql_router = GraphQLRouter(
+class _FormattingGraphQLRouter(GraphQLRouter):
+    """GraphQLRouter that actually applies ``_format_error``.
+
+    ``_format_error`` was written to stamp an ``error_code`` extension on every
+    error and to replace internal messages with "An internal error occurred"
+    unless ``DEBUG=true`` — but it was never wired to anything. Neither
+    ``strawberry.Schema`` nor ``GraphQLRouter`` takes an error-formatter
+    argument (checked against strawberry 0.324: ``Schema.__init__`` accepts
+    ``exception_handlers``/``extensions``, not a formatter, and the response
+    shape is produced by ``process_result``). So the function sat unused, every
+    error came back with the library's default shape, no ``error_code`` reached
+    any client, and the production message suppression never ran.
+
+    Overriding ``process_result`` is the hook that exists for this.
+    """
+
+    async def process_result(self, request, result):  # type: ignore[override]
+        response = await super().process_result(request, result)
+        errors = getattr(result, "errors", None)
+        if errors and isinstance(response, dict) and "errors" in response:
+            response["errors"] = [_format_error(error, lambda e: dict(e.formatted)) for error in errors]
+        return response
+
+
+graphql_router = _FormattingGraphQLRouter(
     schema,
     graphql_ide=_graphql_ide,
     context_getter=_get_context,

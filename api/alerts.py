@@ -67,7 +67,7 @@ class CreateAlertIn(BaseModel):
 _fallback_engine = None  # lazy-init when startup factory hasn't run
 
 
-def _get_engine(request: Request):
+def _get_engine(request: Request | None):
     """
     Retrieve the AlertEngine.
 
@@ -75,6 +75,13 @@ def _get_engine(request: Request):
     1. app_state.alert_engine  — set by the startup factory (primary)
     2. request.app.state.alert_engine — legacy location
     3. Lazy-init a minimal AlertEngine so the endpoint never 503s
+
+    ``request`` may be None. Step 2 used to do ``request.app.state``
+    unconditionally and raised ``AttributeError: 'NoneType' object has no
+    attribute 'app'`` — never hit from the REST routes, which always have one,
+    but reachable now that the GraphQL ``createAlert`` mutation shares this
+    helper. Step 3 already exists precisely so a missing engine is not fatal, so
+    a missing request should fall through to it rather than blow up on the way.
     """
     global _fallback_engine
 
@@ -89,7 +96,8 @@ def _get_engine(request: Request):
         logger.debug("Suppressed exception: %s", _exc)
 
     # 2. request.app.state (legacy)
-    engine = getattr(request.app.state, "alert_engine", None)
+    app = getattr(request, "app", None)
+    engine = getattr(getattr(app, "state", None), "alert_engine", None)
     if engine is not None:
         return engine
 
