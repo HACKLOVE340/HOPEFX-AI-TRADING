@@ -88,16 +88,10 @@ KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
     ): "S-41 no manager class exists; NewsFeedBase is abstract",
     ("api/nocode.py", "StateMachineEngine", "nocode.state_machine"): "S-41 validate_graph exists nowhere in the repo",
     (
-        "api/settings_new_endpoints.py",
-        "_last_health_result",
-        "health_check_service",
-    ): "S-41 health results are computed on demand, never cached",
-    (
         "api/superadmin/risk_management.py",
         "_GLOBAL_REGISTRY",
         "risk.circuit_breakers",
     ): "S-41 reset/force-open call methods CircuitBreaker lacks",
-    ("api/ws_live.py", "_data_buffers", "core.signal_engine"): "S-41 no such buffer anywhere; ATR falls back to CSV",
     ("ml/continuous_learning.py", "train_model", "ml.training"): "S-41 train_ml_pipeline has a different signature",
     (
         "ml/training_manager.py",

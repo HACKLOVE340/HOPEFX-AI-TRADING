@@ -875,55 +875,6 @@ async def _eventbus_tick_broadcaster() -> None:
             await asyncio.sleep(delay)
 
 
-def _atr_from_buffer(symbol: str) -> float | None:
-    """Compute ATR(14) from the signal engine data buffer. Returns None on failure."""
-    try:
-        from core.signal_engine import _data_buffers  # type: ignore[attr-defined]
-        import numpy as _np
-
-        broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
-        buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
-        if buf is not None and len(buf) >= 15:
-            bars = list(buf)[-15:]
-            highs = _np.array([b["high"] for b in bars], dtype=float)
-            lows = _np.array([b["low"] for b in bars], dtype=float)
-            closes = _np.array([b["close"] for b in bars], dtype=float)
-            tr = _np.maximum(
-                highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1]))
-            )
-            if len(tr) >= 14:
-                return float(_np.mean(tr[-14:]))
-    except Exception as exc:
-        logger.debug("_atr_from_buffer failed: %s", exc)
-    return None
-
-
-def _atr_from_csv(symbol: str) -> float | None:
-    """Compute ATR(14) from H1 CSV file. Returns None on failure."""
-    try:
-        import pathlib
-        import numpy as _np
-        import pandas as _pd
-
-        broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
-        csv_path = pathlib.Path(f"data/{broker_sym}_H1.csv")
-        if not csv_path.exists():
-            csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
-        if csv_path.exists():
-            df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
-            if len(df) >= 15:
-                highs = df["high"].to_numpy(dtype=float)
-                lows = df["low"].to_numpy(dtype=float)
-                closes = df["close"].to_numpy(dtype=float)
-                tr = _np.maximum(
-                    highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1]))
-                )
-                return float(_np.mean(tr[-14:]))
-    except Exception as exc:
-        logger.debug("_atr_from_csv failed: %s", exc)
-    return None
-
-
 def _compute_atr_sl_tp(
     symbol: str,
     mid: float,
@@ -935,9 +886,9 @@ def _compute_atr_sl_tp(
     Compute ATR(14)-based stop-loss and take-profit prices.
 
     Resolution order:
-    1. Recent H1 OHLCV from the signal engine data buffer
-    2. Recent H1 CSV from data/<symbol>_H1.csv
-    3. Percentage fallback (1.5% SL / 3.0% TP) when no price history available
+    1. Recent H1 CSV from data/<symbol>_H1.csv
+    2. Percentage fallback: 1% of mid stands in for ATR when no price history
+       is available, so the returned levels are sl_mult/tp_mult times that.
 
     Returns (stop_loss, take_profit) rounded to 5 decimal places.
     sl_atr_mult and tp_atr_mult are read from env vars SL_ATR_MULT / TP_ATR_MULT
@@ -948,34 +899,14 @@ def _compute_atr_sl_tp(
 
     atr: float | None = None
 
-    # ── 1. Signal engine data buffer ─────────────────────────────────────────
-    try:
-        from core.signal_engine import _data_buffers  # type: ignore[attr-defined]  # pylint: disable=no-name-in-module
+    # A tier above this one read `core.signal_engine._data_buffers`. No such
+    # object exists anywhere in the repository, so the import raised on every
+    # call, the handler logged it at DEBUG, and the tier never ran once. The
+    # CSV below is the real first source: data/*_H1.csv is gitignored as
+    # runtime market data the scheduler writes, so it is absent from a fresh
+    # checkout but present in a deployment.
 
-        broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
-        buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
-        if buf is not None and len(buf) >= 15:
-            import numpy as _np
-
-            highs = _np.array([b["high"] for b in list(buf)[-15:]], dtype=float)
-            lows = _np.array([b["low"] for b in list(buf)[-15:]], dtype=float)
-            closes = _np.array([b["close"] for b in list(buf)[-15:]], dtype=float)
-            tr = _np.maximum(
-                highs[1:] - lows[1:],
-                _np.maximum(
-                    _np.abs(highs[1:] - closes[:-1]),
-                    _np.abs(lows[1:] - closes[:-1]),
-                ),
-            )
-            if len(tr) >= 14:
-                atr = float(_np.mean(tr[-14:]))
-    except Exception as exc:
-        logger.debug(
-            "_compute_sl_tp: signal engine ATR calc failed, trying CSV fallback: %s",
-            exc,
-        )
-
-    # ── 2. CSV fallback ───────────────────────────────────────────────────────
+    # ── 1. H1 CSV written by the market-data scheduler ───────────────────────
     if atr is None:
         try:
             import pathlib
@@ -1004,11 +935,11 @@ def _compute_atr_sl_tp(
                     atr = float(_np.mean(tr[-14:]))
         except Exception as exc:
             logger.debug(
-                "_compute_sl_tp: CSV ATR calc failed, using percentage fallback: %s",
+                "_compute_atr_sl_tp: CSV ATR calc failed, using percentage fallback: %s",
                 exc,
             )
 
-    # ── 3. Percentage fallback ────────────────────────────────────────────────
+    # ── 2. Percentage fallback ────────────────────────────────────────────────
     if atr is None or atr <= 0:
         atr = mid * 0.01  # 1% percentage fallback
 

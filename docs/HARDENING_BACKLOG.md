@@ -6579,3 +6579,78 @@ beside it. They are redundant lines, not broken tests.
 The general rule, same as the one S-42 recorded for `MagicMock` modules: patch
 the real symbol. `create=True` and a `MagicMock` module will both manufacture
 whatever the source is failing to find.
+
+### S-46 — two dead ATR helpers and a tier that never ran — FIXED
+
+`api/ws_live.py` had three ATR routines. Two of them, `_atr_from_buffer` and
+`_atr_from_csv`, were never called from anywhere in the repository — their
+logic had been inlined into `_compute_atr_sl_tp`, and the originals were left
+behind. `_atr_from_buffer` is where the S-41 `_data_buffers` entry came from.
+
+`_compute_atr_sl_tp` itself is live, and its first tier was dead:
+
+```python
+from core.signal_engine import _data_buffers   # exists nowhere in the repo
+```
+
+The import raised on every call and the handler logged it at DEBUG, so the tier
+never ran once. Its own log lines named `_compute_sl_tp`, a function that does
+not exist — left over from a rename.
+
+**What this does not mean.** The first reading was that live stop-losses were
+volatility-blind. They are not:
+
+* `_compute_atr_sl_tp` runs only when the upstream signal did not already carry
+  `stop_loss`/`take_profit`, and
+* its result goes into the WebSocket `type: "signal"` payload the frontend
+  renders — a displayed level, not an order the OMS submits.
+
+* The CSV tier is real. `data/*_H1.csv` is gitignored as "Runtime market data
+  fetched by the scheduler — not source files", so it is absent from a fresh
+  checkout and present in a deployment; `api/ml.py` reads the same files. It
+  was never a dead fallback, only an invisible one in a clean tree.
+
+So the defect is a dead tier, two dead functions and a docstring advertising
+three sources when one worked — worth removing, but not a money-path failure.
+Recorded that way rather than as the emergency it first looked like.
+
+Removed both helpers and the dead tier, corrected the log name, and fixed the
+docstring, which also mis-stated the fallback as "1.5% SL / 3.0% TP" when the
+code substitutes 1% of mid for ATR and then applies the multipliers.
+
+Baseline: 13 -> 12 known entries. The gate flagged the entry as stale before it
+was deleted, which is the loop working as designed.
+
+### S-47 — the admin performance page has never shown a component latency — FIXED
+
+`api/settings_new_endpoints.get_performance_metrics` builds a "components"
+block from
+
+```python
+from health_check_service import _last_health_result   # never existed
+```
+
+`health_check_service` computes health on demand: `_run_all_checks()` gathers
+the seven component probes concurrently, `detailed_health()` returns them, and
+the result was discarded. Nothing ever cached it. So the import raised
+`ImportError` on every call, the surrounding `except Exception` swallowed it,
+and the `components` key was never added to the response.
+
+`get_performance_metrics` is a **sync** route, so it cannot await the probes
+itself. Making it async to run them inline would put seven live checks —
+including Redis, database and data-feed round trips — on every admin page load.
+A cache is the right shape, and the dead import's own name says that is what
+was intended.
+
+`_run_all_checks()` now records its result, so every path that checks health
+refreshes it: `/health/detailed`, the readiness probe, and the standalone
+Docker runner alike. Entries are stored as
+`{name, status, latency_ms, critical}` — `name` and `critical` are not fields
+on `ComponentStatus`, so the cache is built to match the reader rather than the
+model, and `critical` is derived from `_CRITICAL_CHECKS` rather than a copied
+list.
+
+Verified against the real probes: seven components cached, `critical` exactly
+equal to `_CRITICAL_CHECKS`, and the cache empty until the first check runs.
+
+Baseline: 12 -> 11 known entries.

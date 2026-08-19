@@ -65,8 +65,7 @@ def test_kill_switch_module_singleton_is_named_kill_switch():
 
     assert hasattr(ks_mod, "kill_switch"), "the module singleton moved — update _get_kill_switch"
     assert not hasattr(ks_mod, "_instance"), (
-        "an `_instance` alias appeared; the resolver should still prefer the documented "
-        "`kill_switch` singleton"
+        "an `_instance` alias appeared; the resolver should still prefer the documented `kill_switch` singleton"
     )
 
 
@@ -128,8 +127,7 @@ def test_status_calls_is_active_rather_than_testing_its_truthiness():
     source = inspect.getsource(nuclear_controls.get_nuclear_status)
 
     assert 'getattr(ks, "is_active", False)' not in source, (
-        "status tests the truthiness of a bound method, which is always True — "
-        "it must call is_active()"
+        "status tests the truthiness of a bound method, which is always True — it must call is_active()"
     )
     assert "is_active()" in source
 

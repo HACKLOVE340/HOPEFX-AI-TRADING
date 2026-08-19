@@ -707,7 +707,7 @@ def get_performance_metrics(user: TokenPayload = Depends(require_role("admin")))
 
     # ── Component latencies from last health check ────────────────────────────
     try:
-        from health_check_service import _last_health_result  # type: ignore[attr-defined]
+        from health_check_service import _last_health_result
 
         if _last_health_result:
             result["components"] = [
