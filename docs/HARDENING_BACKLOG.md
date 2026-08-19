@@ -7078,3 +7078,96 @@ tree — `models` (.env.example), `ml/saved_models` (retrain_model, run_training
 superadmin/reliability), `ml/models` (hourly_trainer) and `/app/data/models`
 (helm). Whether the components that honour it agree with the ones that do not
 is a separate question worth its own pass.
+
+---
+
+## Round 21 — the Round-2 open list, re-verified
+
+The "Open (lower-priority, documented for next pass)" list at the top of this
+file dates from Round 2. Each item was re-checked against the current tree
+before anything was touched; several needed their severity restated rather than
+their code changed.
+
+### S-56 — Sentry scrubbed three regions and left the three with the most text — FIXED
+
+`monitoring/sentry_config._before_send` scrubbed `request.data`,
+`request.headers` and `extra`. It did not touch:
+
+* **`logentry`** — the log message and its interpolation params. Every
+  `logger.error("auth failed for %s", token)` put the token here verbatim.
+* **`breadcrumbs`** — the trail of log lines and HTTP calls leading up to the
+  error, usually the richest part of an event.
+* **`contexts`** — despite the function's own docstring claiming it scrubbed
+  "request data, extra, and contexts". It never did.
+* **`request.query_string`** — where a token lands when a client passes one in
+  the URL, which this codebase does for WebSocket endpoints (see the still-open
+  item below).
+
+The scrubbing machinery was never the problem: `_scrub_dict` already walks
+nested dicts and lists, and `_scrub_string` already matches Bearer tokens, JWTs,
+32-hex keys, IPv4 and email. It simply was not pointed at most of the event.
+
+All four regions are covered now, including both breadcrumb shapes
+(`{"values": [...]}` from modern SDKs and a bare list from older ones), and the
+docstring is true. 21 tests build events carrying a JWT, a Bearer token, an
+OANDA-shaped key and an email in each region and assert none survive; a
+parametrised case feeds malformed regions through, because raising inside
+`before_send` loses the event entirely.
+
+### S-57 — the affiliate payout task pays a manager that is always empty (OPEN)
+
+The Round-2 list carried two separate items: "persistent audit log for
+subscription/affiliate money actions" and "affiliate payout TOCTOU double-pay
+window". Re-checking collapses them into one sharper finding.
+
+`AffiliateManager.__init__` initialises five dicts and loads nothing:
+
+```python
+self._affiliates = {}; self._referrals = {}; self._payouts = {}
+self._affiliate_codes = {}; self._user_affiliates = {}
+```
+
+`celery_app.affiliate_commission_payout` then does:
+
+```python
+mgr = AffiliateManager()          # fresh instance, all dicts empty
+result = mgr.process_pending_payouts()
+```
+
+while `api/billing.py` and `api/monetization.py` reach the module **singleton**
+`affiliate_manager`. So the scheduled payout runs against a different object
+from the one the API populates, and that object is empty on every run — in a
+separate Celery worker process the singleton would be empty too. Nothing
+persists, so nothing is ever paid.
+
+That reframes the TOCTOU item. `request_payout` does have a genuine race — it
+reads `_calculate_pending_commission`, creates a payout for that amount, then
+marks referrals paid, with no lock, so two concurrent calls both pay the full
+balance. But `request_payout` **has no caller anywhere in the repository**, and
+the path that does run is wrapped in a global `_redis_lock("affiliate_payout")`.
+The race is real in the code and unreachable in the product.
+
+Fixing this is not adding a lock. It is giving the monetization managers
+persistence — which is the original Round-2 item, and a product decision of the
+same shape as S-51: it determines what "paid" means across restarts and across
+processes. Recorded rather than half-built.
+
+### Still open, re-verified, unchanged
+
+* **WebSocket tokens in the query string.** `api/ws_live.py:2118` and `:2246`
+  and `api/gateway.py:291` accept `?token=<jwt>`. Tokens in URLs reach access
+  logs, proxy logs and browser history. Removing the query-string path is a
+  client-compatibility decision, not a repair — the docstrings advertise it as
+  supported. S-56 above at least closes the Sentry leg of the leak.
+* **`execution/redis_state.py` crash recovery.** `load_state_on_boot` restores
+  orders and positions but does not reconcile them against live broker state,
+  and nothing prunes orphaned index members. Real design work: it needs broker
+  access at boot and a stated conflict rule.
+* **Codacy still burns 15 minutes per push.** `timeout-minutes: 15` on both
+  jobs, triggers still `push` + `pull_request` + weekly `schedule` +
+  `workflow_dispatch`. The recommendation from S-37 stands — drop the per-push
+  and per-PR triggers, keep the schedule and dispatch — and remains a spend
+  decision for whoever owns the Actions bill.
+* **k6 load tests run in no workflow.** Confirmed: nothing under
+  `.github/workflows/` references k6. Wiring it in needs a target environment
+  to point at.
