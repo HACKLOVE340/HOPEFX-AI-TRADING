@@ -6894,3 +6894,59 @@ passing and a graph with a cycle, an unknown type, a missing parameter and a
 dangling edge returning all four findings by name.
 
 Baseline: 7 -> 6 known entries.
+
+### S-53 — the news feed has always returned an empty list — FIXED
+
+`api/news_feed.py::_get_news_manager` did:
+
+```python
+from data_layer.feeds.news.base import NewsFeedManager
+mgr = NewsFeedManager()
+```
+
+`base.py` defines `NewsFeedBase`, an abstract class whose one abstract method is
+`fetch_articles`. There is no manager in it, and no `NewsFeedManager` anywhere
+in the repository. The import raised on every call, the handler logged
+"News manager init failed" at WARNING and returned `None`, and all three
+endpoints skipped their work:
+
+```python
+articles = []
+if mgr:
+    ...
+return {"articles": articles[:limit], "total": len(articles)}
+```
+
+There is no fallback, so `/api/news/latest`, `/api/news/feed` and
+`/api/news/nuclear-score` answered empty regardless of configuration.
+
+The five adapters all exist and all implement `fetch_articles(limit)` —
+`FinnhubFeed`, `FMPFeed`, `NewsDataFeed`, `AlphaVantageNewsFeed`,
+`NewsAPIFeed`. What was missing is the piece that queries them together.
+
+`data_layer/feeds/news/manager.py` fans out with `asyncio.gather`, merges on
+`article_id`, sorts newest first and truncates to `limit`. Two translations
+carried the risk:
+
+* the adapters return `NewsArticle` dataclasses (`article_id`, `headline`,
+  `sentiment_label`, `impact_score`) while the endpoints read dicts with
+  different names (`id`, `title`, `sentiment`, `impact`). Getting that mapping
+  wrong would return articles whose fields are all quietly empty — the same
+  shape of failure as the original bug, which is why each key has its own test;
+* `impact_score` is a 0-1 float but `GET /articles` filters on
+  `impact == "low"|"medium"|"high"`, so it is bucketed.
+
+Degradation is explicit: an adapter with no API key is skipped rather than
+called and failed, one failing provider does not lose the others, and no
+configured providers returns `[]` rather than raising.
+
+**On the runtime evidence.** This environment has no news API keys, so the
+endpoints still answer `{"articles": [], "total": 0}` — over HTTP that is
+indistinguishable from the old broken behaviour. The distinction is recorded
+in-process instead: `_get_news_manager()` now returns a `NewsFeedManager` with
+all five adapters constructed and none configured, and "News manager init
+failed" no longer appears in the server log. A keyed environment is needed to
+see articles actually flow; the sixteen unit tests cover that path with stub
+feeds. `evidence/flows/news_feed/runtime-proof.txt`.
+
+Baseline: 6 -> 5 known entries.
