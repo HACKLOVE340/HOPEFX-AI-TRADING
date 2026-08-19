@@ -6838,3 +6838,59 @@ contract and fails if a `DynamicStrategy` model ever appears — which is the
 signal to revisit this decision rather than let the path quietly switch on.
 
 Baseline: 8 -> 7 known entries.
+
+### S-52 — /api/nocode/validate answered "invalid" to everything — FIXED
+
+The endpoint did:
+
+```python
+from nocode.state_machine import StateMachineEngine
+engine = StateMachineEngine()
+result = engine.validate_graph(nodes=request.nodes, edges=request.edges)
+```
+
+Neither name exists. `nocode/state_machine.py` defines `StateMachineBuilder`,
+`StateMachineDefinition`, `State`, `Transition`, `Condition` and `Action` — a
+states-and-transitions builder, not a nodes-and-edges graph validator — and
+`validate_graph` appears nowhere in the repository. The import raised
+`ImportError` on every request, the handler's own `except Exception` caught it,
+and the response was
+
+```json
+{"valid": false, "errors": ["<internal error>"], "warnings": []}
+```
+
+for every input. The builder UI had no working validation, and a caller could
+not distinguish a broken strategy from a broken endpoint — the error branch
+wears the same shape as a genuine finding.
+
+Implemented `nocode/graph_validation.py` against the contract the endpoint's own
+docstring states — "valid node types, proper connections, no cycles in
+execution flow, and required parameters":
+
+* **node types** — checked against the taxonomy, with duplicate-id detection;
+* **required parameters** — each type's declared `params` must be present;
+* **connections** — every edge endpoint must name a real node;
+* **cycles** — iterative DFS with white/grey/black colouring, so a diamond (two
+  paths reconverging) is not mistaken for a loop the way a plain visited-set
+  would be. Self-loops are caught too;
+* **advisories** — an empty graph, or one with no `actions` node, is a warning
+  rather than an error: it is legal but can never place a trade.
+
+It never raises. Malformed input is a finding, not a 500 — turning bad input
+into a server error on a validation endpoint tells the caller the wrong thing.
+
+**The taxonomy moved, deliberately.** All 22 node types were defined inline
+inside the `/node-types` handler. The validator needs the same list, and a
+second copy would drift from the first — the exact failure this backlog keeps
+finding (S-38's resolution chain, S-47's cache, `_executable_lot_ceiling`).
+`NODE_TYPES` now lives in `nocode/graph_validation.py` and `/node-types` serves
+it, so the palette the UI renders and the rules the validator enforces cannot
+disagree. A test asserts the handler no longer carries its own copy.
+
+Proven over HTTP against a running server, not only in unit tests —
+`evidence/flows/nocode_validation/runtime-proof.txt` shows a valid strategy
+passing and a graph with a cycle, an unknown type, a missing parameter and a
+dangling edge returning all four findings by name.
+
+Baseline: 7 -> 6 known entries.
