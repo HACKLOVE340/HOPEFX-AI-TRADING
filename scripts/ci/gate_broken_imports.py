@@ -92,13 +92,6 @@ KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
         "_GLOBAL_REGISTRY",
         "risk.circuit_breakers",
     ): "S-41 reset/force-open call methods CircuitBreaker lacks",
-    ("ml/continuous_learning.py", "train_model", "ml.training"): "S-41 train_ml_pipeline has a different signature",
-    (
-        "ml/training_manager.py",
-        "retrain_advanced_predictor",
-        "ml.train_advanced",
-    ): "S-41 no programmatic retrain entry point",
-    ("ml/training_manager.py", "retrain_lstm", "ml.lstm_signal_layer"): "S-41 no retrain function exists",
     (
         "strategies/dynamic_registry.py",
         "DynamicStrategy",

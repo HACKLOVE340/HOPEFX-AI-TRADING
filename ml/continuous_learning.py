@@ -482,18 +482,21 @@ class RetrainingOrchestrator:
 
             return model_path, metrics
 
-        except ImportError:
-            logger.warning("AdvancedTrainer not available — using fallback training")
-            # Fallback: use the basic training pipeline
-            try:
-                from ml.training import train_model
-
-                model_path = Path(f"ml/saved_models/retrained_{int(time.time())}.pkl")
-                metrics = train_model(training_data, str(model_path))
-                return model_path, metrics
-            except Exception as exc:
-                logger.error("Fallback training failed: %s", exc)
-                return None, {}
+        except ImportError as exc:
+            # There is no second trainer to fall back to. This branch used to
+            # import `train_model` from ml.training, which does not exist; the
+            # nearest real function is `train_ml_pipeline`, and it could not
+            # have served as a fallback either — it takes a pandas DataFrame and
+            # does df.iloc / FeatureEngineer.create_features, while this method
+            # receives an np.ndarray. So the fallback was dead twice over, and
+            # only reachable if ml.train_advanced stopped importing at all,
+            # which is a deployment fault rather than a runtime condition.
+            logger.error(
+                "AdvancedTrainer could not be imported (%s) — no fallback trainer exists, "
+                "so this retrain is abandoned. Check that ml/train_advanced.py imports cleanly.",
+                exc,
+            )
+            return None, {}
         except Exception as exc:
             logger.error("Model training failed: %s", exc)
             return None, {}

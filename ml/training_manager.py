@@ -240,9 +240,27 @@ class TrainingManager:
 
             return retrain_advanced_predictor()
         if model == "lstm_signal":
-            from ml.lstm_signal_layer import retrain_lstm
+            # ml/lstm_signal_layer.py is inference-only — _load, _build_sequence,
+            # predict, stats, is_available. There is no training code in it, and
+            # AGENTS.md's model table records this model as "Architecture
+            # complete, not trained". This used to import a `retrain_lstm` that
+            # does not exist, so the job failed with an ImportError naming a
+            # symbol nobody can find.
+            raise RuntimeError(
+                "lstm_signal has no training implementation: ml/lstm_signal_layer.py "
+                "is inference-only and the model has never been trained. Training it "
+                "requires building a trainer (and PyTorch, which is optional here) — "
+                "see the ML Models table in AGENTS.md."
+            )
 
-            return retrain_lstm()
+        if model in ("rf_macro", "xgb_macro"):
+            # Both are listed in _KNOWN_MODELS, so the caller was told they were
+            # valid, and then fell through to "Unknown model for training".
+            raise RuntimeError(
+                f"{model} is listed in _KNOWN_MODELS but _dispatch_training has no "
+                f"branch for it, so it cannot be trained through this manager. "
+                f"Either add a dispatch branch or remove it from _KNOWN_MODELS."
+            )
         if model in ("rl_ppo", "rl"):
             from ml.rl_agent import RLAgent
             import pandas as pd
