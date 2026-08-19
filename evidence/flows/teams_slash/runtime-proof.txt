@@ -1,0 +1,16 @@
+# teams slash-parity runtime proof
+# captured: 2026-08-19T09:58:24Z
+# revision: 0aeb75737bc888e98548b269c555a2e0b73d6007
+
+## POST /api/teams  — the exact path frontend teamsApi.create() sends
+## BEFORE this change: 405 {"detail":"Method Not Allowed"} on 3/3 attempts
+status=200
+{"team_id":"team_1_1787133504","name":"slash-parity-probe","description":"","owner_id":"b3602fd2-ac57-42dd-a8a1-f7f5a909d58e","member_count":1,"status":"active","created_at":"2026-08-19T09:58:24.69393
+
+## POST /api/teams/ — the originally registered form, must still work
+status=200
+{"team_id":"team_2_1787133504","name":"slash-parity-probe-2","description":"","owner_id":"b3602fd2-ac57-42dd-a8a1-f7f5a909d58e","member_count":1,"status":"active","created_at":"2026-08-19T09:58:24.724
+
+## GET both forms still 200
+GET /api/teams  -> 200
+GET /api/teams/ -> 200
