@@ -7022,3 +7022,59 @@ A note on the measurement: an earlier probe of the same endpoint returned 503
 rather than 405, which was transient startup state. Re-running it three times
 is what produced a trustworthy answer — a single sample would have recorded the
 wrong cause.
+
+### S-55 — a smoke test overwrote committed model artefacts — FIXED
+
+This item began with a wrong premise, and correcting it is most of its value.
+
+The claim was "the test suite dirties tracked model artefacts". Measured, that
+is **false for CI**. From a clean tree:
+
+| Run | Artefacts dirtied |
+|---|---|
+| `pytest tests/unit -m "not slow and not e2e"` (full) | 0 |
+| `pytest tests/integration tests/system -m "not slow and not e2e"` | 0 |
+| `gate_d_model_accuracy.py` | 0 |
+| `gate_m_ml_edge.py` | 0 |
+
+The earlier suspicion pointed at `ml/drift_monitor.py`, which turned out to be a
+*reader* of `feature_stats.json`, not a writer. Bisecting the thirteen test
+functions in `tests/unit/test_ml_training_pipeline.py` found the single real
+writer: `test_retrain_model_smoke_exits_zero`, which shells out to
+`scripts/retrain_model.py --smoke --advanced` and overwrites six tracked files
+in `ml/saved_models/`.
+
+It carries `@pytest.mark.slow`, so CI never selects it — which is why CI stays
+clean and why this went unnoticed. Anyone running `pytest` plainly, or that
+file directly, gets a dirty working tree. That is exactly how three regenerated
+`.pkl`/`.json` artefacts rode along in an unrelated commit earlier in this work
+and had to be reverted.
+
+**The tidier-looking fix is unsafe.** `--model-dir` exists on
+`retrain_model.py` but is only threaded through the *non-advanced* branch; the
+`--advanced/--smoke` path delegates to `ml/train_advanced.py`, whose `MODEL_DIR`
+is hardcoded. The obvious repair — have `train_advanced` honour `ML_MODEL_DIR`
+like `ml/run_training.py` and `ml/hourly_trainer.py` already do — would change
+production behaviour, because that variable is already live:
+
+    .env.example:858              ML_MODEL_DIR=models
+    deployment/helm_chart.py:116  ML_MODEL_DIR: "/app/data/models"
+
+while `ml/advanced_predictor.py` reads models back from `ml/saved_models`. In
+any deployment that sets it, a retrain would start writing where inference does
+not look. So the test cleans up after itself instead: a `_preserve_saved_models`
+fixture snapshots the six artefacts and restores any whose bytes changed.
+
+A companion pair of tests mutates an artefact inside the fixture's scope and
+asserts the scribble is gone afterwards, so the fixture cannot rot into a no-op
+and let the pollution back in quietly.
+
+Verified: `pytest tests/unit/test_ml_training_pipeline.py` with **no** marker
+filter — the slow retrain included — now leaves `git status ml/saved_models/`
+empty. It dirtied three files before.
+
+**Noted, not chased:** `ML_MODEL_DIR` has four different defaults across the
+tree — `models` (.env.example), `ml/saved_models` (retrain_model, run_training,
+superadmin/reliability), `ml/models` (hourly_trainer) and `/app/data/models`
+(helm). Whether the components that honour it agree with the ones that do not
+is a separate question worth its own pass.
