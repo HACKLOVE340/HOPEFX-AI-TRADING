@@ -124,8 +124,7 @@ def test_every_baseline_entry_carries_a_justification():
 
     for key, reason in known.items():
         assert isinstance(reason, str) and len(reason) >= 20, (
-            f"{key} has no usable justification ({reason!r}). Say why it is "
-            f"there and where the fix is tracked."
+            f"{key} has no usable justification ({reason!r}). Say why it is there and where the fix is tracked."
         )
 
 

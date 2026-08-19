@@ -47,12 +47,15 @@ def _get_kill_switch():
                 return app_state.kill_switch
         except Exception:  # nosec B110  # noqa: S110
             pass
-        # Fall back to module-level singleton
+        # Fall back to the module-level singleton. It is named `kill_switch`
+        # (kill_switch.py) — this used to look for `_instance`, which exists
+        # nowhere in that module, so together with the app_state branch above
+        # (AppState defines no kill_switch attribute) this function returned
+        # None on every call and the in-process kill switch was never touched.
         try:
             import kill_switch as _ks_mod
 
-            if hasattr(_ks_mod, "_instance"):
-                return _ks_mod._instance
+            return getattr(_ks_mod, "kill_switch", None)
         except Exception:  # nosec B110  # noqa: S110
             pass
     except Exception:  # nosec B110  # noqa: S110
@@ -90,7 +93,10 @@ async def get_nuclear_status(
     kill_switch_active = False
     kill_switch_reason = None
     if ks is not None:
-        kill_switch_active = bool(getattr(ks, "is_active", False) or getattr(ks, "enabled", False))
+        # is_active is a method: bool(bound method) is always True, so this
+        # reported every kill switch as active once resolution started working.
+        _is_active = getattr(ks, "is_active", None)
+        kill_switch_active = bool(_is_active()) if callable(_is_active) else bool(getattr(ks, "enabled", False))
         kill_switch_reason = getattr(ks, "reason", None)
 
     # Hedge state
@@ -142,8 +148,10 @@ async def nuclear_halt(
     ks = _get_kill_switch()
     if ks is not None:
         try:
+            # activate() is synchronous — awaiting its None return raises
+            # TypeError, which the handler below logged as an activation error.
             if hasattr(ks, "activate"):
-                await ks.activate(reason=reason)
+                ks.activate(reason)
             elif hasattr(ks, "enable"):
                 ks.enable(reason=reason)
         except Exception as exc:
@@ -191,8 +199,9 @@ async def nuclear_resume(
     ks = _get_kill_switch()
     if ks is not None:
         try:
+            # deactivate() is synchronous — see the note in nuclear_halt.
             if hasattr(ks, "deactivate"):
-                await ks.deactivate()
+                ks.deactivate()
             elif hasattr(ks, "disable"):
                 ks.disable()
         except Exception as exc:
