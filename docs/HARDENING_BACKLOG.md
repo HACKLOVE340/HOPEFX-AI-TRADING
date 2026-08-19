@@ -6727,3 +6727,66 @@ for it to control". Either wire `register_circuit_breaker()` into wherever risk
 breakers are constructed, or remove the surface. Leaving a page that reports
 `state: closed` for breakers that do not exist is worse than having no page —
 an operator reads it as evidence the breakers are healthy.
+
+---
+
+## Round 19 — the retrain jobs that always failed
+
+### S-49 — two of four retrain model types could never run (MEDIUM) — FIXED
+
+`TrainingManager._dispatch_training` imported two symbols that do not exist:
+
+```python
+if model == "advanced_oos":
+    from ml.train_advanced import retrain_advanced_predictor   # not defined
+if model == "lstm_signal":
+    from ml.lstm_signal_layer import retrain_lstm              # not defined
+```
+
+Unlike most defects in this backlog these imports are **unguarded**, so each
+raised `ImportError` straight into `_run_training`'s handler, which marked the
+job failed and stored the message. Retrain has never worked for either type.
+
+`ml/train_advanced.py` only ever had the argparse `main()`; there was no
+programmatic entry point. `main()` now takes an optional argv list — so
+`parse_args(argv)` instead of reading `sys.argv`, which a worker thread must not
+depend on — and `retrain_advanced_predictor()` wraps it with the production
+settings AGENTS.md documents (`--years 50 --oos-years 4 --stacking`), returning
+`main()`'s report dict as the job metrics. The CLI is unchanged: `argv` defaults
+to `None`. **This is the real fix — advanced_oos can now be retrained.**
+
+`lstm_signal` cannot be fixed by a rename. `ml/lstm_signal_layer.py` is
+inference-only — `_load`, `_build_sequence`, `predict`, `stats`,
+`is_available` — with no training code anywhere in it, and AGENTS.md's model
+table records the model as "Architecture complete, not trained". It now raises a
+message saying exactly that, instead of an ImportError naming a symbol nobody
+will find. Inventing a trainer for it is real work, not a repair, and is not
+done here.
+
+A third problem sat beside it. `_KNOWN_MODELS` lists six models while
+`_dispatch_training` branches on four: `rf_macro` and `xgb_macro` pass the
+caller's membership check and then fall through to
+`ValueError("Unknown model for training")` — confusing precisely because the
+caller was just told they were known. They now say they are advertised but
+undispatchable, and name the two ways to resolve it.
+
+### S-50 — a fallback that was dead twice over (LOW) — FIXED
+
+`ContinuousLearning._train_model` caught `ImportError` from `AdvancedTrainer`
+and fell back to `from ml.training import train_model`, which does not exist.
+
+Two things make this lower severity than it looks, both verified:
+
+1. **`AdvancedTrainer` does exist**, so the primary path works and the fallback
+   is only reachable if `ml.train_advanced` stops importing altogether — a
+   deployment fault, not a runtime condition.
+2. **The fallback could not have worked even with the right name.** The nearest
+   real function is `train_ml_pipeline`, which takes a pandas DataFrame and
+   calls `df.iloc` and `FeatureEngineer.create_features`; `_train_model`
+   receives an `np.ndarray`. No rename fixes a type mismatch.
+
+So the branch was dead twice over. Replaced with an explicit error saying there
+is no fallback trainer and naming the likely cause, rather than a second import
+that would fail differently.
+
+Baseline: 11 -> 8 known entries.
