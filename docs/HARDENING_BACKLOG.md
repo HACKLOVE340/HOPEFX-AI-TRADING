@@ -6950,3 +6950,75 @@ see articles actually flow; the sixteen unit tests cover that path with stub
 feeds. `evidence/flows/news_feed/runtime-proof.txt`.
 
 Baseline: 6 -> 5 known entries.
+
+---
+
+## Round 20 — the frontend, examined for the first time
+
+303 files under `frontend/src` had never been opened in this work. Baseline
+first: `tsc --noEmit` is clean and `vitest` runs 1629 tests across 68 files, all
+passing. The frontend is in good health.
+
+The useful question was whether it suffers the backend's characteristic defect —
+a call to something that does not exist, failing quietly. So: extract every
+axios call site and check it against the routes the backend actually registers
+at runtime.
+
+The SPA's axios instance sets `baseURL: '/api'`, so call sites use paths without
+that prefix (`api.get('/trading/status')` → `GET /api/trading/status`). A first
+pass that searched for `/api/...` string literals found only nine and was
+therefore measuring nothing; correcting for the baseURL found **644** distinct
+calls.
+
+Of those 644, four did not match a registered route. Three were artefacts of the
+extraction, not defects:
+
+* `GET /endpoint` — inside a JSDoc usage example in `hooks/useFetch.ts`;
+* `GET /payments/crypto/status/` — the call is
+  `api.get('/payments/crypto/status/' + paymentId)`, and
+  `/api/payments/crypto/status/{payment_id}` exists;
+* `POST /alerts/${alert.id}/${action}` — `action` is `pause` or `resume`, and
+  both `/api/alerts/{alert_id}/pause` and `.../resume` exist.
+
+The fourth was real.
+
+### S-54 — creating a team from the UI returned 405 (MEDIUM) — FIXED
+
+`frontend/src/hooks/useApi.ts`:
+
+```ts
+list:   ()     => api.get('/teams'),
+create: (body) => api.post('/teams', body),
+```
+
+`teams/__init__.py` registered the verbs asymmetrically:
+
+```python
+@router.get("")      # GET  /api/teams
+@router.get("/")     # GET  /api/teams/
+@router.post("/")    # POST /api/teams/   <- slash only
+```
+
+So listing teams worked and creating one did not. Confirmed against a running
+server: `POST /api/teams` answered `{"detail":"Method Not Allowed"}` with 405 on
+three consecutive attempts, while `POST /api/teams/` created the team.
+
+`redirect_slashes` did not rescue it, and it is worth being precise about why:
+Starlette issues its slash redirect only when the request would otherwise
+**404**. `/api/teams` is a real path that merely lacks a POST handler, so the
+result is a 405, and 405s are not redirected. Relying on that redirect would
+have been an incorrect assumption — it was tested rather than assumed.
+
+Fixed by stacking `@router.post("")` above `@router.post("/")`, matching what
+`list_teams` already did for GET, so any client works with or without the
+slash. Changing the frontend instead would have fixed one caller and left the
+next one to rediscover this.
+
+Verified over HTTP after the change: both forms return 200 and create a team,
+and both GET forms still return 200.
+`evidence/flows/teams_slash/runtime-proof.txt`.
+
+A note on the measurement: an earlier probe of the same endpoint returned 503
+rather than 405, which was transient startup state. Re-running it three times
+is what produced a trustworthy answer — a single sample would have recorded the
+wrong cause.

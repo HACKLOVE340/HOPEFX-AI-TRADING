@@ -963,6 +963,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/tca/report/{broker}` | JWT |  | tca |
 | `GET` | `/api/tca/stats` | JWT |  | tca |
 | `GET` | `/api/teams` | JWT |  | Teams |
+| `POST` | `/api/teams` | JWT |  | Teams |
 | `GET` | `/api/teams/` | JWT |  | Teams |
 | `POST` | `/api/teams/` | JWT |  | Teams |
 | `POST` | `/api/teams/invitations/accept` | JWT |  | Teams |
