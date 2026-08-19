@@ -92,11 +92,6 @@ KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
         "_GLOBAL_REGISTRY",
         "risk.circuit_breakers",
     ): "S-41 reset/force-open call methods CircuitBreaker lacks",
-    (
-        "strategies/dynamic_registry.py",
-        "DynamicStrategy",
-        "database.models",
-    ): "S-41 no such model or migration; registry is memory-only",
 }
 
 

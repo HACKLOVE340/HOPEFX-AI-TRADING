@@ -6790,3 +6790,51 @@ is no fallback trainer and naming the likely cause, rather than a second import
 that would fail differently.
 
 Baseline: 11 -> 8 known entries.
+
+### S-51 — dynamic strategies never persisted, and enabling it is a security decision (OPEN decision, code made honest)
+
+`DynamicStrategyRegistry` reads as if it stores registered strategies. It does
+not, and never has. The database path is dead for three independent reasons:
+
+1. **No model.** `_load_from_database` and `_persist_version` both did
+   `from database.models import DynamicStrategy`. `database/models.py` defines
+   nineteen models and not that one.
+2. **No table.** Nothing under `alembic/` references a dynamic-strategy table.
+3. **No session factory.** `_db_session_factory` is assigned only by
+   `DynamicStrategyRegistry.start()`, and **`start()` is called from nowhere** —
+   not in production, not in tests. `api/dynamic_strategies.py` reaches the
+   registry through `get_dynamic_registry()`, which constructs the singleton
+   lazily and never starts it. Both methods returned at their first guard,
+   before the missing import was ever evaluated.
+
+`_redis` comes from the same unused `start()`, so the cross-pod sync in
+`_publish_update` is inert too. Registered strategies live in `self._versions`
+and `self._active`, are lost on restart, and `POST /register` reports success.
+
+**Why this was not simply "add the model and a migration".**
+
+`/register` accepts `source_code: str` — Python source, which the registry
+compiles through `_compile_strategy` after `_validate_safety`. The body that
+was in `_load_from_database` re-compiled every record whose state was ACTIVE,
+at startup. So enabling persistence means caller-supplied Python is stored in
+the database and executed on every boot, which converts any future gap in
+`_validate_safety` from a live-process problem into one that survives restarts
+and reboots cleanly into the same code.
+
+That is a decision for the product owner. The endpoints are role-gated
+(`_router_require_role("trader")` on the router, `_require_admin()` on
+register), so this is not an unauthenticated path — but "admin can persist code
+that runs at every startup" is still a different security posture from "admin
+can run code in the current process", and it should be chosen deliberately.
+
+**What changed here:** the dead database code is removed and the memory-only
+behaviour is stated in both methods. The methods and their six call sites stay
+in place, so wiring persistence later means filling them in rather than
+rediscovering where they belong, and `_load_from_database` now warns if a
+session factory is ever supplied while persistence remains unimplemented.
+
+`tests/unit/test_dynamic_registry_is_memory_only.py` pins the memory-only
+contract and fails if a `DynamicStrategy` model ever appears — which is the
+signal to revisit this decision rather than let the path quietly switch on.
+
+Baseline: 8 -> 7 known entries.

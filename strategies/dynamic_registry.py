@@ -602,90 +602,39 @@ class DynamicStrategyRegistry:
     # ── Persistence ───────────────────────────────────────────────────────────
 
     async def _load_from_database(self) -> None:
-        """Load all strategy versions from the database on startup."""
-        if not self._db_session_factory:
-            logger.debug("DynamicStrategyRegistry: no DB session factory — skipping load")
-            return
+        """No-op: the registry is memory-only. Persistence is not implemented.
 
-        try:
-            from database.models import DynamicStrategy
+        This used to query ``database.models.DynamicStrategy``, which does not
+        exist — `database/models.py` defines nineteen models and not that one,
+        and no migration creates a table for it. The method never reached that
+        import anyway: ``_db_session_factory`` is assigned only by ``start()``,
+        and ``start()`` is called from nowhere, so the guard returned first.
 
-            session = self._db_session_factory()
-            try:
-                records = session.query(DynamicStrategy).all()
-                for record in records:
-                    version = StrategyVersion(
-                        version_id=record.version_id,
-                        name=record.name,
-                        source_code=record.source_code,
-                        source_hash=record.source_hash,
-                        symbol=record.symbol,
-                        timeframe=record.timeframe,
-                        author_id=record.author_id,
-                        state=StrategyState(record.state),
-                        created_at=record.created_at,
-                        activated_at=record.activated_at,
-                    )
-                    # Re-compile active strategies
-                    if version.state == StrategyState.ACTIVE:
-                        try:
-                            version.instance = self._compile_strategy(version.name, version.source_code)
-                            self._active[version.name] = version
-                        except Exception as exc:
-                            logger.error(
-                                "Failed to recompile active strategy %s: %s",
-                                version.name,
-                                exc,
-                            )
-                            version.state = StrategyState.FAILED
-                            version.validation_errors = [f"Recompilation failed: {exc}"]
+        Re-enabling this is a product decision, not a repair. The body that was
+        here re-compiled every ACTIVE record's ``source_code`` at startup via
+        ``_compile_strategy``. Since ``/register`` accepts Python source from a
+        caller, persisting it would mean user-supplied code stored in the
+        database and executed on every boot — turning any future gap in
+        ``_validate_safety`` into a problem that survives restarts.
 
-                    self._versions[version.version_id] = version
-
-                logger.info("DynamicStrategyRegistry: loaded %d versions from DB", len(records))
-            finally:
-                session.close()
-        except ImportError:
-            logger.debug("DynamicStrategy model not available — skipping DB load")
-        except Exception as exc:
-            logger.warning("DynamicStrategyRegistry: DB load failed: %s", exc)
+        Kept as a method with its two call sites intact so wiring persistence
+        later is filling this in, not rediscovering where it belongs.
+        See S-51 in docs/HARDENING_BACKLOG.md.
+        """
+        if self._db_session_factory is not None:
+            logger.warning(
+                "DynamicStrategyRegistry: a DB session factory was supplied but "
+                "persistence is not implemented — strategies remain in memory only. "
+                "See S-51 in docs/HARDENING_BACKLOG.md."
+            )
 
     async def _persist_version(self, version: StrategyVersion) -> None:
-        """Persist a strategy version to the database."""
-        if not self._db_session_factory:
-            return
+        """No-op: the registry is memory-only. See ``_load_from_database``.
 
-        try:
-            from database.models import DynamicStrategy
-
-            session = self._db_session_factory()
-            try:
-                record = session.query(DynamicStrategy).filter(DynamicStrategy.version_id == version.version_id).first()
-                if record:
-                    record.state = version.state.value
-                    record.activated_at = version.activated_at
-                    record.source_hash = version.source_hash
-                else:
-                    record = DynamicStrategy(
-                        version_id=version.version_id,
-                        name=version.name,
-                        source_code=version.source_code,
-                        source_hash=version.source_hash,
-                        symbol=version.symbol,
-                        timeframe=version.timeframe,
-                        author_id=version.author_id,
-                        state=version.state.value,
-                        created_at=version.created_at,
-                        activated_at=version.activated_at,
-                    )
-                    session.add(record)
-                session.commit()
-            finally:
-                session.close()
-        except ImportError:
-            logger.debug("DynamicStrategy model not available — skipping persist")
-        except Exception as exc:
-            logger.warning("DynamicStrategyRegistry: persist failed: %s", exc)
+        Called from register, activate and deactivate. It used to write to
+        ``database.models.DynamicStrategy``, which does not exist.
+        """
+        return
 
     # ── Cross-pod synchronization ─────────────────────────────────────────────
 
