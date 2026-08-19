@@ -6461,3 +6461,121 @@ defect, fails the gate too, so fixing an import forces its entry to be deleted
 in the same change instead of lingering to mask the next one.
 `tests/unit/test_gate_broken_imports_baseline.py` pins both properties, plus the
 requirement that every entry carries a justification and an `S-NN` reference.
+
+---
+
+## Round 17 — the tests that manufactured the missing symbols
+
+Round 16 fixed the imports. This round asks the next question: how did they stay
+broken? The answer is that several tests created the missing symbol themselves.
+
+### S-43 — superadmin nuclear controls could never reach the kill switch (HIGH) — FIXED
+
+`_get_kill_switch()` in `api/superadmin/nuclear_controls.py` has two resolution
+branches and neither can succeed:
+
+```python
+from api.admin import app_state
+if app_state and hasattr(app_state, "kill_switch"):   # AppState has no such attribute
+    return app_state.kill_switch
+
+import kill_switch as _ks_mod
+if hasattr(_ks_mod, "_instance"):                      # the singleton is `kill_switch`
+    return _ks_mod._instance
+```
+
+`AppState.__init__` never defines `kill_switch`, and nothing in the tree assigns
+`app_state.kill_switch` — the only `.kill_switch =` in the repo is on
+`PropEngine`, a different object. `kill_switch.py:1383` names its singleton
+`kill_switch`; `_instance` appears nowhere in that module. Both branches are
+`hasattr`-guarded, so nothing raises: the function returns `None` on every call.
+
+`POST /nuclear/halt` therefore never activates the in-process kill switch. It
+still writes the Redis latch, and `KillSwitch` polls that latch and activates
+from it — which is why the halt appeared to work and nobody noticed. But the
+in-process path is dead, so **with Redis unavailable the superadmin emergency
+halt does nothing but write a log line**.
+
+Two further defects sat behind that one, and repairing resolution alone would
+have made the endpoint worse rather than better:
+
+1. `nuclear_halt` called `await ks.activate(reason=reason)` and `nuclear_resume`
+   called `await ks.deactivate()`. Both methods are synchronous —
+   `activate(self, reason: str = "manual activation") -> None`. Awaiting their
+   `None` return raises `TypeError`, which the surrounding `except Exception`
+   logs as "Kill switch activate error". Activation would have kept failing, in
+   a new way, the moment resolution started working.
+
+2. `get_nuclear_status` computed
+   `bool(getattr(ks, "is_active", False) or getattr(ks, "enabled", False))`.
+   `is_active` is a **method**, and a bound method is always truthy, so a
+   working resolver would have reported the kill switch as permanently ACTIVE
+   to every superadmin — strictly worse than the current always-None behaviour.
+   (`enabled` does not exist; `reason` does.)
+
+All three are fixed together. `tests/unit/test_superadmin_nuclear_controls_resolution.py`
+pins the singleton name, the absence of `AppState.kill_switch` (so adding one
+becomes a deliberate signal rather than a silent change), the synchronous call
+shape, and the called predicate.
+
+### S-44 — the kill-switch load tests proved a path that does not exist — FIXED
+
+`tests/unit/test_kill_switch_load.py::TestBrokerCancelAll` is the suite that
+should have caught S-38. Every one of its cases did this:
+
+```python
+with patch("execution.engine.get_active_broker", fake, create=True):
+    ...
+eng.get_active_broker = fake_get_active_broker
+```
+
+`create=True` means "this attribute does not exist — create it anyway", and
+that is exactly the situation: `execution/engine.py` defines `ExecutionEngine`
+and no module-level accessor. So the tests manufactured step 1 of the
+resolution chain, exercised it, and asserted `cancel_all_orders` was called.
+Step 3 — `core.app_state.app_state.broker`, the only step that resolves in
+production — was never touched; the string `app_state` did not appear in the
+file. The suite would have passed identically whether or not the kill switch
+could reach a broker at all.
+
+Added a case that resolves through `app_state`, and fixed
+`test_broker_cancel_all_no_engine_no_router`, which nulled the two module
+imports but left `app_state.broker` set — so it asserted nothing once step 3
+existed.
+
+The manufactured-symbol cases are kept: they now legitimately cover the
+forward-compatibility branches, and the new case says which path is which.
+
+### S-45 — a test named for a feature that does not exist — FIXED
+
+`test_drawdown_warning_triggers_fcm` patched `risk.manager.push_manager` and
+`risk.manager._device_tokens`, both with `create=True`. Neither name exists in
+`risk/manager.py`, which sends no push notifications at all — its drawdown
+alerting goes through `_send_telegram_alert`. `push_manager` lives in
+`mobile.push_notifications` and is used only by `api/mobile.py`;
+`send_drawdown_warning` exists nowhere in the tree.
+
+So the test created two attributes nothing reads, built a mock it never
+asserted against, and checked one real thing: that an 11% drawdown blocks
+trading. Renamed to `test_drawdown_over_limit_blocks_trading` and the dead
+patches removed.
+
+### What this round says about the test suite
+
+`patch(..., create=True)` is the mechanism worth watching. It is sometimes
+correct — patching an optional dependency that may not be installed
+(`market_data.mt5_live_feed.websocket`) is a legitimate use, and 4 of the 10
+audited targets exist and are patched properly. But it is also the one flag
+that turns "this symbol is missing" into "this test passes".
+
+Audited: 17 `create=True` sites across 9 files; 6 targets missing. Two were real
+(S-44, S-45). Two more — `api.billing.db_get`/`db_set` and
+`core.startup_factories.validate_and_report` — are **not** defects: both target
+names that production imports inside a function body, so the module-level patch
+has no effect, and in both cases an effective patch (a `sys.modules` entry, or
+the correctly-targeted `core.env_validator.validate_and_report`) sits right
+beside it. They are redundant lines, not broken tests.
+
+The general rule, same as the one S-42 recorded for `MagicMock` modules: patch
+the real symbol. `create=True` and a `MagicMock` module will both manufacture
+whatever the source is failing to find.
