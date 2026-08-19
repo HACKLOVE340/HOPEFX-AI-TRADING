@@ -6654,3 +6654,76 @@ Verified against the real probes: seven components cached, `critical` exactly
 equal to `_CRITICAL_CHECKS`, and the cache empty until the first check runs.
 
 Baseline: 12 -> 11 known entries.
+
+---
+
+## Round 18 — the first time the app was actually run
+
+Every finding up to here came from static analysis plus targeted in-process
+reproductions. This round boots the API and drives it.
+
+`python run.py --mode api` against local config — `APP_ENV=development`,
+`BROKER_TYPE=paper`, `OANDA_API_KEY` empty so no live broker is reachable.
+Transcript: `evidence/flows/runtime_proof/runtime-proof.txt`.
+
+The system comes up healthy: redis, database, data_feed, broker
+(`balance=100000.0`), event_bus, kill_switch (`inactive`) and disk all `ok`.
+
+Two things worth recording before the finding.
+
+**The route surface is larger than static analysis showed.** 992 paths are
+registered at runtime; an AST scan of `api/*.py` found 745. The ~25% difference
+is routes registered dynamically at startup, which no static sweep in this
+backlog has ever covered.
+
+**S-47 confirmed against the running server.** `GET
+/api/admin/settings/performance` now returns a `components` block with all seven
+probes and their latencies — an endpoint that had never returned that key.
+
+**2FA holds.** `GET /api/superadmin/nuclear/status` refuses a valid superadmin
+bearer token without a TOTP code. That is correct, and it means S-43's fix is
+proven in-process by its tests but not over HTTP; driving halt/resume would
+require circumventing a deliberate control, which was not done.
+
+### S-48 — the superadmin circuit-breaker page shows fabricated state (MEDIUM) — OPEN
+
+`GET /api/superadmin/risk/circuit-breakers` returned, on the live server:
+
+```json
+{"circuit_breakers":[{"name":"daily_drawdown","state":"closed","failure_count":0,
+ "threshold":3}, {"name":"total_drawdown",...,"threshold":1}, {"name":"order_rate",
+ ...,"threshold":10}, ...]}
+```
+
+That is not live state. It is the hardcoded bootstrap list at the bottom of
+`_load_cb_states()`, reached because both tiers above it are empty:
+
+1. **Live registry** — `get_circuit_breakers()` returns `risk.circuit_breakers._registry`,
+   and **`register_circuit_breaker()` is called by nothing in the repository**.
+   The registry is permanently `{}`. Confirmed at runtime: `_registry == {}`.
+2. **Redis cache** — only written by the reset/force-open handlers, which are
+   themselves no-ops (S-41), so on a clean deployment there is nothing to read.
+3. **Hardcoded list** — what the operator actually sees.
+
+Note the name collision that makes this easy to misread:
+`risk.circuit_breakers.CircuitBreaker(broker, redis_client)` and
+`data_layer.orchestrator`'s `CircuitBreaker(name, failure_threshold,
+recovery_timeout)` are **different classes**. The orchestrator constructs eight
+of its own; none of them are in the risk registry, and none would satisfy the
+risk breaker's interface.
+
+Round 16 fixed the import in the live tier — it named `_GLOBAL_REGISTRY`, which
+does not exist — but that fix is inert while nothing registers a breaker. The
+import was still worth correcting; it just does not change what the page shows.
+
+So the whole superadmin circuit-breaker surface is decorative: it displays a
+fixed list as if it were live, and its reset and force-open buttons call methods
+`CircuitBreaker` does not define and persist to a cache of that fixed list.
+
+This is now part of the open decision recorded under S-41. The question is not
+only "what should reset and force-open mean against `manual_override`" but
+"should this page exist in its current form, given nothing registers a breaker
+for it to control". Either wire `register_circuit_breaker()` into wherever risk
+breakers are constructed, or remove the surface. Leaving a page that reports
+`state: closed` for breakers that do not exist is worse than having no page —
+an operator reads it as evidence the breakers are healthy.
