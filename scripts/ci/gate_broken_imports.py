@@ -86,7 +86,6 @@ KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
         "NewsFeedManager",
         "data_layer.feeds.news.base",
     ): "S-41 no manager class exists; NewsFeedBase is abstract",
-    ("api/nocode.py", "StateMachineEngine", "nocode.state_machine"): "S-41 validate_graph exists nowhere in the repo",
     (
         "api/superadmin/risk_management.py",
         "_GLOBAL_REGISTRY",

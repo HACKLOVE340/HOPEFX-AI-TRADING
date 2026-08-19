@@ -195,11 +195,9 @@ async def validate_strategy(
     and required parameters.
     """
     try:
-        from nocode.state_machine import StateMachineEngine
+        from nocode.graph_validation import validate_graph
 
-        engine = StateMachineEngine()
-        result = engine.validate_graph(nodes=request.nodes, edges=request.edges)
-        return result
+        return validate_graph(request.nodes, request.edges)
     except Exception as e:
         # Genuine validation findings come back inside `result` above. Reaching
         # here means the engine itself failed, so this is an internal error
@@ -223,84 +221,8 @@ async def get_node_types(user: TokenPayload = Depends(get_current_user)):
     authentication rather than the professional gate so the builder UI can
     render its palette for an upgrade preview.
     """
-    node_types = {
-        "indicators": [
-            {"id": "rsi", "name": "RSI", "params": ["period"], "outputs": ["value"]},
-            {
-                "id": "macd",
-                "name": "MACD",
-                "params": ["fast", "slow", "signal"],
-                "outputs": ["macd", "signal", "histogram"],
-            },
-            {"id": "atr", "name": "ATR", "params": ["period"], "outputs": ["value"]},
-            {
-                "id": "bollinger",
-                "name": "Bollinger Bands",
-                "params": ["period", "std_dev"],
-                "outputs": ["upper", "middle", "lower"],
-            },
-            {"id": "ema", "name": "EMA", "params": ["period"], "outputs": ["value"]},
-            {"id": "sma", "name": "SMA", "params": ["period"], "outputs": ["value"]},
-            {"id": "stochastic", "name": "Stochastic", "params": ["k_period", "d_period"], "outputs": ["k", "d"]},
-            {"id": "adx", "name": "ADX", "params": ["period"], "outputs": ["value", "plus_di", "minus_di"]},
-        ],
-        "conditions": [
-            {"id": "crossover", "name": "Crossover", "inputs": ["line_a", "line_b"], "outputs": ["signal"]},
-            {
-                "id": "threshold",
-                "name": "Threshold",
-                "inputs": ["value"],
-                "params": ["level", "direction"],
-                "outputs": ["signal"],
-            },
-            {
-                "id": "time_filter",
-                "name": "Time Filter",
-                "params": ["start_hour", "end_hour", "days"],
-                "outputs": ["allowed"],
-            },
-            {"id": "spread_filter", "name": "Spread Filter", "params": ["max_spread_pips"], "outputs": ["allowed"]},
-        ],
-        "actions": [
-            {"id": "buy", "name": "Buy", "inputs": ["signal"], "params": ["lot_size"]},
-            {"id": "sell", "name": "Sell", "inputs": ["signal"], "params": ["lot_size"]},
-            {"id": "close_all", "name": "Close All", "inputs": ["signal"]},
-            {"id": "trailing_stop", "name": "Trailing Stop", "inputs": ["position"], "params": ["distance_pips"]},
-        ],
-        "ml_nodes": [
-            {
-                "id": "ml_predict",
-                "name": "ML Prediction",
-                "params": ["model_name", "confidence_threshold"],
-                "outputs": ["prediction", "confidence"],
-            },
-            {
-                "id": "sentiment_score",
-                "name": "Sentiment Score",
-                "params": ["source"],
-                "outputs": ["score", "direction"],
-            },
-            {
-                "id": "anomaly_detect",
-                "name": "Anomaly Detection",
-                "params": ["sensitivity"],
-                "outputs": ["is_anomaly", "score"],
-            },
-        ],
-        "risk": [
-            {
-                "id": "position_size",
-                "name": "Position Sizer",
-                "params": ["risk_percent", "method"],
-                "outputs": ["lot_size"],
-            },
-            {"id": "max_drawdown", "name": "Max Drawdown Guard", "params": ["max_dd_percent"], "outputs": ["allowed"]},
-            {
-                "id": "correlation_filter",
-                "name": "Correlation Filter",
-                "params": ["max_correlation"],
-                "outputs": ["allowed"],
-            },
-        ],
-    }
-    return {"node_types": node_types}
+    # The taxonomy lives in nocode/graph_validation.py so the palette this
+    # endpoint renders and the rules /validate enforces cannot drift apart.
+    from nocode.graph_validation import NODE_TYPES
+
+    return {"node_types": NODE_TYPES}
