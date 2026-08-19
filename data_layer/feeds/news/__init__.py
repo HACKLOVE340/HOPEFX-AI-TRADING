@@ -62,8 +62,15 @@ except Exception as _exc:
     logger.debug("data_layer.feeds.news: NewsAPIFeed unavailable: %s", _exc)
     NewsAPIFeed = None  # type: ignore[assignment,misc]
 
+try:
+    from data_layer.feeds.news.manager import NewsFeedManager
+except Exception as _exc:
+    logger.debug("data_layer.feeds.news: NewsFeedManager unavailable: %s", _exc)
+    NewsFeedManager = None  # type: ignore[assignment,misc]
+
 __all__ = [
     "AlphaVantageNewsFeed",
+    "NewsFeedManager",
     "FMPFeed",
     "FinnhubFeed",
     "NewsAPIFeed",

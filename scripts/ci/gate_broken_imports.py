@@ -82,11 +82,6 @@ KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
     ): "S-41 admin password reset; module is functions, needs a reset token",
     ("api/admin.py", "get_email_service", "core.email_service"): "S-41 SMTP test; no public generic send_email",
     (
-        "api/news_feed.py",
-        "NewsFeedManager",
-        "data_layer.feeds.news.base",
-    ): "S-41 no manager class exists; NewsFeedBase is abstract",
-    (
         "api/superadmin/risk_management.py",
         "_GLOBAL_REGISTRY",
         "risk.circuit_breakers",
