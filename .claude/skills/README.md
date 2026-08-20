@@ -38,6 +38,84 @@ verbatim under `licenses/`.
 
 ---
 
+## Second wave: production-discipline and domain skills
+
+58 skills total. The first wave (below) covered repo workflow; this wave was
+selected against a measured profile of the codebase rather than by guesswork.
+
+### What the repo profile said
+
+| Signal | Measured | Skills it justified |
+|---|---|---|
+| `api/` 60,986 LOC — **916 endpoints, 93 routers** | | `fastapi-templates`, `api-design-principles` |
+| `async def` 1878 · `await` 1588 · **`asyncio.create_task` 277** | | `async-python-patterns`, `python-resource-management` |
+| **1769** broad `except` in api/execution/risk/brokers/ml | | `python-error-handling`, `python-anti-patterns`, `python-resilience` |
+| **867** `float()` casts in execution/risk/brokers vs 5 `Decimal` imports | | **`hopefx-money-precision`** (custom) |
+| `ml/` 31,728 LOC · **322** drift refs · 40 committed models | | `ml-pipeline-workflow` |
+| 19 celery files | | `python-background-jobs` |
+| stripe + `monetization/` 9,510 LOC | | `pci-compliance`, `stripe-integration` |
+| k8s + helm + kubernetes-asyncio | | `k8s-security-policies` |
+| Deep OTel + prometheus-client + structlog + sentry | | `python-observability`, `distributed-tracing`, `prometheus-configuration`, `slo-implementation` |
+| `data_layer/` 19,610 LOC | | `data-quality-frameworks` |
+| **338 invariant predicates across 34 modules** | | **`hopefx-invariants`** (custom) |
+| `brokers/ibkr_fix_bridge.py` + quickfix/simplefix | | **`hopefx-fix-bridge`** (custom) |
+
+### Three custom skills — written for this repo, nothing equivalent exists
+
+| Skill | Covers |
+|---|---|
+| `hopefx-money-precision` | The Decimal/float split (payments+OMS are Decimal, `risk/manager.py` and the FIX wire are float), the conversion boundary at `execution/oms.py:254,258,411,412`, why the `tol=0.01` reconciliation tolerances exist and must never be widened, and the 841 `==` monetary assertions in `tests/` |
+| `hopefx-invariants` | The constitution: pure `verify_*` predicates → `enforcement.py` decides; auto-discovery by naming convention; `CONSTITUTIONAL`/`CRITICAL` block and `WARNING` does not; `HOPEFX_INVARIANT_MODE` defaults to `monitor`; finite-guard-before-compare because `NaN > tol` is `False` |
+| `hopefx-fix-bridge` | Session state lifetime — `IBKR_FIX_STORE_PATH` defaults under `$TMPDIR`, so changing `reset_on_logon` without moving it to a persistent volume is a live outage; port 4001/7496 vs 4002/7497 is the only thing separating live from paper; `latency_threshold_ms` is a risk limit, not a metric |
+
+Every factual claim in these three was verified against the codebase by an
+assertion script (26 checks: line numbers, constants, defaults, predicate count,
+file lengths). Re-run that verification after any refactor that moves the cited
+lines — a skill that cites a stale line number is worse than no skill.
+
+**Caveat on method:** `writing-skills` mandates baseline-testing new skills
+against subagents before deployment. That was not done — subagent dispatch was
+unavailable. These three are reference skills verified for factual accuracy, not
+discipline skills pressure-tested for compliance.
+
+### Removed as actively harmful to this repo
+
+Installed, evaluated, then deleted. Do not re-add without re-reading this.
+
+| Skill | Why |
+|---|---|
+| `finishing-a-development-branch` | Offers "Merge back to `<base-branch>` locally" and runs `git merge`. This repo mandates work on a designated branch and forbids pushing elsewhere without permission. |
+| `using-superpowers` | Mandates invoking a skill before *any* response including clarifying questions, framed as non-negotiable. A forced preamble on every turn in a 608k-LOC repo. |
+| `subagent-driven-development`, `dispatching-parallel-agents` | Push toward spawning agents, which the operating rules here forbid unless explicitly requested. |
+
+### Also fixed on the way in
+
+Six links that ship broken upstream: `on-call-handoff-patterns` and
+`sast-configuration` referenced sibling skills (`postmortem-facilitation`,
+`dependency-scanning`, `owasp-top10-checklist`, `container-security`) that exist
+nowhere in `wshobson/agents`; `writing-skills` referenced a file inside a skill
+removed above. Repointed at real siblings and at this repo's `pip-audit` + Trivy
+setup. `postgresql/` renamed to `postgresql-table-design/` to match its frontmatter.
+
+### Provenance — second wave
+
+| Upstream | Commit | Licence | Taken |
+|---|---|---|---|
+| `obra/superpowers` | `b36e082` | MIT — `licenses/superpowers.MIT.txt` | 10 of 14 |
+| `wshobson/agents` | `367cb6a` | MIT — `licenses/wshobson-agents.MIT.txt` | 35 of 181 |
+| `anthropics/skills` | `0a64e39` | Apache-2.0 — `licenses/anthropics-skills.Apache-2.0.txt` | 2 of 20 |
+| `tradingview/lightweight-charts` | `.github/skills/` | Apache-2.0 — `licenses/lightweight-charts.txt` | 1 |
+
+Rejected wholesale: 15 ccxt Binance Web3/Pay skills (they trigger on "market
+order", "limit order", "cancel order" and then give Binance wallet instructions —
+a mis-trigger hazard in an execution codebase), 4 OpenBB skills (no YAML
+frontmatter; they are MCP prompts, not Claude Code skills), 1 Jesse skill
+(documents Jesse's own test layout), and 146 wshobson skills for stacks this repo
+does not use.
+
+
+---
+
 ## Local patches
 
 Anything below diverges from upstream. Re-apply it after a version bump.
