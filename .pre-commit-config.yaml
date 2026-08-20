@@ -105,10 +105,12 @@ repos:
         language: python
         entry: python scripts/pre_commit_healer.py
         types: [python]
-        # Exclude test files, examples, and generated code — the healer only
-        # checks production source files for stubs, TODOs, and mock classes.
+        # Exclude test files, examples, generated code, and vendored agent
+        # skills — the healer only checks production source files for stubs,
+        # TODOs, and mock classes.
         exclude: >-
           (?x)^(
+            \.claude/.*|
             tests/.*|
             examples/.*|
             scripts/.*|
@@ -128,9 +130,11 @@ repos:
         entry: python scripts/pre_commit_coverage.py
         types: [python]
         # Only run on production source files that have corresponding test files.
-        # Excluded: tests, scripts, examples, generated/infra code.
+        # Excluded: tests, scripts, examples, generated/infra code, vendored
+        # agent skills under .claude/.
         exclude: >-
           (?x)^(
+            \.claude/.*|
             tests/.*|
             examples/.*|
             scripts/.*|

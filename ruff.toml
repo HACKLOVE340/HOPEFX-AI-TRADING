@@ -14,6 +14,10 @@ exclude = [
     ".venv",
     ".greptile.py",
     "examples",
+    # Vendored agent-skill code under .claude/skills/ tracks its upstream
+    # projects verbatim; reformatting it to our rules would make it
+    # undiffable against upstream on the next version bump.
+    ".claude",
 ]
 
 [lint]
