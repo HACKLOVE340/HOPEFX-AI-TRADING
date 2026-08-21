@@ -1589,3 +1589,75 @@ Severity HIGH: 16 features that reach the ML pipeline are computed over a
 sampling process determined by cache behaviour and request volume. This is not a
 crash — it is silent, and it would look like a plausible feature series in any
 downstream inspection.
+
+## F88 — the strategy plan gate: the agent got the direction right and the path wrong · CORRECTED (proven by execution)
+AGENT CLAIM #10: "Plan-gate key miss defaults to 'starter' (fail-open on
+entitlement); the live brain path never passes user_plan at all, so only starter
+strategies ever run."
+
+Both halves are true *of `StrategyManager`*. Neither describes the production
+path, because the object injected into the brain in production is not a
+`StrategyManager`. Traced the call graph rather than trusting it:
+
+`brain/brain.py:853` is the ONLY call site (verified by grep across the repo):
+    signals = await asyncio.wait_for(
+        self.strategy_manager.generate_signals(self.state.market_regime,
+                                               self.price_engine), timeout=10.0)
+Two positional args, no `user_plan`. But `self.strategy_manager` is duck-typed
+and there are two different classes that can land there:
+
+PATH 1 — the FastAPI production path. core/startup_factories.py:1744:
+    strategy_manager = getattr(s, "strategy_brain", None)
+    b.inject_components(..., strategy_manager=strategy_manager, ...)
+`s.strategy_brain` is built by `init_strategy_brain` (:1513-1529) and is a
+**StrategyBrain**, registering MA_Crossover, RSI, MACD, BB.
+`strategies/strategy_brain.py` contains NO occurrence of "plan", "PLAN" or
+"tier" anywhere — its `generate_signals(market_regime, price_engine)` (:495) has
+no entitlement check of any kind.
+=> On the real API path the tier gate does not fail open. It is ABSENT.
+   `STRATEGY_PLAN_REQUIREMENTS` and the `_plan_satisfies` check at
+   strategies/manager.py:606-614 are DEAD CODE in production — the only caller
+   never holds a StrategyManager. A reader auditing manager.py would conclude
+   tiers are enforced on signal generation; they are not enforced anywhere.
+
+PATH 2 — the standalone engine. hopefx_engine.py:396-400:
+    sm = StrategyManager()
+    self._brain.inject(strategy_manager=sm)
+    logger.info("StrategyManager injected into brain (%d strategies)", ...)
+`preload_defaults` defaults to False (manager.py:465), so nothing is registered.
+PROVEN (scratchpad/f10.py):
+    hopefx_engine.py:398  StrategyManager()  -> strategies registered: 0
+The engine injects an EMPTY strategy manager and announces it at INFO as
+"(0 strategies)". `generate_signals` iterates `self.strategies.values()` over an
+empty dict and returns []. The standalone engine generates no strategy signals
+at all. This is the most consequential fact here and the agent did not report it.
+
+PATH 3 — the degraded fallback. `init_strategy_brain` is registered
+`required=False` (startup_factories.py:2699), so when it fails, :1797
+`sm = s.strategy_brain or StrategyManager(preload_defaults=True)` yields a real
+StrategyManager with three strategies. There the gate DOES fire, at the
+`user_plan="starter"` default:
+    TrendFollowing   starter        True
+    MeanReversion    professional   False   <-- silenced
+    Breakout         professional   False   <-- silenced
+Two of three strategies are dropped, logged at `logger.debug` (manager.py:608),
+i.e. invisible at the default log level.
+
+THE FAIL-OPEN (agent's first half) is real and is LATENT:
+    required = STRATEGY_PLAN_REQUIREMENTS.get(strategy.name, "starter")
+A strategy whose name is absent from the table is granted to the lowest tier.
+The names actually used elsewhere in the codebase do not match the table —
+StrategyBrain registers "MA_Crossover", "RSI", "BB" while the table lists
+"EMAcrossover", "RSIReversal", "BollingerBands" — so any future wiring of those
+into a StrategyManager would key-miss and silently become free. It does not bite
+today only because those objects never reach this function.
+
+FOR THE RECORD, the whole table at `user_plan="starter"` (proven, f10.py):
+    TrendFollowing/EMAcrossover/RSIReversal/Ichimoku -> True
+    MACD/BollingerBands/Breakout/MeanReversion/Stochastic -> False
+    SMC_ICT (enterprise) -> False        StrategyBrain (elite) -> False
+
+Severity: HIGH for path 2 (an engine that silently generates no signals) and for
+the dead-code gate (monetisation not enforced where the code says it is);
+MEDIUM for the latent fail-open. NOT the "only starter strategies run in
+production" the agent described — in production no tier check runs at all.
