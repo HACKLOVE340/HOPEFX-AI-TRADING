@@ -1230,3 +1230,143 @@ in-process, the denylist is the only parent protection, and the flag is the
 real control.
 Severity: LOW as a doc defect, but it misdescribes the one control that matters
 on an RCE path.
+
+════════ DATA/BRAIN AGENT (5 of 8) — 16 findings; top chain re-verified by me ════════
+
+## F80 — *** A HEADLINE CONTAINING "coupon" OPENS A REAL SHORT ON GOLD *** · CRITICAL
+VERIFIED END TO END BY RUNNING THE ACTUAL CODE.
+
+Step 1 — the matcher is a bare substring test, no word boundaries:
+  news/nuclear_wordmap_scorer.py:284   `if term in text_lower:`
+  (punctuation is stripped to spaces first at :275-276)
+  Terms that collide with ordinary English, with their real weights:
+      "nuclear war" 10.0 (:49)   "coup" 7.0 (:90)   "depression" 7.5 (:167)
+      "gold standard" 6.0 (:186) "risk off" 5.0 (:192)
+
+Step 2 — I ran the real scorer. Output, verbatim:
+  "Treasury coupon auction results beat expectations"  -> sev  7  hedge_mode   ['coup']
+  "IAEA issues nuclear warning over inspections"       -> sev 10  nuclear_mode ['nuclear war']
+  "Tropical depression forms off the Florida coast"    -> sev  8  hedge_mode   ['depression']
+  "ETF seen as the gold standard of liquidity"         -> sev  6  pause        ['gold standard']
+  "Markets in risk off mode ahead of data"             -> sev  5  pause        ['risk off']
+  "Quiet session, gold drifts sideways"                -> sev  0  normal       []
+
+Step 3 — hedge_mode places a REAL MARKET ORDER:
+  brain/nuclear_supervisor.py:462-467  if rl_action == ACTION_HEDGE: await trigger_hedge_mode()
+  risk/orchestrator.py:325-331
+      result = await broker.place_order(symbol=symbol,
+                                        units=-self._hedge_units,   # negative = short
+                                        order_type="MARKET",
+                                        label="NUCLEAR_HEDGE")
+
+Step 4 — the substring path is the DEFAULT and the FALLBACK, not legacy-dead:
+  news/geopolitical_llm.py gates the LLM replacement behind
+  GEOPOLITICAL_LLM_EXTRACTION, "default OFF", and its own docstring says
+  "With the flag off this class behaves exactly like NuclearWordMapScorer",
+  and score_event_llm "falls back to the WORDMAP on any failure (no key, parse
+  error, exception)". There is NO configuration in which the substring scorer is
+  bypassed — off, it IS the scorer; on, it is still the fallback.
+
+Step 5 — wiring: hopefx_engine.py:295 register_news_callback(supervisor.on_new_event);
+  connect_to_life.py:426 also calls on_new_event. Live public news feeds.
+
+NET: a routine fixed-income headline using the word "coupon", or an IAEA story
+using "nuclear warning", or a weather story using "depression", opens an
+unhedged-direction market short on XAU_USD — or trips the kill switch. The trigger
+text arrives from public news, so it is both accident-prone and attacker-influenceable.
+Severity: CRITICAL.
+REMAINING UNCERTAINTY (stated honestly): I verified the callback registration and
+the order call, but have NOT confirmed a live news provider is configured in the
+default container, so I cannot say this fires today without a news key. The code
+path is complete and unguarded; only feed configuration stands in front of it.
+
+## F81 — hedge is marked ACTIVE before the order is attempted, and never rolled back · CRITICAL
+risk/orchestrator.py, verified by reading:
+  :318  self._hedge_active = True          <-- set BEFORE any broker call
+  :325  result = await broker.place_order(...)
+  :334-335  except Exception as exc: logger.error("Hedge order failed: %s", exc)
+  :343-349  HedgePosition(..., order_id=order_id) appended REGARDLESS, order_id=None on failure
+  :314-316  a retry returns early because _hedge_active is already True
+=> If the hedge order fails, the system, its persisted state and its dashboards all
+report "hedged" while the account is completely UNHEDGED — during the exact event
+the hedge exists for — and no retry is possible.
+Also: :341 when no broker is present it logs "Manual hedge required" and STILL
+appends the HedgePosition, so the same false-hedged state is recorded.
+Severity: CRITICAL.
+
+## F82-F94 — remaining data-layer findings (agent-reported, NOT yet re-verified by me)
+  #1  consensus weight = confidence/latency/spread; the inverse-spread term lets a
+      feed quoting a 0.01 spread take ~96% of the weight and then evict honest
+      feeds as "outliers" against a mean it dominates. Latency term is inert
+      because _make_tick stamps datetime.now(UTC). CRITICAL if confirmed.
+  #2  MIN_FEED_QUORUM defaults to 1 (manager.py:305) — a lone feed can drive execution.
+  #3  3->2 feed loss changes confidence not at all; no gate observes it.
+  #4  MIN_CONFIDENCE floor (0.30) EQUALS the is_safe_to_trade gate (<0.30), so with
+      >=2 inliers the gate is mathematically unreachable.
+  #5  SUSPECT ticks are never filtered from consensus; detect_arbitrage,
+      compute_ml_anomaly_score, get_kalman_price, mark_source_stale have ZERO callers.
+  #6  Jump filter never runs for the three 60s-poll feeds because _is_stale (>30s) is
+      always true for them — and they are structurally excluded from consensus while
+      still being published to Redis.
+  #8  NuclearStreamer uses ONE global _last_price across all sources, so a single
+      >5% divergent feed can silence the entire stream (alternating rejection).
+  #9  RegimeRouter computes a confidence and never uses it; UNKNOWN routes to
+      TrendFollowing. Two incompatible regime taxonomies (brain vs router).
+  #10 Plan-gate key miss defaults to "starter" (fail-open on entitlement); the live
+      brain path never passes user_plan at all, so only starter strategies ever run.
+  #11a RL escalation has no upper clamp; _normalize_obs silently returns RAW obs on
+      VecNormalize failure — obs the policy never saw in training.
+  #13 execution/engine.py:687 `if orchestrator._started and not is_safe_to_trade()`
+      — if start() raised partway, _started stays False and the ENTIRE safety gate
+      is skipped. ml/inference_engine.py:1404 fails closed on the same condition.
+  #14 Lee-Ready tie-break is `mid >= (bid+ask)/2` where mid IS the midpoint by
+      construction — always True. Permanent synthetic buy pressure into ML features.
+  #15 DQE docstring claims lineage writes; there are none. Rejections log at DEBUG.
+  #16 cached tick confidence defaults to 1.0 on a missing field (latent).
+
+## F82-VERIFIED — inverse-spread weighting lets ONE feed own 96% of the consensus · CRITICAL
+Formula confirmed at data_layer/quality/engine.py:505-516:
+    lat  = max(state.p95_latency(), 1.0)
+    sprd = max(t.spread, 0.01)
+    weights[src] = state.confidence / lat / sprd
+I recomputed the normalised weights myself. Synthetic spread is 0.0002 x $2350 = $0.47
+(data_layer/feeds/gold/base.py:296-325 synthesises it for every feed except GoldAPI):
+
+  three honest feeds, all synthetic:        33.3% / 33.3% / 33.3%     <- correct
+  one feed quoting a tight spread (0.001,
+  floored to 0.01 by max(t.spread,0.01)):    2.0% /  2.0% / 95.9%     <- dominance
+
+Then the outlier gate (engine.py:518-523, CROSS_SOURCE_MAX_DIFF = 0.003) is measured
+against consensus_p1 — a mean the dominant feed already owns 95.9% of. So:
+    an honest feed is EXCLUDED once divergence exceeds  0.313%
+    the dominant feed is excluded only above           7.35%
+and MAX_JUMP_PCT = 0.005 (0.5%/tick) means 7.35% is unreachable in one tick.
+=> the gate evicts the HONEST sources and keeps the outlier. Excluded sources are
+also penalised -0.02 confidence each tick (engine.py:523), so they degrade further.
+
+Two readings, both real:
+  ADVERSARIAL — a compromised/hijacked feed quoting a tight spread takes the
+    consensus to its own price within one tick.
+  NO ADVERSARY REQUIRED — GoldAPI is the only feed supplying REAL bid/ask
+    (feeds/gold/goldapi.py:71-77); an honest tight quote in a thin session gives it
+    ~96% of the weight by accident.
+There is NO cap on any single source's normalised weight anywhere in the function.
+Severity: CRITICAL. VERIFIED BY MY OWN COMPUTATION.
+
+## F83-VERIFIED — the confidence gate is unreachable with >=2 sources · HIGH (with a correction)
+data_layer/quality/engine.py:59   MIN_CONFIDENCE = env DQE_MIN_CONFIDENCE, default 0.30
+data_layer/quality/engine.py:195  self.confidence = max(MIN_CONFIDENCE, min(1.0, ...))
+data_layer/orchestrator.py:1094   if tick.confidence < 0.30: return False
+Every per-source confidence is clamped to >= 0.30; consensus is a weighted average
+with weights summing to 1, so consensus >= 0.30; and 0.30 < 0.30 is False.
+=> with >=2 inliers the gate can NEVER fire, however degraded every feed is.
+
+CORRECTION TO THE AGENT: it wrote that the gate "can only ever fire via the
+single-source x0.5 path" and implied 0.5 always passes. More precisely: the
+single-source factor (DQE_SINGLE_SOURCE_CONF_FACTOR, 0.5) yields 0.15-0.50, so the
+gate CAN fire on a single DEGRADED source (0.30 x 0.5 = 0.15 < 0.30) but not on a
+single healthy one (1.0 x 0.5 = 0.50). The accurate statement is: the gate is
+unreachable with >=2 sources, and reachable with exactly one source only once that
+source has degraded to roughly 0.60 confidence or below.
+Both thresholds are the same literal 0.30, so raising DQE_MIN_CONFIDENCE alone
+would not help — it raises the floor and the gate together.
