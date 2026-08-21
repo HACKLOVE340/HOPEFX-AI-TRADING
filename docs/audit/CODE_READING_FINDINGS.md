@@ -5,7 +5,7 @@ was verified against code at the file:line cited; entries that dissolved on
 inspection are recorded as retracted rather than deleted, so they are not
 re-found later and re-reported as bugs.
 
-**Status: in progress.** ~95 files read directly by me, plus 4 of 8 completed domain audits (execution, brokers, ML, payments). Eight
+**Status: in progress.** ~95 files read directly by me, plus 4 completed domain audits (execution, brokers, ML, payments) and the API/security domain done directly. Eight
 domain audits were running when this was written; their findings are not yet
 merged in.
 
@@ -1042,3 +1042,153 @@ ALSO CONFIRMS F63's unit confusion from the other side: validation.py:47 documen
 max_qty as "Maximum lot size", while risk/manager.py:992 computes the value it
 clamps as troy OUNCES. The ceiling and the quantity are in different units.
 Severity: HIGH (latent regression + confirms the unit mismatch).
+
+## F64-CORRECTED — the shadow OANDABroker S13-03 inversion is REAL but DEAD CODE · MEDIUM (latent)
+The agent rated this CRITICAL. The defect is exactly as described, and I confirmed
+every part of it by running it:
+    brokers.OANDABroker is brokers.oanda.OANDABroker  ->  False   (two classes, one name)
+    brokers/__init__.py OrderSide values              ->  ['buy','sell']
+    brokers/base.py     OrderSide values              ->  'BUY'/'SELL'
+    "BUY" == "buy"                                    ->  False
+      => brokers/__init__.py:1087  units = quantity if side == "buy" else -quantity
+         with side="BUY" yields units = -quantity  => a SELL when a BUY was meant
+    OrderSide("BUY")                                  ->  ValueError: 'BUY' is not a
+         valid OrderSide   — and :1110 raises this AFTER the HTTP POST has filled
+    :1091 str(int(units))                             ->  truncates (0.9 -> "0")
+So all four sub-defects are genuine: inversion, truncation, post-fill ValueError,
+and a duplicate class name.
+
+BUT IT IS UNREACHABLE. Traced every path:
+  - No production module does `from brokers import OANDABroker`.
+    ml/pnl_reconciler.py:521 explicitly imports `from brokers.oanda import OANDABroker`
+    — the CORRECT one.
+  - The only construction site is brokers/__init__.py:1251, inside a MODULE-LEVEL
+    function `create_broker(broker_type, config)` at :1236.
+  - That module-level create_broker has NO production caller. Every grep hit is
+    `BrokerFactory.create_broker` — a classmethod on brokers/factory.py:35, a
+    different function that production actually uses
+    (hopefx_engine.py:592,594,1483; core/startup_factories.py:1207).
+=> S13-03 survives verbatim in a code path nothing calls.
+Severity: CRITICAL -> MEDIUM (latent landmine). Still worth removing: two classes
+named OANDABroker, and a module-level create_broker whose name shadows the intended
+BrokerFactory.create_broker, so one wrong import reactivates a known-catastrophic bug.
+
+## RUNNING TALLY OF MY CORRECTIONS TO AGENT SEVERITIES
+  F62 paper-broker side inversion   CRITICAL -> HIGH (latent)
+        real, but trade_executor passes a lowercase str which is handled correctly
+  F64 shadow OANDABroker inversion  CRITICAL -> MEDIUM (latent)
+        real, but the only constructor has no production caller
+  F63 unit confusion                CRITICAL, BOUNDED at 10 (agent missed the clamp)
+  F45 SL/TP monitor                 mechanism corrected — the monitor IS started,
+        it is dead on an AttributeError, not absent as the agent claimed
+  F59 stop-loss                     UPGRADED — traced all three mechanisms, all dead
+  F73 broken anti-drift import      NEW, found by me, not any agent
+Pattern: agents are excellent at finding the defect and unreliable at reachability.
+Every severity claim needs the call-graph traced before it is believed.
+
+════════ API AUTHORIZATION — done by me (the agent died on quota) ════════
+
+## F74 — API AUTHZ ON STATE-CHANGING MONEY/ORDER ENDPOINTS IS CLEAN · NO FINDING
+AST sweep over all of api/ (986 routes parsed). Filtered to STATE-CHANGING
+(POST/PUT/DELETE/PATCH) endpoints whose path or handler name matches
+order|trade|withdraw|payout|transfer|deposit|kill.?switch|risk|retrain|promote|
+subscri|entitle|balance|wallet|affiliate|cancel|position|leverage:
+
+    state-changing + sensitive           : 65
+      guarded by Depends() injection     : 65   (100%)
+      guarded ONLY by an in-body check   : 0
+      no auth detected at all            : 0
+
+=> Answers the "dependency injection vs forgettable in-body check" question:
+   it is dependency injection, everywhere, on every sensitive write endpoint.
+   That is the robust pattern — a new endpoint cannot silently omit it the way a
+   manual `if user.role != ...` can be forgotten.
+Spot-checked the two scariest by hand, both correct:
+   api/gateway.py:219  POST /api/v1/emergency/kill-switch
+       Depends(self.security) + self._verify_token(..., required_role="superadmin")
+   api/gateway.py:229  POST /api/v1/orders
+       Depends(self.security) + self._verify_token(..., required_role="trader")
+
+## MY OWN FALSE POSITIVE — recorded so it is not repeated
+My FIRST sweep reported 18 sensitive endpoints "without auth", including
+POST /api/v1/emergency/kill-switch and POST /api/v1/orders. That was MY bug:
+the auth dependency is `Depends(self.security)`, and my AUTH_HINT regex matched
+(user|role|admin|auth|superadmin|token|require|kyc|plan|api_key) — none of which
+appear in the string "self.security". Widening the pattern to include
+security|credential|bearer|http dropped the false positives to zero.
+I caught this by reading the two flagged endpoints before reporting them. Had I
+relayed the first run, I would have told the user their kill switch was
+unauthenticated. Exactly the failure mode I have been correcting in the agents.
+LESSON: a detector's negative result is only as good as its pattern list. Always
+read a sample of what it flags before believing the count.
+
+## REMAINING API QUESTIONS — NOT YET ANSWERED (agent died before reaching them)
+  - IDOR: endpoints taking user_id/account_id/affiliate_id from body/query without
+    binding to the authed caller. api/monetization.py:1525 affiliate withdraw is the
+    known money endpoint to check.
+  - WebSocket auth on connect + per-channel authorization (api/ws_live.py + 33 files)
+  - SQLi / path traversal / SSRF / unsafe pickle / CORS / secrets in logs
+  - GET endpoints that leak (my sweep filtered to state-changing only, deliberately)
+
+## F75 — IDOR on money endpoints: CLEAN · NO FINDING (verified by me)
+AST sweep: state-changing sensitive endpoints taking an explicit *_id path/body
+param = 5. All 5 carry an ownership binding. Hand-read the money one rather than
+trusting the regex (my earlier false positive taught me not to):
+  api/monetization.py:1526 POST /affiliate/{affiliate_id}/withdraw
+      async def withdraw_affiliate_commission(affiliate_id, request,
+                                              user = Depends(get_current_user)):
+          """Owner-only: this moves commission money, and `affiliate_id` came
+             straight from the path with no ownership check."""
+          _assert_affiliate_owner(affiliate_id, user)      <-- first statement
+  The docstring documents the historical bug it fixes.
+  Others: /sub-accounts/{account_id}/transfer, /affiliate/{id}/payment-method,
+          /subscription/{id}/cancel, /copy/{trader_id} — all bound.
+IMPORTANT DISTINCTION: this does NOT neutralise F32 (affiliate TOCTOU double-pay).
+Ownership binding stops someone ELSE draining your commission; it does nothing
+about the OWNER firing two concurrent withdrawals of their own balance. Authz is
+clean; concurrency is not. Two different properties.
+
+## F76 — WebSocket auth: CLEAN and fails closed · NO FINDING (verified by me)
+api/ws_live.py:98   WS_AUTH_REQUIRED defaults "true"
+api/ws_live.py:101-105  if APP_ENV == production and not WS_AUTH_REQUIRED:
+                            raise RuntimeError(...)
+    -> a hard failure at MODULE IMPORT. Production cannot start with WS auth off.
+    The comment states the stake plainly: "all WS data (prices, signals, account
+    updates) would otherwise be broadcast to unauthenticated connections."
+Connect flow (ws_live at :1670): origin check first (_reject_ws_bad_origin, close
+4403) -> connection cap rejected with 1008 BEFORE accept() -> accept + "connected"
+-> _ws_auth_gate requires an auth message within AUTH_TIMEOUT_SECONDS or closes
+4001 -> "auth_ok" with user_id -> heartbeat miss limit closes 1001.
+api/community_chat.py:507 uses the same WS_AUTH_REQUIRED default.
+
+## F77 — injection / deserialisation / CORS sweep: CLEAN · NO FINDING (verified by me)
+Across api/ + auth/ + security/:
+    raw SQL f-string / % / concat in execute()   0
+    unsafe yaml.load                             0
+    SSRF (request to a user-supplied url var)    0
+    eval( / exec(                                0 REAL — all 4 hits are false
+        positives: a docstring saying "no eval() or exec()"
+        (api/advanced_trading.py:698), a comment in security/self_healer.py:378,
+        and TWO YARA MALWARE RULES in security/antivirus.py:366,381 that contain
+        "eval(base64_decode" and "exec(compile(" as detection strings.
+    shell=True                                   0 REAL — all 4 hits are `# nosec`
+        comments whose text says "no shell=True, no user input".
+    pickle.load                                  1, api/superadmin/ml_ai.py:452,
+        annotated "path-confined local model file".
+CORS (api/server.py:156-169, :314-321):
+    ALLOWED_ORIGINS env, default http://localhost:3000, split on comma — never "*".
+    allow_credentials=True with an explicit origin list, explicit method and
+    header allowlists.
+    PRODUCTION HARD-FAIL: :162-169 sys.exit(1) if APP_ENV=production and every
+    origin is still localhost/127. — refuses to boot misconfigured.
+api/gateway.py:102 pins ["https://hopefx.com","https://app.hopefx.com"].
+
+## API DOMAIN VERDICT (done by me; the agent died on quota twice)
+authz on 65/65 sensitive write endpoints ....... CLEAN (dependency injection)
+IDOR binding on 5/5 id-taking money endpoints .. CLEAN
+WebSocket auth ................................. CLEAN, fails closed at import
+SQLi / SSRF / yaml / eval / shell / CORS ....... CLEAN
+The perimeter is well built. Every serious defect found this session is INSIDE it:
+execution (F59/F60/F61), ML inference (F24), money concurrency (F31/F32/F34).
+Still not covered: GET-only endpoints (my sweeps filtered to state-changing), and
+the ~22 `except: pass` handlers in ws_live.py.
