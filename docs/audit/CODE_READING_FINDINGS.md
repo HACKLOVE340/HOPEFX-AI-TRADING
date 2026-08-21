@@ -1490,3 +1490,102 @@ price entering the consensus (the other is the 500..10000 bounds check, which is
 far too wide to catch a plausible bad quote), and it is switched off on half the
 feeds by an interaction between two constants that were plainly chosen
 independently. Non-obvious from reading either file alone.
+
+## F86-VERIFIED-WITH-CORRECTION — the Lee-Ready quote rule is degenerate, but the agent's "always True" is wrong · MEDIUM
+data_layer/microstructure/engine.py:617-625:
+
+    if self._last_mid > 0:
+        if mid > self._last_mid:      is_buy = True
+        elif mid < self._last_mid:    is_buy = False
+        else:
+            # Quote rule: trade at or above mid = buy
+            is_buy = mid >= (tick.bid + tick.ask) / 2
+    else:
+        is_buy = True   # first tick — assume buy
+
+THE AGENT SAID this is "always True — permanent synthetic buy pressure". The
+first half is right in substance, the quantifier is not. Measured, not reasoned:
+
+Every tick that reaches this code has bid/ask synthesised symmetrically around
+mid, so (bid+ask)/2 is mid *up to 4-decimal rounding*:
+  * data_layer/feeds/gold/base.py:309-325 `_make_tick` —
+      bid = mid - mid*spread_pct/2, ask = mid + mid*spread_pct/2, each round(...,4)
+    Used by commodity_api, metalpriceapi, metals_api, metals_dev, yahoo.
+    GoldAPI is the one feed that passes real bid/ask (goldapi.py:77).
+  * data_layer/feeds/gold/manager.py:334-344 — the CONSENSUS tick, which is the
+    only tick the microstructure engine ever sees (see F87), is built as
+      bid = round(consensus_mid - half_spread, 4)
+      ask = round(consensus_mid + half_spread, 4)
+      mid = round(consensus_mid, 4)
+    — symmetric again.
+
+MEASURED (scratchpad/f14b.py, replicating the synthesis exactly):
+    realistic gold, 2dp quotes (3200-3400)   True  88.41%
+    realistic gold, 4dp quotes               True  87.49%
+    wide range 1000-4000, 2dp                True  88.53%
+The independent rounding of bid and ask makes (bid+ask)/2 land a hair above mid
+about one time in eight, so the branch is ~88% buy, not 100%.
+
+That correction does not rescue the code. A tie-break is supposed to be
+informative; this one is comparing a number to itself plus float noise. It
+carries no information about trade direction at all — it is 88/12 noise dressed
+as microstructure. Combined with the `is_buy = True` first-tick default, the
+buy/sell split fed to `buy_pressure`, OFI and the 16 ML features
+(engine.py:209-224, :752 `buy_pressure = buy_vol/total`) is biased long by
+construction whenever consecutive mids are equal — and F87 shows equal
+consecutive mids are the *common* case on this path, not the rare one.
+
+Severity MEDIUM, downgraded from the agent's implied CRITICAL: it corrupts an ML
+feature rather than bypassing a gate, and only on the tie branch.
+
+## F87-VERIFIED — the microstructure engine, tick cache, lineage and WebSocket fan-out are driven by READS, not by the feed · HIGH (found while checking F86)
+`MarketDataOrchestrator._on_tick` (data_layer/orchestrator.py:772) is the single
+side-effect hub: it drives the microstructure engine (:787), the Redis tick
+cache, the lineage store, every registered tick subscriber, and the WebSocket
+broadcast queue.
+
+It has EXACTLY ONE call site — orchestrator.py:767 — and it sits on the
+cache-miss branch of `get_latest_tick`:
+
+    def get_latest_tick(self, symbol="XAU_USD"):
+        if self._redis_store._r:
+            cached = self._redis_store.get_tick(symbol)
+            if cached and -5.0 <= age_s <= 30.0:
+                return tick                      # <-- _on_tick NOT called
+        if self._gold_feed and _is_gold_symbol(symbol):
+            tick = self._gold_feed.get_latest_tick()
+            if tick:
+                tick = self._norm.normalize_tick(tick)
+                self._on_tick(tick)              # <-- the ONLY invocation
+                return tick
+
+Verified there is no producer-side path in:
+  * `GoldFeedManager` holds no callback and no orchestrator reference at all
+    (grep for callback/_subscribers/orchestrator in manager.py: only two
+    comment matches, no code).
+  * `_uptime_loop` (orchestrator.py:668-690) only sets a Prometheus gauge and
+    writes a health blob to Redis. It never reads a tick.
+So nothing pushes. The feeds poll into `_latest`/`_consensus_tick` and stop there.
+
+CONSEQUENCES, in order of severity:
+1. With Redis HEALTHY, `_on_tick` fires only once the cached tick has aged past
+   30s — so the microstructure history advances at most ~2/minute, and only if
+   somebody happens to ask for a price. The engine needs 10 ticks before it
+   returns anything but zeros (engine.py:216-217), i.e. ~5 minutes of *demand*,
+   not of market time.
+2. With Redis DOWN, `_on_tick` fires on EVERY read. The tick history then
+   measures how often callers poll, not how often the price changed — and
+   concurrent readers append the *same* consensus tick repeatedly. Those
+   duplicates are exactly `mid == self._last_mid`, which is the degenerate
+   quote-rule branch in F86. The two defects compound: the more readers, the
+   more synthetic buy ticks.
+3. The tick history is therefore irregularly sampled in both modes, while OFI,
+   `buy_pressure` and the rolling statistics computed over it all assume an even
+   tick stream.
+4. The same applies to the WebSocket broadcast and the lineage record: a client
+   watching the live feed is served whatever the cache-miss pattern produced.
+
+Severity HIGH: 16 features that reach the ML pipeline are computed over a
+sampling process determined by cache behaviour and request volume. This is not a
+crash — it is silent, and it would look like a plausible feature series in any
+downstream inspection.
