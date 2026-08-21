@@ -981,3 +981,64 @@ defaults, no tokens in URLs, no credentials logged, and NO TLS bypass anywhere i
 brokers/ (grep for verify=False / ssl=False / CERT_NONE returns nothing). All auth
 via Authorization headers. Every BrokerConnector subclass has __abstractmethods__
 == () — zero NotImplementedError in brokers/.
+
+## F63-VERIFIED — the unit confusion is real, and it is bounded at 10 · CRITICAL (re-verified by me)
+Chain, every line confirmed:
+  risk/manager.py:992   quantity = final_notional / mid_price
+                        final_notional is USD, mid_price is USD/troy-oz
+                        => quantity is TROY OUNCES.
+  risk/manager.py:171-176  `size` and `lot_size` are BOTH `return self.quantity`
+                        — the same number exposed under two unit names.
+  risk/manager.py:1302-1306  clamps quantity to _executable_lot_ceiling(), and the
+                        log line calls the result "lots":
+                        "clamped %.4f -> %.4f lots to stay inside the order
+                         validator's max_qty"
+  risk/manager.py:67-91 that ceiling is ORDER_MAX_QTY, else
+                        OrderValidatorConfig().max_qty, else 10.0.
+  hopefx_engine.py:1453-1465  dispatches the SAME `quantity`:
+                        OANDAStream -> {"units": quantity}     (ounces — CORRECT)
+                        everything else -> {"lots": quantity}  (100 oz each — WRONG)
+  mt5.py:237            "volume": float(quantity), docstring says "1.0 = standard lot"
+  cme_comex.py:301      "quantity is in contracts (1 contract = 100 troy oz)";
+                        _CME_MULTIPLIER is used only for notional REPORTING (:175).
+
+So the value is computed in ounces, clamped against a ceiling the code labels
+"lots", exposed under both names, then interpreted as ounces by one broker and as
+lots/contracts by the others. 1 XAUUSD lot = 100 oz => 100x.
+
+BOUNDING — the agent did not note this, and it matters:
+the clamp caps quantity at 10.0 by default, so the worst case is 10 "lots" =
+1,000 oz ~= $1.9M notional, not an unbounded blowup. On $100k equity that is still
+~19x leverage from a sizing routine whose own cap is 5% of equity.
+COMPOUNDS F49: 10.0 is ALSO the default ALGO_LARGE_ORDER_THRESHOLD, so a size at
+the ceiling routes into the algo path that dies on a TypeError while the caller
+books a phantom position.
+Severity: CRITICAL (bounded). The root defect is that no unit is ever named in a
+type — `quantity: float` means ounces here and lots there.
+
+## F73 — the anti-drift import is broken, so the lot ceiling IS the restated constant · HIGH (found + verified by me)
+risk/manager.py:88   from validation import OrderValidatorConfig
+validation.py:41     class ValidatorConfig:        <-- the real name
+                     :47  max_qty: float = 10.0   # "Maximum lot size"
+There is no OrderValidatorConfig anywhere in validation.py. The import ALWAYS fails.
+Proven by running it:
+    DEBUG risk.manager: could not read OrderValidatorConfig.max_qty
+        (cannot import name 'OrderValidatorConfig' from 'validation') — using 10.0
+    _executable_lot_ceiling() = 10.0
+So the function always takes its `except` branch and returns the hardcoded 10.0,
+at DEBUG level, invisibly.
+Its own docstring states the purpose it is failing to serve:
+    "Read its limit rather than restating the number, so the two cannot drift into
+     disagreeing — which is exactly what had happened (see the clamp in
+     calculate_position_size)."
+The mechanism written to prevent a drift regression is broken, silently, and has
+restored exactly the condition it was added to remove. Benign TODAY only because
+both constants happen to be 10.0; the moment an operator edits
+ValidatorConfig.max_qty, the risk manager will not see it and the clamp diverges
+from the validator that rejects the order — the original bug, back.
+ORDER_MAX_QTY still works (it is checked before the import), so the env override
+is the only path that currently propagates.
+ALSO CONFIRMS F63's unit confusion from the other side: validation.py:47 documents
+max_qty as "Maximum lot size", while risk/manager.py:992 computes the value it
+clamps as troy OUNCES. The ceiling and the quantity are in different units.
+Severity: HIGH (latent regression + confirms the unit mismatch).
