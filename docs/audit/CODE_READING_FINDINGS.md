@@ -5,26 +5,13 @@ was verified against code at the file:line cited; entries that dissolved on
 inspection are recorded as retracted rather than deleted, so they are not
 re-found later and re-reported as bugs.
 
-**Status: in progress.** ~95 of 1,838 source files read directly (~5%). Eight
+**Status: in progress.** ~95 files read directly by me, plus 2 of 8 completed domain audits. Eight
 domain audits were running when this was written; their findings are not yet
 merged in.
 
 Severity is impact on capital/correctness, not effort.
 
 # HOPEFX — Understanding + Findings Log
-(read-only pass; nothing fixed)
-
-## F1 — ARCHITECTURE.md documents a deliberately-deleted module
-`websocket/manager.py` appears twice (canonical module map; Security Fix #2).
-CLAUDE.md: "never recreate a top-level websocket/ package — it shadows the
-websocket-client library and silently disables the REST fallback in
-market_data/mt5_live_feed.py (audit S13-02a)". Dir does not exist. VERIFIED.
-Severity: MEDIUM (steers a reader into a known-bad change)
-
-## F2 — ARCHITECTURE.md Security Fix #5 claims prop_firm_mode.json is gitignored
-It is tracked. .gitignore:124 commits it on purpose for CI. CLAUDE.md already
-corrected this and warns the stale claim invites real credentials in a tracked
-file. ARCHITECTURE.md still carries it. VERIFIED.
 Severity: MEDIUM (credential-handling misdirection)
 
 ## F3 — ARCHITECTURE.md says APP_ENV defaults to `production`; code says `development`
@@ -432,3 +419,185 @@ must additionally be removed by hand, deliberately forcing an explicit operator
 action. reset_for_testing() is explicitly test-only. is_active() returns the bare
 _active flag — layers 2-5 reach it only through the poll loop, which is why F23
 matters.
+
+════════ AGENT FINDINGS (2 of 8 completed; 6 died on session limit) ════════
+
+## F24 — *** TRAIN/SERVE SKEW: 48.2% OF MODEL FEATURES ARE ZERO-FILLED LIVE *** · CRITICAL
+INDEPENDENTLY RE-VERIFIED BY ME, not just relayed. Ran both builders against the
+shipped artifact:
+    SERVE  ml/advanced_features.build_advanced_features  -> 101 cols
+    TRAIN  ml/features_extended.build_extended_features  -> 194 cols
+    MODEL  advanced_oos.pkl feature_names_in_            -> 193
+    MISSING AT SERVE: 93 / 193 = 48.2%
+    by prefix: inst_ 39, ri_ 26, of_ 17, frac_ 11
+Cause — two different builders:
+    ml/train_advanced.py:1323   from ml.features_extended import build_extended_features
+    ml/live_inference.py:327    from ml.advanced_features import build_advanced_features
+features_extended.py:912-916 adds add_orderflow_features, add_fractal_features,
+add_regime_interactions, add_institutional_edge_features on top of the base
+builder. The serve path never calls them, so those 93 columns CANNOT exist live.
+Handling — ml/live_inference.py:444-465: computes impute_frac (0.482), logs a
+WARNING, then `for col in missing: X[col] = 0.0` and predicts anyway. No abstain.
+The warning text blames "MacroStore or data layer likely unavailable" — a
+transient-sounding cause for a PERMANENT structural gap. It fires every bar, which
+is exactly why it reads as noise.
+Agent measured the effect on real scoring: corr 0.5576 between true and served
+probabilities, direction agreement 62.8%, variance collapsed (std .0416 -> .0289),
+and long triggers at >=0.58 went 14/1440 -> 0/1440.
+=> The served model is a different, variance-collapsed model. The 0.5734 OOS in
+advanced_oos_meta.json does not describe what actually predicts in production.
+ONLY the live_trading_gate (OOS<0.60) currently stops this from moving money.
+Severity: CRITICAL.
+
+## F25 — model staleness measured from FILE MTIME, not trained_at · HIGH
+ml/inference_engine.py:718  age_seconds = time.time() - model_path.stat().st_mtime
+Agent measured on this checkout: mtime 2026-08-17 -> 3.7 days -> not stale;
+trained_at 2026-06-26 -> 55.0 days -> stale. MODEL_MAX_AGE_DAYS=30.
+A 55-day-old model is passing a 30-day gate RIGHT NOW. Any git clone, docker
+build, rsync or CI artifact restore resets mtime, so STALE_MODEL_BLOCK (default
+true) can never fire. trained_at is present in the metadata and is ignored here.
+Severity: HIGH. Source line verified by me.
+
+## F26 — the "Sharpe gate" never reads the Sharpe ratio · HIGH
+ml/train_advanced.py:900   gate_passed = n_trades >= target_n     # sharpe unused
+ml/train_advanced.py:1168  sharpe_gate_check(n_trades=n, sharpe=1.52, ...)  # literal
+n is OOS BARS (2016), not trades — which is why the metadata shows
+n_trades == oos_n == 2016. So gate_passed = (2016>=600) = True unconditionally and
+sharpe 1.52 is a hardcoded constant, not a measurement. model_registry.py:789
+lifts sharpe_gate_passed from that field and :288 enforces it.
+=> a model with a genuinely NEGATIVE Sharpe passes the registry Sharpe gate.
+A correct implementation exists (train_advanced.py:1012 SharpeProgressTracker,
+which does compare sharpe >= target) and is not used by the artifact writer.
+Severity: HIGH. (agent-reported; source lines not yet re-verified by me)
+
+## F27 — registry state vocabulary is inconsistent; circuit breaker cannot retire · HIGH
+sharpe_circuit_breaker.py:490 retires only if state == "production";
+model_registry.py:385 promote() writes "production";
+verify_model.py:122 fails anything != "active";
+registry.json records the live entry as state="active".
+=> the Sharpe circuit breaker trips, fires its CRITICAL alert, then silently
+no-ops the retirement — the failing model stays active.
+Also: active model oos_accuracy 0.5734 < REGISTRY_MIN_OOS_ACC 0.60, and its state
+is "active" not "production" — the fingerprint of a manifest edited by hand rather
+than promoted through promote(), which would have raised.
+And live scoring never consults the registry at all: live_inference.py:183
+hardcodes _SAVED/"advanced_oos.pkl".
+Severity: HIGH. (agent-reported)
+
+## F28 — two shipped artifacts fail their recorded SHA-256 · MEDIUM-HIGH
+feature_scaler.pkl MISMATCH, stacking_ensemble.pkl MISMATCH, lstm_signal.pt MISSING.
+advanced_oos.pkl / current.pkl / rf_* / xgb_* verify OK. The live model is clean and
+live_inference._verify_model_integrity does fail closed on a registry-tracked
+mismatch — but two tracked artifacts are already drifted in the committed tree,
+so the checksum manifest is not actually enforced in CI as claimed.
+Severity: MEDIUM-HIGH. (agent-reported)
+
+## F29 — abstention gates validate a vector that is then discarded · MEDIUM
+inference_engine.py:411-447 builds the CORRECT 193-feature matrix via
+features_extended and runs the S4-02/S4-03 abstain gates on it (NaN/Inf, >95%
+zeros). Then :1151 calls predictor.predict_proba(ohlcv, ...) passing RAW OHLCV, and
+the predictor rebuilds its own 101-col matrix. The validated vector is never scored.
+So the "non_zero_pct < 0.05" check inspects a healthy vector while the vector
+actually scored is 48% structural zeros.
+Severity: MEDIUM. (agent-reported)
+
+## F30 — the drift guard DETECTS the skew and is configured not to block · MEDIUM
+S4-01 no longer holds — the guard now watches predictor.last_scored_features, i.e.
+the real scored matrix (coverage 176/193 = 91.2%). Agent replayed the serving
+vector: 12 of 176 monitored features exceed z=4.0 and ALL 12 are F24 zero-fills
+(frac_perm_ent_10 z=19.3, frac_perm_ent_5 z=12.2, inst_buy_pressure_20 z=10.0...).
+_DRIFT_BLOCK defaults false, so it warns and passes the trade through.
+=> the one independent detector of F24 is switched to warn-only by default.
+Severity: MEDIUM. (agent-reported)
+
+════════ PAYMENTS / MONEY (agent-reported, not yet re-verified by me) ════════
+
+## F31 — all affiliate + subscription money state is IN-MEMORY ONLY · CRITICAL
+monetization/affiliate.py:316-320 (_affiliates/_referrals/_payouts) and
+subscription.py:306-307 (_subscriptions) are plain dicts. No session_factory /
+session.add / commit() anywhere in either file.
+=> a pod restart erases every referral, accrued commission and payout record;
+already-paid payouts vanish so the same commissions accrue again. Confirms the
+backlog's "persistent audit log" item is still OPEN.
+
+## F32 — affiliate payout TOCTOU double-pay; NO lock on any money path · CRITICAL
+affiliate.py:495-528 read pending -> create Payout -> mark referrals PAID, with no
+lock and no atomic compare-and-set. Agent grepped all of monetization/ + payments/
+for threading.Lock|asyncio.Lock|RLock|with_for_update: only two hits, both in
+payments/crypto/, neither on a money path.
+=> two concurrent POST /affiliate/{id}/withdraw (api/monetization.py:1525, self-serve)
+both read the same pending and both pay it.
+
+## F33 — partial settlement forfeits the remainder · HIGH
+affiliate.py:662-668 marks a referral fully PAID even when only part of its
+commission was needed. Withdraw $100 against a single $300 referral -> referral
+marked PAID, $200 unrecoverable.
+
+## F34 — a FAILED payout permanently destroys the commission · HIGH
+fail_payout (affiliate.py:556-563) does not restore referral state; referrals were
+flipped to PAID BEFORE the transfer was attempted. Transfer bounces -> payout
+FAILED, referrals stay PAID, pending reads $0, no record the money is owed.
+
+## F35 — creator payout double-pay + no Stripe idempotency key · HIGH
+revenue_split.py:311-364 unlocked read-then-zero; _stripe.Transfer.create at :371
+passes NO idempotency_key. Also, if the transfer succeeds at Stripe but the
+response times out, :389-392 marks FAILED without zeroing pending -> the next
+cycle pays again.
+
+## F36 — crypto webhook signature can be DISABLED in production · HIGH
+api/payments.py:426-436  verify = os.getenv("CRYPTO_WEBHOOK_VERIFY","true") != "false"
+The production fail-closed branch lives INSIDE _verify_webhook_hmac (:375-383),
+which is never reached when verify is False. With CRYPTO_WEBHOOK_VERIFY=false any
+unauthenticated caller can POST {"payment_id":...,"status":"complete"} and be
+granted a paid plan (:483-489). The docstring at :373 claims production is enforced.
+
+## F37 — crypto webhook never validates the amount received, nor expiry · HIGH
+Handler reads only status/confirmations/tx_hash (:457-459). Expected amount_crypto /
+amount_usd are persisted at :151-153 and never compared; expires_at (:157) never
+checked. An underpayment reported "complete" grants the full plan.
+
+## F38 — AML withdrawal gate is correct code on a DEAD path · HIGH
+wallet.py:337-379 fails closed correctly, BUT debit_wallet/credit_wallet have zero
+callers outside wallet.py. The only live withdrawal endpoint, api/payments.py:639
+fiat_withdraw, does no balance check, no debit, and never touches the AML gate.
+
+## F39 — wallet balance restore reads the wrong ledger row · HIGH
+_load_balance_from_db (wallet.py:126-141) returns the latest balance_after for the
+user REGARDLESS of wallet_type (notes carries the type but is not filtered on);
+create_wallet then assigns it to subscription_balance and hard-codes
+commission_balance = 0.00 (:171-172). After a restart a user whose last transaction
+was a commission credit has their subscription balance overwritten and their entire
+commission balance zeroed.
+
+## F40 — second-resolution IDs collide, silently desyncing ledger from memory · HIGH
+wallet.py:282,:393 and compliance.py:92 build IDs as TXN-/AML-%Y%m%d%H%M%S.
+WalletTransaction.transaction_id is unique=True (database/models.py:756). Two
+transactions in the same second -> uniqueness violation swallowed by
+except Exception: logger.error (wallet.py:119-120) -> in-memory balance moves with
+NO ledger row. api/payments.py:184,:588 already fixed this class with UUIDs;
+wallet and compliance were missed.
+
+## F41 — early renewal TRUNCATES paid time · MEDIUM-HIGH
+activation.py:246-248  existing.end_date = now + timedelta(days=duration_days)
+Assignment, not extension. Renew with 12 days left -> those 12 days are lost.
+
+## F42 — refund rounding creates/destroys a cent · MEDIUM
+revenue_split.py:216-217 sale uses ROUND_HALF_UP; :268,:270 refund omits rounding=
+(defaults ROUND_HALF_EVEN) AND recomputes the fee instead of reusing
+orig.platform_fee. Sale+full refund leaves the creator 1c short, permanently, per
+refunded transaction.
+
+## F43 — no double-entry invariant; enforce_ledger_reconciliation is not on any write path · MEDIUM
+WalletTransaction (models.py:750-765) is single-entry. The only production caller of
+enforce_ledger_reconciliation is health_check_service.py:442, whose own docstring
+says "Read-only — never gates trading". Its inputs are also wrong: opening and
+closing are both the SAME current snapshot (:437-438), so the identity cannot hold
+once any deposit exists -> a permanent CONSTITUTIONAL violation operators learn to
+ignore. verify_double_entry exists (invariants/reconciliation.py:63) with no caller.
+CONNECTS TO MY F18: this is one of the 7 inert enforce_* wrappers.
+
+## F44 — Flutterwave tx_ref is deterministic, so renewals silently no-op · MEDIUM
+api/billing.py:620-623 tx_ref = "FLW-" + sha256(user:plan:amount:currency)[:24] —
+no nonce, no period. Next month's renewal produces the identical tx_ref, the verify
+endpoint short-circuits on the cached record (:666-673) and returns
+{"verified":true,"idempotent":true} WITHOUT collecting payment or re-activating.
