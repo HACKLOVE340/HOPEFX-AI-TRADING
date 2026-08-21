@@ -5,7 +5,7 @@ was verified against code at the file:line cited; entries that dissolved on
 inspection are recorded as retracted rather than deleted, so they are not
 re-found later and re-reported as bugs.
 
-**Status: in progress.** ~95 files read directly by me, plus 3 of 8 completed domain audits (execution, ML, payments). Eight
+**Status: in progress.** ~95 files read directly by me, plus 4 of 8 completed domain audits (execution, brokers, ML, payments). Eight
 domain audits were running when this was written; their findings are not yet
 merged in.
 
@@ -764,3 +764,220 @@ k8s/k8s-configmap.yaml:40 sets HOPEFX_INVARIANT_MODE "enforce";
 deployments/k8s/configmap.yaml:14 sets "monitor".
 A SECOND k8s configmap I had not found. In monitor mode enforcement.py:249-252
 returns allowed=True unconditionally, so every gate in F46/F47/F56 logs and permits.
+
+## F45-SCOPE — the dead SL/TP monitor is LIVE IN THE DEFAULT PAPER CONFIG (verified by me)
+core/startup_factories.py:2975-2982:
+    mode = os.getenv("TRADING_MODE", "paper").lower()
+    if mode == "live":
+        autostart = ENGINE_AUTOSTART=="true" AND LIVE_TRADING_ENABLED=="true"   # both default false
+    else:
+        autostart = os.getenv("ENGINE_AUTOSTART", "true") == "true"             # DEFAULT TRUE
+=> In the DEFAULT configuration (TRADING_MODE unset -> "paper"), ENGINE_AUTOSTART
+   defaults to "true", so HopeFXEngine.start() runs, ExecutionEngine is built, and
+   SLTPMonitor is started — and then throws AttributeError on every poll for every
+   open position. The failure is happening today in any paper deployment that holds
+   a position; it is visible as a repeating "SLTPMonitor._loop error" at ERROR level.
+   Flipping to live does NOT fix it — the same dead monitor is what a live position
+   would rely on.
+The asymmetry itself is good design: live requires TWO explicit flags, paper does not.
+
+## S11-02 ANSWERED — "the two flags that gate unsafe trading" are:
+    ENGINE_AUTOSTART        (default "true" in paper, must be "true" for live)
+    LIVE_TRADING_ENABLED    (default "false"; required for live in addition)
+core/startup_factories.py:2977-2979. Backlog S11-02 says they are undocumented —
+worth confirming against .env.example / DEPLOYMENT.md in the CI audit.
+Note these are DISTINCT from the other live gates already logged:
+    FEATURE_LIVE_TRADING  (core/live_trading_gate.py:79)
+    LIVE_MODE_CONFIRMED   (execution/engine.py:46)
+    TRADING_MODE, BROKER_TYPE
+=> at least SIX separate env vars participate in "is this thing allowed to trade",
+   across four modules, with different defaults. That surface is itself a finding.
+
+## F58 — ENGINE_AUTOSTART is undocumented and defaults to TRUE · MEDIUM-HIGH (verified)
+grep across .env.example, .env.production.example and DEPLOYMENT.md:
+    LIVE_TRADING_ENABLED  -> documented (.env.example:198)
+    ENGINE_AUTOSTART      -> DOCUMENTED NOWHERE
+CORRECTION TO MY OWN NOTE: it has TWO defaults in the same function —
+    :2977 live branch  getenv("ENGINE_AUTOSTART", "false")   conservative, good
+    :2982 paper branch getenv("ENGINE_AUTOSTART", "true")    autostarts by default
+The mode-dependent default is sound design (live is conservative). The finding is
+purely that the flag is undocumented, i.e. the flag that
+decides whether the trading engine starts at all is invisible to an operator reading
+the env templates. This is the concrete, still-open half of backlog S11-02.
+
+## F59 — ALL THREE stop-loss mechanisms are non-functional in the production path · CRITICAL
+Traced to the end, each verified:
+
+  1. BROKER-SIDE SL/TP — explicitly discarded.
+     trade_executor.py:409-414 never passes stop_loss/take_profit.
+     brokers/base.py:554-560 discards them when passed and says so in the docstring.
+     execution/engine.py:1336-1343 also omits them.
+
+  2. SLTPMonitor — started, then throws on every poll.
+     Reached in the live path (hopefx_engine.py:475 inside start(), autostarted by
+     default in paper per F45-SCOPE). Handed a PositionTracker; reads
+     pos.position_id at sl_tp_monitor.py:202; PositionTracker's Position has .id.
+     AttributeError, caught by _loop, logged at ERROR, retried forever.
+
+  3. IntraTradeMonitor — the 200ms SL/TP poller docs/architecture.md advertises.
+     Constructed ONLY at execution/hopefx_engine.py:177.
+     execution/hopefx_engine.py is imported ONLY by execution/execution.py:263.
+     execution/execution.py is imported by NOTHING in production — the only two
+     grep hits are a string in scripts/e2e_production_validation.py:524 and an
+     unrelated attribute access (execution.execution_id) in transparency/engine.py:132.
+     => it sits two hops behind a module nothing calls.
+
+CORRECTION TO MY OWN F20: I wrote that execution/hopefx_engine.py is "imported only
+by tests". That was wrong — execution/execution.py:263 imports it. The conclusion is
+unchanged (no production consumer) but it takes one more hop than I said, and I
+should not have stated the stronger claim.
+
+ROOT CAUSE — 12 distinct classes named Position in production code, with
+incompatible identity fields:
+    execution/position_tracker.py:23   -> .id
+    execution/position_manager.py:118  -> .position_id
+    brokers/base.py:212                -> .id
+    portfolio/pms.py:24                -> no id field at all
+    + database/models.py, brokers/__init__.py, backtesting/{engine,enhanced_engine}.py,
+      api/graphql_schema.py, forward_test.py, core/types.py, core/domain_models.py
+Any function typed "takes a Position" is ambiguous. F45 is one realized instance.
+BOUNDED: hopefx_engine.py:478 is the ONLY site passing a PositionTracker into a
+position_manager= parameter, so this specific confusion has exactly one occurrence.
+risk/intra_trade_monitor.py reads .position_id in 9 places but uses its OWN
+OpenPosition type, so it is internally consistent — it is simply unreachable.
+
+Severity: CRITICAL. An open position in the production path has no stop of any kind.
+
+════════ BROKER AGENT (4 of 8 done) — 22 findings; top 4 re-verified by me ════════
+
+## F60 — *** trade_executor.py:416 CRASHES ON EVERY NON-PAPER BROKER, AFTER THE FILL *** · CRITICAL
+PROVEN BY RUNNING IT:
+    MarketOrderResult.status type = <class 'str'>
+    r.status.value -> AttributeError: 'str' object has no attribute 'value'
+brokers/base.py:539,573 place_market_order returns MarketOrderResult;
+its `status` field is annotated `str` (:363).
+execution/trade_executor.py:416  `if order.status.value in ("filled","partial"):`
+This line is OUTSIDE any try block.
+Paper survives only because paper_trading.py:1064 OVERRIDES place_market_order and
+returns a raw Order whose status IS an enum. Every BrokerConnector-derived live
+broker (MT5Connector, IBKRConnector, Alpaca, Binance, ByBit, CCXT, CME, CPPShim)
+raises here.
+FAILURE CHAIN — and it compounds with F59:
+    order submitted -> FILLS at the broker
+    -> AttributeError unwinds at :416
+    -> add_position() (:445) never runs        => position invisible to the tracker
+    -> _clear_intent() (:462) never runs       => intent journal left dirty
+    -> notify_position_opened() never runs     => risk manager never sees it
+    -> and per F59 no stop of any kind is armed
+=> a filled live position the system does not know it holds, with no stop.
+Severity: CRITICAL.
+
+## F61 — the live OANDA broker cannot place an order through TradeExecutor · CRITICAL
+PROVEN BY RUNNING IT:
+    OANDABroker.place_market_order exists: False
+    OANDABroker.get_order          exists: False
+    is BrokerConnector subclass:    False
+core/startup_factories.py:1153-1155 wires brokers.oanda.OANDABroker as app.broker.
+execution/trade_executor.py:409 calls self.broker.place_market_order(...).
+=> AttributeError before any order is built. The stated next milestone (live OANDA)
+cannot place a single order through this path.
+Severity: CRITICAL.
+
+## F62 — paper_trading.py:1064 INVERTS the side when handed an OrderSide enum · HIGH (latent)
+PROVEN: str(OrderSide.BUY) == 'OrderSide.BUY'; .lower() == 'orderside.buy';
+not in ("buy","long") -> resolves to SELL.
+The sibling at paper_trading.py:683 gets it right — its tuple includes
+"ORDERSIDE.BUY". So the two methods in the SAME FILE disagree.
+SCOPING CORRECTION TO THE AGENT (it called this CRITICAL and live): the main path
+does NOT trigger it. execution/trade_executor.py:224 sets `side = signal["action"]`
+— a lowercase str — and :449 confirms (`"long" if side == "buy"`). A str "buy" is
+handled correctly. The bug fires only for a caller passing the enum, which is the
+ABC's DECLARED type (base.py:534 `side: "OrderSide | str"`). So: real, proven, and
+a live trap for any correct-by-the-signature caller — but not currently inverting
+the executor's trades. Downgraded CRITICAL -> HIGH (latent).
+
+## F63 — no unit/lot/contract conversion layer anywhere · CRITICAL (agent-reported)
+hopefx_engine.py:1453-1463 sends the SAME risk-sized quantity as OANDA "units"
+(troy oz) or MT5 "lots" (100 oz). risk/manager.py:175 aliases lot_size and size to
+the same float. mt5.py:237 "volume": float(quantity); cme_comex.py:301 says
+"quantity is in contracts (1 = 100 oz)" and _CME_MULTIPLIER is used only for
+notional REPORTING (:175), never to convert the incoming size.
+=> risk sizes 30 oz; BROKER_TYPE=mt5 submits 30 LOTS = 3,000 oz ~ $7.2M notional.
+100x over-size. Same for CME contracts and ibkr_broker.py CONTFUT/GC.
+NOT YET RE-VERIFIED BY ME — high priority to confirm.
+
+## F64 — brokers/__init__.py:1087 is S13-03 UN-FIXED in a shadow OANDABroker · CRITICAL (agent-reported)
+    units = quantity if side == "buy" else -quantity     # strict lowercase
+then :1091 str(int(units)) truncates, and :1110 OrderSide(side) raises ValueError
+for "BUY" AFTER the order has already filled.
+`brokers.OANDABroker` resolves to THIS class, not brokers.oanda.OANDABroker.
+=> side="BUY" opens a SHORT at OANDA, then ValueError propagates and the caller
+believes the order failed. Inverted AND phantom.
+CONNECTS TO MY F20/F21 (duplicate classes): a third same-name collision.
+
+## F65 — OandaBroker / MT5Broker signatures cannot be called by the router · CRITICAL (agent-reported)
+oanda_broker.py:237 place_order(self, order_params: dict) but manager.py:379 and
+base.py:556 call place_order(symbol=, side=, order_type=, quantity=).
+Agent verified: TypeError: missing a required argument: 'order_params'.
+manager.py:206-213 registers this class as "oanda" and :247-266 puts it in the
+FAILOVER chain. => IBKR primary drops, failover selects OANDA, every order raises
+TypeError, nothing is placed. Same defect at mt5_broker.py:183 (symbol_or_params).
+
+## F66 — six connectors compare side by IDENTITY while a competing OrderSide exists · HIGH
+brokers/__init__.py:49 OrderSide values "buy"/"sell"; brokers/base.py:149 "BUY"/"SELL".
+Identity comparisons `side == OrderSide.BUY` at mt5.py:218, mt5_broker.py:212,
+ibkr_connector.py:523, interactive_brokers.py:181, ccxt_connector.py:159,
+cme_comex.py:430 all fall through to SELL for the wrong class.
+Currently no production module imports brokers.OrderSide — ONE import away from a
+repeat of S13-03. hopefx_engine.py:1443-1450 documents this exact mechanism, yet
+the duplicate enum survives.
+
+## F67 — the kill switch reports positions closed that are still open · HIGH (agent-reported)
+brokers/base.py:518-522 treats any truthy return as a successful close.
+ibkr_connector.py:679 returns True WITHOUT checking the close order;
+ccxt_connector.py:242 and alpaca.py:361 likewise; ibkr_broker.py:431 returns a
+dict, so {"success": False} is truthy and counts as closed.
+And TWO connectors can never close at all: cpp_shim_connector.py:287-290 returns
+False unconditionally; cme_comex.py:372-380 returns False whenever IBKR is absent.
+Both are registered in factory.py:129-146, so the kill switch can select them and
+then be unable to flatten.
+=> drawdown breach fires the kill switch, logs "closed XAUUSD", positions stay open.
+COMPOUNDS F59: no stop, and the last-resort flatten reports false success.
+
+## F68 — no close_position anywhere returns a closed QUANTITY · HIGH (agent-reported)
+Every connector returns bool or dict. A partial close is indistinguishable from a
+full one at the connector boundary — and the executor already assumes full (my F45
+notes trade_executor.py:770 reports filled_quantity=position.quantity).
+mt5.py:404 close_volume = quantity or position.volume applied PER TICKET: closing
+0.5 with two open tickets closes 0.5 from EACH; quantity=0.0 silently means
+"close everything".
+
+## F69 — oanda_stream.py:336 truncates units to zero (the live hopefx_engine path) · HIGH
+str(int(signed_units)) — int() not round(), and no zero guard, unlike oanda.py:146-165
+which RAISES on rounding to zero. 0.9 oz -> "0" -> OANDA rejects UNITS_INVALID ->
+:358-360 swallows it and returns None. 3.9 oz silently becomes 3.
+
+## F70 — a timed-out OANDA order is reported as REJECTED · HIGH (agent-reported)
+oanda.py:456-458 after retries returns {"status":"rejected","reason":"max_retries:timeout"}.
+The order may have filled. brokers/smart_router.py:165-172 explicitly refuses to do
+this ("a timeout is NOT a confirmed failure"); oanda.py does it anyway.
+=> caller sizes the next signal as flat and doubles the position.
+
+## F71 — CME_PAPER_FALLBACK defaults to TRUE · HIGH (agent-reported)
+cme_comex.py:131; connect() :269 sets connected = fix or ibkr or paper_fallback;
+place_order :314 routes to _place_paper.
+=> BROKER_TYPE=cme with no FIX credentials reports CONNECTED, publishes
+connected=True, and the executor books SIMULATED fills as real positions and P&L.
+
+## F72 — fabricated equity=0.0 in connectors, which base.py:315-325 forbids · MED-HIGH
+ccxt_connector.py:269 and :272 (the latter INSIDE except, so a transient exchange
+error reports zero equity), cme_comex.py:332-338, cpp_shim_connector.py:267-273.
+ibkr_connector.py:686 correctly RAISES instead — that is the right pattern.
+CONNECTS TO MY F16 (the $100k fabricated default): same rule, opposite direction —
+0.0 fails safe for sizing but misreports the account.
+
+## CLEAN (agent verified, worth recording): no hardcoded secrets, no credential
+defaults, no tokens in URLs, no credentials logged, and NO TLS bypass anywhere in
+brokers/ (grep for verify=False / ssl=False / CERT_NONE returns nothing). All auth
+via Authorization headers. Every BrokerConnector subclass has __abstractmethods__
+== () — zero NotImplementedError in brokers/.
