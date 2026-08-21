@@ -1721,3 +1721,46 @@ alone would have reported the wrong cause.
 
 Severity HIGH: a silent, permanent, order-dependent choice of which price feed
 the whole nuclear stream trusts, with no way to observe it went the wrong way.
+
+## F90-VERIFIED — four quality functions are dead, and the engine's own anomaly verdict is discarded by the consensus · MEDIUM
+AGENT CLAIM #5, verified exactly as stated. Both halves hold.
+
+(a) ZERO CALLERS anywhere in the repo (grep excluding .venv, definitions
+    excluded from the match):
+      data_layer/quality/engine.py:650  mark_source_stale()
+      data_layer/quality/engine.py:699  get_kalman_price()
+      data_layer/quality/engine.py:719  detect_arbitrage()
+      data_layer/quality/engine.py:778  compute_ml_anomaly_score()
+        — one caller, get_all_ml_anomaly_scores() at :832, which itself has
+          ZERO callers. Transitively dead, including the sklearn
+          IsolationForest path behind it.
+    So the Kalman filter is computed on every tick (:361-363) and its smoothed
+    price is never read by anything; the per-source ML anomaly features are
+    accumulated on every tick (:428) and never scored; and there is no way for
+    any operator or watchdog to mark a source stale, because the function that
+    would do it is never called.
+
+(b) SUSPECT TICKS ARE NOT EXCLUDED FROM CONSENSUS. engine.py:500:
+        valid = {src: t for src, t in ticks.items()
+                 if t.is_valid() and t.quality != TickQuality.REJECTED}
+    TickQuality has four members (data_layer/types.py:62-66): GOOD, STALE,
+    SUSPECT, REJECTED. Only REJECTED is filtered — GOOD, STALE and SUSPECT all
+    enter the weighted consensus.
+
+    SUSPECT is the verdict of the engine's three statistical detectors: Kalman
+    innovation > 3 sigma (:366-370), rolling z-score (:429-435), and Mahalanobis
+    distance > 6.0 (:412-418). When any of them fires, the ONLY consequence that
+    survives is a confidence penalty of 0.01, 0.03 or 0.02 respectively.
+
+    That penalty is negligible against the weighting in F82. The weight is
+    `confidence / latency / max(spread, 0.01)`: the spread term alone varies the
+    weight by two orders of magnitude, so a 0.06 confidence deduction (all three
+    detectors firing at once, on a 1.0 baseline) barely moves a source's share.
+    A source can be flagged anomalous by every detector the engine has and still
+    carry the consensus.
+
+Severity MEDIUM: no gate is bypassed, but roughly half of the DataQualityEngine
+— the Kalman filter, the IsolationForest scorer, the arbitrage detector — is
+computed or maintained on the hot path and never consulted by anything, and the
+detectors that DO run have no effective authority over the price that results.
+This is worth knowing before anyone cites "the DQE validates ticks" as a control.
