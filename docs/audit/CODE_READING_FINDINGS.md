@@ -1829,3 +1829,67 @@ implies, in opposite directions, so recording the corrected version.
 
 Severity MEDIUM: (a) is live but bounded by the severity floor; (b) and (c) are
 latent and cheap to close (clamp with min(), assert the spaces at load).
+
+## F92-VERIFIED — losing feeds is invisible to every downstream gate until only one remains · MEDIUM
+AGENT CLAIMS #2 and #3, both confirmed; recording them together because they are
+the same hole seen from two sides.
+
+The consensus confidence (data_layer/quality/engine.py:551) is a weight-average
+over the INLIERS, and the weights are renormalised to sum to 1 first (:547-548):
+    norm_w2 = {s: w/total_w2 ...}
+    conf    = sum(self._sources[s].confidence * norm_w2[s] for s in inliers)
+Renormalisation is exactly what erases the source count. Losing a feed
+redistributes its share among the survivors and leaves the number unchanged:
+    3 healthy sources (confidence 1.0 each) -> consensus confidence 1.000
+    2 healthy sources (confidence 1.0 each) -> consensus confidence 1.000
+    1 healthy source                        -> consensus confidence 0.500
+Only the explicit `len(inliers) < 2` branch (:558-560, factor
+DQE_SINGLE_SOURCE_CONF_FACTOR=0.5) registers anything, and only at exactly one
+source. A 3->2 loss — half the redundancy gone — produces no signal anywhere:
+same confidence, no gate, no counter, no log.
+
+And the single-source degrade that does fire is not enough to trip anything.
+Per F83 the gate is `tick.confidence < 0.30` (orchestrator.py:1094); a lone
+healthy source yields 0.500, which passes. Combined with
+    MIN_FEED_QUORUM default 1 (feeds/gold/manager.py:305)
+a single feed can drive execution end to end. The code says so itself, in the
+comment at manager.py:297-304: "Default 1 preserves prior single-feed behaviour;
+operators handling live capital should raise this to >= 2 so a lone source can
+never drive execution."
+That is an honest, documented default rather than a hidden bug — so #2 is a
+RISKY DEFAULT, not a defect. It is recorded here because the deployment this
+repo ships (prop_firm_mode.json enabled, live OANDA as the next milestone) is
+precisely the "handling live capital" case the comment warns about, and nothing
+in the startup path raises it or warns that it is 1.
+
+## F93-VERIFIED — the DQE claims lineage writes it does not make; cached ticks default to full confidence · LOW/MEDIUM
+AGENT CLAIMS #15 and #16, both confirmed.
+
+(#15) data_layer/quality/engine.py:31, in the module docstring:
+    "All decisions are logged with structured fields and written to the lineage store."
+The file never imports or touches the lineage store. The only two occurrences of
+"lineage" in the whole module are field copies — `lineage_id=tick.lineage_id` at
+:474 and :868 — which propagate an id the DQE did not create and does not
+persist. Every accept/reject decision it makes is logged and then gone.
+Worse, the rejections are logged at DEBUG (`_reject`, :846-852) — invisible at
+default log level. The one exception is the cross-source outlier exclusion at
+:524, which does log at WARNING.
+The lineage store that DOES exist is written from the orchestrator's `_on_tick`
+— which per F87 runs only on the Redis cache-miss read path. So the "immutable
+audit trail" records cache misses, not the tick stream, and contains no record
+of a single DQE rejection.
+Severity LOW as a defect, but it matters for anyone treating the lineage store
+as the audit answer to "why did we trade on that price".
+
+(#16) data_layer/orchestrator.py:721, rehydrating a tick from the Redis cache:
+    confidence=cached.get("confidence", 1.0),
+A cached entry missing the `confidence` key is rehydrated at FULL confidence —
+the one value that passes every downstream gate unconditionally. The adjacent
+lines show the author's own better instinct: `source` is required and raises if
+absent (:709-711, "rather than labelling the tick with a fabricated origin"),
+`spread` defaults to 0.0 and `lineage_id` to "". Confidence is the only field
+that defaults to the maximally permissive value instead of the neutral one.
+Latent: the writer currently always sets the field. It becomes live the moment a
+cache entry is written by an older/newer version, by hand, or by any other
+producer. Severity MEDIUM-latent; a one-word fix (default 0.0) makes it fail
+closed like its neighbours.
