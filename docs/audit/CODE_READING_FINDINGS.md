@@ -1661,3 +1661,63 @@ Severity: HIGH for path 2 (an engine that silently generates no signals) and for
 the dead-code gate (monetisation not enforced where the code says it is);
 MEDIUM for the latent fail-open. NOT the "only starter strategies run in
 production" the agent described — in production no tier check runs at all.
+
+## F89-CORRECTED — NuclearStreamer's anomaly filter picks a winner by ARRIVAL ORDER, not by correctness · HIGH (proven by execution)
+AGENT CLAIM #8: "NuclearStreamer uses ONE global _last_price across all sources,
+so a single >5% divergent feed can silence the entire stream (alternating
+rejection)."
+
+The premise is right, the failure mode is not. There is no alternation and the
+stream is never silenced. What actually happens is a permanent lock-out of every
+source that disagrees with whichever source ticked first.
+
+data_feed/nuclear_streamer.py:303-305 — note the asymmetry the author left:
+    self._price_lock  = asyncio.Lock()
+    self._last_price: float | None = None      # <-- ONE value, all sources
+    self._anomaly_counts: dict[str, int] = {}  # <-- per source
+    self._dedup_cache: dict[str, deque] = {}   # <-- per source
+Everything else in this class is keyed by source. The price is not.
+
+:654-668, inside `process_tick`:
+    async with self._price_lock:
+        if self._last_price is not None:
+            pct_change = abs((price - self._last_price)/self._last_price)*100.0
+            if pct_change > self.anomaly_jump_pct:      # default 5.0 (:262)
+                self._anomaly_counts[source] += 1
+                return          # <-- returns BEFORE updating _last_price
+        self._last_price = price
+Because the discard path returns before the assignment, a rejected source never
+gets to move the baseline. The first source to tick sets `_last_price` and then
+rejects every divergent source forever — and `_last_price` is never reset
+anywhere (assigned only at :304 and :668, no timeout, no per-source expiry), so
+the lock-in lasts for the life of the process.
+
+PROVEN (scratchpad/f8b.py — two feeds 6% apart, jittered so dedup never fires):
+    --- feedA (3300) ticks first (threshold anomaly_jump_pct=5.0%) ---
+      feedA: 5/5 accepted
+      feedB: 0/5 accepted
+      _last_price=3300.44  anomaly_counts={'feedB': 5}
+    --- feedB (3500) ticks first ---
+      feedA: 0/5 accepted
+      feedB: 5/5 accepted
+      _last_price=3500.52  anomaly_counts={'feedA': 5}
+Same code, same feeds, same prices — the only variable is which one arrived
+first, and it fully determines which price the platform trades on.
+
+WHY THIS MATTERS: the filter has no notion of which price is correct. If the
+broken feed (a decimal shift, per-gram instead of per-ounce, a provider
+returning silver) happens to connect first, it takes ownership of `_last_price`
+and every *correct* feed is discarded as the anomaly, indefinitely, while the
+stream keeps publishing the wrong price at full rate and looks perfectly healthy.
+`_anomaly_counts` records the rejections per source, but nothing reads it to
+decide the baseline was wrong.
+
+METHOD NOTE (recorded because it nearly produced a wrong finding): my first
+attempt fed each source the identical price repeatedly and measured 5 rejections
+but `anomaly_counts == 1`. The discrepancy was the per-source dedup ring buffer
+(:307-312) swallowing ticks 2-5 before they reached the anomaly check — not the
+anomaly filter at all. Jittering the prices isolated the mechanism. Reasoning
+alone would have reported the wrong cause.
+
+Severity HIGH: a silent, permanent, order-dependent choice of which price feed
+the whole nuclear stream trusts, with no way to observe it went the wrong way.
