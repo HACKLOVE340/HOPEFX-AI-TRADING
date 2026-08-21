@@ -5,7 +5,7 @@ was verified against code at the file:line cited; entries that dissolved on
 inspection are recorded as retracted rather than deleted, so they are not
 re-found later and re-reported as bugs.
 
-**Status: in progress.** ~95 files read directly by me, plus 2 of 8 completed domain audits. Eight
+**Status: in progress.** ~95 files read directly by me, plus 3 of 8 completed domain audits (execution, ML, payments). Eight
 domain audits were running when this was written; their findings are not yet
 merged in.
 
@@ -601,3 +601,166 @@ api/billing.py:620-623 tx_ref = "FLW-" + sha256(user:plan:amount:currency)[:24] 
 no nonce, no period. Next month's renewal produces the identical tx_ref, the verify
 endpoint short-circuits on the cached record (:666-673) and returns
 {"verified":true,"idempotent":true} WITHOUT collecting payment or re-activating.
+
+════════ EXECUTION AGENT (3 of 8 done) — 20 findings, top ones re-verified by me ════════
+
+## F45 — *** NO WORKING STOP-LOSS: broker never gets one, and the local monitor is dead *** · CRITICAL
+RE-VERIFIED BY ME, EMPIRICALLY. Two independent halves, both confirmed:
+
+(a) No broker-side stop is ever placed.
+    execution/trade_executor.py:409-414 calls place_market_order(symbol, side,
+    quantity, client_order_id) — stop_loss/take_profit are NOT passed; they are
+    only written onto the local Position object at :466-467.
+    brokers/base.py:554-560 discards them even when passed, and says so:
+      "bracket SL/TP not applied at entry (per-broker); they are logged and ignored"
+    execution/engine.py:1336-1343 likewise omits them from _po_kwargs.
+
+(b) The compensating local monitor throws on its first position, forever.
+    hopefx_engine.py:475-479 (inside HopeFXEngine.start()) constructs
+      ExecutionEngine(position_manager=self._position_tracker)   <- a PositionTracker
+    execution/engine.py:430-437 then starts SLTPMonitor(position_manager=that).
+    sl_tp_monitor.py:194 positions = self._pm.get_all_positions()
+    sl_tp_monitor.py:202 `if pos.position_id in self._closing:`   <- AttributeError
+    Proven by running it:
+        PositionTracker.get_all_positions : exists, returns list[Position]  (:149)
+        Position has .id                  : True
+        Position has .position_id         : False
+        reading pos.position_id           -> AttributeError
+    The monitor's own comment at :200 says "get_all_positions() returns
+    dict[str, Position]" — that is PositionManager's signature (:538), not
+    PositionTracker's (:149, returns a list). It was written for a different class.
+    sl_tp_monitor.py:181-184 _loop catches it: logger.error(...) then sleeps and
+    retries every poll. So it fails silently-ish forever, at ERROR level, with no
+    alert and no halt.
+    _close_position would also TypeError: it calls self._pm.close_position(symbol=,
+    fill_price=) but PositionTracker.close_position takes (position_id, exit_price,
+    commission) (:95).
+
+CORRECTION TO THE AGENT: it claimed "in the app.py/container path the SL/TP monitor
+does not exist" because core/startup_factories.py never constructs an
+ExecutionEngine. That is wrong — startup_factories.py:2941 init_trading_engine()
+constructs HopeFXEngine INSIDE the API process, and line 475 sits inside
+HopeFXEngine.start(), so the monitor IS constructed and started there. The monitor
+exists; it is simply dead on arrival because of the attribute mismatch. Same
+outcome, different mechanism — worth stating correctly.
+
+NET: an open position has no broker stop and no functioning local stop watcher.
+Loss is bounded only by margin call.
+Severity: CRITICAL.
+
+## F46 — risk_approval_token is carried but never verified · HIGH (agent-reported)
+Minted at risk/manager.py:1017 as f"rat-{lineage_id}". Read in exactly three
+places, all pure truthiness: trade_executor.py:355-372, oms.py:196-207,
+smart_router.py:549-558, all feeding enforcement.py:573 `if not _get(...)`.
+No issued-token registry, no binding to symbol/side/qty/notional, no expiry, no
+single-use consumption, no signature. Any non-empty string authorizes any order.
+S1-05 removed the manufactured constant from TradeExecutor, but the check it feeds
+is still unfalsifiable in substance — a stale or foreign token passes identically.
+COMPOUNDING (agent): trade_executor.py:378 derives decision_id FROM the token
+immediately before enforcement checks decision_id is non-empty — so the
+"No Hidden Decision" half is unfalsifiable at that call site too.
+AND (agent): HOPEFXDecisionEngine.py:553/:595 stores the token as INSTANCE state,
+so two decisions in flight on one engine carry the wrong symbol's token.
+
+## F47 — a gate REJECTION triggers the bypass · CRITICAL (agent-reported)
+hopefx_engine.py:1519-1527: when SmartRouter returns
+{"status":"rejected","reason":"unauthorized:..."} from enforce_order_authorization,
+the caller logs "SmartRouter rejected — falling back to direct order" and then
+calls self._broker.place_order(**order_kwargs) DIRECTLY, with no gate.
+The sr_request built at :1493-1506 carries no risk_approval_token and no
+decision_id, so under enforce mode it is rejected by construction.
+=> the constitutional gate's refusal is the trigger for bypassing it.
+
+## F48 — router "unknown" (timeout) is classified as success · CRITICAL (agent-reported)
+execution/smart_router.py:616-620 deliberately returns status="unknown" on timeout
+so the caller will reconcile rather than assume. hopefx_engine.py:1509 tests
+`status not in ("rejected","error")` — "unknown" passes. :1530 then reads
+result.get("fill_price", exec_price), and the key is absent, so the REQUESTED price
+is booked as the fill. The branch written to prevent an unverified position is the
+branch that creates one.
+
+## F49 — large orders silently void; a phantom full-size position is booked · CRITICAL (agent-reported)
+smart_router.py:217 wires self._algo.set_broker_submit_fn(self._submit_child_order).
+_submit_child_order is (self, child_order_dict: dict) — one positional param, no
+**kwargs. algo_orders.py:256-266 calls it with symbol=, side=, quantity=,
+order_type=, metadata= -> TypeError, which is not caught by :299 or :814, so the
+algo task dies on its first child. Meanwhile _route_via_algo returned
+{"status":"algo_submitted"}, which hopefx_engine.py:1509 treats as a fill.
+=> orders >= ALGO_LARGE_ORDER_THRESHOLD (default 10.0) are never sent anywhere, and
+the system books a full-size position it does not hold. Closing that phantom later
+sends a REAL opposite-side market order.
+
+## F50 — cancel never reaches the broker · HIGH (agent-reported)
+oms.py:334-340 cancel_order() only transitions to PENDING_CANCEL. Nothing in the
+repo transitions PENDING_CANCEL -> CANCELLED and nothing calls the broker to cancel.
+A "cancelled" partially-filled order stays live at the broker forever.
+Related: OCO _cancel_siblings (:457-468) relies on this, so BOTH legs of an OCO can
+fill; and bracket exits created by _place_bracket_exits (:497-529) are never
+submitted at all — TP and SL sit in CREATED forever.
+
+## F51 — FIX adapter discards every fill after the first report · HIGH (agent-reported)
+fix_adapter.py:1063-1064 pops the pending future on the FIRST ExecutionReport of any
+non-REJECTED ExecType — including NEW ("0") and PARTIAL_FILL. Real FIX sessions send
+ExecType=0 first, so send_order returns filled_qty=0 and all subsequent reports are
+discarded at :1066-1071 as "unsolicited exec report" (debug level).
+
+## F52 — order idempotency is effectively absent · HIGH (agent-reported)
+client_order_id is minted fresh per call (trade_executor.py:405) — a correlation id,
+not an idempotency key. It never reaches the broker anyway: brokers/base.py:562-568
+drops it. TradeExecutor._pending_orders (:131) is read at :1045 but NEVER WRITTEN.
+self._lock (:133) is not taken in _execute_open. Neither router carries a dedup key.
+
+## F53 — crash recovery never reconciles ORDERS against the broker · HIGH (agent-reported)
+redis_state.py load_state_on_boot() is a pure Redis read — no broker call in the
+file. Position reconciliation exists (position_manager.py:639) but only diffs
+positions; persisted orders are never compared to the broker's open orders.
+audit_order_intents() (:661) only LOGS orphans at CRITICAL (:684-698) — never
+cancels, adopts or flattens. Its only handle is client_order_id, which per F52 was
+never transmitted, so its own instruction "Verify against the broker" cannot be
+executed. Under --mode engine PositionTracker is in-memory only: no persistence,
+no reconciliation at all.
+
+## F54 — timeout re-routing holes (agent-reported)
+Both routers' PRIMARY leg is correct (returns unknown, does not re-route). Holes:
+  brokers/smart_router.py:195-214 fallback loop wraps _execute_with_timeout in a
+    bare `except Exception: continue` — a TimeoutError on fallback #1 advances to #2.
+  execution/smart_router.py:598-602 any non-"filled" result — the comment names
+    "partial" — re-routes the FULL quantity to the next broker.
+  execution/smart_router.py:621-624 ConnectionError/RuntimeError after the write is
+    treated as confirmed failure and re-routed.
+  hopefx_engine.py:1328-1332 an ExecutionEngine TimeoutError -> status ERROR ->
+    "falling back to direct" -> resubmits. Duplicate fill.
+
+## F55 — OMS state-machine defects (agent-reported)
+  :291-293 a broker TIMEOUT is recorded as REJECTED; OrderStatus has no UNKNOWN
+    member and VALID_TRANSITIONS has no unknown sink. A live order is recorded as
+    refused, so the strategy resizes as flat and resubmits.
+  :307-332 fill_order mutates filled_quantity/avg_fill_price FIRST, then
+    _transition rejects PARTIALLY_FILLED -> PARTIALLY_FILLED (not in the table at
+    :127) and returns False. Quantity silently absorbed, no event, no history record
+    for fills 2..N of a multi-fill order.
+  :342-349 expire_orders: PARTIALLY_FILLED -> EXPIRED is illegal so _transition
+    returns False, but active_orders.discard() runs UNCONDITIONALLY. A live
+    partially-filled resting order becomes invisible to the OMS.
+  :148-153 create_order always transitions CREATED -> CREATED (illegal), so every
+    creation logs "Invalid transition" and writes NO order_history record.
+  :488-494 create_bracket registers a GLOBAL FILLED callback closing over that
+    bracket's prices; after M brackets any single fill fires all M callbacks.
+CONNECTS TO MY F17: I found the invariant table is MORE permissive than the OMS.
+These are cases where the OMS table is too STRICT for its own code paths — the two
+tables are wrong in opposite directions.
+
+## F56 — ExecutionEngine.execute() has no authorization gate at all · HIGH (agent-reported)
+ExecutionRequest (engine.py:140-153) has no risk_approval_token and no decision_id
+field, and grep for "enforce_" in execution/engine.py returns only the docstring.
+The path hopefx_engine.py calls the "canonical execution path" (:471) enforces
+PreTradeGate but never the No-Unauthorized-Trade invariant.
+Also :1382 an unrecognised broker status defaults to SUBMITTED, which counts as
+success -> a "successful" report with filled_quantity=0 is booked as an open
+position at exec_price.
+
+## F57 — conflicting k8s enforcement defaults (agent-reported, extends my F3/F10)
+k8s/k8s-configmap.yaml:40 sets HOPEFX_INVARIANT_MODE "enforce";
+deployments/k8s/configmap.yaml:14 sets "monitor".
+A SECOND k8s configmap I had not found. In monitor mode enforcement.py:249-252
+returns allowed=True unconditionally, so every gate in F46/F47/F56 logs and permits.
