@@ -1370,3 +1370,123 @@ unreachable with >=2 sources, and reachable with exactly one source only once th
 source has degraded to roughly 0.60 confidence or below.
 Both thresholds are the same literal 0.30, so raising DQE_MIN_CONFIDENCE alone
 would not help — it raises the floor and the gate together.
+
+## F84-VERIFIED — the data-layer safety gate is skipped in exactly the condition it exists for · CRITICAL (proven by execution)
+execution/engine.py:687, inside `_enrich_price_from_data_layer`:
+
+    if orchestrator._started and not orchestrator.is_safe_to_trade():
+        await self._inc_blocks()
+        return self._blocked_report(request, "[DATA_LAYER] Unsafe trading conditions ...", t0)
+
+The `_started` conjunct makes the whole gate a no-op whenever the data layer is
+not running. That is not a rare state — it is the *normal degraded state*, and
+it is produced by a code path that deliberately swallows the failure:
+
+core/startup_helpers.py:95-116 `start_data_layer_orchestrator` is documented
+"(non-fatal)". It wraps `orchestrator.start()` in
+`asyncio.wait_for(..., timeout=ORCHESTRATOR_STARTUP_TIMEOUT_S default 60.0)`
+and catches BOTH `TimeoutError` and bare `Exception`, logging each at
+**warning** level and returning normally. The app then continues to serve and
+to execute orders.
+
+`_started = True` is set at data_layer/orchestrator.py:573 — the very END of
+`start()`, after all ten feed-startup steps. So a timeout or a raise anywhere in
+those ten steps leaves `_started` False permanently, with no retry.
+
+PROVEN BY RUNNING IT (scratchpad/f13.py against the real singleton):
+    fresh singleton _started = False
+    is_safe_to_trade()       = False        <-- the check says UNSAFE
+    gate expression blocked? = False        <-- but nothing is blocked
+    ... after asyncio.wait_for(o.start(), timeout=0.001):
+    after timeout, _started  = False
+    gate blocked?            = False
+
+So `is_safe_to_trade()` correctly reports unsafe and the caller discards that
+answer. Every check the gate is supposed to enforce is bypassed:
+  1. macro-event blackout window   (is_blackout_window)
+  2. no live tick at all           (tick is None -> fail closed)
+  3. tick confidence < 0.30
+  4. gold feed with zero active sources for >30s
+
+WHAT MAKES THIS A DEFECT RATHER THAN A DESIGN CHOICE — the sibling call sites of
+the same function do not do this, and one of them says in a comment that failing
+open here is wrong:
+  * ml/inference_engine.py:1391-1407 — wraps it and on ANY failure to reach the
+    orchestrator logs "failing CLOSED (not safe)" and returns False.
+  * execution/hopefx_engine.py:392 — `if not self._orch.is_safe_to_trade():`,
+    no `_started` guard at all.
+  * data_layer/orchestrator.py:1089-1093 — inside the function itself, the
+    author wrote "No tick means no live price — fail CLOSED: a missing tick must
+    NOT be treated as safe to trade."
+execution/engine.py:687 is the only call site that inverts that decision, and it
+is the one on the order-placement path.
+
+Severity CRITICAL: this is a risk-gate bypass on the execution path, reachable
+by nothing more than a slow or unreachable feed at boot — the same condition
+that makes trading unsafe is the condition that disables the check for it.
+
+## F85-VERIFIED — the price-jump filter is 100% dead on three of the six gold feeds · HIGH (proven by execution)
+The staleness threshold is shorter than three feeds' own poll intervals, so those
+feeds are *by construction* always "stale" at the moment their next tick is
+validated — and the jump check is gated behind not-stale.
+
+    data_layer/quality/engine.py:53   STALE_THRESHOLD_S = 30.0   (DQE_STALE_THRESHOLD_S)
+    data_layer/quality/engine.py:52   MAX_JUMP_PCT      = 0.005  (0.5%)
+    data_layer/quality/engine.py:198  is_stale() -> (time.time() - last_tick_ts) > 30 and last_tick_ts > 0
+    data_layer/quality/engine.py:331  _is_stale = state.is_stale()
+    data_layer/quality/engine.py:334  if state.last_mid > 0 and not _is_stale:   <-- jump check
+
+    data_layer/feeds/gold/manager.py:52-59  _POLL_INTERVALS
+        GOLDAPI 5.0 | METALS_DEV 10.0 | YAHOO 5.0
+        METALS_API 60.0 | METALPRICEAPI 60.0 | COMMODITY_API 60.0
+
+`state.last_tick_ts` is not written until engine.py:448 — long AFTER the jump
+check at :334. So when tick N is validated, `last_tick_ts` still holds tick N-1's
+arrival time, which for a 60-second feed is always ~60s old. 60 > 30, so
+`_is_stale` is True on every tick after the first, and the guard at :334 is never
+satisfied. This is not intermittent: for METALS_API, METALPRICEAPI and
+COMMODITY_API the jump filter never executes at all.
+
+PROVEN BY RUNNING THE REAL ENGINE (scratchpad/f6.py) — identical DataQualityEngine,
+identical tick sequence, only the cadence differs:
+
+  60-second cadence (the real METALS_API interval):
+    t=+  0s mid= 3300.0 -> quality=good     conf=1.000  jump_count=0
+    t=+ 60s mid= 3301.0 -> quality=stale    conf=0.981  jump_count=0
+    t=+120s mid= 3302.0 -> quality=stale    conf=0.962  jump_count=0
+    t=+180s mid= 9999.0 -> quality=stale    conf=0.943  jump_count=0   <-- +203%, ACCEPTED
+    t=+240s mid= 3303.0 -> quality=stale    conf=0.924  jump_count=0
+
+  5-second cadence, same engine, same jump:
+    t=+ 15s mid= 9999.0 -> quality=rejected conf=0.000  jump_count=1   <-- REJECTED
+    ("DQE jump detected source=metals_api jump_pct=2.0282 mid=9999.00 prev=3302.00")
+
+A 203% move passes on the slow feeds and is rejected on the fast ones. Note the
+bad tick is not caught by the sanity bounds either: MAX_GOLD_PRICE is 10000.0
+(engine.py:63), so 9999 is in range — and the realistic corruptions (a decimal
+shift, a stale cached quote, a provider returning silver) sit comfortably inside
+500..10000 too.
+
+The rationale comment at :325-330 is sound in itself — after a genuine silence
+gap the pre-gap `last_mid` is a bad baseline. The defect is that the code cannot
+distinguish "this feed went silent" from "this feed polls slower than the
+staleness threshold", so a normal, healthy, on-schedule 60s feed is permanently
+treated as recovering-from-a-gap.
+
+SECOND-ORDER EFFECT (different duty cycle — stated separately because it is NOT
+100%): three other places filter on `not is_stale()` and evaluate it at their own
+call time, not inside validate_tick:
+    engine.py:596-597  best_source()      — highest-confidence non-stale source
+    engine.py:661      generate_report()  — the `active` source list
+    engine.py:671      the reconstructed last_known_ticks fed to cross_source_consensus
+For a 60s feed, `is_stale()` is False for the 30s following each tick and True for
+the next 30s. So these three sources flicker in and out of consensus and out of
+best_source on a ~50% duty cycle, and the consensus composition changes every 30
+seconds with no price having moved. Combined with F82 (inverse-spread weighting),
+a feed dropping out of the consensus set redistributes its weight abruptly.
+
+Severity HIGH: the jump filter is one of only two defences against a corrupt
+price entering the consensus (the other is the 500..10000 bounds check, which is
+far too wide to catch a plausible bad quote), and it is switched off on half the
+feeds by an interaction between two constants that were plainly chosen
+independently. Non-obvious from reading either file alone.
