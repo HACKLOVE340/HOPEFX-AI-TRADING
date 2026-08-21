@@ -1893,3 +1893,78 @@ Latent: the writer currently always sets the field. It becomes live the moment a
 cache entry is written by an older/newer version, by hand, or by any other
 producer. Severity MEDIUM-latent; a one-word fix (default 0.0) makes it fail
 closed like its neighbours.
+
+## F94 — *** REGIME DETECTION NEVER RUNS, AND ITS UNUSED DEFAULT HALVES EVERY POSITION *** · HIGH (proven by execution)
+AGENT CLAIM #9: "RegimeRouter computes a confidence and never uses it; UNKNOWN
+routes to TrendFollowing. Two incompatible regime taxonomies (brain vs router)."
+
+Every part is true, and following it to the sizing code turns it into something
+much larger than a routing nit.
+
+STEP 1 — `RegimeRouter.route()` IS NEVER CALLED. Grepping `\.route(` across the
+repo (excluding .venv, tests, and the unrelated `research/pipeline` RegimeRouter
+and `execution/order_algorithms.py` order router) leaves only
+strategies/regime_router.py:27 — a usage example inside a docstring — and an
+ASCII diagram in brain/hopefx_brain.py:28. Nothing invokes it.
+`init_regime_router` (core/startup_factories.py:1793) builds the object and
+stores it on app_state; `api/trading.py:3872-3875` reads `regime_history()` from
+it. The detector itself is never run.
+
+STEP 2 — so its state never leaves the constructor. :302-303:
+    self._last_regime: str = REGIME_UNKNOWN   # "unknown"
+    self._last_confidence: float = 0.0
+`route()` (:316-318) is the only writer of both.
+
+STEP 3 — that constant propagates into live position sizing:
+    strategies/regime_router.py:397  status()["current_regime"] -> "unknown"
+    core/regime_router.py            get_current_regime() reads status()
+    core/signal_engine.py:1958-1963  regime_name = regime_result["regime"]
+    core/signal_engine.py:1471       regime_scalar = get_regime_position_scalar(regime_name)
+    core/signal_engine.py:175-181    return _REGIME_SIZE_MAP.get(name.upper(), 0.5)
+    core/signal_engine.py:1472-1481  if regime_scalar < 1.0:
+                                         scaled_size = sizing.recommended_size * regime_scalar
+                                         return scaled_size
+
+PROVEN BY RUNNING THE REAL OBJECTS:
+    RegimeRouter fresh (route() is never called anywhere in the app):
+       status()["current_regime"] = 'unknown'
+       status()["confidence"]     = 0.0
+    get_current_regime() -> regime = 'unknown'
+    get_regime_position_scalar('unknown') = 0.5
+    so signal_engine.py:1473  scaled_size = recommended_size * 0.5
+
+EVERY position that goes through this path is sized at exactly HALF the size the
+risk manager approved, permanently, and the log line at :1474 reports it as
+"Regime-conditional sizing ... regime=unknown scalar=0.50" — which reads like the
+feature working rather than a detector that never ran.
+
+_DEFAULT_REGIME_SIZE_MAP (signal_engine.py:148-156) is entirely inert:
+    TRENDING_UP 1.0 | TRENDING_DOWN 1.0 | MEAN_REVERTING 0.6 | RANGE_BOUND 0.5
+    HIGH_VOL 0.3    | LOW_VOL 0.8       | UNKNOWN 0.5
+Only the UNKNOWN row is ever selected. The 0.3 high-volatility de-risking that
+this table exists to provide can never engage.
+
+The direction is conservative — half size, not double — so this is not a runaway
+risk. It is still a HIGH finding: a documented adaptive risk control is dead, its
+protective branch unreachable, and the platform silently trades at half its
+intended size while logging as if the control were live.
+
+THE REST OF CLAIM #9, confirmed:
+  * confidence is computed by `detect_regime` (:86-139, returns
+    (label, confidence)), stored, logged and published in the REGIME_CHANGE
+    event (:341) — but `_select_strategy(regime)` (:354) takes only the regime.
+    Confidence never influences routing. A regime detected at 0.3 (the UNKNOWN
+    fallback at :139) routes identically to one at 1.0. There is no minimum.
+  * `REGIME_UNKNOWN: "TrendFollowing"` (:75), documented at :20 as the "safe
+    default". Routing an unrecognised regime to a trend-following strategy is a
+    directional bet, not a safe default. Moot today since route() never runs.
+  * The taxonomy problem is bigger than "two". There are FIVE separate
+    `MarketRegime` enums, none of which share members with the router's strings:
+        ml/regime.py:44   brain/brain.py:44   analysis/market_analysis.py:56
+        nocode/ml_nodes.py:65   backtesting/enhanced_engine.py:104
+    plus the seven REGIME_* string constants in strategies/regime_router.py:49-55.
+    Six taxonomies for one concept. Note `_REGIME_SIZE_MAP`'s keys match the
+    router's strings (upper-cased) and NOT any of the enums — so even if a brain
+    regime were routed into the sizing call, `.get(name.upper(), 0.5)` would miss
+    and return the same 0.5 default. The fail-open default is what hides the
+    mismatch.
