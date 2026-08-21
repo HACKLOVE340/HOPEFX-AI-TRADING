@@ -1764,3 +1764,68 @@ Severity MEDIUM: no gate is bypassed, but roughly half of the DataQualityEngine
 computed or maintained on the hot path and never consulted by anything, and the
 detectors that DO run have no effective authority over the price that results.
 This is worth knowing before anyone cites "the DQE validates ticks" as a control.
+
+## F91-CORRECTED — the RL nuclear supervisor: obs fail-open is real and live; the missing clamp is latent · MEDIUM
+AGENT CLAIM #11a: "RL escalation has no upper clamp; _normalize_obs silently
+returns RAW obs on VecNormalize failure — obs the policy never saw in training."
+
+Both parts are literally true. Their weight is different from what the claim
+implies, in opposite directions, so recording the corrected version.
+
+(a) THE OBS FAIL-OPEN IS REAL AND LIVE. brain/nuclear_supervisor.py:303-319:
+        if self._vec_normalize is None:
+            return obs                                  # path 1
+        try:
+            ... return self._vec_normalize.normalize_obs(batched)...
+        except Exception as exc:
+            logger.debug("VecNormalize.normalize_obs failed (%s) — using raw obs")
+            return obs                                  # path 2
+    Path 1 is entered when `_load_vec_normalize` fails, which it does quietly
+    (:293-301 logs a WARNING; :256-260 logs at DEBUG when the file is simply
+    absent). Path 2 swallows ANY exception at DEBUG.
+    The observation space is bounded — decoded from the committed artifact below
+    as Box(shape=(7,), low=[0,0,-1,...], high=[1,5,1,...]) — and the policy was
+    trained on VecNormalize-scaled inputs. Returning raw obs feeds the policy
+    values it never saw, and nothing above the DEBUG line records that it
+    happened. `predict()` does not validate bounds.
+
+(b) THE MISSING UPPER CLAMP IS LATENT TODAY, and the agent did not credit the
+    mitigation that makes it so. :392-397:
+        if   severity >= 9: rl_action = max(rl_action, ACTION_NUCLEAR)
+        elif severity >= 7: rl_action = max(rl_action, ACTION_HEDGE)
+        elif severity >= 5: rl_action = max(rl_action, ACTION_PAUSE)
+    These are a FLOOR. The RL agent can escalate above the rule-based decision
+    but can never de-escalate below it, so an out-of-distribution observation
+    cannot make the supervisor under-react at severity >= 5. That is correct,
+    deliberate design and it bounds (a).
+
+    The hazard is what happens if `rl_action` ever exceeds ACTION_NUCLEAR.
+    `_execute_action` (:446-485) is an `==` chain — ACTION_NUCLEAR(3),
+    ACTION_HEDGE(2), ACTION_PAUSE(1) — and everything unmatched FALLS THROUGH to
+    the ACTION_NORMAL tail, which de-escalates `nuclear_level` when severity < 3.
+    So an action of 4 at severity 9 would compute `max(4, 3) = 4`, match no
+    branch, and be executed as "normal" — the severity-9 floor defeated by the
+    very value it was meant to raise. Fails toward NORMAL, not toward NUCLEAR:
+    the opposite of what "no upper clamp" suggests.
+
+    NOT REACHABLE TODAY. I decoded the committed artifact rather than assuming
+    (scratchpad, stubbing gymnasium to unpickle the spaces out of the .zip):
+        ml/rl_models/nuclear_decision_ppo.zip
+          action_space      = Discrete(n=4, start=0)
+          observation_space = Box(shape=(7,), dtype=float32,
+                                  low=[0, 0, -1, ...], high=[1, 5, 1, ...])
+    Discrete(4) matches ACTION_NORMAL..ACTION_NUCLEAR and Box(7,) matches
+    `_build_rl_observation`'s 7-dim vector (:329-345). Both artifacts are present
+    and committed (nuclear_decision_ppo.zip, nuclear_decision_vecnorm.pkl).
+
+(c) NOTHING VALIDATES THAT MATCH. `_load_rl_agent` (:225-244) calls
+    `PPO.load(path)` and checks only that it did not raise — no assertion on
+    action-space size or observation-space shape. A retrain that changed either,
+    or a wrong file at the path, is undetected at load; the action-space case
+    then lands in (b) and the obs-shape case raises inside `predict()` at :389,
+    which sits in NO try/except within `on_new_event`. Given ml/rl_models/ is
+    checksum-verified in CI (per CLAUDE.md) the drift risk is managed, but the
+    code itself has no guard.
+
+Severity MEDIUM: (a) is live but bounded by the severity floor; (b) and (c) are
+latent and cheap to close (clamp with min(), assert the spaces at load).
