@@ -1192,3 +1192,41 @@ The perimeter is well built. Every serious defect found this session is INSIDE i
 execution (F59/F60/F61), ML inference (F24), money concurrency (F31/F32/F34).
 Still not covered: GET-only endpoints (my sweeps filtered to state-changing), and
 the ~22 `except: pass` handlers in ws_live.py.
+
+## F78 — LLM code execution: a REAL RCE surface, correctly gated OFF · NO FINDING (verified by me)
+brain/llm_agent.py generates strategy Python from a model and CAN exec() it.
+The code names its own risk with unusual precision (:85-91):
+    "_compile_strategy ultimately exec()s model-produced Python *in this parent
+     process* (the subprocess step only smoke-tests instantiation; the strategy
+     object is needed in-process for backtesting). The AST denylist is the
+     parent's only protection and a denylist cannot stop dunder-traversal escapes
+     (e.g. ().__class__.__bases__[0].__subclasses__() reaching os without
+     importing it). In a money-moving system this path must be OFF by default and
+     only enabled deliberately in an isolated research/dev context."
+Gate: :92 LLM_CODE_EXECUTION_ENABLED defaults "false".
+Enforcement VERIFIED at :464 — the FIRST statement of _compile_strategy:
+    if not _LLM_CODE_EXEC_ENABLED:
+        return (None, "LLM code execution is disabled...")
+It returns before ast.parse. Fails closed.
+Defence in depth present but explicitly acknowledged as insufficient on its own:
+an AST denylist (_ast_sandbox_check at :430) blocking eval/exec/open/__import__/
+subprocess/importlib/tempfile and attribute-based os.system/os.popen, plus a
+subprocess smoke test.
+ASSESSMENT: this is the most self-aware security code in the repository. The author
+identified the exact escape their mitigation cannot stop, wrote it down, and turned
+the feature off by default rather than trusting the denylist. Correct handling.
+NOT A FINDING.
+
+## F79 — ARCHITECTURE.md overstates the LLM sandbox · LOW (doc)
+ARCHITECTURE.md "Security Fixes Applied (v1.18)" #1 reads:
+    "LLM sandbox subprocess isolation | brain/llm_agent.py"
+That phrasing implies the model-generated code runs isolated in a subprocess.
+The code says otherwise, in its own words: the exec happens "in this parent
+process" and "the subprocess step only smoke-tests instantiation".
+A reader trusting the doc would conclude the RCE surface is contained by process
+isolation, and might therefore enable LLM_CODE_EXECUTION_ENABLED believing the
+subprocess is the boundary. The doc should say what the code says: exec is
+in-process, the denylist is the only parent protection, and the flag is the
+real control.
+Severity: LOW as a doc defect, but it misdescribes the one control that matters
+on an RCE path.
