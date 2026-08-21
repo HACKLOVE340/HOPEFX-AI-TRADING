@@ -487,21 +487,42 @@ class TestSuperadminSecurityInfraFixes:
 
 class TestSuperadminSystemHealthFixes:
     def test_pg_dump_subprocess_has_check_false(self):
-        """subprocess.run for pg_dump must have check=False (PLW1510)."""
-        src = _source("api/superadmin/system_health.py")
-        # Locate the actual subprocess.run(...) call for pg_dump: find the
-        # quoted "pg_dump" list element, then look BACKWARDS for its
-        # enclosing subprocess.run(. A prior version searched forward from
-        # the first bare mention of "pg_dump" (which matches a preceding
-        # comment line, "# pg_dump") and stopped at the first ")" it saw —
-        # an unrelated os.path.join(...) call's closing paren — so it never
-        # actually reached the real call at all.
-        pg_dump_idx = src.find('"pg_dump"')
-        assert pg_dump_idx != -1, '"pg_dump" literal not found'
-        call_start = src.rfind("subprocess.run(", 0, pg_dump_idx)
-        assert call_start != -1, "subprocess.run(...) call for pg_dump not found"
-        first_run = src[call_start : src.find(")\n", call_start) + 1]
-        assert "check=False" in first_run, "subprocess.run for pg_dump must have explicit check=False"
+        """pg_dump must pass explicit check=False (PLW1510), and must not block the loop.
+
+        Resolved via AST rather than string scraping: the call is now
+        ``asyncio.to_thread(subprocess.run, ["pg_dump", ...], check=False)``,
+        so an earlier version that searched backwards for the literal
+        ``subprocess.run(`` no longer matched anything. The AST form survives
+        both shapes and any future re-wrapping.
+        """
+        import ast
+
+        tree = ast.parse(_source("api/superadmin/system_health.py"))
+        pg_dump_calls = [
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            and any(
+                isinstance(a, ast.List)
+                and a.elts
+                and isinstance(a.elts[0], ast.Constant)
+                and a.elts[0].value == "pg_dump"
+                for a in n.args
+            )
+        ]
+        assert len(pg_dump_calls) == 1, f"expected exactly one pg_dump call, found {len(pg_dump_calls)}"
+        call = pg_dump_calls[0]
+
+        kwargs = {k.arg: k.value for k in call.keywords if k.arg}
+        assert "check" in kwargs, "pg_dump call must pass explicit check="
+        assert kwargs["check"].value is False, "pg_dump call must pass check=False"
+
+        # pg_dump has timeout=60; run inline it would stall the event loop for
+        # up to a minute, so it must be dispatched off the loop.
+        assert ast.unparse(call.func) == "asyncio.to_thread", (
+            "pg_dump must be dispatched via asyncio.to_thread, not called inline in an async route"
+        )
+        assert ast.unparse(call.args[0]) == "subprocess.run"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

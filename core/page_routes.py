@@ -15,6 +15,7 @@ Register with:
     register_page_routes(app)
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -180,7 +181,7 @@ def register_page_routes(app: FastAPI) -> None:
         ]
         for _p in _ico_candidates:
             if _p.exists():
-                return Response(content=_p.read_bytes(), media_type="image/x-icon")
+                return Response(content=await asyncio.to_thread(_p.read_bytes), media_type="image/x-icon")
         # Minimal 1×1 transparent ICO (46 bytes) — avoids 404 noise in logs
         _ico_bytes = (
             b"\x00\x00\x01\x00\x01\x00\x01\x01\x00\x00\x01\x00\x18\x00"

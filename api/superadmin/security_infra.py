@@ -22,6 +22,7 @@ POST /superadmin/security-infra/antivirus/scan           — trigger scan
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ import ssl
 import socket
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -546,8 +548,13 @@ async def trigger_antivirus_scan(
         import time
 
         t0 = time.perf_counter()
-        proc = subprocess.run(
-            ["clamscan", "--recursive", "--no-summary", "/workspaces/HOPEFX-AI-TRADING/uploads"],
+        # Scan target is deployment-specific; the previous hardcoded
+        # /workspaces/... path only existed on a dev container, so this endpoint
+        # always reported 0 files scanned in production.
+        scan_dir = os.getenv("HOPEFX_UPLOAD_DIR", str(Path.cwd() / "uploads"))
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            ["clamscan", "--recursive", "--no-summary", scan_dir],
             capture_output=True,
             text=True,
             timeout=30,

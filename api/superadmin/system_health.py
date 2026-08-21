@@ -20,6 +20,7 @@ GET  /superadmin/system-health/dependencies              — dependency health g
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -272,7 +273,8 @@ async def trigger_backup(
         if db_url.startswith("postgresql"):
             # pg_dump
             dump_path = os.path.join(_tmp, f"{backup_id}.dump")
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["pg_dump", "--format=custom", f"--file={dump_path}", db_url],
                 capture_output=True,
                 timeout=60,
@@ -289,7 +291,7 @@ async def trigger_backup(
             db_path = db_url.replace("sqlite:///", "").replace("sqlite://", "")
             if os.path.exists(db_path):
                 dest = os.path.join(_tmp, f"{backup_id}.db")
-                shutil.copy2(db_path, dest)
+                await asyncio.to_thread(shutil.copy2, db_path, dest)
                 size_mb = round(os.path.getsize(dest) / 1024 / 1024, 2)
                 location = dest
     except Exception as exc:

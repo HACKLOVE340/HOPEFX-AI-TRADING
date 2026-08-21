@@ -397,14 +397,14 @@ class MutationTestRunner:
 
         Returns: "killed" | "survived" | "timeout" | "error"
         """
-        original_source = py_file.read_text()
+        original_source = await asyncio.to_thread(py_file.read_text)
         mutated_source = self._apply_mutation(original_source, mutant)
 
         if mutated_source == original_source:
             return "error"  # mutation had no effect
 
         try:
-            py_file.write_text(mutated_source)
+            await asyncio.to_thread(py_file.write_text, mutated_source)
             proc = await asyncio.create_subprocess_exec(
                 sys.executable,
                 "-m",
@@ -429,7 +429,7 @@ class MutationTestRunner:
             return "error"
         finally:
             # Always restore original source
-            py_file.write_text(original_source)
+            await asyncio.to_thread(py_file.write_text, original_source)
 
     def _apply_mutation(self, source: str, mutant: dict[str, Any]) -> str:
         """Apply a single mutation to source text via token replacement."""

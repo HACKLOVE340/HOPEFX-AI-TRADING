@@ -114,7 +114,7 @@ class ContinuousBackup:
             async with _aiofiles.open(filepath, "wb") as f:
                 await f.write(compressed)
         else:
-            filepath.write_bytes(compressed)
+            await asyncio.to_thread(filepath.write_bytes, compressed)
 
         # Upload to cloud if enabled
         if self.cloud_enabled:
@@ -155,7 +155,7 @@ class ContinuousBackup:
             async with _aiofiles.open(filepath, "rb") as f:
                 compressed = await f.read()
         else:
-            compressed = filepath.read_bytes()
+            compressed = await asyncio.to_thread(filepath.read_bytes)
         data = gzip.decompress(compressed)
         state_dict = json.loads(data)
 

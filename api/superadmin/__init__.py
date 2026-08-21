@@ -13,6 +13,7 @@ All sub-routers are mounted here.  External code that does::
 continues to work without changes.
 """
 
+import asyncio
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 
@@ -96,7 +97,7 @@ async def superadmin_dashboard(user: TokenPayload = Depends(_require_superadmin)
     """
     path = _TEMPLATES_DIR / "admin" / "superadmin.html"
     if path.exists():
-        return HTMLResponse(content=path.read_text(encoding="utf-8"))
+        return HTMLResponse(content=await asyncio.to_thread(path.read_text, encoding="utf-8"))
     # Fallback: redirect to the React SPA which renders SuperAdminDashboard
     from fastapi.responses import RedirectResponse
 

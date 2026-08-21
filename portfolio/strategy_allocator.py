@@ -43,6 +43,7 @@ Integration
     allocator.mount_router(app)
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -535,7 +536,7 @@ class StrategyAllocator:
         async def get_registry(request: Request):
             _require_admin(request)
             if REGISTRY_PATH.exists():
-                return json.loads(REGISTRY_PATH.read_text())
+                return json.loads(await asyncio.to_thread(REGISTRY_PATH.read_text))
             return {"pods": {}}
 
         return router

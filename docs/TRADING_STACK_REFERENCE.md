@@ -82,7 +82,9 @@ https://github.com/wick-trading/Wick
 **Recommended Front-end Stack:**
 React 19 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Lightweight Charts
 
-> This is already HOPEFX's `frontend/` stack, minus Lightweight Charts.
+> This is already HOPEFX's `frontend/` stack in full — `frontend/package.json`
+> pins React 19.2.6, Vite 8.1.0, Tailwind 3.4.17, TypeScript 5.9.3 **and**
+> `lightweight-charts@^5.1.0`. Nothing in this section is a gap.
 
 ---
 

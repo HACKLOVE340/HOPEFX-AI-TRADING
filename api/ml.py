@@ -21,6 +21,8 @@ GET  /ml/engine-health     — InferenceEngine detailed diagnostics (admin only)
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 import os
 from datetime import datetime, timezone
@@ -490,7 +492,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
     for p in eval_paths:
         if p.exists():
             try:
-                data = json.loads(p.read_text())
+                data = json.loads(await asyncio.to_thread(p.read_text))
                 # Normalise field names across different file formats
                 accuracy = float(data.get("accuracy") or data.get("oos_accuracy") or data.get("test_accuracy") or 0.0)
                 precision = float(data.get("precision") or data.get("test_precision") or data.get("oos_f1") or 0.0)
@@ -1575,7 +1577,7 @@ async def get_model_card(
     active_meta: dict[str, Any] = {}
     try:
         if registry_path.exists():
-            registry = json.loads(registry_path.read_text())
+            registry = json.loads(await asyncio.to_thread(registry_path.read_text))
             active_version = registry.get("active_version", "")
             active_meta = registry.get("versions", {}).get(active_version, {})
     except Exception as exc:
@@ -1585,7 +1587,7 @@ async def get_model_card(
     training_report: dict[str, Any] = {}
     try:
         if report_path.exists():
-            training_report = json.loads(report_path.read_text())
+            training_report = json.loads(await asyncio.to_thread(report_path.read_text))
     except Exception as exc:
         logger.warning("model_card: could not read training report: %s", exc)
 
@@ -1593,7 +1595,7 @@ async def get_model_card(
     feature_stats: dict[str, Any] = {}
     try:
         if feature_stats_path.exists():
-            _raw_stats = json.loads(feature_stats_path.read_text())
+            _raw_stats = json.loads(await asyncio.to_thread(feature_stats_path.read_text))
             # surface top-level keys for the drift section
             feature_stats["_available"] = True
             feature_stats.update({k: v for k, v in _raw_stats.items() if not isinstance(v, dict)})
@@ -1604,7 +1606,7 @@ async def get_model_card(
     feature_importances: list[dict] = []
     try:
         if feat_imp_path.exists():
-            raw = json.loads(feat_imp_path.read_text())
+            raw = json.loads(await asyncio.to_thread(feat_imp_path.read_text))
             # Accept list[{feature, importance}] or dict{feature: importance}
             if isinstance(raw, dict):
                 feature_importances = sorted(

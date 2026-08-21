@@ -10,6 +10,7 @@ Admin endpoints for system control and monitoring.
 All endpoints require role >= 'admin'.
 """
 
+import asyncio
 import json
 import logging
 import os as _os
@@ -1483,7 +1484,7 @@ async def trigger_backup(
         snapshot = {k: _db_g6(k) for k in keys}
         dst = _P2(__file__).parent.parent / "backups" / backup_id
         dst.mkdir(parents=True, exist_ok=True)
-        (dst / "db_snapshot.json").write_text(_json.dumps(snapshot, default=str))
+        await asyncio.to_thread((dst / "db_snapshot.json").write_text, _json.dumps(snapshot, default=str))
         backed_up.append("db_store")
     except Exception as exc:
         logger.warning("backup db_store: %s", exc)

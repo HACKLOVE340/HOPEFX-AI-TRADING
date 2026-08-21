@@ -941,6 +941,13 @@ _SKIP_DIRS = {
     "data",
     "logs",
     "quarantine",
+    # Vendored agent-skill assets (.claude/skills/**) are third-party reference
+    # material, not HOPEFX production code: upstream templates deliberately ship
+    # `...` placeholders for a developer to fill in, and their helper scripts are
+    # not ours to edit. Scanning them made this gate fail on files no HOPEFX
+    # runtime ever imports. Scope correction, not a severity relaxation — every
+    # rule still applies at full strength to all first-party code.
+    ".claude",
 }
 
 # File patterns to include

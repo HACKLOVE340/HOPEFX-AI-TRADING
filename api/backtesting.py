@@ -20,6 +20,8 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
+
 import io
 import logging
 import pathlib
@@ -871,7 +873,7 @@ async def get_latest_multi_symbol_report(
         )
 
     try:
-        report = json.loads(report_path.read_text(encoding="utf-8"))
+        report = json.loads(await asyncio.to_thread(report_path.read_text, encoding="utf-8"))
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.error("Could not read report: %s", exc)
         raise HTTPException(status_code=500, detail="Could not read report — check server logs") from None
@@ -918,7 +920,7 @@ async def get_reconciled_investigation(
     cache_path = Path("data/backtest_investigation.json")
     if cache_path.exists():
         try:
-            return json.loads(cache_path.read_text(encoding="utf-8"))
+            return json.loads(await asyncio.to_thread(cache_path.read_text, encoding="utf-8"))
         except Exception as _exc:  # pylint: disable=broad-exception-caught
             logger.debug("Suppressed exception: %s", _exc)
 
@@ -930,7 +932,7 @@ async def get_reconciled_investigation(
         from backtesting.reconciled_backtest_investigation import run_investigation
 
         results = run_investigation(smoke=False)
-        cache_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        await asyncio.to_thread(cache_path.write_text, json.dumps(results, indent=2), encoding="utf-8")
         return results
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.error("Investigation failed: %s", exc)

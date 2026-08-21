@@ -760,7 +760,7 @@ class SelfHealer:
 
             cfg_path = PROJECT_ROOT / "data" / "auto_healing_config.json"
             if cfg_path.exists():
-                cfg = _json.loads(cfg_path.read_text())
+                cfg = _json.loads(await asyncio.to_thread(cfg_path.read_text))
                 self.apply_config(cfg)
                 return
         except Exception as exc:
@@ -1001,7 +1001,7 @@ class SelfHealer:
 
             original_code = ""
             if target.exists():
-                original_code = target.read_text(encoding="utf-8", errors="replace")
+                original_code = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
 
             success, msg = _apply_patch(target, new_code)
             diff = _unified_diff(original_code, new_code, target.name) if success else ""
@@ -1302,7 +1302,7 @@ class SelfHealer:
 
             # Read the file
             try:
-                source = target.read_text(encoding="utf-8", errors="replace")
+                source = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
             except OSError as exc:
                 logger.warning("SelfHealer: cannot read %s for Claude fix: %s", file_rel, exc)
                 continue
