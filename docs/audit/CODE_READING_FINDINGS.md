@@ -2958,3 +2958,116 @@ claude-fable-5), with claude-haiku-4-5 alongside. The default here pins the
 previous generation. It is overridable by ANTHROPIC_MODEL and only matters when
 the LLM fix path is enabled (aggressive/nuclear + API key), so this is a currency
 note rather than a defect.
+
+================================================================================
+DATABASE / ORM (domain 4) — database/ 4,880 LOC + the payments write path.
+Agent 2 covered alembic; this is the schema and the code that writes to it.
+================================================================================
+
+## F135 — *** WALLET LEDGER ROWS COLLIDE AND ARE SILENTLY DROPPED *** · CRITICAL (proven by execution)
+payments/wallet.py:284 (deposit) and :396 (withdrawal), identical in both:
+    "transaction_id": f"TXN-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+A wall-clock timestamp to the SECOND, with no user id, no counter, no random
+suffix — used as the value for
+    database/models.py:756
+    transaction_id = Column(String(50), unique=True, nullable=False, index=True)
+
+PROVEN BY RUNNING THE REAL GENERATOR:
+    5 transactions generated in 0.0001s:
+      TXN-20260822024522
+      TXN-20260822024522
+      TXN-20260822024522
+      TXN-20260822024522
+      TXN-20260822024522
+    distinct ids : 1 of 5
+Any two wallet transactions ANYWHERE IN THE SYSTEM inside the same second
+collide on the unique index. Not per-user — the constraint is global.
+
+AND THE FAILURE IS SWALLOWED. payments/wallet.py:104-121 `_persist_transaction`:
+    with self._session_factory() as session:
+        session.add(WalletTransaction(transaction_id=txn["transaction_id"], ...))
+        session.commit()
+    except Exception as exc:
+        logger.error("Wallet DB write failed: %s", exc)
+The IntegrityError is caught and logged. But the in-memory balance was ALREADY
+mutated before this call (:270-277 `wallet.subscription_balance += amount`), and
+the function returns success to its caller.
+
+CONSEQUENCE: the money moves in the wallet object, the audit row never lands.
+The ledger and the balance diverge, permanently and silently, with only an ERROR
+line in the log. And because `_load_balance_from_db` (:123-138) rebuilds the
+balance by reading the LATEST `balance_after` row —
+    session.query(WalletTransaction).filter_by(user_id=user_id)
+           .order_by(WalletTransaction.id.desc()).first()
+— a dropped row means a process restart restores the balance from BEFORE the
+dropped transaction. The user's deposit disappears, or their withdrawal is
+refunded, depending on which row was lost.
+Fix is trivial: append a uuid4 (the codebase already does this elsewhere, e.g.
+GoldTick.lineage_id).
+
+## F136 — the wallet balance is a read-modify-write with no lock · HIGH
+payments/wallet.py:270-277 mutates an in-memory wallet object
+(`wallet.subscription_balance += amount`) and then records the result as
+`balance_after`. `_load_balance_from_db` rehydrates it with an unlocked
+`ORDER BY id DESC LIMIT 1`.
+There is no `SELECT ... FOR UPDATE`, no `with_for_update()`, no atomic
+`UPDATE ... SET balance = balance + :amount`, and no unique constraint or
+transaction isolation making the sequence safe (grepped for `with_for_update`
+and `FOR UPDATE` across payments/ — no hits). Two concurrent deposits for the
+same user both read the same starting balance and both write a `balance_after`
+computed from it: a classic lost update.
+The in-memory dict makes this worse rather than better — with more than one
+worker process (the deployment runs uvicorn/gunicorn and a separate Celery
+worker, celery_app.py) each has its OWN `_transaction_history` and wallet
+objects, so they cannot even see each other's writes.
+
+## F137 — every money column in the schema is Float; the Decimal discipline dies at the ORM boundary · MEDIUM (narrower than I first assumed — measured)
+`grep -n "Numeric\|DECIMAL" database/models.py database/user_models.py` returns
+NOTHING. Every monetary column in the schema is `Column(Float)`: trade
+entry/exit price, realized/unrealized/total P&L, commission, swap, account
+balance and equity, wallet `amount` and `balance_after` (:759-760), crypto
+`amount_usd`/`amount_crypto` (:1071-1072), `Chargeback.amount` (:1192),
+`TaxReport.total_revenue`/`taxable_amount` (:1241-1242), and payment
+reconciliation `expected_amount`/`actual_amount` (:1293-1294).
+
+This directly contradicts the layer above it. Per the money-precision map,
+`payments/` and `monetization/` maintain `Decimal` throughout — and
+payments/wallet.py shows the seam explicitly:
+    :290, :401   "balance_after": float(...)        <-- Decimal -> float to store
+    :138         return Decimal(str(row.balance_after))   <-- float -> Decimal to read
+The read side uses `Decimal(str(x))`, which is the CORRECT idiom — the author
+knew the rule. The column type is what forces the lossy trip in the first place.
+
+I TESTED THE ACTUAL HARM RATHER THAN ASSERTING IT, AND MOST OF MY HYPOTHESIS DID
+NOT HOLD. Recording the measurements so this is not overstated later:
+  * Single store/load of typical USD amounts is LOSSLESS.
+    Decimal('19.99'), '0.1', '1234567.89', '0.07', '99.95' all round-trip
+    exactly through float64 — float64 carries 15-17 significant digits and
+    Python's repr picks the shortest round-tripping string.
+  * Accumulating 10,000 x 0.07 drifts by 9.1E-11 — negligible against a cent.
+  * SUM over 200,000 randomised money rows: float 99874402117.279053 vs
+    Decimal 99874402117.28 — drift 0.00095, UNDER one cent. Revenue aggregation
+    is not materially broken.
+  * WHERE IT DOES BITE — `amount_crypto` (:1072). 18-decimal token amounts
+    exceed float64's precision:
+        Decimal('1.23456789012345678')          -> 1.2345678901234567   LOSSY
+        Decimal('12345678.123456789012345678')  -> 12345678.12345679    LOSSY
+        Decimal('0.000000012345678')            -> exact
+    ERC-20 amounts are 18-decimal by standard, so this column cannot represent
+    them faithfully.
+So the finding is NOT "float money is catastrophic" — for USD it is adequate in
+practice. It is (a) a real precision defect on `amount_crypto`, and (b) an
+architectural one: the schema throws away a type guarantee the application layer
+spends real effort maintaining, so the next requirement that needs exactness
+fails silently rather than loudly. `taxable_amount` as a float is the one to fix
+first on principle even though the measured drift is sub-cent.
+
+## F138 — an invariant exists for the balance arithmetic and nothing calls it here · LOW
+invariants/payments.py:84
+    def verify_balance_after(before: float, delta: float, after: float,
+                             tol: float = 0.01) -> list[Violation]
+Exactly the predicate that would catch F135's dropped rows and F136's lost
+updates. Grepping the wallet write path shows no call to it — payments/wallet.py
+computes `balance_after` and persists it without ever asserting
+before + delta == after. Same shape as the recurring pattern in this audit: the
+control is written, correct, and not wired in.
