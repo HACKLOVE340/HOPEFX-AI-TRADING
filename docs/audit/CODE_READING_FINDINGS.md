@@ -2555,3 +2555,124 @@ one manufactures the specific evidence an operator would rely on to conclude a
 strategy generalises before committing real money. A user reading this output
 sees five independent out-of-sample periods agreeing with each other. There is
 one in-sample period, counted five times.
+
+================================================================================
+FRONTEND (domain 8) — 95,599 LOC TypeScript, 302 files. Done by me.
+================================================================================
+
+## F124 — THE FRONTEND IS THE BEST-ENGINEERED LAYER IN THIS REPOSITORY · NO FINDING (verified by running it)
+Recording this in detail because it is the opposite of the pattern everywhere
+else in the audit, and because it means this surface does not need re-auditing.
+
+  * `npm run typecheck` (tsc --noEmit) passes CLEAN across all 95,599 lines.
+    And it is a meaningful pass — tsconfig.json has
+        "strict": true,
+        "noUncheckedIndexedAccess": true,     <-- rarely enabled; very strict
+        "noFallthroughCasesInSwitch": true
+  * NO FABRICATED DATA. Swept for Math.random / mockData / MOCK_ / fakeData /
+    DUMMY / sampleData outside tests. Three hits, all legitimate: a modal id
+    (Modal.tsx:57), WebSocket reconnect jitter (useWebSocket.ts:473), and
+    placeholder *text* in inputs. Nothing invents a number.
+  * MONEY FORMATTERS FAIL TO "—", NEVER TO 0. lib/utils.ts:91-138 — every one of
+    fmtPrice/fmtPct/fmtPctRaw/fmtPnl/fmtCompact begins
+    `if (value == null || !isFinite(value)) return '—';`. A missing value renders
+    as a dash, not as a plausible zero.
+  * fmtPnl CARRIES ITS OWN BUG HISTORY (:112-129): "The negative branch
+    previously produced an empty sign while still taking Math.abs, so every loss
+    rendered as a positive number — a -$500 position read as '$500.00' in the
+    positions table, the portfolio summary and the performance page. Colour
+    usually carried the meaning; the number did not." Found, fixed, documented.
+  * THE JWT IS NEVER PERSISTED. useApi.ts:161 "Use the in-memory Zustand token
+    only — never localStorage"; :261 "Store in Zustand memory only — never in
+    localStorage"; AuthGuard.tsx:7 the same. localStorage is used only for the
+    theme and a dismissed banner. This is the correct XSS posture and most
+    codebases get it wrong.
+  * THE STALE-FEED WATCHDOG IS REAL, AND IT DEFENDS AGAINST MY OWN F87.
+    This chain is fully wired — I traced every link because the repeated backend
+    pattern is a control that is never invoked:
+        useWebSocket.ts:62   FEED_STALE_AFTER_MS = HEARTBEAT_INTERVAL_MS * 2
+        useWebSocket.ts:343  startFeedWatchdog()  — setInterval every 5s
+        useWebSocket.ts:346-350
+             if (wsStatus !== 'connected') return;
+             if (lastDataAt == null) return;
+             const stale = Date.now() - lastDataAt > FEED_STALE_AFTER_MS;
+             if (stale !== feedStale) setFeedStale(stale);
+        useWebSocket.ts:443  startFeedWatchdog() IS CALLED on connect
+        useWebSocket.ts:457,508  cleared on close and on unmount
+        store/index.ts:607   selectFeedLive = wsStatus === 'connected'
+                                              && !feedStale && lastDataAt != null
+    The comment at :332-341 states the failure mode exactly: "`lastHeartbeat`
+    was written to the store on every heartbeat and read nowhere outside test
+    files... The `noLiveFeed` banner is not a substitute: it only fires when the
+    *server* volunteers that condition, which a stalled server cannot do."
+    That is the same class of defect as F87, identified and closed on the client.
+  * AND THE FALLBACK IS KEYED CORRECTLY. useOrchestratorData.ts:277-283:
+    "keyed to `selectFeedLive`, not `wsStatus`. This fallback exists for a dead
+    feed, and `wsStatus` stays 'connected' through the one failure mode that
+    matters... Keyed to the connection flag, the fallback was switched off during
+    precisely the outage it was written for."
+  * ORDER ENTRY REFUSES TO SIZE AGAINST A STALE PRICE.
+    OrderEntryForm.tsx:238-241 consumes selectFeedLive and surfaces it in the
+    confirmation dialog.
+  * ERROR BOUNDARIES ARE PER-PANEL, not just top-level. PanelErrorBoundary.tsx
+    and withPanelGuard.tsx wrap the risky data panels (RiskDashboard,
+    MicrostructurePanel, OrderBookDepth, LivePriceTicker, MacroCalendar,
+    SentimentGauge), and App.tsx:371 wraps every route. A bad payload degrades
+    one panel rather than blanking the app.
+
+THE ONE REAL GAP — the network boundary is asserted, not validated:
+  * NO runtime validation library is present (no zod/io-ts/yup/valibot/ajv in
+    package.json).
+  * 142 unchecked `as` casts on API responses, e.g.
+        useOrchestratorData.ts:272  return res.data as AccountMetrics;
+    TypeScript's strictness stops at the wire. Every backend response is
+    ASSERTED to match its interface, never CHECKED.
+  Severity MEDIUM, not higher, for two reasons I verified rather than assumed:
+  a crash is contained by the per-panel boundaries above, and the formatters
+  degrade to "—" rather than 0. The genuine exposure is not a crash but
+  WELL-TYPED WRONG DATA — a field that is present, correctly shaped, and
+  semantically false passes the cast silently. That is exactly what several
+  backend findings produce (F16 fabricated equity, F72 equity=0.0, F94's
+  permanently "unknown" regime), and no amount of frontend strictness can catch
+  it. Runtime schema validation at the boundary would not catch it either; the
+  fix belongs on the server.
+
+## F125 — the regime EMA is computed backwards; the oldest bar outweighs the newest 7.4x · MEDIUM (proven by execution)
+api/trading.py:3788-3794, serving the regime badge in AIChart.tsx:117-125:
+
+    ema20 = closes[-1]
+    for c in reversed(closes[-20:]):
+        ema20 = ema20 * 0.9 + c * 0.1
+    ema50 = closes[-1]
+    for c in reversed(closes[-min(50, len(closes)):]):
+        ema50 = ema50 * 0.96 + c * 0.04
+
+`reversed()` walks the window newest -> oldest. In this recurrence the value
+folded in LAST carries the full 0.1 coefficient and each earlier one decays by
+0.9, so the weighting is inverted end to end.
+
+MEASURED by replicating the loop exactly:
+    weight applied to the NEWEST bar (folded first) : 0.01351
+    weight applied to the OLDEST bar (folded last)  : 0.10000
+    -> the oldest bar carries 7.4x the weight of the newest
+
+    steadily RISING series, last close 3295:  code 3238.92   correct EMA20 3254.59
+    steadily FALLING series, last close 2705: code 2761.08   correct EMA20 2745.41
+
+BEING PRECISE ABOUT THE IMPACT: the classification is NOT reversed. The code EMA
+still sits below price in an uptrend and above it in a downtrend, so
+`ema_spread > 0.005` still means "up". What is wrong is the responsiveness — the
+indicator is dominated by the oldest bar in its window, so it lags far more than
+a 20-period EMA should and the derived `confidence`
+(:3813 `min(0.90, 0.55 + abs(ema_spread)*15)`) is computed from a spread that is
+not the spread between a 20- and a 50-period EMA. Both numbers are displayed to
+the trader as a regime badge and a confidence figure.
+
+AND IT IS A SEVENTH REGIME TAXONOMY. This endpoint computes its own
+"trending_up"/"trending_down"/"ranging" inline, unrelated to the router's seven
+REGIME_* strings and to all five MarketRegime enums catalogued in F94.
+Note the endpoint DOES guard against the dead router (:3835
+`if status_dict.get("current_regime", "unknown") != "unknown":`), so the UI is
+not showing F94's stuck "unknown" — it falls through to this inline computation
+instead. F94's sizing impact is unaffected: core/signal_engine.py reads
+`status()` directly with no such guard.
