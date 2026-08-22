@@ -1968,3 +1968,383 @@ THE REST OF CLAIM #9, confirmed:
     regime were routed into the sizing call, `.get(name.upper(), 0.5)` would miss
     and return the same 0.5 default. The fail-open default is what hides the
     mismatch.
+
+================================================================================
+AGENT 2 — CI / CONFIG / TEST INTEGRITY.  Findings F95-F118.
+Every CRITICAL and every structural HIGH below was RE-VERIFIED BY ME before
+being recorded; the verification is stated inline. Items I did not personally
+re-run are marked (agent-reported, not re-verified).
+================================================================================
+
+## F95 — *** CI HAS NOT RUN ON main FOR AT LEAST 30 CONSECUTIVE PUSHES *** · CRITICAL (found by me, resolving the agent's UNVERIFIED question)
+The agent could not determine whether ci.yml is actually enforced and correctly
+said so. I queried the GitHub Actions API directly. The answer changes the
+weight of every other CI finding in this section.
+
+Last 30 ci.yml runs on main — `Counter({'failure': 30})`, an unbroken streak:
+    2026-08-18T08:01:26  failure  #4042  6591f742     <-- most recent
+    2026-08-14T19:51:34  failure  #4033  6258d6a1
+    ... every run in between ...
+    2026-08-13T18:26:42  failure  #3999  d235ff8d
+Not one success in the returned window (total_count 3474 runs overall).
+
+These are NOT test failures. Jobs for run #4042 (id 32114265315):
+    test (3.11)       created 08:01:26  completed 08:01:28   failure
+    test (3.12)       created 08:01:27  completed 08:01:29   failure
+    dependency-scan / frontend / typecheck / pre-commit / build-cpp-shim
+                      all created 08:01:27, all completed by 08:01:29, all failure
+    e2e               skipped
+Every job died within 2 seconds of creation. Fetching one directly:
+    "id": 95640157674, "name": "test (3.12)", "conclusion": "failure",
+    "runner_id": 0, "runner_name": "",
+    "started_at": "2026-08-18T08:01:27Z", "completed_at": "2026-08-18T08:01:29Z"
+NO RUNNER WAS EVER ASSIGNED. Not a single step executed. The signature —
+instant failure across all jobs, no runner, no logs — is an account-level
+rejection before scheduling (Actions spending limit / billing / Actions
+disabled). The precise cause is UNVERIFIED: I cannot read billing settings.
+
+WHY THIS IS THE HEADLINE. Combined with F96, the deployment path has been
+running with ZERO test signal:
+  * deploy.yml has no `needs:` and triggers on `push: branches: [main]`, so it
+    does not depend on CI passing — and CI has not produced a result at all.
+  * Every gate discussed in F97-F108 — the coverage thresholds, Gates A-L, the
+    invariant check, pre-commit, typecheck — has been inert for at least five
+    days of pushes to main.
+So the correct reading of this whole section is not "these gates are weak". It
+is "these gates have not executed", and the weaknesses below describe what would
+still get through even once someone restores CI.
+Severity CRITICAL. This is also the single most actionable item in the entire
+audit: it is a settings fix, not a code fix.
+
+## F96 — production deploys are gated on nothing · CRITICAL (verified by me)
+.github/workflows/deploy.yml — read in full:
+    on:
+      push:
+        branches: [main]
+        paths-ignore: ["**/*.md", "docs/**", "diagnostics/**"]
+      workflow_dispatch: {}
+    jobs:
+      deploy:
+        name: SSH deploy
+        runs-on: ubuntu-latest
+        env: { VPS_HOST: ${{ secrets.VPS_HOST }} }
+        steps:
+          - name: Deploy over SSH
+            if: ${{ env.VPS_HOST != '' }}
+            uses: appleboy/ssh-action@v1.2.5
+There is NO `needs:` and no `workflow_run` gate. The job races CI rather than
+following it; per F95 there is no CI result to follow anyway. Any push to main
+SSHes into the VPS and runs deployments/deploy.sh.
+
+## F97 — the only unpinned action in the repo is the one holding the production SSH key · HIGH (verified by me)
+Swept all 18 workflows for `uses:` lines not pinned to a 40-char SHA. Exactly
+one result:
+    deploy.yml:52   uses: appleboy/ssh-action@v1.2.5
+Every other action across every workflow is SHA-pinned, most with an explicit
+"pinned to SHA for supply-chain safety" comment. The single exception is the
+step that receives `secrets.VPS_SSH_KEY` — the private key for the production
+host. A floating tag can be re-pointed by the upstream owner or by anyone who
+compromises that account.
+
+## F98 — two ConfigMaps with the SAME NAME define contradictory safety settings; last apply wins · CRITICAL (verified by me)
+    k8s/k8s-configmap.yaml:7-8          name: hopefx-config   namespace: hopefx
+    deployments/k8s/configmap.yaml:4-5  name: hopefx-config   namespace: hopefx
+Both Deployments mount it:
+    k8s/k8s-deployment.yaml:76-78          envFrom: - configMapRef: name: hopefx-config
+    deployments/k8s/deployment.yaml:28-30  envFrom: - configMapRef: name: hopefx-config
+`kubectl apply` REPLACES `data` wholesale, so whichever file was applied last
+defines the safety posture for both deployments.
+
+What the two files actually say:
+    k8s/k8s-configmap.yaml:33  OANDA_PRACTICE: "false"      <-- real money
+    k8s/k8s-configmap.yaml:34  BROKER_TYPE: "oanda"
+    k8s/k8s-configmap.yaml:39  # CRITICAL: HOPEFX_INVARIANT_MODE must be
+                               #   "enforce" when BROKER_TYPE != "paper".
+    k8s/k8s-configmap.yaml:40  HOPEFX_INVARIANT_MODE: "enforce"
+    k8s/k8s-configmap.yaml:43  DRIFT_BLOCK: "true"
+    k8s/k8s-configmap.yaml:46  STALE_MODEL_BLOCK: "true"
+
+    deployments/k8s/configmap.yaml:14  HOPEFX_INVARIANT_MODE: "monitor"
+    deployments/k8s/configmap.yaml     DRIFT_BLOCK      — ABSENT
+    deployments/k8s/configmap.yaml     STALE_MODEL_BLOCK — ABSENT
+Applying the second file last downgrades enforcement to `monitor` AND deletes
+both ML safety flags, dropping DRIFT_BLOCK to its code default `false`
+(ml/inference_engine.py:81) — i.e. trading on drifted models, with real-money
+OANDA credentials, while the sibling file's own comment declares that
+combination CRITICAL. One file states an invariant; the other silently voids it.
+
+## F99 — the placeholder-secret test skips on precisely the case its docstring claims to catch · CRITICAL (verified by me, run)
+tests/unit/test_placeholder_secrets_are_rejected.py:151-165. Docstring:
+    "A new required secret added to .env.example with a placeholder is caught
+     here rather than in production."
+The body:
+    src = inspect.getsource(... "config.startup_validator" ...)
+    if f'"{name}"' not in src:
+        pytest.skip(f"{name} is not read by the startup validator")
+It greps the VALIDATOR'S SOURCE TEXT for the variable name and skips when
+absent. But "the validator does not know about this secret yet" IS the new-secret
+case. The guard inverts the property the test exists to assert.
+
+RAN IT (`pytest tests/unit/test_placeholder_secrets_are_rejected.py -q -rs`):
+    21 passed, 8 skipped
+    SKIPPED  BOOTSTRAP_ADMIN_PASSWORD is not read by the startup validator
+    SKIPPED  BOOTSTRAP_SUPERADMIN_PASSWORD ...
+    SKIPPED  BOOTSTRAP_TRADER_PASSWORD ...
+    SKIPPED  BYBIT_API_KEY ...      SKIPPED  BYBIT_API_SECRET ...
+    SKIPPED  DB_ENCRYPTION_KEY ...  SKIPPED  GRAFANA_ADMIN_PASSWORD ...
+    SKIPPED  POSTGRES_PASSWORD ...
+Eight published placeholders — including the DATABASE ENCRYPTION KEY and the
+Postgres password and three bootstrap admin passwords — are exempted from the
+test written to reject them. A deployment shipping the published
+`CHANGE_ME_generate_32byte_urlsafe_b64_key` produces a green skip.
+
+## F100 — the shipped .env weakens the drawdown circuit breaker 3x · HIGH (verified by me)
+    execution/trade_executor.py:62   DRAWDOWN_HALT_PCT = getenv("DRAWDOWN_HALT_PCT", "0.05")
+    .env.example:1512                DRAWDOWN_HALT_PCT=0.15            <-- 3x weaker
+    connect_to_life.py:100           DD_HARD_STOP_PCT  = getenv("DD_HARD_STOP_PCT", "0.03")
+    .env.example:1511                DD_HARD_STOP_PCT=0.10             <-- 3.3x weaker
+This is not hypothetical: DEPLOYMENT.md:210 instructs, verbatim,
+    # Copy environment template
+    cp .env.example .env
+so the real deployment procedure installs the weaker values. The breaker that
+halts trading fires after 15% of equity is gone instead of 5%.
+The suite cannot see it: every test imports the constant and compares against
+itself rather than asserting the number
+(test_trade_executor_comprehensive.py:299, test_execution_coverage_boost.py:1711,
+test_execution_coverage2.py:576 — agent-reported, not re-run by me).
+
+## F101 — .env.production.example ships Redis TLS OFF and drops both ML safety flags · HIGH (agent-reported)
+    .env.production.example:192  REDIS_FORCE_TLS=false
+    .env.production.example      DRIFT_BLOCK, STALE_MODEL_BLOCK — both ABSENT
+                                 (so DRIFT_BLOCK falls to its code default false)
+scripts/ci/gate_l_safety_invariants.py rule L-6 requires REDIS_FORCE_TLS=true —
+but Gate L reads only three files (.env.example, config/feature_flags.py,
+ml/inference_engine.py, lines 42-127). It never opens .env.production.example,
+docker-compose.yml, or either ConfigMap. The file named "production" is outside
+the reach of the gate that checks production safety defaults.
+STRUCTURAL CAUSE, and it explains F98/F100/F101 together: the only fail-closed
+gate has a three-file blind spot, and tests/system/test_env_consistency.py:422
+(`if ref.has_default: continue`) additionally exempts any var that HAS a code
+default — i.e. exactly the safety flags.
+
+## F102 — a boot-time migration fabricates trade direction and price · HIGH (verified by me)
+alembic/versions/j1k2l3m4n5o6_trade_notnull_cascade.py:45-47, inside `upgrade()`:
+    op.execute("UPDATE trades SET side = 'BUY' WHERE side IS NULL")
+    op.execute("UPDATE trades SET entry_price = 0.0 WHERE entry_price IS NULL")
+    op.execute("UPDATE trades SET entry_quantity = 0.0 WHERE entry_quantity IS NULL")
+The comment calls 'BUY' "the safest neutral default for legacy rows where the
+direction was not recorded". There is no neutral default for a trade direction:
+a fabricated BUY at entry_price 0.0 is a fictional trade that will be counted by
+every P&L, win-rate and drawdown computation that reads the table.
+
+And it runs UNATTENDED AT EVERY CONTAINER BOOT (verified):
+    Dockerfile:91          CMD ["bash","-c","scripts/preflight.sh && python app.py"]
+    scripts/preflight.sh:181  if [ "${SKIP_MIGRATIONS:-false}" != "true" ]; then
+    scripts/preflight.sh:205      timeout "${MIGRATION_TIMEOUT}" python3 -m alembic upgrade head
+No operator prompt, no dry-run, no backup step. Correct handling would be to
+fail the migration and make a human decide.
+`SKIP_MIGRATIONS` is documented in Dockerfile:90 and preflight.sh:12 but appears
+in NO env template (grep across .env.example, .env.production.example,
+docker-compose.yml, k8s/, deployments/ returns nothing).
+
+## F103 — coverage gates for brain/ and news/ CANNOT PASS · HIGH (verified by me, reproduced)
+    .coveragerc [run] source = auth risk brokers execution market_data ml config
+                               kill_switch compliance analytics backtesting core
+`brain` and `news` are NOT in that list, so no data is ever collected for them.
+But ci.yml gates on them anyway:
+    ci.yml:432  coverage report --rcfile=.coveragerc --include="brain/*" --fail-under=70
+    ci.yml:438  coverage report --rcfile=.coveragerc --include="news/*" --fail-under=70
+REPRODUCED LOCALLY (ran a small suite under --cov, then the two gate commands
+verbatim):
+    --- brain/ gate (ci.yml:432) ---   No data to report.   exit=1
+    --- news/ gate (ci.yml:438) ---    No data to report.   exit=1
+Neither has `continue-on-error`. They fail every run in which they execute. Per
+F95 they have not executed for at least 30 pushes, which is why nobody noticed.
+
+## F104 — the job named "Coverage gate (>=70%)" contains no failure path · HIGH (verified by me)
+tests.yml:500-595. The job has exactly four steps: checkout, download artifact,
+extract percentage, post PR comment. There is no `exit 1` and no
+`core.setFailed` anywhere in it. It renders a FAIL badge into a PR comment and
+exits 0.
+tests.yml:525-534 makes it worse:
+    try:  ... parse coverage.xml ... print(f'{combined:.1f}')
+    except Exception:  print('0.0')
+A missing or corrupt coverage.xml renders "0.0%" — displayed as failing — and
+still passes. (The real threshold that does block is `--cov-fail-under=70` at
+ci.yml:373 / tests.yml:124.)
+
+## F105 — the 80% gates measure the packages with the risk logic deleted · HIGH (agent-reported)
+.coveragerc `omit` (:29-95) removes from the very packages the gates claim to protect:
+    risk/       4,399 of 11,851 lines (37%) omitted — INCLUDING risk/manager.py
+                (2,620 lines: the pre-trade gate, VaR/CVaR, Kelly sizing, kill
+                switch — the file CLAUDE.md names as the risk core), plus
+                pre_trade_gate.py, gatekeeper.py, post_trade_analyzer.py
+    execution/  5,775 of 16,928 lines (34%) omitted — engine.py (1,621),
+                fix_adapter.py (1,119), hopefx_engine.py (1,073)
+    also omitted: core/decision/HOPEFXDecisionEngine.py (the 5-phase pipeline),
+                  brokers/oanda*.py, brokers/interactive_brokers.py
+"risk/ >= 80%" is therefore a true statement about the two thirds of risk/ that
+is not the dangerous part. Cross-reference F106: trade_executor.py IS measured,
+and its broken line 416 counts as covered.
+
+## F106 — F60 CONFIRMED INDEPENDENTLY, plus a second break I had missed · CRITICAL
+The agent reproduced my F60 (`order.status.value` → AttributeError, status is a
+plain str per brokers/base.py:340) and found a SECOND defect on the same path
+that I had not: `MarketOrderResult` exposes `order_id`, not `id`, so
+`order.id` at trade_executor.py:438/447/467/496/501 also raises.
+Reachable via BROKER_TYPE=alpaca|binance|bybit|ccxt|ibkr|cme — 13 connectors
+inherit brokers/base.py:531-573 without overriding
+(core/startup_factories.py:1042).
+
+HOW IT SURVIVED 16,218 PASSING TESTS — three independent reasons, agent-verified:
+  * tests/unit/test_trade_executor_comprehensive.py:33-37 builds the broker's
+    order as a bare MagicMock() and hand-sets `order.status.value = "filled"`
+    and `order.id`. A MagicMock returns a child mock for ANY attribute, so
+    line 416 passes regardless of the real contract — and --cov counts it covered.
+  * tests/unit/test_broker_connectors_conformance.py:68 asserts
+    `r.status.lower() == "filled"` — i.e. asserts status IS a str.
+  * ZERO test files import both TradeExecutor and MarketOrderResult/a real
+    connector. Both halves are internally consistent; nothing tests the join.
+This is the cleanest example in the audit of why coverage percentage is not
+evidence: the line is covered, executed, and wrong.
+
+## F107 — BROKER_TYPE=oanda cannot place an order · CRITICAL (verified by me, run)
+brokers/oanda.py:681  `AsyncOANDAConnector = OANDABroker` — a bare alias.
+PROBED AT RUNTIME:
+    AsyncOANDAConnector -> <class 'brokers.oanda.OANDABroker'>
+    issubclass(BrokerConnector) = False
+    hasattr place_market_order  = False
+    order-ish methods: ['_post_order_with_retry', 'cancel_order', 'place_order']
+core/startup_factories.py:1154 wires this class in for BROKER_TYPE=oanda;
+execution/trade_executor.py:409 calls `self.broker.place_market_order(...)`,
+which raises AttributeError before an order is even constructed.
+Live OANDA is the stated next milestone (CLAUDE.md) and k8s/k8s-configmap.yaml:33-34
+already sets BROKER_TYPE=oanda with OANDA_PRACTICE=false.
+brokers/oanda.py is in .coveragerc omit (:35), so no coverage gate touches it.
+Corroborates and sharpens my F61.
+
+## F108 — 14 of 37 tests in one file assert nothing, against a class that never existed · HIGH (agent-reported)
+tests/unit/test_auth_analytics_backtest_coverage.py wraps whole test bodies —
+assertion included — in `except (ImportError, AttributeError): pytest.skip(...)`
+(e.g. :245-267). The agent verified `PerformanceAnalyzer` does not exist in
+analytics/performance.py (the real class is `PerformanceAnalytics`, :173) and
+that `git log -S "class PerformanceAnalyzer"` returns NOTHING — the name was
+wrong in the first commit and every test referencing it has always skipped.
+Silently unexercised: Sharpe ratio, max drawdown, VaR, portfolio metrics,
+portfolio optimisation, Monte Carlo, execution handler, report generation.
+analytics/ IS in .coveragerc source, so these skips suppress nothing visible.
+
+## F109 — CI cannot run both halves of the broker guards in any single environment · HIGH (agent-reported)
+requirements-ci.txt:9 excludes `ib_insync` ("no broker available in CI") while
+requirements.txt:131 makes it a hard production dependency. Consequence: the only
+two tests that construct an InteractiveBrokersConnector
+(test_broker_connectors.py:1544, :1551) ALWAYS skip in CI — confirmed verbatim
+`SKIPPED [1] ...:1544: ib_insync not installed`. Same for `quickfix` (the FIX
+engine). And test_broker_sdk_guards.py:143 skips when the package IS installed,
+so the two directions are mutually exclusive: no environment runs both.
+
+## F110 — two mechanisms turn "the production app cannot boot" into green · HIGH (agent-reported; currently DORMANT — see F111)
+  * scripts/runtime_invariant_check.py:733 exits 2 on "BOOT FAILED — app did not
+    become ready (syntax/import/startup error)"; ci.yml:410-411 converts exit 2
+    into `::warning` + `exit 0`. The one step whose job is to boot the app and
+    assert behaviour treats "won't boot" as a pass. ci.yml:413's bare `exit 0`
+    also swallows any code >= 3 (e.g. 137/OOM).
+  * tests/integration/{test_api,test_api_routing,test_compliance_risk,
+    test_invariants_endpoint}.py catch SystemExit on `from app import app` and
+    `pytest.skip(allow_module_level=True)`. app.py:172 is
+    `validate_environment(strict=True)  # calls sys.exit(1) on failure`, so a
+    config regression that stops production booting silently empties the
+    integration suite instead of failing it.
+
+## F111 — measured skip reality, correcting our shared hypothesis · NOTE (agent-measured)
+Full local runs:
+  * tests/unit -m "not slow and not e2e": 1 failed, 16218 passed, 50 skipped,
+    11 deselected (20m42s)
+  * tests/integration + tests/system: 810 passed, 0 SKIPPED
+So the module-level import guards in F110 are LATENT, not firing. The real
+damage is a different pattern: guards that wrap the ASSERTION and catch
+AttributeError, or that grep source text and skip on absence — F99 and F108.
+Those do not protect against a missing dependency; they protect against the code
+being wrong.
+The 50 skips break down as: F99 (8), F108 (14), amtool not installed (6), torch
+not installed (5), advanced_training_report.json absent (3), ib_insync (2),
+MT5 package installed (2).
+Two more worth naming:
+  * test_risk_coverage.py:235,245 — "calculate_position_size signature differs",
+    "kelly_criterion not exported". POSITION-SIZING tests self-disabling.
+  * test_ml_inference_training.py:312 — "Insufficient data for walk-forward:
+    Found input variables with inconsistent numbers of samples: [1, 500]" — a
+    genuine sklearn shape error laundered into a skip.
+The 1 failure is test_ml_training.py::TestXGBoostModel::test_predict_proba_shape,
+`Timeout (>120.0s)` — hardware speed, not logic. Whether it fails on CI runners
+is UNVERIFIED (and per F95, moot for now).
+
+## F112 — five pairs of CI jobs share identical display names · MEDIUM (agent-reported)
+tests.yml: `auth-coverage` (:189) and `gate-a-auth-coverage` (:603) both render
+as "Gate A — auth coverage (all mutating routes)"; likewise Gates B/C/D/E. They
+run different implementations (pytest vs scripts/ci/gate_*.py). Branch
+protection matches required checks BY NAME, so which one is enforced is
+ambiguous.
+
+## F113 — the security workflows cannot fail the build · HIGH (agent-reported)
+  * security-scan.yml — bandit (:37,:41), safety (:77,:78,:82), trivy (:129) all
+    `|| true`; SARIF upload and TruffleHog `continue-on-error` (:138,:160).
+    NOTHING in this workflow can fail the build.
+  * codeql.yml:29,68,78 — continue-on-error on init AND analyze. CodeQL findings
+    never block.
+  * ci.yml:164-176 — mypy on api/, risk/, ml/ all `|| true`.
+  * ci.yml:78 — `pip-audit ... || true` then a Python block whose
+    `except: sys.exit(0)` (:301) treats a missing report as "no vulns". If
+    pip-audit crashes, the gate passes silently.
+  * codacy.yml:28,54 and docs.yml:32,66 — continue-on-error, documented as
+    missing tokens / Pages not enabled. Not defects.
+  * fortify.yml:23, jekyll-docker.yml:6 — workflow_dispatch only, deliberately
+    disabled with explanatory comments. NOT defects.
+  * lockfile.yml:4-6 — triggers on `push` to requirements.txt but NOT
+    `pull_request`, so a PR changing deps never regenerates or validates the
+    lock. Holds contents:write + pull-requests:write.
+  * summary.yml:4 — issues:[opened] only; never runs on PRs.
+  * quarterly_retrain.yml:248 — continue-on-error, documented as optional.
+
+## F114 — Python version: packaging still advertises the untested 3.10 · MEDIUM (agent-reported)
+Correct and consistent: Dockerfile:35 python:3.12-slim; ci.yml:186 and
+tests.yml:36 matrix ["3.11","3.12"]; retrain.yml:88,172 and
+quarterly_retrain.yml:125,175,229 all 3.12 — matching CLAUDE.md's pickle
+requirement.
+Two gaps:
+  * ruff.toml:5 `target-version = "py311"` — lints against 3.11 while production
+    runs 3.12.
+  * pyproject.toml:31 `requires-python = ">=3.10"` + :22 classifier 3.10 — pip
+    installs happily on 3.10, which NO workflow tests. This is the exact error
+    CLAUDE.md documents as already corrected ("3.10 was tested by nothing"),
+    still live in the packaging metadata.
+release.yml:48,88 builds the sdist/wheel on 3.11 (pure-Python, no pickle impact).
+
+## F115 — a downgrade that destroys every 2FA secret · MEDIUM (agent-reported)
+alembic/versions/q1r2s3t4u5v6_widen_totp_secret_for_encryption.py:41-49. Its own
+comment: "any encrypted values longer than 64 bytes will be silently truncated."
+Upgrade widens users.totp_secret to TEXT for AES-GCM (~80 chars); downgrade
+narrows it back to VARCHAR(64). Every secret written after the upgrade is
+destroyed on rollback.
+
+## F116 — no workflow ever runs `alembic downgrade` · MEDIUM (agent-reported)
+ci.yml:291 runs `alembic upgrade head` only. scripts/ci/gate_i_migration_chain.py
+validates revision LINKAGE, not reversibility. scripts/test_migrations.py:154-166
+implements a full `downgrade base` -> `upgrade head` round-trip and is wired into
+NO workflow. All 21 downgrade() bodies are untested, including F115.
+
+## F117 — a second migration path that swallows failure · LOW (latent, agent-reported)
+docker/entrypoint.sh:33  `alembic upgrade head || echo "Migration warning (continuing)"`
+The app then starts on a half-migrated schema, contradicting preflight.sh's
+hard-fail. Mitigating: referenced only by docker/Dockerfile:55, NOT the root
+Dockerfile that production builds. Dead for the shipped image; a live trap if
+anyone switches images.
+
+## F118 — ENGINE_AUTOSTART undocumented, but the gating itself is correct · LOW (agent-verified, downgrades my F58)
+Absent from .env.example, .env.production.example, docker-compose.yml and both
+ConfigMaps; it appears only in this audit log. BUT the live gating is right:
+startup_factories.py:2977-2982 requires ENGINE_AUTOSTART=true AND
+LIVE_TRADING_ENABLED=true when TRADING_MODE=live, both defaulting false; the
+paper-mode default of true is safe.
+So F58 is a DISCOVERABILITY defect, not a safety one. Correcting my earlier
+MEDIUM-HIGH down to LOW.
