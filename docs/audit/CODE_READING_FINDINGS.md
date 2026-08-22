@@ -2348,3 +2348,148 @@ LIVE_TRADING_ENABLED=true when TRADING_MODE=live, both defaulting false; the
 paper-mode default of true is safe.
 So F58 is a DISCOVERABILITY defect, not a safety one. Correcting my earlier
 MEDIUM-HIGH down to LOW.
+
+================================================================================
+BACKTESTING INTEGRITY (domain 3) — done by me; the agent died on session quota
+after its first message. F119 onward.
+================================================================================
+
+## F119 — annualised return is computed as if hourly bars were days; reported ~34x too low · HIGH (proven by arithmetic on the real formula)
+backtesting/engine_config.py:1026, inside `_calculate_results`:
+    annual_return = (1 + total_return) ** (252.0 / max(len(equity_values), 1)) - 1
+    calmar        = float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+`equity_values` holds one entry PER BAR, and the engine runs on HOURLY bars:
+    engine_config.py:581  df = await self.data_loader.load_data(symbol, "1h", ...)
+    engine_config.py:85   bars_per_day: float = 24.0  # 24 for H1, 6 for H4, 1 for D
+So the exponent 252/len(equity_values) treats a bar count as a day count.
+
+COMPUTED FROM THE REAL FORMULA:
+    1 year, +100%    bars=6048   reported=  2.930%   correct= 100.000%   34.1x low
+    1 year, +30%     bars=6048   reported=  1.099%   correct=  30.000%   27.3x low
+    2 years, +50%    bars=12096  reported=  0.848%   correct=  22.474%   26.5x low
+A strategy that doubled capital in a year is reported as returning 2.93%.
+CALMAR (:1027) is annual_return / max_drawdown, so it carries the identical error
+and is meaningless as published.
+
+Correct exponent: 252 / (len(equity_values)/bars_per_day), i.e.
+252*bars_per_day/len(equity_values) — off by exactly bars_per_day = 24.
+
+WHAT MAKES THIS A CLEAR SLIP RATHER THAN A CONVENTION: the same function handles
+bars_per_day correctly everywhere else —
+    :990   ann_factor = np.sqrt(252.0 * max(self.config.bars_per_day, 1e-9))
+    :1008  avg_hold_days = avg_hold_bars / self.config.bars_per_day
+    :1009  trade_ann_factor = np.sqrt(252.0 / max(avg_hold_days, 0.04))
+Line 1026 is the one place the divisor was omitted.
+Direction is CONSERVATIVE (it understates performance), which is very likely why
+it has never been questioned — an understated backtest tempts nobody. It still
+makes annual_return and Calmar unusable, and it would mask a genuinely good
+strategy as flat.
+
+## F120 — the Sortino denominator is the wrong statistic, in BOTH engines · MEDIUM (proven by execution)
+Both implementations compute the denominator as the standard deviation of the
+losing observations only:
+    backtesting/metrics.py:135-142
+        downside_returns = returns[returns < 0]
+        ... np.sqrt(252) * (excess_returns.mean() / downside_returns.std())
+    backtesting/engine_config.py:1018-1023
+        downside = bar_returns[bar_returns < 0]
+        downside_std = float(np.std(downside))
+        sortino = float(np.mean(bar_returns) / downside_std * ann_factor)
+
+`returns[returns<0].std()` measures the DISPERSION AMONG THE LOSSES — deviation
+about the mean loss, over only the losing periods. Downside deviation is
+`sqrt(mean(min(r - target, 0)^2))`, a root-mean-square about the TARGET taken
+over ALL periods. Different denominator, different N, different centre.
+
+MEASURED against the textbook definition (scratchpad/bt_sortino2.py, real
+PerformanceMetrics, 1000 periods each):
+    symmetric normal returns
+        used 0.005866   correct 0.006636   REPORTED 2.392  CORRECT 2.115  1.13x HIGH
+    negatively skewed (many small wins, rare big losses — the realistic shape)
+        used 0.010652   correct 0.007610   REPORTED 0.786  CORRECT 1.101  0.71x LOW
+    fat left tail (2% shock days)
+        used 0.011289   correct 0.008827   REPORTED -0.448 CORRECT -0.573 0.78x LOW
+
+CORRECTING MY OWN FIRST HYPOTHESIS: I expected this to inflate Sortino
+uniformly. It does not. The bias flips sign with the shape of the return
+distribution — it overstates for symmetric returns and UNDERSTATES for the
+negatively-skewed distributions that trading strategies actually produce. The
+defect is that the number is not Sortino at all, not that it points one way.
+Severity MEDIUM: a reported metric is wrong in an unpredictable direction. It is
+not a gate and does not size a position.
+
+## F121 — fills are referenced to the SAME BAR'S CLOSE that produced the signal · MEDIUM (structural, verified by reading the loop)
+backtesting/engine_config.py:622-643, per bar:
+    mask = df["timestamp"] <= timestamp
+    row = df[mask].iloc[-1]
+    current_prices[symbol] = float(row["close"])       # <-- bar N close
+    ...
+    signals = strategy.generate_signals(timestamp=timestamp, prices=current_prices, data=all_data)
+    self._process_signal(signal, timestamp, current_prices, current_bars)
+and :782-788 `place_market_order(symbol, action, quantity, current_price, ...)`.
+The decision is made from bar N's close and the fill is referenced to bar N's
+close. In live trading that close is not knowable until the bar has ended, so
+the order can only be worked at bar N+1. This is the classic same-bar-close
+fill; it flatters any strategy whose signal is triggered by the close itself.
+
+MITIGATED, not eliminated: slippage is applied in the ADVERSE direction and
+scales with the bar range, so the fill is never better than the close —
+    :335-337  slippage = self._calculate_slippage(current_price, bar_high, bar_low)
+              fill_price = current_price*(1+slippage) if side=="buy"
+                           else current_price*(1-slippage)
+That converts an impossible fill into a pessimistic one of unknown adequacy. It
+is a reasonable proxy, but it is not the same as filling at the next bar's open,
+and nothing in the config offers that option.
+
+## F122 — the engine hands strategies the ENTIRE future; only the adapter slices it · MEDIUM (structural)
+engine_config.py:640-642 passes `data=all_data` — every symbol's COMPLETE
+DataFrame, including all bars after `timestamp`. Point-in-time discipline is not
+enforced by the engine; it is delegated to the strategy.
+The supported path does it correctly:
+    backtesting/strategy_adapter.py:152  history = frame[frame["timestamp"] <= timestamp]
+    (docstring :28 states this explicitly, and api/advanced_trading.py:229-230
+     wraps every API-launched strategy in BacktestStrategyAdapter)
+But `add_strategy` (engine_config.py:555-557) is
+    def add_strategy(self, strategy: Any):
+        self.strategies.append(strategy)
+— no type check, no adapter requirement. Any object exposing
+`generate_signals(timestamp, prices, data)` is accepted and receives the
+unsliced future. engine_config.py:1299 (`quick_backtest`) does exactly that: it
+calls `engine.add_strategy(strategy)` on the caller's raw object.
+LATENT for the shipped strategies, which go through the adapter. The hazard is
+that the safe path is a convention rather than an invariant, and the unsafe one
+is the more obvious API.
+
+## BACKTESTING — VERIFIED CLEAN (recorded so this is not re-audited)
+These are the things I went looking for and did NOT find. Several are better
+than typical:
+  * TRANSACTION COSTS ARE REAL AND SYMMETRIC. engine_config.py:341-347 —
+    `rt_frac = self._tc.round_trip_cost_frac(ticker)` then
+    `commission = cost * rt_frac / 2.0`, explicitly "half the round-trip cost on
+    entry, half on exit (symmetric)". Costs are charged on both sides, as bps of
+    notional, not a token flat fee.
+  * SLIPPAGE IS ADVERSE, NEVER FAVOURABLE (:337, above) and is derived from the
+    actual bar high/low rather than a constant.
+  * BUYING POWER IS CHECKED. :350-351 rejects the order when
+    cost + commission > cash, so the backtest cannot trade money it does not
+    have.
+  * WALK-FORWARD USES A PURGE/EMBARGO GAP. backtesting/walk_forward.py:75-86 —
+    train_end -> purge_start/purge_end -> test_start, with the comment
+    "purge_start:purge_end is the embargo gap between train and test". This is
+    the López de Prado precaution against leakage across the split boundary and
+    most backtesters omit it.
+  * TRADE-LEVEL SHARPE IS ANNUALISED CORRECTLY, and the author documented WHY
+    bar-level Sharpe was rejected (:985-999): "Flat no-trade bars inflate the
+    bar-level Sharpe by suppressing the denominator... Bar-level Sharpe
+    (previously reported as 4.68) was inflated by flat no-trade days". That is a
+    real, correctly diagnosed overfitting trap that was found and fixed.
+  * A SHARPE STANDARD ERROR IS REPORTED. :1014-1015
+    `sharpe_se = 1/sqrt(2*(N-1))`. Publishing an uncertainty alongside a Sharpe
+    is unusual and good practice.
+  * STRATEGY EXCEPTIONS ARE NOT SWALLOWED SILENTLY. :645-651 appends to
+    `self.strategy_errors`, with the comment that a run where this fired on
+    every bar "used to be indistinguishable from a strategy that chose not to
+    trade". Same fix in strategy_adapter.py:159-161.
+  * AN EMPTY STRATEGY LIST IS AN ERROR, not a 0.00% result (:570-575).
+  * EXITS CLOSE THE ACTUAL POSITION rather than a freshly Kelly-sized quantity
+    (:761-772), with the reasoning written out.
