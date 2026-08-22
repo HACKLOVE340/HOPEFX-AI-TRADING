@@ -2493,3 +2493,65 @@ than typical:
   * AN EMPTY STRATEGY LIST IS AN ERROR, not a 0.00% result (:570-575).
   * EXITS CLOSE THE ACTUAL POSITION rather than a freshly Kelly-sized quantity
     (:761-772), with the reasoning written out.
+
+## F123 — *** THE WALK-FORWARD ENDPOINT PERFORMS NO WALK-FORWARD ANALYSIS *** · CRITICAL (proven by arithmetic on the real code)
+`POST /walk-forward/run` (api/backtesting.py:560-640), gated at
+`require_plan("professional")`, persisted via `_persist_wf_result` and rendered
+in the frontend as out-of-sample validation. It does none of the three things
+walk-forward analysis consists of.
+
+The fold loop (:598-616) computes real-looking date boundaries:
+    fold_start = start_dt + timedelta(days=i*fold_days)
+    fold_end   = fold_start + timedelta(days=fold_days)
+    train_end  = fold_start + timedelta(days=int(fold_days*req.train_ratio))
+and then passes NONE of them to the backtest. It passes DURATIONS:
+    train_result = _run_real_backtest(strategy, symbol, int((train_end - fold_start).days), capital)
+    test_result  = _run_real_backtest(strategy, symbol, int((fold_end  - train_end ).days), capital)
+The dates survive only as display labels in the result dict (:620-624).
+
+And `_run_real_backtest` (api/backtesting.py:423-441) anchors every window to NOW:
+    end_dt   = datetime.now(UTC)
+    start_dt = end_dt - timedelta(days=days)
+
+COMPUTED WITH THE ENDPOINT'S OWN DEFAULTS (n_splits=5, train_ratio=0.7, 3 years):
+    fold_days = 219
+    fold | LABEL shown to the user                        | days actually passed
+      1  | 2023-08-23..2024-01-23 / 2024-01-23..2024-03-29 | train=153 test=66
+      2  | 2024-03-29..2024-08-29 / 2024-08-29..2024-11-03 | train=153 test=66
+      3  | 2024-11-03..2025-04-05 / 2025-04-05..2025-06-10 | train=153 test=66
+      4  | 2025-06-10..2025-11-10 / 2025-11-10..2026-01-15 | train=153 test=66
+      5  | 2026-01-15..2026-06-17 / 2026-06-17..2026-08-22 | train=153 test=66
+
+THREE SEPARATE DEFECTS, each fatal on its own:
+
+1. THE TEST SET IS A SUBSET OF THE TRAINING SET. Both windows end at `now`, so
+   every fold backtests train=[now-153d, now] and test=[now-66d, now]. The
+   "out-of-sample" period is the last 66 days OF THE IN-SAMPLE PERIOD. This is
+   not leakage at the boundary — the test data is wholly contained in the train
+   data. It is the most contaminated split possible.
+
+2. ALL FIVE FOLDS ARE THE SAME TWO BACKTESTS. `fold_days` is constant, so
+   `train_end - fold_start` is 153 days and `fold_end - train_end` is 66 days
+   for EVERY i. The loop runs the identical pair five times and labels the
+   results with five different historical periods spanning 2023-2026. The
+   reported per-fold variation — the whole point of walk-forward — can only be
+   backtest nondeterminism. `avg_test_sharpe` (:637) averages five copies of one
+   number and reports it as a cross-fold mean.
+
+3. NOTHING IS OPTIMISED. Genuine walk-forward fits parameters on train and
+   applies the FROZEN parameters to test. Here `_run_real_backtest` is called
+   with the same `req.strategy_params` both times; `train_result` and
+   `test_result` are just two runs of the same unchanged strategy. The
+   train/test distinction is decorative.
+
+WHAT MAKES THIS WORSE: the repo already contains a CORRECT implementation.
+backtesting/walk_forward.py:75-86 does anchored rolling windows with a
+purge/embargo gap between train and test, and :99-103 optimises on the training
+window then evaluates the winner on the held-out window. It is exported from
+backtesting/__init__.py:34. The endpoint does not use it.
+
+Severity CRITICAL. Every other backtesting finding here distorts a number; this
+one manufactures the specific evidence an operator would rely on to conclude a
+strategy generalises before committing real money. A user reading this output
+sees five independent out-of-sample periods agreeing with each other. There is
+one in-sample period, counted five times.
