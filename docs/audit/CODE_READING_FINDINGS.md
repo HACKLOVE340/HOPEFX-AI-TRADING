@@ -2797,3 +2797,164 @@ Eight vocabularies, no shared type, no conversion layer between any pair. Per
 F94 the one that drives position sizing is the one whose detector never runs,
 and `_REGIME_SIZE_MAP.get(name.upper(), 0.5)` fails open to 0.5 on any name it
 does not recognise — which is what hides the mismatch between all eight.
+
+================================================================================
+SELF-HEALER / SECURITY TOOLING (domain 5) — security/ 9,924 LOC. Done by me.
+This subsystem WRITES PYTHON SOURCE FILES IN THE RUNNING TREE, so reachability
+was traced before any severity was assigned.
+================================================================================
+
+## F130 — the self-healer's patch-signing control is OFF BY DEFAULT and set NOWHERE · HIGH (conditional on entry point — see the reachability section)
+security/self_healer.py:133-139:
+    # Patches written to fixes:approved must be signed with this key so that a
+    # compromised Redis instance cannot inject arbitrary code.  Set
+    # HEAL_PATCH_SIGNING_KEY in the environment (min 32 bytes recommended).
+    # If unset, signing is skipped and a warning is emitted on every drain cycle.
+    _PATCH_SIGNING_KEY: bytes = os.getenv("HEAL_PATCH_SIGNING_KEY", "").encode()
+
+and :328-349 `_patch_entry_is_trusted`:
+    if not _PATCH_SIGNING_KEY:
+        logger.warning("SelfHealer: HEAL_PATCH_SIGNING_KEY not set — patch queue
+                        trust verification disabled.  Set this env var to
+                        prevent Redis injection.")
+        return True                      # <-- ACCEPTS THE PATCH
+    ...
+    return _verify_patch_signature(raw, sig)
+
+The HMAC check is correctly built — `hmac.new(key, payload, sha256)` and
+`hmac.compare_digest` (:318-326), no timing leak, no truthiness bug. It simply
+does not run.
+
+GREPPED THE ENTIRE REPOSITORY FOR `HEAL_PATCH_SIGNING_KEY`, all file types,
+excluding .venv and this audit log: it appears ONLY inside self_healer.py.
+Not in .env.example, not in .env.production.example, not in docker-compose.yml,
+not in k8s/k8s-configmap.yaml, not in deployments/k8s/configmap.yaml. There is
+no shipped configuration in which this control is on. This is the same shape as
+F101 — a fail-open safety flag outside the reach of Gate L's three-file scan.
+
+The author's own comment names the exact threat the control exists to stop:
+"a compromised Redis instance cannot inject arbitrary code". With the key unset,
+whatever can RPUSH to the Redis list `fixes:approved` (:916
+`redis.lrange("fixes:approved", 0, -1)`) has its Python written into the source
+tree, subject only to the defence-in-depth checks in F131.
+
+*** REACHABILITY — this is why it is HIGH and not CRITICAL. ***
+The drain loop only runs when the healer's background tasks are started, and
+only ONE entry point does that:
+    connect_to_life.py:347-353   from security.self_healer import start_healer
+                                 await _start_healer(...)
+    self_healer.py:2158-2167     start_healer -> asyncio.create_task(healer.run())
+    self_healer.py:733-754       run() starts 7 loops, including
+                                 _patch_loop and _claude_fix_loop
+`connect_to_life.py` IS a real entry point — scripts/ci/gate_e_dead_files.py:57
+lists it under "Entry-point scripts run directly, not imported".
+But the CONTAINERISED PRODUCTION PATH DOES NOT START IT. Dockerfile:91 is
+`scripts/preflight.sh && python app.py`, and app.py contains no reference to the
+healer (grepped). What app.py DOES get is the HTTP router —
+core/router_registry.py:525-528 registers `/api/security/heal/*` unconditionally.
+So: in the Docker deployment the patch loops are dormant and only the endpoints
+exist; running connect_to_life.py directly turns the full autonomous patcher on.
+
+AT THE DEFAULT CONFIG, once started, here is what is and is not live — I read
+each gate rather than assuming:
+    :508  self._enabled       = True
+    :509  self._aggressiveness = "medium"       # low|medium|aggressive|nuclear
+    :901  Redis patch drain runs when `self._enabled and aggressiveness != "low"`
+                                                        -> ON at "medium"
+    :1266 LLM patches require aggressiveness in ("aggressive","nuclear")
+                                                        -> OFF at "medium"
+    :1285 LLM patches also require ANTHROPIC_API_KEY, else the queue is cleared
+    :980  categories in _require_approval_categories (["nuclear","e2e"], :571)
+          are diverted to `heal:pending_approval` unless aggressiveness=="nuclear"
+So the LLM-authored path is off by default — correct posture, and worth saying
+plainly. The Redis-queued path is ON by default, and it is the one whose
+signature check is disabled.
+
+## F131 — the remaining defence is a denylist, and the code says so itself · MEDIUM (context for F130)
+With F130's signature check inert, `_validate_patch_content` (:356-403) is the
+only thing between the Redis queue and the file system. It is thoughtfully
+built, and it is a denylist:
+    _DANGEROUS_CALLS (:141-157): exec, eval, compile, __import__, subprocess,
+        os.system, os.popen, open, socket, urllib, requests, httpx
+    _DANGEROUS_ATTRS (:158-171): system, popen, execve, execvp, spawn, Popen,
+        call, check_call, check_output, run
+    plus a sensitive-path regex over string literals (.env, id_rsa, .pem,
+    /etc/passwd …) and a 50%-shrink guard.
+The header comment at :140 is candid: "This is a defence-in-depth check on top
+of the compile() gate." The author did not intend it as the primary control —
+the HMAC signature was the primary control, and F130 is that it never runs.
+
+Structural limits, stated factually and without a recipe:
+  * The scan visits `ast.Call` nodes only. `import` and `ImportFrom` statements
+    are never examined, so module imports are unrestricted; `importlib` is
+    absent from both lists.
+  * Only direct `Name` calls and `Attribute` calls are matched. Any denylist
+    keyed to identifiers at parse time cannot see indirection, by construction.
+  * The sensitive-path regex inspects `ast.Constant` string literals only.
+These are inherent properties of AST denylists rather than oversights; the
+correct remedy is the one the author already designed — set the signing key so
+untrusted entries never reach the validator.
+
+GOOD DESIGN WORTH RECORDING, because this module gets a lot right:
+  * MAX_PATCH_SIZE 64 KB (:107).
+  * A backup is taken before every write — `shutil.copy2(path, dest)` (:265).
+  * The 50%-shrink guard exists specifically to stop "wholesale deletion of
+    safety logic" (:363-364) — someone thought about the adversarial case.
+  * On a failed import after patching, it reverts with `git checkout --` and
+    validates the path first: "unsafe path rejected for git rollback" (:286-308).
+  * `_import_ok` (:406-418) treats ANY read/compile error as unsafe, not just
+    SyntaxError.
+  * Diagnostics are disabled in development/test (:1552) with the reasoning
+    written out.
+
+## F132 — the heal router's auth fails open on ImportError · LOW (latent — I checked, it does not currently fire)
+security/self_healer.py:2175-2209. Both dependencies have the same shape:
+    def _heal_require_auth(request):        # read endpoints
+        try:
+            from auth.jwt import decode_access_token as _decode
+            ... _decode(token)
+        except HTTPException: raise
+        except ImportError:  # nosec B110
+            logger.warning("SelfHealer router: auth.jwt unavailable, auth skipped")
+        except Exception as exc: raise HTTPException(401) from exc
+    def _heal_require_admin(request):       # mutating endpoints
+        ... except ImportError: "admin check skipped"
+Falling through the `except ImportError` branch returns None, which FastAPI
+treats as a satisfied dependency — the endpoint executes unauthenticated.
+
+I HYPOTHESISED THIS WAS REACHABLE AND IT IS NOT — recording the check so it is
+not re-raised. `decode_access_token` does lazy-import `auth.service` inside the
+function (auth/jwt.py:169), which looked like a live path to an ImportError
+escaping into the caller's handler. It is not: auth/jwt.py:173-174 catches that
+ImportError itself. And `from auth.jwt import decode_access_token` imports
+cleanly here (verified by running it) — it needs only `jwt` and `bcrypt`, both
+hard dependencies.
+So the fail-open requires auth.jwt itself to become unimportable, which would
+break the whole application anyway. LATENT. The endpoint structure is otherwise
+correct: read endpoints take `_heal_require_auth`, every mutating endpoint takes
+`_heal_require_admin` (:2239, :2243, :2249, :2266, :2287, :2294), and none of
+them applies a patch — they trigger scans, analyses and diagnostics only.
+
+## F133 — the token-revocation check fails open · LOW
+auth/jwt.py:167-175, inside `decode_access_token`:
+    if jti:
+        try:
+            from auth.service import is_access_token_revoked
+            if is_access_token_revoked(jti):
+                raise jwt.InvalidTokenError("Token has been revoked")
+        except ImportError:
+            ...  # nosec B110
+    return payload
+If `auth.service` cannot be imported, a REVOKED token is accepted as valid — the
+blacklist is silently skipped rather than failing closed. `auth.service` pulls in
+the database layer, so this is more plausible than F132's trigger (a missing DB
+driver, a circular import during startup ordering). Narrow, but it is a
+revocation control that degrades to "allow" rather than "deny".
+
+## F134 — the LLM default model is a generation behind · LOW (informational)
+security/self_healer.py:1479  `model = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-5")`
+The current generation is the Claude 5 family (claude-opus-5, claude-sonnet-5,
+claude-fable-5), with claude-haiku-4-5 alongside. The default here pins the
+previous generation. It is overridable by ANTHROPIC_MODEL and only matters when
+the LLM fix path is enabled (aggressive/nuclear + API key), so this is a currency
+note rather than a defect.
