@@ -3071,3 +3071,79 @@ updates. Grepping the wallet write path shows no call to it — payments/wallet.
 computes `balance_after` and persists it without ever asserting
 before + delta == after. Same shape as the recurring pattern in this audit: the
 control is written, correct, and not wired in.
+
+================================================================================
+SCRIPTS / OPS (domain 7) + the kill-switch durability chain it exposed.
+================================================================================
+
+## F139 — *** THE deployments/k8s/ MANIFEST SET DISABLES CROSS-POD KILL-SWITCH PROPAGATION *** · CRITICAL
+The kill switch is designed with five independent activation layers precisely so
+that no single dependency can silence it (kill_switch.py:205-216):
+    1. in-memory flag       2. kill_switch.flag file       3. env var
+    4. Redis latch (ks:latch, TTL 7d)
+    5. K8s ConfigMap watcher — the documented Redis-down fallback
+and the docstring states the intent plainly: "When Redis is down: ... The K8s
+ConfigMap watcher (priority 5) provides cross-pod propagation."
+Layer 5 is started unconditionally (:295 `_k8s_configmap_watcher`) and written on
+activation (:938 `_write_k8s_configmap(reason)`).
+
+LAYER 5 REQUIRES RBAC, AND ONLY ONE OF THE TWO MANIFEST SETS GRANTS IT.
+  k8s/  — CORRECT, and carefully done. k8s/kill-switch-rbac.yaml defines a Role
+    scoped with `resourceNames: ["hopefx-kill-switch"]` and verbs limited to
+    ["get","patch"] — genuine least privilege — bound to ServiceAccount
+    `hopefx-api`, and k8s-deployment.yaml:39 sets `serviceAccountName: hopefx-api`.
+  deployments/k8s/ — NO RBAC FILE EXISTS in that directory (contents: configmap,
+    deployment, hpa, namespace, service), and deployment.yaml sets NO
+    `serviceAccountName` (grepped: only two `securityContext` hits, :16 and :33).
+    Pods therefore run as the namespace `default` ServiceAccount, which the
+    RoleBinding does not name. Every `get`/`patch` on the kill-switch ConfigMap
+    is denied by RBAC.
+
+LAYER 2 DOES NOT SURVIVE A POD REPLACEMENT EITHER.
+    kill_switch.py:78  _DEFAULT_FLAG_FILE = Path(__file__).parent / "kill_switch.flag"
+That resolves inside the image layer (/app/kill_switch.flag), not onto a volume.
+  * docker-compose.yml DOES declare a persistent `trading_state:/app/state`
+    volume (:110, :199, :272) — the right home for this file — but the flag is
+    not written there, and nothing sets `flag_file=` outside a test script
+    (scripts/validate_ml_flow.py:610 is the only override in the repo).
+  * k8s/k8s-deployment.yaml mounts only `tmp` (emptyDir) and `app-logs`; neither
+    covers /app, and emptyDir does not survive rescheduling anyway.
+So the comment at :107 — "JSON state file sits next to the flag file and survives
+restarts" — is true for a process restart inside a live container and false for
+a container replacement, which is the normal Kubernetes event.
+
+LAYER 4 IS EXPLICITLY OPTIONAL. scripts/preflight.sh:258-266 downgrades an
+unreachable Redis from `fail` to `warn` and continues, with the reasoning
+written out. That is a defensible choice on its own — the orchestrator's own
+startup log even names the cost: "Trading continues in degraded mode (no tick
+cache, no kill-switch propagation)".
+
+NET EFFECT for a cluster deployed from `deployments/k8s/`: layer 4 is optional,
+layer 5 is denied by RBAC, layer 2 evaporates on reschedule, layer 1 is
+per-process, and layer 3 requires a redeploy to change. An operator who hits the
+kill switch stops the pod they reached and no other, and the halt does not
+survive a restart. That directory ALSO sets HOPEFX_INVARIANT_MODE=monitor and
+omits DRIFT_BLOCK/STALE_MODEL_BLOCK (F98), so the same manifest set that breaks
+the kill switch also drops invariant enforcement and model-drift blocking.
+Severity CRITICAL: this is the control of last resort on a money-moving system,
+and one of the two shipped manifest sets silently removes three of its five
+layers.
+
+## F140 — scripts/ is clean on destructive operations · NO FINDING (verified)
+Swept all 71 scripts for `DROP TABLE|DROP DATABASE|TRUNCATE|rm -rf|shutil.rmtree|
+.delete()|DELETE FROM`. Two hits, both benign:
+  * scripts/build_frontend.sh — `rm -rf` on build output only.
+  * scripts/seed_demo_trades.py:192 — `db.query(Trade).filter(
+    Trade.user_id == DEMO_USER_ID).delete()`, scoped to
+    `DEMO_USER_ID = "demo-seed-user"` (:44) and defaulting `APP_ENV=development`
+    (:34). The `--user_id` flag (:176) can retarget it, but that is an explicit
+    operator argument, not an accident.
+No script drops a table, truncates, or deletes across users.
+
+## F141 — preflight.sh gates startup correctly · NO FINDING (verified)
+scripts/preflight.sh uses a real `fail() { ...; exit 1; }` (:24) and applies it
+where it matters: Python version below 3.12 (:40), a missing .env with required
+vars absent (:60), any missing required env var (:94), and a failed Alembic
+migration (:230). The Python-level `validate_environment(strict=True)` runs at
+step 7. The only downgrade to `warn` is Redis (F139 above), and it is documented
+with its rationale rather than silently loosened.
