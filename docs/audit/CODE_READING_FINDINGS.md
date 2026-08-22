@@ -2676,3 +2676,124 @@ Note the endpoint DOES guard against the dead router (:3835
 not showing F94's stuck "unknown" — it falls through to this inline computation
 instead. F94's sizing impact is unaffected: core/signal_engine.py reads
 `status()` directly with no such guard.
+
+================================================================================
+NUCLEAR / NEWS PIPELINE (domain 6) — completing what F80/F89/F91 started.
+================================================================================
+
+## F126 — the nuclear pipeline is FULLY WIRED and its signals place real orders · NO FINDING, but essential context
+Recording this first because my own initial reading was wrong and the correction
+matters for how every other nuclear finding should be weighted.
+
+A caller count on the individual modules is MISLEADING here. Counting imports
+from outside the package gives zero for signal_composer, strategy_engine,
+itos_cone_engine and shadow_backtest (2,607 LOC) — which looks like dead code.
+It is not. nuclear/nuclear_agent.py:56-62 imports ALL of them:
+    from nuclear.feature_builder    import FeatureBuilder, MultiTimeframeFeatures
+    from nuclear.itos_cone_engine   import ItosCone, ItosConeEngine
+    from nuclear.redis_stream_reader import RedisStreamReader, get_stream_reader
+    from nuclear.regime_classifier  import RegimeClassifier, RegimeResult
+    from nuclear.shadow_backtest    import BacktestResult, ShadowBacktestEngine
+    from nuclear.signal_composer    import NuclearSignal, SignalComposer
+    from nuclear.strategy_engine    import NuclearStrategyEngine
+`nuclear/__init__.py:23-25` exports only the agent, which is why the package
+reads as dead from outside. The whole pipeline runs behind one entry point.
+
+AND IT REACHES EXECUTION:
+    hopefx_engine.py:495-496  get_nuclear_agent(...); await agent.start()
+    hopefx_engine.py:627-632  tasks.append(agent.run_loop(
+                                  interval_s=NUCLEAR_INTERVAL_S default 5,
+                                  on_signal=self._on_nuclear_signal))
+    hopefx_engine.py:637-644  _on_nuclear_signal converts an APPROVED
+                              NuclearSignal into an ExecutionRequest and routes
+                              it through the ExecutionEngine.
+The kill switch is checked there and FAILS CLOSED, with the reasoning written
+out (:645-660): "The ExecutionEngine path enforces this too, but the fallback to
+direct broker calls below does not — so check here as well". Any error in the
+check drops the signal. Correct.
+
+*** THE COMPOUNDING FACT: in hopefx_engine.py the nuclear agent is very likely
+the ONLY signal source. *** Per F88, hopefx_engine.py:398 injects a
+`StrategyManager()` with preload_defaults=False — zero strategies — into the
+brain. So the brain contributes nothing there and every order originates from
+this pipeline. That makes F80 (the wordmap scoring a headline containing
+"coupon" at severity 7 and triggering hedge_mode) a defect on the primary order
+path of the standalone engine, not a peripheral one.
+
+## F127 — the nuclear shadow backtest is CORRECTLY point-in-time · NO FINDING (verified by reading the slicing)
+Notable because F123 shows the same repository shipping a walk-forward endpoint
+with the test set inside the training set. This one is right.
+    nuclear/shadow_backtest.py:346-348
+        bars_at_tick = {tf: [b for b in bars
+                             if (b.close_time or b.open_time) <= tick.timestamp]
+                        for tf, bars in bars_by_tf.items()}
+    :436  docstring: "Walk-forward bar simulation: generate signal on bar[i],
+                      exit on bar[i+1]"
+    :445  walk_bars = bars[-(n_bars+1):]
+    :447-448  for i in range(len(walk_bars)-1):
+                  history = bars[: -(n_bars - i)] if (n_bars - i) > 0 else bars
+I checked the slice arithmetic rather than trusting the comment, because
+off-by-one here is exactly where lookahead enters. With n_bars=5:
+    i=0 -> signal bar = bars[-6], exit = bars[-5], history = bars[:-5]
+           (history ends AT bars[-6] — the signal bar's own close, which is
+            knowable when it closes. Correct.)
+    i=4 -> signal bar = bars[-2], exit = bars[-1], history = bars[:-1]. Correct.
+No lookahead at either end of the walk.
+
+## F128 — an APPROVED live order needs only THREE backtest trades · MEDIUM (bounded by the sizing caps)
+nuclear/signal_composer.py:535-562 `_evaluate_approval` is correctly implemented
+and matches its docstring exactly (RR floor first, then the confidence floor,
+then the conjunction):
+    if rr < self._rr_min:                     -> REJECTED
+    if confidence < self._conf_pending:       -> REJECTED
+    if confidence >= self._conf_approved and bt_trades >= self._min_bt_trades:
+                                              -> APPROVED
+The thresholds (:70-76):
+    _CONF_APPROVED = 0.60   _CONF_PENDING = 0.45   _RR_MIN = 1.5
+    _MIN_BACKTEST_TRADES = 3
+THREE trades is the entire evidentiary bar for releasing an order to a broker.
+With exactly 3 trades the win rate can only take four values —
+    reachable win_rate with 3 trades: [0.0, 0.333, 0.667, 1.0]
+— so "backtest validated" carries essentially no statistical information, and
+that win rate then feeds the Kelly fraction at :424-429.
+
+WHY THIS IS MEDIUM AND NOT HIGH — the design bounds the consequence, and I
+computed the actual range rather than assuming:
+    _KELLY_CAP = 0.25   _BASE_RISK_PCT = 0.01   _MAX_RISK_PCT = 0.02
+    risk_pct      = min(BASE*(0.5 + conf*0.5), MAX)
+    position_size = min(risk_pct*(kelly*0.5 + 0.5), MAX)
+      conf=0.60 kelly=0.00 -> position_size = 0.00400
+      conf=0.60 kelly=0.25 -> position_size = 0.00500
+      conf=1.00 kelly=0.00 -> position_size = 0.00500
+      conf=1.00 kelly=0.25 -> position_size = 0.00625
+Across the ENTIRE confidence and Kelly space the position is 0.40%-0.625% of
+equity against a 2% cap. Kelly's total influence is a 1.25x swing, because the
+`+ 0.5` term floors its contribution. A meaningless 3-trade Kelly estimate
+therefore cannot produce a dangerous position. Two further mitigations are real:
+`wr = bt.win_rate if bt.total_trades >= self._min_bt_trades else 0.5` (:424)
+falls back to neutral rather than optimistic, and `confidence_score`
+(shadow_backtest.py:150-166) explicitly includes
+`sample_score = min(total_trades/20, 1.0)` weighted 0.25, so a small sample does
+suppress confidence.
+The finding is that the GATE is weak evidence, not that the outcome is unsafe.
+Raising _MIN_BACKTEST_TRADES is a one-constant change.
+
+## F129 — an EIGHTH regime taxonomy · LOW (extends F94)
+nuclear/regime_classifier.py:60-68 defines its own nine regime strings:
+    trending_up, trending_down, breakout, mean_reverting, range_bound,
+    high_vol, low_vol, crisis, unknown
+It overlaps strategies/regime_router.py's seven but is not the same set — it
+adds `breakout` and `crisis`. Running total of independent "market regime"
+vocabularies in this one repository:
+    1  strategies/regime_router.py      7 REGIME_* strings
+    2  ml/regime.py                     MarketRegime enum
+    3  brain/brain.py                   MarketRegime enum
+    4  analysis/market_analysis.py      MarketRegime enum
+    5  nocode/ml_nodes.py               MarketRegime enum
+    6  backtesting/enhanced_engine.py   MarketRegime enum
+    7  api/trading.py:3812-3826         inline trending_up/trending_down/ranging
+    8  nuclear/regime_classifier.py     9 REGIME_* strings
+Eight vocabularies, no shared type, no conversion layer between any pair. Per
+F94 the one that drives position sizing is the one whose detector never runs,
+and `_REGIME_SIZE_MAP.get(name.upper(), 0.5)` fails open to 0.5 on any name it
+does not recognise — which is what hides the mismatch between all eight.
