@@ -3147,3 +3147,94 @@ vars absent (:60), any missing required env var (:94), and a failed Alembic
 migration (:230). The Python-level `validate_environment(strict=True)` runs at
 step 7. The only downgrade to `warn` is Redis (F139 above), and it is documented
 with its rationale rather than silently loosened.
+
+================================================================================
+ENTRY-POINT ARCHITECTURE — four entry points, four different pipelines.
+This section answers "how is it SUPPOSED to work vs how does it ACTUALLY work".
+================================================================================
+
+## F142 — *** THE ACTIVE PAPER PIPELINE HAS NO RISK LAYER AT ALL *** · CRITICAL
+CLAUDE.md states the platform's status as "paper trading active". `run.py`
+routes that mode to `PaperRunner`, NOT to the engine every other finding in this
+audit examined:
+    run.py:372-380   _paper_mode = PAPER_TRADING == "true"
+                     if _paper_mode or args.broker == "paper":
+                         from execution.paper_runner import PaperRunner
+                         runner = PaperRunner(); await runner.run()
+    run.py:387-394   else: from hopefx_engine import HopeFXEngine
+
+THE ACTUAL PAPER PATH (execution/paper_runner.py:689-758 `_tick_loop`):
+    OandaPricePoll (REST poll)          :96
+      -> OHLCVBuffer (builds bars from ticks)   :186
+        -> InferenceSignalAdapter (ML on bar close)   :304
+          -> bus.publish(CH_ORDER, {symbol, direction, units, mid,
+                                    confidence, timestamp})       :731-744
+            -> FIXRouter._route()  (execution/fix_router.py:320)
+              -> paper broker
+
+WHAT IS NOT IN THAT PATH — verified by reading `_route` in full (:320-360):
+    if self._halted:            <-- kill switch, the ONLY gate
+        return
+    symbol    = order_request.get("symbol", "XAU/USD")
+    direction = order_request.get("direction", "BUY").upper()
+    units     = float(order_request.get("units", DEFAULT_UNITS))
+    ... straight to _send_paper / _send_fix
+  * NO RiskManager.assess()      * NO pre-trade gate
+  * NO position sizing           * NO Kelly, no risk-per-trade, no equity scaling
+  * NO stop-loss or take-profit  — neither is in the order_request payload
+  * NO ExecutionEngine           — so none of its OTel/TCA/gate logic applies
+  * NO drawdown check            * NO exposure or correlation limit
+
+SIZE IS A FIXED CONSTANT. paper_runner.py:87
+    _ORDER_UNITS: float = float(os.environ.get("PAPER_ORDER_UNITS", "1000"))
+and :657 passes it verbatim into every order_request. Every trade is 1000 units
+regardless of equity, volatility, confidence or open exposure.
+
+The only safety control on this path is the kill switch, reached through
+FIXRouter's breach listener (:309-314, halts on kill_switch_active / kill_event /
+kill_switch).
+
+This reframes a large part of the audit. F45/F59 (no working stop-loss),
+F60/F61/F107 (broker call breaks), F63 (unit confusion), F84 (data-layer gate
+bypass), F88 (empty StrategyManager) all describe `hopefx_engine` /
+`ExecutionEngine` — the path used in LIVE mode. The path actually running today
+does not reach that code at all. It is simpler, and it has less protection, not
+more: the risk stack those findings describe as broken is not merely broken here,
+it is absent.
+Severity CRITICAL: this is the running configuration, and an ML signal becomes a
+broker order with one boolean between them.
+
+## F143 — `--dry-run` describes a live pipeline that does not exist · HIGH
+`run.py --dry-run` exists so an operator can confirm what is about to start
+before committing real money. `_get_pipeline` (:317-341) is called from exactly
+one place — `_print_plan` at :302 — i.e. it is display text only.
+
+For LIVE mode it promises:
+    "EventBus (Redis pub/sub)"
+    "FaultGuard (circuit breaker + heartbeat)"
+    "NewsCalendarFeed (ForexFactory → Redis)"
+    "MarketIngest (XAUUSD ticks via ccxt.pro)"
+    "StrategyEngine (ML signal — AdvancedModelPredictor)"
+    "Gatekeeper (prop-firm risk checks)"
+    "FIXRouter (order execution + OANDA REST fallback)"
+Live mode runs `HopeFXEngine`. Counting occurrences in hopefx_engine.py:
+    FaultGuard 0   MarketIngest 0   NewsCalendarFeed 0   Gatekeeper 0
+    FIXRouter 0    EventBus 0
+All six classes DO exist in the repo (utils/fault_guard.py, data/market_ingest.py,
+data/news_calendar_feed.py, risk/gatekeeper.py, execution/fix_router.py) — this
+is a stale description of a superseded architecture, not fiction. But five of the
+six are genuinely not in the live path:
+  * Gatekeeper — risk/manager.py names it only in DOCSTRINGS (:221 "consumed by
+    Gatekeeper", :666 "Consumed by Gatekeeper and execution pipeline"). No
+    import, no call. The documented consumer does not consume.
+  * FIXRouter — zero hits in execution/engine.py, brokers/factory.py, execution/oms.py.
+  * EventBus is the one exception: execution/engine.py does use it, so it is in
+    the live path indirectly.
+What HopeFXEngine actually wires (:377-589): RiskManager, HopeFXBrain,
+SniperEntryEngine, AdvancedPredictor, risk_orchestrator, PositionTracker, OMS,
+ExecutionEngine, NuclearStrategyAgent, OANDAStream/MT5Bridge, BrokerFactory,
+drift_monitor.
+The PAPER description is accurate by contrast — OandaPricePoll, TickSignalEngine,
+FillRecorder are all real members of paper_runner.py.
+Severity HIGH: the one tool whose entire purpose is telling an operator what will
+run is wrong about the money-moving mode.
