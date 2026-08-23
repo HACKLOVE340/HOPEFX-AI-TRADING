@@ -51,8 +51,7 @@ def test_sale_during_payout_is_not_destroyed(engine: RevenueSplitEngine) -> None
     engine._settle_paid_payout(bal, captured)
 
     assert bal.pending_usd == after_sale - captured, (
-        f"money destroyed: pending is {bal.pending_usd}, "
-        f"expected {after_sale - captured}"
+        f"money destroyed: pending is {bal.pending_usd}, expected {after_sale - captured}"
     )
     assert bal.total_paid_usd == captured
 
@@ -71,9 +70,7 @@ def test_balance_never_goes_negative(engine: RevenueSplitEngine) -> None:
 # ── F204: never report PAID without a transfer ────────────────────────────────
 
 
-def test_no_transfer_backend_does_not_report_paid(
-    engine: RevenueSplitEngine, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_no_transfer_backend_does_not_report_paid(engine: RevenueSplitEngine, monkeypatch: pytest.MonkeyPatch) -> None:
     """With the stripe package absent, a payout must NOT claim it paid.
 
     Before the fix this set status=PAID, stamped completed_at, and zeroed the
@@ -89,13 +86,9 @@ def test_no_transfer_backend_does_not_report_paid(
 
     assert len(payouts) == 1
     payout = payouts[0]
-    assert payout.status is not PayoutStatus.PAID, (
-        "reported PAID with no transfer backend"
-    )
+    assert payout.status is not PayoutStatus.PAID, "reported PAID with no transfer backend"
     assert payout.stripe_transfer_id is None
-    assert engine._get_or_create_balance("c1").pending_usd == pending_before, (
-        "balance was debited without a transfer"
-    )
+    assert engine._get_or_create_balance("c1").pending_usd == pending_before, "balance was debited without a transfer"
 
 
 # ── F206: cents must not truncate against the creator ─────────────────────────
@@ -110,9 +103,7 @@ def test_no_transfer_backend_does_not_report_paid(
         (Decimal("12.34"), 1234),
     ],
 )
-def test_cents_conversion_rounds_it_does_not_truncate(
-    amount: Decimal, expected_cents: int
-) -> None:
+def test_cents_conversion_rounds_it_does_not_truncate(amount: Decimal, expected_cents: int) -> None:
     """`int(x * 100)` truncates toward zero, always in the platform's favour.
 
     Sub-cent amounts arise normally: the creator's share is the remainder after
@@ -126,9 +117,7 @@ def test_cents_conversion_rounds_it_does_not_truncate(
 # ── F207: a payout must claim only what it actually paid ──────────────────────
 
 
-def test_payout_claims_only_unpaid_transactions(
-    engine: RevenueSplitEngine, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_payout_claims_only_unpaid_transactions(engine: RevenueSplitEngine, monkeypatch: pytest.MonkeyPatch) -> None:
     """Each payout used to list every historical transaction for the creator,
     so summing transaction ids across payouts double-counted."""
     monkeypatch.setattr(

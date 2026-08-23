@@ -206,6 +206,11 @@ class RevenueSplitEngine:
         self._transactions: dict[str, SaleTransaction] = {}
         self._balances: dict[str, CreatorBalance] = {}
         self._payouts: dict[str, PayoutRecord] = {}
+        # `record_sale` credits pending_usd while `process_weekly_payouts`
+        # reads it, transfers, and writes it back. There was no lock anywhere
+        # in this module, so the read-modify-write raced and the payout also
+        # iterated `_balances` while sales could insert into it (F203).
+        self._lock = threading.RLock()
 
     # ── Sales ─────────────────────────────────────────────────────────────────
 
@@ -252,10 +257,12 @@ class RevenueSplitEngine:
         )
         self._transactions[txn.transaction_id] = txn
 
-        # Credit creator balance
-        bal = self._get_or_create_balance(creator_id)
-        bal.pending_usd += creator_amount
-        bal.total_earned_usd += creator_amount
+        # Credit creator balance under the lock: a payout cycle may be reading
+        # and writing this same field concurrently (F203).
+        with self._lock:
+            bal = self._get_or_create_balance(creator_id)
+            bal.pending_usd += creator_amount
+            bal.total_earned_usd += creator_amount
 
         logger.info(
             "Sale recorded: strategy=%s creator=%s gross=%.2f creator_share=%.2f",
@@ -334,23 +341,35 @@ class RevenueSplitEngine:
         Process payouts for all eligible creators.
 
         Eligibility: pending_usd >= MIN_PAYOUT_USD AND stripe_account_id set.
-        Uses Stripe Connect transfers if available, otherwise marks as PAID
-        in simulation mode.
+
+        With no transfer backend available the payout is recorded as
+        ``SIMULATED`` and the balance is left untouched — it is NOT reported as
+        paid. Simulation previously reused ``PAID`` and zeroed the balance, so
+        a creator's ledger claimed money that never left the platform (F204).
 
         Returns:
             List of PayoutRecord objects created this cycle.
         """
         payouts: list[PayoutRecord] = []
 
-        for creator_id, bal in self._balances.items():
+        # Snapshot under the lock: `record_sale` may insert a new creator while
+        # this cycle iterates, which would raise "dictionary changed size
+        # during iteration" (F203).
+        with self._lock:
+            balances = list(self._balances.items())
+
+        for creator_id, bal in balances:
             if not bal.is_payout_eligible:
                 continue
 
             amount = bal.pending_usd
+            # Only transactions no previous payout has settled. This used to
+            # list every transaction the creator had ever had, so summing
+            # across payouts double-counted (F207).
             payout_txn_ids = [
                 t.transaction_id
                 for t in self._transactions.values()
-                if t.creator_id == creator_id and t.creator_amount > 0
+                if t.creator_id == creator_id and t.creator_amount > 0 and t.settled_by_payout_id is None
             ]
 
             payout = PayoutRecord(
@@ -366,11 +385,17 @@ class RevenueSplitEngine:
             if _STRIPE_AVAILABLE and bal.stripe_account_id:
                 payout = self._execute_stripe_transfer(payout, bal)
             else:
-                # Simulation mode
-                payout.status = PayoutStatus.PAID
-                payout.completed_at = datetime.now(UTC)
-                logger.info(
-                    "Payout simulated (Stripe unavailable): creator=%s amount=%.2f",
+                # No transfer backend. Record what happened without claiming a
+                # payment occurred, and leave the balance intact so the money
+                # is still owed and will be picked up by the next cycle (F204).
+                payout.status = PayoutStatus.SIMULATED
+                payout.failure_reason = (
+                    "No transfer backend available (stripe package not installed "
+                    "or no payout account); nothing was sent and the balance is "
+                    "unchanged."
+                )
+                logger.warning(
+                    "Payout NOT sent — no transfer backend: creator=%s amount=%.2f. Balance left pending.",
                     creator_id,
                     float(amount),
                 )
@@ -378,19 +403,45 @@ class RevenueSplitEngine:
             self._payouts[payout.payout_id] = payout
 
             if payout.status == PayoutStatus.PAID:
-                bal.total_paid_usd += amount
-                bal.pending_usd = Decimal("0.00")
-                bal.last_payout_at = datetime.now(UTC)
+                self._settle_paid_payout(bal, amount, payout)
 
             payouts.append(payout)
 
         return payouts
 
+    def _settle_paid_payout(
+        self,
+        bal: CreatorBalance,
+        amount: Decimal,
+        payout: PayoutRecord | None = None,
+    ) -> None:
+        """Debit a completed payout from the creator's pending balance.
+
+        This used to assign ``Decimal("0.00")``. The amount is captured before
+        a network transfer that takes seconds, so anything ``record_sale``
+        credited in that window was silently destroyed — measured at $40 lost
+        on a $50 sale landing mid-payout (F203).
+
+        Subtracting is the whole fix; the clamp guards the case where a caller
+        settles more than is pending, which must not push a creator into debt.
+        """
+        with self._lock:
+            bal.total_paid_usd += amount
+            bal.pending_usd = max(Decimal("0.00"), bal.pending_usd - amount)
+            bal.last_payout_at = datetime.now(UTC)
+            if payout is not None:
+                # Mark exactly which transactions this payout settled, so the
+                # next cycle does not re-claim them (F207).
+                for txn_id in payout.transaction_ids:
+                    txn = self._transactions.get(txn_id)
+                    if txn is not None:
+                        txn.settled_by_payout_id = payout.payout_id
+
     def _execute_stripe_transfer(self, payout: PayoutRecord, bal: CreatorBalance) -> PayoutRecord:
         """Execute a Stripe Connect transfer to the creator's account."""
         try:
             transfer = _stripe.Transfer.create(  # type: ignore[union-attr]
-                amount=int(payout.amount_usd * 100),  # cents
+                amount=to_cents(payout.amount_usd),
                 currency="usd",
                 destination=bal.stripe_account_id,
                 metadata={
@@ -411,7 +462,12 @@ class RevenueSplitEngine:
         except Exception:
             payout.status = PayoutStatus.FAILED
             payout.failure_reason = "Transfer failed — check server logs"
-            logger.exception("Stripe transfer failed: creator=%s error=%s", payout.creator_id)
+            # This had two %s placeholders and one argument, so logging raised
+            # while formatting and the record was never emitted — the failure
+            # path for a creator payout was diagnostically blind while
+            # `failure_reason` told the operator to check logs that had nothing
+            # in them (F205). logger.exception already attaches the traceback.
+            logger.exception("Stripe transfer failed: creator=%s", payout.creator_id)
 
         return payout
 

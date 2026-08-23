@@ -312,3 +312,11 @@ security/yara_rules/
 
 # Playwright sweep session (contains a live token)
 frontend/.auth.json
+
+# Runtime state written by research/pipeline/paper_trading_gate.py when the
+# suite or the engine runs. Same class as test-results.xml: generated, not
+# source, and it lands inside the tracked data/ directory.
+data/paper_gate_state.json
+data/paper_trading_gate.json
+# Dead-letter queue written at runtime by the regulatory reporter.
+data/reg_dlq/
