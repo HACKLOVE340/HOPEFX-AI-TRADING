@@ -38,14 +38,36 @@ remediation.
 * **Tests written first**, demonstrating each failure before the fix.
 
 ## Phase B — Money: persistence and the wallet
+
+### B1 — the wallet write path · DONE
+* **F135** — wallet ledger ids collide (timestamp to the second); rows silently
+  dropped. **Proved: 50 credits produced 1 distinct id.** Now
+  `TXN-%Y%m%d-<uuid4[:8]>`, matching `payments/transaction_manager.py`.
+* **F136** — wallet balance is an unlocked read-modify-write. **Proved: $32
+  deposited, $4 recorded; and a $100 wallet overdrawn to −$60.** One `RLock`
+  now covers read → check → write → ledger row.
+* **F138** — `verify_balance_after` is never called. Wired — but *not* by
+  calling the predicate from the money path, which would blur the line the
+  `hopefx-invariants` skill draws. Added `enforce_wallet_movement` to
+  `invariants/enforcement.py` under the existing `ledger` kind, so the violation
+  is counted and visible through `enforcement.status`.
+* **F234** — readers never took the lock, so a torn balance was still
+  observable mid-transfer. A defect in the *first* version of the F136 fix.
+* **F235** — sub-cent amounts diverge memory from the `Float` ledger column.
+  Refused rather than rounded.
+* **F237** — `_load_balance_from_db` restored a commission balance into the
+  subscription wallet, and never restored commission at all.
+
+Note on enforcement mode: `HOPEFX_INVARIANT_MODE` defaults to `monitor`, where
+`allowed` is `True` even for a CONSTITUTIONAL violation. Money safety therefore
+cannot rest on it. The write path refuses on its own exact-Decimal check
+regardless of mode; the invariant makes the violation *observable*.
+
+### B2 — creator balance persistence · BLOCKED ON YOU
 * **F208** — creator balances, sales and payouts exist only in RAM. **There is
   no table for any of them** — this is a schema decision, not a write-path fix.
-  Cheapest possible moment: nothing to migrate.
-* **F135** — wallet ledger ids collide (timestamp to the second); rows silently
-  dropped.
-* **F136** — wallet balance is an unlocked read-modify-write.
-* **F138** — `verify_balance_after` is never called; it is the check that
-  catches F135 and F136.
+  Cheapest possible moment: nothing to migrate. Needs your call on what a
+  creator balance, a sale and a payout look like as tables.
 
 ## Phase C — Controls that report success without acting
 The codebase's signature defect.

@@ -6808,3 +6808,91 @@ The frontend guard is a safety net, not the right home for this rule.
 
 Generalises to a rule worth keeping: **a field that describes how a number was
 produced is a claim, not a guarantee. Check the number.**
+
+---
+
+## F234 — the wallet reader observes a torn balance mid-transfer · HIGH
+
+Found while fixing F136, and it is a defect in the *first* version of that fix.
+
+`transfer_between_wallets` is two movements: a debit from one wallet, a credit to
+the other. Holding a write lock across both legs does not help, because
+`get_balance` and `get_wallet` never took the lock at all. A reader sampling
+between the legs sees a total short by the transferred amount.
+
+Measured, not argued — a watcher thread against a $100 balance during 10.00
+transfers:
+
+```
+AssertionError: a partial transfer was observable: [90.0, 100.0]
+```
+
+The general rule: **locking the writers is not enough.** A multi-field read that
+must be consistent has to be a snapshot taken under the same lock. Fixed by
+locking `get_wallet`, `get_balance`, `get_transaction_history`, `freeze_wallet`
+and `unfreeze_wallet`, and by returning a copy of the history list rather than a
+live reference to a list a concurrent movement is appending to.
+
+## F235 — sub-cent amounts silently diverge memory from the ledger · MEDIUM
+
+`WalletTransaction.balance_after` is a `Float` column (`database/models.py:760`)
+while the in-memory balance is `Decimal`. For a balance that is a whole number of
+cents the round-trip through `float()` and `Decimal(str(...))` is exact. For a
+sub-cent residue it is not: the residue lives in memory and is lost on restart.
+
+The wallet carries subscription fees and commissions; neither has a legitimate
+sub-cent movement. `_validate_amount` now refuses them rather than rounding —
+rounding would move money the caller did not ask to move, which is the same class
+of defect as `to_cents` truncation in F203.
+
+The `Float` column itself remains the residual risk and belongs with the F208
+schema work: a `Numeric(18, 2)` column would remove the need for this guard.
+
+## F236 — the suite is sensitive to working-directory state · MEDIUM
+
+Logged first as "two auth tests fail under test-order pollution". That was too
+small a claim, and the number I first reached for was wrong.
+
+The fast suite run from the primary working directory reported **187 failed /
+16876 passed**. The same commit run in a freshly-created `git worktree` reported
+**7 failed / 17042 passed**. Same selection, same interpreter, same absent CI
+environment — the only difference was the directory.
+
+Then the same experiment with the phase-B changes applied, in its own fresh
+worktree: **7 failed / 17056 passed**, and the failure sets diff clean. The +14
+is exactly the new wallet tests. So the change caused none of it.
+
+Two things this establishes, both worth keeping:
+
+1. **180 of those failures were the measurement, not the code.** They were about
+   to be attributed to a wallet change that touches neither trading auth nor the
+   smart router. This is the fourth time in this audit that an alarming number
+   turned out to be the harness — the standing rule holds: *when a measurement
+   suddenly looks alarming, suspect the measurement first.*
+2. **The suite carries real order/state sensitivity.** `test_trading_auth.py`
+   passes 36/36 alone and fails 5 in company; `test_smart_router_comprehensive.py`
+   passes 49/49 alone and fails 5 in company; both pass in full once the CI
+   environment block from `.github/workflows/ci.yml` is exported. Tests that
+   only fail in company, or only without env, will fail in CI for reasons nobody
+   can reproduce locally.
+
+The 7 genuine pre-existing failures (SLTP monitor lifecycle ×4, execution
+coverage ×1, docs accuracy ×1, sltp comprehensive ×1) are unrelated to payments
+and are not addressed here.
+
+Practical note for anyone verifying a change in this repo: compare two fresh
+worktrees, and export the CI env block. Comparing against a long-lived working
+directory produces noise that swamps the signal.
+
+## F237 — `_load_balance_from_db` restored the wrong wallet's balance · HIGH
+
+`WalletManager._load_balance_from_db` selected the newest `WalletTransaction` row
+for a user **regardless of which of the two wallets it belonged to**, and assigned
+its `balance_after` to `subscription_balance`. A commission credit followed by a
+restart therefore overwrote the subscription balance with an unrelated number,
+and the commission balance was never restored at all — it always came back as
+`0.00`.
+
+The wallet type was already being written (`notes=txn.get("wallet_type")`), so the
+filter was available and simply not applied. Fixed by filtering on it and
+restoring both balances independently.

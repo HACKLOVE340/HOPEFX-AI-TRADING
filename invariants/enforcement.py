@@ -59,6 +59,11 @@ from invariants.constitution import (
 )
 from invariants.ai import verify_trust_floor, verify_trust_score, verify_trust_weighted_allocation
 from invariants.governance import verify_action_audited, verify_human_approval, verify_pod_isolation
+from invariants.payments import (
+    verify_amount_valid,
+    verify_balance_after,
+    verify_withdrawal_within_balance,
+)
 from invariants.resilience import verify_recovery_path_exists
 from invariants.risk import (
     verify_daily_loss,
@@ -524,6 +529,38 @@ def enforce_ledger_reconciliation(
         "ledger",
         lambda: verify_capital_equation(opening, deposits, realized, withdrawals, fees, closing, tol),
     )
+
+
+def enforce_wallet_movement(
+    *,
+    before: float,
+    delta: float,
+    after: float,
+    available: float | None = None,
+    tol: float = 0.01,
+) -> EnforcementResult:
+    """Assert a single wallet credit/debit is sound before it is recorded.
+
+    ``before + delta`` must equal ``after`` (No Unauthorized Capital Movement),
+    the amount must be finite and positive, and a debit must not exceed
+    ``available``. Wired from payments/wallet.py; runs under the ``ledger`` kind
+    alongside enforce_ledger_reconciliation, which checks the same property over
+    a whole account period rather than one movement.
+
+    The write path additionally refuses on its own exact-Decimal check, because
+    a balance that does not reconcile must never be recorded regardless of
+    HOPEFX_INVARIANT_MODE. This wrapper is what makes the violation *observable*
+    — counted, logged and surfaced by enforcement.status.
+    """
+
+    def _check() -> list[Violation]:
+        violations = verify_amount_valid(abs(delta))
+        violations += verify_balance_after(before, delta, after, tol)
+        if available is not None and delta < 0:
+            violations += verify_withdrawal_within_balance(abs(delta), available)
+        return violations
+
+    return _safe("ledger", _check)
 
 
 def enforce_no_spof(dependencies: dict[str, dict[str, Any]]) -> EnforcementResult:
