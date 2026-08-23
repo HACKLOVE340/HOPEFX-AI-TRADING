@@ -5929,3 +5929,72 @@ Four, counting `market_data/`. `CLAUDE.md` names only two of them and
 mischaracterises one. `ARCHITECTURE.md` should carry the boundary; a reader
 currently has to grep imports to find out which feed path is live — which is
 what this audit had to do.
+
+---
+
+# DOMAIN: `alembic/` (3,281 LOC, 20 migrations) and `backtest/` (244 LOC)
+
+## VERIFIED CLEAN — the migration graph
+20 revisions, **1 root, 1 head, no branch points, no dangling `down_revision`**.
+`alembic upgrade head` has an unambiguous target. The initial migration also
+wraps every create in `_create_table_if_missing(...)` with `checkfirst`, so it
+is idempotent against a database already built by `create_all()` — a
+thoughtful accommodation of the dual-provisioning reality below.
+
+## VERIFIED CLEAN — `backtest/`
+244 LOC across 6 files, **zero non-import statements**, 0 production imports.
+It is exactly the re-export shim `CLAUDE.md` describes, and it says so in its
+own docstring. The guidance for this package is accurate.
+
+## F218 — 14 model tables have no migration coverage · MEDIUM
+
+Cross-referencing every `__tablename__` in the codebase against every table
+touched by a migration (`create_table`, the `_create_table_if_missing` wrapper,
+and `batch_alter_table`):
+
+* tables declared by models: **41**
+* tables touched by migrations: **27**
+* **model tables with no migration coverage: 14**
+
+```
+aml_alerts            api_keys             broker_connections   chargebacks
+config_store          crypto_payments      email_suppressions   gdpr_requests
+outbox_events         reconciliation_records                    sessions
+tax_reports           watchlists           whitelabel_tenants
+```
+
+These exist only because `Base.metadata.create_all()` is called from
+`database/connection.py:516`, `database/models.py:910`, `cli.py:54/222`,
+`scripts/bootstrap_dev.py:420` and `scripts/create_superadmin.py:111`.
+
+`create_all()` creates missing tables. **It never alters an existing one.** So
+for these 14 tables a column added to the model appears on every fresh database
+and on **no existing one**, with no migration to close the gap and no error to
+announce it — the application simply fails at query time on the deployment that
+has been running longest.
+
+The list is not incidental. `aml_alerts`, `chargebacks`, `crypto_payments`,
+`tax_reports`, `gdpr_requests` and `reconciliation_records` are the
+compliance and money-reconciliation tables — exactly the ones whose schema a
+regulator or an auditor would expect to be version-controlled and reproducible.
+`outbox_events` is a transactional-outbox table, where a schema mismatch means
+silently undelivered events.
+
+**Fix:** autogenerate a migration against the current models
+(`alembic revision --autogenerate`), review it, and add a CI check that fails
+when a `__tablename__` exists with no migration covering it — the same
+comparison performed here, which is ~20 lines.
+
+## Method correction — I nearly reported this as 36 of 41
+My first extraction matched only `op.create_table("name"`, which missed the
+17 creates that go through this repo's `_create_table_if_missing(name, …)`
+wrapper. That produced "5 tables have migrations, 36 do not" — an alarming
+figure that would have misrepresented a largely-working migration setup. The
+corrected figure is 27 covered, 14 not.
+
+Third time in this audit that a first-pass regex over an unfamiliar codebase
+produced a dramatic false number (see also the 89%→34% capability gap and the
+"329 dead invariants"). The pattern is consistent enough to state as a rule:
+**a measurement that makes the codebase look far worse than the surrounding
+evidence suggests is more likely to be a broken measurement than a discovery.**
+Check it against a case known to work before reporting it.
