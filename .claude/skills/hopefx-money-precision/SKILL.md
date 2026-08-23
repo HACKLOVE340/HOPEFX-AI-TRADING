@@ -19,12 +19,30 @@ a decision, and it belongs at a named, tested edge — not inline in an f-string
 | Region | Representation | Files |
 |---|---|---|
 | Payments / monetization | `Decimal` | all of `payments/`, `monetization/` (24 files) |
-| Order state | `Decimal` | `execution/oms.py`, `execution/tca.py`, `portfolio/pms.py` |
+| Order state | `Decimal` | `execution/oms.py`, `execution/tca.py` |
+| Live position state | **`float`** | `execution/position_tracker.py` (35 importers) |
+| ~~`portfolio/pms.py`~~ | `Decimal` but **UNREACHABLE** | no caller anywhere — see below |
 | Sizing / routing | `Decimal` | `risk/position_sizing.py`, `brokers/smart_router.py` |
 | Risk engine | **`float`** | `risk/manager.py` |
 | Invariant predicates | **`float`** | `invariants/constitution.py` |
 | FIX order wire | **`float`** | `execution/fix_adapter.py` (`FIXOrder.quantity`, `.price`) |
 | Most broker adapters | **`float`** | `brokers/` |
+
+## `portfolio/pms.py` is Decimal and dead — do not rely on it
+
+`portfolio/pms.py` maintains correct `Decimal` discipline on every monetary
+field. It also has **no consumers**: nothing imports the `portfolio` package
+level, and nothing imports `portfolio.pms` directly. `portfolio/manager.py` is in
+the same position — 550 LOC with no reachable caller. A name collision hides it:
+both files define a class called `PortfolioManager`, and `__init__.py` imports
+one as `PortfolioManager` and the other as `PMS`.
+
+Every live position is carried by `execution/position_tracker.py`, whose
+`Position` is `float` on `quantity`, `entry_price`, `current_price`,
+`unrealized_pnl`, `realized_pnl`, `commission`, `stop_loss` and `take_profit`.
+
+So when you are reasoning about precision on a position, the file to read is
+`position_tracker.py`, not `pms.py`. Verified in the audit as F158.
 
 ## The boundary rule
 
