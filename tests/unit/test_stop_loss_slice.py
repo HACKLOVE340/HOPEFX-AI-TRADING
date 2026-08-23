@@ -35,11 +35,7 @@ def test_sl_tp_monitor_never_reads_position_id():
     so the monitor closed nothing. Source-level because the loop needs a broker."""
     src = (ROOT / "execution" / "sl_tp_monitor.py").read_text()
     tree = ast.parse(src)
-    bad = [
-        n.lineno
-        for n in ast.walk(tree)
-        if isinstance(n, ast.Attribute) and n.attr == "position_id"
-    ]
+    bad = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr == "position_id"]
     assert not bad, f"sl_tp_monitor.py reads .position_id at lines {bad}; Position exposes .id"
 
 
@@ -49,9 +45,7 @@ def test_sl_tp_monitor_never_reads_position_id():
 def test_market_order_result_status_is_a_plain_string():
     from brokers.base import MarketOrderResult
 
-    r = MarketOrderResult(
-        order_id="o1", average_fill_price=1.0, filled_quantity=1.0, status="filled"
-    )
+    r = MarketOrderResult(order_id="o1", average_fill_price=1.0, filled_quantity=1.0, status="filled")
     assert isinstance(r.status, str)
     with pytest.raises(AttributeError):
         r.status.value  # noqa: B018 — this is the bug trade_executor assumed away
@@ -70,8 +64,7 @@ def test_trade_executor_does_not_assume_enum_status_or_id():
         base = node.value
         if isinstance(base, ast.Name) and base.id == "order":
             assert node.attr not in ("id",), (
-                f"trade_executor.py reads order.{node.attr} at line {node.lineno}; "
-                "MarketOrderResult exposes order_id"
+                f"trade_executor.py reads order.{node.attr} at line {node.lineno}; MarketOrderResult exposes order_id"
             )
         if (
             node.attr == "value"
@@ -81,8 +74,7 @@ def test_trade_executor_does_not_assume_enum_status_or_id():
             and base.value.id == "order"
         ):
             pytest.fail(
-                f"trade_executor.py reads order.status.value at line {node.lineno}; "
-                "MarketOrderResult.status is a str"
+                f"trade_executor.py reads order.status.value at line {node.lineno}; MarketOrderResult.status is a str"
             )
 
 
@@ -94,9 +86,7 @@ def test_status_normalisation_accepts_both_shapes(status_in, expected):
     """The normalisation must handle a str status and an enum status alike."""
     from brokers.base import MarketOrderResult
 
-    r = MarketOrderResult(
-        order_id="o1", average_fill_price=1.0, filled_quantity=1.0, status=status_in
-    )
+    r = MarketOrderResult(order_id="o1", average_fill_price=1.0, filled_quantity=1.0, status=status_in)
     raw = getattr(r, "status", "")
     assert str(getattr(raw, "value", raw)).lower() == expected
 
@@ -107,9 +97,7 @@ def test_status_normalisation_accepts_both_shapes(status_in, expected):
 def test_market_order_result_exposes_bracket_truth():
     from brokers.base import MarketOrderResult
 
-    r = MarketOrderResult(
-        order_id="o1", average_fill_price=1.0, filled_quantity=1.0, status="filled"
-    )
+    r = MarketOrderResult(order_id="o1", average_fill_price=1.0, filled_quantity=1.0, status="filled")
     assert r.brackets_requested is False
     assert r.brackets_applied is True, "no bracket asked for -> nothing was dropped"
 

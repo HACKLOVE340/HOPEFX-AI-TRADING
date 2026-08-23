@@ -4455,3 +4455,109 @@ And `cursor-pointer` — which measured 25-27 violations per page on the FREE
 account — is **0 on every page** for a full-access user, so those were gated
 placeholder rows, not a real defect. The responsive layer is sound; the fixes
 needed are iconography, target size and semantics, not the grid.
+
+---
+
+# F170 — FIXED · emoji nav icons replaced with SVG (Lucide)
+
+## What was wrong
+Every navigation item in `frontend/src/components/sidebar/navConfig.ts` typed
+its icon as `icon: string` and stored an emoji. The sidebar renders on every
+authenticated page, so the emoji count measured per rendered page was **129-181**
+and was dominated by one file.
+
+Emoji fail four separate rules in the `ui-ux-pro-max` checklist at once:
+  * `no-emoji-icons` — they are font glyphs, so they render as a different
+    picture on Windows, macOS, Android and Linux. There is no such thing as a
+    consistent look.
+  * they cannot inherit `currentColor`, so the icon **ignores** the row's
+    active / locked / hover colour. The nav row changed colour on hover; the
+    icon did not.
+  * screen readers announce them literally — "chart increasing" for the
+    Performance link, "radioactive" for Nuclear Dashboard.
+  * they carry no fixed metrics, so they cannot sit on the optical grid; icon
+    width drifted per glyph inside a `width: 20` box.
+
+Compounding it (F168): the same glyph was reused for different destinations —
+📊 ×3, 🤖 ×3, 🔍 ×3, 🧠 ×2 — so the icon carried no information at all.
+
+## What was changed
+`frontend/src/components/sidebar/navConfig.ts`
+  * `icon: string` → `icon: LucideIcon`, with the rationale in a doc comment.
+  * **58 distinct Lucide icons across 60 nav items.** Previously-duplicated
+    glyphs were deliberately mapped to *different* icons, which closes F168 in
+    the same edit.
+
+`frontend/src/components/sidebar/Sidebar.tsx`
+  * nav row: `<span>{item.icon}</span>` → `<item.icon size={16} strokeWidth={1.75} aria-hidden />`.
+    The icon now inherits `currentColor` and therefore tracks active/locked/hover.
+  * group chevron `▼`, pin `★/☆`, search `🔍`, clear `×`, Favorites `★`,
+    Recent `🕘`, collapsed sign-out `⏻`, collapsed sign-in `→`, footer
+    `Sign in →` and `← Landing` → `ChevronDown`, `Star`, `Search`, `X`,
+    `History`, `Power`, `LogIn`, `ArrowLeft`.
+  * **Accessibility repair found while doing this**: in the *collapsed*
+    sidebar the visible label is not rendered. With the icon correctly marked
+    `aria-hidden`, each nav link would have had **no accessible name at all**.
+    Added `aria-label` (gated on `collapsed`) so the collapsed rail is still
+    navigable by screen reader — this was latent before the change too, since
+    the only "name" was an emoji.
+  * `aria-label` added to the icon-only sign-out / sign-in buttons and the
+    search clear button (skill rule `aria-labels`, F172).
+
+## Measured effect — same harness, same superadmin session, 1440px
+| route | emoji before | emoji after |
+|---|---|---|
+| /settings | 181 | 54 |
+| /superadmin | 153 | 26 |
+| /wallet | 141 | 14 |
+| /watchlist | 140 | 13 |
+| /performance | 139 | 12 |
+| /dashboard | 135 | 14 |
+| /backtest | 134 | 7 |
+| /journal | 132 | 5 |
+| /portfolio | 132 | 7 |
+| /signals | 130 | 3 |
+| /trade | 129 | 6 |
+| /marketplace | 129 | 2 |
+
+A uniform **-127 per page** — which is exactly the sidebar, confirming the
+attribution. `<svg>` count per page rose to 130-138. `cursor-pointer`
+violations stayed at 0 and no page gained horizontal overflow at 375px.
+
+## Verification
+* `npx tsc --noEmit` clean.
+* `npm run build` succeeds.
+* `npx vitest run` — **69 files / 1633 tests passing**, identical to the
+  pre-change baseline (no test was weakened or skipped).
+* New regression suite `frontend/src/test/nav_icons_svg.test.tsx` (5 tests):
+  asserts every icon is a component and not a string, that neither
+  `navConfig.ts` nor `Sidebar.tsx` contains a glyph, that the renderer uses
+  `<item.icon>` rather than stringifying it into a text node, and that ≥90% of
+  icons are distinct (the F168 guard).
+  *The glyph test earned its place immediately* — it caught two arrows
+  (`Sign in →`, `← Landing`) that my own manual scan missed, because that scan
+  filtered on Unicode category `So`/`Sk` and an arrow is category `Sm`.
+
+## F175 — residual emoji in page bodies · MEDIUM (design maturity) · OPEN
+The sidebar was the single highest-leverage file because it multiplies by every
+page, but it is not the whole problem. Remaining across `frontend/src`
+(excluding tests): **1,472 glyphs in 151 files**. Ranked:
+
+| glyphs | file |
+|---|---|
+| 132 | `pages/settings/PlatformConfiguration.tsx` |
+| 62 | `pages/superadmin/SystemReliabilitySection.tsx` |
+| 54 | `components/CommandPalette.tsx` |
+| 51 | `pages/Settings.tsx` |
+| 50 | `pages/superadmin/AutoHealingSection.tsx` |
+| 42 | `pages/GeopoliticalRiskPage.tsx` |
+| 37 | `pages/SuperAdminDashboard.tsx` |
+| 37 | `pages/superadmin/FinancialSection.tsx` |
+| 31 | `pages/Dashboard.tsx` |
+| 30 | `pages/superadmin/RiskManagementSection.tsx` |
+
+`CommandPalette.tsx` keeps its own hard-coded command list with `icon?: string`
+and emoji — it does **not** read icons from `navConfig`, so it was untouched by
+this fix and needs the same treatment. The residual is a long tail best taken
+file-by-file rather than in one sweep; the regression test above should be
+extended to each file as it is converted.

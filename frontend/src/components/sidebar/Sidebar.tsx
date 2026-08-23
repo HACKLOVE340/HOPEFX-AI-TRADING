@@ -16,6 +16,7 @@ import {
   useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan,
   selectFavorites, selectCollapsedGroups, selectRecentPaths,
 } from '../../store';
+import { ChevronDown, Star, Search, X, History, Power, LogIn, ArrowLeft } from 'lucide-react';
 import { ThemeToggle } from '../ThemeToggle';
 import { isAdmin, isSuperAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
 import { NAV_ITEMS, NAV_GROUPS } from './navConfig';
@@ -163,13 +164,16 @@ const GroupLabel: React.FC<{
         fontFamily: 'inherit',
       }}
     >
-      <span style={{
-        fontSize: 9, transition: 'transform 0.15s',
-        transform: groupCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-        display: 'inline-block', width: 8,
-      }}>
-        ▼
-      </span>
+      <ChevronDown
+        size={11}
+        strokeWidth={2.5}
+        aria-hidden
+        style={{
+          transition: 'transform 0.15s',
+          transform: groupCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+          flexShrink: 0,
+        }}
+      />
       {label}
     </button>
   );
@@ -196,6 +200,9 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
     to={locked ? '/upgrade' : item.path}
     className="hopefx-navrow"
     title={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
+    /* Collapsed: the visible label is gone and the icon is aria-hidden, so the
+       link would otherwise have no accessible name at all (F170/F172). */
+    aria-label={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
     onClick={onNavigate}
     style={{
       display: 'flex', alignItems: 'center',
@@ -213,9 +220,10 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
       cursor: locked ? 'not-allowed' : 'pointer',
     }}
   >
-    <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
-      {item.icon}
-    </span>
+    {/* Lucide component, not a glyph: inherits `currentColor` so the icon
+        tracks active/locked/hover state, and is hidden from screen readers
+        because the adjacent label already names the destination (F170). */}
+    <item.icon size={16} strokeWidth={1.75} aria-hidden style={{ flexShrink: 0 }} />
     {!collapsed && (
       <>
         {/* ellipsis + title: long labels ("AI Chart Dashboard", "Copy Trading")
@@ -247,10 +255,11 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               color: isFavorite ? '#fbbf24' : '#475569',
-              fontSize: 12, lineHeight: 1, padding: 2, flexShrink: 0,
+              lineHeight: 1, padding: 2, flexShrink: 0,
+              display: 'flex', alignItems: 'center',
             }}
           >
-            {isFavorite ? '★' : '☆'}
+            <Star size={12} strokeWidth={2} aria-hidden fill={isFavorite ? 'currentColor' : 'none'} />
           </button>
         )}
       </>
@@ -276,7 +285,7 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
       background: '#0f172a', border: '1px solid #1e293b',
       borderRadius: 6, padding: '5px 8px',
     }}>
-      <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>🔍</span>
+      <Search size={12} strokeWidth={2} aria-hidden style={{ color: '#475569', flexShrink: 0 }} />
       <input
         type="text"
         placeholder="Search…"
@@ -291,12 +300,15 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
       {value && (
         <button
           onClick={() => onChange('')}
+          aria-label="Clear search"
+          title="Clear search"
           style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: '#475569', fontSize: 14, padding: 0, lineHeight: 1,
+            color: '#475569', padding: 0, lineHeight: 1,
+            display: 'flex', alignItems: 'center',
           }}
         >
-          ×
+          <X size={13} strokeWidth={2.5} aria-hidden />
         </button>
       )}
     </div>
@@ -521,7 +533,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                   letterSpacing: '0.08em', padding: '8px 14px 4px',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                  <span style={{ color: '#fbbf24' }}>★</span> Favorites
+                  <Star size={11} strokeWidth={2} fill="currentColor" aria-hidden style={{ color: '#fbbf24' }} /> Favorites
                 </div>
                 {favoriteItems.map((item) => (
                   <NavItemRow
@@ -547,7 +559,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                   letterSpacing: '0.08em', padding: '8px 14px 4px',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                  <span>🕘</span> Recent
+                  <History size={11} strokeWidth={2} aria-hidden /> Recent
                 </div>
                 {recentItems.map((item) => (
                   <NavItemRow
@@ -625,27 +637,29 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
               <button
                 onClick={handleSignOut}
                 title="Sign out"
+                aria-label="Sign out"
                 style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
-                  color: '#475569', fontSize: 16, lineHeight: 1,
+                  color: '#475569', lineHeight: 1,
                   padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderRadius: 6,
                 }}
               >
-                ⏻
+                <Power size={16} strokeWidth={1.75} aria-hidden />
               </button>
             ) : (
               <button
                 onClick={() => navigate('/login')}
                 title="Sign in"
+                aria-label="Sign in"
                 style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
-                  color: '#60a5fa', fontSize: 16, lineHeight: 1,
+                  color: '#60a5fa', lineHeight: 1,
                   padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderRadius: 6,
                 }}
               >
-                →
+                <LogIn size={16} strokeWidth={1.75} aria-hidden />
               </button>
             )}
           </>
@@ -683,15 +697,18 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                   background: '#1e3a5f', border: 'none', borderRadius: 6,
                   color: '#60a5fa', fontSize: 12, cursor: 'pointer',
                   padding: '6px 10px', fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
               >
-                Sign in →
+                Sign in
+                <LogIn size={13} strokeWidth={2} aria-hidden />
               </button>
             )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
-                  ← Landing
+                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <ArrowLeft size={12} strokeWidth={2} aria-hidden />
+                  Landing
                 </NavLink>
                 <NavLink to="/docs" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
                   Docs
