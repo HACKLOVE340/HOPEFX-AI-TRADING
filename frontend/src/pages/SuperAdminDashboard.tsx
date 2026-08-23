@@ -5,6 +5,7 @@
  */
 
 import React, { useState, Suspense, lazy, Component, useEffect, useCallback, useRef } from 'react';
+import { Play, OctagonX, RefreshCw } from 'lucide-react';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import VoiceTradingPanel from '../components/voice/VoiceTradingPanel';
@@ -510,13 +511,21 @@ const SuperAdminDashboard: React.FC = () => {
                   <button
                     onClick={() => setShowKillConfirm(true)}
                     disabled={togglingKill}
-                    className={`px-3 py-1.5 rounded-lg border-0 text-2xs font-bold cursor-pointer transition-colors disabled:opacity-60 ${
+                    // The emergency stop was a ~24px target with an emoji
+                    // label. It is the single control that must never be
+                    // mis-tapped or ambiguous.
+                    aria-label={killSwitchActive
+                      ? 'Resume trading — the kill switch is currently active'
+                      : 'Activate the kill switch and halt all trading'}
+                    className={`inline-flex min-h-[44px] items-center gap-1.5 px-3.5 rounded-lg border-0 text-2xs font-bold cursor-pointer transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14] ${
                       killSwitchActive
-                        ? 'bg-green-950 text-green-400 hover:bg-green-900'
-                        : 'bg-red-950 text-red-400 hover:bg-red-900'
+                        ? 'bg-green-950 text-green-400 hover:bg-green-900 focus-visible:ring-green-500'
+                        : 'bg-red-950 text-red-400 hover:bg-red-900 focus-visible:ring-red-500'
                     }`}
                   >
-                    {killSwitchActive ? '▶ Resume' : '🛑 Kill Switch'}
+                    {killSwitchActive
+                      ? <><Play size={13} strokeWidth={2.5} aria-hidden /> Resume</>
+                      : <><OctagonX size={13} strokeWidth={2.5} aria-hidden /> Kill switch</>}
                   </button>
                   {killErr && <span className="text-red-400 text-2xs">{killErr}</span>}
 
@@ -531,9 +540,10 @@ const SuperAdminDashboard: React.FC = () => {
                     )}
                     <button
                       onClick={() => { setRefreshKey(k => k + 1); setSectionLoadedAt(new Date()); setCountdown(REFRESH_INTERVAL); }}
-                      className="text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer text-sm leading-none transition-colors"
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                       title="Refresh now"
-                    >↻</button>
+                      aria-label="Refresh this section now"
+                    ><RefreshCw size={14} strokeWidth={2} aria-hidden /></button>
                   </div>
 
                   <span className="text-slate-700 text-2xs font-mono hidden sm:block">

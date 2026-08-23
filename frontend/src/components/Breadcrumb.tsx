@@ -61,11 +61,17 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
           {item.href && !isLast ? (
             <Link
               to={item.href}
+              // Breadcrumb links were ~16px tall. They appear on most pages, so
+              // the target fix lifts all of them (rubric: touch-target-size).
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                         focus-visible:ring-offset-1 focus-visible:ring-offset-[#080c14] rounded"
               style={{
                 color: '#64748b',
                 textDecoration: 'none',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
+                minHeight: 44,
+                cursor: 'pointer',
                 gap: 4,
                 transition: 'color 0.15s',
               }}
