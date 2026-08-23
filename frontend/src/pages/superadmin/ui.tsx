@@ -1,5 +1,6 @@
 // superadmin/ui.tsx — shared UI primitives for all superadmin sections
 import React from 'react';
+import { Inbox } from 'lucide-react';
 
 // ── KPI Tile ──────────────────────────────────────────────────────────────────
 
@@ -12,19 +13,44 @@ interface KpiTileProps {
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
   onClick?: () => void;
+  /** What activating the tile opens. Used for the accessible name and tooltip;
+   *  only meaningful alongside `onClick`. */
+  title?: string;
 }
 
 export const KpiTile: React.FC<KpiTileProps> = ({
-  label, value, sub, icon, accent = '#3b82f6', trend, trendValue, onClick,
+  label, value, sub, icon, accent = '#3b82f6', trend, trendValue, onClick, title,
 }) => (
+  // A <div onClick> is reachable by mouse only: no tab stop, no Enter/Space,
+  // no focus ring, and assistive tech is never told it does anything. When a
+  // tile is interactive it announces itself as a button and is operable from
+  // the keyboard; when it is not, it stays an inert div rather than becoming
+  // an empty tab stop. See audit F187.
   <div
-    onClick={onClick}
+    {...(onClick
+      ? {
+          role: 'button' as const,
+          tabIndex: 0,
+          onClick,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
+          },
+        }
+      : {})}
+    className={onClick
+      ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]'
+      : undefined}
+    // The label alone ("Total Users") does not tell a screen-reader user what
+    // activating the tile does. Carry the value and the destination.
+    aria-label={onClick ? `${label}: ${value}${title ? ` — ${title}` : ''}` : undefined}
+    title={onClick ? title : undefined}
     style={{
       background: '#0f172a',
       border: `1px solid #1e293b`,
       borderTop: `3px solid ${accent}`,
       borderRadius: 12,
       padding: '18px 20px',
+      minHeight: onClick ? 44 : undefined,
       cursor: onClick ? 'pointer' : 'default',
       transition: 'border-color 0.15s, transform 0.1s',
       position: 'relative',
@@ -214,12 +240,18 @@ export const ActionBtn: React.FC<ActionBtnProps> = ({
         border: `1px solid ${v.border}`,
         borderRadius: 7, cursor: disabled || loading ? 'not-allowed' : 'pointer',
         fontSize: size === 'sm' ? 12 : 13, fontWeight: 600,
-        padding: size === 'sm' ? '5px 12px' : '8px 16px',
+        // 44px minimum target. `sm` was ~26px tall (rubric: touch-target-size,
+        // CRITICAL) — these are the controls that ban users and trigger
+        // retrains, so they are exactly the ones that must not be mis-tapped.
+        minHeight: 44,
+        padding: size === 'sm' ? '0 12px' : '0 16px',
         opacity: disabled ? 0.5 : 1,
         transition: 'opacity 0.15s',
         whiteSpace: 'nowrap',
         ...style,
       }}
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
     >
       {loading ? <Spinner size={12} /> : icon ? <span>{icon}</span> : null}
       {label}
@@ -338,7 +370,12 @@ export const Divider: React.FC = () => (
 
 // ── Empty State ───────────────────────────────────────────────────────────────
 
-export const EmptyState: React.FC<{ icon?: string; message: string }> = ({ icon = '📭', message }) => (
+export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> = ({
+  // Was the "inbox tray" emoji, which renders differently on every OS and
+  // cannot inherit currentColor (audit F170/F175).
+  icon = <Inbox size={22} strokeWidth={1.5} aria-hidden />,
+  message,
+}) => (
   <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
     <div style={{ fontSize: 32, marginBottom: 10 }}>{icon}</div>
     <div style={{ fontSize: 13 }}>{message}</div>

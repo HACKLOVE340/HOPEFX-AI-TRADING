@@ -339,7 +339,12 @@ const SuperAdminDashboard: React.FC = () => {
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setMobileNavOpen(false); }}
                 title={tab.description}
-                className={`flex items-center gap-2 w-full px-4 py-2 text-xs border-0 border-l-2 cursor-pointer transition-colors ${
+                // This is the section navigation: 24 buttons that were ~28px
+                // tall with no focus ring (rubric: touch-target-size CRITICAL,
+                // focus-states HIGH). `aria-current` tells assistive tech which
+                // section is open, which the colour alone did not.
+                aria-current={active ? 'page' : undefined}
+                className={`flex min-h-[44px] items-center gap-2 w-full px-4 text-xs border-0 border-l-2 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 ${
                   active
                     ? 'text-slate-100 font-semibold bg-blue-950/30'
                     : 'text-slate-500 font-normal bg-transparent hover:bg-terminal-raised/50 hover:text-slate-300'

@@ -271,16 +271,16 @@ const OverviewSection: React.FC = () => {
 
       {/* KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14, marginBottom: 24 }}>
-        <KpiTile label="Total Users"        value={fmt(data.total_users)}          icon="👥" accent="#3b82f6" sub="all time" />
+        <KpiTile label="Total Users" onClick={() => navigateTo('users')} title="Open Users"        value={fmt(data.total_users)}          icon="👥" accent="#3b82f6" sub="all time" />
         {/* trend was hardcoded "up", so a week with no signups still rendered an
             upward arrow next to "+0 this week". */}
-        <KpiTile label="Active (24h)"       value={fmt(data.active_users_24h)}     icon="🟢" accent="#22c55e" trend={data.new_users_7d > 0 ? "up" : data.new_users_7d < 0 ? "down" : undefined} trendValue={`${data.new_users_7d >= 0 ? "+" : ""}${data.new_users_7d} this week`} />
-        <KpiTile label="Revenue MTD"        value={fmtMoney(data.revenue_mtd, data.revenue_currency)} icon="💰" accent="#f59e0b" />
-        <KpiTile label="Trades Today"       value={fmt(data.total_trades_today)}   icon="📊" accent="#8b5cf6" />
-        <KpiTile label="Open Positions"     value={data.open_positions}            icon="📈" accent="#06b6d4" />
-        <KpiTile label="Active Sessions"    value={data.active_sessions}           icon="🔗" accent="#ec4899" />
-        <KpiTile label="ML Accuracy"        value={fmtPct((data.ml_model_accuracy ?? 0) * 100)} icon="🧠" accent="#a78bfa" />
-        <KpiTile label="Signals Today"      value={fmt(data.signals_generated_today)} icon="📡" accent="#34d399" />
+        <KpiTile label="Active (24h)" onClick={() => navigateTo('users')} title="Open Users"       value={fmt(data.active_users_24h)}     icon="🟢" accent="#22c55e" trend={data.new_users_7d > 0 ? "up" : data.new_users_7d < 0 ? "down" : undefined} trendValue={`${data.new_users_7d >= 0 ? "+" : ""}${data.new_users_7d} this week`} />
+        <KpiTile label="Revenue MTD" onClick={() => navigateTo('financial')} title="Open Financial"        value={fmtMoney(data.revenue_mtd, data.revenue_currency)} icon="💰" accent="#f59e0b" />
+        <KpiTile label="Trades Today" onClick={() => navigateTo('trading-engine')} title="Open Trading engine"       value={fmt(data.total_trades_today)}   icon="📊" accent="#8b5cf6" />
+        <KpiTile label="Open Positions" onClick={() => navigateTo('trading-engine')} title="Open Trading engine"     value={data.open_positions}            icon="📈" accent="#06b6d4" />
+        <KpiTile label="Active Sessions" onClick={() => navigateTo('security')} title="Open Security"    value={data.active_sessions}           icon="🔗" accent="#ec4899" />
+        <KpiTile label="ML Accuracy" onClick={() => navigateTo('ml-ai')} title="Open ML & AI"        value={fmtPct((data.ml_model_accuracy ?? 0) * 100)} icon="🧠" accent="#a78bfa" />
+        <KpiTile label="Signals Today" onClick={() => navigateTo('ml-ai')} title="Open ML & AI"      value={fmt(data.signals_generated_today)} icon="📡" accent="#34d399" />
       </div>
 
       {/* Infrastructure + Response */}
