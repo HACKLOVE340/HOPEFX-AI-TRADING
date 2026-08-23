@@ -5250,3 +5250,125 @@ shareable. Only then wire the row links.
 
 This also affects a plain user expectation independent of F187: a trader
 cannot bookmark or share a ticket for a specific instrument today.
+
+---
+
+# SWEEP 2 — 18 routes never rendered before
+
+## F193 — CORRECTION to F174/F190: charting exists; I over-generalised · correction
+
+F174 and F190 stated "zero data tables and zero chart canvases **across the
+product**", measured over 18 pages. That generalisation is **wrong**. Measured
+on the routes I had not yet visited:
+
+| Route | `<table>` | `<canvas>` |
+|---|---:|---:|
+| `/nuclear` | 2 | **14** |
+| `/terminal` | 1 | **7** |
+| `/ai-chart` | 1 | **7** |
+
+Canvas-based charting and semantic tables are implemented and working — they
+are simply **absent from the pages a subscriber spends their time on**
+(`/dashboard`, `/portfolio`, `/performance`, `/journal`, `/wallet`, `/trade`).
+
+The corrected finding is narrower and more useful than the original: this is
+not a missing capability, it is a **distribution** problem. The charting
+components exist in this codebase; `/performance` and `/portfolio` render none
+of them while `/nuclear` renders fourteen. Combined with F185 (`api/trading.py`
+already serves `/equity-curve`, `/history`, `/depth/{symbol}`), both halves —
+the data and the renderer — are already built for the pages that lack them.
+
+**Method note.** The original claim was measured over a real sample and was
+still wrong, because the sample was drawn from the pages I happened to audit
+first. "Measured across 18 pages" is not "across the product" when the product
+has 86 routes. Scope claims need to match the sample, not the intent.
+
+## F194 — two sentiment endpoints disagree, and the UI is wired to the one that hides the failure · HIGH
+
+`/news` displays **"ARTICLES 1"** directly above **"No recent news."**
+
+Traced to two endpoints returning contradictory data:
+
+```
+GET /api/sentiment/latest        (what NewsSentiment.tsx calls)
+{"symbol":"XAUUSD","overall_score":0,"news_count":1,
+ "bullish_pct":0.0,"bearish_pct":0.0,"neutral_pct":0.0,"nuclear_alert":false}
+
+GET /api/news/feed?limit=50      (what the same page calls for the list)
+{"articles":[],"total":0}
+```
+
+One says there is 1 article; the other says there are none. The page renders
+both faithfully — **the component is not at fault**, which is why this is a
+data-contract finding rather than a UI one. Note also that
+`bullish_pct + bearish_pct + neutral_pct = 0`, which cannot be true of a
+corpus of 1 article; `news_count` appears to count something that produced no
+classification.
+
+**The more serious half.** A third endpoint exists:
+
+```
+GET /api/news/sentiment/latest
+{"symbol":"LATEST","sentiment_score":0.0,"label":"neutral",
+ "note":"Sentiment engine unavailable; install textblob or vaderSentiment for live scores."}
+```
+
+This one is **honest** — it says the sentiment engine is not installed. The
+endpoint the UI actually calls returns `overall_score: 0` with no note, so the
+page presents **"SENTIMENT 0.0 · BULLISH 0% · BEARISH 0%"** as a measurement.
+
+For a trading platform this is materially misleading: **a genuinely neutral
+market is indistinguishable from a sentiment engine that is not running.** A
+trader reading "sentiment neutral" may treat it as information when it means
+"we cannot compute this". This is the same defect shape as **F189** (the
+correlation page discarding the server's explanation) and **F176** (a safety
+scorecard that cannot fail) — a system that reports a confident value where it
+should report that it does not know.
+
+It is also **F186's shape again**: parallel implementations of the same
+concept, with the UI wired to the one that conceals the problem.
+
+**Fix:** have `/api/sentiment/latest` carry the same unavailability signal, and
+have the page render `—` plus the note rather than `0.0` when the engine is
+absent. Reconcile `news_count` against the feed, or drop the tile.
+
+## F195 — `/walk-forward` is the empty-state standard the rest of the product should meet · GOOD
+Worth recording as the positive reference, since most findings here are
+failures. `/walk-forward` with no data renders:
+
+> "No walk-forward results yet. Run a backtest first via the Backtesting page.
+> Go to the Backtesting page and run a walk-forward analysis to see results
+> here." — with **↻ Retry** and **Go to Backtesting** buttons.
+
+It states what is missing, why, what to do, and provides the route to do it.
+Compare `/correlation` before F189 (a blank card after ~20 s) and `/news`
+(zeros presented as data). `/ml-ops` is close behind — it shows real pipeline
+state and labels its empty sections honestly ("No shadow deployments").
+
+When the batch fix comes, this is the pattern to copy rather than inventing a
+new one.
+
+## F196 — dead ends confirmed at scale · MEDIUM
+Widens **F188**. Content areas with **zero outbound links**, now 19 of 36
+routes measured: `/terminal`, `/prop-firm`, `/ai-chart`, `/walk-forward`,
+`/ab-testing`, `/research`, `/alerts`, `/calendar`, `/observability`,
+`/ml-ops`, `/strategy-builder`, `/transparency`, `/news`, plus the seven from
+F188. `/terminal` is the notable one: 35 buttons, 12 metrics, 7 canvases, and
+no way to reach any other page from its content.
+
+## F197 — thin pages, second sweep · MEDIUM
+| Route | chars | reading |
+|---|---:|---|
+| `/strategy-builder` | **63** | "Show node catalogue · No templates available." — a builder with nothing to build from |
+| `/news` | 92 | F194 |
+| `/research` | 169 | |
+| `/transparency` | 169 | 4 metrics, 1 button, no links |
+| `/ml-ops` | 188 | honest but sparse |
+| `/walk-forward` | 209 | good empty state (F195) |
+| `/alerts` | 234 | the page has full create/pause/delete logic (`PriceAlerts.tsx`) — this is an empty state, not a stub |
+| `/prop-firm` | 373 | 5 metrics, 0 clickable, 0 links out |
+
+`/strategy-builder` at 63 characters is the thinnest page in the product. It
+offers a node catalogue toggle and "No templates available", so a user cannot
+begin. Whether templates are meant to ship with the product or be user-created
+is not discoverable from the page.
