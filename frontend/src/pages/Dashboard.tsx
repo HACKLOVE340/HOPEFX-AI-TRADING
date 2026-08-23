@@ -15,9 +15,13 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  ChevronRight, Wallet, Briefcase, LineChart, BookOpen, Trophy,
+  Inbox, Radio, Zap, Shield, Radar,
+} from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
-import { PageHeader, EmptyState, CrossLinkBar, Spinner } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar, Spinner, RelatedPages } from '../components';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { DataAge } from '../components/ui/DataAge';
 import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
@@ -67,25 +71,65 @@ interface StatCardProps {
   sub?: string;
   positive?: boolean | null;
   highlight?: boolean;
+  /** Page that explains this figure. Omit for a non-interactive tile. */
+  to?: string;
+  /** What the destination answers, used to build the accessible name. */
+  toHint?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highlight }) => (
-  <div style={{ ...s.statCard, ...(highlight ? s.statCardHighlight : {}) }}>
-    <div style={s.statLabel}>{label}</div>
-    <div
-      style={{
-        ...s.statValue,
-        color:
-          positive === true  ? '#4ade80' :
-          positive === false ? '#f87171' :
-          '#f8fafc',
-      }}
+/**
+ * A headline figure. Given `to` the whole tile drills into the page that
+ * explains it — the trades behind a win rate, the curve behind a drawdown.
+ * Without `to` it stays an inert div rather than an empty tab stop. F187.
+ */
+const StatCard: React.FC<StatCardProps> = ({
+  label, value, sub, positive, highlight, to, toHint,
+}) => {
+  const body = (
+    <>
+      <div style={s.statLabel} className="flex items-center gap-1">
+        {label}
+        {to && (
+          <ChevronRight
+            size={11} strokeWidth={2.5} aria-hidden
+            className="ml-auto text-slate-700 transition-colors duration-150
+                       group-hover:text-slate-300 group-focus-visible:text-slate-300"
+          />
+        )}
+      </div>
+      <div
+        style={{
+          ...s.statValue,
+          color:
+            positive === true  ? '#4ade80' :
+            positive === false ? '#f87171' :
+            '#f8fafc',
+        }}
+      >
+        {value}
+      </div>
+      {sub && <div style={s.statSub}>{sub}</div>}
+    </>
+  );
+
+  const cardStyle = { ...s.statCard, ...(highlight ? s.statCardHighlight : {}) };
+  if (!to) return <div style={cardStyle}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      style={cardStyle}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className="group block min-h-[44px] cursor-pointer no-underline transition-colors duration-150
+                 hover:bg-[#141c2b] focus-visible:outline-none focus-visible:ring-2
+                 focus-visible:ring-sky-500 focus-visible:ring-offset-2
+                 focus-visible:ring-offset-[#080c14]"
     >
-      {value}
-    </div>
-    {sub && <div style={s.statSub}>{sub}</div>}
-  </div>
-);
+      {body}
+    </Link>
+  );
+};
 
 // ─── Price ticker ─────────────────────────────────────────────────────────────
 // Symbol keys must match the WebSocket price_tick format (slash separator).
@@ -241,12 +285,22 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
 
 const PositionsTable: React.FC = () => {
   const positions = useStore(selectPositions);
+  const navigate  = useNavigate();
   const flashColors = useFlashMap(
     positions.map((p) => ({ id: p.id, value: p.unrealized_pnl })),
   );
 
   if (positions.length === 0) {
-    return <EmptyState compact icon="📭" title="No open positions" description="Your live positions will appear here once you place a trade." links={[{ label: 'Trade Now', href: '/trade', icon: '⚡' }]} />;
+    return <EmptyState
+        compact
+        icon={Inbox}
+        title="No open positions"
+        description="Positions appear here the moment an order fills. Open the ticket to place one."
+        links={[
+          { label: 'Open the ticket', href: '/trade' },
+          { label: 'Browse signals', href: '/signals' },
+        ]}
+      />;
   }
 
   return (
@@ -261,8 +315,24 @@ const PositionsTable: React.FC = () => {
         </thead>
         <tbody>
           {positions.map((p) => (
+            // The row drills into the ticket for that instrument, carrying the
+            // symbol and side through router state — the mechanism Trade.tsx
+            // already reads (audit F225). Keyboard-operable, not mouse-only.
             <tr
               key={p.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`${p.symbol} ${p.side}, ${fmtUSD(p.unrealized_pnl)} unrealised — open the ticket`}
+              onClick={() => navigate('/trade', { state: { signal: { symbol: p.symbol, direction: p.side === 'long' ? 'BUY' : 'SELL' } } })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/trade', { state: { signal: { symbol: p.symbol, direction: p.side === 'long' ? 'BUY' : 'SELL' } } });
+                }
+              }}
+              className="cursor-pointer transition-colors duration-150 hover:bg-[#141c2b]
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset
+                         focus-visible:ring-sky-500"
               style={{
                 ...s.tr,
                 background: flashColors[p.id] ?? 'transparent',
@@ -297,7 +367,16 @@ const SignalsPanel: React.FC = () => {
   const active  = signals.filter((sig) => sig.status === 'active').slice(0, 6);
 
   if (active.length === 0) {
-    return <EmptyState compact icon="📡" title="No active signals" description="AI-generated trading signals will appear here in real-time." links={[{ label: 'Signals Feed', href: '/signals', icon: '📡' }]} />;
+    return <EmptyState
+        compact
+        icon={Radio}
+        title="No active signals"
+        description="The model publishes signals here as it finds them. You can also generate one yourself."
+        links={[
+          { label: 'Signal feed', href: '/signals' },
+          { label: 'Generate a strategy', href: '/ai-strategy' },
+        ]}
+      />;
   }
 
   return (
@@ -715,20 +794,20 @@ const Dashboard: React.FC = () => {
         <PanelSkeleton rows={3} />
       ) : (
         <div style={s.statsGrid}>
-          <StatCard label="Balance"     value={orDash(acc.balance, v => '$' + fmt(v))} />
-          <StatCard label="Equity"      value={orDash(acc.equity, v => '$' + fmt(v))} highlight />
-          <StatCard label="Daily P&L"   value={orDash(acc.daily_pnl, fmtUSD)}
+          <StatCard label="Balance" to="/wallet" toHint="Wallet"     value={orDash(acc.balance, v => '$' + fmt(v))} />
+          <StatCard label="Equity" to="/portfolio" toHint="Portfolio"      value={orDash(acc.equity, v => '$' + fmt(v))} highlight />
+          <StatCard label="Daily P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.daily_pnl, fmtUSD)}
             positive={has(acc.daily_pnl) ? acc.daily_pnl >= 0 : undefined}
             sub={orDash(acc.daily_pnl_pct, fmtPct)} />
-          <StatCard label="Total P&L"   value={orDash(acc.total_pnl, fmtUSD)}
+          <StatCard label="Total P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.total_pnl, fmtUSD)}
             positive={has(acc.total_pnl) ? acc.total_pnl >= 0 : undefined} />
-          <StatCard label="Win Rate"    value={orDash(acc.win_rate, v => (v * 100).toFixed(1) + '%')}
+          <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => (v * 100).toFixed(1) + '%')}
             positive={has(acc.win_rate) ? acc.win_rate >= 0.55 : undefined} />
-          <StatCard label="Sharpe"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))}
+          <StatCard label="Sharpe" to="/performance" toHint="risk-adjusted performance"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))}
             positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= 1.5 : undefined} />
-          <StatCard label="Account DD"  value={orDash(acc.max_drawdown, v => (v * 100).toFixed(2) + '%')}
+          <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => (v * 100).toFixed(2) + '%')}
             positive={has(acc.max_drawdown) ? acc.max_drawdown < 0.1 : undefined} />
-          <StatCard label="Open Trades" value={orDash(acc.open_trades, String)} />
+          <StatCard label="Open Trades" to="/portfolio" toHint="your positions" value={orDash(acc.open_trades, String)} />
         </div>
       )}
 
@@ -816,6 +895,16 @@ const Dashboard: React.FC = () => {
         { label: 'Leaderboard',     href: '/leaderboard',      icon: '🏆', color: '#fbbf24' },
         { label: 'Performance',     href: '/performance',      icon: '📊', color: '#22c55e' },
       ]} />
+      <RelatedPages
+        links={[
+          { to: '/trade',           label: 'Trading ticket',  hint: 'Place or close an order',            icon: Zap },
+          { to: '/portfolio',       label: 'Portfolio',       hint: 'Every position and its allocation',  icon: Briefcase },
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',          icon: LineChart },
+          { to: '/journal',         label: 'Trade journal',   hint: 'The trades behind these numbers',    icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade',                icon: Shield },
+          { to: '/signals',         label: 'Signal feed',     hint: 'What the model sees right now',      icon: Radar },
+        ]}
+      />
     </div>
   );
 };
