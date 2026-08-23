@@ -6,6 +6,11 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
+  Radiation, CalendarDays, LineChart, Briefcase,
+} from 'lucide-react';
 import { NuclearDashboard } from '../features/chart-bot';
 import { PageHeader } from '../components/PageHeader';
 
@@ -78,6 +83,15 @@ const NuclearDashboardPage: React.FC = () => (
     <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
       <NuclearDashboard />
     </div>
+    <RelatedPages
+      links={[
+        { to: '/geopolitical', label: 'Geopolitical risk', hint: 'What is driving the hedge', icon: Globe },
+        { to: '/news', label: 'News & sentiment', hint: 'Headlines behind the score', icon: Newspaper },
+        { to: '/intelligence', label: 'AI intelligence', hint: 'Model health and gates', icon: Sparkles },
+        { to: '/trade', label: 'Trading ticket', hint: 'Act on the signal', icon: Zap },
+      ]}
+    />
+
   </div>
 );
 

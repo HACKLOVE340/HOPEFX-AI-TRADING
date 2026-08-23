@@ -11,6 +11,11 @@
 
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
+  Radiation, CalendarDays, LineChart, Briefcase,
+} from 'lucide-react';
 import { PageHeader, CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
@@ -359,6 +364,15 @@ const GeopoliticalRiskPage: React.FC = () => {
         { label: 'Signal Feed',       href: '/signals',     icon: '📡', color: '#4ade80' },
         { label: 'Trade XAU/USD',     href: '/trade',       icon: '⚡', color: '#fbbf24' },
       ]} />
+      <RelatedPages
+        links={[
+          { to: '/nuclear', label: 'Nuclear AI', hint: 'The hedge this feeds', icon: Radiation },
+          { to: '/news', label: 'News & sentiment', hint: 'Source headlines', icon: Newspaper },
+          { to: '/calendar', label: 'Economic calendar', hint: 'Scheduled risk events', icon: CalendarDays },
+          { to: '/correlation', label: 'Correlation', hint: 'How assets move together', icon: LineChart },
+        ]}
+      />
+
     </div>
   );
 };

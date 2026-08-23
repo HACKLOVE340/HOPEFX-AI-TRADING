@@ -10,6 +10,11 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
+  Radiation, CalendarDays, LineChart, Briefcase,
+} from 'lucide-react';
 import { PageHeader, EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
@@ -680,6 +685,15 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
         <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
         <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
       </div>
+      <RelatedPages
+        links={[
+          { to: '/trade', label: 'Trading ticket', hint: 'Place the sized order', icon: Zap },
+          { to: '/portfolio', label: 'Portfolio', hint: 'Current exposure', icon: Briefcase },
+          { to: '/prop-firm', label: 'Prop firm', hint: 'Limits you must respect', icon: Shield },
+          { to: '/journal', label: 'Trade journal', hint: 'How past sizing worked out', icon: BookOpen },
+        ]}
+      />
+
     </div>
   );
 };

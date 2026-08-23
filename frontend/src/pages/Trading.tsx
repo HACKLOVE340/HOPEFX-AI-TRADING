@@ -6,6 +6,11 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
+  Radiation, CalendarDays, LineChart, Briefcase,
+} from 'lucide-react';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -125,11 +130,13 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus, fe
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 bg-[#0a1628] border-b border-[#1e2d3d] shrink-0 flex-wrap">
-      {/* Branding */}
-      <span className="text-[13px] font-bold text-[#00d4ff] tracking-widest shrink-0">
-        HOPEFX
-      </span>
-      <span className="text-[10px] text-slate-600 shrink-0">TERMINAL</span>
+      {/* Branding doubles as the page's only h1. This page rendered ZERO
+          h1-h3 elements, so it had no document outline for a screen reader to
+          navigate by (audit F173). The visual treatment is unchanged. */}
+      <h1 className="flex items-baseline gap-2 m-0 shrink-0">
+        <span className="text-[13px] font-bold text-[#00d4ff] tracking-widest">HOPEFX</span>
+        <span className="text-[10px] font-normal text-slate-600">TERMINAL</span>
+      </h1>
 
       <div className="w-px h-4 bg-[#1e2d3d]" />
 
@@ -1055,6 +1062,16 @@ function TradingPage() {
         {/* Right sidebar */}
         <RightSidebar rightTab={rightTab} setRightTab={setRightTab} />
       </div>
+      <RelatedPages
+        links={[
+          { to: '/trade', label: 'Trading ticket', hint: 'Place an order', icon: Zap },
+          { to: '/ai-chart', label: 'AI charts', hint: 'Model analysis on the chart', icon: Brain },
+          { to: '/watchlist', label: 'Watchlist', hint: 'Instruments you follow', icon: Eye },
+          { to: '/journal', label: 'Trade journal', hint: 'What you did last time', icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size before you enter', icon: Shield },
+        ]}
+      />
+
     </div>
   );
 }
