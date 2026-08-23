@@ -166,24 +166,49 @@ three layers and does not exist at the broker.
 
 ## AUDIT COVERAGE — what has not been read
 
-157 findings from ~200 files read deeply of 1,911 total.
+*(Recomputed 2026-08-23. The previous version of this section was stale: it
+listed `cache/`, `config/`, `compliance/`, `portfolio/`, `notifications/`,
+`utils/`, `analytics/`, `infrastructure/`, `resilience/` and `charting/` as
+never opened. All ten have since been read and are removed from the list.)*
 
-**Never opened (~44,000 LOC), in the order I would take them:**
+**180 findings.** Read state by package, measured, not remembered.
+
+### Backend — genuinely never opened (~50,400 LOC)
 
 | LOC | Package | Why it matters |
 |---:|---|---|
-| 3,473 | `cache/` | Redis layer that F84/F87/F139 all depend on |
-| 2,732 | `config/` | F98, F101, F130 all trace to config defaults |
-| 2,496 | `compliance/` | money-adjacent; every money path audited found something |
-| 2,493 | `portfolio/` | position/PMS state |
-| 3,867 | `notifications/` | alert delivery — the thing that tells you when it breaks |
-| 3,840 | `charting/` | |
-| 3,531 | `utils/` | contains `fault_guard.py` (F143) |
-| 2,850 | `analytics/` | F108 showed its tests are inert |
-| 2,442 | `infrastructure/` | |
-| 2,378 | `resilience/` | |
-| ~14,000 | `nocode`, `social`, `teams`, `whitelabel`, `chaos`, `monitoring`, `tracing`, `deployment`, `replay`, `transparency`, `rate_limiting`, `shadow`, `explainability`, `events`, `reports`, `visualization`, `forensics`, `examples`, `locust`, `mobile` | lower value |
+| 9,924 | `security/` | Largest unread package in a money-moving system. Nothing here has been verified at all. |
+| 9,510 | `monetization/` | Money-adjacent. Every money path audited so far (F31/F32, F135-F138) found a defect. |
+| 9,325 | `research/` | |
+| 6,259 | `data/` | Legacy dir. Confirm nothing live still imports it before deleting. |
+| 5,405 | `invariants/` | **Highest value per line.** F138 found `verify_balance_after` is never called. If the rest of the package is also uncalled, that is a whole class of dead safety checks, not one bug. |
+| 3,739 | `data_feed/` | Second feed path; relationship to `data_layer/` and `market_data/` unverified. |
+| 3,281 | `alembic/` | Migrations. Never checked against the models they claim to produce. |
+| 3,063 | `mobile/` | Backend half of mobile; the RN app was audited, this was not. |
+| 399 | `tutorials/` | |
+| 244 | `backtest/` | Re-export shim; verify it is only a shim. |
 
-**Also never audited: `tests/` (221,598 LOC, 588 files).** Only sampled. Given
-F99 and F108 — tests that skip the exact case they exist for — this is a real
-gap, not a formality.
+### Backend — "audited" means the key paths were traced, not every line
+
+`api/` (61k), `ml/` (31k), `scripts/` (22k), `core/` (21k), `data_layer/` (19k),
+`brokers/` (19k), `execution/` (17k) were entered through their entry points and
+followed along the live paths. Files off those paths were not read line by line.
+This is the honest limit of what "audited" means for the large packages.
+
+### Frontend — 86 routes declared, 15 rendered and measured
+
+`/alerts /backtest /calendar /dashboard /journal /marketplace /news /performance
+/portfolio /settings /signals /superadmin /trade /wallet /watchlist`
+
+**71 routes have never been rendered in a browser.** 110 page components,
+95,838 LOC of TS/TSX. The design-maturity findings (F166-F175) are therefore
+measured on 17% of the product's surface. The pattern has been consistent
+across every page measured, so it likely generalises — but that is an
+inference, not a measurement.
+
+### Tests — 221,598 LOC / 588 files, sampled only
+
+Given F99 (a placeholder-secret test that skips the case it exists for) and
+F108 (14 tests asserting nothing against a class that never existed), the test
+suite is a source of findings in its own right, not a formality. It remains the
+single largest unread body of code in the repository.
