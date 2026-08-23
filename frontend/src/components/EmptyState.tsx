@@ -5,6 +5,8 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 
 export interface EmptyStateLink {
   label: string;
@@ -13,9 +15,23 @@ export interface EmptyStateLink {
 }
 
 interface EmptyStateProps {
-  icon?: string;
+  /**
+   * Lucide component. Was a string emoji, which renders differently on every
+   * OS and cannot inherit `currentColor` — see audit F170/F175. A string is
+   * still accepted so the 20+ existing call sites keep working, but it is
+   * deprecated: pass a component.
+   */
+  icon?: LucideIcon | string;
   title: string;
   description?: string;
+  /**
+   * Verbatim explanation from the API. Several endpoints in this platform
+   * return one and the UI discarded it — /correlation showed a blank card for
+   * ~20s while the server had sent the remedy in plain English (F189), and
+   * /news presents 0.0 as a measurement when the sentiment engine is not
+   * running (F194). When the server explains itself, show its words.
+   */
+  serverNote?: string | null;
   action?: React.ReactNode;
   /** Quick-links to related pages shown below the CTA */
   links?: EmptyStateLink[];
@@ -25,9 +41,10 @@ interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-  icon = '📭',
+  icon = Inbox,
   title,
   description,
+  serverNote,
   action,
   links,
   style,
@@ -52,13 +69,26 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 28, lineHeight: 1,
       marginBottom: 4,
+      color: '#475569',
     }}>
-      {icon}
+      {typeof icon === 'string'
+        ? icon                                  /* legacy emoji call sites */
+        : React.createElement(icon, { size: 26, strokeWidth: 1.5, 'aria-hidden': true })}
     </div>
     <p style={{ color: '#94a3b8', fontSize: 15, fontWeight: 600, margin: 0 }}>{title}</p>
     {description && (
       <p style={{ fontSize: 13, margin: 0, maxWidth: 360, lineHeight: 1.6, color: '#64748b' }}>
         {description}
+      </p>
+    )}
+    {serverNote && (
+      <p style={{
+        fontSize: 12.5, margin: 0, maxWidth: 520, lineHeight: 1.6,
+        color: '#94a3b8', textAlign: 'left',
+        background: '#0b1220', border: '1px solid #1e2d3d',
+        borderRadius: 8, padding: '8px 12px',
+      }}>
+        {serverNote}
       </p>
     )}
     {action && <div style={{ marginTop: 8 }}>{action}</div>}

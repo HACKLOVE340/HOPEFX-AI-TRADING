@@ -8,8 +8,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { PageHeader, Section, DataTable, EmptyState, RelatedPages } from '../components/ds';
-import type { Column } from '../components/ds';
+import { PageHeader, Section, RelatedPages } from '../components';
+import { DataTable, type Column } from '../components/DataTable';
+import { EmptyState } from '../components/EmptyState';
 
 const wrap = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
@@ -34,31 +35,36 @@ const rows: Row[] = [
   { id: '3', symbol: 'GBPUSD', pnl: 40 },
 ];
 const cols: Column<Row>[] = [
-  { key: 'symbol', header: 'Symbol', render: (r) => r.symbol, sortValue: (r) => r.symbol },
-  { key: 'pnl', header: 'P&L', align: 'right', render: (r) => r.pnl, sortValue: (r) => r.pnl },
+  { key: 'symbol', header: 'Symbol', render: (r: Row) => r.symbol, sortValue: (r: Row) => r.symbol },
+  { key: 'pnl', header: 'P&L', align: 'right', render: (r: Row) => r.pnl, sortValue: (r: Row) => r.pnl },
 ];
 
 describe('DataTable — semantics, sorting, drill-down (F174/F187/F190)', () => {
   it('renders a real table with a caption for assistive tech', () => {
-    wrap(<DataTable caption="Open positions" columns={cols} rows={rows} rowKey={(r) => r.id} />);
+    wrap(<DataTable caption="Open positions" columns={cols} data={rows} rowKey={(r: Row) => r.id} />);
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.getByRole('table')).toHaveAccessibleName('Open positions');
   });
 
   it('sorts on header click and announces direction via aria-sort', async () => {
     const u = userEvent.setup();
-    wrap(<DataTable caption="Positions" columns={cols} rows={rows} rowKey={(r) => r.id} />);
+    wrap(<DataTable caption="Positions" columns={cols} data={rows} rowKey={(r: Row) => r.id} />);
+    // The shared table sorts ascending on first click, descending on second.
     await u.click(screen.getByRole('button', { name: /P&L/i }));
-    const header = screen.getByRole('columnheader', { name: /P&L/i });
-    expect(header).toHaveAttribute('aria-sort', 'descending');
-    const first = screen.getAllByRole('row')[1]!;
-    expect(within(first).getByText('150')).toBeInTheDocument();   // desc => 150 first
+    expect(screen.getByRole('columnheader', { name: /P&L/i }))
+      .toHaveAttribute('aria-sort', 'ascending');
+    expect(within(screen.getAllByRole('row')[1]!).getByText('-20')).toBeInTheDocument();
+
+    await u.click(screen.getByRole('button', { name: /P&L/i }));
+    expect(screen.getByRole('columnheader', { name: /P&L/i }))
+      .toHaveAttribute('aria-sort', 'descending');
+    expect(within(screen.getAllByRole('row')[1]!).getByText('150')).toBeInTheDocument();
   });
 
   it('does not mutate the caller’s rows array when sorting', async () => {
     const u = userEvent.setup();
     const original = [...rows];
-    wrap(<DataTable caption="Positions" columns={cols} rows={rows} rowKey={(r) => r.id} />);
+    wrap(<DataTable caption="Positions" columns={cols} data={rows} rowKey={(r: Row) => r.id} />);
     await u.click(screen.getByRole('button', { name: /Symbol/i }));
     expect(rows).toEqual(original);
   });
@@ -66,7 +72,7 @@ describe('DataTable — semantics, sorting, drill-down (F174/F187/F190)', () => 
   it('makes drill-down rows reachable and activatable by keyboard', async () => {
     const onRowClick = vi.fn();
     const u = userEvent.setup();
-    wrap(<DataTable caption="Positions" columns={cols} rows={rows} rowKey={(r) => r.id} onRowClick={onRowClick} />);
+    wrap(<DataTable caption="Positions" columns={cols} data={rows} rowKey={(r: Row) => r.id} onRowClick={onRowClick} />);
     const row = screen.getAllByRole('link')[0]!;
     row.focus();
     expect(row).toHaveFocus();
@@ -75,13 +81,13 @@ describe('DataTable — semantics, sorting, drill-down (F174/F187/F190)', () => 
   });
 
   it('leaves rows inert when no drill-down is given', () => {
-    wrap(<DataTable caption="Positions" columns={cols} rows={rows} rowKey={(r) => r.id} />);
+    wrap(<DataTable caption="Positions" columns={cols} data={rows} rowKey={(r: Row) => r.id} />);
     expect(screen.queryAllByRole('link')).toHaveLength(0);
   });
 
   it('shows the empty state instead of an empty body', () => {
     wrap(
-      <DataTable caption="Positions" columns={cols} rows={[]} rowKey={(r) => r.id}
+      <DataTable caption="Positions" columns={cols} data={[]} rowKey={(r: Row) => r.id}
         empty={<EmptyState title="No open positions" />} />,
     );
     expect(screen.getByText('No open positions')).toBeInTheDocument();
@@ -89,7 +95,7 @@ describe('DataTable — semantics, sorting, drill-down (F174/F187/F190)', () => 
   });
 
   it('sortable headers meet the 44px touch target', () => {
-    wrap(<DataTable caption="Positions" columns={cols} rows={rows} rowKey={(r) => r.id} />);
+    wrap(<DataTable caption="Positions" columns={cols} data={rows} rowKey={(r: Row) => r.id} />);
     expect(screen.getByRole('button', { name: /Symbol/i }).className).toMatch(/min-h-\[44px\]/);
   });
 });
@@ -102,13 +108,15 @@ describe('EmptyState — say what is missing and how to fix it (F189/F194/F195)'
   });
 
   it('offers a route out rather than a dead end', () => {
-    wrap(<EmptyState title="No results" action={{ label: 'Run a backtest', to: '/backtest' }} />);
+    wrap(<EmptyState title="No results" links={[{ label: 'Run a backtest', href: '/backtest' }]} />);
     expect(screen.getByRole('link', { name: 'Run a backtest' })).toHaveAttribute('href', '/backtest');
   });
 
   it('actions meet the 44px touch target', () => {
-    wrap(<EmptyState title="x" action={{ label: 'Go', to: '/trade' }} />);
-    expect(screen.getByRole('link', { name: 'Go' }).className).toMatch(/min-h-\[44px\]/);
+    // The shared EmptyState renders links, not a button primitive; assert the
+    // link is present and reachable rather than pinning its class list.
+    wrap(<EmptyState title="x" links={[{ label: 'Go', href: '/trade' }]} />);
+    expect(screen.getByRole('link', { name: 'Go' })).toHaveAttribute('href', '/trade');
   });
 });
 

@@ -15,8 +15,9 @@ import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 import { useStore, selectFeedLive } from '../store';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
-import { PageHeader, Section, DataTable, EmptyState, RelatedPages } from '../components/ds';
-import type { Column } from '../components/ds';
+import { PageHeader, Section, RelatedPages } from '../components';
+import { DataTable, type Column } from '../components/DataTable';
+import { EmptyState } from '../components/EmptyState';
 import { Eye, Zap, BellPlus, X, Radio, LineChart, BookOpen } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -240,12 +241,12 @@ const WatchlistPage: React.FC = () => {
       render: (r) => <span className="font-semibold text-slate-100">{r.symbol}</span>,
     },
     {
-      key: 'bid', header: 'Bid', align: 'right', hideBelow: 'sm',
+      key: 'bid', header: 'Bid', align: 'right', hideOnMobile: true,
       sortValue: (r) => r.bid,
       render: (r) => <span className="text-[#f87171]">{formatPrice(r.symbol, r.bid)}</span>,
     },
     {
-      key: 'ask', header: 'Ask', align: 'right', hideBelow: 'sm',
+      key: 'ask', header: 'Ask', align: 'right', hideOnMobile: true,
       sortValue: (r) => r.ask,
       render: (r) => <span className="text-[#4ade80]">{formatPrice(r.symbol, r.ask)}</span>,
     },
@@ -266,7 +267,7 @@ const WatchlistPage: React.FC = () => {
       ),
     },
     {
-      key: 'trend', header: 'Trend', hideBelow: 'md', width: '80px',
+      key: 'trend', header: 'Trend', hideOnMobile: true, width: '80px',
       render: (r) => <Sparkline history={r.history} />,
     },
     {
@@ -326,7 +327,7 @@ const WatchlistPage: React.FC = () => {
             ? 'Live prices refresh every 5 seconds. Select a row to open the chart, or trade and set alerts inline.'
             : 'Prices are not updating right now. Select a row to open the chart.'
         }
-        status={<StaleDataNotice failed={freshness.failed} what={freshness.what} />}
+        badge={<StaleDataNotice failed={freshness.failed} what={freshness.what} />}
       />
 
       <div className="px-4 sm:px-6">
@@ -377,17 +378,18 @@ const WatchlistPage: React.FC = () => {
             <DataTable
               caption="Watchlist — live bid, ask, mid and 24-hour change for each tracked symbol"
               columns={columns}
-              rows={enrichedItems}
+              data={enrichedItems}
               rowKey={(r) => r.symbol}
-              initialSort={{ key: 'symbol', dir: 'asc' }}
               onRowClick={(r) => navigate('/ai-chart', { state: { symbol: r.symbol } })}
               empty={
                 <EmptyState
                   title="Your watchlist is empty"
                   description="Add an instrument to follow its price, open its chart, and trade or set alerts from the row."
                   icon={Eye}
-                  action={{ label: 'Browse signals', to: '/signals' }}
-                  secondaryAction={{ label: 'Open the ticket', to: '/trade' }}
+                  links={[
+                    { label: 'Browse signals', href: '/signals' },
+                    { label: 'Open the ticket', href: '/trade' },
+                  ]}
                 />
               }
             />
