@@ -5126,3 +5126,80 @@ single button.** It is a poster, not an application screen.
 * "Metrics" is a heuristic over leaf text nodes. A timestamp or an axis label
   can be counted. The ratios (1/104, 0/22, 60/71) are the signal; the absolute
   totals are approximate.
+
+---
+
+## F187 — FIXED (partially) · dashboard metrics now drill into their pages
+
+**Skills used:** `frontend-design` (copy, affordance, restraint) and
+`ui-ux-pro-max --domain ux` for the interaction rules — which named
+`touch-target-size` (44×44, HIGH), `focus-states` (HIGH), `keyboard-nav`
+(HIGH), `aria-labels` (HIGH), `cursor-pointer`, `back-button` ("preserve
+navigation history properly — don't break browser back") and the
+hover-without-layout-shift rule. Each is applied below.
+
+### What changed
+`MetricTile` (shared by AccountBar, RiskDashboard and EquityCurveChart) takes
+an optional `to` + `toHint`. Given them it renders a `<Link>`; without them it
+remains an inert `<div>` — deliberately, so a tile that leads nowhere does not
+become an empty tab stop. `MLModelPanel` shadows this component with its own
+bordered-card variant and a `color`-as-className API; it received the same
+contract rather than being forced onto the shared component.
+
+**29 tiles wired**, every destination an existing route:
+
+| Metric | Drills to |
+|---|---|
+| Balance | `/wallet` |
+| Equity, Open Trades | `/portfolio` |
+| Daily P&L, Total P&L | `/pnl` |
+| Margin, CVaR 95% | `/risk-calculator` |
+| Win Rate, Profit Factor, Avg Trade, Total Trades | `/journal` |
+| Max Drawdown, Sharpe, Sortino, Return | `/performance` |
+| Accuracy, F1, Precision, Recall | `/intelligence` |
+
+### Interaction rules applied
+* **44px minimum target** — the tiles were ~34px tall; measured 44px after.
+* **Visible focus ring** + real `<a>` elements, so keyboard users get the same
+  affordance and browser back works (the rubric's HIGH-severity back-button
+  rule).
+* **Colour-only hover.** A `scale`/`translate` on a tile inside a flex row
+  nudges every neighbouring tile on each mouse-over; the test pins this.
+* **A persistent, quiet chevron** that brightens on hover rather than
+  appearing. The rubric's anti-pattern is "no indication element is
+  interactive" — without it a linked tile looks identical to an inert one.
+* **Accessible name carries the value and the outcome**: *"Win Rate: 62.5% —
+  open the trades behind it"*. The label alone tells a screen-reader user
+  nothing about what activating it does.
+
+### Measured — Playwright, authenticated, 1440px
+| | before | after |
+|---|---:|---:|
+| `/dashboard` clickable metrics | **1 / 104** | **36 / 101** |
+| `/dashboard` outbound links | 8 | **55** |
+| drill-down tiles rendered | 0 | 47 |
+
+Click-through verified on five tiles — Win Rate → `/journal`, Max DD →
+`/performance`, Balance → `/wallet`, Equity → `/portfolio`, Sharpe →
+`/performance` — each landed on its declared route. First tile: focusable,
+44px tall, `cursor: pointer`, tag `A`.
+
+### Still open
+**65 of 101 metrics remain inert.** They live in panels that use neither tile
+component: `LivePriceTicker`, `MicrostructurePanel`, `OrderBookDepth`,
+`LiveSignalFeed`, `OrchestratorHealthGrid`, `SentimentGauge`, `MacroCalendar`,
+and the `QuickActionBar` open-P&L readout. F187 stays open until those are
+wired. `/performance` (0/8) and `/watchlist` (0/16) were untouched by this
+change and remain fully inert.
+
+### Notes
+* A copy defect reached the browser before I caught it: `toHint="open positions"`
+  rendered as *"Open Trades: 0 — open **open** positions"*. Fixed to "your
+  positions" and a test now rejects any hint beginning with "open ".
+* Of the 11 regression tests, **8 fail on pre-fix code**; the other 3 pass
+  vacuously when no tile declares a destination. Stating that rather than
+  claiming all 11 as proof.
+* My verification command `npx tsc --noEmit | head -5 && echo TSC-CLEAN`
+  printed "TSC-CLEAN" over three real type errors, because `head` masked the
+  exit code. Replaced with an explicit `echo "tsc exit: $?"`. Worth flagging
+  as a method fix — a check that cannot fail is the same defect shape as F176.
