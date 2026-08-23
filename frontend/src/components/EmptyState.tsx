@@ -101,13 +101,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           <Link
             key={l.href}
             to={l.href}
+            // 44px minimum target (rubric: touch-target-size, CRITICAL).
+            // These links were ~26px tall and are the primary way out of an
+            // empty screen, so they are exactly the ones that must be tappable.
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1421]"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: 12, color: '#475569',
-              padding: '5px 12px', borderRadius: 6,
+              minHeight: 44, fontSize: 12, color: '#475569',
+              padding: '0 14px', borderRadius: 8,
               border: '1px solid #1e293b',
               background: 'rgba(30,41,59,0.5)',
-              textDecoration: 'none',
+              textDecoration: 'none', cursor: 'pointer',
               transition: 'color 0.15s, border-color 0.15s',
             }}
             onMouseEnter={(e) => {

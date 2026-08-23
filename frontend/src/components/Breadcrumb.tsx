@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Home, ChevronRight } from 'lucide-react';
 
 export interface BreadcrumbItem {
   label: string;
@@ -47,14 +48,16 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
       onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
       title="Dashboard"
     >
-      <span style={{ fontSize: 11 }}>⌂</span>
+      {/* Lucide, not the "house" glyph: it renders differently per OS and
+          cannot inherit currentColor (audit F170/F175). */}
+      <Home size={11} strokeWidth={2} aria-hidden />
     </Link>
 
     {items.map((item, idx) => {
       const isLast = idx === items.length - 1;
       return (
         <React.Fragment key={idx}>
-          <span style={{ color: '#2d3f55', userSelect: 'none', fontSize: 11 }}>›</span>
+          <ChevronRight size={11} strokeWidth={2} aria-hidden style={{ color: '#2d3f55', flexShrink: 0 }} />
           {item.href && !isLast ? (
             <Link
               to={item.href}

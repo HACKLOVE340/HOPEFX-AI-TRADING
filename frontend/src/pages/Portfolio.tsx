@@ -17,8 +17,11 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { PageHeader, CrossLinkBar } from '../components';
+import { Link, useNavigate } from 'react-router-dom';
+import { PageHeader, CrossLinkBar, RelatedPages } from '../components';
+import {
+  Briefcase, Download, Inbox, Zap, BookOpen, LineChart, Trophy, Shield, Radar, ChevronRight,
+} from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
@@ -56,28 +59,65 @@ const fmtRatio = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '—');
 // ── Stat tile ─────────────────────────────────────────────────────────────────
 
 interface StatTileProps {
+  /** Page that explains this figure. Omit for a non-interactive tile. */
+  to?: string;
+  /** What the destination answers, used in the accessible name. */
+  toHint?: string;
   label:     string;
   value:     string;
   positive?: boolean | null;
   sub?:      string;
 }
 
-const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub }) => (
-  <div className="flex flex-col gap-1 px-4 py-3 rounded-lg bg-[#0d1421] border border-[#1e2d3d]">
-    <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-    <span
-      className={cn(
-        'text-[18px] font-bold tabular-nums',
-        positive === true  ? 'text-[#00e676]' :
-        positive === false ? 'text-[#ff1744]' :
-                             'text-slate-100',
-      )}
+/**
+ * A portfolio figure. Given `to` the whole tile drills into the page that
+ * explains it; without `to` it stays inert rather than becoming an empty tab
+ * stop for keyboard users. See audit F187.
+ */
+const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub, to, toHint }) => {
+  const body = (
+    <>
+      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500">
+        {label}
+        {to && (
+          <ChevronRight
+            size={11} strokeWidth={2.5} aria-hidden
+            className="ml-auto text-slate-700 transition-colors duration-150
+                       group-hover:text-slate-300 group-focus-visible:text-slate-300"
+          />
+        )}
+      </span>
+      <span
+        className={cn(
+          'text-[18px] font-bold tabular-nums',
+          positive === true  ? 'text-[#00e676]' :
+          positive === false ? 'text-[#ff1744]' :
+                               'text-slate-100',
+        )}
+      >
+        {value}
+      </span>
+      {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
+    </>
+  );
+
+  const base = 'flex flex-col gap-1 px-4 py-3 rounded-lg bg-[#0d1421] border border-[#1e2d3d]';
+  if (!to) return <div className={base}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className={cn(base, `group min-h-[44px] no-underline cursor-pointer transition-colors
+        duration-150 hover:border-[#2b3f56] hover:bg-[#111827] focus-visible:outline-none
+        focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2
+        focus-visible:ring-offset-[#080c14]`)}
     >
-      {value}
-    </span>
-    {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
-  </div>
-);
+      {body}
+    </Link>
+  );
+};
 
 // ── Account summary ───────────────────────────────────────────────────────────
 
@@ -152,25 +192,27 @@ const PerformanceMetrics: React.FC = () => {
   const worstTrade    = perf?.worst_trade        ?? 0;
   const cvar          = perf?.cvar_95            ?? 0;
 
-  const metrics: { label: string; value: string; positive?: boolean | null }[] = [
-    { label: 'Total Return',   value: fmtPct(totalReturn),            positive: totalReturn >= 0 },
-    { label: 'Sharpe Ratio',   value: fmtRatio(sharpe),               positive: sharpe >= 1 ? true : sharpe < 0 ? false : null },
-    { label: 'Sortino Ratio',  value: fmtRatio(sortino),              positive: sortino >= 1 ? true : sortino < 0 ? false : null },
-    { label: 'Max Drawdown',   value: fmtPct(-Math.abs(maxDD)),       positive: false },
-    { label: 'Win Rate',       value: fmtPct(winRate),                positive: winRate >= 50 },
-    { label: 'Profit Factor',  value: fmtRatio(profitFactor),         positive: profitFactor >= 1 },
-    { label: 'Total Trades',   value: String(totalTrades) },
-    { label: 'Avg Trade P&L',  value: fmtPnl(avgPnl),                 positive: avgPnl >= 0 },
-    { label: 'Best Trade',     value: fmtPnl(bestTrade),              positive: true },
-    { label: 'Worst Trade',    value: fmtPnl(worstTrade),             positive: false },
-    { label: 'CVaR 95%',       value: fmtPnl(cvar),                   positive: false },
+  const metrics: {
+    label: string; value: string; positive?: boolean | null; to?: string; toHint?: string;
+  }[] = [
+    { label: 'Total Return',   value: fmtPct(totalReturn),            positive: totalReturn >= 0,  to: '/performance', toHint: 'performance detail' },
+    { label: 'Sharpe Ratio',   value: fmtRatio(sharpe),               positive: sharpe >= 1 ? true : sharpe < 0 ? false : null, to: '/performance', toHint: 'risk-adjusted performance' },
+    { label: 'Sortino Ratio',  value: fmtRatio(sortino),              positive: sortino >= 1 ? true : sortino < 0 ? false : null, to: '/performance', toHint: 'risk-adjusted performance' },
+    { label: 'Max Drawdown',   value: fmtPct(-Math.abs(maxDD)),       positive: false,             to: '/performance', toHint: 'the drawdown curve' },
+    { label: 'Win Rate',       value: fmtPct(winRate),                positive: winRate >= 50,     to: '/journal',     toHint: 'the trades behind it' },
+    { label: 'Profit Factor',  value: fmtRatio(profitFactor),         positive: profitFactor >= 1, to: '/journal',     toHint: 'the trades behind it' },
+    { label: 'Total Trades',   value: String(totalTrades),                                         to: '/journal',     toHint: 'the trade journal' },
+    { label: 'Avg Trade P&L',  value: fmtPnl(avgPnl),                 positive: avgPnl >= 0,       to: '/pnl',         toHint: 'the P&L breakdown' },
+    { label: 'Best Trade',     value: fmtPnl(bestTrade),              positive: true,              to: '/journal',     toHint: 'the trade journal' },
+    { label: 'Worst Trade',    value: fmtPnl(worstTrade),             positive: false,             to: '/journal',     toHint: 'the trade journal' },
+    { label: 'CVaR 95%',       value: fmtPnl(cvar),                   positive: false,             to: '/risk-calculator', toHint: 'the Risk Calculator' },
   ];
 
   return (
     <Panel title="Performance">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {metrics.map(({ label, value, positive }) => (
-          <StatTile key={label} label={label} value={value} positive={positive} />
+        {metrics.map(({ label, value, positive, to, toHint }) => (
+          <StatTile key={label} label={label} value={value} positive={positive} to={to} toHint={toHint} />
         ))}
       </div>
     </Panel>
@@ -194,6 +236,7 @@ interface TradeRecord {
 type TradeFilter = 'all' | 'long' | 'short' | 'win' | 'loss';
 
 const TradeHistory: React.FC = () => {
+  const navigate = useNavigate();
   const { data: trades, isLoading, isError, error: tradesError } = useQuery<TradeRecord[]>({
     queryKey: ['trades', 'history'],
     queryFn:  async () => {
@@ -301,14 +344,14 @@ const TradeHistory: React.FC = () => {
       {!isLoading && !isError && filtered.length === 0 && (
         <EmptyState
           compact
-          icon="📋"
+          icon={Inbox}
           title={!trades || trades.length === 0 ? 'No closed trades yet' : `No ${filter} trades`}
           description={!trades || trades.length === 0
-            ? 'Closed positions will appear here once you start trading.'
-            : 'Try changing the filter to see other trade types.'}
+            ? 'Closed positions appear here once a trade completes. Open the ticket to place one.'
+            : 'Change the filter above to see other trade types.'}
           links={[
-            { label: 'Trade Now', href: '/trade', icon: '⚡' },
-            { label: 'Journal', href: '/journal', icon: '📓' },
+            { label: 'Open the ticket', href: '/trade' },
+            { label: 'Trade journal', href: '/journal' },
           ]}
         />
       )}
@@ -316,6 +359,9 @@ const TradeHistory: React.FC = () => {
       {filtered.length > 0 && (
         <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
           <table className="w-full text-[12px] min-w-[560px]">
+            <caption className="sr-only">
+              Closed trade history — symbol, side, size, entry and exit price, P&amp;L, and open and close times
+            </caption>
             <thead>
               <tr className="border-b border-[#1e2d3d]">
                 {['Symbol', 'Side', 'Size', 'Entry', 'Exit', 'P&L', 'Opened', 'Closed'].map((h) => (
@@ -335,9 +381,24 @@ const TradeHistory: React.FC = () => {
                 const isLong = positionSide(t) === 'long';
                 const pnlPos = t.pnl >= 0;
                 return (
+                  // The row opens the ticket for that instrument, carrying
+                  // symbol and side through router state (F225). Keyboard
+                  // operable, not mouse-only.
                   <tr
                     key={t.id}
-                    className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/40 transition-colors"
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`${t.symbol} ${isLong ? 'long' : 'short'}, P&L ${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} — open the ticket`}
+                    onClick={() => navigate('/trade', { state: { signal: { symbol: t.symbol, direction: isLong ? 'BUY' : 'SELL' } } })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate('/trade', { state: { signal: { symbol: t.symbol, direction: isLong ? 'BUY' : 'SELL' } } });
+                      }
+                    }}
+                    className="border-b border-[#0d1421] cursor-pointer transition-colors duration-150
+                               hover:bg-[#1e2d3d]/40 focus-visible:outline-none focus-visible:ring-2
+                               focus-visible:ring-inset focus-visible:ring-sky-500"
                   >
                     <td className="px-3 py-2.5 font-semibold text-slate-200 whitespace-nowrap">
                       {t.symbol}
@@ -628,27 +689,25 @@ const Portfolio: React.FC = () => {
 
       <PageHeader
         title="Portfolio"
-        icon="💼"
+        icon={Briefcase}
         subtitle="Balances, equity curve, allocation, and trade history"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Portfolio' },
         ]}
         actions={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Link to="/performance" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
-              📊 <span className="hidden xs:inline ml-1">Analytics</span>
-            </Link>
-            <Link to="/trade" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
-              ⚡ <span className="hidden xs:inline ml-1">Trade</span>
-            </Link>
-            <Link to="/journal" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
-              📓 <span className="hidden xs:inline ml-1">Journal</span>
-            </Link>
-            <button onClick={handleExport} className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors min-h-[36px]">
-              ↓ <span className="hidden xs:inline ml-1">Export CSV</span>
-            </button>
-          </div>
+          // Cross-links move to the related-pages footer; the header keeps
+          // only the control that acts on this page.
+          <button
+            onClick={handleExport}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-[11px]
+                       font-semibold bg-[#1e3a5f] text-[#60a5fa] ring-1 ring-inset ring-[#1d4ed8]
+                       cursor-pointer transition-colors duration-150 hover:bg-[#1d4ed8]/30
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+          >
+            <Download size={13} strokeWidth={1.75} aria-hidden />
+            Export CSV
+          </button>
         }
       />
 
@@ -689,6 +748,16 @@ const Portfolio: React.FC = () => {
         { label: 'Trade Journal',   href: '/journal',         icon: '📓', color: '#a78bfa' },
         { label: 'Watchlist',       href: '/watchlist',       icon: '👁', color: '#60a5fa' },
       ]} />
+      <RelatedPages
+        links={[
+          { to: '/trade',           label: 'Trading ticket',  hint: 'Open or close a position',           icon: Zap },
+          { to: '/performance',     label: 'Performance',     hint: 'Sharpe, drawdown, equity curve',      icon: Trophy },
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',           icon: LineChart },
+          { to: '/journal',         label: 'Trade journal',   hint: 'Notes and mistakes per trade',        icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next position',              icon: Shield },
+          { to: '/watchlist',       label: 'Watchlist',       hint: 'Instruments you are following',       icon: Radar },
+        ]}
+      />
     </div>
   );
 };
