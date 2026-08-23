@@ -6687,3 +6687,40 @@ Net effect on the route census: of the 82 routes measured, several are
 redirects or aliases of one another. The count of **distinct screens** is
 lower than 82, which makes the "46 routes have zero clickable metrics" figure
 an overstatement of the number of distinct pages affected.
+
+---
+
+## F209 — SETTLED: the two dashboards are complementary, and named backwards
+
+Decided on the composition of each, not on preference.
+
+**`/home` (`Dashboard.tsx`, 879 LOC) is the trader's view.** It renders
+8 StatCards, a PriceTicker, a **PositionsTable**, a SignalsPanel, a
+RiskSnapshotPanel, a MarketRegimePanel, an MlAccuracyCard and QuickNav —
+7 canvases and 1 table. Everything on it is *the user's money*.
+
+**`/dashboard` (`TradingDashboard.tsx`, 271 LOC) is the engine operator's
+view.** It composes EquityCurve, RiskDashboard, SentimentGauge,
+**MicrostructurePanel**, MacroCalendar, **OrderBookDepth**, LiveSignalFeed,
+**OrchestratorHealthGrid** and **MLModelPanel** — 0 canvases, 0 tables. Five of
+the nine describe the platform's own machinery.
+
+So they are **not duplicates**. They are two legitimate views whose names are
+swapped: the trader's view sits at `/home` behind a sidebar item labelled
+"Live Feed", and the machinery view owns the word "Dashboard" and the URL every
+user, bookmark and external link points at.
+
+### The settlement
+
+1. **`/dashboard` renders the trader's view.** It is the canonical URL, the
+   sidebar label, and the page that should open with the user's positions,
+   P&L and risk — and it is the one with the charts and the table.
+2. **`/home` redirects to `/dashboard`.** No bookmark or existing link breaks.
+3. **The operator grid moves to `/observability`** — an existing route of 149
+   LOC rendering a single `Metrics` component and measuring 395 characters,
+   whose name describes exactly what that grid shows. Nothing is deleted.
+4. **The sidebar drops "Live Feed"** and points "Observability" at the grid.
+
+Chosen because it breaks nothing (no route removed), puts charts and positions
+on the page users actually open, and gives the near-empty `/observability`
+real content instead of building new panels for it.
