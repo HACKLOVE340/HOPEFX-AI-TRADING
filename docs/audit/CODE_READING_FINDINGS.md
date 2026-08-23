@@ -5203,3 +5203,31 @@ change and remain fully inert.
   printed "TSC-CLEAN" over three real type errors, because `head` masked the
   exit code. Replaced with an explicit `echo "tsc exit: $?"`. Worth flagging
   as a method fix — a check that cannot fail is the same defect shape as F176.
+
+### F187 — remaining work, specified for the batch fix
+Deferred by decision: detect everything first, fix in one pass. Specified here
+so the later fix does not need to re-derive it.
+
+| Panel | LOC | Links today | Metrics it owns | Should drill to |
+|---|---:|---:|---|---|
+| `LivePriceTicker` | 292 | 0 | bid/ask/spread/change per symbol | `/trade?symbol=X` — clicking an instrument should open its ticket |
+| `MicrostructurePanel` | 297 | 0 | imbalance, tick rate, depth stats | `/tca` (slippage) — and `api/trading.py /microstructure` (F185) |
+| `OrderBookDepth` | 236 | 0 | bid/ask ladder | `/trade?symbol=X` at the clicked price level |
+| `LiveSignalFeed` | 444 | 1 | per-signal confidence, direction | `/signals` for the signal; `/intelligence` for the model |
+| `OrchestratorHealthGrid` | 340 | 0 | per-component health, latency | `/system-status`, `/observability` |
+| `SentimentGauge` | 223 | 1 | sentiment score, contributors | `/intelligence`, `/news` |
+| `MacroCalendar` | 196 | 1 | event impact, forecast vs actual | `/calendar` for the event detail |
+
+Total inert metrics remaining on `/dashboard`: **65 of 101**. Also untouched
+and fully inert: `/performance` (0/8) and `/watchlist` (0/16) — the latter is
+the sharpest miss in the product, since clicking an instrument on a watchlist
+to open its ticket is the single most expected interaction a trader has.
+
+**Preconditions for the batch fix** (learned from the 29 already wired):
+1. `/trade` must accept a symbol query param, or these links land on a
+   generic ticket and the drill-down is cosmetic. **Verify before wiring.**
+2. Row-level links need the same 44px/focus/cursor treatment; a ladder row is
+   ~18px tall today.
+3. `MetricTile`'s contract (`to` + `toHint`, inert without them) is the
+   pattern to reuse. Three of these panels render bespoke markup and will need
+   the contract applied by hand, not by prop.
