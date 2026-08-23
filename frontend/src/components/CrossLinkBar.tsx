@@ -5,11 +5,17 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 
 export interface CrossLink {
   label: string;
   href: string;
-  icon?: string;
+  /**
+   * Lucide component preferred. A string is a legacy emoji call site: emoji
+   * render differently on every OS and cannot inherit `currentColor`, so they
+   * ignore the link's own hover and active colour (audit F170/F175).
+   */
+  icon?: LucideIcon | string;
   color?: string;
 }
 
@@ -44,14 +50,21 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
         <Link
           key={link.href}
           to={link.href}
+          // 44px minimum target (rubric: touch-target-size, CRITICAL). These
+          // pills were ~26px tall and appear at the foot of most pages, so the
+          // fix lifts every page using the bar rather than one.
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                     focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: 5,
-            padding: '5px 12px',
+            minHeight: 44,
+            cursor: 'pointer',
+            padding: '0 14px',
             background: link.color ? `${link.color}12` : 'transparent',
             border: `1px solid ${link.color ? `${link.color}30` : '#1e293b'}`,
-            borderRadius: 6,
+            borderRadius: 8,
             color: link.color ?? '#475569',
             fontSize: 12,
             fontWeight: 500,
@@ -69,7 +82,11 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
             el.style.color = link.color ?? '#475569';
           }}
         >
-          {link.icon && <span style={{ fontSize: 13 }}>{link.icon}</span>}
+          {link.icon && (
+            typeof link.icon === 'string'
+              ? <span style={{ fontSize: 13 }}>{link.icon}</span>   /* legacy emoji */
+              : React.createElement(link.icon, { size: 14, strokeWidth: 1.75, 'aria-hidden': true })
+          )}
           {link.label}
         </Link>
       ))}

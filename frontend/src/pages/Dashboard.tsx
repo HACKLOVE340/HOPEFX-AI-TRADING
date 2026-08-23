@@ -16,9 +16,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
-  ChevronRight, Wallet, Briefcase, LineChart, BookOpen, Trophy,
-  Inbox, Radio, Zap, Shield, Radar,
+  ArrowRight, BookOpen, Brain, Briefcase, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, Trophy, Wallet, Zap,
 } from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import { PageHeader, EmptyState, CrossLinkBar, Spinner, RelatedPages } from '../components';
@@ -678,19 +678,19 @@ const RiskSnapshotPanel: React.FC = () => {
 
 // ─── Quick-nav shortcuts ──────────────────────────────────────────────────────
 
-const QUICK_LINKS = [
-  { icon: '⚡', label: 'Trade',        path: '/trade'        },
-  { icon: '🧠', label: 'AI Chart Bot', path: '/ai-chart'     },
-  { icon: '☢️', label: 'Nuclear AI',   path: '/nuclear'      },
-  { icon: '📓', label: 'Journal',      path: '/journal'      },
-  { icon: '🏆', label: 'Performance',  path: '/performance'  },
-  { icon: '💹', label: 'P&L',          path: '/pnl'          },
-  { icon: '🌍', label: 'Geopolitical', path: '/geopolitical' },
-  { icon: '📡', label: 'Signal Feed',  path: '/signals'      },
-  { icon: '👁', label: 'Watchlist',    path: '/watchlist'    },
-  { icon: '🔗', label: 'Correlation',  path: '/correlation'  },
-  { icon: '🔁', label: 'Copy Trading', path: '/copy-trading' },
-  { icon: '▶️', label: 'Replay',       path: '/replay'       },
+const QUICK_LINKS: { icon: LucideIcon; label: string; path: string }[] = [
+  { icon: Zap,        label: 'Trade',        path: '/trade'        },
+  { icon: Brain,      label: 'AI Chart Bot', path: '/ai-chart'     },
+  { icon: Radiation,  label: 'Nuclear AI',   path: '/nuclear'      },
+  { icon: BookOpen,   label: 'Journal',      path: '/journal'      },
+  { icon: Trophy,     label: 'Performance',  path: '/performance'  },
+  { icon: DollarSign, label: 'P&L',          path: '/pnl'          },
+  { icon: Globe,      label: 'Geopolitical', path: '/geopolitical' },
+  { icon: Radar,      label: 'Signal Feed',  path: '/signals'      },
+  { icon: Eye,        label: 'Watchlist',    path: '/watchlist'    },
+  { icon: Link2,      label: 'Correlation',  path: '/correlation'  },
+  { icon: Repeat,     label: 'Copy Trading', path: '/copy-trading' },
+  { icon: Rewind,     label: 'Replay',       path: '/replay'       },
 ];
 
 const QuickNav: React.FC = () => (
@@ -699,11 +699,14 @@ const QuickNav: React.FC = () => (
       <Link
         key={path}
         to={path}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
         style={{
           background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-          padding: '8px 14px', color: '#94a3b8',
+          minHeight: 44, padding: '0 14px', color: '#94a3b8',
           fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
-          textDecoration: 'none', transition: 'border-color 0.15s, color 0.15s',
+          textDecoration: 'none', cursor: 'pointer',
+          transition: 'border-color 0.15s, color 0.15s',
         }}
         onMouseEnter={e => {
           (e.currentTarget as HTMLAnchorElement).style.borderColor = '#3b82f6';
@@ -714,7 +717,7 @@ const QuickNav: React.FC = () => (
           (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8';
         }}
       >
-        <span>{icon}</span> {label}
+        {React.createElement(icon, { size: 14, strokeWidth: 1.75, 'aria-hidden': true })} {label}
       </Link>
     ))}
   </div>
@@ -777,13 +780,16 @@ const Dashboard: React.FC = () => {
         actions={
           <Link
             to="/trade"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
             style={{
               background: '#1d4ed8', border: '1px solid #3b82f6', borderRadius: 8,
-              color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 18px',
+              color: '#fff', fontSize: 13, fontWeight: 700,
+              minHeight: 44, padding: '0 18px', cursor: 'pointer',
               textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
             }}
           >
-            ⚡ New Trade
+            <Zap size={15} strokeWidth={2} aria-hidden /> New trade
           </Link>
         }
       />
@@ -820,8 +826,14 @@ const Dashboard: React.FC = () => {
                 {fmtUSD(acc.total_pnl)}
               </span>
             )}
-            <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>
-              Full report →
+            <Link
+              to="/performance"
+              className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
+                         no-underline cursor-pointer transition-colors duration-150
+                         hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-sky-500"
+            >
+              Full report <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
           </div>
         </div>
@@ -842,14 +854,30 @@ const Dashboard: React.FC = () => {
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 10 }}>
             <span style={s.cardTitle}>Open Positions</span>
-            <Link to="/portfolio" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>View all →</Link>
+            <Link
+              to="/portfolio"
+              className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
+                         no-underline cursor-pointer transition-colors duration-150
+                         hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-sky-500"
+            >
+              View all <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <PositionsTable />
         </div>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 10 }}>
             <span style={s.cardTitle}>Active Signals</span>
-            <Link to="/ai-strategy" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Strategy gen →</Link>
+            <Link
+              to="/ai-strategy"
+              className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
+                         no-underline cursor-pointer transition-colors duration-150
+                         hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-sky-500"
+            >
+              Strategy gen <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <SignalsPanel />
         </div>
@@ -859,14 +887,18 @@ const Dashboard: React.FC = () => {
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
             <span style={s.cardTitle}>Market Regime — XAU/USD</span>
-            <Link to="/ai-chart" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>AI Chart →</Link>
+            <Link to="/ai-chart" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+              AI Chart <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <MarketRegimePanel />
         </div>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
             <span style={s.cardTitle}>Risk Snapshot</span>
-            <Link to="/risk-calculator" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Calculator →</Link>
+            <Link to="/risk-calculator" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+              Calculator <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <RiskSnapshotPanel />
         </div>
@@ -875,7 +907,9 @@ const Dashboard: React.FC = () => {
       <div style={s.card}>
         <div style={{ ...s.cardHeader, marginBottom: 12 }}>
           <span style={s.cardTitle}>ML Model Accuracy</span>
-          <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Performance →</Link>
+          <Link to="/performance" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+              Performance <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
         </div>
         <MlAccuracyCard />
       </div>
