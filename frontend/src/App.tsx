@@ -540,8 +540,16 @@ const AppShell: React.FC = () => {
         <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* Core */}
-            <Route path="/dashboard"    element={wrap(gated('dashboard',    <TradingDashboard />))} />
-            <Route path="/home"         element={wrap(gated('dashboard',    <Dashboard />))} />
+            {/* F209: the two dashboards were named backwards. `Dashboard`
+                (positions, P&L, risk, signals, 7 charts, 1 table) is the
+                trader's view and now owns the canonical /dashboard URL that
+                the sidebar, bookmarks and external links point at.
+                `TradingDashboard` is the engine-operator grid — microstructure,
+                order book, orchestrator health, ML internals — and moves to
+                /observability, which is named for exactly that and was
+                rendering 395 characters. /home redirects so nothing breaks. */}
+            <Route path="/dashboard"    element={wrap(gated('dashboard',    <Dashboard />))} />
+            <Route path="/home"         element={<Navigate to="/dashboard" replace />} />
             <Route path="/trade"        element={wrap(gated('trade',        <Trade />))} />
             <Route path="/portfolio"    element={wrap(gated('portfolio',    <Portfolio />))} />
             <Route path="/watchlist"    element={wrap(gated('watchlist',    <WatchlistPage />))} />
@@ -632,7 +640,15 @@ const AppShell: React.FC = () => {
             <Route path="/backtest"     element={<Navigate to="/ai-strategy" replace />} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
-            <Route path="/observability" element={wrap(adminOnly(<Observability />))} />
+            <Route
+              path="/observability"
+              element={wrap(adminOnly(
+                <>
+                  <Observability />
+                  <TradingDashboard />
+                </>,
+              ))}
+            />
             <Route path="/ml-ops"        element={wrap(adminOnly(<MLDashboard />))} />
             <Route path="/strategy-builder" element={wrap(gated('strategy-builder', <StrategyBuilder />))} />
             <Route path="/transparency"  element={wrap(<Transparency />)} />

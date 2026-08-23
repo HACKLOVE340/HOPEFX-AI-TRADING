@@ -74,7 +74,6 @@ import {
   UsersRound,
   Wallet,
   Wrench,
-  Zap,
 } from 'lucide-react';
 
 import type { Plan } from '../../lib/subscription';
@@ -113,7 +112,6 @@ export const NAV_GROUPS: { id: NavGroup; label: string }[] = [
 export const NAV_ITEMS: NavItem[] = [
   // ── Core ──────────────────────────────────────────────────────────────────
   { path: '/dashboard',    label: 'Dashboard',      icon: LayoutDashboard, group: 'core',      plan: 'free',    featureKey: 'dashboard'    },
-  { path: '/home',         label: 'Live Feed',      icon: Zap, group: 'core',      plan: 'free',    featureKey: 'dashboard'    },
   { path: '/trade',        label: 'Trade',          icon: TrendingUp, group: 'core',      plan: 'free',    featureKey: 'trade'        },
   { path: '/portfolio',    label: 'Portfolio',      icon: Briefcase, group: 'core',      plan: 'free',    featureKey: 'portfolio'    },
   { path: '/watchlist',    label: 'Watchlist',      icon: Eye, group: 'core',      plan: 'free',    featureKey: 'watchlist'    },
