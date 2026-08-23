@@ -5852,3 +5852,80 @@ matching the code default, and let F214's gate turn it on when it passes.
 * Two independent drift detectors (Page-Hinkley `DriftDetector` and
   `ADWINDriftDetector`) with `reset()` paths, rather than a single heuristic.
 * The fill→label path refuses to fabricate labels (quoted above).
+
+---
+
+# DOMAIN: `data/` — 6,259 LOC. The project's own guidance about it is wrong.
+
+## F216 — `CLAUDE.md` calls `data/` legacy; it holds the live real-time price engine · HIGH (documentation defect with real consequences)
+
+`CLAUDE.md` — the file every AI assistant and new contributor is told to follow
+first — states:
+
+> | Data pipeline | **Use (canonical):** `data_layer/` | **Do NOT add code to:** `data/` (CSV + old utilities) |
+
+`data/` is not CSV and old utilities. It is **6,259 LOC of live runtime
+infrastructure**:
+
+| LOC | Module |
+|---:|---|
+| 1,107 | `real_time_price_engine.py` |
+| 894 | `scheduler.py` |
+| 768 | `depth_of_market.py` |
+| 694 | `tick_feed.py` |
+| 615 | `time_and_sales.py` |
+| 580 | `streaming.py` |
+| 454 | `feeds/macro.py` |
+
+And it is imported **22 times from production**, including the application's
+own startup path:
+
+```
+core/startup_factories.py:618   from data.scheduler            import DataScheduler
+core/startup_factories.py:707   from data.time_and_sales       import TimeAndSalesService, create_time_and_sales_router
+core/startup_factories.py:723   from data.depth_of_market      import DepthOfMarketService, create_dom_router
+core/startup_factories.py:1400  from data.real_time_price_engine import RealTimePriceEngine
+core/startup_factories.py:3460  from data.tick_feed            import TickFeedManager
+core/main_loop.py:51            from data.market_ingest        import MarketIngest
+core/router_registry.py:654/666/678  streaming, DOM and time-and-sales ROUTERS
+ml/training.py:55               from data.feeds.macro          import MacroFeed
+```
+
+Three HTTP routers are mounted from this "legacy" package, the real-time price
+engine is constructed from it, and model training reads its macro feed.
+
+**Why this is a real defect, not a doc nit.** The instruction is *actionable and
+wrong*: a contributor adding a tick-feed or depth-of-market feature is told to
+put it in `data_layer/`, which would split one subsystem across two packages
+whose relationship nobody has documented. The same instruction is at the top of
+the context for every AI assistant working in this repo.
+
+This is the same class as **F158**, where the `hopefx-money-precision` skill
+named `portfolio/pms.py` as the live Decimal path when that module has no
+caller at all. I fixed that skill when I found it. This one is bigger, because
+`CLAUDE.md` outranks the skills.
+
+**Fix (needs a decision, not just an edit):** either
+1. `data/` is canonical for real-time feeds — say so, and describe how it
+   divides responsibility with `data_layer/` and `data_feed/` (a *third*
+   feed-adjacent package, 3,739 LOC, 11 production imports); or
+2. the migration to `data_layer/` is genuinely intended — then say it is
+   *incomplete*, name what still lives in `data/`, and stop describing it as
+   "CSV + old utilities", which reads as safe-to-ignore.
+
+Until then the honest interim edit is to strike "(CSV + old utilities)" and
+replace it with "contains live feed infrastructure — check before assuming a
+module here is dead."
+
+## F217 — three packages own "market data" and no document says how they divide · MEDIUM
+| Package | LOC | Production imports |
+|---|---:|---:|
+| `data_layer/` | 19,610 | canonical per `CLAUDE.md` |
+| `data/` | 6,259 | 22 |
+| `data_feed/` | 3,739 | 11 |
+| `market_data/` | 4,031 | (audited earlier — `mt5_live_feed.py`) |
+
+Four, counting `market_data/`. `CLAUDE.md` names only two of them and
+mischaracterises one. `ARCHITECTURE.md` should carry the boundary; a reader
+currently has to grep imports to find out which feed path is live — which is
+what this audit had to do.
