@@ -3672,3 +3672,71 @@ I NEARLY REPORTED A FALSE POSITIVE HERE. Two things looked like lookahead:
     by up to `window` bars of future data — 5 hours on H1 at the default
     window=5. The correct fix at that point is to attribute the level to
     `i + window`, not to `i`.
+
+================================================================================
+CACHE (3,473 LOC) — the Redis layer F84/F87/F139 all depend on.
+================================================================================
+
+## F101-CORRECTED — Redis TLS is ENFORCED in production; my earlier finding was incomplete · DOWNGRADE HIGH -> LOW
+F101 recorded that `.env.production.example:192` ships `REDIS_FORCE_TLS=false`
+and concluded production runs Redis without TLS. Reading `cache/redis_client.py`
+shows that conclusion is wrong. The flag is not the control.
+
+`_enforce_tls` (:211-270) — the real behaviour:
+    app_env    = os.getenv("APP_ENV", "development").lower()
+    _is_force  = os.getenv("IS_FORCE_TLS", "").lower()        # canonical
+    _redis_force = os.getenv("REDIS_FORCE_TLS", "false").lower()  # legacy alias
+    force_tls  = (_is_force == "true") or (_redis_force == "true")
+
+    if not redis_url.startswith("redis://"):   return redis_url   # already TLS
+    if force_tls:                              return "rediss://" + rest
+
+    if app_env == "production" and not is_private_redis_host(redis_url):
+        raise RuntimeError(
+            "Redis TLS required in production: REDIS_URL must use rediss:// …"
+        )
+So in production, a plaintext URL pointing at a ROUTABLE host **raises at
+connection time** regardless of what the flag says. `REDIS_FORCE_TLS=false`
+cannot expose credentials on a network anyone can listen to.
+
+`is_private_redis_host` (:175-208) is the load-bearing predicate and it FAILS
+CLOSED at every branch:
+    except (ValueError, AttributeError): return False   # parse error -> TLS required
+    if not host:                         return False   # empty host -> TLS required
+    if host in ("localhost","127.0.0.1","::1"): return True
+    try:    addr = ipaddress.ip_address(host)
+    except ValueError:  return "." not in host          # single-label = container DNS
+    return addr.is_loopback or addr.is_private or addr.is_link_local
+
+The narrowing is documented with the incident that caused it (:180-187):
+requiring TLS unconditionally "made the stack unrunnable as configured: the tick
+writer failed to start, so ticks were never persisted or broadcast and prices
+froze in the UI. rediss:// was no escape either, since redis:7-alpine serves no
+TLS. Narrowed to destinations that can actually be eavesdropped."
+
+That is a deliberate, correct, well-reasoned scope reduction — not a weakened
+control. And the permitted case is said out loud: a one-shot INFO
+(`_tls_private_note_emitted`) explaining that the destination is loopback or
+private "so no credentials cross a routable network".
+
+WHAT REMAINS OF F101 — genuinely LOW:
+  * `IS_FORCE_TLS` and `REDIS_FORCE_TLS` are two names for one setting
+    (:232-235). `.env.production.example` sets the LEGACY alias. Not a defect,
+    but it is why the template reads alarming.
+  * The `.env.production.example` value is still misleading to a reader.
+The other half of F101 — `DRIFT_BLOCK` and `STALE_MODEL_BLOCK` absent from
+`.env.production.example`, so `DRIFT_BLOCK` falls to its code default `false` —
+is UNAFFECTED and still stands at HIGH. That one has no equivalent guard.
+
+METHOD NOTE: F101 came from reading config templates and the Gate L scanner
+without reading the consumer. A default in a template is not a control; the code
+that reads it is. Two other config findings (F98, F130) were verified against
+their consumers and stand.
+
+## CACHE — VERIFIED CLEAN
+  * TLS enforcement fails closed on every ambiguous input (above).
+  * The alias precedence is explicit: `IS_FORCE_TLS` wins when both are set.
+  * The production plaintext allowance is rate-limited to one log line rather
+    than flooding, via a module-level flag.
+  * `REDIS_TLS_SKIP_VERIFY=true` with `APP_ENV=production` is documented as
+    raising RuntimeError at connection time — "this is intentional" (:228-229).
