@@ -6532,3 +6532,95 @@ The corollary is that the gating constraint is `useOrchestratorData.ts`: pages
 render what the global bootstrap fetched, so surfacing built capability is
 mostly a matter of adding fetches there and rendering them — not backend work,
 and not new design systems.
+
+---
+
+# BUILD PHASE — the design system, and `/watchlist` as the proof
+
+## The approach, and why not page-by-page
+
+The audit measured the same failures repeating across all 82 routes: no
+headings (F173), no tables (F174/F190), inert metrics (F187), dead ends
+(F188/F196), 82–128 sub-44px targets per page (F171), emoji icons (F175).
+
+Rewriting 60+ pages individually would mean re-solving each of those 60+ times
+and produce 60 slightly different answers. So the first deliverable is a
+**primitive layer** — `frontend/src/components/ds/` — where each primitive
+exists to close one measured finding, and applying it to a page closes all of
+them at once for that page.
+
+**Design system source.** `ui-ux-pro-max --design-system` recommended Dark Mode
+(OLED), IBM Plex Sans, and a gold+purple palette for a fintech product. The
+codebase **already has** a coherent OLED dark token set (`--bg #080c14`,
+`--surface #0d1421`, `--border #1e2d3d`, bull/bear, a Tailwind terminal/neon
+palette) that satisfies the rubric's style guidance. Replacing a working
+palette across 110 page components is high-risk churn for a debatable gain, so
+the tokens were kept and the rubric applied where the product actually fails
+it — structure, semantics and interaction. The gold accent (apt for a XAUUSD
+platform) and IBM Plex Sans are recorded as recommendations, not applied.
+
+## The primitives
+
+| Primitive | Closes | Contract |
+|---|---|---|
+| `PageHeader` / `Section` | F173 | exactly one `<h1>` per page, `<h2>` per block |
+| `DataTable` | F174/F187/F190 | real `<table>` + `<caption>`, click-to-sort with `aria-sort`, keyboard-operable drill-down rows, wrapper owns horizontal scroll, sorts a **copy** so caller state is not mutated |
+| `EmptyState` | F189/F194/F195 | says what is missing, why, and the route out; renders the **server's own note** when the API sends one |
+| `RelatedPages` | F188/F196 | labelled `<nav>` landmark so no page is a dead end |
+
+Every interactive target is ≥44px with a visible focus ring, `cursor-pointer`
+and colour-only hover (no transform, so nothing shifts). Icons are Lucide
+components. 14 contract tests in `ds_primitives.test.tsx`.
+
+## `/watchlist` — measured before and after
+
+| | before | after |
+|---|---:|---:|
+| clickable metrics | **0 / 16** | **16 / 16** |
+| outbound links | **0** | **5** |
+| `<table>` | 0 | **1** |
+| touch targets < 44px | **82** | **0** |
+| rendered characters | 413 | 744 |
+
+Verified in the browser, not inferred: `h1` = `['Watchlist']`, `h2` =
+`['Tracked symbols', 'Where to next']`, table caption present, 5 sortable
+headers with `aria-sort` announced, 4 drill-down rows, 5 related links.
+Clicking the "24h" header reordered `[BTCUSD, EURUSD, GBPUSD, XAUUSD]` →
+`[XAUUSD, EURUSD, GBPUSD, BTCUSD]`. Clicking a row landed on `/ai-chart`.
+
+All page logic (fetch, add, remove, sparkline, tick enrichment) is unchanged.
+
+## F229 — my own audit harness was under-reporting · method correction
+
+The first measurement of the rebuilt page showed `links_out=0` and
+`metrics=0/16` — i.e. no improvement. Both were **harness bugs**, not page
+defects:
+
+1. it excluded `nav, aside, header` when finding content links, so a
+   related-pages footer (a `<nav>` landmark **by design**) was invisible;
+2. its clickable test was `closest('a,button,[role=button],[onclick]')`, which
+   does not match `tr[role="link"]` — the keyboard-operable drill-down row;
+3. its inert-row test had the same gap.
+
+Corrected, the same page reports `links_out=5`, `metrics=16/16`. **Every
+per-page measurement in this audit was taken with the uncorrected harness**, so
+outbound-link and clickable-metric counts on pages using nav landmarks or
+`role="link"` rows are floors, not exact values. The pages measured before this
+build phase used neither pattern, so their figures stand — but the correction
+is recorded because it is the fourth time a measurement, not the code, was the
+thing at fault.
+
+## Scope — stated plainly
+
+One page of 82 is rebuilt. The primitives are what make the rest tractable, and
+`/watchlist` is the proof they work end-to-end, but **81 routes still render
+their original markup.** The order for the remainder, worst-first by measured
+gap:
+
+1. `/signals` (362 chars, 0 links, 0 metrics) · `/journal` (378, 1 link) ·
+   `/leaderboard` (454) — thin list pages that are pure `DataTable` + `EmptyState` work
+2. `/pnl` (849 LOC, refresh and pagination only) · `/performance` (0/8 clickable)
+3. `/master-control` (46 metrics, 0 clickable) · `/status` (10 inert rows)
+4. `/dashboard`'s nine panels (65 inert metrics — F187 remaining)
+5. `/home` vs `/dashboard` — F209 is an information-architecture **decision**
+   that should be made before either is restyled
