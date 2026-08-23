@@ -6624,3 +6624,66 @@ gap:
 4. `/dashboard`'s nine panels (65 inert metrics — F187 remaining)
 5. `/home` vs `/dashboard` — F209 is an information-architecture **decision**
    that should be made before either is restyled
+
+## F230 — CORRECTION to F212/F185: the status page already uses most of its API · correction
+
+F212 stated: *"`api/status.py` exposes 10 endpoints with **zero** frontend
+surface — `/status/incidents`, `/status/history`, `/status/live-trading/gate`,
+`/status/paper-trading/gate`. The incident history a subscriber would check
+before trusting the platform with money is built and unreachable."*
+
+**Half of that is wrong.** `StatusPage.tsx:126-128` already calls three of
+them:
+
+```tsx
+api.get<StatusData>('/status/json'),
+api.get<{ history?: HistoryDay[] }>('/status/history'),
+api.get<{ incidents: Incident[] }>('/status/incidents'),
+```
+
+Verified against the live route table and by counting callers per endpoint:
+
+| endpoint | SPA callers |
+|---|---:|
+| `/api/status` | 9 |
+| `/api/status/json` | 1 |
+| `/api/status/history` | **1 — incident history IS surfaced** |
+| `/api/status/incidents` | **1 — incidents ARE surfaced** |
+| `/api/status/live-trading/gate` | **0** |
+| `/api/status/paper-trading` | **0** |
+| `/api/status/paper-trading/gate` | **0** |
+| `/api/status/sharpe-progress` | **0** |
+
+The corrected finding is narrower: **4 of 9 status endpoints have no UI**, and
+they are the *gate* endpoints — `live-trading/gate`, `paper-trading/gate`,
+`paper-trading`, `sharpe-progress`. Those answer "is the system allowed to
+trade right now, and how far through validation is it", which is genuinely
+worth surfacing (and ties to F214's paper-trading gate). But the incident
+history claim was false.
+
+**Why the original was wrong.** The capability-gap scan matched pages against
+the `useApi.ts` client and against `api.<verb>('path')` calls, but
+`StatusPage` types its calls as `api.get<StatusData>('/status/json')` — the
+generic parameter between `get` and `(` defeated the regex. Any page using a
+typed call was under-counted.
+
+**Consequence for F185's headline.** The "34% of endpoints have no UI" figure
+is therefore a **ceiling, not an exact value**; the true unsurfaced share is
+somewhat lower. The individual "fully unsurfaced module" entries were each
+spot-checked, but the aggregate should be read as "up to a third".
+
+Fifth measurement error in this audit, and the same shape as the others: a
+regex over an unfamiliar codebase that misses a syntactic variant and
+therefore over-reports a gap.
+
+## F231 — `/status` and `/master-control` are redirects/aliases, not pages · correction
+`App.tsx:552` — `<Route path="/status" element={<Navigate to="/system-status" replace />} />`.
+`/status` is a redirect, so the earlier measurement recorded for it (668 chars,
+10 inert rows, 0 buttons) was taken on `/system-status` after the redirect, not
+on a distinct page. Likewise `/master-control` renders `SuperAdminDashboard`,
+the same component as `/superadmin` — already recorded as F210.
+
+Net effect on the route census: of the 82 routes measured, several are
+redirects or aliases of one another. The count of **distinct screens** is
+lower than 82, which makes the "46 routes have zero clickable metrics" figure
+an overstatement of the number of distinct pages affected.
