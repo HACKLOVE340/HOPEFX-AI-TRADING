@@ -243,8 +243,14 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
 
   // Auto-clear the result banner after 4 seconds so it doesn't linger.
   // The cleanup also fires on unmount, preventing setState-after-unmount.
+  //
+  // SUCCESS ONLY. A failure — including "filled but the stop was not placed,
+  // this position is UNPROTECTED" (F169) — must stay on screen until the trader
+  // dismisses it by acting. Auto-hiding a warning about an unprotected position
+  // after four seconds is how it gets missed.
   useEffect(() => {
     if (!result) return;
+    if (!result.ok) return;
     if (resultTimer.current) clearTimeout(resultTimer.current);
     resultTimer.current = setTimeout(() => setResult(null), 4_000);
     return () => {
@@ -360,8 +366,28 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
 
     setSubmitting(true);
     try {
-      await tradingApi.placeOrder(payload);
-      setResult({ ok: true, msg: `${side.toUpperCase()} ${qtyNum} ${symbol} placed` });
+      const res = await tradingApi.placeOrder(payload);
+
+      // The broker may accept the order and silently drop the bracket: adapters
+      // without native bracket support log the stop and discard it, so a filled
+      // order can leave an UNPROTECTED position. The API reports this as
+      // `stop_loss_placed` (null when no bracket was requested). Surfacing it
+      // here is the difference between "your stop is set" and "you have no
+      // stop and do not know it". See audit F151 / F169.
+      const slPlaced = (res as { data?: { stop_loss_placed?: boolean | null } })
+        ?.data?.stop_loss_placed;
+
+      if (slPlaced === false) {
+        setResult({
+          ok: false,
+          msg:
+            `${side.toUpperCase()} ${qtyNum} ${symbol} FILLED — but the STOP LOSS was ` +
+            `NOT placed with the broker. This position is UNPROTECTED. Close it or ` +
+            `set a stop manually.`,
+        });
+      } else {
+        setResult({ ok: true, msg: `${side.toUpperCase()} ${qtyNum} ${symbol} placed` });
+      }
       setQty('0.01');
       setSl('');
       setTp('');
