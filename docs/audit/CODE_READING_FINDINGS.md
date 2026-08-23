@@ -6218,3 +6218,134 @@ Across 16,404 test functions, just 18 carry a `skip`/`skipif` decorator. There
 is no large body of quietly disabled tests, and no file failed to parse. The
 suite is genuinely executed — which makes F221 and F222 about *what it points
 at*, not about tests being switched off.
+
+---
+
+# PER-PAGE FUNCTIONAL ANALYSIS — what each page shows, why, and what it lacks
+
+## The architecture that decides what every page can display
+
+`frontend/src/hooks/useOrchestratorData.ts` (751 LOC) is a **single global
+fetcher**. It calls ~25 APIs on a poll and writes them into the Zustand store:
+
+```
+tradingApi.account          performanceApi.summary/equityCurve/weekly
+signalsApi.active/summary/analytics                dataLayerApi.health/macro/
+positionSizingApi.riskMetrics    drawdownApi.curve  microstructure/quality/
+regimeApi.current           newsApi.latest/geopoliticalSignal    sentiment/feeds
+calendarApi.highImpact      allocatorApi.status    mlExtendedApi.health
+signalEngineApi.status      llmApi.health          securityHealingApi.healStatus
+profilesListApi.list
+```
+
+`App.tsx` runs it once; pages read slices via `useStore(selectX)`. This is a
+**good** design — one poll, no duplicate fetches, no thundering herd on
+navigation — and `TradingDashboard.tsx` documents it explicitly.
+
+**It also decides the ceiling of the whole product.** A page can only render
+what the bootstrap fetched. This reframes **F185** (34% of endpoints have no
+UI): much of that gap is not pages ignoring endpoints — it is the *bootstrap*
+never fetching them, so no page can show them however it is designed.
+
+## F225 — CORRECTION to F192: the in-app symbol handoff already works · correction
+
+F192 stated that wiring watchlist rows to `/trade` "would produce links that
+navigate and land on the wrong instrument". **That is wrong.**
+
+`Trade.tsx:460-467` reads router state and seeds its symbol from it:
+
+```tsx
+const signalState = (location.state as { signal?: {
+  symbol?: string; direction?: string;
+  entry_price?: number; stop_loss?: number; take_profit?: number; quantity?: number;
+} } | null)?.signal;
+const [selectedSymbol, setSelectedSymbol] = useState(signalState?.symbol ?? 'XAU/USD');
+```
+
+and callers already use it:
+
+```
+Watchlist.tsx:309    navigate('/trade', { state: { signal: { symbol: … } } })
+TradeJournal.tsx:254 navigate('/trade', { state: { signal: { symbol, direction } } })
+```
+
+The handoff carries symbol, direction, entry, stop, take-profit and quantity.
+**It is better than the query param I proposed.**
+
+**What F192 correctly identifies, narrowed:** there is no `useSearchParams`, so
+`/trade?symbol=XAUUSD` is ignored. The consequences are real but smaller than
+stated:
+* a ticket **cannot be bookmarked or shared** — router state does not survive a
+  reload or a copied URL;
+* a link built as a query param (an email, a notification deep link, the mobile
+  app) silently lands on the default symbol.
+
+**Revised fix:** keep the router-state path, and additionally seed from
+`?symbol=` when state is absent, syncing the param on selection. This does
+**not** block the remaining F187 drill-down work — that work should use the
+existing state mechanism.
+
+Recording this prominently because F192 was written into the fix plan as a
+blocker for Phase 8b. It is not one.
+
+## F226 — `/dashboard` is a layout shell with no logic of its own · MEDIUM
+
+`TradingDashboard.tsx` is 271 LOC with **zero store reads, zero handlers, zero
+form inputs**. It composes nine lazy-loaded panels into a 12-column grid and
+nothing else.
+
+That explains several earlier measurements which looked like separate defects
+and are in fact one:
+* **F173** — zero `h1`–`h3`: the shell renders no headings; each panel titles
+  itself with a styled `div`.
+* the page has **63 buttons and no handlers** — every button belongs to a child
+  panel or the `QuickActionBar`.
+* **F187** — the metrics are inert because they live in panels, not here.
+
+So "the dashboard is too basic" is not a property of the dashboard page. It is
+a property of the nine panels it composes, plus the choice to compose *these*
+nine. Any fix must be made in the panels.
+
+## F227 — pages are read-only where the backend offers actions · HIGH
+
+Inventory of user-actionable functions per page (handlers, form inputs, and
+what the page can actually *do* rather than show):
+
+| Route | LOC | store slices | actions the page offers | form inputs |
+|---|---:|---:|---|---:|
+| `/home` | 879 | **8** | **none** | **0** |
+| `/dashboard` | 271 | 0 | none (shell) | 0 |
+| `/pnl` | 849 | 1 | refresh, paginate | **0** |
+| `/leaderboard` | 314 | 0 | period, sort | 2 |
+| `/watchlist` | 353 | **1** | add, remove | 1 |
+| `/performance` | 641 | 0 | tab, period, export CSV/PDF | 4 |
+| `/journal` | 501 | 0 | tab, edit entry, → trade | 4 |
+| `/trade` | 639 | 5 | close-all, tab, place order | 0 |
+| `/wallet` | 634 | 0 | deposit, withdraw | 1 |
+| `/alerts` | 409 | 2 | create, delete, pause/resume | 4 |
+| `/copy-trading` | 540 | 0 | start, stop, set allocation | 4 |
+| `/risk-calculator` | 799 | 2 | save, load, delete history | 3 |
+| `/tca` | 844 | 1 | 3 filters, export CSV, flush | 3 |
+
+**`/home` is the sharpest case: 879 LOC, eight store slices, and not one thing
+a user can do.** It is the richest *display* in the product (7 charts, 1 table
+— F209) and a pure poster. `/pnl` at 849 LOC offers a refresh button and
+pagination — no date range, no filter, no export, while `/performance` (641
+LOC) exports CSV and PDF.
+
+**`/watchlist` reads a single store slice (`FeedLive`) and offers add/remove.**
+For a watchlist on a trading platform, the absent functions are conspicuous:
+no reordering, no columns beyond price, no per-symbol alert, no note, no
+grouping, no sort, no inline sparkline, no link to that symbol's signal or
+journal history. It has 16 metrics and 0 outbound links (F188).
+
+**The pattern:** the pages that *do* things (alerts, copy-trading, risk
+calculator, TCA) are well-featured. The pages that *show* things (home, pnl,
+leaderboard, watchlist, dashboard) are read-only, and they are the ones a
+subscriber opens most.
+
+## F228 — inconsistent affordances for the same action · LOW
+`Watchlist.tsx` has two "Trade" buttons with different behaviour: the header
+`⚡ Trade` at `:246` navigates with **no state** (lands on the default symbol),
+while the per-row button at `:309` passes the row's symbol. Two controls with
+the same label doing different things on the same screen.
