@@ -3439,3 +3439,83 @@ The better implementation is the dead one.
   * `institutional_flow` and `market_analysis` show zero EXTERNAL importers but
     are re-exported through `analysis/__init__.py` (:32, :65), so a caller-count
     on the module alone is misleading here — the same trap as F126.
+
+================================================================================
+DASHBOARD — the second UI (dashboard/src, 15,334 LOC), served at /godmode/
+================================================================================
+
+## HOW THE TWO UIs ARE SERVED — I initially misread this; correcting it here
+`core/page_routes.py:245-252` documents the arrangement:
+    #   1. frontend/static/  — main React app (Vite outDir: ../static)
+    #   2. dashboard/dist/   — legacy GodMode dashboard (fallback)
+`dashboard/` is NOT a shadow of `frontend/` and NOT a silent fallback. Both are
+served, at different paths:
+  * `static/` exists  -> modern frontend at `/`, GodMode mounted at `/godmode/` (:276-282)
+  * only dashboard/dist -> GodMode at `/godmode/`, plus an INFO "main app not
+    built yet" and a WARNING "Run 'cd frontend && npm run build'" (:514-515)
+  * neither -> a placeholder page explaining how to build (:517-529)
+No silent degradation at any branch. And `Dockerfile:2-29, 69` builds the
+frontend in a multi-stage build (`npm ci`, `npm run build`,
+`COPY --from=frontend-builder /build/static ./static`), so the Docker production
+image genuinely serves the modern UI. F124's assessment stands for production.
+Note `static/` is gitignored (`.gitignore:28`) and untracked while
+`dashboard/dist/` IS tracked — which is why the committed build exists.
+
+## F148 — the two UIs have OPPOSITE type-safety postures · MEDIUM
+    frontend/tsconfig.json   "strict": true, "noUncheckedIndexedAccess": true
+    dashboard/tsconfig.json  "strict": false
+F124 recorded that `frontend/` passes a genuinely strict typecheck across 95,599
+lines. `dashboard/` — 15,334 lines of admin surface including tenant management
+and revenue figures — opts out of strict mode entirely. Anything I verified about
+`frontend/`'s type safety should not be assumed of `/godmode/`.
+
+## F149 — the watchlist renders a FABRICATED price history · MEDIUM (real, and it re-randomises on every render)
+dashboard/src/pages/Watchlist.tsx:38-48:
+
+    // Tiny sparkline using SVG — last 10 random points around current price
+    const Sparkline: React.FC<{ change_pct: number }> = ({ change_pct }) => {
+      const points = Array.from({ length: 10 }, (_, i) => {
+        const trend = (change_pct / 10) * i;
+        const noise = (Math.random() - 0.5) * 0.5;
+        return 20 - (trend + noise) * 2;
+      });
+
+The component receives ONLY `change_pct` — the net change — and invents ten
+intermediate points. The rendered sparkline sits in a trading watchlist beside
+real prices and reads as price history. Its *direction* is real; its *path* is
+synthetic and has no relationship to what the instrument actually did.
+
+Two aggravating details:
+  * `Math.random()` is called in the component body with no `useMemo`, so the
+    "history" is redrawn differently on EVERY React re-render while the price
+    has not moved.
+  * This is exactly the pattern I swept for in `frontend/` and did NOT find
+    (F124: "no fabricated data"). The two UIs differ on this too.
+The comment is honest about what it does, so this is not deception — but a user
+reading a sparkline in a trading view reasonably believes it depicts a real path.
+
+## F150 — "Copy API key" fabricates a key in the browser that can never authenticate · MEDIUM (broken feature; the backend fails closed)
+dashboard/src/pages/WhitelabelAdmin.tsx:72-76:
+
+    const copyApiKey = (id: string) => {
+      navigator.clipboard.writeText(`hopefx_wl_${id}_${Math.random().toString(36).slice(2, 10)}`)
+
+The button never contacts the server. It builds a string from the tenant id plus
+eight base-36 characters of `Math.random()` and puts it on the clipboard. It
+differs on every click.
+
+The backend runs a REAL key system — `whitelabel/api_auth.py`:
+    :130  register_api_key(raw_key, tenant_id, tier)   -> stores HMAC-SHA256(key)
+    :315  key_hash = _hash_key(x_api_key)
+    :316  entry = _key_store.get(key_hash)
+    :318  if entry is None: raise HTTPException(401, "Invalid API key")
+so a key that was never registered is rejected. **That is the saving grace: this
+is a broken feature, not a credential hole.** A white-label admin copies a key,
+pastes it into their integration, and gets 401 with no indication why.
+
+Recording the security reasoning explicitly because the severity turns on it:
+`Math.random()` is not cryptographically secure and eight base-36 characters is
+roughly 41 bits, so if the backend ever accepted keys by PATTERN rather than by
+registry lookup this would be a trivially forgeable credential. It does not —
+`verify_api_key` fails closed on an unknown hash. Severity MEDIUM as a broken
+admin feature; it would be CRITICAL if the lookup were ever relaxed.
