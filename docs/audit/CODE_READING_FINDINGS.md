@@ -3986,3 +3986,53 @@ This is not a stub subsystem — it is a built one with a broken last hop. The f
 is small: have `notifications/__init__.get_alert_engine()` (or the delegation
 site) resolve the `NotificationManager` the comment already describes, rather
 than returning the AlertEngine to itself.
+
+================================================================================
+INFRASTRUCTURE (2,442 LOC) — health probes, metrics, logging.
+================================================================================
+
+## F160 — the broker health probe reports "ok" from an environment variable · MEDIUM (proven by execution)
+`infrastructure/health_engine.py:276-300` `_probe_broker` first tries Redis for a
+real `broker:connection_status`. When Redis is unreachable the exception is
+swallowed at DEBUG (:293-294) and it falls through to:
+
+    broker_type = os.getenv("BROKER_TYPE", os.getenv("BROKER_DEFAULT", "paper"))
+    return {
+        "status": "ok" if broker_type == "paper" else "warning",
+        "detail": f"broker={broker_type} (config only)",
+    }
+
+PROVEN with Redis pointed at a dead port (scratchpad/health4.py):
+    BROKER_TYPE=paper   -> status=ok       detail='broker=paper (config only)'
+    BROKER_TYPE=oanda   -> status=warning  detail='broker=oanda (config only)'
+    BROKER_TYPE=mt5     -> status=warning  detail='broker=mt5 (config only)'
+
+With `BROKER_TYPE=paper` — the ACTIVE mode per F142 — the broker component
+reports **ok** having contacted nothing. It read an env var. The broker could be
+absent, misconfigured, or (per F107) an alias with no `place_market_order` at
+all, and this probe would still be green.
+
+To its credit the detail string says "(config only)", which is honest. But
+`HealthReport.ok_count` / `error_count` (:70-79) and `_STATUS_RANK` aggregation
+(:105-115) work on `status`, not `detail`, so every rollup, badge and dashboard
+tile derived from this shows green. An operator reads the colour, not the string.
+
+Compounding F159: the alerting subsystem does not deliver, and the health
+surface reports ok from configuration. Both of the channels through which a human
+would learn something is wrong are impaired.
+
+## INFRASTRUCTURE — VERIFIED CLEAN
+  * THE GENERIC PROBE WRAPPER FAILS CLOSED, which is the important part.
+    `probe_one` (:149-183) wraps every probe in
+    `asyncio.wait_for(fn(), timeout=self.PROBE_TIMEOUT_S)` and converts BOTH
+    `TimeoutError` and bare `Exception` into `status="error"` with the detail
+    preserved. A probe that hangs or raises cannot report healthy.
+  * `status = raw.get("status", "error")` (:164) — a probe returning a dict with
+    no status is treated as an ERROR, not as ok. Correct default.
+  * The status vocabulary is ranked (`_STATUS_RANK`, :100-115) and the rollup
+    takes the MAX severity rather than an average, so one critical component
+    cannot be diluted by many healthy ones.
+  * 18 components are probed, covering database, redis, broker, ML, trading
+    engine, self-healer, decision engine, risk manager, kill switch, tracing,
+    data feed, websocket, event bus, config store, celery, env vars and the
+    signal engine — genuinely broad coverage.
