@@ -6769,3 +6769,42 @@ Related, and honest in the same way: `/api/ml/drift-report` returns
 `{"overall_status":"unknown","message":"Insufficient live feature data (need
 ≥50 ticks). Start live inference to populate the drift buffer.","live_samples":0}`
 — a server-side note of exactly the kind `EmptyState.serverNote` exists to show.
+
+## F233 — the `method` label on feature-importance is not trustworthy · MEDIUM (extends F232)
+
+F232 recorded that `/api/ml/explain/{model}` returns `method: "uniform"` when
+it measures nothing, and concluded that a UI should key off that label.
+**That conclusion was insufficient.** Measured on the sibling endpoint:
+
+```
+GET /api/ml/feature-importance/rf_xauusd
+method   : feature_importances      <- claims it measured
+n        : 30
+min/max  : 0.02 0.02
+distinct : 1                        <- every value identical
+```
+
+The label says `feature_importances`; the data is flat. So a model whose
+`feature_importances_` array is itself degenerate is reported as measured.
+
+**Caught by verification, not by reading.** I built the page with a
+`method === 'uniform'` guard, rendered it, and the browser showed *"Derived by
+feature_importances for model rf_xauusd"* above thirty identical 0.0200 bars —
+the exact anti-pattern F232 was written to prevent, in my own work, one commit
+after writing the warning.
+
+**The correct test is the distribution, not the label:** treat attribution as
+absent when `method === 'uniform'` **or** the importances have ≤1 distinct
+value. The page now says "This model cannot explain itself yet" and reports the
+server's own claim beside the contradicting shape:
+
+> Server reported method "feature_importances" for model rf_xauusd, but
+> returned 30 features with 1 distinct value(s).
+
+**Backend follow-up (not done here):** `ml/explainability.py` should apply the
+same test server-side — if `feature_importances_` is degenerate, report
+`method: "uniform"` rather than naming a method it did not meaningfully apply.
+The frontend guard is a safety net, not the right home for this rule.
+
+Generalises to a rule worth keeping: **a field that describes how a number was
+produced is a claim, not a guarantee. Check the number.**

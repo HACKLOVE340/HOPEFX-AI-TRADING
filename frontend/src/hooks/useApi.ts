@@ -445,6 +445,15 @@ export const mlApi = {
   features: ()               => api.get('/ml/features'),
   // Inference health + safety gates (staleness, drift, fallback rate, calibration).
   health:   ()               => api.get('/ml/health'),
+  /** Live engine state: model version, feature count, OOS accuracy, last trained. */
+  engineHealth: ()           => api.get('/ml/engine-health'),
+  /** Built-in feature importances for a deployed MODEL (not a symbol).
+   *  The response's `method` says how they were derived — "uniform" means the
+   *  server measured nothing and returned 1/n per feature. See audit F232. */
+  featureImportance: (modelName: string, topN = 30) =>
+    api.get(`/ml/feature-importance/${encodeURIComponent(modelName)}`, { params: { top_n: topN } }),
+  /** Feature-drift report; explains itself in `message` when it lacks samples. */
+  driftReport: ()            => api.get('/ml/drift-report'),
 };
 
 // ── Accounts / Teams ──────────────────────────────────────────────────────────
