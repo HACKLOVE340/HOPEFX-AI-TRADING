@@ -1564,6 +1564,8 @@ export const pnlApi = {
   drawdownCurve:    ()                                        => api.get('/pnl/drawdown-curve'),
   tradeLog:         (params?: Record<string, unknown>)        => api.get('/pnl/trade-log', { params }),
   openPositions:    ()                                        => api.get('/pnl/open-positions'),
+  /** Closed-trade history. Unlike tradeLog this accepts a `symbol` filter. */
+  history:          (params?: Record<string, unknown>)        => api.get('/pnl/history', { params }),
   export:           (format: 'csv' | 'json' = 'csv')         =>
                       api.get(`/pnl/export?format=${format}`, { responseType: 'blob' }),
 };

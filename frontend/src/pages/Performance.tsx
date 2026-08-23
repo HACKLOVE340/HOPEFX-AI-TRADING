@@ -13,7 +13,11 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar, RelatedPages } from '../components';
+import {
+  Trophy, BarChart3, ListOrdered, CalendarDays, RefreshCw, ChevronRight,
+  LineChart, Briefcase, BookOpen, Shield,
+} from 'lucide-react';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError, positionSide } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -123,13 +127,49 @@ function EquityCurveChart({ points }: { points: { t: number; v: number }[] }) {
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div style={s.statCard}>
-      <div style={s.statLabel}>{label}</div>
+/**
+ * A performance figure. Given `to`, the whole card drills into the page that
+ * explains it — the trades behind a win rate, the curve behind a drawdown.
+ * Without `to` it stays inert rather than becoming an empty tab stop. F187.
+ */
+function StatCard({
+  label, value, sub, color, to, toHint,
+}: {
+  label: string; value: string; sub?: string; color?: string;
+  to?: string; toHint?: string;
+}) {
+  const body = (
+    <>
+      <div style={s.statLabel} className="flex items-center gap-1">
+        {label}
+        {to && (
+          <ChevronRight
+            size={11} strokeWidth={2.5} aria-hidden
+            className="ml-auto text-slate-700 transition-colors duration-150
+                       group-hover:text-slate-300 group-focus-visible:text-slate-300"
+          />
+        )}
+      </div>
       <div style={{ ...s.statValue, color: color ?? '#f1f5f9' }}>{value}</div>
       {sub && <div style={s.statSub}>{sub}</div>}
-    </div>
+    </>
+  );
+
+  if (!to) return <div style={s.statCard}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      style={s.statCard}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className="group block min-h-[44px] cursor-pointer no-underline transition-colors duration-150
+                 hover:bg-[#141c2b] focus-visible:outline-none focus-visible:ring-2
+                 focus-visible:ring-sky-500 focus-visible:ring-offset-2
+                 focus-visible:ring-offset-[#080c14]"
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -343,41 +383,54 @@ const Performance: React.FC = () => {
     <div className="page-content gap-4 sm:gap-6">
       <PageHeader
         title="Performance"
-        icon="🏆"
+        icon={Trophy}
         subtitle="Live trading results — equity curve, drawdown, trade stats"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Analytics', href: '/pnl' },
           { label: 'Performance' },
         ]}
+        // Tabs move into PageHeader so they carry role="tab", aria-selected
+        // and a 44px target rather than being hand-rolled buttons.
+        activeTab={tab}
+        onTabChange={(k) => setTab(k as Tab)}
+        tabs={[
+          { key: 'overview', label: 'Overview', icon: BarChart3 },
+          { key: 'trades',   label: 'Trades',   icon: ListOrdered },
+          { key: 'weekly',   label: 'Weekly',   icon: CalendarDays },
+        ]}
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {/* Tab selector */}
-            <div style={{ display: 'flex', gap: 4 }}>
-              {(['overview', 'trades', 'weekly'] as Tab[]).map((t) => (
-                <button key={t} onClick={() => setTab(t)} style={{ ...s.tabBtn, ...(tab === t ? s.tabBtnActive : {}) }}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </button>
-              ))}
-            </div>
             {/* Period toggle */}
             <div style={{ display: 'flex', gap: 2, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: 2 }}>
               {(['weekly', 'monthly', 'yearly', 'all'] as Period[]).map((p) => (
-                <button key={p} onClick={() => setPeriod(p)} style={{
-                  ...s.tabBtn, padding: '4px 10px', fontSize: 11, border: 'none',
-                  background: period === p ? '#1e3a5f' : 'transparent',
-                  color: period === p ? '#60a5fa' : '#475569',
-                }}>
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  aria-pressed={period === p}
+                  className={`inline-flex min-h-[44px] items-center rounded px-3 text-[11px] font-semibold
+                              cursor-pointer transition-colors duration-150 focus-visible:outline-none
+                              focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-inset
+                              ${period === p ? 'bg-[#1e3a5f] text-[#60a5fa]' : 'text-slate-600 hover:text-slate-300'}`}
+                >
                   {p.charAt(0).toUpperCase() + p.slice(1)}
                 </button>
               ))}
             </div>
-            <Link to="/pnl"       style={{ ...s.refreshBtn, background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24', textDecoration: 'none' }}>💰 P&L</Link>
-            <Link to="/portfolio" style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)',  borderColor: 'rgba(34,197,94,0.3)',  color: '#22c55e', textDecoration: 'none' }}>💼 Portfolio</Link>
-            <Link to="/tca"       style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa', textDecoration: 'none' }}>📊 TCA</Link>
-            <Link to="/journal"   style={{ ...s.refreshBtn, background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)', color: '#60a5fa', textDecoration: 'none' }}>📓 Journal</Link>
-            <button onClick={refresh} disabled={publicQ.isFetching} style={s.refreshBtn}>
-              {publicQ.isFetching ? '⟳' : '↻'} Refresh
+            {/* Cross-links move to the related-pages footer; the header keeps
+                only the controls that act on THIS page. */}
+            <button
+              onClick={refresh}
+              disabled={publicQ.isFetching}
+              aria-label="Refresh performance data"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
+                         font-semibold text-slate-300 ring-1 ring-inset ring-[#1e2d3d] cursor-pointer
+                         transition-colors duration-150 hover:bg-[#243447]
+                         disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none
+                         focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${publicQ.isFetching ? 'animate-spin' : ''}`} aria-hidden />
+              Refresh
             </button>
           </div>
         }
@@ -394,7 +447,7 @@ const Performance: React.FC = () => {
           )}
           {!publicQ.isLoading && !publicQ.isError && !pub && (
             <EmptyState
-              icon="📊"
+              icon={BarChart3}
               title="No performance data yet"
               description="Make your first trade to start tracking equity curve, Sharpe ratio, win rate, and drawdown metrics."
               action={
@@ -418,11 +471,11 @@ const Performance: React.FC = () => {
                     guarded — and this page's own strategy table guards
                     `total_trades` correctly — so the payload was known to
                     arrive partially populated. */}
-                <StatCard label="Total Trades"  value={pub.total_trades != null ? String(pub.total_trades) : '—'} sub="Paper trading" color="#60a5fa" />
-                <StatCard label="Win Rate"      value={pub.win_rate != null ? `${pub.win_rate}%` : '—'} sub={pub.win_rate == null ? 'Need 50+ trades' : 'Winning trades'} color={pub.win_rate != null && pub.win_rate >= 50 ? '#00e676' : '#ff1744'} />
-                <StatCard label="Avg Return"    value={pub.avg_return_pct != null ? `${pub.avg_return_pct > 0 ? '+' : ''}${pub.avg_return_pct}%` : '—'} sub="Per trade" color={pub.avg_return_pct != null && pub.avg_return_pct >= 0 ? '#00e676' : '#ff1744'} />
-                <StatCard label="Sharpe"        value={pub.sharpe != null ? pub.sharpe.toString() : '—'} sub={pub.sharpe == null ? 'Need 50+ trades' : 'Annualised'} color="#a78bfa" />
-                <StatCard label="Max Drawdown"  value={pub.max_drawdown_pct != null ? `${pub.max_drawdown_pct}%` : '—'} sub="Peak-to-trough" color="#ff1744" />
+                <StatCard label="Total Trades"  value={pub.total_trades != null ? String(pub.total_trades) : '—'} sub="Paper trading" color="#60a5fa" to="/journal" toHint="the trade journal" />
+                <StatCard label="Win Rate"      value={pub.win_rate != null ? `${pub.win_rate}%` : '—'} sub={pub.win_rate == null ? 'Need 50+ trades' : 'Winning trades'} color={pub.win_rate != null && pub.win_rate >= 50 ? '#00e676' : '#ff1744'} to="/journal" toHint="the trades behind it" />
+                <StatCard label="Avg Return"    value={pub.avg_return_pct != null ? `${pub.avg_return_pct > 0 ? '+' : ''}${pub.avg_return_pct}%` : '—'} sub="Per trade" color={pub.avg_return_pct != null && pub.avg_return_pct >= 0 ? '#00e676' : '#ff1744'} to="/pnl" toHint="the P&L breakdown" />
+                <StatCard label="Sharpe"        value={pub.sharpe != null ? pub.sharpe.toString() : '—'} sub={pub.sharpe == null ? 'Need 50+ trades' : 'Annualised'} color="#a78bfa" to="/pnl" toHint="the return series" />
+                <StatCard label="Max Drawdown"  value={pub.max_drawdown_pct != null ? `${pub.max_drawdown_pct}%` : '—'} sub="Peak-to-trough" color="#ff1744" to="/pnl" toHint="the drawdown curve" />
               </div>
               <div style={s.noteBox}>
                 <span style={{ color: '#fbbf24', marginRight: 8 }}>⏱</span>
@@ -608,6 +661,15 @@ const Performance: React.FC = () => {
         { label: '🤖 AI Strategy',     href: '/ai-strategy',   color: '#f97316' },
         { label: '📈 Walk-Forward',    href: '/walk-forward',  color: '#4ade80' },
       ]}/>
+      <RelatedPages
+        links={[
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',              icon: LineChart },
+          { to: '/portfolio',       label: 'Portfolio',       hint: 'Open positions and allocation',          icon: Briefcase },
+          { to: '/tca',             label: 'Execution costs', hint: 'Slippage between signal and fill',       icon: BarChart3 },
+          { to: '/journal',         label: 'Trade journal',   hint: 'The trades behind these numbers',        icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade',                    icon: Shield },
+        ]}
+      />
     </div>
   );
 };

@@ -18,8 +18,7 @@ import { PageHeader, CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
 import {
-  TrendingUp, TrendingDown, Activity, Shield,
-  Clock, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
+  Activity, AlertTriangle, BarChart3, BookOpen, ChevronLeft, ChevronRight, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp, Zap,
 } from 'lucide-react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
@@ -119,8 +118,13 @@ const COLOR_CLASSES: Record<CardColor, string> = {
   purple: 'bg-purple-500/10 text-purple-400',
 };
 
+/**
+ * A headline P&L figure. Given `to`, the card drills into the page that
+ * explains it; without `to` it stays inert rather than becoming an empty tab
+ * stop for keyboard users. See audit F187.
+ */
 function StatCard({
-  label, value, sub, icon: Icon, color = 'amber', warn = false,
+  label, value, sub, icon: Icon, color = 'amber', warn = false, to, toHint,
 }: {
   label: string;
   value: string;
@@ -128,18 +132,37 @@ function StatCard({
   icon: React.ElementType;
   color?: CardColor;
   warn?: boolean;
+  to?: string;
+  toHint?: string;
 }) {
-  return (
-    <div className={`bg-[#0d1421] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[#1e2d3d]'}`}>
+  const cls = `bg-[#0d1421] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[#1e2d3d]'}`;
+  const body = (
+    <>
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-slate-400">{label}</span>
         <div className={`p-2 rounded-lg ${COLOR_CLASSES[color]}`}>
-          <Icon className="w-4 h-4" />
+          <Icon className="w-4 h-4" aria-hidden />
         </div>
       </div>
       <div className="text-2xl font-bold text-slate-100">{value}</div>
       {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
-    </div>
+    </>
+  );
+
+  if (!to) return <div className={cls}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className={`${cls} block no-underline cursor-pointer transition-colors duration-150
+                  hover:border-[#2b3f56] hover:bg-[#111827] focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2
+                  focus-visible:ring-offset-[#080c14]`}
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -420,6 +443,8 @@ const PnLDashboard: React.FC = () => {
 
   const [page, setPage]         = useState(0);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [exporting, setExporting]     = useState(false);
+  const [exportErr, setExportErr]     = useState<string | null>(null);
 
   // ── Summary ────────────────────────────────────────────────────────────────
   const summaryQ = useQuery<PnLSummary>({
@@ -514,12 +539,32 @@ const PnLDashboard: React.FC = () => {
   const isLoading  = summaryQ.isLoading || fillsQ.isLoading;
   const error      = summaryQ.error ?? fillsQ.error ?? positionsQ.error;
 
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(true);
+    setExportErr(null);
+    try {
+      const res = await pnlApi.export(format);
+      const blob = new Blob([res.data as BlobPart], {
+        type: format === 'csv' ? 'text/csv' : 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pnl-export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setExportErr(extractApiError(e, 'Export failed.'));
+    }
+    setExporting(false);
+  };
+
   return (
     <div className="page-content space-y-4 sm:space-y-6">
 
       <PageHeader
-        title="P&L Dashboard"
-        icon="💹"
+        title="P&L breakdown"
+        icon={TrendingUp}
         subtitle="Real fills from the live engine — no synthetic data"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -529,16 +574,40 @@ const PnLDashboard: React.FC = () => {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <LiveEquityBadge equity={summary?.equity} />
-            <Link to="/performance" className="flex items-center gap-1 px-3 py-1.5 text-[#4ade80] rounded-lg text-xs font-semibold" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', textDecoration: 'none' }}>📈 Performance</Link>
-            <Link to="/tca"         className="flex items-center gap-1 px-3 py-1.5 text-[#a78bfa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', textDecoration: 'none' }}>📊 TCA</Link>
-            <Link to="/journal"     className="flex items-center gap-1 px-3 py-1.5 text-[#60a5fa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', textDecoration: 'none' }}>📓 Journal</Link>
-            <button onClick={handleRefresh} disabled={isLoading} className="flex items-center gap-2 px-3 py-1.5 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-xs transition-colors disabled:opacity-50">
-              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+            {/* /pnl/export is served by the backend and had no caller
+                anywhere in the SPA (audit F185). */}
+            <button
+              onClick={() => void handleExport('csv')}
+              disabled={exporting}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
+                         font-semibold text-slate-300 ring-1 ring-inset ring-[#1e2d3d] cursor-pointer
+                         transition-colors duration-150 hover:bg-[#243447]
+                         disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none
+                         focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading}
+              aria-label={lastUpdated ? `Refresh — last updated ${lastUpdated}` : 'Refresh P&L data'}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#1e2d3d] px-3.5
+                         text-xs text-slate-300 cursor-pointer transition-colors duration-150
+                         hover:bg-[#243447] disabled:cursor-not-allowed disabled:opacity-50
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} aria-hidden />
               {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
             </button>
           </div>
         }
       />
+
+      {exportErr && (
+        <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300
+                                   ring-1 ring-inset ring-red-500/30">{exportErr}</p>
+      )}
 
       {/* Error */}
       {error && (
@@ -560,6 +629,8 @@ const PnLDashboard: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Equity"
+          to="/portfolio"
+          toHint="Portfolio"
           value={summary ? fmtUSD(summary.equity) : '—'}
           sub={summary ? `Started ${fmtUSD(summary.starting_equity)}` : undefined}
           icon={TrendingUp}
@@ -567,6 +638,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Total Return"
+          to="/performance"
+          toHint="performance detail"
           value={summary ? fmtPctRaw(summary.total_return_pct) : '—'}
           sub={summary ? `${summary.total_fills} fills` : undefined}
           icon={Activity}
@@ -574,6 +647,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Sharpe Ratio"
+          to="/performance"
+          toHint="risk-adjusted performance"
           value={summary?.sharpe_ratio != null ? fmtNum(summary.sharpe_ratio, 3) : '—'}
           sub={
             summary?.sharpe_ratio == null
@@ -590,6 +665,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Max Drawdown"
+          to="/performance"
+          toHint="the drawdown curve"
           value={summary ? `${fmtNum(summary.max_drawdown_pct, 2)}%` : '—'}
           sub={summary ? `Current: ${fmtNum(summary.current_drawdown_pct, 2)}%` : undefined}
           icon={TrendingDown}
@@ -598,6 +675,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Win Rate"
+          to="/journal"
+          toHint="the trades behind it"
           value={summary?.win_rate != null ? `${fmtNum(summary.win_rate, 1)}%` : '—'}
           sub={summary?.win_rate == null ? 'Need 30+ fills' : `${summary.total_fills} fills`}
           icon={Shield}
@@ -605,6 +684,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Open Positions"
+          to="/portfolio"
+          toHint="your positions"
           value={summary ? String(summary.open_positions) : '—'}
           sub="Live"
           icon={Activity}
