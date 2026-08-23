@@ -3921,3 +3921,68 @@ better one is the dead one.
     `core/strategy_orchestra.py:71-73`.
   * `factor_model.py` (652) is live with 3 importers.
   * No fabricated data anywhere in the package.
+
+================================================================================
+NOTIFICATIONS (3,867 LOC) — the subsystem that is meant to tell you when
+anything above breaks.
+================================================================================
+
+## F159 — *** CRITICAL ALERTS NEVER LEAVE THE LOG FILE *** · CRITICAL (proven by execution)
+`AlertEngine.send_alert` (notifications/alert_engine.py:869-905) is, by its own
+docstring, the path for the events that matter most:
+
+    Called by HOPEFXBrain._safe_notify() and RiskManager._send_telegram_alert()
+    to dispatch critical events (emergency stop, drawdown breach, etc.).
+
+It logs the alert (:885-890), then tries to deliver it:
+
+    # Delegate to the notifications singleton when available so the alert
+    # reaches Telegram / Discord / email channels in addition to the log.
+    from notifications import get_alert_engine as _get_singleton
+    singleton = _get_singleton()
+    # Avoid infinite recursion — only delegate if the singleton is a
+    # different object (NotificationManager, not this AlertEngine).
+    if singleton is not None and singleton is not self and hasattr(singleton, "send_alert"):
+        coro = singleton.send_alert(level, message, data)
+
+THE GUARD AND THE DELIVERY ARE THE SAME BRANCH. The comment states the intent —
+delegate only when the singleton is a `NotificationManager`, "not this
+AlertEngine". But `notifications/__init__.py:374-377` imports
+`get_alert_engine` straight from `notifications.alert_engine`, and
+`alert_engine.py:1027` defines it as `get_alert_engine() -> AlertEngine`,
+returning the AlertEngine singleton.
+
+PROVEN (scratchpad/alerts.py):
+    notifications.get_alert_engine() -> AlertEngine
+    alert_engine.get_alert_engine()  -> AlertEngine
+    same object?                       True
+    singleton is not self  ->  False
+
+So for the singleton — the instance every caller uses — the condition is False
+and the Telegram / Discord / email delegation never executes. An emergency stop
+or a drawdown breach is written to the application log and goes nowhere else.
+
+AND THE FAILURE PATH IS ALSO SILENT. Even when the branch is entered, any
+delivery error is swallowed at DEBUG (:904-905):
+    except Exception as exc:  # nosec B110 — notification must never crash the caller
+        logger.debug("AlertEngine.send_alert delegation failed: %s", exc)
+"Notification must never crash the caller" is the right principle. Reporting the
+failure at DEBUG is not: an alert that did not reach the operator's phone should
+say so at WARNING or ERROR, because the operator's evidence that nothing is wrong
+is the absence of a message.
+
+WHY THIS IS THE MOST CONSEQUENTIAL FINDING OF THE WHOLE AUDIT, IN CONTEXT:
+this audit has found 27 CRITICAL defects that fail quietly — F142's missing risk
+layer, F151's discarded stop-loss, F156's lapsed AML screening, F94's stuck
+regime scalar, F135's vanishing ledger rows. The subsystem whose job is to
+surface exactly those conditions delivers to a log file nobody is watching. Every
+"silent failure" in this document is silent twice.
+Severity CRITICAL.
+
+## NOTIFICATIONS — what is genuinely there
+The channels are real and substantial: `manager.py` (910), `telegram_bot.py`
+(339), `discord_bot.py` (414), `email_triggers.py` (365), `heartbeat.py` (350).
+This is not a stub subsystem — it is a built one with a broken last hop. The fix
+is small: have `notifications/__init__.get_alert_engine()` (or the delegation
+site) resolve the `NotificationManager` the comment already describes, rather
+than returning the AlertEngine to itself.
