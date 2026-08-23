@@ -4269,3 +4269,86 @@ zero is not evidence of a computed zero.
     observed live) and "Price engine returned 100 flat bars for XAUUSD (no price
     movement) — discarding rather than feeding zero-range features to the
     predictor."
+
+================================================================================
+UI / UX AUDIT — logged in as a real subscriber (trader@hopefx.io, FREE plan),
+83 routes enumerated, core journey walked with a browser at 1440x900.
+================================================================================
+
+## F166 — the dashboard overflows horizontally at 1440px and TRUNCATES MONEY VALUES · HIGH (UX, visually proven)
+At a 1440x900 viewport — a common laptop size, and wider than a 1366px MacBook
+Air — `/dashboard` clips content on the right edge in five separate places:
+    * top ticker      — EUR/USD cut mid-price: "1.0…"
+    * KPI strip       — ends at "OPEN", the value clipped
+    * tab bar         — ends at "Watch…"
+    * Risk panel      — **"EQUITY  $100,000.("** — a balance cut mid-number
+    * Risk panel      — "MAX DRAWD…"
+A truncated equity figure on a trading dashboard is not a cosmetic issue. A
+trader glancing at "$100,000.(" cannot tell it from "$100,000.00" vs
+"$100,000.05", and the one number they most need to trust is the one being cut.
+
+The information architecture is the cause: the page renders a 10-metric KPI
+strip, a 7-symbol ticker, an 11-item tab bar and a 4-column panel grid on one
+row with no responsive collapse. Everything is present; nothing has room.
+
+## F167 — the sidebar footer overlaps itself on EVERY page · MEDIUM (UX, visually proven)
+Bottom-left of the persistent nav, seen identically on /dashboard, /trade and
+every other authenticated route captured:
+    * the "Sign out" button sits ON TOP of the "⌘ K  Search" hint
+    * a further item is clipped behind it, showing only "…Status" and a moon
+      icon (the theme toggle and a System Status link)
+Sign out is the control a user reaches for when something has gone wrong. It
+being visually tangled with two other controls is the wrong place for a layout
+bug.
+
+## F168 — two navigation items are indistinguishable · LOW (UX)
+The TRADING section shows two adjacent entries both rendering as **"AI Ch…"**,
+each badged PROFESSIONAL. From the route list they are `/ai-chart` and
+`/ai-charts` (there is also `/ai-chart-dashboard`). A user cannot tell which is
+which, and the truncation is what hides the distinction. Three near-identical
+routes is itself worth a product decision — per F163's method note, the fix is
+naming, not CSS.
+
+## F169 — the order form presents Stop Loss and Take Profit as working fields · CRITICAL-UX (the user-facing half of F151)
+`/trade` renders, under ORDER ENTRY:
+    QUANTITY (LOTS)  [0.01]        Min 0.01 lot
+    STOP LOSS        [Optional]    TAKE PROFIT   [Optional]
+    [ ▲ Buy 0.01 XAU/USD ]
+Two ordinary labelled inputs, styled identically to the quantity field, with no
+warning, no disabled state and no asterisk. A trader fills in a stop, presses
+Buy, and gets a filled order — while `brokers/base.py` discards the bracket
+(F151). This screenshot is the user's-eye view of that finding: the platform
+does not merely fail to place the stop, it *invites* the trader to set one.
+The slice committed for F151 makes the discard loud in the logs and returns
+`stop_loss_placed` on the API response; the UI must now consume that field and
+tell the trader, or the fields should be disabled until brackets are implemented.
+
+## UI — WHAT IS GENUINELY GOOD (and the Trade page is the strongest surface)
+Recording this because "the design is too low" is not true of the whole product.
+`/trade` is a well-designed professional terminal:
+  * A risk strip directly under the balance strip — DAILY LOSS, MAX DD,
+    OPEN RISK and **KILL SWITCH: ● Off**. Surfacing kill-switch state on the
+    order screen is exactly right and most platforms bury it.
+  * A keyboard-shortcut bar: `1–9` select symbol · `B` pre-fill buy · `S`
+    pre-fill sell · `Esc` cancel/deselect · `Cmd+K` command palette. That is
+    real trader UX, not decoration.
+  * The submit button states the whole action — "▲ Buy 0.01 XAU/USD" — rather
+    than a bare "Submit".
+  * Seven symbol cards each showing bid, ask, spread and a sparkline.
+  * A breadcrumb, and a "● Live" feed indicator on the balance strip.
+And across every page the EMPTY STATES ARE HONEST, which is the thing this audit
+has praised repeatedly and here it is on screen:
+    "Awaiting equity data…"  ·  "Awaiting signals from inference engine…"
+    "Awaiting depth data…"   ·  "Awaiting microstructure data…"
+    "No open positions"      ·  "No active AI signals for XAU/USD"
+    "No recent articles"
+Not one fabricated number anywhere in the authenticated app, with every feed
+degraded. Plan gating is visible and legible (STARTER / PROFESSIONAL badges on
+locked nav items, the user's own plan shown as FREE), and the PAPER mode badge
+sits beside the logo on every screen.
+
+## UI — VERDICT
+The problem is not craft; `/trade` proves the team can build a good surface. The
+problem is DENSITY WITHOUT HIERARCHY on `/dashboard`, and a nav that has grown
+to 83 routes without an information architecture to hold them. The fixes are
+layout and naming, not a redesign.
