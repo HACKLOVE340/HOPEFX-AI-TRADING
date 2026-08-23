@@ -51,7 +51,7 @@ describe('DataTable — semantics, sorting, drill-down (F174/F187/F190)', () => 
     await u.click(screen.getByRole('button', { name: /P&L/i }));
     const header = screen.getByRole('columnheader', { name: /P&L/i });
     expect(header).toHaveAttribute('aria-sort', 'descending');
-    const first = screen.getAllByRole('row')[1];
+    const first = screen.getAllByRole('row')[1]!;
     expect(within(first).getByText('150')).toBeInTheDocument();   // desc => 150 first
   });
 
@@ -67,7 +67,7 @@ describe('DataTable — semantics, sorting, drill-down (F174/F187/F190)', () => 
     const onRowClick = vi.fn();
     const u = userEvent.setup();
     wrap(<DataTable caption="Positions" columns={cols} rows={rows} rowKey={(r) => r.id} onRowClick={onRowClick} />);
-    const row = screen.getAllByRole('link')[0];
+    const row = screen.getAllByRole('link')[0]!;
     row.focus();
     expect(row).toHaveFocus();
     await u.keyboard('{Enter}');

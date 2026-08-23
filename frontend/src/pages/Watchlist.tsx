@@ -15,6 +15,9 @@ import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 import { useStore, selectFeedLive } from '../store';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
+import { PageHeader, Section, DataTable, EmptyState, RelatedPages } from '../components/ds';
+import type { Column } from '../components/ds';
+import { Eye, Zap, BellPlus, X, Radio, LineChart, BookOpen } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -230,124 +233,179 @@ const WatchlistPage: React.FC = () => {
     }
   };
 
+  const columns: Column<WatchlistItem>[] = [
+    {
+      key: 'symbol', header: 'Symbol', width: '22%',
+      sortValue: (r) => r.symbol,
+      render: (r) => <span className="font-semibold text-slate-100">{r.symbol}</span>,
+    },
+    {
+      key: 'bid', header: 'Bid', align: 'right', hideBelow: 'sm',
+      sortValue: (r) => r.bid,
+      render: (r) => <span className="text-[#f87171]">{formatPrice(r.symbol, r.bid)}</span>,
+    },
+    {
+      key: 'ask', header: 'Ask', align: 'right', hideBelow: 'sm',
+      sortValue: (r) => r.ask,
+      render: (r) => <span className="text-[#4ade80]">{formatPrice(r.symbol, r.ask)}</span>,
+    },
+    {
+      key: 'mid', header: 'Mid', align: 'right',
+      sortValue: (r) => r.mid,
+      render: (r) => <span className="font-semibold text-slate-50">{formatPrice(r.symbol, r.mid)}</span>,
+    },
+    {
+      key: 'change', header: '24h', align: 'right',
+      sortValue: (r) => (Number.isFinite(r.change_pct) ? r.change_pct : 0),
+      render: (r) => (
+        <span className={(r.change_pct ?? 0) >= 0 ? 'text-[#4ade80]' : 'text-[#f87171]'}>
+          {Number.isFinite(r.change_pct)
+            ? `${r.change_pct >= 0 ? '+' : ''}${r.change_pct.toFixed(2)}%`
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'trend', header: 'Trend', hideBelow: 'md', width: '80px',
+      render: (r) => <Sparkline history={r.history} />,
+    },
+    {
+      key: 'actions', header: 'Actions', align: 'right', width: '150px',
+      render: (r) => (
+        // stopPropagation: the row itself drills into the chart, so a control
+        // inside it must not trigger that navigation as well.
+        <span className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => navigate('/trade', { state: { signal: { symbol: toSlashSymbol(r.symbol) } } })}
+            title={`Trade ${r.symbol}`}
+            aria-label={`Trade ${r.symbol}`}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg
+                       text-sky-400 cursor-pointer transition-colors duration-150
+                       hover:bg-sky-500/15 focus-visible:outline-none focus-visible:ring-2
+                       focus-visible:ring-sky-500 focus-visible:ring-inset"
+          >
+            <Zap size={15} strokeWidth={1.75} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/alerts', { state: { symbol: r.symbol } })}
+            title={`Set a price alert for ${r.symbol}`}
+            aria-label={`Set a price alert for ${r.symbol}`}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg
+                       text-amber-400 cursor-pointer transition-colors duration-150
+                       hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2
+                       focus-visible:ring-amber-500 focus-visible:ring-inset"
+          >
+            <BellPlus size={15} strokeWidth={1.75} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleRemove(r.symbol)}
+            title={`Remove ${r.symbol} from watchlist`}
+            aria-label={`Remove ${r.symbol} from watchlist`}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg
+                       text-slate-600 cursor-pointer transition-colors duration-150
+                       hover:bg-red-500/15 hover:text-red-400 focus-visible:outline-none
+                       focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-inset"
+          >
+            <X size={15} strokeWidth={2} aria-hidden />
+          </button>
+        </span>
+      ),
+    },
+  ];
+
   return (
-    <div className="page-content">
-      <div style={{ ...s.header, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={s.title}>Watchlist</h1>
-          <p style={s.subtitle}>
-            {freshness.isLive && feedLive
-              ? 'Live prices refresh every 5 seconds. Click a symbol to open its chart.'
-              : 'Prices are not updating right now. Click a symbol to open its chart.'}
-          </p>
-          <StaleDataNotice failed={freshness.failed} what={freshness.what} className="mt-2" />
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/trade')}
-            style={{ padding: '6px 13px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ Trade
-          </button>
-          <button onClick={() => navigate('/signals')}
-            style={{ padding: '6px 13px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📡 Signals
-          </button>
-          <button onClick={() => navigate('/alerts')}
-            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🔔 Alerts
-          </button>
-        </div>
-      </div>
+    <div className="page-content flex flex-col gap-4 pb-6">
+      <PageHeader
+        title="Watchlist"
+        icon={Eye}
+        subtitle={
+          freshness.isLive && feedLive
+            ? 'Live prices refresh every 5 seconds. Select a row to open the chart, or trade and set alerts inline.'
+            : 'Prices are not updating right now. Select a row to open the chart.'
+        }
+        status={<StaleDataNotice failed={freshness.failed} what={freshness.what} />}
+      />
 
-      <div style={s.addRow}>
-        <select value={addSymbol} onChange={(e) => setAddSymbol(e.target.value)} style={s.select}>
-          <option value="">Add symbol…</option>
-          {AVAILABLE_SYMBOLS.filter((sym) => !items.find((i) => i.symbol === sym)).map((sym) => (
-            <option key={sym} value={sym}>{sym}</option>
-          ))}
-        </select>
-        <button onClick={handleAdd} disabled={!addSymbol || adding} style={{ ...s.addBtn, opacity: !addSymbol ? 0.5 : 1 }}>
-          {adding ? '…' : '+ Add'}
-        </button>
-        {error && <span style={{ color: '#f87171', fontSize: 13 }}>{error}</span>}
-      </div>
-
-      {loading ? (
-        <div style={s.empty}>Loading…</div>
-      ) : enrichedItems.length === 0 ? (
-        <div style={s.empty}>Your watchlist is empty. Use the dropdown above to start tracking.</div>
-      ) : (
-        <div style={s.table}>
-          <div style={s.tableHeader}>
-            <span style={{ flex: 1 }}>Symbol</span>
-            <span style={{ width: 90, textAlign: 'right' }}>Bid</span>
-            <span style={{ width: 90, textAlign: 'right' }}>Ask</span>
-            <span style={{ width: 100, textAlign: 'right' }}>Mid</span>
-            <span style={{ width: 80, textAlign: 'right' }}>24h</span>
-            <span style={{ width: 70, textAlign: 'center' }}>Trend</span>
-            <span style={{ width: 140, textAlign: 'center' }}>Actions</span>
-          </div>
-          {enrichedItems.map((item) => (
-            <div key={item.symbol} style={s.tableRow}>
-              <span
-                style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}
-                onClick={() => navigate('/ai-chart', { state: { symbol: item.symbol } })}
-                title={`Open ${item.symbol} chart`}
+      <div className="px-4 sm:px-6">
+        <Section
+          title="Tracked symbols"
+          description={`${enrichedItems.length} of ${AVAILABLE_SYMBOLS.length} available instruments`}
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="wl-add" className="sr-only">Add a symbol to your watchlist</label>
+              <select
+                id="wl-add"
+                value={addSymbol}
+                onChange={(e) => setAddSymbol(e.target.value)}
+                className="min-h-[44px] rounded-lg border border-[#1e2d3d] bg-[#111827] px-3
+                           text-[12.5px] text-slate-200 cursor-pointer
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
               >
-                {item.symbol}
-              </span>
-              <span style={{ width: 90, textAlign: 'right', color: '#f87171', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.bid)}</span>
-              <span style={{ width: 90, textAlign: 'right', color: '#4ade80', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.ask)}</span>
-              <span style={{ width: 100, textAlign: 'right', color: '#f8fafc', fontSize: 13, fontWeight: 700 }}>{formatPrice(item.symbol, item.mid)}</span>
-              <span style={{ width: 80, textAlign: 'right', fontWeight: 600, color: (item.change_pct ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
-                {Number.isFinite(item.change_pct) ? `${item.change_pct >= 0 ? '+' : ''}${item.change_pct.toFixed(2)}%` : '—'}
-              </span>
-              <span style={{ width: 70, display: 'flex', justifyContent: 'center' }}>
-                <Sparkline history={item.history} />
-              </span>
-              <span style={{ width: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <button
-                  onClick={() => navigate('/trade', { state: { signal: { symbol: toSlashSymbol(item.symbol) } } })}
-                  style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 8px' }}
-                  title={`Trade ${item.symbol}`}
-                >
-                  ⚡ Trade
-                </button>
-                <button
-                  onClick={() => navigate('/alerts', { state: { symbol: item.symbol } })}
-                  style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}
-                  title={`Set alert for ${item.symbol}`}
-                >
-                  🔔
-                </button>
-                <button
-                  onClick={() => handleRemove(item.symbol)}
-                  style={s.removeBtn}
-                  title="Remove from watchlist"
-                >
-                  ×
-                </button>
-              </span>
+                <option value="">Add symbol…</option>
+                {AVAILABLE_SYMBOLS.filter((sym) => !items.find((i) => i.symbol === sym)).map((sym) => (
+                  <option key={sym} value={sym}>{sym}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={!addSymbol || adding}
+                className="inline-flex min-h-[44px] items-center rounded-lg bg-sky-500/15 px-4
+                           text-[12.5px] font-semibold text-sky-300 ring-1 ring-inset ring-sky-500/40
+                           cursor-pointer transition-colors duration-150 hover:bg-sky-500/25
+                           disabled:cursor-not-allowed disabled:opacity-40
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              >
+                {adding ? 'Adding…' : 'Add'}
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+          }
+        >
+          {error && (
+            <p role="alert" className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-[12.5px] text-red-300
+                                       ring-1 ring-inset ring-red-500/30">
+              {error}
+            </p>
+          )}
+
+          {loading ? (
+            <EmptyState title="Loading your watchlist…" compact />
+          ) : (
+            <DataTable
+              caption="Watchlist — live bid, ask, mid and 24-hour change for each tracked symbol"
+              columns={columns}
+              rows={enrichedItems}
+              rowKey={(r) => r.symbol}
+              initialSort={{ key: 'symbol', dir: 'asc' }}
+              onRowClick={(r) => navigate('/ai-chart', { state: { symbol: r.symbol } })}
+              empty={
+                <EmptyState
+                  title="Your watchlist is empty"
+                  description="Add an instrument to follow its price, open its chart, and trade or set alerts from the row."
+                  icon={Eye}
+                  action={{ label: 'Browse signals', to: '/signals' }}
+                  secondaryAction={{ label: 'Open the ticket', to: '/trade' }}
+                />
+              }
+            />
+          )}
+        </Section>
+
+        <RelatedPages
+          links={[
+            { to: '/trade',    label: 'Trading ticket', hint: 'Place an order on a tracked symbol', icon: Zap },
+            { to: '/signals',  label: 'Signal feed',    hint: 'What the model sees right now',      icon: Radio },
+            { to: '/ai-chart', label: 'Charts',         hint: 'Full chart with indicators',         icon: LineChart },
+            { to: '/alerts',   label: 'Price alerts',   hint: 'Alerts you have already set',        icon: BellPlus },
+            { to: '/journal',  label: 'Trade journal',  hint: 'How these symbols have traded for you', icon: BookOpen },
+          ]}
+        />
+      </div>
     </div>
   );
-};
-
-const s: Record<string, React.CSSProperties> = {
-  page:        { padding: 24, maxWidth: 860, margin: '0 auto' },
-  header:      { marginBottom: 20 },
-  title:       { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
-  subtitle:    { fontSize: 14, color: '#64748b', margin: 0 },
-  addRow:      { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 },
-  select:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
-  addBtn:      { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '8px 16px' },
-  table:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, overflow: 'hidden' },
-  tableHeader: { display: 'flex', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid #334155', fontSize: 12, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 },
-  tableRow:    { display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #1e293b', cursor: 'pointer', transition: 'background 0.1s' },
-  removeBtn:   { background: 'transparent', border: 'none', color: '#475569', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '0 4px' },
-  empty:       { textAlign: 'center', color: '#475569', padding: 40 },
 };
 
 export default WatchlistPage;
