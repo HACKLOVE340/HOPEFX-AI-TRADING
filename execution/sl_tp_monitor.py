@@ -199,7 +199,7 @@ class SLTPMonitor:
         # get_all_positions() returns dict[str, Position]; iterate values.
         pos_iter = positions.values() if isinstance(positions, dict) else positions
         for pos in pos_iter:
-            if pos.position_id in self._closing:
+            if pos.id in self._closing:
                 continue
             mid = self._get_mid(pos.symbol)
             if mid is None or mid <= 0:
@@ -212,10 +212,10 @@ class SLTPMonitor:
                 # would re-pass the `in self._closing` check above and spawn a
                 # duplicate close (double market order). The add() inside
                 # _close_position is now redundant but kept as defense-in-depth.
-                self._closing.add(pos.position_id)
+                self._closing.add(pos.id)
                 asyncio.create_task(
                     self._close_position(pos, reason, mid),
-                    name=f"sltp_close_{pos.position_id}",
+                    name=f"sltp_close_{pos.id}",
                 )
 
     @staticmethod
@@ -295,7 +295,7 @@ class SLTPMonitor:
         Emits Prometheus counter, logs, and sends Telegram alert on success.
         Captures to Sentry and increments error counter if all retries fail.
         """
-        pos_id = pos.position_id
+        pos_id = pos.id
         symbol = pos.symbol
         self._closing.add(pos_id)
         logger.warning(
@@ -370,7 +370,7 @@ class SLTPMonitor:
                             pos_id,
                             reason,
                             attempt,
-                            getattr(order, "id", "?"),
+                            getattr(order, "order_id", None) or getattr(order, "id", "?"),
                             float(actual_fill),
                         )
                         # Close in the position manager ONLY if it still holds the
@@ -384,12 +384,12 @@ class SLTPMonitor:
                                     "SLTPMonitor: pos %s already absent from PM — broker close sent",
                                     pos_id,
                                 )
-                            elif getattr(current, "position_id", pos_id) != pos_id:
+                            elif getattr(current, "id", pos_id) != pos_id:
                                 logger.warning(
                                     "SLTPMonitor: PM position for %s changed (%s != %s) — "
                                     "skipping PM close to avoid closing the wrong position",
                                     symbol,
-                                    getattr(current, "position_id", "?"),
+                                    getattr(current, "id", "?"),
                                     pos_id,
                                 )
                             else:

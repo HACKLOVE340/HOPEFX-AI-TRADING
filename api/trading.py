@@ -379,6 +379,11 @@ class OrderResponse(BaseModel):
     order_id: str
     filled_price: float | None = None
     filled_quantity: float | None = None
+    # True only when a requested stop_loss/take_profit was actually placed with
+    # the broker. Clients that collected a stop from a user MUST check this —
+    # a filled order with stop_loss_placed=False is an UNPROTECTED position.
+    # Null when no bracket was requested. See F151.
+    stop_loss_placed: bool | None = None
 
 
 class ClosePositionResponse(BaseModel):
@@ -699,6 +704,18 @@ async def _route_to_broker(order: "OrderRequest", user_id: str) -> Any:
             quantity=order.quantity,
             **kwargs,
         )
+        # A stop the broker never received must not be reported as accepted.
+        # brokers/base.py cannot attach brackets at market entry for adapters
+        # without bracket support, so it flags the discard here rather than
+        # letting the caller believe the position is protected. See F151.
+        if getattr(result, "brackets_requested", False) and not getattr(result, "brackets_applied", True):
+            logger.error(
+                "Order %s filled but its stop_loss/take_profit was NOT placed with the "
+                "broker — position is UNPROTECTED (symbol=%s user=%s)",
+                getattr(result, "order_id", "?"),
+                order.symbol,
+                user_id,
+            )
         return result
     except HTTPException:
         raise
@@ -909,11 +926,17 @@ async def _record_fill(
     _increment_fill_metrics(order)
     _notify_paper_gate_and_online_learner(order, result)
 
+    # Report the bracket outcome truthfully. None when the caller asked for no
+    # stop; False when they asked and the broker never received it (F151).
+    _brackets_req = getattr(result, "brackets_requested", False)
+    _sl_placed = getattr(result, "brackets_applied", True) if _brackets_req else None
+
     return {
         "status": "success",
         "order_id": order_id,
         "filled_price": fill_price,
         "filled_quantity": filled_qty,
+        "stop_loss_placed": _sl_placed,
     }
 
 

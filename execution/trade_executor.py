@@ -413,7 +413,17 @@ class TradeExecutor:
             client_order_id=client_order_id,
         )
 
-        if order.status.value in ("filled", "partial"):
+        # Broker result shapes differ across connectors: brokers/base.py's
+        # MarketOrderResult carries `status: str` and `order_id`, while some
+        # adapters return an enum status and an `id`. Normalise both once here
+        # rather than assuming either — `order.status.value` raised
+        # AttributeError on every MarketOrderResult, AFTER the broker had
+        # already filled the order, and `order.id` did the same below.
+        _raw_status = getattr(order, "status", "")
+        order_status = str(getattr(_raw_status, "value", _raw_status)).lower()
+        order_ref = getattr(order, "order_id", None) or getattr(order, "id", None) or ""
+
+        if order_status in ("filled", "partial"):
             # The broker has ALREADY EXECUTED this order. A missing or zero
             # fill price is a reporting gap, not a reason to disown the
             # position — brokers that acknowledge a fill and deliver the price
@@ -435,8 +445,8 @@ class TradeExecutor:
                     "position OPENED at provisional price %.5f and flagged "
                     "price_unconfirmed. Reconcile against the broker before "
                     "trusting P&L for this position.",
-                    order.id,
-                    order.status.value,
+                    order_ref,
+                    order_status,
                     order.average_fill_price,
                     _entry_price,
                 )
@@ -444,7 +454,7 @@ class TradeExecutor:
             from execution.position_tracker import Position
 
             position = Position(
-                id=order.id,
+                id=order_ref,
                 symbol=symbol,
                 side="long" if side == "buy" else "short",
                 quantity=order.filled_quantity,
@@ -464,7 +474,7 @@ class TradeExecutor:
             # intent is no longer a reconciliation candidate. Clearing it is
             # best-effort: a journal error must never make us disown a position
             # the broker has actually filled.
-            await self._clear_intent(client_order_id, broker_order_id=order.id)
+            await self._clear_intent(client_order_id, broker_order_id=order_ref)
 
             # Tell the RiskManager a position opened. Without this the
             # _MAX_OPEN_POSITIONS gate in size_order() reads a counter that is
@@ -484,7 +494,7 @@ class TradeExecutor:
             # A market order that only partially filled leaves an unfilled
             # remainder that is NOT resubmitted here. Surface it explicitly so
             # the shortfall is observable rather than silently dropped.
-            if order.status.value == "partial":
+            if order_status == "partial":
                 _remainder = size - order.filled_quantity
                 logger.warning(
                     "TradeExecutor: PARTIAL fill on %s — requested=%s filled=%s "
@@ -493,17 +503,17 @@ class TradeExecutor:
                     size,
                     order.filled_quantity,
                     _remainder,
-                    order.id,
+                    order_ref,
                 )
 
         return ExecutionResult(
-            success=order.status.value in ("filled", "partial"),
-            order_id=order.id,
+            success=order_status in ("filled", "partial"),
+            order_id=order_ref,
             filled_quantity=order.filled_quantity,
             average_price=order.average_fill_price,
             commission=order.commission,
-            status=OrderStatus(order.status.value),
-            message=f"Order {order.status.value}",
+            status=OrderStatus(order_status),
+            message=f"Order {order_status}",
         )
 
     def _resolve_store(self) -> Any:

@@ -342,6 +342,13 @@ class MarketOrderResult:
     commission: float = 0.0
     slippage: float = 0.0
     raw: Any = None
+    # False when a stop_loss/take_profit was supplied by the caller but NOT
+    # placed with the broker. The base adapter cannot attach brackets at market
+    # entry, and silently returning success for a stop that does not exist is
+    # how a trader ends up believing they are protected. Callers that accepted a
+    # bracket from a user MUST surface this. See docs/audit F151.
+    brackets_applied: bool = True
+    brackets_requested: bool = False
 
     @property
     def fill_price(self) -> float:
@@ -551,9 +558,16 @@ class BrokerConnector(ABC):
         connector without bracket support never raises on extra kwargs.
         """
         side_enum = side if isinstance(side, OrderSide) else OrderSide(str(side).upper())
-        if stop_loss is not None or take_profit is not None:
-            logger.debug(
-                "%s.place_market_order: bracket SL/TP not applied at entry (per-broker); SL=%s TP=%s",
+        _brackets_requested = stop_loss is not None or take_profit is not None
+        if _brackets_requested:
+            # WARNING, not DEBUG: the caller asked for a stop and is not getting
+            # one. At DEBUG this was invisible at the default log level, so a
+            # user-entered stop-loss was accepted by the UI, forwarded by the
+            # API, discarded here, and the order still returned 201 Created.
+            logger.warning(
+                "%s.place_market_order: bracket SL/TP NOT placed with the broker "
+                "(no bracket support in this adapter); SL=%s TP=%s — the position "
+                "is UNPROTECTED unless a stop is placed separately.",
                 self.name,
                 stop_loss,
                 take_profit,
@@ -570,7 +584,11 @@ class BrokerConnector(ABC):
             result = await result
         if result is None:
             raise RuntimeError(f"{self.name}: market order rejected (place_order returned None)")
-        return MarketOrderResult.from_order(result)
+        normalised = MarketOrderResult.from_order(result)
+        # Record truthfully whether the caller's bracket made it to the broker.
+        normalised.brackets_requested = _brackets_requested
+        normalised.brackets_applied = not _brackets_requested
+        return normalised
 
     def is_connected(self) -> bool:
         """
