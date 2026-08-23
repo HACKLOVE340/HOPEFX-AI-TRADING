@@ -17,6 +17,12 @@ import { useNavigate } from 'react-router-dom';
 import { journalApi } from '../hooks/useApi';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
+import { PageHeader, Section, RelatedPages } from '../components';
+import { EmptyState } from '../components/EmptyState';
+import {
+  BookOpen, TrendingUp, Shield, Brain, CalendarDays, Download,
+  AlertTriangle, Zap, Target, LineChart,
+} from 'lucide-react';
 import { extractApiError, fmtPnl } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -56,7 +62,7 @@ interface JournalStats {
   rule_deviation_count: number;
 }
 
-type Tab = 'trades' | 'stats' | 'mistakes';
+type Tab = 'trades' | 'stats' | 'mistakes' | 'emotions' | 'weekly';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -97,6 +103,14 @@ function normalizeEntry(e: JournalEntry): JournalEntry {
 const TradeJournal: React.FC = () => {
   const navigate = useNavigate();
   const [tab, setTab]             = useState<Tab>('trades');
+  // `/journal/emotion-stats` and `/journal/weekly-report` are built and were
+  // never called by any page (audit F185). Loaded lazily on first tab open so
+  // the default view costs nothing extra.
+  const [emotions, setEmotions]   = useState<Record<string, unknown> | null>(null);
+  const [weekly, setWeekly]       = useState<Record<string, unknown> | null>(null);
+  const [extraLoading, setExtraLoading] = useState(false);
+  const [extraErr, setExtraErr]   = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [trades, setTrades]       = useState<JournalEntry[]>([]);
   const [mistakes, setMistakes]   = useState<JournalEntry[]>([]);
   const [stats, setStats]         = useState<JournalStats | null>(null);
@@ -177,40 +191,133 @@ const TradeJournal: React.FC = () => {
     }));
   };
 
+  useEffect(() => {
+    if (tab !== 'emotions' && tab !== 'weekly') return;
+    if (tab === 'emotions' && emotions) return;
+    if (tab === 'weekly' && weekly) return;
+    let alive = true;
+    setExtraLoading(true);
+    setExtraErr(null);
+    (tab === 'emotions' ? journalApi.emotionStats() : journalApi.weeklyReport())
+      .then((r) => {
+        if (!alive) return;
+        if (tab === 'emotions') setEmotions(r.data as Record<string, unknown>);
+        else setWeekly(r.data as Record<string, unknown>);
+      })
+      .catch((e: unknown) => { if (alive) setExtraErr(extractApiError(e, 'Could not load this view.')); })
+      .finally(() => { if (alive) setExtraLoading(false); });
+    return () => { alive = false; };
+  }, [tab, emotions, weekly]);
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(true);
+    try {
+      const res = await journalApi.export(format);
+      const blob = new Blob([res.data as BlobPart], {
+        type: format === 'csv' ? 'text/csv' : 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `trade-journal.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setExtraErr(extractApiError(e, 'Export failed.'));
+    }
+    setExporting(false);
+  };
+
   return (
     <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Trade Journal</h1>
-          <p style={s.subtitle}>Every trade logged automatically. Add notes, emotions, and tags to improve.</p>
-          <StaleDataNotice failed={freshness.failed} what={freshness.what} className="mt-2" />
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => navigate('/performance')}
-            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
-          >
-            📈 Performance
-          </button>
-          <button
-            onClick={() => navigate('/risk-calculator')}
-            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
-          >
-            🛡 Risk Calculator
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Trade journal"
+        icon={BookOpen}
+        subtitle="Every trade logged automatically. Add notes, emotions and tags to find what you keep repeating."
+        badge={<StaleDataNotice failed={freshness.failed} what={freshness.what} />}
+        activeTab={tab}
+        onTabChange={(k) => setTab(k as Tab)}
+        tabs={[
+          { key: 'trades',   label: 'All trades', icon: BookOpen,      badge: trades.length },
+          { key: 'stats',    label: 'Stats & tags', icon: Target },
+          { key: 'mistakes', label: 'Mistakes',   icon: AlertTriangle, badge: mistakes.length },
+          { key: 'emotions', label: 'Emotions',   icon: Brain },
+          { key: 'weekly',   label: 'Weekly review', icon: CalendarDays },
+        ]}
+        actions={
+          <>
+            <button
+              onClick={() => void handleExport('csv')}
+              disabled={exporting}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-[12.5px]
+                         font-semibold text-slate-400 ring-1 ring-inset ring-[#1e2d3d] cursor-pointer
+                         transition-colors duration-150 hover:bg-[#141c2b] hover:text-slate-200
+                         disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none
+                         focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <Download size={14} strokeWidth={1.75} aria-hidden />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+          </>
+        }
+      />
 
-      {/* Tabs */}
-      <div style={s.tabs}>
-        {(['trades', 'stats', 'mistakes'] as Tab[]).map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}>
-            {t === 'trades' ? `All Trades (${trades.length})` :
-             t === 'stats' ? 'Stats & Tags' :
-             `⚠ Mistakes (${mistakes.length})`}
-          </button>
-        ))}
-      </div>
+      {extraErr && (tab === 'emotions' || tab === 'weekly') && (
+        <p role="alert" className="mx-4 mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-[12.5px]
+                                   text-red-300 ring-1 ring-inset ring-red-500/30">{extraErr}</p>
+      )}
+
+      {/* ── EMOTIONS TAB — surfaces /journal/emotion-stats (F185) ── */}
+      {tab === 'emotions' && (
+        <div className="mt-4 px-4">
+          <Section
+            title="Emotional state vs outcome"
+            description="Which state of mind precedes your winning and losing trades."
+          >
+            {extraLoading ? (
+              <EmptyState title="Loading emotion statistics…" compact />
+            ) : emotions && Object.keys(emotions).length > 0 ? (
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-[#0b1220] p-3
+                              text-[12px] leading-relaxed text-slate-300">
+                {JSON.stringify(emotions, null, 2)}
+              </pre>
+            ) : (
+              <EmptyState
+                icon={Brain}
+                title="No emotion data yet"
+                description="Tag a few trades with how you felt before entering. Patterns appear once several trades carry a state."
+                links={[{ label: 'Tag your trades', href: '/journal' }]}
+              />
+            )}
+          </Section>
+        </div>
+      )}
+
+      {/* ── WEEKLY TAB — surfaces /journal/weekly-report (F185) ── */}
+      {tab === 'weekly' && (
+        <div className="mt-4 px-4">
+          <Section
+            title="This week"
+            description="A rollup of the week's trades, mistakes and results."
+          >
+            {extraLoading ? (
+              <EmptyState title="Loading this week's review…" compact />
+            ) : weekly && Object.keys(weekly).length > 0 ? (
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-[#0b1220] p-3
+                              text-[12px] leading-relaxed text-slate-300">
+                {JSON.stringify(weekly, null, 2)}
+              </pre>
+            ) : (
+              <EmptyState
+                icon={CalendarDays}
+                title="No trades logged this week"
+                description="The weekly review builds once you have closed trades in the current week."
+                links={[{ label: 'Open the ticket', href: '/trade' }]}
+              />
+            )}
+          </Section>
+        </div>
+      )}
 
       {/* ── TRADES TAB ── */}
       {tab === 'trades' && (
@@ -435,6 +542,14 @@ const TradeJournal: React.FC = () => {
           }
         </>
       )}
+      <RelatedPages
+        links={[
+          { to: '/performance',     label: 'Performance',     hint: 'Sharpe, drawdown and the equity curve', icon: TrendingUp },
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money actually came from',    icon: LineChart },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade before you take it', icon: Shield },
+          { to: '/trade',           label: 'Trading ticket',  hint: 'Place the next order',                  icon: Zap },
+        ]}
+      />
     </div>
   );
 };

@@ -725,9 +725,14 @@ describe('TradeJournal page', () => {
     return wrap(<TradeJournal />);
   }
 
-  it('renders Trade Journal heading', async () => {
+  it('renders the trade journal as the page h1', async () => {
     await renderTradeJournal();
-    expect(screen.getByText('Trade Journal')).toBeInTheDocument();
+    // Queried by role and case-insensitively: the title is sentence case
+    // ("Trade journal"), and asserting the exact string pinned the copy
+    // rather than the structure.
+    const h1s = screen.getAllByRole('heading', { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]).toHaveTextContent(/trade journal/i);
   });
 
   it('renders Trades tab', async () => {

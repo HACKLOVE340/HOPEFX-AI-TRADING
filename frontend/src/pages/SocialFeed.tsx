@@ -8,6 +8,12 @@ import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase, extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
+import { PageHeader, RelatedPages } from '../components';
+import { EmptyState } from '../components/EmptyState';
+import {
+  Radio, ThumbsUp, ThumbsDown, MessageSquare, Zap, ChevronUp, ChevronDown,
+  Sparkles, Check, Lightbulb, Trophy, Users, BookOpen, LineChart,
+} from 'lucide-react';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -167,26 +173,32 @@ const SocialFeed: React.FC = () => {
 
   return (
     <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Community Signal Feed</h1>
-          <p style={s.subtitle}>High-confidence AI signals from the community (≥70% confidence)</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#64748b' }}>Share my signals:</span>
+      <PageHeader
+        title="Community signal feed"
+        icon={Radio}
+        subtitle="High-confidence AI signals shared by the community — 70% confidence and above."
+        actions={
           <button
             onClick={handleOptToggle}
             disabled={optLoading || optedIn === null}
-            style={{
-              ...s.toggleBtn,
-              background: optedIn ? '#059669' : '#334155',
-              color: optedIn ? '#fff' : '#94a3b8',
-            }}
+            aria-pressed={optedIn === true}
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-4 text-[12.5px]
+                        font-semibold cursor-pointer transition-colors duration-150
+                        disabled:cursor-not-allowed disabled:opacity-50
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                        focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]
+                        ${optedIn
+                          ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/25'
+                          : 'text-slate-400 ring-1 ring-inset ring-[#1e2d3d] hover:bg-[#141c2b] hover:text-slate-200'}`}
           >
-            {optLoading ? '…' : optedIn ? '✅ Opted In' : 'Opt In'}
+            {optLoading
+              ? 'Saving…'
+              : optedIn
+                ? <><Check size={14} strokeWidth={2.5} aria-hidden /> Sharing my signals</>
+                : 'Share my signals'}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Symbol filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -217,15 +229,19 @@ const SocialFeed: React.FC = () => {
       {error && <div style={s.errorBox}>{error}</div>}
 
       {filteredItems.length === 0 && !loading && !error && (
-        <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 36 }}>📡</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No signals yet</div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>Check back soon or generate AI signals now.</div>
-          <button onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '7px 18px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', borderRadius: 8, color: '#a78bfa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-            ✨ Generate AI Signals
-          </button>
-        </div>
+        <EmptyState
+          icon={Radio}
+          title={symbolFilter === 'All' ? 'No community signals yet' : `No signals for ${symbolFilter}`}
+          description={
+            symbolFilter === 'All'
+              ? 'Signals appear here when a member shares one at 70% confidence or above. You can generate your own in the meantime.'
+              : 'Clear the symbol filter to see the whole feed, or generate a signal for this instrument.'
+          }
+          links={[
+            { label: 'Generate AI signals', href: '/ai-strategy' },
+            { label: 'Open the ticket', href: '/trade' },
+          ]}
+        />
       )}
 
       <div style={s.feed}>
@@ -254,27 +270,54 @@ const SocialFeed: React.FC = () => {
             </div>
 
             <div style={s.actions}>
-              <button onClick={() => handleReact(item.signal_id, 'up')}
-                style={{ ...s.reactBtn, color: item.your_reaction === 'up' ? '#4ade80' : '#64748b' }}>
-                👍 {item.thumbs_up}
+              <button
+                onClick={() => handleReact(item.signal_id, 'up')}
+                aria-pressed={item.your_reaction === 'up'}
+                aria-label={`Agree with this ${item.symbol} signal (${item.thumbs_up} so far)`}
+                className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]
+                            cursor-pointer transition-colors duration-150 hover:bg-emerald-500/10
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
+                            ${item.your_reaction === 'up' ? 'text-emerald-400' : 'text-slate-500'}`}
+              >
+                <ThumbsUp size={14} strokeWidth={1.75} aria-hidden /> {item.thumbs_up}
               </button>
-              <button onClick={() => handleReact(item.signal_id, 'down')}
-                style={{ ...s.reactBtn, color: item.your_reaction === 'down' ? '#f87171' : '#64748b' }}>
-                👎 {item.thumbs_down}
+              <button
+                onClick={() => handleReact(item.signal_id, 'down')}
+                aria-pressed={item.your_reaction === 'down'}
+                aria-label={`Disagree with this ${item.symbol} signal (${item.thumbs_down} so far)`}
+                className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]
+                            cursor-pointer transition-colors duration-150 hover:bg-red-500/10
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500
+                            ${item.your_reaction === 'down' ? 'text-red-400' : 'text-slate-500'}`}
+              >
+                <ThumbsDown size={14} strokeWidth={1.75} aria-hidden /> {item.thumbs_down}
               </button>
-              <button onClick={() => toggleExpand(item.signal_id)} style={s.commentToggle}>
-                💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
+              <button
+                onClick={() => toggleExpand(item.signal_id)}
+                aria-expanded={expanded === item.signal_id}
+                aria-label={`${expanded === item.signal_id ? 'Hide' : 'Show'} ${item.comment_count} comments`}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]
+                           text-slate-500 cursor-pointer transition-colors duration-150
+                           hover:bg-[#141c2b] hover:text-slate-300 focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-sky-500"
+              >
+                <MessageSquare size={14} strokeWidth={1.75} aria-hidden /> {item.comment_count}
+                {expanded === item.signal_id
+                  ? <ChevronUp size={12} strokeWidth={2.5} aria-hidden />
+                  : <ChevronDown size={12} strokeWidth={2.5} aria-hidden />}
               </button>
               <button
                 onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol, direction: item.direction } } })}
-                style={{
-                  marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer',
-                  background: item.direction === 'BUY' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-                  border: `1px solid ${item.direction === 'BUY' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-                  color: item.direction === 'BUY' ? '#4ade80' : '#f87171',
-                }}
+                aria-label={`Open a ${item.direction} ticket for ${item.symbol}`}
+                className={`ml-auto inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5
+                            text-[12.5px] font-bold cursor-pointer transition-colors duration-150
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+                            focus-visible:ring-offset-[#0d1421]
+                            ${item.direction === 'BUY'
+                              ? 'bg-emerald-500/12 text-emerald-400 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/22 focus-visible:ring-emerald-500'
+                              : 'bg-red-500/12 text-red-400 ring-1 ring-inset ring-red-500/40 hover:bg-red-500/22 focus-visible:ring-red-500'}`}
               >
-                ⚡ Trade
+                <Zap size={13} strokeWidth={2} aria-hidden /> Trade {item.direction}
               </button>
             </div>
 
@@ -315,11 +358,23 @@ const SocialFeed: React.FC = () => {
         </div>
       )}
 
+      <RelatedPages
+        links={[
+          { to: '/leaderboard',  label: 'Leaderboard',   hint: 'Who is performing best right now', icon: Trophy },
+          { to: '/copy-trading', label: 'Copy trading',  hint: 'Follow a trader automatically',    icon: Users },
+          { to: '/ai-strategy',  label: 'AI strategy',   hint: 'Generate your own signals',        icon: Sparkles },
+          { to: '/journal',      label: 'Trade journal', hint: 'How signals worked out for you',   icon: BookOpen },
+          { to: '/ai-chart',     label: 'Charts',        hint: 'Study a symbol before you act',    icon: LineChart },
+        ]}
+      />
+
       {optedIn !== null && (
         <div style={s.infoBanner}>
           {optedIn
-            ? '✅ Your high-confidence signals are visible to the community. Toggle off to stop sharing.'
-            : '💡 Opt in to share your AI signals with the community and build your reputation.'}
+            ? <><Check size={13} strokeWidth={2.5} aria-hidden className="inline mr-1.5 align-[-2px] text-emerald-400" />
+                Your high-confidence signals are visible to the community. Turn sharing off to stop.</>
+            : <><Lightbulb size={13} strokeWidth={1.75} aria-hidden className="inline mr-1.5 align-[-2px] text-amber-400" />
+                Share your AI signals with the community to build your reputation.</>}
         </div>
       )}
     </div>

@@ -461,7 +461,7 @@ describe('SocialFeed page', () => {
   it('shows empty feed state when no signals', async () => {
     await renderSocialFeed();
     await waitFor(() => {
-      expect(document.body.textContent).toMatch(/no signals yet/i);
+      expect(document.body.textContent).toMatch(/no (community )?signals yet/i);
     }, { timeout: 3000 });
   });
 
