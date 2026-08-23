@@ -3292,3 +3292,85 @@ same bcrypt cost.
   * Tokens are issued as HttpOnly cookies, with the refresh cookie scoped to
     /api/auth/refresh (router.py:643-647).
   * Login attempts are recorded for BOTH outcomes, with IP and failure reason.
+
+================================================================================
+RESEARCH / ML PIPELINE — the root cause of F24.
+================================================================================
+
+## F145 — *** F24's ROOT CAUSE: missing features are zero-filled BEFORE scaling, so the model sees extremes, not neutrals *** · CRITICAL (proven by computation)
+F24 recorded that 48.2% of model features are zero-filled live. This is the
+mechanism, and it makes the finding materially worse than "zero-filled" implies.
+
+The training pipeline DOES persist a feature contract:
+    research/pipeline/orchestrator.py:533  self._feature_cols = list(X_train_df.columns)
+    research/pipeline/orchestrator.py:603  "feature_cols": self._feature_cols,   -> run_meta.json
+and the predictor DOES read and align to it — ml/__init__.py:311, :326-330:
+
+    if self._feature_cols:
+        for col in self._feature_cols:
+            if col not in X_in.columns:
+                X_in[col] = 0.0            # <-- silent fill, RAW space
+        X_in = X_in[self._feature_cols]
+    X_in = X_in.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+    if self._scaler is not None:           # :335-337
+        X_in = self._scaler.transform(X_in)
+
+Alignment is correct in principle — the ordering is what breaks it. The fill
+happens in RAW feature space and the scaler runs AFTERWARDS, so a missing
+feature reaches the model as `z = (0 - mean) / std`, not as 0.
+
+COMPUTED for feature scales typical of a gold model:
+    feature                    mean       std    z the model sees
+    RSI_14                    50.00     15.00              -3.33   extreme
+    close price             3000.00    200.00             -15.00   extreme
+    ATR_14                    12.00      4.00              -3.00
+    volume                 50000.00  20000.00              -2.50
+    spread                     0.40      0.15              -2.67
+    MACD_hist                  0.00      1.50               0.00   neutral
+    pct_return_1               0.00      0.01               0.00   neutral
+
+Only features already centred on zero land anywhere near neutral. Every feature
+on a natural scale — price, RSI, ATR, volume, spread — is pushed to a value the
+model saw almost never in training. With 48.2% of the vector missing, the model
+is not being handed an incomplete observation; it is being handed a confident
+description of a market that has never existed.
+
+That the model still reports OOS 0.5734 is consistent with this: the live
+inference distribution is not the distribution it was validated on.
+
+THE CORRECT FIX IS ORDERING, NOT THE FILL VALUE. Fill after scaling (so 0.0
+means "at the training mean"), or better, refuse to predict when coverage falls
+below a threshold — the engine already computes exactly that number (see below).
+
+TWO SMALLER FAIL-OPENS ON THE SAME PATH:
+  * ml/__init__.py:337-339 — `scaler.transform` failure is caught and logged at
+    DEBUG, and the UNSCALED frame is then passed to the base learners.
+  * ml/__init__.py:344-350 — a base learner raising in predict_proba substitutes
+    0.5 (neutral). That one is reasonable and logged at WARNING.
+
+## F146 — the inference engine already MEASURES this, and the measurement is not wired to a refusal · HIGH
+ml/inference_engine.py:231-241 tracks, with the failure named in its own comment:
+    # A stats file whose feature names do not match what the model produces
+    # leaves the guard measuring nothing while looking healthy, so coverage
+    # is part of "active" rather than a separate diagnostic.
+    self._drift_covered: int = 0
+    self._drift_total: int = 0
+    self._drift_uncovered: list[str] = []   # WHICH features are unwatched
+The author identified precisely the train/serve mismatch in F145 and instrumented
+it — coverage counts, plus the names of the uncovered features so an operator can
+see which. What is missing is the step from measurement to refusal: nothing
+blocks a prediction when coverage is 51.8%. This is the same shape as the
+recurring pattern (§3.3 of PLATFORM_ARCHITECTURE.md) — the control exists, is
+correct, and does not gate anything.
+
+## RESEARCH PIPELINE — VERIFIED CLEAN
+  * SYNTHETIC DATA IS OFF BY DEFAULT AND TRAIN-ONLY.
+    orchestrator.py:101  use_synthetic_augment: bool = False  # (slow; off by default)
+    orchestrator.py:550-551  augments X_train/y_train ONLY — the TimeGAN output
+    never touches validation or test. Correct practice; the obvious way to get
+    this wrong is to augment before splitting, and it does not.
+  * `is_synthetic` and `is_forward_filled` are excluded from the feature set
+    (orchestrator.py:328), so the augmentation flags cannot leak as predictors.
+  * research/pipeline/paper_trading_gate.py exists as a named promotion gate
+    rather than models being shipped straight from training.
