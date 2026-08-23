@@ -3519,3 +3519,86 @@ roughly 41 bits, so if the backend ever accepted keys by PATTERN rather than by
 registry lookup this would be a trivially forgeable credential. It does not —
 `verify_api_key` fails closed on an unknown hash. Severity MEDIUM as a broken
 admin feature; it would be CRITICAL if the lookup were ever relaxed.
+
+================================================================================
+MOBILE APP (mobile-app/, 10,940 LOC React Native / Expo)
+================================================================================
+
+## F151 — *** A USER-ENTERED STOP-LOSS IS ACCEPTED, FORWARDED, AND DISCARDED — traced end to end *** · CRITICAL (completes F45/F59)
+F45 and F59 established that stop-losses do not reach the broker. This traces the
+full path from a human typing one into a phone to the line that throws it away:
+
+  1. mobile-app/src/screens/trading/PlaceOrderScreen.tsx:77-84
+         await placeOrder({ symbol, side, quantity: qty, order_type: orderType,
+                            price: ..., stop_loss: sl ?? undefined,
+                            take_profit: tp ?? undefined });
+  2. mobile-app/src/services/apiClient.ts:237-246
+         await _axios.post<Order>('/api/trading/order', order);
+  3. api/trading.py:682-701 `_route_to_broker` — forwards them FAITHFULLY:
+         if order.stop_loss   is not None: kwargs["stop_loss"]   = order.stop_loss
+         if order.take_profit is not None: kwargs["take_profit"] = order.take_profit
+         result = await _user_broker_call(user_id, "place_market_order", ..., **kwargs)
+  4. brokers/base.py:549-560 — the end of the line:
+         # ... they are logged and ignored so a connector without bracket
+         # support never raises on extra kwargs.
+         if stop_loss is not None or take_profit is not None:
+             logger.debug("%s.place_market_order: bracket SL/TP not applied at
+                           entry (per-broker); SL=%s TP=%s", ...)
+
+The order returns **201 Created**. The trader sees the order accepted with the
+stop they set. No stop exists at the broker. The only record is a DEBUG line.
+
+The intent at step 4 is defensible in isolation — don't raise on a connector that
+lacks bracket support. The effect is that the platform collects a risk parameter
+at three layers, validates it, transports it, and silently drops it, while every
+surface above reports success. Refusing the order, or returning the order with
+`stop_loss: null` so the client can show it was not applied, would both be honest.
+Severity CRITICAL: this is the control a retail trader relies on most, offered
+prominently in the UI, and it does not exist.
+
+## F152 — the order API DOES have risk checks; F142 is narrower than it reads · IMPORTANT SCOPE CORRECTION
+Recording this so F142 is not over-applied. `POST /api/trading/order`
+(api/trading.py:974-1010) is properly gated:
+    user:  Depends(require_kyc)
+    role:  Depends(require_role("trader"))
+    rate:  Depends(_order_rate_limit_dep)
+    Idempotency-Key header supported, documented as "place it at most once"
+and its docstring names the pipeline, which the code follows:
+    _validate_order()    — broker availability + prop-firm rules
+    _apply_risk_checks() — RiskManager + CVaR gate
+    _log_compliance()    — pre-execution audit record
+    _route_to_broker()   — broker submission
+So orders originating from a CLIENT (web, mobile) pass through KYC, role, rate
+limiting, RiskManager and a CVaR gate. F142's finding — no risk layer — applies
+to the PaperRunner's INTERNAL signal loop, which publishes straight to the event
+bus and bypasses this endpoint entirely. Two different doors into the same
+broker, one guarded and one not.
+
+## F153 — the mobile order screen omits two gates the web form has · MEDIUM
+mobile-app/src/screens/trading/PlaceOrderScreen.tsx does check the kill switch
+(:70 `Alert.alert('Trading Halted', 'Kill switch is active…')`) and validates
+quantity (:66). It does NOT:
+  * gate on feed staleness — the web `OrderEntryForm.tsx:238-241` consumes
+    `selectFeedLive` and surfaces it in the confirmation precisely so a trader is
+    told when the price they are sizing against may be stale (F124). There is no
+    equivalent here; grepping the screen for stale/feedLive returns nothing.
+  * require a confirmation step — the web form uses `useConfirm()`; the mobile
+    screen submits on tap with only haptic feedback.
+So the same account can place an order from a phone against a frozen price, with
+no confirm, that the web UI would have blocked or warned on.
+
+## MOBILE — VERIFIED CLEAN
+  * CREDENTIALS ARE IN THE KEYCHAIN/KEYSTORE, NOT AsyncStorage.
+    src/store/authStore.ts:9,61-63 uses `expo-secure-store` for BOTH the access
+    and refresh token (`SecureStore.getItemAsync(TOKEN_KEY / REFRESH_KEY)`), and
+    deletes both when validation fails (:76-78). src/services/apiClient.ts:52-56
+    holds them in memory only and injects via an axios interceptor. This is the
+    correct mobile posture and matches the web app's "never localStorage" rule.
+  * AsyncStorage is used ONLY for non-sensitive data — watchlist symbols
+    (useWatchlist.ts) and an offline snapshot (offlineCache.ts).
+  * THE OFFLINE CACHE EXPIRES. offlineCache.ts:31-33 computes
+    `age = Date.now() - new Date(cached.cachedAt)` and REMOVES the entry beyond
+    MAX_AGE_MS rather than serving it. A stale snapshot is discarded, not shown
+    as live — the same discipline as the web watchdog (F124).
+  * A 401 triggers a single guarded refresh attempt (`original._retry` flag,
+    apiClient.ts:76-80), so a failing refresh cannot loop.
