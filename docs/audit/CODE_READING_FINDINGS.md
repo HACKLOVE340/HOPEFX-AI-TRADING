@@ -3740,3 +3740,70 @@ their consumers and stand.
     than flooding, via a module-level flag.
   * `REDIS_TLS_SKIP_VERIFY=true` with `APP_ENV=production` is documented as
     raising RuntimeError at connection time — "this is intentional" (:228-229).
+
+================================================================================
+CONFIG (2,732 LOC) — read consumer-first, per the F101 lesson.
+================================================================================
+
+## F155 — the feature-flag system has TWO interpretations of the same env var, and they disagree · MEDIUM (proven by execution)
+`config/feature_flags.py` declares 67 flags as descriptors. `_FeatureDef.__get__`
+(:121-125) resolves them permissively:
+
+    raw = os.environ.get(self._env_var)
+    if raw is None:
+        return self._default
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+Anything not in that four-item denylist is TRUE — including an empty string.
+
+Every real consumer of the most safety-relevant flag reads the env var DIRECTLY
+with a strict comparison instead:
+    core/live_trading_gate.py:79   os.getenv("FEATURE_LIVE_TRADING","false").lower() == "true"
+    core/live_trading_gate.py:101  same
+    compliance/regulatory_reporter.py:84  same
+
+MEASURED — same variable, same process, two answers (scratchpad/flags.py):
+    value         flags.LIVE_TRADING      direct  == "true"
+    ''            True                    False   <-- DISAGREE
+    'disabled'    True                    False   <-- DISAGREE
+    'flase'       True                    False   <-- DISAGREE
+    'true'        True                    True
+    'True'        True                    True
+    'TRUE'        True                    True
+    '1'           True                    False   <-- DISAGREE
+    'yes'         True                    False   <-- DISAGREE
+
+Five of eight disagree, and the descriptor is uniformly the more permissive.
+The realistic case is not the typo — it is `FEATURE_LIVE_TRADING=1` or `=yes`,
+the two most natural ways an operator writes "on". Those give a SPLIT BRAIN:
+descriptor-gated code paths see the feature enabled while every direct reader
+sees it disabled. An empty value (`FEATURE_X=` in a .env, a ConfigMap key with
+no value, an unresolved `${VAR}`) does the same.
+
+WHY THIS IS MEDIUM AND NOT HIGH — I traced it before assigning severity:
+  * The UNSET default is correct: `FEATURE_LIVE_TRADING` defaults to False
+    (feature_flags.py:177-181), verified by execution.
+  * The controls that actually gate real money are the STRICT readers, and they
+    fail closed. `core/live_trading_gate.py` requires `== "true"` and separately
+    blocks live intent against a paper broker (:111) or outside production
+    (:113). So the permissive descriptor cannot by itself turn on live trading.
+  * `config/startup_validator.py:485-506` calls `validate_trading_mode_config()`
+    and appends blocking errors so the process refuses to start on contradictory
+    configuration.
+The defect is the inconsistency itself: 67 flags resolved one way and read
+another. Fix is one function — make `__get__` accept only an explicit truthy
+list and treat anything unrecognised as the default, or better, as an error.
+
+## CONFIG — VERIFIED CLEAN
+  * The live-trading gate is layered and fails closed: five documented
+    prerequisites (live_trading_gate.py:17-39), a strict flag comparison, a
+    broker-type cross-check, and an APP_ENV cross-check.
+  * `_validate_trading_mode` (startup_validator.py:485) separates BLOCKING
+    inconsistencies (appended to `errors`, refusing startup) from advisory
+    NOTE-level ones (logged loudly, non-blocking) — an explicit, sensible split.
+  * The descriptor survives `importlib.reload()` by design, via an
+    `_is_feature_def = True` sentinel rather than class identity
+    (feature_flags.py:96-98) — a real problem, correctly solved.
+  * `scripts/enable_live_trading.py` exists as a guarded promotion path that
+    "checks all prerequisites before setting FEATURE_LIVE_TRADING=true in .env"
+    rather than leaving operators to edit it by hand.
