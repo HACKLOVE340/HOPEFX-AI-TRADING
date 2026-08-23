@@ -3807,3 +3807,66 @@ list and treat anything unrecognised as the default, or better, as an error.
   * `scripts/enable_live_trading.py` exists as a guarded promotion path that
     "checks all prerequisites before setting FEATURE_LIVE_TRADING=true in .env"
     rather than leaving operators to edit it by hand.
+
+================================================================================
+COMPLIANCE (2,496 LOC)
+================================================================================
+
+## F156 — AML velocity screening silently stops applying to sub-threshold withdrawals when the DB component is degraded · HIGH (proven by execution)
+`compliance/aml.py` `AMLGate.check_withdrawal` needs a SQLAlchemy session to
+evaluate rules 3-5 (velocity, daily aggregate, history). With no session factory:
+    :132-150  elif amount > KYC_THRESHOLD:   -> allowed=False, flags=["NO_DB_SESSION"]
+              ... otherwise FALLS THROUGH to
+    :169      return AMLDecision(allowed=True, reason="Approved", ...)
+
+PROVEN (scratchpad/aml.py, real AMLGate(session_factory=None)):
+    KYC_THRESHOLD = 1000
+      amount=     999  allowed=True   flags=[] reason='Approved'
+      amount=    1000  allowed=True   flags=[] reason='Approved'
+      amount=    1001  allowed=False  flags=['NO_DB_SESSION']
+      amount=   50000  allowed=False  flags=['EXCEEDS_SINGLE_CAP']
+
+So every withdrawal at or below AML_KYC_THRESHOLD (default **$1000**) is approved
+without any velocity or daily-aggregate evaluation. Structuring — repeated $999
+withdrawals — is precisely what rules 3-5 exist to catch, and it is exactly what
+survives this state.
+
+*** THE LOG LINE IS INDISTINGUISHABLE FROM A REAL SCREENING. *** The >$1000 case
+logs at ERROR naming the cause. The sub-threshold pass-through logs (:160-166):
+    LOG INFO: AML: withdrawal approved for user u1 amount 999 USD
+identical to a genuinely screened approval, with `flags=[]` and
+`reason='Approved'`. Nothing in the record distinguishes "screened and clean"
+from "not screened at all".
+
+REACHABILITY — this is not hypothetical. `core/startup_factories.py:2698`:
+    .register("aml", F.init_aml, required=False, deps=["database"])
+`required=False` means its own failure does not block startup, and
+`deps=["database"]` means it never runs at all if the database component is
+degraded. Either path leaves `get_aml_gate()._sf = None` while the app serves
+withdrawals normally.
+
+## F157 — the AMLGate docstring claims the OPPOSITE of what the code does · LOW (doc, safe direction)
+compliance/aml.py:48-52:
+    Stateless AML gate. Requires a SQLAlchemy session_factory to query
+    transaction history. **Falls back to allow-all when DB is unavailable.**
+The code does not allow-all. On a DB query failure it returns `allowed=False`
+with `flags=["DB_UNAVAILABLE"]` and `risk_score=1.0` (:123-131); with no session
+factory it blocks above the threshold (:142-150). The docstring understates the
+control in the safe direction — but it is what a reader auditing this file would
+believe, and it hides the one case that IS allow-all (F156's sub-threshold path).
+
+## COMPLIANCE — VERIFIED CLEAN, and notably good
+  * THE WITHDRAWAL CALLER FAILS CLOSED ON ANY GATE ERROR, with the reasoning
+    written out — payments/wallet.py:369-374:
+        # Fail CLOSED: never allow a money movement when the compliance
+        # gate itself errors. A blocked withdrawal is recoverable; an
+        # unscreened one is a regulatory violation.
+    This is the correct posture and the opposite of the ImportError fail-opens
+    in F132/F133.
+  * A KYC threshold gate blocks amounts above the threshold when
+    `kyc_status != "approved"` (:84-91).
+  * A single-transaction cap is enforced independently of the DB
+    (`EXCEEDS_SINGLE_CAP`, verified firing at $50,000 above).
+  * Blocks emit an audit event via `_emit_block_event`, and when the DB is down
+    the outbox says so rather than dropping silently:
+    "outbox: DB unavailable — event AML_BLOCK not persisted".
