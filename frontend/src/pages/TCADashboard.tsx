@@ -18,6 +18,11 @@
 
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  BarChart3, TrendingDown, LineChart, Zap, BookOpen, Trophy,
+  Target, CheckCircle2, Repeat, ClipboardList,
+} from 'lucide-react';
 import { api as sharedApi } from '../hooks/useApi';
 import {
   useQuery,
@@ -484,22 +489,22 @@ const TCADashboard: React.FC = () => {
       <div style={pg.kpiGrid}>
         <MetricCard label="Mean Slippage"    value={`${meanSlippage.toFixed(2)} bps`}
           delta={meanSlippage > 5 ? 'Above 5 bps' : 'Within threshold'}
-          deltaPositive={meanSlippage <= 5} icon="📉" loading={loading} />
+          deltaPositive={meanSlippage <= 5} icon={<TrendingDown size={14} strokeWidth={2} aria-hidden />} loading={loading} />
         <MetricCard label="P95 Slippage"     value={`${p95Slippage.toFixed(2)} bps`}
-          icon="📊" loading={loading} />
+          icon={<BarChart3 size={14} strokeWidth={2} aria-hidden />} loading={loading} />
         <MetricCard label="Adverse Fill Rate" value={`${(adverseRate * 100).toFixed(1)}%`}
           delta={adverseRate > 0.6 ? 'High' : 'Normal'}
-          deltaPositive={adverseRate <= 0.6} icon="🎯" loading={loading} />
+          deltaPositive={adverseRate <= 0.6} icon={<Target size={14} strokeWidth={2} aria-hidden />} loading={loading} />
         <MetricCard label="Price Improvement" value={`${(improvRate * 100).toFixed(1)}%`}
           delta={improvRate > 0.2 ? 'Good' : undefined}
-          deltaPositive={improvRate > 0.2} icon="✅" loading={loading} />
+          deltaPositive={improvRate > 0.2} icon={<CheckCircle2 size={14} strokeWidth={2} aria-hidden />} loading={loading} />
         <MetricCard label="Mean Latency"     value={`${meanLatency.toFixed(1)} ms`}
           delta={meanLatency > 100 ? '>100ms' : '<100ms'}
-          deltaPositive={meanLatency <= 100} icon="⚡" loading={loading} />
+          deltaPositive={meanLatency <= 100} icon={<Zap size={14} strokeWidth={2} aria-hidden />} loading={loading} />
         <MetricCard label="Signal→Fill"      value={`${meanS2F.toFixed(1)} ms`}
-          icon="🔁" loading={loading} />
+          icon={<Repeat size={14} strokeWidth={2} aria-hidden />} loading={loading} />
         <MetricCard label="Total Trades"     value={totalTrades.toLocaleString()}
-          icon="📋" loading={loading} />
+          icon={<ClipboardList size={14} strokeWidth={2} aria-hidden />} loading={loading} />
       </div>
 
       {/* Trend charts */}
@@ -741,6 +746,14 @@ const TCADashboard: React.FC = () => {
           </div>
         )}
       </div>
+      <RelatedPages
+        links={[
+          { to: '/pnl',        label: 'P&L breakdown', hint: 'What the fills produced',          icon: LineChart },
+          { to: '/trade',      label: 'Trading ticket', hint: 'Place the next order',            icon: Zap },
+          { to: '/journal',    label: 'Trade journal',  hint: 'Notes against each fill',         icon: BookOpen },
+          { to: '/performance', label: 'Performance',   hint: 'Cost impact on returns',          icon: Trophy },
+        ]}
+      />
     </div>
   );
 };

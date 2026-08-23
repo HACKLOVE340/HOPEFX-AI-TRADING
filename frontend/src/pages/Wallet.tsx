@@ -17,6 +17,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { RelatedPages } from '../components';
+import {
+  Wallet as WalletIcon, ArrowDownToLine, ArrowUpFromLine,
+  Briefcase, CreditCard, Receipt, ShieldCheck,
+} from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -295,7 +300,7 @@ const Wallet: React.FC = () => {
     <div className="page-content">
       <PageHeader
         title="Wallet & Payments"
-        icon="💰"
+        icon={WalletIcon}
         subtitle="Manage your balance, transactions, subscriptions, and payment methods"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -417,12 +422,12 @@ const Wallet: React.FC = () => {
       {tab === 'overview' && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <MetricCard icon="↓" label="Total Deposited"
+            <MetricCard icon={<ArrowDownToLine size={14} strokeWidth={2} aria-hidden />} label="Total Deposited"
               value={hasDepositRows
                 ? `$${totalDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                 : '—'}
               accent="green" />
-            <MetricCard icon="↑" label="Total Withdrawn"
+            <MetricCard icon={<ArrowUpFromLine size={14} strokeWidth={2} aria-hidden />} label="Total Withdrawn"
               value={hasWithdrawalRows
                 ? `$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                 : '—'}
@@ -627,6 +632,14 @@ const Wallet: React.FC = () => {
         { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
         { label: '⚙️ Settings', href: '/settings',   color: '#94a3b8' },
       ]} />
+      <RelatedPages
+        links={[
+          { to: '/portfolio', label: 'Portfolio',      hint: 'What the balance is invested in', icon: Briefcase },
+          { to: '/pnl',       label: 'P&L breakdown',  hint: 'How the balance changed',         icon: Receipt },
+          { to: '/upgrade',   label: 'Plan & billing', hint: 'Change your subscription',        icon: CreditCard },
+          { to: '/kyc',       label: 'Verification',   hint: 'Required before withdrawal',      icon: ShieldCheck },
+        ]}
+      />
     </div>
   );
 };
