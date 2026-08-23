@@ -3238,3 +3238,57 @@ The PAPER description is accurate by contrast — OandaPricePoll, TickSignalEngi
 FillRecorder are all real members of paper_runner.py.
 Severity HIGH: the one tool whose entire purpose is telling an operator what will
 run is wrong about the money-moving mode.
+
+================================================================================
+AUTH (2,395 LOC) — previously only auth/jwt.py had been read.
+================================================================================
+
+## F144 — login is user-enumerable by timing, despite an enumeration-safe message · MEDIUM (proven by measurement)
+auth/service.py:427-430, in `login`:
+    if not user:
+        _record(False, "user_not_found")
+        return False, "Invalid credentials", None
+The RESPONSE is identical for a missing user and a wrong password — the author
+deliberately avoided message-based enumeration, and elsewhere uses a named
+constant `_ENUMERATION_SAFE_VERIFY_MESSAGE` (router.py:627) for the same reason.
+
+But the not-found branch returns BEFORE any password hashing happens, while the
+user-exists branch runs bcrypt at cost factor 12 (auth/jwt.py:180). There is no
+dummy-hash compensation anywhere in the file (grepped for dummy/_DUMMY/
+constant.time/timing — no hits).
+
+MEASURED with the real functions:
+    user EXISTS  (bcrypt runs) :   268.75 ms
+    user MISSING (early return):     0.0021 ms
+    observable difference      :   268.74 ms
+269 ms is far above any plausible network jitter, so a single request reveals
+whether an address is registered.
+
+MITIGATIONS THAT ARE REAL — checked before assigning severity:
+  * `/login` carries `Depends(_login_rate_limit_dep)` (router.py:635), an IP
+    rate limit defaulting to 10 requests per 60 s
+    (`AUTH_RATE_LIMIT_REQUESTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS`, :197-198).
+  * Every attempt is written to `LoginAttempt` with ip_address and
+    failure_reason (:404-416), so enumeration leaves an audit trail.
+  * Brute-force lockout is Redis-backed with a DB fallback and is cross-pod
+    (:432-436).
+At 10 requests/minute a bulk sweep is slow, but a targeted check — "is this
+person a customer?" — is one request. Severity MEDIUM. The standard fix is to
+verify against a fixed dummy hash on the not-found path so both branches pay the
+same bcrypt cost.
+
+## AUTH — VERIFIED CLEAN (recorded so it is not re-audited)
+  * TOTP FAILS CLOSED. auth/service.py:235-258 defines the TOTP helpers twice —
+    once against pyotp, once in an `except ImportError` fallback whose
+    `verify_totp` logs "pyotp not installed — 2FA verification always fails" and
+    returns False. That is the correct posture, and notably the OPPOSITE of the
+    ImportError fail-opens in security/self_healer.py (F132) and auth/jwt.py's
+    revocation check (F133).
+  * NO EVENT-LOOP BLOCKING. AuthService is synchronous by design and its
+    docstring claims "auth/router.py already applies this pattern for all 16
+    call-sites". Verified: 17 `asyncio.to_thread` uses in router.py and ZERO
+    unwrapped direct service calls.
+  * Passwords are bcrypt cost 12 with a BLAKE2b pre-hash (auth/jwt.py:178-181).
+  * Tokens are issued as HttpOnly cookies, with the refresh cookie scoped to
+    /api/auth/refresh (router.py:643-647).
+  * Login attempts are recorded for BOTH outcomes, with IP and failure reason.
