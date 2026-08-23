@@ -164,51 +164,40 @@ three layers and does not exist at the broker.
 
 ---
 
-## AUDIT COVERAGE — what has not been read
+## AUDIT COVERAGE — complete
 
-*(Recomputed 2026-08-23. The previous version of this section was stale: it
-listed `cache/`, `config/`, `compliance/`, `portfolio/`, `notifications/`,
-`utils/`, `analytics/`, `infrastructure/`, `resilience/` and `charting/` as
-never opened. All ten have since been read and are removed from the list.)*
+*(Recomputed 2026-08-23, third revision. Every top-level backend package over
+200 LOC has now been read, and all 82 SPA routes have been rendered and
+measured. The two earlier versions of this section are superseded.)*
 
-**180 findings.** Read state by package, measured, not remembered.
+**220 findings.**
 
-### Backend — genuinely never opened (~50,400 LOC)
+### Backend — no package over 200 LOC remains unopened
+The previously-listed gap (`security/`, `monetization/`, `research/`, `data/`,
+`invariants/`, `data_feed/`, `alembic/`, `mobile/`, `tutorials/`, `backtest/`
+— ~50,400 LOC) has been closed. Findings from that pass: **F176-F184**
+(invariants, security), **F203-F208** (monetization), **F214-F215** (research),
+**F216-F217** (data), **F218** (alembic), **F219-F220** (mobile).
 
-| LOC | Package | Why it matters |
-|---:|---|---|
-| 9,924 | `security/` | Largest unread package in a money-moving system. Nothing here has been verified at all. |
-| 9,510 | `monetization/` | Money-adjacent. Every money path audited so far (F31/F32, F135-F138) found a defect. |
-| 9,325 | `research/` | |
-| 6,259 | `data/` | Legacy dir. Confirm nothing live still imports it before deleting. |
-| 5,405 | `invariants/` | **Highest value per line.** F138 found `verify_balance_after` is never called. If the rest of the package is also uncalled, that is a whole class of dead safety checks, not one bug. |
-| 3,739 | `data_feed/` | Second feed path; relationship to `data_layer/` and `market_data/` unverified. |
-| 3,281 | `alembic/` | Migrations. Never checked against the models they claim to produce. |
-| 3,063 | `mobile/` | Backend half of mobile; the RN app was audited, this was not. |
-| 399 | `tutorials/` | |
-| 244 | `backtest/` | Re-export shim; verify it is only a shim. |
+The standing qualifier still applies to the large packages: `api/` (61k),
+`ml/` (31k), `scripts/` (22k), `core/` (21k), `data_layer/` (19k),
+`brokers/` (19k), `execution/` (17k) were entered through their entry points
+and followed along the **live paths**. Files off those paths were not read line
+by line. That is what "audited" means here, and it is not the same as "every
+line read".
 
-### Backend — "audited" means the key paths were traced, not every line
+### Frontend — complete
+**82 of 82 SPA routes** rendered and measured in an authenticated superadmin
+session. Aggregate: 46 routes with zero clickable metrics, 31 navigational dead
+ends, charts on 5 routes, tables on 7, 12 routes that are duplicate aliases.
 
-`api/` (61k), `ml/` (31k), `scripts/` (22k), `core/` (21k), `data_layer/` (19k),
-`brokers/` (19k), `execution/` (17k) were entered through their entry points and
-followed along the live paths. Files off those paths were not read line by line.
-This is the honest limit of what "audited" means for the large packages.
+### The one body of code still unread: `tests/`
+**221,598 LOC across 588 files.** Sampled only. This is now the single largest
+unexamined surface in the repository, and it is not a formality — the sampling
+already produced **F99** (a placeholder-secret test that skips the exact case it
+exists for), **F105** (coverage gates measuring packages with the risk logic
+omitted), **F106** (nothing tests the TradeExecutor/connector join) and **F108**
+(14 tests asserting nothing against a class that has never existed).
 
-### Frontend — 86 routes declared, 15 rendered and measured
-
-`/alerts /backtest /calendar /dashboard /journal /marketplace /news /performance
-/portfolio /settings /signals /superadmin /trade /wallet /watchlist`
-
-**71 routes have never been rendered in a browser.** 110 page components,
-95,838 LOC of TS/TSX. The design-maturity findings (F166-F175) are therefore
-measured on 17% of the product's surface. The pattern has been consistent
-across every page measured, so it likely generalises — but that is an
-inference, not a measurement.
-
-### Tests — 221,598 LOC / 588 files, sampled only
-
-Given F99 (a placeholder-secret test that skips the case it exists for) and
-F108 (14 tests asserting nothing against a class that never existed), the test
-suite is a source of findings in its own right, not a formality. It remains the
-single largest unread body of code in the repository.
+Given that CI has not run for 30+ pushes (**F95**), the test suite's real state
+is unverified by anything except these samples.
