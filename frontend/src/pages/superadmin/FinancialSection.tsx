@@ -13,6 +13,7 @@ import type { RevenueStats, SubscriptionStats, Chargeback, TaxReport, Reconcilia
 import { PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { Plan } from '../../lib/subscription';
 import { asArray } from '../../lib/utils';
+import { Scale, Check, AlertTriangle } from 'lucide-react';
 
 interface Payment {
   payment_id: string;
@@ -588,7 +589,198 @@ const AffiliatePanel: React.FC = () => {
 // Financial tabs
 // ─────────────────────────────────────────────────────────────────────────────
 
-type FinTab = 'overview' | 'chargebacks' | 'tax' | 'reconciliation' | 'affiliates';
+
+// ── Refund policy panel ───────────────────────────────────────────────────────
+// Where a creator's money comes from when a sale is refunded after it has already
+// been paid out. The options and their descriptions come from the API
+// (monetization/refund_policy.py) rather than being duplicated here, so the
+// wording that explains where money goes has exactly one source.
+
+interface PolicyOption {
+  value: string;
+  label: string;
+  description: string;
+  recommended: string;
+}
+
+const RefundPolicyPanel: React.FC = () => {
+  const [options, setOptions] = useState<PolicyOption[]>([]);
+  const [saved, setSaved] = useState('');
+  const [selected, setSelected] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [msgOk, setMsgOk] = useState(true);
+
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await superadminApi.refundPolicy();
+      if (!mountedRef.current) return;
+      const d = res.data as { policy: string; options: PolicyOption[]; note?: string };
+      setOptions(asArray(d, 'options') as PolicyOption[]);
+      setSaved(d.policy);
+      setSelected(d.policy);
+      setNote(d.note ?? '');
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setError(apiErr(e, 'Failed to load refund policy'));
+    } finally { if (mountedRef.current) setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const res = await superadminApi.setRefundPolicy(selected);
+      const d = res.data as { policy: string };
+      setSaved(d.policy);
+      setSelected(d.policy);
+      setMsgOk(true);
+      setMsg('Refund policy saved. It applies to new refunds only.');
+    } catch (e) {
+      setMsgOk(false);
+      // The API refuses rather than silently defaulting, so the reason it gives
+      // is the reason the setting did not change — show it verbatim.
+      setMsg(apiErr(e, 'Could not save the refund policy — it has not changed.'));
+      setSelected(saved);
+    } finally { setBusy(false); }
+  };
+
+  const dirty = selected !== saved && selected !== '';
+
+  if (loading) {
+    return <SectionCard title="Refund Policy" icon={<Scale size={16} />} accent="#f59e0b"><LoadingRows rows={3} /></SectionCard>;
+  }
+  if (error) {
+    return <SectionCard title="Refund Policy" icon={<Scale size={16} />} accent="#f59e0b"><ErrorState message={error} onRetry={load} /></SectionCard>;
+  }
+
+  return (
+    <SectionCard
+      title="Refund Policy"
+      icon={<Scale size={16} />}
+      accent="#f59e0b"
+      subtitle="Where a creator's money comes from when a settled sale is refunded"
+    >
+      <div
+        style={{
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+          padding: '12px 14px', marginBottom: 18,
+          background: '#f59e0b14', border: '1px solid #f59e0b3a', borderRadius: 10,
+        }}
+      >
+        <AlertTriangle size={16} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+        <div style={{ fontSize: 12.5, color: '#cbd5e1', lineHeight: 1.6 }}>
+          Once a payout has settled a sale, the creator&rsquo;s share has left the platform.
+          If that sale is then refunded, this setting decides where the money comes back from.
+          {note && <><br />{note}</>}
+        </div>
+      </div>
+
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+          color: '#64748b', marginBottom: 10, padding: 0,
+        }}>
+          Recovery method
+        </legend>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {options.map(opt => {
+            const active = selected === opt.value;
+            const isSaved = saved === opt.value;
+            return (
+              <label
+                key={opt.value}
+                style={{
+                  display: 'flex', gap: 12, alignItems: 'flex-start',
+                  // 44px minimum target height — the whole row is the control,
+                  // not just the radio dot.
+                  minHeight: 44, padding: '14px 16px',
+                  background: active ? '#f59e0b14' : '#0b1220',
+                  border: `1px solid ${active ? '#f59e0b66' : '#1e293b'}`,
+                  borderRadius: 10, cursor: 'pointer',
+                  transition: 'background 200ms, border-color 200ms',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="refund-policy"
+                  value={opt.value}
+                  checked={active}
+                  disabled={busy}
+                  onChange={() => setSelected(opt.value)}
+                  style={{
+                    width: 18, height: 18, marginTop: 2, flexShrink: 0,
+                    accentColor: '#f59e0b', cursor: 'pointer',
+                  }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: '#f1f5f9' }}>{opt.label}</span>
+                    {opt.recommended === 'true' && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                        color: '#22c55e', background: '#22c55e1a', border: '1px solid #22c55e3a',
+                        borderRadius: 999, padding: '2px 8px',
+                      }}>
+                        Recommended
+                      </span>
+                    )}
+                    {isSaved && (
+                      // Not colour alone: the word "Current" carries the meaning.
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                        color: '#60a5fa', background: '#60a5fa1a', border: '1px solid #60a5fa3a',
+                        borderRadius: 999, padding: '2px 8px',
+                      }}>
+                        <Check size={10} aria-hidden="true" /> Current
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 4, lineHeight: 1.6 }}>
+                    {opt.description}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+        <ActionBtn
+          variant="primary"
+          label={busy ? 'Saving…' : 'Save policy'}
+          onClick={save}
+          disabled={!dirty || busy}
+          loading={busy}
+        />
+        {dirty && !busy && (
+          <ActionBtn variant="ghost" label="Cancel" onClick={() => setSelected(saved)} />
+        )}
+        {msg && (
+          <span
+            role={msgOk ? 'status' : 'alert'}
+            style={{ fontSize: 12.5, color: msgOk ? '#22c55e' : '#ef4444' }}
+          >
+            {msg}
+          </span>
+        )}
+      </div>
+    </SectionCard>
+  );
+};
+
+type FinTab = 'overview' | 'chargebacks' | 'tax' | 'reconciliation' | 'affiliates' | 'policy';
 
 const FIN_TABS: { id: FinTab; label: string; icon: string }[] = [
   { id: 'overview',       label: 'Overview',        icon: '💰' },
@@ -596,6 +788,7 @@ const FIN_TABS: { id: FinTab; label: string; icon: string }[] = [
   { id: 'tax',            label: 'Tax Reports',     icon: '📑' },
   { id: 'reconciliation', label: 'Reconciliation',  icon: '⚖️' },
   { id: 'affiliates',     label: 'Affiliates',      icon: '🤝' },
+  { id: 'policy',         label: 'Refund Policy',   icon: '⚖️' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -814,6 +1007,7 @@ const FinancialSection: React.FC = () => {
       {activeTab === 'tax'            && <TaxReportsPanel />}
       {activeTab === 'reconciliation' && <ReconciliationPanel />}
       {activeTab === 'affiliates'     && <AffiliatePanel />}
+      {activeTab === 'policy'         && <RefundPolicyPanel />}
     </div>
   );
 };

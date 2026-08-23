@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.auth import TokenPayload
 
-from ._shared import RefundBody, _log_superadmin_action, _require_superadmin
+from ._shared import RefundBody, _get_config_store, _log_superadmin_action, _require_superadmin
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +158,75 @@ async def refund_payment(payment_id: str, body: RefundBody, user: TokenPayload =
     from api.billing import process_refund
 
     return await process_refund(payment_id=payment_id, reason=body.reason, user=user)
+
+
+# ── Refund policy ─────────────────────────────────────────────────────────────
+# Where a creator's money comes from when a sale is refunded after it has already
+# been paid out. Three answers are defensible and the choice is the operator's,
+# so it is a setting rather than a constant. See monetization/refund_policy.py.
+
+
+@router.get("/financial/refund-policy")
+async def get_refund_policy(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Return the refund policy in force plus every option and what it means.
+
+    The option descriptions come from monetization.refund_policy rather than the
+    frontend, so the wording that explains where money goes has one source.
+    """
+    from monetization.refund_policy import describe_policies, resolve_refund_policy
+
+    store = _get_config_store()
+    policy = resolve_refund_policy(store=store) if store is not None else resolve_refund_policy()
+    return {
+        "policy": policy.value,
+        "options": describe_policies(),
+        "applies_to": "refunds of sales that have already been settled by a payout",
+        "note": (
+            "Changing this affects new refunds only. The policy applied to a "
+            "refund is recorded on that refund and is never re-derived."
+        ),
+    }
+
+
+@router.put("/financial/refund-policy")
+async def set_refund_policy(body: dict, user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Set the refund policy.
+
+    Refuses anything that is not one of the three policies, and refuses when the
+    store could not persist the change. Returning success for a setting that did
+    not save would leave the operator believing money is being handled one way
+    while it is handled another.
+    """
+    from monetization.refund_policy import REFUND_POLICY_KEY, RefundPolicy, describe_policies
+
+    raw = (body or {}).get("policy")
+    try:
+        policy = RefundPolicy(raw)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown refund policy {raw!r}. Expected one of {[p.value for p in RefundPolicy]}.",
+        ) from None
+
+    store = _get_config_store()
+    if store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Configuration store unavailable — refund policy not changed.",
+        )
+
+    actor = user if isinstance(user, str) else getattr(user, "sub", "unknown")
+    if not store.set(REFUND_POLICY_KEY, policy.value, changed_by=actor):
+        raise HTTPException(
+            status_code=503,
+            detail="Configuration store rejected the write — refund policy not changed.",
+        )
+
+    # Only audited once the write is known to have landed.
+    _log_superadmin_action(user, "refund_policy_change", f"policy={policy.value}")
+    logger.warning("Refund policy changed to %s by %s", policy.value, actor)
+
+    return {"policy": policy.value, "options": describe_policies()}
 
 
 @router.get("/financial/affiliates")

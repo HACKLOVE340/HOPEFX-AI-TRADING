@@ -636,6 +636,11 @@ export const superadminApi = {
   refundPayment:     (id: string, reason: string) => api.post(`/superadmin/financial/payments/${id}/refund`, { reason }),
   affiliateStats:    ()                        => api.get('/superadmin/financial/affiliates'),
 
+  // Refund policy — where a creator's money comes from when a settled sale is
+  // refunded. See monetization/refund_policy.py for what each option means.
+  refundPolicy:      ()                        => api.get('/superadmin/financial/refund-policy'),
+  setRefundPolicy:   (policy: string)          => api.put('/superadmin/financial/refund-policy', { policy }),
+
   // Chargebacks
   chargebacks:       (params?: Record<string, string | number>) => api.get('/superadmin/financial/chargebacks', { params }),
   updateChargeback:  (id: string, body: Record<string, unknown>) => api.patch(`/superadmin/financial/chargebacks/${id}`, body),
