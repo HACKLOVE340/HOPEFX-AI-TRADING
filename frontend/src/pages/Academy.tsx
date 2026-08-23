@@ -15,6 +15,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Lock, Play, Clapperboard } from 'lucide-react';
 import { tutorialsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
@@ -90,7 +91,11 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
           position: 'absolute', bottom: 8, right: 10, fontSize: 18,
           opacity: ep.locked ? 0.85 : 1,
         }}>
-          {ep.locked ? '🔒' : ep.published ? '▶' : '🎬'}
+          {ep.locked
+            ? <Lock size={14} strokeWidth={2} aria-label="Locked on your plan" />
+            : ep.published
+              ? <Play size={14} strokeWidth={2} aria-label="Ready to watch" />
+              : <Clapperboard size={14} strokeWidth={2} aria-label="Not published yet" />}
         </div>
       </div>
 
@@ -274,7 +279,11 @@ const Academy: React.FC = () => {
     }
   }, [navigate, toast]);
 
-  const unlockedCount = episodes.filter((e) => !e.locked).length;
+  // `!locked` means the user's PLAN permits the episode, not that there is
+  // anything to watch. Counting it as "available" told every subscriber that
+  // 15 episodes were available when none were published (audit F201).
+  const unlockedCount  = episodes.filter((e) => !e.locked).length;
+  const watchableCount = episodes.filter((e) => !e.locked && e.published).length;
 
   return (
     <div className="page-content" style={{ flexDirection: 'column', overflow: 'auto', padding: 0 }}>
@@ -311,7 +320,12 @@ const Academy: React.FC = () => {
         ) : (
           <>
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-              {episodes.length} episodes · {unlockedCount} available on your plan
+              {episodes.length} episodes ·{' '}
+              {watchableCount > 0
+                ? `${watchableCount} available to watch now`
+                : unlockedCount > 0
+                  ? `${unlockedCount} included in your plan — none published yet`
+                  : 'none included in your plan yet'}
               {unlockedCount < episodes.length && (
                 <>
                   {' · '}

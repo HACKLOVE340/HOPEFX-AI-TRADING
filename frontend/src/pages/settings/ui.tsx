@@ -1,5 +1,6 @@
 // settings/ui.tsx — shared UI primitives used across all settings sections
 import React from 'react';
+import { AlertTriangle, Check } from 'lucide-react';
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,11 @@ export const Toggle: React.FC<ToggleProps> = ({ id, label, description, checked,
       tabIndex={disabled ? -1 : 0}
       onClick={() => !disabled && onChange(!checked)}
       onKeyDown={(e) => !disabled && (e.key === 'Enter' || e.key === ' ') && onChange(!checked)}
+      // The switch is keyboard-operable but had no visible focus indicator,
+      // so a keyboard user could not see which toggle they were on
+      // (rubric: focus-states, HIGH).
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1421]"
       style={{
         width: 44, height: 24, borderRadius: 12, flexShrink: 0, marginLeft: 16,
         background: checked ? '#22c55e' : '#374151',
@@ -70,7 +76,8 @@ export const Field: React.FC<FieldProps> = ({ label, description, children }) =>
 // ── Input ─────────────────────────────────────────────────────────────────────
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  icon?: string;
+  /** Lucide element preferred; a string is a legacy glyph call site (F170). */
+  icon?: React.ReactNode;
 }
 
 export const Input: React.FC<InputProps> = ({ icon, style, ...props }) => (
@@ -148,7 +155,8 @@ interface SectionHeaderProps {
   description?: string;
   /** Alias for `description` — accepted for backwards compatibility. */
   desc?: string;
-  icon?: string;
+  /** Lucide element preferred; a string is a legacy glyph call site (F170). */
+  icon?: React.ReactNode;
 }
 
 export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, description, desc, icon }) => {
@@ -182,18 +190,24 @@ export const Button: React.FC<ButtonProps> = ({
   const border = variant === 'secondary' ? '1px solid #334155'
     : variant === 'ghost' ? '1px solid transparent'
     : 'none';
-  const padding = size === 'sm' ? '6px 14px' : size === 'lg' ? '14px 32px' : '10px 20px';
+  // 44px minimum target (rubric: touch-target-size, CRITICAL). `sm` was
+  // ~26px tall — and this kit renders the buttons that delete accounts, revoke
+  // API keys and change broker credentials.
+  const padding = size === 'sm' ? '0 14px' : size === 'lg' ? '0 32px' : '0 20px';
   const fontSize = size === 'sm' ? 12 : size === 'lg' ? 16 : 14;
 
   return (
     <button
       {...props}
       disabled={disabled || loading}
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
       style={{
         padding, fontSize, fontWeight: 600, background: bg, border,
+        minHeight: size === 'lg' ? 52 : 44,
         borderRadius: 8, color: '#fff', cursor: disabled || loading ? 'not-allowed' : 'pointer',
         opacity: disabled || loading ? 0.6 : 1, transition: 'opacity 0.15s, transform 0.1s',
-        display: 'inline-flex', alignItems: 'center', gap: 6,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         ...style,
       }}
     >
@@ -255,8 +269,16 @@ export const SaveBar: React.FC<SaveBarProps> = ({ onSave, saving, saved, error }
     display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
     gap: 12, marginTop: 24, paddingTop: 20, borderTop: '1px solid #1e293b',
   }}>
-    {error && <span style={{ fontSize: 13, color: '#fbbf24' }}>⚠️ {error}</span>}
-    {saved && !saving && <span style={{ fontSize: 13, color: '#22c55e' }}>✅ Saved</span>}
+    {error && (
+      <span role="alert" style={{ fontSize: 13, color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <AlertTriangle size={14} strokeWidth={2} aria-hidden /> {error}
+      </span>
+    )}
+    {saved && !saving && (
+      <span role="status" style={{ fontSize: 13, color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <Check size={14} strokeWidth={2.5} aria-hidden /> Saved
+      </span>
+    )}
     <Button onClick={onSave} loading={saving} variant="primary">
       {saved && !saving ? 'Saved' : 'Save changes'}
     </Button>
