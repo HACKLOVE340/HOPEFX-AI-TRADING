@@ -4036,3 +4036,78 @@ would learn something is wrong are impaired.
     engine, self-healer, decision engine, risk manager, kill switch, tracing,
     data feed, websocket, event bus, config store, celery, env vars and the
     signal engine — genuinely broad coverage.
+
+================================================================================
+RESILIENCE / UTILS / ANALYTICS
+================================================================================
+
+## F143-RESOLVED — `--dry-run` describes `core/main_loop.py`, a FIFTH orchestration path · IMPORTANT CORRECTION
+F143 recorded that `run.py --dry-run` promises FaultGuard, MarketIngest,
+NewsCalendarFeed, Gatekeeper, FIXRouter and EventBus for live mode while
+`hopefx_engine.py` contains zero references to all six. That observation was
+correct; the conclusion — "stale description of a superseded architecture" — was
+only half right. Those six components ARE wired together, just not in
+HopeFXEngine.
+
+`core/main_loop.py:50-56` imports EXACTLY the six the dry-run names:
+    from core.event_bus            import CH_BREACH, bus
+    from data.market_ingest        import MarketIngest
+    from data.news_calendar_feed   import NewsCalendarFeed
+    from execution.fix_router      import FIXRouter
+    from risk.gatekeeper           import Gatekeeper
+    from utils.fault_guard         import FaultGuard
+and `run.py:396-399`:
+    logger.warning("HopeFXEngine not available — falling back to core.main_loop")
+    from core.main_loop import MainLoop
+
+So `MainLoop` is a FIFTH entry-point pipeline — a fallback used when
+`HopeFXEngine` cannot be imported. The `--dry-run` text is an accurate
+description of the FALLBACK path and an inaccurate one of the path that normally
+runs. Both statements in F143 stand; the reason is now known.
+
+Updated entry-point count (PLATFORM_ARCHITECTURE.md §2 said four):
+    app.py · paper_runner · hopefx_engine · connect_to_life · **core/main_loop**
+`Gatekeeper` is genuinely invoked here, so the F143 note that it is "named only
+in docstrings" applies to `risk/manager.py`, not to the repository.
+
+## F161 — a purpose-built shared retry module is unused while three subsystems hand-rolled their own · LOW
+`resilience/retry.py` (258 LOC) exports named, purpose-fitted decorators —
+`retry`, `redis_retry`, `broker_retry`, `http_retry` — and `resilience/__init__.py:62-67`
+re-exports them. Grepping `from resilience import` / `from resilience.retry import`
+outside the package returns **zero hits**.
+
+Meanwhile three subsystems each wrote their own:
+    database/connection.py:442        execute_with_retry
+    cache/market_data_cache.py:351    _connect_with_retry
+    data_feed/multi_source_feed.py:690 _fetch_with_retry
+Not a defect — each works — but it is the eighth instance of the pattern, and
+retry/backoff semantics diverging across a broker path, a cache path and a feed
+path is how one of them ends up hammering a rate-limited API.
+
+## F162 — the analytics package has essentially no consumers · LOW (compounds F108)
+`analytics/` is 2,850 LOC. Outside the package only three references exist:
+    backtesting/engine_config.py:1089   from analytics.monte_carlo import run_bootstrap
+    utils/component_status.py:365       from analytics import __version__   (version probe)
+    api/admin.py:985                    a comment, not an import
+`PerformanceAnalytics` (analytics/performance.py, 768 LOC) is aliased to
+`AnalyticsEngine` in `__init__.py:51` and **neither name is imported anywhere**.
+Combined with F108 — 14 tests in one file that assert nothing because they
+reference `PerformanceAnalyzer`, a class that has never existed — the analytics
+surface is simultaneously untested and unconsumed. Only `analytics.monte_carlo`
+is genuinely live.
+
+## RESILIENCE — VERIFIED CLEAN, and the circuit breaker is well built
+`resilience/service_circuit_breakers.py` has 22 external importers and is a
+correct three-state machine:
+  * CLOSED / OPEN / HALF_OPEN with `failure_threshold=5`, `success_threshold=3`
+    and a HALF_OPEN probe limit (:62-80, :148-151).
+  * `call()` wraps BOTH the async and sync paths in
+    `asyncio.wait_for(..., timeout=call_timeout_seconds)`, and runs sync
+    functions via `loop.run_in_executor` rather than blocking the event loop
+    (:157-168).
+  * `CircuitBreakerOpenError` is re-raised WITHOUT counting as a failure
+    (:171-172) — so an open circuit does not deepen its own failure count.
+  * `excluded_exceptions` (documented example: auth errors) are re-raised
+    without counting (:173-175) — a real distinction most implementations miss.
+  * `_maybe_transition_to_half_open` (:185-190) compares elapsed time against
+    `timeout_seconds` and resets the probe counter on transition.
