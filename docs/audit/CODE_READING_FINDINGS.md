@@ -5998,3 +5998,88 @@ produced a dramatic false number (see also the 89%→34% capability gap and the
 **a measurement that makes the codebase look far worse than the surrounding
 evidence suggests is more likely to be a broken measurement than a discovery.**
 Check it against a case known to work before reporting it.
+
+---
+
+# DOMAIN: `mobile/` (3,063 LOC), `data_feed/` (3,739), `tutorials/` (399)
+
+## F219 — push notifications report success when nothing is sent · HIGH
+
+`mobile/push_notifications.py:173`:
+
+```python
+if not self.fcm_enabled or not tokens:
+    print(f"[FCM-LOG] {user_id} -> {title}: {body}")
+    logger.info("[FCM-LOG] %s -> %s: %s", user_id, title, body)
+    return True                      # <- reports SUCCESS for a no-op
+```
+
+**Executed on the running configuration:**
+
+```
+fcm_enabled                 : False
+send_notification() returned: True
+device tokens registry      : {}
+```
+
+All three Firebase variables (`FIREBASE_CREDENTIALS_BASE64`,
+`FIREBASE_CREDENTIALS_JSON`, `FIREBASE_SERVER_KEY`) are **blank in
+`.env.example`**, so this is the default state of a fresh deployment: every
+push notification returns `True` and reaches no device.
+
+The callers cannot tell. `api/trading.py:780` `_send_fill_push` and
+`api/signals.py:456` both invoke it and receive `True`. A trader who has
+enabled fill notifications gets none, and nothing in the system registers a
+failure.
+
+**Credit where it is due — the diagnostic endpoint is honest.**
+`api/mobile.py:/test-push` returns the true state alongside the misleading
+boolean:
+
+```json
+{"sent": true, "fcm_enabled": false, "devices": 0,
+ "note": "Notification logged (no FCM key)"}
+```
+
+So an operator who reads the whole payload learns the truth. But `sent: true`
+sits next to a body that reads *"Push notifications are working correctly."*,
+and a mobile client that renders `sent` without also reading `note` shows a
+success confirmation for a notification that does not exist.
+
+**Fix:** return `False` (or a tri-state) when `fcm_enabled` is false or the
+user has no tokens. "I logged it instead" is not "sent". This is the same shape
+as **F204** (payout `PAID` with no transfer), **F159** (critical alerts that
+never leave the log) and **F176** (a scorecard that cannot fail) — the most
+repeated defect in this codebase is *a success value returned for work that did
+not happen*.
+
+## F220 — device tokens live in a module-level dict · MEDIUM
+`mobile/push_notifications.py:43` — `_device_tokens: dict[str, list[str]] = {}`.
+No persistence anywhere in the module.
+
+Every restart drops every device registration. After a deploy, `get_tokens()`
+returns `[]` for every user, which routes straight into the F219 branch — so
+even a **correctly configured** FCM deployment silently stops delivering after
+a restart until each user reopens the app and re-registers. Under more than one
+worker, a token registered against one worker is invisible to the others, so
+delivery becomes a coin flip.
+
+Same shape as **F208** (creator balances in RAM), lower stakes but the same
+fix: persist the registry.
+
+## VERIFIED — `data_feed/` (3,739 LOC)
+Live and reachable: `NuclearStreamer` (1,092 LOC) is imported by
+`hopefx_engine.py:796`, `api/server.py:58/207`, `brokers/oanda_ws.py:27` and
+`trader_full.py:128`. Its anomaly-filter behaviour was audited earlier (the
+arrival-order finding). `multi_source_feed.py` (825 LOC) contains **zero**
+`except Exception` blocks that swallow into a `return`/`pass` — no silent
+fallbacks in the feed-selection path, which is the failure mode that matters
+most here. `redis_tick_writer.py` degrades to no-op metric stubs when
+`prometheus_client` is absent rather than crashing the writer — a deliberate
+and correctly-scoped fallback.
+
+## VERIFIED — `tutorials/` (399 LOC)
+Two production callers (`api/tutorials.py:386`, `scripts/generate_tutorials.py`),
+both to `tutorials.generator`. Small, reachable, no findings. Note the content
+gap is separate and already recorded as **F201** (`/academy` advertises 15
+episodes, all "COMING SOON").
