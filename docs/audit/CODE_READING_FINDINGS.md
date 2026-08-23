@@ -4181,3 +4181,91 @@ Verified by resolving every import-shaped reference, not by a module-name grep:
     transparency   855        2             explainability 763   2
     shadow         771        2             replay        889   1
     forensics      188        1             teams        1068   live (above)
+
+================================================================================
+RUNTIME / VISUAL AUDIT — the app booted and driven with a real browser.
+This closes the one gap the whole audit had: I had read 100% of the frontend
+code and seen 0% of the rendered result.
+================================================================================
+
+## HOW IT WAS RUN (so this is reproducible)
+    APP_ENV=development PAPER_TRADING=true SKIP_MIGRATIONS=true STARTUP_GATE=false
+    DATABASE_URL=sqlite:///…  ASYNC_DATABASE_URL=sqlite+aiosqlite:///…
+    REDIS_URL=redis://127.0.0.1:6399/0 (deliberately dead)  ENGINE_AUTOSTART=false
+    uvicorn app:app --port 8125
+    Playwright + /opt/pw-browsers/chromium-1194, viewport 1440x900.
+All five routes returned 200: `/`, `/login`, `/dashboard`, `/trade`, `/godmode/`.
+
+## F164 — the public landing ticker's "Live data" indicator is HARDCODED green · MEDIUM (proven visually and in source)
+frontend/src/pages/LandingPage.tsx:1308-1310:
+
+    <div className="flex items-center gap-1.5">
+      <span className="w-1.5 h-1.5 rounded-full bg-bull animate-pulse-fast" />
+      <span className="text-2xs text-slate-500">Live data</span>
+    </div>
+
+`bg-bull` is an unconditional class. There is no `feedLive ? … : …`, no reference
+to `selectFeedLive`, no stale check — the dot is green and pulsing on every
+render regardless of whether a single tick has arrived.
+
+VISUALLY CONFIRMED: with Redis pointed at a dead port and no price feed reachable,
+the screenshot shows all six ticker symbols (XAU/USD, EUR/USD, GBP/USD, USD/JPY,
+BTC/USD, XAG/USD) rendering **skeleton loaders** — correctly, no fabricated
+prices — while the green "● Live data" dot pulses beside them.
+
+This is notable because F124 credited the frontend for solving exactly this on
+the authenticated side: `useWebSocket.ts` has a real stale-feed watchdog and
+`selectFeedLive` is a correct three-way conjunction, with a comment explaining
+that a stalled server keeps `wsStatus` at 'connected'. That discipline was not
+applied to the public landing page, which is the first thing a prospective
+customer sees. Fix is one ternary against the same store selector.
+
+## F165 — the two UIs use different visual identities · LOW (design)
+Seen side by side:
+  * `/` (frontend) — near-black background, CYAN primary accent (buttons, badge,
+    logo mark), gold/amber for the "gold & forex" emphasis.
+  * `/login` (frontend) — deep BLUE gradient background with a blue primary
+    button, a visibly different hue from the landing page's cyan.
+  * `/godmode/` (dashboard) — dark navy, BLUE primary accent, orange emphasis.
+Three surfaces of one product, three palettes. Not a defect in the engineering
+sense, but for a platform asking people to trust it with money, the login screen
+looking like a different product from the landing page is a real credibility
+cost. Worth one design token pass.
+
+## NOT A DEFECT — a false positive I caught by verifying, recorded so it is not
+## re-raised
+My first screenshot showed the landing hero stats as
+    0+ Built-in strategies · 0% Uptime SLA · <0ms Signal latency · 0 OANDA
+against `/godmode/`'s correct `9+ · 99.9% · <50ms · OANDA`. That looked like a
+live-data computation returning zeros on the primary marketing page.
+It is not. `LandingPage.tsx:153-158` holds the correct constants
+(`value: 9`, `99.9`, `50`, `display: 'OANDA'`) and they are ANIMATED COUNTERS
+gated on `inView` (:365). The stats row sat at the bottom edge of the 900px
+viewport, so the counters had not started. Scrolling them into view and waiting:
+    Built-in strategies    '9+'
+    Uptime SLA             '99.9%'
+    Signal latency         '<50ms'
+    OANDA integration      'OANDA'
+Correct. The lesson is the same one that has run through this audit: a rendered
+zero is not evidence of a computed zero.
+
+## RUNTIME — VERIFIED CLEAN
+  * THE AUTH GUARD WORKS. `/dashboard` and `/trade` both render the Sign In page
+    (title 'Sign In — HOPEFX'), not a flash of protected content. Verified by
+    page title and body text, not by inspection.
+  * NO FABRICATED PRICES UNDER FAILURE. With every feed unreachable the ticker
+    shows skeleton loaders and the stats row shows `Total trades 0`,
+    `Win rate —`, `Avg return —`. That is F124's "formatters degrade to a dash,
+    never to a plausible zero", confirmed at runtime.
+  * The startup gate is real: before `STARTUP_GATE=false`, every page returned
+    503 `{"detail":"Server is starting up…","status":"starting"}` from
+    core/middleware.py:671-678 while `/api/health/live` returned 200. Liveness
+    and readiness are correctly distinguished.
+  * `/godmode/` serves independently at its own path, confirming F148's dual-UI
+    finding at runtime.
+  * Degradation logging is honest — the boot log names each missing dependency
+    explicitly, e.g. "Rate limiter: Redis unavailable … using in-process fallback
+    for 30s. This does NOT enforce limits across multiple pods." (F163's praise,
+    observed live) and "Price engine returned 100 flat bars for XAUUSD (no price
+    movement) — discarding rather than feeding zero-range features to the
+    predictor."
