@@ -4352,3 +4352,106 @@ The problem is not craft; `/trade` proves the team can build a good surface. The
 problem is DENSITY WITHOUT HIERARCHY on `/dashboard`, and a nav that has grown
 to 83 routes without an information architecture to hold them. The fixes are
 layout and naming, not a redesign.
+
+================================================================================
+UI/UX MATURITY AUDIT — measured against the `ui-ux-pro-max` skill's
+pre-delivery checklist, logged in as superadmin/elite/KYC-approved so nothing
+is plan-gated. 12 pages x 3 viewports (1440, 1024, 375).
+================================================================================
+
+## METHOD CORRECTION — my first pass was measuring the paywall, not the pages
+Recording this because it nearly produced a completely wrong verdict. On the
+FREE test account `/backtest` returned 132 characters of content:
+    "🔒 Professional plan required. This feature is available on the
+     Professional plan and above. Upgrade to unlock it."
+I read the low character counts across pages as "the pages are too basic". They
+were not — the plan gate was working exactly as designed. Re-run as
+superadmin with plan=elite and kyc=approved, `/backtest` returns 764 characters
+of real UI. **Every number below is from the elite account.** A thin page is
+only evidence of a thin page when the account can actually see it.
+
+## F170 — EMOJI ARE USED AS ICONS THROUGHOUT: 129-181 PER PAGE · HIGH (design)
+The `ui-ux-pro-max` skill lists this first under "Common Rules for Professional
+UI — frequently overlooked issues that make UI look unprofessional":
+    | **No emoji icons** | Use SVG icons (Heroicons, Lucide, Simple Icons)
+    |                    | Don't use emojis like 🎨 🚀 ⚙️ as UI icons
+
+MEASURED, emoji rendered as icon glyphs inside nav/button/link labels:
+    /settings 181 · /superadmin 153 · /wallet 141 · /watchlist 140
+    /performance 139 · /dashboard 135 · /backtest 134 · /journal 132
+    /portfolio 132 · /signals 130 · /trade 129 · /marketplace 129
+Corroborated by the inverse measure — **SVG elements per page: 0** on
+/portfolio, /signals, /journal, /wallet, /backtest, /settings, /performance,
+/marketplace and /superadmin. Only /trade (12), /dashboard (7) and /watchlist
+(4) contain any SVG at all.
+
+So the icon system is not "mostly SVG with some emoji". It is emoji, with SVG
+as the exception. Concretely: 📊 Dashboard · ⚡ Live Feed · 💹 Trade ·
+💼 Portfolio · 👁 Watchlist · 📅 Economic Calendar · 🤖 AI Assistant ·
+🔔 Price Alerts · 🟢 System Status · 📚 Documentation · 📈 Analytics ·
+🧠 AI Strategy · 🌍 Geopolitical · 📓 Journal · 🛡 Risk Calc · 📡 Signals ·
+🔁 Copy Trading.
+
+WHY THIS IS THE SINGLE HIGHEST-LEVERAGE DESIGN FIX, and it is not taste:
+  * Emoji render differently on every OS and browser — the product looks
+    different to each customer, and unrecognisable on some Linux/Android fonts.
+  * They cannot inherit `currentColor`, so they do not respond to theme, hover,
+    active or disabled state. Every other element in the nav does.
+  * They are announced literally by screen readers ("chart increasing trade"),
+    which is why the accessibility numbers below are worse than they look.
+  * They cannot be sized on the optical grid — this is why the nav labels
+    wobble.
+This is the difference between "a serious trading terminal" and "a project".
+Swapping to one SVG set (Lucide or Heroicons, per the skill) is mechanical.
+
+## F171 — 82-128 touch targets under 44x44px on every page · HIGH (accessibility)
+The skill ranks Touch & Interaction as **priority 2, CRITICAL**:
+    `touch-target-size` — Minimum 44x44px touch targets
+MEASURED (clickable elements below 44px in either dimension, at 1440px):
+    /settings 128 · /superadmin 122 · /dashboard 119 · /portfolio 104
+    /performance 98 · /trade 97 · /wallet 97 · /watchlist 92
+    /marketplace 86 · /signals 84 · /backtest 84 · /journal 82
+The dense-terminal aesthetic is a legitimate choice on desktop with a mouse.
+It is not a legitimate choice on the phone viewport the same code serves, and
+this app ships a React Native client too — a trader closing a position on a
+handset is exactly the moment precision matters most.
+
+## F172 — 10 icon-only buttons on /dashboard have no accessible name · MEDIUM
+The skill ranks Accessibility **priority 1, CRITICAL**: `aria-labels` —
+aria-label for icon-only buttons. `/dashboard` has 10 buttons whose visible
+text is ≤2 characters with neither `aria-label` nor `title`; `/portfolio` has 5.
+Combined with F170 these are unusable by screen reader: an icon-only button
+whose only content is an emoji announces the emoji's Unicode name.
+
+## F173 — document structure is nearly absent · MEDIUM (accessibility/SEO)
+Headings (h1/h2/h3) per page: **/dashboard 0**, then 1 on /trade, /portfolio,
+/signals, /journal, /wallet, /watchlist, /backtest, /performance and
+/superadmin; 2 on /settings; 9 on /marketplace.
+A page with zero headings has no landmark structure to navigate by. Notably
+/marketplace — a public-facing page — has 9, so the team knows how; the
+authenticated app does not do it.
+
+## F174 — zero data tables and zero chart canvases across the product · MEDIUM (design maturity)
+Measured `<table>` elements: **0 on every page except /superadmin (1)**.
+Measured `<canvas>` / chart surfaces: **0 on every page**.
+For a platform whose landing page promises "institutional-grade AI", trade
+history, allocation, equity curves and backtest results are being rendered as
+div grids rather than semantic tables, and there is no canvas-based charting
+anywhere. Two consequences:
+  * The skill's `data-table` rule ("provide table alternative for
+    accessibility") cannot be satisfied — there is no table to fall back to,
+    and no sortable/exportable structure a trader expects.
+  * Equity and allocation are shown as SVG/DOM rather than a charting surface,
+    which caps what can be displayed (no crosshair, no zoom, no overlay
+    indicators) — thin for a product of this ambition.
+This is the concrete, measurable form of "too basic for what the app should be
+doing".
+
+## RESPONSIVE — VERIFIED GOOD, and better than expected
+At **375px** (the skill's mobile checkpoint) **no page has horizontal page
+overflow** — `hOver=False` on all 12. Clipped sub-elements at 375px: 0 on eight
+of twelve pages, 2 on /portfolio, 10 on /settings, 16 on /dashboard.
+And `cursor-pointer` — which measured 25-27 violations per page on the FREE
+account — is **0 on every page** for a full-access user, so those were gated
+placeholder rows, not a real defect. The responsive layer is sound; the fixes
+needed are iconography, target size and semantics, not the grid.
