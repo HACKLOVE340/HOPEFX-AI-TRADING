@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 
 // ─── Mocked API surface (only the modules the five pages consume) ───────────────
@@ -175,7 +176,7 @@ describe('NewsSentiment page', () => {
 // ─── ML-Ops Dashboard ───────────────────────────────────────────────────────────
 describe('MLDashboard page', () => {
   it('shows a loading state first', () => {
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     expect(screen.getByText('Loading pipeline…')).toBeInTheDocument();
   });
 
@@ -183,14 +184,14 @@ describe('MLDashboard page', () => {
     mocks.mlOpsApi.health.mockReturnValue(ok({ running: true, retraining_state: 'idle', drift_history_count: 3, latest_drift: { is_drifted: false } }));
     mocks.mlOpsApi.shadow.mockReturnValue(ok({ shadows: { 'model-2026-01-01': { auc: 0.7 } } }));
     mocks.mlOpsApi.retrainHistory.mockReturnValue(ok({ history: ['retrained 2026-01-01'] }));
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     expect(await screen.findByText('Running')).toBeInTheDocument();
     expect(screen.getByText('model-2026-01-01')).toBeInTheDocument();
     expect(screen.getByText('retrained 2026-01-01')).toBeInTheDocument();
   });
 
   it('triggers a retrain and shows the returned message', async () => {
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     await screen.findByText('No shadow deployments.');
     fireEvent.click(screen.getByText('Trigger Retrain'));
     expect(await screen.findByText('Retrain triggered.')).toBeInTheDocument();
@@ -199,7 +200,7 @@ describe('MLDashboard page', () => {
 
   it('promotes a shadow model', async () => {
     mocks.mlOpsApi.shadow.mockReturnValue(ok({ shadows: { 'model-x': {} } }));
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     fireEvent.click(await screen.findByText('Promote'));
     await waitFor(() => expect(mocks.mlOpsApi.promote).toHaveBeenCalledWith('model-x'));
     expect(await screen.findByText('Model promoted.')).toBeInTheDocument();
@@ -209,7 +210,7 @@ describe('MLDashboard page', () => {
     mocks.mlOpsApi.health.mockReturnValue(fail());
     mocks.mlOpsApi.shadow.mockReturnValue(fail());
     mocks.mlOpsApi.retrainHistory.mockReturnValue(fail());
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     expect(await screen.findByText('Failed to load ML-Ops data.')).toBeInTheDocument();
   });
 });

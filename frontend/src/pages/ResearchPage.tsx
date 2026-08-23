@@ -14,6 +14,11 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
+  Microscope, BarChart3, BookOpen, Activity,
+} from 'lucide-react';
 import { researchApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -299,7 +304,7 @@ const ResearchPage: React.FC = () => {
           {!nbLoading && notebooks.length === 0 && (
             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🔬</div>
+              <Microscope size={30} strokeWidth={1.5} aria-hidden style={{ marginBottom: 12, color: '#475569' }} />
               <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>No research notebooks yet</div>
               <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>Create one to start AI-powered market analysis</div>
               <button onClick={() => navigate('/ai-strategy')}
@@ -410,7 +415,7 @@ const ResearchPage: React.FC = () => {
                         }}
                         title="Use these research signals to generate a trading strategy"
                       >
-                        🤖 Convert to Strategy
+                        <Cpu size={14} strokeWidth={2} aria-hidden /> Convert to strategy
                       </button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -442,6 +447,15 @@ const ResearchPage: React.FC = () => {
           creating={createMut.isPending}
         />
       )}
+      <RelatedPages
+        links={[
+          { to: '/intelligence', label: 'AI intelligence', hint: 'Model health and attribution', icon: Sparkles },
+          { to: '/backtest', label: 'Backtest', hint: 'Test a research idea', icon: FlaskConical },
+          { to: '/ai-strategy', label: 'AI strategy', hint: 'Turn research into a strategy', icon: Cpu },
+          { to: '/correlation', label: 'Correlation', hint: 'Cross-asset relationships', icon: LineChart },
+        ]}
+      />
+
     </div>
   );
 };

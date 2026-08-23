@@ -10,6 +10,11 @@
  * Admin/ops surface — gated at the route level.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { RelatedPages } from '../components';
+import {
+  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart, RefreshCw,
+  Microscope, BarChart3, BookOpen, Activity,
+} from 'lucide-react';
 import { mlOpsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -136,9 +141,21 @@ const MLDashboard: React.FC = () => {
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: '#e2e8f0' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>🤖 ML-Ops</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Cpu size={18} strokeWidth={1.75} aria-hidden /> ML-Ops
+        </h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>
+          <button
+            onClick={load}
+            aria-label="Refresh ML-Ops status"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
+                       font-bold text-[#60a5fa] cursor-pointer transition-colors duration-150
+                       hover:bg-[rgba(59,130,246,0.25)] focus-visible:outline-none
+                       focus-visible:ring-2 focus-visible:ring-sky-500"
+            style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)' }}
+          >
+            <RefreshCw size={13} strokeWidth={2} aria-hidden /> Refresh
+          </button>
           <button onClick={retrain} disabled={busy === 'retrain' || health?.can_retrain === false}
             style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, cursor: busy === 'retrain' ? 'default' : 'pointer', opacity: health?.can_retrain === false ? 0.5 : 1 }}>
             {busy === 'retrain' ? 'Retraining…' : 'Trigger Retrain'}
@@ -207,6 +224,15 @@ const MLDashboard: React.FC = () => {
           </div>
         </>
       )}
+      <RelatedPages
+        links={[
+          { to: '/intelligence', label: 'AI intelligence', hint: 'Model health and attribution', icon: Sparkles },
+          { to: '/observability', label: 'Engine monitor', hint: 'Live orchestrator panels', icon: Activity },
+          { to: '/ab-testing', label: 'A/B testing', hint: 'Compare model versions', icon: FlaskConical },
+          { to: '/signals', label: 'Signal feed', hint: 'What the model publishes', icon: Radar },
+        ]}
+      />
+
     </div>
   );
 };

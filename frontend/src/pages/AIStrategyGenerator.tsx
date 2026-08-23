@@ -8,6 +8,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart, Loader2,
+  Microscope, BarChart3, BookOpen, Activity,
+} from 'lucide-react';
 import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
@@ -317,7 +322,9 @@ const AIStrategyGenerator: React.FC = () => {
             opacity: !prompt.trim() || stage === 'generating' ? 0.5 : 1,
           }}
         >
-          {stage === 'generating' ? '⏳ Generating…' : '✨ Generate Strategy'}
+          {stage === 'generating'
+              ? <><Loader2 size={14} strokeWidth={2} aria-hidden className="animate-spin" /> Generating…</>
+              : <><Sparkles size={14} strokeWidth={2} aria-hidden /> Generate strategy</>}
         </button>
       </div>
 
@@ -411,6 +418,15 @@ const AIStrategyGenerator: React.FC = () => {
       )}
       </>
       )}
+    <RelatedPages
+      links={[
+        { to: '/backtest', label: 'Backtest', hint: 'Test the generated strategy', icon: FlaskConical },
+        { to: '/intelligence', label: 'AI intelligence', hint: 'What the live model knows', icon: Sparkles },
+        { to: '/ab-testing', label: 'A/B testing', hint: 'Run two strategies side by side', icon: Activity },
+        { to: '/signals', label: 'Signal feed', hint: 'Signals the engine is publishing', icon: Radar },
+        { to: '/walk-forward', label: 'Walk-forward', hint: 'Validate out of sample', icon: LineChart },
+      ]}
+    />
     </div>
   );
 };
@@ -421,6 +437,7 @@ const MetricCard: React.FC<{ label: string; value: string; positive: boolean }> 
   <div style={s.metricCard}>
     <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 20, fontWeight: 700, color: positive ? '#4ade80' : '#f87171' }}>{value}</div>
+
   </div>
 );
 

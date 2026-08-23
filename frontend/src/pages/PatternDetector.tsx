@@ -7,6 +7,11 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
+  Microscope, BarChart3, BookOpen, Activity,
+} from 'lucide-react';
 import { tradingApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -161,7 +166,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
             color: bullish ? '#4ade80' : '#f87171',
           }}
         >
-          ⚡ {bullish ? 'BUY' : 'SELL'} {symbol} — Trade This Pattern
+          <Cpu size={14} strokeWidth={2} aria-hidden /> {bullish ? 'BUY' : 'SELL'} {symbol} — trade this pattern
         </button>
       )}
       {pattern.confidence >= 0.5 && neutral && (
@@ -296,7 +301,7 @@ const PatternDetector: React.FC = () => {
             disabled={loading}
             style={{ ...s.scanBtn, ...(loading ? s.scanBtnDisabled : {}) }}
           >
-            {loading ? 'Scanning…' : '🔍 Scan'}
+            {loading ? 'Scanning…' : <><ScanSearch size={14} strokeWidth={2} aria-hidden /> Scan</>}
           </button>
         </div>
       </div>
@@ -352,6 +357,15 @@ const PatternDetector: React.FC = () => {
           </div>
         )
       ) : null}
+      <RelatedPages
+        links={[
+          { to: '/ai-chart', label: 'Charts', hint: 'See the pattern on the chart', icon: BarChart3 },
+          { to: '/trade', label: 'Trading ticket', hint: 'Act on a detected pattern', icon: Cpu },
+          { to: '/signals', label: 'Signal feed', hint: 'What the model is publishing', icon: Radar },
+          { to: '/journal', label: 'Trade journal', hint: 'Whether patterns worked for you', icon: BookOpen },
+        ]}
+      />
+
     </div>
   );
 };

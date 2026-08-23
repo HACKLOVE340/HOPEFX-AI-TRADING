@@ -4,6 +4,11 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
+  Microscope, BarChart3, BookOpen, Activity,
+} from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -198,6 +203,15 @@ const ABTesting: React.FC = () => {
           ))}
         </div>
       )}
+      <RelatedPages
+        links={[
+          { to: '/ai-strategy', label: 'AI strategy', hint: 'Generate a challenger strategy', icon: Sparkles },
+          { to: '/walk-forward', label: 'Walk-forward', hint: 'Out-of-sample validation', icon: LineChart },
+          { to: '/backtest', label: 'Backtest', hint: 'Single-strategy run', icon: FlaskConical },
+          { to: '/performance', label: 'Performance', hint: 'How the winner actually did', icon: BarChart3 },
+        ]}
+      />
+
     </div>
   );
 };

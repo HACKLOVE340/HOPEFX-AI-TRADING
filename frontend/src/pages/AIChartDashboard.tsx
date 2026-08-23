@@ -17,6 +17,11 @@
 import React, { useEffect, useState, Component } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
+  Microscope, BarChart3, BookOpen, Activity,
+} from 'lucide-react';
 import { AIChart } from '../components/charts/AIChart';
 import { cn, extractApiError } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
@@ -278,6 +283,16 @@ export default function AIChartDashboard() {
           ))}
         </div>
       </div>
+      <RelatedPages
+        links={[
+          { to: '/ai-chart', label: 'AI chart bot', hint: 'Single-symbol deep analysis', icon: Brain },
+          { to: '/pattern-detector', label: 'Pattern detector', hint: 'Named chart patterns', icon: ScanSearch },
+          { to: '/trade', label: 'Trading ticket', hint: 'Act on what you see', icon: Cpu },
+          { to: '/watchlist', label: 'Watchlist', hint: 'Instruments you follow', icon: Radar },
+          { to: '/signals', label: 'Signal feed', hint: 'Model output per symbol', icon: Sparkles },
+        ]}
+      />
+
     </div>
   );
 }
