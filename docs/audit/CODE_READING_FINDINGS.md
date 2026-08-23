@@ -5747,3 +5747,108 @@ Aggregate across all 82:
 * `<canvas>` charts on 5 routes only: `/nuclear` (14), `/home`, `/terminal`,
   `/ai-chart`/`/trading`/`/ai-charts` (7 each).
 * `<table>` on 7 routes.
+
+---
+
+# DOMAIN: `research/` — 9,325 LOC, ML research pipeline
+
+**Reachability is good, unlike `invariants/`.** Of 130 public functions, **93
+(72%) are reachable** — 58 called directly from production (`core/signal_engine.py`
+×7, `ml/inference_engine.py`, `ml/rl_agent.py`, `api/ml_anomaly.py` ×6,
+`core/startup_factories.py` ×5), 71 called within the package. No dead-package
+finding here; this is live code on the signal path.
+
+The design is also genuinely careful in places. `core/signal_engine.py:1647`
+declines to feed the online learner at fill time, with an explicit rationale:
+
+> "Calling notify_fill here with a fabricated label=1 would poison the model by
+> teaching it that every auto-trade is profitable regardless of outcome. …
+> If the close path is unavailable the features are discarded — this is
+> preferable to corrupting the online model with false labels."
+
+That is exactly the right call, and the reasoning is written down.
+
+## F214 — the Phase-2 and Phase-3 safety gates are advisory; nothing enforces them · HIGH
+
+`config/feature_flags.py:582` defines the online-learning flag with an explicit
+precondition:
+
+```python
+ONLINE_LEARNING = _FeatureDef(
+    "FEATURE_ONLINE_LEARNING",
+    default=False,
+    status=FeatureStatus.EXPERIMENTAL,
+    description=(
+        "Phase 3: … Blends primary model (default 0.7) with IncrementalXGBoost "
+        "that updates on each confirmed fill (default 0.3). … "
+        "Gate: 90-day paper run (any supported broker) with >= 500 fills. "
+        "Enable with FEATURE_ONLINE_LEARNING=true after gate passes."
+    ),
+)
+```
+
+`research/pipeline/paper_trading_gate.py` implements that gate properly —
+`phase3_ready()` checks 90 calendar days since `PAPER_RUN_START_UTC` and
+`PAPER_FILL_COUNT >= 500`, with a state file so it survives restarts.
+
+**Nothing calls it before enabling the feature.** `core/signal_engine.py:229`,
+the function that decides whether the online learner blends into live signals:
+
+```python
+def _get_online_learner_store() -> Any | None:
+    enabled = bool(flags.ONLINE_LEARNING)          # …or the env var
+    if not enabled:
+        return None
+    ...                                            # no phase3_ready() anywhere
+```
+
+`phase3_ready()` **is** called — once, at `ml/inference_engine.py:1558` — and
+its result is assigned to `online_ok`, whose only use is
+`"online_learner": online_ok` in a health dict at `:1631`. **It is measured and
+reported; it gates nothing.** The Phase-2 anomaly-weighting gate has the
+identical structure (`flags.ANOMALY_WEIGHTING` checked, `phase2_ready()` not).
+
+This is **F146's shape exactly** (drift coverage computed and gating nothing)
+and **F176's** (a value reported rather than enforced). Here the consequence is
+that an incrementally-trained model can take **30% of the signal weight** on
+live trading decisions without the 90-day/500-fill validation the code itself
+declares necessary.
+
+**Fix:** `_get_online_learner_store()` should require `flags.ONLINE_LEARNING
+and get_gate().phase3_ready()[0]`, logging the gate's reason when it refuses.
+The gate is already written, tested and persistent — it needs one caller.
+
+## F215 — `.env.example` ships the one flag whose code default is `False` · HIGH
+
+Audited every `FEATURE_*` entry in `.env.example` against its `_FeatureDef` in
+`config/feature_flags.py`. Six EXPERIMENTAL flags are enabled in the template;
+**five of them have `default=True` in code**, so the template agrees with the
+code and they are experimental in name only (watchlist, trade journal, 2FA,
+advanced trading, price alerts — all UI surface).
+
+**Exactly one contradicts its code default:**
+
+| Flag | Code default | `.env.example` |
+|---|---|---|
+| `FEATURE_ONLINE_LEARNING` | **`False`** | **`true`** (line 830) |
+
+It is the only flag in the file that overrides a deliberate `False`, and it is
+the one gated on a 90-day paper run (F214). `scripts/bootstrap_dev.py` generates
+`.env` from this template, so **every developer and every fresh deployment
+starts with unvalidated online learning blended into live signals** — the exact
+state the flag's own description forbids.
+
+Stating the narrow version deliberately: "six experimental flags are on" would
+have been alarming and misleading. Five are fine. One is not, and it is the
+consequential one.
+
+**Fix:** set `FEATURE_ONLINE_LEARNING=false` in `.env.example` (and `.env`),
+matching the code default, and let F214's gate turn it on when it passes.
+
+## VERIFIED — `research/` correctness spot-checks that came back clean
+* `AdaptiveBlendWeights` clips to `[min_primary, max_primary]` on every update
+  (`:307`, `:347`), so the primary model's weight cannot be driven to zero by a
+  run of favourable online accuracy.
+* Two independent drift detectors (Page-Hinkley `DriftDetector` and
+  `ADWINDriftDetector`) with `reset()` paths, rather than a single heuristic.
+* The fill→label path refuses to fabricate labels (quoted above).
