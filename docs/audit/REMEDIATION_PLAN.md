@@ -325,6 +325,43 @@ per unit of work, since the backend is already done:
   page: what it renders, what drives it, what functions it lacks, and which
   **already-built** endpoints supply them.
 
+## PHASE 9 — AI Core build (spec received, NOT started)
+
+Full intake and audit cross-reference: **`AI_CORE_SPEC_INTAKE.md`**.
+
+- [ ] **Rotate the exposed superadmin credential** (spec item 6). Above
+      everything in this plan. Location not yet confirmed — the tracked working
+      tree reads as placeholders; needs the file or commit named.
+- [ ] **Prerequisites the spec does not know about.** The AI kill switch
+      inherits **F139** (cross-pod propagation denied — no RBAC in
+      `deployments/k8s/`); the agent sandbox inherits **F130** (patch signing
+      off, key set nowhere) and **F184** ("could not run tests" recorded as
+      "tests passed" on the patch gate). Fix these first or the AI layer ships
+      with a decorative emergency stop and a second unsigned code-execution path.
+- [ ] **Adopt two acceptance tests before writing agent code:** an agent
+      calling an action outside its scope must FAIL THE BUILD, and a proposal
+      executing without an approval record must fail the build. The spec's
+      approval queue is otherwise the same shape as F176 — a control that is
+      described accurately and enforced by convention.
+- [ ] **The eval gate must declare its own coverage.** **F221** — the existing
+      coverage gate measures 34% of the application and omits the risk manager;
+      a new gate added to that culture inherits the blind spot.
+- [ ] **Superadmin surface ≠ user surface** (hive chat and AI Core). Capability
+      split, not styling: server-side enforcement with a 403 test per endpoint,
+      the direct-GET probe from **F198**, and separate components rather than
+      `if (isSuperAdmin)` branches. **Hive chat details still to come.**
+- [ ] Confirm the six Business Operations department names, then rebuild Figma
+      once (Starter-plan rate limit makes iteration expensive). The current file
+      is out of date per the spec's own Section 10.
+- [ ] Confirm VPS RAM/VRAM before locking a local model size — and settle
+      **F98/F178** first (two ConfigMaps named `hopefx-config` with
+      contradictory safety values) so "what is deployed" is a known quantity.
+- [ ] Restore **customizable settings** to scope (theme, department visibility,
+      notification thresholds, default autonomy per department) — dropped from
+      later spec drafts, distinct from the per-action autonomy dial.
+- [ ] Then: AI Gateway, internal MCP tool bus, response cache, guardrails-as-
+      pipeline, formalized evals (spec Section 3).
+
 ## Not yet examined
 
 * **41 sub-views** inside `/superadmin` (24 sections) and `/settings` (17) were
