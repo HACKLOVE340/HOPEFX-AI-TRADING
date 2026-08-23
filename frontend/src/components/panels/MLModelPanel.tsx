@@ -16,6 +16,8 @@ import { mlApi, mlExtendedApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
+import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // ── Types (mirror backend Pydantic models) ────────────────────────────────────
@@ -79,25 +81,63 @@ interface MLHealthResponse {
 
 // ── Metric tile ───────────────────────────────────────────────────────────────
 
+// NOTE: this shadows components/ui/MetricTile and keeps its own bordered-card
+// look and `color`-as-className API. It gains the same drill-down contract:
+// pass `to` and the tile links to the page that explains the number; omit it
+// and the tile stays an inert div rather than an empty tab stop. See F187.
 function MetricTile({
   label,
   value,
   color,
   sub,
+  to,
+  toHint,
 }: {
   label: string;
   value: string;
   color?: string;
   sub?: string;
+  to?: string;
+  toHint?: string;
 }) {
-  return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 bg-[#0d1421] rounded border border-[#1e2d3d]">
-      <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
+  const body = (
+    <>
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
+        {to && (
+          <ChevronRight
+            size={11}
+            strokeWidth={2.5}
+            aria-hidden
+            className="ml-auto shrink-0 text-slate-700 transition-colors duration-150 group-hover:text-slate-300 group-focus-visible:text-slate-300"
+          />
+        )}
+      </div>
       <span className={cn('text-[15px] font-bold tabular-nums', color ?? 'text-slate-200')}>
         {value}
       </span>
       {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
-    </div>
+    </>
+  );
+
+  const base = 'flex flex-col gap-0.5 px-3 py-2 bg-[#0d1421] rounded border border-[#1e2d3d]';
+
+  if (!to) return <div className={base}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className={cn(
+        base,
+        'group cursor-pointer min-h-[44px] justify-center',
+        'transition-colors duration-150 hover:bg-[#141c2b] hover:border-[#2b3f56]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950',
+      )}
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -294,30 +334,42 @@ function MLModelPanelInner() {
                 <div className="grid grid-cols-2 gap-2">
                   <MetricTile
                     label="Accuracy"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={`${(acc.accuracy * 100).toFixed(1)}%`}
                     color={acc.accuracy >= t.accuracy_good ? 'text-[#00e676]' : acc.accuracy >= t.accuracy_warn ? 'text-[#ffb800]' : 'text-[#ff1744]'}
                   />
                   <MetricTile
                     label="Win Rate"
+                    to="/journal"
+                    toHint="the trades behind it"
                     value={`${(acc.win_rate * 100).toFixed(1)}%`}
                     color={acc.win_rate >= t.win_rate_good ? 'text-[#00e676]' : 'text-[#ffb800]'}
                   />
                   <MetricTile
                     label="Sharpe"
+                    to="/performance"
+                    toHint="risk-adjusted performance"
                     value={acc.sharpe.toFixed(2)}
                     color={acc.sharpe >= t.sharpe_good ? 'text-[#00e676]' : acc.sharpe >= t.sharpe_warn ? 'text-[#ffb800]' : 'text-[#ff1744]'}
                   />
                   <MetricTile
                     label="F1 Score"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={acc.f1.toFixed(3)}
                     color={acc.f1 >= t.f1_good ? 'text-[#00e676]' : 'text-[#ffb800]'}
                   />
                   <MetricTile
                     label="Precision"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={`${(acc.precision * 100).toFixed(1)}%`}
                   />
                   <MetricTile
                     label="Recall"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={`${(acc.recall * 100).toFixed(1)}%`}
                   />
                 </div>

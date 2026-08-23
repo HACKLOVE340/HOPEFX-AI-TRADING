@@ -160,24 +160,32 @@ export function RiskDashboard() {
         <div className="px-4 py-3 border-b border-[#1e2d3d] grid grid-cols-2 gap-3">
           <MetricTile
             label="CVaR 95%"
+            to="/risk-calculator"
+            toHint="the Risk Calculator"
             value={account?.cvar_95 != null ? `${(account.cvar_95 * 100).toFixed(1)}%` : '—'}
             valueColor="#ff3b5c"
             compact
           />
           <MetricTile
             label="Max Drawdown"
+            to="/performance"
+            toHint="the drawdown curve"
             value={fmtPct(account?.max_drawdown, 1)}
             valueColor="#ff3b5c"
             compact
           />
           <MetricTile
             label="Win Rate"
+            to="/journal"
+            toHint="the trades behind it"
             value={fmtPct(account?.win_rate, 1)}
             valueColor="#00e676"
             compact
           />
           <MetricTile
             label="Sharpe"
+            to="/performance"
+            toHint="risk-adjusted performance"
             value={account ? fmtRatio(account.sharpe_ratio) : '—'}
             valueColor="#00d4ff"
             compact

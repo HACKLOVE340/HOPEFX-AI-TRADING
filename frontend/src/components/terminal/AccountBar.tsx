@@ -87,12 +87,16 @@ export function AccountBar() {
     <div className="flex items-center gap-6 px-5 py-2.5 bg-[#0d1421] border-b border-[#1e2d3d] overflow-x-auto scrollbar-terminal shrink-0">
       <MetricTile
         label="Balance"
+        to="/wallet"
+        toHint="Wallet"
         value={`$${fmtPrice(account.balance)}`}
         compact
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Equity"
+        to="/portfolio"
+        toHint="Portfolio"
         value={`$${fmtPrice(account.equity)}`}
         valueColor="#00d4ff"
         compact
@@ -100,6 +104,8 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Daily P&L"
+        to="/pnl"
+        toHint="the P&L breakdown"
         value={fmtPctRaw(account.daily_pnl_pct)}
         sub={fmtPnl(account.daily_pnl)}
         valueColor={(account.daily_pnl ?? 0) >= 0 ? '#00e676' : '#ff1744'}
@@ -108,6 +114,8 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Total P&L"
+        to="/pnl"
+        toHint="the P&L breakdown"
         value={fmtPnl(account.total_pnl)}
         valueColor={pnlColor(account.total_pnl)}
         compact
@@ -115,6 +123,8 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Margin"
+        to="/risk-calculator"
+        toHint="the Risk Calculator"
         value={fmtMarginLevel(account.margin_level, account.margin_used)}
         sub={`Used: $${fmtPrice(account.margin_used, 0)}`}
         valueColor={marginColor}
@@ -123,6 +133,8 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Win Rate"
+        to="/journal"
+        toHint="the trades behind it"
         value={fmtPct(account.win_rate, 1)}
         valueColor="#00e676"
         compact
@@ -130,6 +142,8 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Max DD"
+        to="/performance"
+        toHint="the drawdown curve"
         value={fmtPct(account.max_drawdown, 1)}
         valueColor="#ff3b5c"
         compact
@@ -137,6 +151,8 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Sharpe"
+        to="/performance"
+        toHint="risk-adjusted performance"
         value={fmtRatio(account.sharpe_ratio)}
         valueColor="#00d4ff"
         compact
@@ -146,6 +162,8 @@ export function AccountBar() {
           <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
           <MetricTile
             label="Sortino"
+        to="/performance"
+        toHint="risk-adjusted performance"
             value={fmtRatio(account.sortino_ratio)}
             valueColor="#a78bfa"
             compact
@@ -155,6 +173,8 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Open Trades"
+        to="/portfolio"
+        toHint="your positions"
         value={account.open_trades?.toString() ?? '—'}
         compact
       />

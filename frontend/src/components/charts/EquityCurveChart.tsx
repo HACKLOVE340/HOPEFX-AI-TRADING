@@ -195,10 +195,10 @@ export function EquityCurveChart() {
   const headerRight = (
     <div className="flex items-center gap-4">
       {rangeSelector}
-      <MetricTile label="Return" value={fmtPct(totalReturn)} valueColor={totalReturn >= 0 ? '#00e676' : '#ff1744'} compact />
-      <MetricTile label="Sharpe"  value={perf ? fmtRatio(perf.sharpe_ratio)  : '—'} valueColor="#00d4ff" compact />
-      <MetricTile label="Sortino" value={perf ? fmtRatio(perf.sortino_ratio) : '—'} valueColor="#a855f7" compact />
-      <MetricTile label="Max DD"  value={perf ? `${maxDD.toFixed(1)}%`        : '—'} valueColor="#ff3b5c" compact />
+      <MetricTile label="Return" to="/performance" toHint="performance detail" value={fmtPct(totalReturn)} valueColor={totalReturn >= 0 ? '#00e676' : '#ff1744'} compact />
+      <MetricTile label="Sharpe" to="/performance" toHint="risk-adjusted performance"  value={perf ? fmtRatio(perf.sharpe_ratio)  : '—'} valueColor="#00d4ff" compact />
+      <MetricTile label="Sortino" to="/performance" toHint="risk-adjusted performance" value={perf ? fmtRatio(perf.sortino_ratio) : '—'} valueColor="#a855f7" compact />
+      <MetricTile label="Max DD" to="/performance" toHint="the drawdown curve"  value={perf ? `${maxDD.toFixed(1)}%`        : '—'} valueColor="#ff3b5c" compact />
     </div>
   );
 
@@ -216,11 +216,11 @@ export function EquityCurveChart() {
 
           {perf && (
             <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[#1e2d3d] shrink-0">
-              <MetricTile label="Win Rate"      value={fmtPctRaw(perf.win_rate, 1)} valueColor="#00e676" compact />
-              <MetricTile label="Profit Factor" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
-              <MetricTile label="Total Trades"  value={perf.total_trades?.toString() ?? '—'}            compact />
-              <MetricTile label="Avg Trade"     value={fmtPrice(perf.avg_trade_pnl, 2)}        valueColor={pnlColor(perf.avg_trade_pnl)} compact />
-              <MetricTile label="CVaR 95%"      value={fmtPct(perf.cvar_95, 1)} valueColor="#ff3b5c" compact />
+              <MetricTile label="Win Rate" to="/journal" toHint="the trades behind it"      value={fmtPctRaw(perf.win_rate, 1)} valueColor="#00e676" compact />
+              <MetricTile label="Profit Factor" to="/journal" toHint="the trades behind it" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
+              <MetricTile label="Total Trades" to="/journal" toHint="the trade journal"  value={perf.total_trades?.toString() ?? '—'}            compact />
+              <MetricTile label="Avg Trade" to="/journal" toHint="the trade journal"     value={fmtPrice(perf.avg_trade_pnl, 2)}        valueColor={pnlColor(perf.avg_trade_pnl)} compact />
+              <MetricTile label="CVaR 95%" to="/risk-calculator" toHint="the Risk Calculator"      value={fmtPct(perf.cvar_95, 1)} valueColor="#ff3b5c" compact />
             </div>
           )}
         </div>
