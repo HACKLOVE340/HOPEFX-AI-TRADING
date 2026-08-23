@@ -5372,3 +5372,102 @@ no way to reach any other page from its content.
 offers a node catalogue toggle and "No templates available", so a user cannot
 begin. Whether templates are meant to ship with the product or be user-created
 is not discoverable from the page.
+
+## F198 — `/kyc` and `/mobile` return raw JSON 404 on direct navigation · HIGH
+
+Tested every SPA route with a direct `GET` — what a browser refresh, a
+bookmark, or a link in an email does. **2 of 82 fail**, and both fail loudly:
+
+```
+GET /kyc     404  {"detail":"No route for GET /kyc","path":"/kyc","method":"GET"}
+GET /mobile  404  {"detail":"No route for GET /mobile","path":"/mobile","method":"GET"}
+```
+
+The user sees a raw JSON error object, not a page.
+
+**`/kyc` is the serious one.** KYC is a regulatory gate on a money-moving
+platform. A user who follows a "complete your verification" link, or refreshes
+the page mid-flow, lands on a JSON blob. In-app navigation from the sidebar
+works — React Router handles it client-side — which is exactly why this
+survives casual testing.
+
+### Root cause, traced
+
+`api/kyc.py:33` mounts a router at the **bare** `/kyc` prefix:
+
+```python
+router           = APIRouter(prefix="/kyc",     tags=["kyc"])     # line 33
+kyc_alias_router = APIRouter(prefix="/api/kyc", tags=["KYC"])     # line 282
+```
+
+and the mobile v2 API registers `/mobile/api/v2/*` and `/mobile/health`. Both
+occupy a path prefix that the SPA also needs.
+
+`core/page_routes.py` already documents this exact failure mode — someone
+diagnosed and fixed it for `/godmode`:
+
+> "returning 404 from a route that has *matched* does not hand the request
+> onward — the response ends it. Net effect: `GET /godmode/` answered
+> `{"detail": "No route for GET /godmode/"}` in exactly the deployment that has
+> both UIs built, which is the Docker/production one."
+
+The same bug, unfixed, for `/kyc` and `/mobile`.
+
+### Fix
+`api/kyc.py` **already has** the correctly-prefixed `kyc_alias_router` at
+`/api/kyc`. Retire the bare `/kyc` mount (checking the two webhook paths,
+`/kyc/webhooks/onfido` and `/kyc/webhooks/sumsub`, whose URLs are registered
+with external providers and must either be kept or re-registered upstream).
+Move the mobile v2 API under `/api/mobile/v2`. Then add both paths to
+`_SPA_ROUTES`.
+
+## F199 — the SPA route list is hand-maintained and has drifted 23 routes · MEDIUM
+`core/page_routes.py` declares `_SPA_ROUTES` — an explicit list of every path
+that should serve `index.html`. It holds **60 entries**; `frontend/src/App.tsx`
+declares **83 routes**. Nothing keeps them in step.
+
+Today the gap is masked by the wildcard catch-all registered after the list, so
+only the two routes in F198 actually break. But the list is the mechanism the
+file's own comments treat as authoritative, and any future API router mounted
+at a bare path will silently take a page down in the same way — the failure
+appears only on direct navigation, never in-app, which is the hardest kind to
+notice.
+
+**Fix:** generate `_SPA_ROUTES` from the router manifest, or add a test that
+fails when `App.tsx` declares a path the server will not serve. The check is
+cheap: a direct `GET` on every declared route asserting `200` and
+`content-type: text/html` — which is exactly the probe that found F198.
+
+## F200 — `/docs` is permanently blank: CSP blocks its own stylesheet · MEDIUM
+`/docs` renders **0 characters**. Console:
+
+> Refused to load the stylesheet
+> `https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css` because it
+> violates the following Content Security Policy directive
+
+The API documentation page loads Swagger UI from a CDN that the platform's own
+CSP forbids. This is not environment-specific: the CSP ships with the app, so
+the page is blank in every deployment that enforces it. Either vendor
+`swagger-ui-dist` into `static/` (it is already an npm dependency pattern) or
+add the CDN to the `style-src`/`script-src` allowlist — vendoring is the better
+answer for an app that already self-hosts its frontend build.
+
+## F201 — `/academy` advertises 15 episodes and none exist · MEDIUM
+Renders "15 episodes · 15 available on your plan", then every one of the 15
+cards is marked **COMING SOON**. The harness counted 15 empty-state matches on
+a 3,123-character page — the largest content page in the trader-facing product
+is entirely placeholder.
+
+"15 available on your plan" is a false statement to a subscriber: zero are
+available. If the content is not ready, the honest render is "Coming soon — 15
+episodes planned", not a count of what they can watch.
+
+## F202 — `/upgrade` is the most polished page in the product · observation
+2,548 characters, 25 metrics, 16 buttons, 8 outbound links, 4 headings — the
+richest and best-structured page measured, and one of only two with a metric
+wired to a destination.
+
+Recorded because the contrast is informative rather than as a defect: the page
+that takes payment is materially better built than the pages a subscriber uses
+afterwards. `/journal` (378 chars), `/signals` (362) and `/watchlist` (413) are
+what they get for the money.
