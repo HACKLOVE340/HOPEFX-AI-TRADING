@@ -4847,3 +4847,132 @@ One nit: `rotate_key` calls `keyring.set_password` without checking
 `_KEYRING_AVAILABLE`; if `keyring` is absent, `keyring` is `None` and the
 `AttributeError` surfaces as a confusing `VaultError("Key rotation failed:
 'NoneType' object has no attribute...")`. Guard it for a clearer message.
+
+---
+
+# CAPABILITY GAP — what the platform can do vs. what it shows
+
+This section answers a different question from the rest of the audit. Not *"is
+this correct?"* but *"how much of what has been built is actually reachable by a
+paying user?"*
+
+## Method, and three corrections I had to make
+
+Measured by parsing every FastAPI route decorator in `api/` (resolving both
+`APIRouter(prefix=…)` and mount-time prefixes) against every path passed to an
+API verb anywhere in `frontend/src`. The first three attempts were wrong and
+each was caught by a deliberate sanity check against a page known to work:
+
+| Attempt | Result | Why it was wrong |
+|---|---|---|
+| 1 | "89% unsurfaced" | Frontend extractor had a path whitelist that silently dropped `/journal`, `/alerts` and others. |
+| 2 | "57% unsurfaced" | Did not resolve prefixes applied at `include_router()` time, so all of `superadmin/*` looked dead. It is not. |
+| 3 | "34%, but `api/alerts.py` 8/8 dead" | Only scanned the `useApi.ts` client. Pages also call `api.post('/alerts/')` directly. |
+| **4 (reported)** | **34%, `api/alerts.py` 4/8** | Sanity checks pass on journal, alerts and superadmin/financial. |
+
+Stating this because the headline number moved from 89% to 34% under scrutiny.
+**The honest figure is 34%. The 89% would have been a serious misrepresentation
+of the platform's completeness.**
+
+## F185 — one third of the backend has no user interface · HIGH (product, not a bug)
+
+**891 non-infrastructure endpoints. 309 (34%) are not called from anywhere in
+the SPA.** (`api/health.py`, `api/pages.py`, `api/metrics.py` excluded — those
+are infra probes and server-rendered pages, correctly not SPA-called.)
+
+This is not dead code and it is not a defect. It is **built, working capability
+that a subscriber cannot reach.** For the question "how far do I need to go
+beyond what it renders already" — a third of the answer is already written and
+merely needs a screen.
+
+### Fully unsurfaced subsystems — nothing in the UI reaches these
+
+| Endpoints | Module | What the user is not getting |
+|---:|---|---|
+| 13 | `api/nuclear_strategy.py` | `/analyze`, `/backtest`, `/cone`, `/features`, `/regime`, `/history` — a whole strategy-analysis surface |
+| 10 | `api/nuclear.py` | `/snapshot`, `/hedge/activate`, `/hedge/deactivate`, `/kill_switch/activate` — **operator controls with no operator screen** |
+| 10 | `api/status.py` | `/status/incidents`, `/status/history`, `/status/live-trading/gate`, `/status/paper-trading/gate` — a full public status page |
+| 9 | `api/portfolio_allocator.py` | `/allocator/weights`, `/correlation`, `/pods`, `/registry` — multi-strategy capital allocation |
+| 8 | `api/dynamic_strategies.py` | register / activate / deactivate / version a strategy at runtime |
+| 7 | `api/advanced_orders.py` | **OCO, stop-limit, trailing-stop** — order types a serious trader expects, implemented and unreachable |
+| 7 | `api/copy_trading.py` | `/masters`, `/my-copies`, pause/resume/stop a copy, per-copy risk — the page exists, these do not reach it |
+| 6 | `api/chaos.py` | chaos scenarios and mutation results |
+
+`api/advanced_orders.py` deserves emphasis. **OCO, stop-limit and trailing-stop
+are built and tested on the backend, and the order ticket offers none of them.**
+Set against F151 (a plain stop-loss is discarded at the broker), the platform
+has more order-type capability written than it has working stop-loss delivery.
+
+### Partially surfaced — the page exists, most of the API does not reach it
+
+| Unused/total | Module | Notable endpoints with no UI |
+|---:|---|---|
+| 33/50 | `api/monetization.py` | `/analytics/dashboard`, `/analytics/revenue`, `/analytics/growth`, creator balances and payouts |
+| 19/37 | `api/trading.py` | `/equity-curve`, `/history`, `/balance`, `/depth/{symbol}`, `/levels`, `/microstructure` |
+| 18/37 | `api/admin.py` | `/activity`, `/logs`, `/monitoring`, `/maintenance` |
+| 13/25 | `api/ml.py` | `/drift-report`, `/feature-importance/{model}`, `/explain/{model}`, `/engine-health`, `/ab-tests` |
+| 12/14 | `api/portfolio.py` | `/factor/exposures`, `/rebalancer/weights`, `/risk/factor-report`, `/tick-feed/last-tick` |
+| 8/10 | `api/mobile.py` | sessions, push status, notification prefs |
+| 7/8 | `api/ml_anomaly.py` | anomaly score / report / retrain |
+
+`api/trading.py` is the sharpest one: **`/equity-curve`, `/history` and
+`/microstructure` are built and the dashboard renders none of them.** F174
+recorded "zero chart canvases across the product" as a design gap — this shows
+the *data* for those charts already has an endpoint. The chart is missing, not
+the capability.
+
+`api/ml.py` `/explain/{model_name}` and `/feature-importance/{model_name}` are
+the explainability surface for a product whose landing page sells "institutional-
+grade AI". Neither is reachable.
+
+## F186 — two parallel indicator subsystems; the UI is wired to the weaker one · MEDIUM
+
+Confirmed against the live server's route table:
+
+```
+/api/indicators              /api/custom-indicators
+/api/indicators/{ind_id}     /api/custom-indicators/builtin
+/api/indicators/{id}/apply   /api/custom-indicators/calculate
+/api/indicators/preview      /api/custom-indicators/preview
+                             /api/custom-indicators/{id}
+                             /api/custom-indicators/{id}/apply
+                             /api/custom-indicators/{id}/test
+                             /api/custom-indicators/{id}/deploy
+(4 routes — what the UI calls)  (8 routes — unreachable)
+```
+
+`CustomIndicators.tsx` calls `indicatorsApi.list / preview / create / delete`,
+which resolve to `/api/indicators/*`. The richer `/api/custom-indicators/*`
+implementation — with a **built-in indicator library**, `calculate`, **`test`**
+and **`deploy`** — has no caller.
+
+So the page lets a user write a formula and delete it. The backend can also
+test that formula, deploy it live, and offer a library to start from. That is
+precisely the "too simple for what it should be" shape, with a concrete cause:
+the page is wired to the wrong one of two implementations.
+
+**I initially recorded this as a 404 — the frontend calling a path that does not
+exist.** The live route table disproved it (both are registered; `401` not
+`404`). The page works; it is connected to the lesser API. Correcting it here
+because "the page is broken" and "the page is under-powered" call for very
+different fixes.
+
+## What this means for the product question
+
+The user's question was how far to go beyond what the app renders today. The
+measurement says: **a third of the way is already built.** Priority order, by
+user-visible value per unit of work:
+
+1. **`api/advanced_orders.py`** — OCO / stop-limit / trailing-stop into the
+   order ticket. Highest trader-visible value; the backend is done.
+2. **`api/trading.py` `/equity-curve` + `/history`** — this is the chart and the
+   trade table that F173/F174 found missing everywhere. The data exists.
+3. **`api/ml.py` `/explain` + `/feature-importance`** — turns "trust the AI"
+   into "here is why", and it is the differentiator the landing page already
+   claims.
+4. **`api/status.py`** — a real public status page with incidents and history,
+   which a subscriber checks before they trust the platform with money.
+5. **`api/custom-indicators` `test` + `deploy` + `builtin`** — rewire the
+   existing page to the stronger API.
+6. **`api/portfolio_allocator.py` + `api/portfolio.py` factor endpoints** —
+   allocation and factor exposure, the institutional layer.
