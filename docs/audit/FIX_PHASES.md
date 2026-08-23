@@ -1,7 +1,19 @@
 # Fix phases — backend
 
-UI work is complete (12 phases, ~20 pages, 8 shared components). This is the
-plan for the audit findings themselves.
+## How the work is numbered
+
+Three separate bodies of work, one scheme each — stated here because using
+three at once was confusing:
+
+| Track | Numbering | State |
+|---|---|---|
+| **UI rebuild** | phases **1–12** | **complete** — ~20 pages, 8 shared components |
+| **Backend fixes** | phases **A–H** (this file) | starting at A |
+| **AI Core build** | not numbered | spec recorded; sequences **after fix phase D**, whose findings are its prerequisites |
+
+Counted as bodies of work, AI Core is the thirteenth. It is lettered out of the
+fix sequence rather than numbered into it because it is new construction, not
+remediation.
 
 **Owner-blocked, above everything:**
 * **Rotate the exposed superadmin credential.** Location not confirmed — the

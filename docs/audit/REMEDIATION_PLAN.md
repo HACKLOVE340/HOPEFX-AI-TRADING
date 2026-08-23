@@ -325,7 +325,10 @@ per unit of work, since the backend is already done:
   page: what it renders, what drives it, what functions it lacks, and which
   **already-built** endpoints supply them.
 
-## PHASE 9 — AI Core build (spec received, NOT started)
+## AI CORE — build (spec received, NOT started)
+
+*Not numbered: it sequences AFTER fix phase D, whose three findings
+(F139, F130, F184) are its prerequisites. See `FIX_PHASES.md`.*
 
 Full intake and audit cross-reference: **`AI_CORE_SPEC_INTAKE.md`**.
 

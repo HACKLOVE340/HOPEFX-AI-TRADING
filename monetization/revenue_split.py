@@ -42,6 +42,7 @@ Usage
 from __future__ import annotations
 
 import logging
+import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -72,7 +73,18 @@ except ImportError:
 # ── Constants ─────────────────────────────────────────────────────────────────
 PLATFORM_FEE_PCT = Decimal("0.20")  # 20% platform fee
 CREATOR_SHARE_PCT = Decimal("0.80")  # 80% to creator
-MIN_PAYOUT_USD = Decimal("10.00")  # minimum payout threshold
+MIN_PAYOUT_USD = Decimal("10.00")
+
+
+def to_cents(amount: Decimal) -> int:
+    """Convert a money amount to integer cents, rounding half-up.
+
+    `int(amount * 100)` truncates toward zero, which always favours the
+    platform: $10.999 became 1099 cents, not 1100. Sub-cent amounts arise in
+    normal operation because the creator's share is the remainder left after
+    quantising the platform fee (F206).
+    """
+    return int(amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) * 100)  # minimum payout threshold
 
 
 class PayoutStatus(StrEnum):
@@ -80,6 +92,11 @@ class PayoutStatus(StrEnum):
     PROCESSING = "processing"
     PAID = "paid"
     FAILED = "failed"
+    #: No transfer backend was available, so nothing was sent. Distinct from
+    #: PAID: the creator's balance is NOT debited and their ledger does not
+    #: claim they were paid. Simulation previously reused PAID, which told a
+    #: creator they had received money that never left the platform (F204).
+    SIMULATED = "simulated"
 
 
 class TransactionType(StrEnum):
@@ -103,6 +120,10 @@ class SaleTransaction:
     transaction_type: TransactionType
     stripe_payment_intent_id: str | None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    #: Set when a payout settles this transaction. Payouts previously listed
+    #: every historical transaction for the creator, so summing across payouts
+    #: double-counted and reconciliation was impossible (F207).
+    settled_by_payout_id: str | None = None
 
     def to_dict(self) -> dict:
         return {
