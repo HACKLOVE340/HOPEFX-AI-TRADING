@@ -6349,3 +6349,186 @@ subscriber opens most.
 `⚡ Trade` at `:246` navigates with **no state** (lands on the default symbol),
 while the per-row button at `:309` passes the row's symbol. Two controls with
 the same label doing different things on the same screen.
+
+---
+
+# PER-PAGE DESIGN SPECIFICATION — what each page should be
+
+Grounded in three sources, so none of this is invention:
+1. **What the page renders today** (measured with Playwright, authenticated).
+2. **What the backend already serves** — endpoints that exist and have no UI
+   (F185). Marked **[BUILT]**; these need wiring, not new backend work.
+3. The `ui-ux-pro-max` rubric for this product type. Queried: the recommended
+   dashboard pattern for an analytics product is **"Drill-Down Analytics +
+   Comparative"**, style **Data-Dense**, charts at interactivity level
+   **"Hover + Zoom"** for trends and **"Hover + Sort"** for comparisons, with a
+   **data-table alternative required** for accessibility.
+
+Read against that rubric, the product's gap is one thing repeated: it renders
+**level 1 only** — a value, with no hover, no zoom, no sort, no table, and no
+way down to what produced it.
+
+---
+
+## `/dashboard` — the shell (F226)
+
+**Today:** 271 LOC composing 9 panels. 0 headings, 0 tables, 0 canvases,
+36/101 metrics clickable (post-F187), 63 buttons that all belong to children.
+
+**The real question is which nine panels.** Today: equity curve, risk,
+sentiment, microstructure, macro calendar, order book, signal feed,
+orchestrator health, ML model. That is an *engine operator's* view — five of
+the nine describe the platform's own machinery, not the user's money.
+
+**Should be:** open with the user's position — P&L, open risk, what the system
+did since they last looked. Machinery panels (orchestrator health, ML model,
+microstructure) belong on `/observability` and `/intelligence`, which exist and
+are near-empty (395 and 994 chars).
+
+**Missing, already built:**
+* `api/trading.py /equity-curve` **[BUILT]** — the chart at real interactivity.
+* `api/trading.py /history` **[BUILT]** — recent trades as a **sortable table**;
+  the rubric requires a table alternative and the product has 0 on this page.
+* `api/status.py /live-trading/gate` **[BUILT]** — "is the system allowed to
+  trade right now", which no page shows.
+* Headings (`h1`–`h3`). `/landing` has 24; this has 0.
+
+---
+
+## `/home` — the other dashboard (F209, F227)
+
+**Today:** 879 LOC, 8 store slices, **7 canvases, 1 table** — the richest
+display in the product — and **zero actions**. Reached only by clicking a
+sidebar item labelled "Live Feed" while the page titles itself "Dashboard".
+
+**Should be:** this is the dashboard. Decide that first; F209 is an information-
+architecture decision, not a code change. Then give it the actions its data
+implies: click a position → close it; click a signal → the ticket pre-filled
+(the router-state mechanism already exists, F225).
+
+---
+
+## `/watchlist` — the thinnest page relative to its job (F227)
+
+**Today:** 353 LOC, **one** store slice (`FeedLive`), add/remove, 16 metrics,
+**0 clickable**, **0 outbound links**, 413 characters.
+
+**A watchlist is a working surface, not a price list.** Absent: sort by any
+column, reorder, columns beyond price (spread, session range, ATR, % from high),
+per-symbol alert, a note, grouping/lists, an inline sparkline, and a link from
+a symbol to its own signal history or journal entries.
+
+**Missing, already built:**
+* per-row **→ ticket** with the row's symbol **[BUILT]** — the mechanism works
+  (F225) and `Watchlist.tsx:309` already uses it; it is not applied to the row
+  itself, only a small button.
+* `api/signals.py` per-symbol signals **[BUILT]** — "what does the model think
+  about this instrument" is the reason to keep a watchlist on *this* platform,
+  and it is one join away.
+* `api/alerts.py` create-from-row **[BUILT]** — `/alerts` already has full
+  create/pause/delete; the watchlist should be able to start one.
+
+---
+
+## `/pnl` — 849 LOC that only paginates (F227)
+
+**Today:** refresh + pagination. **0 form inputs.** No date range, no filter,
+no export — while `/performance` (641 LOC) exports CSV **and** PDF.
+
+**Should be:** P&L is a question people ask by period, instrument, strategy and
+session. Add date range, group-by (symbol / strategy / session / broker), the
+same export `/performance` already implements, and a row → the trades behind it.
+
+---
+
+## `/trade` — the strongest page, and the reference (F227)
+
+**Today:** 60/71 metrics clickable, order entry, close-all, live prices,
+per-symbol AI signal panel, keyboard shortcuts (`1–9` select symbol).
+
+**Nearly right.** Two gaps, both already built:
+* **`api/advanced_orders.py` [BUILT]** — **OCO, stop-limit, trailing-stop** are
+  implemented, tested and unreachable. The ticket offers market orders only,
+  on a platform whose stop-loss delivery is itself defective (F151).
+* **`api/trading.py /depth/{symbol}` [BUILT]** — order-book depth beside the
+  ticket.
+
+Everything else should be measured against this page: it is proof the team
+builds dense, interactive screens when they set out to.
+
+---
+
+## `/journal` — 501 LOC, 378 rendered characters
+
+**Today:** tabs, edit entry, → trade. Ten backend endpoints exist; the page
+uses a handful.
+
+**Missing, already built:** `/journal/mistakes`, `/journal/emotion-stats`,
+`/journal/weekly-report`, `/journal/tags`, `/journal/export` — **all [BUILT]**.
+A trade journal whose differentiator is mistake-tagging and emotional-state
+analysis has that analysis on the server and shows none of it.
+
+---
+
+## `/performance` — 0/8 metrics clickable
+
+**Today:** tab, period, CSV + PDF export. Good exports; nothing is clickable.
+
+**Missing, already built:** `api/portfolio.py /factor/exposures`,
+`/risk/factor-report`, `/rebalancer/weights` **[BUILT]** — the institutional
+layer the landing page sells. Plus: every metric here should drill to its
+constituents (Sharpe → the return series; win rate → the trades).
+
+---
+
+## `/status` — 668 chars, 10 rows, all inert (F212)
+
+**Missing, already built:** `api/status.py` has **10 endpoints and zero UI** —
+`/status/incidents`, `/status/history`, `/status/live-trading/gate`,
+`/status/paper-trading/gate`. The incident history a subscriber checks before
+funding an account is written and unreachable.
+
+---
+
+## `/intelligence` — 994 chars, 11 metrics, **zero buttons**
+
+**Missing, already built:** `api/ml.py /explain/{model_name}`,
+`/feature-importance/{model_name}`, `/drift-report`, `/engine-health`,
+`/ab-tests` — **all [BUILT]**. This is the page that should answer "why did the
+AI say that", on a product whose entire pitch is institutional-grade AI. It is
+currently a poster with no controls.
+
+---
+
+## `/academy` — 15 episodes, all "COMING SOON" (F201)
+
+Not a design problem: it advertises "15 available on your plan" and zero are.
+Either ship content or change the claim.
+
+---
+
+## The cross-cutting design rules this product breaks
+
+| Rubric rule | Severity | State |
+|---|---|---|
+| `data-table` — provide a table alternative | LOW | tables on **7 of 82** routes |
+| Charts at "Hover + Zoom" | — | canvases on **5 of 82** routes |
+| `touch-target-size` 44×44 | **CRITICAL** | 82–128 violations per page (F171) |
+| `aria-labels` on icon-only buttons | **HIGH** | 10 on `/dashboard` (F172) |
+| Drill-down analytics pattern | — | **46 of 82** routes have zero clickable metrics |
+| `no-emoji-icons` | MEDIUM | sidebar fixed (F170); **1,472 remain** in 151 files |
+| Heading structure | HIGH | `/dashboard` 0 vs `/landing` 24 (F173) |
+| `consistency` — one style across pages | MEDIUM | duplicate aliases render the same page under 5 names (F210) |
+
+---
+
+## The single most useful conclusion
+
+Across every page above, the recurring answer to *"what is it missing?"* is
+**not "a feature that must be built"** — it is **"an endpoint that already
+exists and nothing calls"**. F185 measured 309 such endpoints (34%).
+
+The corollary is that the gating constraint is `useOrchestratorData.ts`: pages
+render what the global bootstrap fetched, so surfacing built capability is
+mostly a matter of adding fetches there and rendering them — not backend work,
+and not new design systems.
