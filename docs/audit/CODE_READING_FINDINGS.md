@@ -5471,3 +5471,173 @@ Recorded because the contrast is informative rather than as a defect: the page
 that takes payment is materially better built than the pages a subscriber uses
 afterwards. `/journal` (378 chars), `/signals` (362) and `/watchlist` (413) are
 what they get for the money.
+
+---
+
+# DOMAIN: `monetization/` — 9,510 LOC, 17 modules
+
+Well connected: 18 imports in `api/billing.py` alone, plus `api/monetization.py`,
+`api/superadmin/financial.py`, `api/admin.py`, `celery_app.py` and `auth/router.py`.
+This is live code on the path that pays creators and affiliates.
+
+**Credit first, because the money *arithmetic* is right.** `revenue_split.py`
+uses `Decimal` with `quantize(Decimal("0.01"), ROUND_HALF_UP)`, and — the part
+most implementations get wrong — quantizes only the platform fee and gives the
+creator the remainder:
+
+```python
+gross          = Decimal(str(gross_amount)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+platform_fee   = (gross * self.platform_fee_pct).quantize(Decimal("0.01"), ROUND_HALF_UP)
+creator_amount = gross - platform_fee          # remainder — always sums to gross
+```
+
+`platform_fee + creator_amount == gross` exactly, with no lost or invented
+cent. The defects below are in state handling around that correct core.
+
+## F203 — a sale recorded during a payout is silently destroyed · CRITICAL
+
+`process_weekly_payouts()` captures the balance, performs a network transfer,
+then **zeroes** the balance instead of subtracting what it paid:
+
+```python
+amount = bal.pending_usd            # :328  captured
+...                                 # :346  Stripe transfer — seconds of I/O
+bal.total_paid_usd += amount        # :359
+bal.pending_usd = Decimal("0.00")   # :360  ZEROES — does not subtract
+```
+
+`record_sale()` credits the same field (`bal.pending_usd += creator_amount`)
+with no lock anywhere in the module. **Executed:**
+
+```
+captured for payout : 80.00
+balance after sale  : 120.00     (a $50 sale landed mid-payout)
+pending after payout: 0.00       (should be 40.00)
+-> MONEY LOST       : 40.00
+```
+
+A creator loses every dollar earned during their own payout window. The fix is
+one character-class change — `bal.pending_usd -= amount` — plus a lock around
+the read-modify-write. This is **F136's shape** (unlocked balance RMW) but
+strictly worse: a race merely *risks* a lost update, whereas zeroing
+*guarantees* one whenever a sale lands in the window.
+
+There is no `threading.Lock` in the module, and `process_weekly_payouts`
+iterates `self._balances.items()` while `record_sale` can insert into it — a
+new creator mid-cycle also risks `RuntimeError: dictionary changed size during
+iteration`.
+
+## F204 — with the Stripe package absent, payouts are marked PAID and balances zeroed · CRITICAL
+
+`:345` — `if _STRIPE_AVAILABLE and bal.stripe_account_id:` … `else:` simulation
+mode, which sets `status = PAID` and `completed_at`. The balance-zeroing block
+at `:358` then fires because it tests `if payout.status == PayoutStatus.PAID`.
+
+**Executed with `_STRIPE_AVAILABLE = False`** (a deployment where the `stripe`
+package is not installed):
+
+```
+pending before      : 400.00
+payout status       : paid
+stripe_transfer_id  : None
+completed_at set    : True
+pending after       : 0.00
+total_paid recorded : 400.00
+-> creator balance zeroed and payout recorded PAID, with no transfer.
+```
+
+The creator's ledger says they were paid $400. No money moved. Only a
+`logger.info("Payout simulated…")` line distinguishes it, and the persisted
+record — the thing a support agent or the creator sees — says `PAID`.
+
+Simulation must not reuse the `PAID` terminal state. Introduce
+`PayoutStatus.SIMULATED`, leave `pending_usd` untouched, or refuse to run the
+cycle at all when the transfer backend is unavailable. **Fail closed on a
+payout path.**
+
+## F205 — the failure log for a failed transfer cannot emit · HIGH
+
+```python
+except Exception:
+    payout.status = PayoutStatus.FAILED
+    payout.failure_reason = "Transfer failed — check server logs"
+    logger.exception("Stripe transfer failed: creator=%s error=%s", payout.creator_id)
+```
+
+Two `%s` placeholders, one argument. Python's logging raises
+`TypeError: not enough arguments for format string` while formatting, so **the
+record is never emitted** — stderr gets a logging-internal traceback instead of
+the failure.
+
+The user-facing `failure_reason` says *"check server logs"*. The logs do not
+contain the reason. The diagnostic path for a failed creator payout is blind by
+construction. One-line fix: drop the second `%s`, or pass the exception.
+
+Found only because a test drove the real failure branch. A `%`-format arity bug
+is invisible to linting and to any test that does not exercise the exception.
+
+## F206 — payout amounts truncate against the creator · MEDIUM
+`:372` — `amount=int(payout.amount_usd * 100)`. `int()` truncates toward zero
+rather than rounding. **Executed:**
+
+| amount | cents sent | effect |
+|---|---:|---|
+| $10.999 | 1099 | −$0.009 |
+| $0.999 | 99 | −$0.009 |
+| $19.995 | 1999 | −$0.005 |
+
+Always in the platform's favour. Sub-cent amounts arise from the
+`gross - platform_fee` remainder, so this is reachable in normal operation.
+Quantize before converting.
+
+## F207 — every payout claims every historical transaction · MEDIUM
+`:329` builds `payout_txn_ids` from *all* of a creator's transactions with
+`creator_amount > 0`, with no filter for already-paid ones. **Executed:**
+
+```
+payout 1 claims 3 txns
+payout 2 claims 4 txns   <- includes the 3 already paid by payout 1
+```
+
+Payout records cannot be reconciled against sales: summing transaction amounts
+across payouts double-counts. Mark transactions with their `payout_id` when
+paid, and select only unpaid ones.
+
+## F208 — creator balances, sales and payouts exist only in RAM · CRITICAL
+`RevenueSplitEngine.__init__` (`:185-187`):
+
+```python
+self._transactions: dict[str, SaleTransaction] = {}
+self._balances:     dict[str, CreatorBalance]  = {}
+self._payouts:      dict[str, PayoutRecord]    = {}
+```
+
+Grepping the whole 432-line module for `session`, `commit()`, `db.`, `redis`,
+`json.dump` or `open(` returns **zero matches**. `affiliate.py` (750 LOC) is the
+same — `self._affiliates`, `self._referrals`, `self._payouts` are plain dicts,
+zero persistence calls.
+
+It is a module-level singleton (`revenue_engine = RevenueSplitEngine()`) reached
+by **seven live endpoints** in `api/monetization.py`, including `record_sale`
+(:1423), `get_creator_balance` (:1439) and `process_weekly_payouts` (:1490).
+
+**Every restart, deploy, crash or pod reschedule erases what creators are owed
+and what affiliates have earned.** Under more than one worker process, each
+worker holds a *different* balance for the same creator, and which one answers
+a request is arbitrary.
+
+This confirms and widens **F31/F32**, which recorded the same shape for
+affiliate and subscription state. It is the largest single money-correctness
+exposure found in this audit.
+
+## Method note — a hypothesis that was wrong, and a bug found by being wrong
+I predicted that a Stripe failure would still mark the payout `PAID`. **It does
+not.** With the `stripe` package present and the API key missing, the transfer
+raised, the payout was correctly marked `failed`, and `pending_usd` was
+**preserved at 160.00** — correct fail-safe behaviour, and worth stating
+plainly since so much of this audit is failures.
+
+The genuine defect (F204) is the *other* branch — the package being absent
+entirely — which I only reached by forcing `_STRIPE_AVAILABLE = False`. And
+driving the failure path is what exposed F205, which I had not predicted at
+all. Running the code beat reading it, twice in one test.
