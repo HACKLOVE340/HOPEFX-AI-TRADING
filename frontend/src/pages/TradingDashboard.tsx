@@ -186,23 +186,31 @@ function DashboardInner() {
           panel (e.g. Risk's feed-source list) scrolls internally instead of
           ballooning the whole row. Each cell is `grid` so its Panel stretches
           to fill the cell — no empty gaps. The page scrolls if it overflows. */}
+      {/* `min-w-0` alongside `min-h-0`: a grid item defaults to
+          `min-width: auto`, so it refuses to shrink below its content's
+          intrinsic width and OVERFLOWS the track instead. At col-span-2
+          (~230px on a 1440px viewport) that clipped the Risk panel's own
+          two-column grid mid-number — equity rendered as "$100,000.(" — which
+          is unreadable on the one figure a trader most needs to trust.
+          The vertical equivalent was already handled above; this is the same
+          fix on the other axis. See audit F166. */}
       <div className="hidden lg:grid grid-cols-12 auto-rows-[minmax(300px,380px)] gap-2 p-2">
-        <div className="grid col-span-5 row-span-2 min-h-0">
+        <div className="grid col-span-5 row-span-2 min-h-0 min-w-0">
           <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
         </div>
-        <div className="grid col-span-3 row-span-2 min-h-0">
+        <div className="grid col-span-3 row-span-2 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={6} />}><LiveSignalFeedGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><RiskDashboardGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={8} />}><OrderBookDepthGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={3} />}><SentimentGaugeGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={5} />}><MicrostructurePanelGuarded /></Suspense>
         </div>
       </div>
@@ -226,13 +234,13 @@ function DashboardInner() {
       {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
       {/* Desktop */}
       <div className="hidden lg:grid h-[260px] grid-cols-12 gap-2 px-2 pb-2">
-        <div className="grid col-span-5 min-h-0">
+        <div className="grid col-span-5 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
         </div>
-        <div className="grid col-span-4 min-h-0">
+        <div className="grid col-span-4 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><OrchestratorHealthGridGuarded /></Suspense>
         </div>
-        <div className="grid col-span-3 min-h-0">
+        <div className="grid col-span-3 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><MLModelPanelGuarded /></Suspense>
         </div>
       </div>

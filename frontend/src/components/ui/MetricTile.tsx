@@ -29,7 +29,13 @@ export function MetricTile({
     <div
       className={cn(
         'flex flex-col gap-0.5',
-        compact ? 'min-w-[80px]' : 'min-w-[100px]',
+        // `min-w-0` lets the tile shrink inside a narrow grid/flex parent.
+        // `min-w-[80px]` alone is a FLOOR: the tile refused to go below it,
+        // overflowed the panel, and the panel's `overflow-hidden` cut the value
+        // mid-glyph — equity rendered as "$100,000.(" on the dashboard, which
+        // reads as a complete number and is not one. See audit F166.
+        'min-w-0',
+        compact ? 'sm:min-w-[80px]' : 'sm:min-w-[100px]',
         className,
       )}
     >
@@ -41,10 +47,17 @@ export function MetricTile({
       </div>
       <span
         className={cn(
-          'font-mono tabular-nums font-semibold leading-tight',
-          compact ? 'text-sm' : 'text-base',
+          'font-mono tabular-nums font-semibold leading-tight truncate',
+          // `compact` tiles live in narrow panel grids, so the value font is
+          // sized for the CELL, not the viewport — a `sm:` prefix would
+          // re-inflate it on every desktop and re-clip the number.
+          compact ? 'text-xs' : 'text-base',
         )}
         style={valueColor ? { color: valueColor } : undefined}
+        // A monetary value that cannot fit must fail VISIBLY. `truncate` gives
+        // an ellipsis ("$100,0…") instead of a mid-glyph cut, and the title
+        // carries the full figure for hover and screen readers.
+        title={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
       >
         {value}
       </span>

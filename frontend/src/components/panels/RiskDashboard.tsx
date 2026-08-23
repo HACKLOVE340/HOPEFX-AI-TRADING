@@ -127,7 +127,7 @@ export function RiskDashboard() {
               color: account?.total_pnl == null ? '#475569' : account.total_pnl >= 0 ? '#00e676' : '#ff1744',
             },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-[#0d1421] px-4 py-3">
+            <div key={label} className="bg-[#0d1421] px-2 py-3 min-w-0">
               <MetricTile label={label} value={value} valueColor={color} compact />
             </div>
           ))}
