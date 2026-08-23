@@ -5641,3 +5641,109 @@ The genuine defect (F204) is the *other* branch — the package being absent
 entirely — which I only reached by forcing `_STRIPE_AVAILABLE = False`. And
 driving the failure path is what exposed F205, which I had not predicted at
 all. Running the code beat reading it, twice in one test.
+
+---
+
+# SWEEP 3 — the last 18 routes. All 82 SPA routes are now measured.
+
+## F209 — there are two dashboards; the nav points at the weaker one · HIGH
+
+`App.tsx:543-544` — two distinct components behind the same feature gate:
+
+```tsx
+<Route path="/dashboard" element={wrap(gated('dashboard', <TradingDashboard />))} />
+<Route path="/home"      element={wrap(gated('dashboard', <Dashboard />))} />
+```
+
+Measured side by side, authenticated, 1440px:
+
+| | `/dashboard` (`TradingDashboard`) | `/home` (`Dashboard`) |
+|---|---:|---:|
+| `<canvas>` charts | **0** | **7** |
+| `<table>` | **0** | **1** |
+| clickable metrics | 36 / 101 *(after the F187 fix)* | 17 / 29 |
+| outbound links | 55 *(after F187)* | 35 |
+| buttons | 63 | 0 |
+
+And the naming, from `navConfig.ts:115-116`:
+
+| Sidebar label | Route | What the page calls itself |
+|---|---|---|
+| **"Dashboard"** | `/dashboard` | — (0 headings, F173) |
+| **"Live Feed"** | `/home` | breadcrumb "⌂ › Dashboard", `<h1>` "📊 Dashboard" |
+
+So the page that titles itself **"Dashboard"**, carries the charts and the
+data table, is reachable only by clicking **"Live Feed"** — while the nav item
+labelled "Dashboard" leads to the version with no charts and no tables at all.
+
+This substantially revises **F193**. I wrote that charting was "absent from the
+pages a subscriber spends their time on". It is not absent from the dashboard —
+**it is on the other dashboard**, one click away and behind a label that does
+not describe it. Before building anything new here, the first question is
+whether these two pages should be one.
+
+Note also that `/home` had 17 of 29 metrics already clickable before my F187
+work touched anything — a second confirmation (with `/trade` at 60/71) that the
+drill-down pattern was established in this codebase and simply not applied
+uniformly.
+
+## F210 — five route pairs render identical pages · MEDIUM
+Measured byte-for-byte identical harness fingerprints:
+
+| Routes | chars | Same component? |
+|---|---:|---|
+| `/trading` · `/ai-charts` · `/ai-chart` | 728 / 728 / 728 | yes — 25 btn, 7 canvas, 1 table each |
+| `/reliability` · `/system-reliability` | 2108 / 2119 | yes |
+| `/feed` · `/social-feed` · `/social` | 362 each | yes |
+| `/risk-calc` · `/risk-calculator` | 1168 each | yes |
+| `/audit` · `/audit-log` | 1371 each | yes |
+
+Aliases are legitimate for backward compatibility, but 12 of 82 routes being
+duplicates inflates the apparent size of the product and means the sidebar,
+command palette and breadcrumbs can disagree about where a user "is". Pick a
+canonical path per page and make the others redirect, so the breadcrumb and the
+active-nav highlight resolve to one answer.
+
+## F211 — `/master-control` has 46 metrics and none are clickable · MEDIUM
+The largest concentration of inert data in the product, now that `/dashboard`
+is partly wired: 46 metrics, **0 clickable**, 7 of 8 rows inert, 8 outbound
+links. This is the operator console. Adds to **F187**'s remaining scope.
+
+## F212 — `/status` is fully inert · MEDIUM
+668 characters, **0 buttons**, 10 rows and **all 10 inert**, 1 metric, 0
+clickable. A status page whose component rows cannot be clicked for detail, and
+which offers no refresh control. Per **F185**, `api/status.py` exposes 10
+endpoints with **zero frontend surface** — `/status/incidents`,
+`/status/history`, `/status/live-trading/gate`, `/status/paper-trading/gate`.
+The incident history a subscriber would check before trusting the platform with
+money is built and unreachable.
+
+## F213 — the marketing pages are the best-built pages in the product · observation
+| Route | chars | headings | links out |
+|---|---:|---:|---:|
+| `/landing` | **5,233** | **24** | 27 |
+| `/pricing` | 2,673 | 2 | 3 |
+| `/upgrade` | 2,548 | 4 | 8 |
+| … | | | |
+| `/journal` | 378 | 1 | 1 |
+| `/signals` | 362 | 1 | 0 |
+| `/watchlist` | 413 | 1 | 0 |
+
+`/landing` has **24 headings**; `/dashboard` has zero (F173). The pre-purchase
+experience is an order of magnitude richer than the post-purchase one. Recorded
+as the single clearest answer to "is this too basic for what the app should be
+doing": the team demonstrably can build dense, well-structured, well-navigated
+pages — they have done it for the pages that sell the product.
+
+## Coverage — the frontend sweep is complete
+**82 of 82 SPA routes rendered and measured** in an authenticated superadmin
+session (2 of them, `/kyc` and `/mobile`, only via in-app navigation — they
+404 on direct GET, F198). Earlier coverage notes recording "15 of 86 rendered"
+are superseded.
+
+Aggregate across all 82:
+* **Zero clickable metrics** on 46 routes.
+* **Zero outbound links** from the content area on 31 routes.
+* `<canvas>` charts on 5 routes only: `/nuclear` (14), `/home`, `/terminal`,
+  `/ai-chart`/`/trading`/`/ai-charts` (7 each).
+* `<table>` on 7 routes.
