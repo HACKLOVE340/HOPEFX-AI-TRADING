@@ -13,6 +13,12 @@ interface CorrelationData {
   insights: string[];
   window: number;
   updated_at: string;
+  /** Server-side explanation when the matrix comes back empty, e.g. "requires
+   *  OHLCV history for at least 2 symbols. Found data for: ['XAU_USD']".
+   *  The response has always carried these; the interface did not model them,
+   *  so they could not be rendered and the user saw a blank card. F189. */
+  note?: string;
+  symbols_missing_data?: string[];
 }
 
 interface COTData {
@@ -41,6 +47,10 @@ const CorrelationDashboard: React.FC = () => {
   const [cot,  setCot]    = useState<COTData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  // COT is secondary data shown in its own card. It must not blank the page:
+  // `loadErr` replaces the whole view, so a COT outage would hide a perfectly
+  // good correlation matrix. Reported inline instead. F189.
+  const [cotErr, setCotErr] = useState<string | null>(null);
   const [window, setWindow]   = useState(30);
 
   const mountedRef = useRef(true);
@@ -61,9 +71,15 @@ const CorrelationDashboard: React.FC = () => {
     const cotOk  = cotRes.status  === 'fulfilled';
     setCorr(corrOk ? corrRes.value.data : null);
     setCot(cotOk  ? cotRes.value.data  : null);
-    if (!corrOk && !cotOk) {
-      setLoadErr(extractApiError((corrRes as PromiseRejectedResult).reason, 'Failed to load correlation data'));
-    }
+    // Surface a partial failure. This used to require BOTH calls to fail
+    // before showing anything, so a failing correlation request was silent
+    // whenever the (independent) COT request succeeded — the user got a blank
+    // panel with no error and no explanation. F189.
+    // Previously this required BOTH calls to fail before showing anything, so a
+    // failing correlation request was silent whenever the independent COT
+    // request succeeded — a blank panel with no error and no explanation. F189.
+    setLoadErr(corrOk ? null : extractApiError((corrRes as PromiseRejectedResult).reason, 'Failed to load correlation data'));
+    setCotErr(cotOk ? null : extractApiError((cotRes as PromiseRejectedResult).reason, 'COT sentiment unavailable'));
     setLoading(false);
   }, [window]);
 
@@ -116,6 +132,37 @@ const CorrelationDashboard: React.FC = () => {
           {corr && (
             <div style={{ ...s.card, gridColumn:'span 2' }}>
               <div style={s.cardTitle}>Rolling {corr.window}-Day Correlation Matrix</div>
+              {/* The server explains an empty matrix in `note` ("requires OHLCV
+                  history for at least 2 symbols. Found data for: [...]") and
+                  names the symbols it lacked. That was being discarded: only
+                  `cot.note` was rendered, so a user waited ~20s for a blank
+                  card while the remedy sat unread in the response. See F189. */}
+              {(corr.symbols ?? []).length === 0 ? (
+                <div style={{ padding:'18px 4px', display:'flex', flexDirection:'column', gap:8 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#94a3b8' }}>
+                    Not enough price history to correlate
+                  </div>
+                  {corr.note && (
+                    <div style={{ fontSize:12.5, color:'#64748b', lineHeight:1.55 }}>{corr.note}</div>
+                  )}
+                  {(corr.symbols_missing_data ?? []).length > 0 && (
+                    <div style={{ fontSize:12, color:'#64748b' }}>
+                      Missing history for:{' '}
+                      <span style={{ color:'#94a3b8', fontFamily:'ui-monospace, monospace' }}>
+                        {(corr.symbols_missing_data ?? []).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => navigate('/settings')}
+                    style={{ alignSelf:'flex-start', marginTop:4, padding:'6px 14px',
+                             background:'rgba(59,130,246,0.15)', border:'1px solid rgba(59,130,246,0.4)',
+                             borderRadius:8, color:'#60a5fa', fontSize:12.5, fontWeight:700, cursor:'pointer' }}
+                  >
+                    Connect a broker
+                  </button>
+                </div>
+              ) : (
               <div style={{ overflowX:'auto' }}>
                 <table style={{ borderCollapse:'collapse', fontSize:12 }}>
                   <thead>
@@ -142,6 +189,7 @@ const CorrelationDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+              )}
               <div style={{ marginTop:16 }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
                   <div style={s.cardTitle}>Key Insights</div>
@@ -171,6 +219,20 @@ const CorrelationDashboard: React.FC = () => {
           )}
 
           {/* COT Sentiment */}
+          {cotErr && !cot && (
+            <div style={{ ...s.card }}>
+              <div style={s.cardTitle}>COT Sentiment</div>
+              <div style={{ fontSize:12.5, color:'#94a3b8', padding:'12px 0' }}>{cotErr}</div>
+              <button
+                onClick={load}
+                style={{ padding:'6px 14px', background:'rgba(59,130,246,0.15)',
+                         border:'1px solid rgba(59,130,246,0.4)', borderRadius:8,
+                         color:'#60a5fa', fontSize:12.5, fontWeight:700, cursor:'pointer' }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {cot && (
             <div style={s.card}>
               <div style={s.cardTitle}>CFTC COT — Gold Speculator Sentiment</div>
