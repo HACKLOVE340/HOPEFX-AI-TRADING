@@ -29,6 +29,7 @@ try:
     from sqlalchemy import (
         BigInteger,
         Boolean,
+        CheckConstraint,
         Column,
         DateTime,
         Enum,
@@ -36,6 +37,7 @@ try:
         ForeignKey,
         Index,
         Integer,
+        Numeric,
         String,
         Text,
         UniqueConstraint,
@@ -1171,6 +1173,132 @@ else:
     class ConfigStore:  # type: ignore[no-redef]
         __tablename__ = "config_store"
         __table__ = type("T", (), {"columns": []})()
+
+
+# ── Creator marketplace ledger ────────────────────────────────────────────────
+# Creator balances, sales and payouts. Before these tables existed, all three
+# lived only in RevenueSplitEngine's dicts: a restart forgot every sale, every
+# balance and every payout, and there was nothing to reconcile a Stripe transfer
+# against (F208).
+#
+# Money is Numeric(18, 2), not Float. These are the first exact-decimal money
+# columns in this file — the other 104 monetary columns are Float, which is why
+# payments/wallet.py has to refuse sub-cent amounts to keep its balances
+# round-trippable (F235). New tables have nothing to migrate, so this is the
+# cheapest place to set the precedent rather than inherit the problem.
+#
+# The design is event-sourced with a reconcilable cache: creator_sales and
+# creator_payouts are append-only facts, and creator_balances is a summary the
+# facts can always re-derive. A stored balance that cannot be re-derived is the
+# defect this audit found repeatedly (F203, F136, F207).
+
+if SQLALCHEMY_AVAILABLE:
+
+    class CreatorPayoutRow(Base):
+        """A disbursement to a creator."""
+
+        __tablename__ = "creator_payouts"
+
+        id = Column(PKBigInt, primary_key=True)
+        payout_id = Column(String(64), unique=True, nullable=False, index=True)
+        creator_id = Column(String(64), nullable=False, index=True)
+        amount_usd = Column(Numeric(18, 2), nullable=False)
+        currency = Column(String(3), nullable=False, default="USD")
+        # TEXT + CHECK rather than a PG enum: the status set evolves with the
+        # payment provider, and a native enum needs a migration to extend.
+        status = Column(String(20), nullable=False, index=True)
+        # Guards a retried transfer. Stripe is called across a network that can
+        # time out after the transfer succeeded; without a unique key on the
+        # attempt, the retry pays the creator twice.
+        idempotency_key = Column(String(128), unique=True, nullable=False)
+        stripe_transfer_id = Column(String(128), unique=True, nullable=True)
+        failure_reason = Column(Text, nullable=True)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        completed_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("amount_usd >= 0", name="ck_creator_payouts_amount_non_negative"),
+            CheckConstraint(
+                "status IN ('pending','processing','paid','failed','simulated')",
+                name="ck_creator_payouts_status",
+            ),
+            Index("idx_creator_payouts_creator_created", "creator_id", "created_at"),
+        )
+
+    class CreatorSale(Base):
+        """A single marketplace sale or refund, split between platform and creator."""
+
+        __tablename__ = "creator_sales"
+
+        id = Column(PKBigInt, primary_key=True)
+        transaction_id = Column(String(64), unique=True, nullable=False, index=True)
+        strategy_id = Column(String(64), nullable=False, index=True)
+        creator_id = Column(String(64), nullable=False, index=True)
+        buyer_id = Column(String(64), nullable=False, index=True)
+        # Signed: a refund is the negative mirror of its sale.
+        gross_amount = Column(Numeric(18, 2), nullable=False)
+        platform_fee = Column(Numeric(18, 2), nullable=False)
+        creator_amount = Column(Numeric(18, 2), nullable=False)
+        currency = Column(String(3), nullable=False, default="USD")
+        transaction_type = Column(String(20), nullable=False, index=True)
+        stripe_payment_intent_id = Column(String(128), nullable=True, unique=True)
+        # Which payout settled this sale. A sale can be claimed by at most one
+        # payout, and the database is what enforces it — in Python this was a
+        # filter that was simply absent, so every payout claimed every historical
+        # transaction and reconciliation double-counted (F207).
+        settled_by_payout_id = Column(
+            String(64),
+            ForeignKey("creator_payouts.payout_id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
+        # On a refund row: the policy in force when it was applied. Stored, not
+        # re-derived, so changing the setting never rewrites history.
+        refund_policy_applied = Column(String(32), nullable=True)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+
+        __table_args__ = (
+            # The split identity, enforced by the database. This makes the
+            # truncation bug in to_cents() unrepresentable rather than merely
+            # fixed: no row can exist where the parts do not sum to the whole
+            # (F206).
+            CheckConstraint(
+                "platform_fee + creator_amount = gross_amount",
+                name="ck_creator_sales_split_sums_to_gross",
+            ),
+            CheckConstraint(
+                "transaction_type IN ('purchase','subscription','refund')",
+                name="ck_creator_sales_type",
+            ),
+            Index("idx_creator_sales_creator_settled", "creator_id", "settled_by_payout_id"),
+            Index("idx_creator_sales_creator_created", "creator_id", "created_at"),
+        )
+
+    class CreatorBalanceRow(Base):
+        """A creator's payout position. Derivable from creator_sales and creator_payouts."""
+
+        __tablename__ = "creator_balances"
+
+        creator_id = Column(String(64), primary_key=True)
+        pending_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        total_earned_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        total_paid_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        # Owed back to the platform under the deduct_next_payout refund policy.
+        # Kept out of pending_usd so a debt never presents as a negative balance.
+        recoverable_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        stripe_account_id = Column(String(128), nullable=True)
+        last_payout_at = Column(DateTime(timezone=True), nullable=True)
+        # Optimistic lock. RevenueSplitEngine's RLock only serialises threads in
+        # one process; production runs several workers, where an in-process lock
+        # protects nothing. A write that finds a changed version must retry.
+        version = Column(BigInteger, nullable=False, default=0)
+        updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+        __table_args__ = (
+            CheckConstraint("total_earned_usd >= 0", name="ck_creator_balances_earned_non_negative"),
+            CheckConstraint("total_paid_usd >= 0", name="ck_creator_balances_paid_non_negative"),
+            CheckConstraint("recoverable_usd >= 0", name="ck_creator_balances_recoverable_non_negative"),
+        )
 
 
 # ── Chargeback table ──────────────────────────────────────────────────────────

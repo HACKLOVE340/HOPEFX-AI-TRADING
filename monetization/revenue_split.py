@@ -124,6 +124,11 @@ class SaleTransaction:
     #: every historical transaction for the creator, so summing across payouts
     #: double-counted and reconciliation was impossible (F207).
     settled_by_payout_id: str | None = None
+    #: On a REFUND row: which refund policy was in force when it was applied.
+    #: Stamped rather than re-derived from the live setting — otherwise changing
+    #: the setting silently rewrites the meaning of every historical refund and
+    #: the ledger stops reconciling. See monetization/refund_policy.py.
+    refund_policy_applied: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -151,6 +156,12 @@ class CreatorBalance:
     total_paid_usd: Decimal = Decimal("0.00")
     last_payout_at: datetime | None = None
     stripe_account_id: str | None = None  # Stripe Connect account
+    #: Money the platform is owed back, under the DEDUCT_NEXT_PAYOUT policy:
+    #: a sale was refunded after its payout had already sent the creator's share.
+    #: Netted off future earnings before anything becomes payable. Kept separate
+    #: from ``pending_usd`` so a debt never presents as a negative balance the
+    #: creator cannot act on.
+    recoverable_usd: Decimal = Decimal("0.00")
 
     @property
     def is_payout_eligible(self) -> bool:
@@ -206,6 +217,10 @@ class RevenueSplitEngine:
         self._transactions: dict[str, SaleTransaction] = {}
         self._balances: dict[str, CreatorBalance] = {}
         self._payouts: dict[str, PayoutRecord] = {}
+        #: Where the refund policy is read from. None means "use the process
+        #: default store"; tests inject a stand-in. Never cached — see
+        #: resolve_refund_policy for why.
+        self.config_store = None
         # `record_sale` credits pending_usd while `process_weekly_payouts`
         # reads it, transfers, and writes it back. There was no lock anywhere
         # in this module, so the read-modify-write raced and the payout also
@@ -261,8 +276,23 @@ class RevenueSplitEngine:
         # and writing this same field concurrently (F203).
         with self._lock:
             bal = self._get_or_create_balance(creator_id)
-            bal.pending_usd += creator_amount
             bal.total_earned_usd += creator_amount
+            # A debt carried from a refunded-after-payout sale is netted off
+            # first. Without this, "deduct from next payout" would be a label on
+            # a number nothing ever reads.
+            if bal.recoverable_usd > 0:
+                applied = min(bal.recoverable_usd, creator_amount)
+                bal.recoverable_usd -= applied
+                creator_amount_net = creator_amount - applied
+                logger.info(
+                    "Sale offset against carried refund debt: creator=%s applied=%.2f remaining_debt=%.2f",
+                    creator_id,
+                    float(applied),
+                    float(bal.recoverable_usd),
+                )
+            else:
+                creator_amount_net = creator_amount
+            bal.pending_usd += creator_amount_net
 
         logger.info(
             "Sale recorded: strategy=%s creator=%s gross=%.2f creator_share=%.2f",
@@ -279,7 +309,22 @@ class RevenueSplitEngine:
         refund_amount: float | None = None,
     ) -> SaleTransaction | None:
         """
-        Record a refund, debiting the creator's pending balance.
+        Record a refund and recover the creator's share according to policy.
+
+        The interesting case is a sale that has already been **settled by a
+        payout**: the creator's share has left the platform, so refunding the
+        buyer means the money has to come back from somewhere. Which of the
+        three answers applies is the operator's setting — see
+        monetization/refund_policy.py — and the one actually used is stamped on
+        the refund row rather than re-read later.
+
+        For a sale that has not been paid out, the creator's share is still
+        pending and every policy behaves the same: reverse it.
+
+        This previously clamped the balance with ``max(Decimal("0.00"), ...)``
+        and never looked at whether the sale had been settled, so the shortfall
+        on a paid-out refund was neither deferred nor debited — it was silently
+        forgotten and there was nothing left to reconcile against.
 
         Args:
             original_transaction_id: The transaction being refunded.
@@ -288,15 +333,23 @@ class RevenueSplitEngine:
         Returns:
             Refund SaleTransaction, or None if original not found.
         """
+        from monetization.refund_policy import RefundPolicy, resolve_refund_policy
+
         orig = self._transactions.get(original_transaction_id)
         if not orig:
             return None
 
         gross = (
-            Decimal(str(refund_amount)).quantize(Decimal("0.01")) if refund_amount is not None else orig.gross_amount
+            Decimal(str(refund_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if refund_amount is not None
+            else orig.gross_amount
         )
-        platform_fee = (gross * self.platform_fee_pct).quantize(Decimal("0.01"))
+        platform_fee = (gross * self.platform_fee_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        # Subtract rather than recompute, so platform_fee + creator_amount is
+        # exactly gross even when the percentage does not divide evenly (F206).
         creator_amount = gross - platform_fee
+
+        policy = resolve_refund_policy(store=self.config_store)
 
         refund_txn = SaleTransaction(
             transaction_id=str(uuid.uuid4()),
@@ -309,18 +362,44 @@ class RevenueSplitEngine:
             currency=orig.currency,
             transaction_type=TransactionType.REFUND,
             stripe_payment_intent_id=None,
+            refund_policy_applied=policy.value,
         )
-        self._transactions[refund_txn.transaction_id] = refund_txn
 
-        # Debit creator balance
-        bal = self._get_or_create_balance(orig.creator_id)
-        bal.pending_usd = max(Decimal("0.00"), bal.pending_usd - creator_amount)
-        bal.total_earned_usd = max(Decimal("0.00"), bal.total_earned_usd - creator_amount)
+        with self._lock:
+            self._transactions[refund_txn.transaction_id] = refund_txn
+            bal = self._get_or_create_balance(orig.creator_id)
+            already_paid_out = orig.settled_by_payout_id is not None
+
+            if not already_paid_out:
+                # The money never left. Reverse it; no policy required.
+                bal.pending_usd -= creator_amount
+                bal.total_earned_usd -= creator_amount
+            elif policy is RefundPolicy.PLATFORM_ABSORBS:
+                # The creator keeps what they were paid; the platform funds the
+                # buyer's refund out of its own share. Their ledger is untouched.
+                pass
+            elif policy is RefundPolicy.ALLOW_NEGATIVE_BALANCE:
+                bal.pending_usd -= creator_amount
+                bal.total_earned_usd -= creator_amount
+            else:  # DEDUCT_NEXT_PAYOUT
+                # Take what is pending, carry the rest as a debt against future
+                # earnings. pending_usd never goes below zero.
+                from_pending = min(max(bal.pending_usd, Decimal("0.00")), creator_amount)
+                bal.pending_usd -= from_pending
+                bal.recoverable_usd += creator_amount - from_pending
+                bal.total_earned_usd -= creator_amount
+
+            # Reversing more than a creator ever earned is not meaningful; it
+            # would make total_earned a running figure rather than a total.
+            if bal.total_earned_usd < 0:
+                bal.total_earned_usd = Decimal("0.00")
 
         logger.info(
-            "Refund recorded: original=%s amount=%.2f",
+            "Refund recorded: original=%s amount=%.2f settled=%s policy=%s",
             original_transaction_id,
             float(gross),
+            already_paid_out,
+            policy.value,
         )
         return refund_txn
 
