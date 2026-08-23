@@ -4976,3 +4976,153 @@ user-visible value per unit of work:
    existing page to the stronger API.
 6. **`api/portfolio_allocator.py` + `api/portfolio.py` factor endpoints** —
    allocation and factor exposure, the institutional layer.
+
+---
+
+# PAGE-BY-PAGE INTERACTION AUDIT — drill-down, dead ends, and inert data
+
+Measured with an authenticated superadmin session at 1440px, waiting for
+`networkidle` plus a loading-state guard (six retries) so a slow page is not
+scored as an empty one. Harness: `interact.py`.
+
+**Method correction, recorded because it changed the conclusions.** The first
+run used a flat 1600 ms wait and reported `/indicators` at **0 chars** and
+`/tca`, `/risk-calculator`, `/copy-trading`, `/pattern-detector` at an identical
+**156 chars** — which reads as "four pages render the same error". They do not.
+All five render full content; the harness was measuring a loading state. This is
+the third time in this audit that a too-short measurement window has produced a
+false "the page is empty" result. The numbers below are from the corrected run.
+
+## F187 — the product shows 104 numbers on its main screen and 1 of them is clickable · HIGH
+
+The core of "professional apps let you click through". Metrics counted as leaf
+text nodes in the content area that parse as a number; "clickable" means the
+node is inside an `<a>`, `<button>`, `[role=button]` or `[onclick]`.
+
+| Route | clickable / total metrics | drill-down links out |
+|---|---:|---:|
+| `/dashboard` | **1 / 104** | 8 |
+| `/portfolio` | **0 / 22** | 11 |
+| `/watchlist` | **0 / 16** | **0** |
+| `/intelligence` | **0 / 11** | 2 |
+| `/performance` | **0 / 8** | 11 |
+| `/pnl` | 0 / 4 | 10 |
+| `/wallet` | 0 / 4 | 12 |
+| `/tca` | 0 / 4 | **0** |
+| `/trade` | **60 / 71** | 9 |
+
+`/trade` is the proof that the team knows how to do this — 60 of 71 numbers on
+that page are interactive. Every other page in the product is a read-only
+readout. On `/dashboard` a user sees 104 figures — P&L, win rate, exposure,
+drawdown, latency — and can act on exactly one.
+
+**What each of these should do**, in the idiom the request describes:
+* a P&L figure → the trades that produced it
+* a win-rate → the journal filtered to those trades
+* an exposure or position size → that position, with its stop, its risk, its
+  broker fill
+* a drawdown → the equity curve at that point in time
+* a model confidence → `api/ml.py /explain/{model}` (**already built** — F185)
+* a slippage number on `/tca` → the fills behind it
+
+Note that most of the destinations already exist as endpoints. This is
+overwhelmingly a wiring job, not new backend work.
+
+## F188 — seven pages are navigational dead ends · MEDIUM
+
+Pages whose entire content area contains **zero links to anywhere else**:
+`/watchlist`, `/signals`, `/backtest`, `/correlation`, `/tca`, `/copy-trading`,
+`/pattern-detector`.
+
+A user who arrives on one of these can only leave via the sidebar. There is no
+"see the trades behind this", no "open this instrument", no next step. On
+`/watchlist` this is the sharpest: 16 instruments with prices, and clicking an
+instrument does not open it on `/trade`.
+
+## F189 — the Correlation page blocks for ~20 s, then discards the backend's explanation · HIGH
+
+Measured against the live server, authenticated, all four window options the UI
+offers:
+
+```
+window=14  HTTP 200  21.63s  388B
+window=30  HTTP 200  17.99s  388B
+window=60  HTTP 200  13.93s  388B
+window=90  HTTP 200  20.21s  388B
+```
+
+Three separate defects stack here:
+
+1. **~20 seconds to first content**, with only the word "Loading…" on screen —
+   no skeleton, no progress, no indication anything is happening. This is why
+   the page measured 148 chars: it had not finished. A user will conclude it is
+   broken and leave.
+2. **The response is empty** — `{"symbols":[],"matrix":{},"insights":[]}` — and
+   the backend says exactly why:
+   `"note": "Correlation matrix requires OHLCV history for at least 2 symbols. Found data for: ['XAU_USD']. Connect a broker, add…"`
+3. **The UI throws that message away.** `CorrelationDashboard.tsx:25` declares
+   `note: string` in the response type, and line 209 renders `cot.note` — the
+   *sentiment* note. **`corr.note` is never rendered anywhere.** The user waits
+   twenty seconds and gets a blank panel, while the server sent a plain-English
+   explanation and a remedy.
+
+`load()` also suppresses the error state by design: `if (!corrOk && !cotOk)`.
+Because the COT call succeeds, a failing correlation call can never raise a
+visible error. Partial failure is silent.
+
+**Fix, in order:** render `corr.note` (a one-line change that turns a blank
+screen into an actionable instruction); set the error state per-request rather
+than only when both fail; add a skeleton; then investigate the 14-22 s server
+time.
+
+**Correction recorded:** I first measured this endpoint with `window=30d`,
+copying the button *label*, and got HTTP 422 — from which I nearly logged "the
+correlation page can never load, every request 422s". The component state is a
+number (`useState(30)`) and the `d` is display text only; the real request
+returns 200. The 422 was my own input, not the app's. The genuine defects are
+the three above.
+
+## F190 — zero tables and zero chart canvases confirmed across 18 pages · MEDIUM
+Widens **F174** from 12 pages to 18. `<table>`: **0 on every page measured**.
+`<canvas>`: **0 on every page measured**. For a trading platform this is the
+single clearest "too basic for what it should be" signal — no sortable trade
+history, no exportable grid, no zoomable equity curve, no crosshair. And per
+**F185**, `api/trading.py` already serves `/equity-curve`, `/history`,
+`/depth/{symbol}` and `/microstructure`. The data is there; nothing draws it.
+
+## F191 — content thinness, ranked · MEDIUM
+Visible characters in the content area, authenticated, full access:
+
+| Route | chars | reading |
+|---|---:|---|
+| `/correlation` | 148 | blocked ~20 s then blank (F189) |
+| `/copy-trading` | 241 | 7 backend endpoints unsurfaced (F185) |
+| `/signals` | 362 | dead end, no metrics, no drill-down |
+| `/journal` | 378 | 10 backend endpoints, most unsurfaced |
+| `/pattern-detector` | 402 | 11 buttons, 1 metric, no links out |
+| `/leaderboard` | 454 | 12 links out but 0 metrics |
+| `/watchlist` | 413 | 16 metrics, none clickable, 0 links out |
+| `/tca` | 620 | 3 of 7 buttons disabled, 0 links out |
+| `/indicators` | 633 | wired to the weaker of two APIs (F186) |
+| `/wallet` | 707 | |
+| `/performance` | 748 | |
+| `/backtest` | 766 | |
+| `/pnl` | 854 | 1 button on the whole page |
+| `/portfolio` | 984 | 22 metrics, none clickable |
+| `/intelligence` | 994 | **0 buttons on the entire page** |
+| `/trade` | 1,477 | the strongest page in the product |
+| `/dashboard` | 1,969 | 104 metrics, 1 clickable |
+
+`/intelligence` is worth singling out: **994 characters, 11 metrics, and not a
+single button.** It is a poster, not an application screen.
+
+## Measurement caveats — stated so these numbers are not over-read
+* The `tab` count in the raw harness output matches `[class*=tab]`, which
+  collides with utility class names (`table`, `tabular`). It is not a reliable
+  count of tab controls and is excluded from the findings above.
+* `/dashboard` reports `h=0` headings. This is a real finding (**F173**) but
+  the page does render section labels — they are styled `div`s, not `h1`-`h3`.
+  The defect is semantic structure, not the absence of visible titles.
+* "Metrics" is a heuristic over leaf text nodes. A timestamp or an axis label
+  can be counted. The ratios (1/104, 0/22, 60/71) are the signal; the absolute
+  totals are approximate.
