@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CheckCircle2, Circle, ShieldAlert, RefreshCw, LayoutDashboard } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
 
@@ -22,6 +23,32 @@ interface StatusData {
 interface HistoryDay {
   date: string;
   uptime_pct: number;
+}
+
+/** GET /status/live-trading/gate — may the engine trade live right now. */
+interface LiveGate {
+  allowed: boolean;
+  reason?: string;
+  checked_at?: string;
+  checks?: Record<string, { passed: boolean; message?: string }>;
+}
+
+/** GET /status/paper-trading/gate — progress through the validation phases. */
+interface PaperGate {
+  elapsed_days?: number;
+  fill_count?: number;
+  phase2_ready?: boolean;
+  phase2_reason?: string;
+  phase3_ready?: boolean;
+  phase3_reason?: string;
+}
+
+/** GET /status/sharpe-progress — trades collected toward a stable Sharpe. */
+interface SharpeProgress {
+  trade_count?: number;
+  n_needed?: number;
+  pct_complete?: number;
+  sharpe?: number;
 }
 
 interface Incident {
@@ -112,6 +139,14 @@ const StatusPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  // `/status/live-trading/gate`, `/status/paper-trading/gate` and
+  // `/status/sharpe-progress` are served by the backend and had no caller
+  // anywhere in the SPA (audit F185/F230). They answer the question a
+  // subscriber actually has on a status page: is the system allowed to trade
+  // live right now, and if not, how far off is it.
+  const [liveGate, setLiveGate]   = useState<LiveGate | null>(null);
+  const [paperGate, setPaperGate] = useState<PaperGate | null>(null);
+  const [sharpe, setSharpe]       = useState<SharpeProgress | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -122,12 +157,21 @@ const StatusPage: React.FC = () => {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [statusRes, histRes, incidentRes] = await Promise.allSettled([
-        api.get<StatusData>('/status/json'),
-        api.get<{ history?: HistoryDay[] }>('/status/history'),
-        api.get<{ incidents: Incident[] }>('/status/incidents'),
-      ]);
+      const [statusRes, histRes, incidentRes, liveRes, paperRes, sharpeRes] =
+        await Promise.allSettled([
+          api.get<StatusData>('/status/json'),
+          api.get<{ history?: HistoryDay[] }>('/status/history'),
+          api.get<{ incidents: Incident[] }>('/status/incidents'),
+          api.get<LiveGate>('/status/live-trading/gate'),
+          api.get<PaperGate>('/status/paper-trading/gate'),
+          api.get<SharpeProgress>('/status/sharpe-progress'),
+        ]);
       if (!mountedRef.current) return;
+      // Each is independent: a readiness endpoint being down must not blank
+      // the whole status page.
+      setLiveGate(liveRes.status === 'fulfilled' ? liveRes.value.data : null);
+      setPaperGate(paperRes.status === 'fulfilled' ? paperRes.value.data : null);
+      setSharpe(sharpeRes.status === 'fulfilled' ? sharpeRes.value.data : null);
       if (statusRes.status === 'fulfilled') {
         setData(statusRes.value.data);
       } else {
@@ -201,13 +245,125 @@ const StatusPage: React.FC = () => {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/')}
-            style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📊 Dashboard
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs font-bold
+                       text-[#60a5fa] cursor-pointer transition-colors duration-150
+                       hover:bg-[rgba(59,130,246,0.25)] focus-visible:outline-none
+                       focus-visible:ring-2 focus-visible:ring-sky-500"
+            style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)' }}
+          >
+            <LayoutDashboard size={14} strokeWidth={1.75} aria-hidden /> Dashboard
           </button>
-          <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
+          <button
+            onClick={load}
+            title="Refresh now"
+            aria-label="Refresh status now"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg
+                       text-slate-400 cursor-pointer transition-colors duration-150
+                       hover:bg-[#1e2d3d] focus-visible:outline-none focus-visible:ring-2
+                       focus-visible:ring-sky-500"
+          >
+            <RefreshCw size={15} strokeWidth={2} aria-hidden />
+          </button>
         </div>
       </div>
+
+      {/* ── Trading readiness — surfaces /status/live-trading/gate,
+             /status/paper-trading/gate and /status/sharpe-progress, none of
+             which had a caller anywhere in the SPA (F185/F230). ── */}
+      {(liveGate || paperGate || sharpe) && (
+        <section aria-labelledby="readiness-h" style={{ marginBottom: 16 }}>
+          <h2 id="readiness-h" style={{
+            fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.08em', color: '#475569', margin: '0 0 8px 2px',
+          }}>
+            Trading readiness
+          </h2>
+
+          {liveGate && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+              background: liveGate.allowed ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)',
+              border: `1px solid ${liveGate.allowed ? 'rgba(34,197,94,0.3)' : 'rgba(251,191,36,0.3)'}`,
+              borderRadius: 10, padding: '12px 16px', marginBottom: 10,
+            }}>
+              {liveGate.allowed
+                ? <CheckCircle2 size={18} strokeWidth={2} aria-hidden style={{ color: '#22c55e', flexShrink: 0, marginTop: 1 }} />
+                : <ShieldAlert size={18} strokeWidth={2} aria-hidden style={{ color: '#fbbf24', flexShrink: 0, marginTop: 1 }} />}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: liveGate.allowed ? '#22c55e' : '#fbbf24' }}>
+                  {liveGate.allowed
+                    ? 'Live trading is permitted'
+                    : 'Live trading is blocked'}
+                </div>
+                {liveGate.reason && (
+                  <p style={{ margin: '4px 0 0', fontSize: 12.5, lineHeight: 1.55, color: '#94a3b8' }}>
+                    {liveGate.reason}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+            {sharpe && (
+              <div style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>
+                  Statistical confidence
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0', fontFamily: 'ui-monospace, monospace', marginTop: 4 }}>
+                  {sharpe.trade_count ?? 0} / {sharpe.n_needed ?? '—'} trades
+                </div>
+                {/* Progress toward a Sharpe the platform will trust. */}
+                <div
+                  role="progressbar"
+                  aria-valuenow={Math.round(sharpe.pct_complete ?? 0)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Progress toward a statistically stable Sharpe ratio"
+                  style={{ height: 6, borderRadius: 3, background: '#1e2d3d', marginTop: 8, overflow: 'hidden' }}
+                >
+                  <div style={{
+                    width: `${Math.min(100, Math.max(0, sharpe.pct_complete ?? 0))}%`,
+                    height: '100%', background: '#00d4ff', transition: 'width 0.3s',
+                  }} />
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
+                  {(sharpe.pct_complete ?? 0).toFixed(1)}% of the sample needed for a stable Sharpe
+                </div>
+              </div>
+            )}
+
+            {paperGate && (
+              <div style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>
+                  Validation phases
+                </div>
+                <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {[
+                    { n: 'Phase 2 — anomaly weighting', ok: paperGate.phase2_ready, why: paperGate.phase2_reason },
+                    { n: 'Phase 3 — online learning',   ok: paperGate.phase3_ready, why: paperGate.phase3_reason },
+                  ].map((ph) => (
+                    <li key={ph.n} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      {ph.ok
+                        ? <CheckCircle2 size={13} strokeWidth={2.5} aria-hidden style={{ color: '#22c55e', flexShrink: 0, marginTop: 2 }} />
+                        : <Circle size={13} strokeWidth={2} aria-hidden style={{ color: '#475569', flexShrink: 0, marginTop: 2 }} />}
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: ph.ok ? '#22c55e' : '#94a3b8' }}>{ph.n}</span>
+                        {ph.why && <span style={{ display: 'block', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>{ph.why}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 8 }}>
+                  {paperGate.fill_count ?? 0} fills over {paperGate.elapsed_days ?? 0} days
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* WebSocket live status */}
       <div style={{
