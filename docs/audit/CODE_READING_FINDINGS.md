@@ -4707,3 +4707,143 @@ none is reachable from a production call site. The wallet write path
 (`F135` id collision, `F136` unlocked read-modify-write) is exactly what these
 predicates were written to catch. The check that would have caught both bugs
 lives in the repository, has tests, and is not wired to the code it describes.
+
+---
+
+# DOMAIN: `security/` — 9,924 LOC, 16 modules
+
+Unlike `invariants/`, this package **is** well connected: 13 production modules
+import it (`api/security_dashboard.py`, `api/superadmin/*`, `core/router_registry.py`,
+`resilience/auto_rollback.py`, `connect_to_life.py`). The problems here are not
+reachability; they are correctness inside the credential layer, and one
+duplicated-identity trap.
+
+## F180 — three different classes named `SecureVault`, and the best-looking one is the broken one · HIGH
+
+| File | LOC | Production importers | Quality |
+|---|---:|---:|---|
+| `config/vault.py` | 530 | **1** (`config/settings.py:18`) — **THE LIVE ONE** | Argon2id, crash-safe rotation, honest docstrings |
+| `security/vault.py` | 530 | **0** | also ships an `APICredentialManager` |
+| `security/encryption.py` | 347 | **0** | **defects proved below** |
+
+Only `config/vault.py` is reachable. The other two are unreferenced — but they
+are not harmless, because they carry the *same class name* and a richer-looking
+API (`APICredentialManager`, `store_credential`, `get_credential`,
+`rotate_key`). A developer wiring broker credentials who autocompletes
+`SecureVault` has a 2-in-3 chance of importing a vault that cannot survive a
+process restart.
+
+**Severity note:** the defects below are in code with no production caller, so
+this is HIGH (a trap), not CRITICAL (a live loss). Stating that explicitly
+because the F158 lesson was the reverse mistake — a module that *looked* live
+and was not.
+
+## F181 — `security/encryption.py` `rotate_key()` destroys every credential and returns True · HIGH (unreachable)
+
+The docstring says *"Re-encrypt all credentials with new key"*. The body:
+
+```python
+def rotate_key(self, new_master_key: str) -> bool:
+    try:
+        # Store old cipher          <-- comment only; no code
+
+        # Set new key
+        self._master_key = new_master_key
+        self._initialize_cipher()
+        logger.info("Key rotation successful")
+        return True
+```
+
+Nothing is re-encrypted. The old cipher is discarded. **Executed:**
+
+```
+stored ok, decrypt before rotate: 'OANDA-API-KEY-SECRET-12345'
+rotate_key() returned: True
+decrypt AFTER rotate  : ''
+-> credential recoverable? False
+```
+
+Total, silent credential loss, reported as success. Compare `config/vault.py`,
+which handles the same problem honestly: it writes the new key to a temporary
+keyring slot first for crash safety, and its docstring states plainly that *"the
+vault does not maintain a registry of encrypted blobs — callers must re-encrypt
+those tokens themselves."* The live implementation is correct and says what it
+does not do; the dead one claims to do it and destroys data.
+
+## F182 — the same vault loses every credential on restart · HIGH (unreachable)
+
+`_initialize_cipher()` reads `HOPEFX_SALT`; when unset it generates a **random
+salt** and continues with a `logger.warning`. The PBKDF2 key is derived from
+that salt, so a restart derives a different key. **Executed** — same master key,
+two instances:
+
+```
+salt v1: 2c7fb4fe9f46e946   salt v2: a042b5a5dc613663
+same master key, new process. decrypt: ''
+```
+
+`HOPEFX_SALT` is **empty in `.env.example:1614`** and is set only in
+`deployment/docker-compose.yml`. A deployment that misses it silently loses
+every stored credential at each restart.
+
+## F183 — the encryption path fails open to base64 · HIGH (unreachable)
+
+Two independent routes store credentials in trivially reversible form:
+
+1. `CRYPTO_AVAILABLE = False` (the `cryptography` import fails) → the entire
+   vault degrades to base64 with one `logger.warning` at import.
+2. `encrypt()` catches any exception from `Fernet.encrypt` and **falls through**
+   to `return EncryptedCredential(base64.b64encode(...), version=0)`.
+
+`decrypt()` then honours `version == 0` by base64-decoding. **Executed:**
+
+```
+a version=0 credential stores: TVktQlJPS0VSLVBBU1NXT1JE
+trivially reversible ->        MY-BROKER-PASSWORD
+decrypt() honours it  ->       'MY-BROKER-PASSWORD'
+```
+
+There is no signal to the caller that a credential is unencrypted. Base64 is an
+encoding, not a cipher; a `version=0` row in `config/credentials.enc` is a
+plaintext broker password with extra steps.
+
+**Also**: `decrypt()` returns `""` on failure rather than raising. A caller
+doing `api_key = vault.get_credential(...)` cannot distinguish "no such
+credential" from "decryption failed" and will attempt to authenticate with an
+empty string.
+
+## F184 — the self-healer counts "could not run tests" as "tests passed" · MEDIUM
+
+`security/self_healer.py:1901-1904`:
+
+```python
+except FileNotFoundError:
+    # python -m pytest failed — python itself not on PATH (shouldn't happen)
+    self._log("warning", "SelfHealer: python not found on PATH — skipping test run")
+    return True
+```
+
+`_run_tests()` gates patch application at `:997` (`pre_ok` — a False skips the
+patch) and validates it at `:1020` and `:1354` (`post_ok`). This component
+**writes code to disk on the running system**. Returning `True` on
+`FileNotFoundError` means a patch is applied and declared validated by a test
+run that never executed.
+
+The rest of the function is careful — timeout returns `False`, generic
+exception returns `False` — so this is one narrow branch, not a pattern. But
+the safe value for "I could not verify" on a patch gate is `False`. Fix: return
+`False` and record the reason, as the timeout branch already does.
+
+## VERIFIED GOOD — `config/vault.py`, the live vault
+Read in full. Argon2id (`time_cost=3, memory_cost=65536, parallelism=4`) for
+password hashing; Fernet for data; the key held in the system keyring, not on
+disk. `rotate_key()` writes to a temporary keyring slot *before* swapping the
+active cipher, so a crash mid-rotation leaves a recoverable state, and it
+documents precisely what it does not do. `verify_password` catches only
+`VerifyMismatchError`, so a corrupt hash raises rather than silently returning
+False. This is the standard the two dead vaults should be deleted in favour of.
+
+One nit: `rotate_key` calls `keyring.set_password` without checking
+`_KEYRING_AVAILABLE`; if `keyring` is absent, `keyring` is `None` and the
+`AttributeError` surfaces as a confusing `VaultError("Key rotation failed:
+'NoneType' object has no attribute...")`. Guard it for a clearer message.
