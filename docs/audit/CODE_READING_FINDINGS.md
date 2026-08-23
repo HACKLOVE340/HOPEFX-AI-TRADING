@@ -3870,3 +3870,54 @@ believe, and it hides the one case that IS allow-all (F156's sub-threshold path)
   * Blocks emit an audit event via `_emit_block_event`, and when the DB is down
     the outbox says so rather than dropping silently:
     "outbox: DB unavailable — event AML_BLOCK not persisted".
+
+================================================================================
+PORTFOLIO (2,493 LOC)
+================================================================================
+
+## F158 — the Decimal-correct position manager is dead; the live one is float · MEDIUM (and it corrects the money-precision map)
+`portfolio/pms.py` (363 LOC) is written with proper `Decimal` discipline
+throughout — `quantity`, `avg_entry_price`, `market_price`, `unrealized_pnl`,
+`realized_pnl` and `cash` are all `Decimal` (:28-32, :97), and the averaging
+arithmetic guards division by zero at every branch (:59-76).
+
+IT HAS NO CONSUMERS. Checked three ways, because the F126 trap is exactly this:
+  * `portfolio/__init__.py` DOES re-export it (:21
+    `from portfolio.pms import PortfolioManager as PMS, PortfolioOptimizer`)
+  * but NOTHING anywhere imports from the package level — grepping
+    `from portfolio import` / `import portfolio` outside the package returns
+    ZERO hits
+  * and nothing imports the submodule directly either — `from portfolio.pms`,
+    `PortfolioManagementSystem`, `PMS(` all return zero outside `portfolio/`
+`portfolio/manager.py` (187 LOC) is in the same position. That is **550 LOC of
+portfolio management with no reachable caller.**
+
+Note also a name collision that makes this easy to miss: `manager.py` and
+`pms.py` BOTH define a class called `PortfolioManager`, and `__init__.py` imports
+one as `PortfolioManager` (:11) and the other as `PMS` (:21).
+
+WHAT IS ACTUALLY LIVE is `execution/position_tracker.py` — 35 importers — and its
+`Position` is float on every monetary field (:26-38):
+    quantity: float          entry_price: float      current_price: float
+    unrealized_pnl: float    realized_pnl: float     commission: float
+    stop_loss: float | None  take_profit: float | None
+
+THIS CORRECTS THE MONEY-PRECISION MAP. The `hopefx-money-precision` skill lists
+`portfolio/pms.py` under "Order state — Decimal", alongside `execution/oms.py`
+and `execution/tca.py`. That is true of the file and false of the running system:
+the Decimal position manager is unreachable and the float one carries every live
+position. Anyone relying on that row to reason about precision would reach the
+wrong conclusion.
+
+Same shape as F147 (order flow): two implementations of one concept, and the
+better one is the dead one.
+
+## PORTFOLIO — the rest, verified
+  * `strategy_allocator.py` (585) is the most-used module here — 7 external
+    importers, backing `api/portfolio_allocator.py` ("a mean-variance
+    allocator"), and it raises 503 when unavailable rather than returning
+    fabricated weights (api/portfolio_allocator.py:51-57).
+  * `rebalancer.py` (683) is live with 3 importers, wired into
+    `core/strategy_orchestra.py:71-73`.
+  * `factor_model.py` (652) is live with 3 importers.
+  * No fabricated data anywhere in the package.
