@@ -3374,3 +3374,68 @@ correct, and does not gate anything.
     (orchestrator.py:328), so the augmentation flags cannot leak as predictors.
   * research/pipeline/paper_trading_gate.py exists as a named promotion gate
     rather than models being shipped straight from training.
+
+================================================================================
+ANALYSIS (5,922 LOC + analysis/patterns/ 4,502 LOC)
+================================================================================
+
+## F147 — the entire order-flow subsystem is mounted, exposed, and never fed · HIGH (proven by execution)
+`core/startup_factories.py:698-703` constructs the analyzer and mounts its API:
+    async def init_order_flow(s, app):
+        from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
+        ofa = OrderFlowAnalyzer()
+        app.include_router(create_order_flow_router(ofa))
+        return ofa
+Five endpoints go live: `/{symbol}/profile`, `/analysis`, `/footprint`,
+`/levels`, `/delta` (order_flow.py:880-908). **All five are `@router.get`.
+There is no POST and no ingest route.**
+
+The only writer to the trade buffer is `_record_trade` (:275-283), reached only
+from `add_trade` (:285) and `add_trades` (:315). Grepping the whole repo
+(excluding .venv, tests/ and analysis/ itself) for callers of those, and for
+`get_order_flow_analyzer` / `OrderFlowAnalyzer(`, returns exactly two hits:
+`examples/order_flow_example.py:81` and the startup factory above. Nothing feeds
+it.
+
+PROVEN by constructing it exactly as startup does:
+    OrderFlowAnalyzer() as constructed at startup:
+      get_trades("XAUUSD")        = []
+      analyze("XAUUSD")           = None
+`analyze()` returns None at :516-517 because the trade list is empty, so every
+one of the five endpoints answers with nothing.
+
+THE SAME IS TRUE OF THE REST OF THE FAMILY:
+    analysis/advanced_order_flow.py   683 LOC — `add_trade` at :201; the class is
+        instantiated NOWHERE outside examples/order_flow_example.py
+    analysis/institutional_flow.py    578 LOC — `add_trade` at :156; zero
+        external references
+    analysis/order_flow_dashboard.py  594 LOC — consumes the two above (:24-32)
+Total: **2,791 LOC of order-flow analytics that cannot return a result.**
+
+This is not a crash and not a wrong answer — it is a feature that is present in
+the API surface, authenticated, documented, and empty. A frontend panel calling
+`/api/order-flow/XAUUSD/analysis` receives null, which is indistinguishable from
+"no flow imbalance right now".
+
+ARCHITECTURALLY, THERE ARE TWO ORDER-FLOW IMPLEMENTATIONS AND NEITHER WORKS
+PROPERLY — this is the "four systems" pattern again:
+  * `data_layer/microstructure/engine.py` — IS fed, computes buy_pressure and
+    OFI, but only on the read-driven cache-miss path (F87) and with a degenerate
+    Lee-Ready tie-break (F86).
+  * `analysis/order_flow.py` and friends — a more complete implementation
+    (volume profile, footprint, value area, cumulative delta) that is never fed
+    at all.
+The better implementation is the dead one.
+
+## ANALYSIS — the rest, verified
+  * `market_scanner.py` (970) is sound by contrast. `scan(market_data, …)`
+    (:313) takes its data as a PARAMETER rather than reaching for a global, and
+    `create_scanner_router` (:946-954) registers BOTH read and write routes
+    behind `Depends(get_current_user)`. Data can actually arrive, and the entry
+    point is authenticated.
+  * `analysis/patterns/` is a further 4,502 LOC (candlestick 917,
+    chart_patterns 1036, pattern_detector 787, support_resistance 862) that I
+    have NOT audited — flagging it explicitly rather than leaving it implied.
+  * `institutional_flow` and `market_analysis` show zero EXTERNAL importers but
+    are re-exported through `analysis/__init__.py` (:32, :65), so a caller-count
+    on the module alone is misleading here — the same trap as F126.
