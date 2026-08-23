@@ -252,10 +252,13 @@ Four manifest pairs now disagree. Each is "whichever `kubectl apply` ran last wi
       `MacroCalendar`. Plus `/master-control` (46 metrics, 0 clickable),
       `/watchlist` (0/16), `/performance` (0/8), `/status` (10 rows, all inert).
       **Aggregate: 46 of 82 routes have zero clickable metrics.**
-- [ ] **F192 · BLOCKS THE ABOVE.** `Trade.tsx` has no `useSearchParams` —
-      symbol is local state. Wiring watchlist rows to `/trade?symbol=X` would
-      produce links that navigate and land on the wrong instrument. **Do this
-      first.** It also means a ticket cannot be bookmarked or shared today.
+- [ ] **F192/F225 · NOT a blocker — corrected.** `Trade.tsx:460` already reads
+      `location.state.signal` (symbol, direction, entry, stop, target,
+      quantity), and `Watchlist.tsx:309` / `TradeJournal.tsx:254` already pass
+      it. **The in-app handoff works and is better than a query param.** Use it
+      for the remaining drill-down work. The residual gap is narrower: no
+      `useSearchParams`, so `/trade?symbol=X` is ignored and a ticket cannot be
+      **bookmarked or shared**. Seed from the param when router state is absent.
 - [ ] **F188/F196 ·** 31 of 82 routes are navigational dead ends.
 
 ### 8c. Structure and information architecture
@@ -301,6 +304,26 @@ per unit of work, since the backend is already done:
    institutional layer.
 
 ---
+
+## What the per-page analysis added (F225-F228 + design spec)
+
+- **F226 ·** `/dashboard` is a 271-LOC layout shell with **zero** store reads,
+  handlers or inputs. "The dashboard is too basic" is a property of the nine
+  panels it composes — and of the choice to compose *those* nine: five of the
+  nine describe the platform's machinery rather than the user's money. Fixes
+  belong in the panels.
+- **F227 ·** the pages that *do* things (alerts, copy-trading, risk calculator,
+  TCA) are well-featured; the pages that *show* things (home, pnl, leaderboard,
+  watchlist, dashboard) are read-only — and those are the ones subscribers open
+  most. `/home`: 879 LOC, 8 store slices, **zero actions**. `/pnl`: 849 LOC,
+  refresh and pagination only, **0 form inputs**.
+- **The gating constraint is `useOrchestratorData.ts`** (751 LOC), a single
+  global fetcher calling ~25 APIs into the store. A page can only render what
+  it fetched. Much of F185's 34% gap is the bootstrap never fetching, not pages
+  ignoring — so surfacing built capability is mostly adding fetches there.
+- **Per-page design spec** in `CODE_READING_FINDINGS.md` gives, for each core
+  page: what it renders, what drives it, what functions it lacks, and which
+  **already-built** endpoints supply them.
 
 ## Not yet examined
 
