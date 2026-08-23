@@ -5231,3 +5231,22 @@ to open its ticket is the single most expected interaction a trader has.
 3. `MetricTile`'s contract (`to` + `toHint`, inert without them) is the
    pattern to reuse. Three of these panels render bespoke markup and will need
    the contract applied by hand, not by prop.
+
+## F192 — `/trade` cannot be deep-linked to a symbol · MEDIUM (blocks the F187 batch fix)
+`frontend/src/pages/Trade.tsx` contains **no `useSearchParams`, no `useParams`
+and no read of `location.search`**. The selected symbol lives in component
+state only, set by clicking a `SymbolCard` or the `1–9` keyboard shortcut.
+
+Consequence for the deferred work: wiring `/watchlist`, `LivePriceTicker` and
+`OrderBookDepth` rows to `/trade?symbol=XAUUSD` would produce links that
+navigate but land on whatever symbol the ticket last defaulted to. The
+drill-down would look implemented and do nothing — the same shape as a control
+that exists and is never invoked, which is this codebase's most repeated defect.
+
+**Do this first, in the batch fix:** have `Trade.tsx` seed its symbol state
+from a `?symbol=` param (falling back to the current default when absent or
+unknown), and keep the param in sync on selection so the page is linkable and
+shareable. Only then wire the row links.
+
+This also affects a plain user expectation independent of F187: a trader
+cannot bookmark or share a ticket for a specific instrument today.
