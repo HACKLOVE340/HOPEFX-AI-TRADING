@@ -3602,3 +3602,73 @@ no confirm, that the web UI would have blocked or warned on.
     as live — the same discipline as the web watchdog (F124).
   * A 401 triggers a single guarded refresh attempt (`original._retry` flag,
     apiClient.ts:76-80), so a failing refresh cannot loop.
+
+================================================================================
+DATA/ (5,799 LOC) and ANALYSIS/PATTERNS/ (4,502 LOC) — the last two areas.
+================================================================================
+
+## F154 — FIVE independent price-acquisition paths coexist, and different consumers read different ones · HIGH (synthesis)
+This is the "four systems" pattern applied to the most fundamental value in the
+platform. Five separate price sources exist, all live, none authoritative:
+
+  1. data_layer/orchestrator.py — 6 gold feeds + DataQualityEngine consensus.
+     Started by core/startup_helpers.py:105 (non-fatal, F84).
+     Consumed by core/signal_engine.py:64, api/ml.py:890, startup_factories:954/1835.
+  2. data_feed/nuclear_streamer.py — WebSocket ticks.
+     Started by core/startup_factories.py:1417 `init_price_engine` when any of
+     FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY is set. (F89)
+  3. data/real_time_price_engine.py (1,107 LOC) — REST engine, the multi-symbol
+     fallback in the same factory (:1400).
+  4. execution/paper_runner.py `OandaPricePoll` — the REST poll used by the
+     ACTIVE paper mode. (F142)
+  5. brokers/oanda_stream.py `OANDAStream` — used by hopefx_engine (:534).
+
+`init_price_engine`'s result is stored as `s.price_engine` and injected into the
+brain (startup_factories.py:1742), so in one process the BRAIN is reading
+NuclearStreamer/RealTimePriceEngine while `core/signal_engine.py` reads the
+data_layer consensus and the paper runner polls OANDA REST directly.
+
+CONSEQUENCE: the price a chart displays, the price a signal is computed from, and
+the price a trade is sized against can be three different numbers from three
+different providers at three different ages, with no reconciliation between them.
+Every data-quality finding in this audit (F82 the 96% weighting, F85 the dead
+jump filter, F87 the read-driven stream) applies to path 1 ONLY — the paths that
+actually feed the brain and the paper runner have no equivalent consensus,
+outlier rejection or jump filter at all.
+
+## DATA/ — the rest
+  * `data/validator.py` (254 LOC) has ZERO external importers — a validation
+    module nothing validates with.
+  * `data/order_book.py` (74) and `data/scheduler.py` (894) are well used
+    (8 and 4 external importers).
+  * `data/market_ingest.py` and `data/news_calendar_feed.py` have one importer
+    each — they are the components `run.py --dry-run` advertises for live mode
+    (F143) and which hopefx_engine does not use.
+
+## ANALYSIS/PATTERNS (4,502 LOC) — VERIFIED CLEAN, including a near-miss I want on record
+All four detectors are well used (candlestick 5 importers, chart_patterns 4,
+pattern_detector 4, support_resistance 6) and contain NO fabricated data
+(swept for random/synthetic/placeholder — no hits).
+
+I NEARLY REPORTED A FALSE POSITIVE HERE. Two things looked like lookahead:
+  * `peaks[i + 1]` (pattern_detector.py:139, advanced_patterns.py:210, …) —
+    this indexes a list of PEAK INDICES, not future bars. Iterating adjacent
+    peaks is how you find a double top or head-and-shoulders. Not lookahead.
+  * `support_resistance.py:114-118` IS a centred window:
+        for i in range(window, len(highs) - window):
+            high_window = highs[i - window : i + window + 1]
+            if highs[i] == max(high_window):
+                results.append((i, highs[i]))
+    A swing high at `i` is confirmed using bars `i+1 … i+window` — future data
+    relative to `i` — and the result is labelled with index `i`.
+    THIS IS CORRECT AS USED. The loop stops at `len(highs) - window`, so it
+    never claims a pivot it cannot yet confirm; on a live series the most recent
+    `window` bars produce no levels. And the only consumers are live API
+    endpoints — api/trading.py:4196-4200 (detect_levels) and :4420-4422
+    (detect_patterns) — answering "what are the confirmed levels right now".
+    No backtest consumes them.
+    LATENT HAZARD, worth stating: if these detectors are ever fed to a backtest
+    and asked "what were the levels at bar i", they will return levels confirmed
+    by up to `window` bars of future data — 5 hours on H1 at the default
+    window=5. The correct fix at that point is to attribute the level to
+    `i + window`, not to `i`.
