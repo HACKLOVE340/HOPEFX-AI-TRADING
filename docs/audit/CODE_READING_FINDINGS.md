@@ -6724,3 +6724,48 @@ user, bookmark and external link points at.
 Chosen because it breaks nothing (no route removed), puts charts and positions
 on the page users actually open, and gives the near-empty `/observability`
 real content instead of building new panels for it.
+
+## F232 — the explainability endpoints return a labelled placeholder · MEDIUM
+
+`/api/ml/explain/{model}` and `/api/ml/feature-importance/{model}` have **zero
+callers in the SPA**, alongside `/ml/drift-report`, `/ml/engine-health`,
+`/ml/model-card` and `/ml/ab-tests`. Verified against the live route table (38
+`/api/ml` routes registered) and by counting callers per path.
+
+Before surfacing them, what they actually return matters. Live, authenticated:
+
+```
+GET /api/ml/explain/rf_xauusd
+{"model":"rf_xauusd","method":"uniform",
+ "features":[{"feature":"feature_000","importance":0.02}, …]}
+```
+
+Every feature carries exactly `0.02`. `ml/explainability.py:270-272`:
+
+```python
+else:
+    features = [{"feature": fn, "importance": 1.0 / max(len(feature_names), 1)} for fn in feature_names]
+    method = "uniform"
+```
+
+When a model exposes neither `feature_importances_` nor `coef_`, the endpoint
+returns a flat distribution and **labels the method `"uniform"`**. The backend
+is honest: it says it did not measure anything.
+
+The feature names are also positional (`feature_000` … `feature_192`), so even
+a real importance ranking would not tell a user *which* input mattered.
+
+**The trap this sets for the UI.** Rendering those bars as "what the model
+weighted" would present an unmeasured flat distribution as insight — the exact
+shape of **F176** (a scorecard that cannot fail) and **F194** (a sentiment 0.0
+shown as a reading when the engine is off). The endpoint is not at fault; a
+naive chart of it would be.
+
+Any page surfacing these must render `method` prominently and refuse to present
+`method: "uniform"` as an explanation. Recorded before building the page, so
+the constraint is explicit rather than discovered later.
+
+Related, and honest in the same way: `/api/ml/drift-report` returns
+`{"overall_status":"unknown","message":"Insufficient live feature data (need
+≥50 ticks). Start live inference to populate the drift buffer.","live_samples":0}`
+— a server-side note of exactly the kind `EmptyState.serverNote` exists to show.
