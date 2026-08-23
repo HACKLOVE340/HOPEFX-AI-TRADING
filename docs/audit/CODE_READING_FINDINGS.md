@@ -4111,3 +4111,73 @@ correct three-state machine:
     without counting (:173-175) — a real distinction most implementations miss.
   * `_maybe_transition_to_half_open` (:185-190) compares elapsed time against
     `timeout_seconds` and resets the probe counter on transition.
+
+================================================================================
+PERIPHERAL PACKAGE SWEEP (~25,000 LOC) — charting, nocode, social, teams,
+whitelabel, monitoring, tracing, transparency, explainability, shadow,
+rate_limiting, reports, visualization, replay, events, forensics, chaos,
+deployment.
+================================================================================
+
+## SWEEP RESULT — CLEAN on both patterns that have produced findings
+  * NO FABRICATED DATA. Swept all 18 packages for
+    `random.(random|uniform|randint)` and `np.random.(rand|uniform|normal)`
+    outside tests and seeds: **zero hits**. (Contrast F149, where the GodMode
+    watchlist fabricates a sparkline.)
+  * NO FAIL-OPEN EXCEPTION HANDLERS. Swept for `except Exception` followed
+    within three lines by `return True` / `allowed=True` / `status: "ok"`:
+    **zero hits**. (Contrast F130, F132, F133, F156.)
+
+## F163 — `visualization/` and `deployment/` are dead; `teams/` is not · LOW
+Verified by resolving every import-shaped reference, not by a module-name grep:
+  * `visualization/` (494 LOC) — DEAD. The only matches anywhere are
+    `import optuna.visualization as vis` (backtesting/hyperopt.py:405, :416), a
+    different package entirely. Nothing imports the local one.
+  * `deployment/` (894 LOC) — DEAD. Zero import references of any kind.
+    (Not to be confused with `deployments/` — the k8s manifests of F139.)
+  * `teams/` (1,068 LOC) — **LIVE**, and my first pass would have called it dead.
+    A `^from teams` pattern misses it; the real wiring is
+        app.py:423                    from teams import router as _teams_router
+        core/router_registry.py:759   from teams import router as teams_router
+        core/startup_factories.py:2384 from teams import TeamManager
+    Recording the near-miss because it is the third time a caller-count has
+    nearly produced a false "dead code" finding (F126 nuclear, F147/F158 the
+    inverse). A module-name grep is not a reachability test.
+
+## RATE_LIMITING — VERIFIED CLEAN, and it is the best failure-handling code in the repository
+15 external importers, and it degrades honestly rather than failing open.
+
+  * THE REDIS FALLBACK IS A REAL LIMITER, NOT A BYPASS. On a Redis error
+    (advanced.py:244-256) it logs at **WARNING** — not debug — and returns
+        await _fallback_limiter.is_allowed(key, limit, window_seconds)
+    `_InMemoryRateLimiter.is_allowed` (:118-131) is a genuine sliding window
+    with a lock, an eviction pass and a real `return False` when the limit is
+    reached. Redis failure degrades fleet-wide counting to per-worker counting;
+    it does not stop counting.
+
+  * TWO REAL BUGS FOUND, FIXED AND DOCUMENTED WITH THEIR CONSEQUENCES
+    (advanced.py:150-167) — worth quoting because this is the standard the rest
+    of the codebase should be held to:
+      1. "``redis.asyncio`` ties its pool to the loop it was created on, so any
+         second loop in the process … hit 'Event loop is closed' on every call.
+         The client is now rebuilt when the running loop changes."
+      2. "**Permanent disable.** A single exception set ``_redis_available =
+         False`` and this function then returned None for the rest of the
+         process's life … One Redis failover — seconds of downtime — therefore
+         turned a fleet-wide rate limit into a per-worker one indefinitely, with
+         no further log line to say so. Availability is now re-probed after a
+         cooldown."
+    That second defect is precisely the class this audit keeps finding — a
+    control that silently stops applying. Here it was found, fixed, and the
+    failure mode written down. `_redis_retry_after = time.monotonic() +
+    _REDIS_RETRY_COOLDOWN` (:255) replaces the one-way switch.
+
+## REMAINING PACKAGES — reachability recorded, no defects surfaced
+    rate_limiting  818 LOC  15 importers    monitoring   1058  11
+    tracing       1017        7             charting     3840   6
+    social        1775        6             nocode       2506   4
+    events         666        4             chaos        1277   4
+    whitelabel    2093        3             reports       654   3
+    transparency   855        2             explainability 763   2
+    shadow         771        2             replay        889   1
+    forensics      188        1             teams        1068   live (above)
