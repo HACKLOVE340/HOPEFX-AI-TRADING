@@ -6083,3 +6083,138 @@ Two production callers (`api/tutorials.py:386`, `scripts/generate_tutorials.py`)
 both to `tutorials.generator`. Small, reachable, no findings. Note the content
 gap is separate and already recorded as **F201** (`/academy` advertises 15
 episodes, all "COMING SOON").
+
+---
+
+# DOMAIN: `tests/` — 221,598 LOC, 575 files, 16,404 test functions
+
+The last unread body of code. Audited by AST across the whole tree plus
+targeted reads.
+
+## F221 — the coverage gate measures 34% of the application · CRITICAL
+
+`.coveragerc [run] source` names 13 packages: `auth risk brokers execution
+market_data ml config kill_switch compliance analytics backtesting core`.
+
+Measured against every application package over 200 LOC:
+
+| | LOC | share |
+|---|---:|---:|
+| application Python | 367,949 | 100% |
+| **inside `[run] source`** | **127,878** | **34%** |
+| **never measured** | **240,071** | **65%** |
+
+The largest packages the gate has never seen:
+
+```
+61,033  api/            <- the biggest package in the codebase
+22,230  scripts/
+19,610  data_layer/
+10,424  analysis/
+ 9,924  security/
+ 9,510  monetization/   <- creator payouts, subscriptions, marketplace
+ 9,325  research/
+ 6,430  database/
+ 6,259  data/           <- the live real-time price engine (F216)
+ 5,405  invariants/     <- the constitutional safety layer
+```
+
+**Every money package is outside the gate**: `monetization/` and `payments/`
+are absent from `source`, so the coverage number says nothing about the code
+that pays creators and takes card payments.
+
+On top of that, the `omit` list removes the risk and execution logic **from
+inside the packages that are measured**:
+
+```
+risk/manager.py            risk/gatekeeper.py
+risk/pre_trade_gate.py     risk/post_trade_analyzer.py
+execution/engine.py        execution/execution.py
+execution/fix_router.py    execution/fix_adapter.py
+core/decision/HOPEFXDecisionEngine.py
+```
+
+So the job labelled **"Per-module coverage gate (≥80%)"** — which passed in my
+own pre-commit run — reports on a subset that excludes the risk manager, the
+pre-trade gate, the decision engine, the execution engine, all payment code and
+the entire HTTP API. This confirms **F105** and is considerably worse than that
+finding recorded.
+
+## F222 — the money-movement modules are the ones with no tests · CRITICAL
+
+Cross-referenced every module ≥150 LOC in the money/risk/execution-critical
+packages against every identifier appearing anywhere in `tests/`. Of 145 such
+modules, **13 are never named in a single test file** — and the list is
+dominated by money:
+
+| LOC | Module | What it does |
+|---:|---|---|
+| 628 | `monetization/payment_processor.py` | processes payments |
+| 585 | `portfolio/strategy_allocator.py` | allocates capital across strategies |
+| **432** | **`monetization/revenue_split.py`** | **pays creators — F203/F204/F206/F207/F208 all live here** |
+| 427 | `payments/transaction_manager.py` | transaction lifecycle |
+| 363 | `portfolio/pms.py` | (already known unreachable — F158) |
+| 354 | `monetization/marketplace_submission.py` | marketplace intake |
+| 318 | `payments/fintech/paystack.py` | Paystack integration |
+| 282 | `monetization/access_codes.py` | access-code redemption |
+| **271** | **`payments/crypto/address_generator.py`** | **generates crypto deposit addresses** |
+| 228 | `database/repositories/tick_data_repository.py` | |
+| 208 | `payments/payment_gateway.py` | gateway abstraction |
+
+`grep -rl revenue_split tests/` → **0**. Same for `payment_processor`,
+`address_generator`, `transaction_manager`, `paystack`.
+
+This is the answer to "how did five defects survive in `revenue_split.py`":
+**nothing tests it, and the coverage gate cannot see it.** A test that ran
+`process_weekly_payouts` twice would have caught F207 in one assertion.
+`address_generator.py` deserves separate emphasis — a wrong crypto deposit
+address is an irrecoverable loss, and it has no test.
+
+## F223 — 75 test files are named after the coverage metric, not behaviour · HIGH
+
+```
+test_coverage_boost_execution.py     test_brokers_low_coverage.py
+test_execution_coverage4.py          test_brokers_deep_coverage.py
+test_execution_coverage6.py          test_risk_manager_coverage.py
+test_coverage_gate_boost.py          test_auth_coverage_ext.py
+test_kill_switch_coverage2.py        test_coverage_boost_ml_misc.py
+…75 files
+```
+
+They are also exactly where the weakest tests cluster. Of the 1,125 test
+functions carrying no assertion of any kind (6.9% of 16,404), the top
+concentrations are `test_brokers_prop_firms_coverage.py` (41),
+`test_brokers_low_coverage.py` (40), `test_config_vault_coverage.py` (35),
+`test_brokers_deep_coverage.py` (29), `test_signal_engine_coverage.py` (26),
+`test_execution_coverage_boost.py` (20).
+
+A file named for the metric it moves rather than the behaviour it protects is
+a statement of intent. Combined with F221, the picture is a coverage number
+being managed rather than a suite being built.
+
+**Fairness — these are not empty tests.** Reading them, the assertion-free ones
+are "does not raise" smoke tests:
+
+```python
+def test_write_redis_latch_no_redis_non_fatal(self, tmp_path):
+    ks = _ks(tmp_path)
+    with patch.object(ks, "_get_latch_redis", return_value=None):
+        ks._write_redis_latch("test reason")   # should not raise
+```
+
+That is a legitimate, if weak, pattern — it does verify the non-fatal contract.
+The real problem is that **the test name claims more than the test checks**:
+`test_write_k8s_configmap_skips_outside_pod` asserts nothing about *skipping*.
+If that method began making a live Kubernetes API call outside a pod, the test
+would still pass. On kill-switch and risk code, "it didn't raise" is not
+sufficient evidence of correct behaviour.
+
+**Method note.** My first sample from a flagged file *did* contain an assert —
+I had picked a function that was not on my list. Checking the list before
+concluding avoided a false accusation about the detector and about the tests.
+
+## F224 — only 18 tests are explicitly skipped · GOOD
+Across 16,404 test functions, just 18 carry a `skip`/`skipif` decorator. There
+is no large body of quietly disabled tests, and no file failed to parse. The
+suite is genuinely executed — which makes F221 and F222 about *what it points
+at*, not about tests being switched off.
