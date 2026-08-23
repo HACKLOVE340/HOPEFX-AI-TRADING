@@ -11,10 +11,10 @@ Companion document: `CODE_READING_FINDINGS.md` (144 findings, F1–F143).
 
 ## 1. The single most important fact
 
-**There is not one system here. There are four, and they share a repository
+**There is not one system here. There are five, and they share a repository
 rather than an architecture.**
 
-Four entry points each assemble a *different* pipeline from the same parts bin.
+Five entry points each assemble a *different* pipeline from the same parts bin.
 They are not layers of one design; they are alternative designs, built at
 different times, all still present and all still runnable.
 
@@ -24,6 +24,7 @@ different times, all still present and all still runnable.
 | `execution/paper_runner.py` | `run.py --mode paper` | REST poll → bars → ML → event bus → FIXRouter |
 | `hopefx_engine.py` | `run.py --mode live` | NuclearStreamer → Brain → Risk → OMS → ExecutionEngine |
 | `connect_to_life.py` | run directly | The above **plus** the autonomous self-healer |
+| `core/main_loop.py` | `run.py` fallback when `HopeFXEngine` is unavailable | MarketIngest → NewsCalendarFeed → Gatekeeper → FIXRouter, guarded by FaultGuard |
 
 Plus `celery_app.py` for scheduled work. A statement like "HOPEFX does X" is
 almost always false unless it names which of these it means.
@@ -106,17 +107,23 @@ LLM for patches. See §7.
 mode it names: EventBus, FaultGuard, NewsCalendarFeed, MarketIngest,
 StrategyEngine, Gatekeeper, FIXRouter.
 
-`hopefx_engine.py` contains **zero references to all six** (F143). Every class
-exists in the repo — so this is a stale description of a superseded architecture,
-not invention — but five of the six are genuinely not in the live path. Only
-`EventBus` survives, indirectly via `execution/engine.py`.
+`hopefx_engine.py` contains **zero references to all six** (F143). But those six
+are wired together — in `core/main_loop.py:50-56`, which imports exactly them,
+and which `run.py:398` falls back to when `HopeFXEngine` cannot be imported.
+
+So the `--dry-run` text is an accurate description of the **fallback** pipeline
+and an inaccurate one of the pipeline that normally runs. That is still a defect
+in the one tool whose purpose is telling an operator what is about to start —
+but it is stale routing, not invention. (F143-RESOLVED.)
 
 The **paper** description in the same function is accurate. The live one is not.
 
 ### 3.2 `Gatekeeper` — the clearest example of the pattern
 
-`risk/gatekeeper.py` implements prop-firm risk checks. `risk/manager.py`
-references it twice — both in **docstrings**:
+`risk/gatekeeper.py` implements prop-firm risk checks, and IS invoked — by
+`core/main_loop.py:54`, the fallback pipeline. It is not reached from
+`hopefx_engine`. Within `risk/manager.py` it is referenced twice, both in
+**docstrings**:
 
 ```
 :221  "Produced by RiskManager.assess() and consumed by Gatekeeper."
@@ -139,7 +146,7 @@ naming because it explains most of the audit:
 | `verify_balance_after` | `invariants/payments.py:84` | wallet write path never calls it (F138) |
 | Patch signing | `security/self_healer.py:318-326` | `HEAL_PATCH_SIGNING_KEY` set in no config file (F130) |
 | Kalman filter, IsolationForest | `data_layer/quality/engine.py` | computed every tick, read by nothing (F90) |
-| `Gatekeeper` | `risk/gatekeeper.py` | referenced only in docstrings (F143) |
+| `Gatekeeper` | `risk/gatekeeper.py` | live in `core/main_loop.py`; absent from `hopefx_engine` (F143-RESOLVED) |
 | Lot-ceiling anti-drift import | `risk/manager.py:88` | imports a name that does not exist (F73) |
 
 The second most common shape: **a gate that fails open in exactly the condition
