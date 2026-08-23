@@ -4561,3 +4561,149 @@ and emoji — it does **not** read icons from `navConfig`, so it was untouched b
 this fix and needs the same treatment. The residual is a long tail best taken
 file-by-file rather than in one sweep; the regression test above should be
 extended to each file as it is converted.
+
+---
+
+# DOMAIN: `invariants/` — 5,405 LOC, 34 modules, 338 predicates
+
+The package presents itself as the platform's constitutional safety layer: a
+comprehensive, introspected, always-current inventory of every safety predicate
+in the system. Its own docstring states the design intent precisely —
+
+> "At platform scale the danger is not a missing check; it is *not knowing what
+> is checked*."
+
+That intent is correct, and the finding below is that the package does the
+opposite of it.
+
+## F176 — the safety scorecard reports FULL COVERAGE from hardcoded literals · CRITICAL
+
+`scripts/invariant_coverage.py` is the operator-facing safety report. Executed
+on the current tree, it prints:
+
+```
+Critical-component coverage:
+   ✅ protected    12/12
+   ✅ monitored    12/12
+   ✅ alerted      12/12
+   ⚠️  recoverable  10/12
+...
+   order_execution      [P M A R]
+   risk_engine          [P M A R]
+   kill_switch          [P M A R]
+   market_data_feed     [P M A R]
+   ml_inference         [P M A R]
+================================================
+FULL COVERAGE ✅
+```
+
+**Every one of those values is a hand-typed `True`.** `invariants/registry.py:77`:
+
+```python
+CRITICAL_COMPONENTS: dict[str, dict[str, bool]] = {
+    "order_execution": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "risk_engine":     {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    "kill_switch":     {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
+    ...
+}
+
+def coverage_counts() -> dict[str, tuple[int, int]]:
+    total = len(CRITICAL_COMPONENTS)
+    return {dim: (sum(1 for c in CRITICAL_COMPONENTS.values() if c.get(dim)), total) ...}
+```
+
+`coverage_counts()` counts how many dict entries say `True`. It inspects no
+code, calls no predicate, probes no component. The report cannot return
+anything other than a near-perfect score, because a literal cannot fail.
+
+**Set against findings already established in this audit, by execution:**
+
+| Component | Report says | This audit proved |
+|---|---|---|
+| `order_execution` | `[P M A R]` protected | **F151** — a user's stop-loss is accepted, forwarded, and discarded at `brokers/base.py:549`. The order returns 201 Created with no stop at the broker. |
+| `risk_engine` | `[P M A R]` protected | **F142** — the ACTIVE paper path (`PaperRunner` → `bus.publish` → `FIXRouter._route`) has no RiskManager, no sizing and no SL/TP. Its only gate is `if self._halted`. |
+| `kill_switch` | `[P M A R]` recoverable | **F139** — `deployments/k8s/` has no RBAC and no `serviceAccountName`, so the ConfigMap patch that propagates the kill switch across pods is denied. |
+| `market_data_feed` | `[P M A R]` protected | **F84** — `execution/engine.py:687` skips the data-layer safety gate in exactly the condition it exists for. |
+| `ml_inference` | `[P M A R]` protected | **F145/F146** — features are zero-filled *before* scaling (measured −15σ) and the drift-coverage number is computed and gates nothing. |
+
+This is the same defect shape as **F160** (the broker probe that reports `ok`
+from config) — but at the constitutional layer, on the one artifact an
+operator, an auditor, or a prop-firm risk desk would read to decide this system
+is safe to fund. F160 misinformed a health endpoint. This misinforms the
+safety review itself.
+
+**Fix.** `CRITICAL_COMPONENTS` must not carry booleans. Each dimension has to
+resolve to a probe that can fail: `protected` → name the predicate(s) actually
+wired to that component and assert they are reachable from a production call
+site; `monitored` → assert a metric with that name is registered; `alerted` →
+assert a rule in `monitoring/rules/alerts.yml` fires on it; `recoverable` →
+assert a documented runbook or recovery entry point exists. Until then, the
+honest interim change is to stop printing `FULL COVERAGE ✅` and print
+`DECLARED (unverified)` instead — a manifest of intent is a useful document,
+but it must not be dressed as a measurement.
+
+## F177 — 338 predicates are inventoried, ~31 are wired · HIGH
+
+Measured by AST across the whole repository (calls resolved by name; internal
+facade dispatch counted separately so the facade is not miscredited):
+
+| | count |
+|---|---|
+| public functions defined in `invariants/` | **362** |
+| facade entry points called from production code | **11** |
+| `verify_*` predicates dispatched inside `enforcement.py` | **20** |
+| **reachable from a production call site (total)** | **~31 (9%)** |
+| called only by `scripts/` | 21 |
+| **called only by their own tests** | **~331 (91%)** |
+
+The 11 production entry points, all through `invariants/enforcement.py`:
+`enforce_pre_trade`, `enforce_order_authorization`, `enforce_exposure`,
+`enforce_var`, `enforce_risk_appetite`, `enforce_reconciliation`,
+`enforce_ledger_reconciliation`, `enforce_human_approval`,
+`verify_decision_trace`, `verify_webhook_signature`, `status`.
+
+**Method note — I nearly got this wrong.** The first pass excluded
+`invariants/` from the call scan and returned "329 never called from
+production", which would have been a false positive of the F126/F163 shape: the
+facade dispatches internally, so 20 predicates *are* live even though nothing
+outside the package names them. The corrected figure is ~31 reachable, not 11.
+The finding survives the correction — 91% is still test-only — but the first
+number was wrong and would have overstated it.
+
+This is not "dead code to delete". Modules such as `platform_auth` (15),
+`platform_web` (17), `platform_data` (15), `payments` (10), `compliance` (9)
+and `security` (8) contain predicates that describe controls this platform
+genuinely needs. They are **written and not connected**. That is the single
+most repeated defect shape in this codebase, and `invariants/` is its largest
+concentration: an entire package of correct safety logic that no production
+code path can reach.
+
+## F178 — the two k8s ConfigMaps disagree on enforcement mode · HIGH
+
+`invariants/enforcement.py:79` defaults to `MODE_MONITOR` — findings are logged
+and nothing is refused. Enforcement is opt-in per deployment. The deployments
+do not agree:
+
+| File | `HOPEFX_INVARIANT_MODE` |
+|---|---|
+| `k8s/k8s-configmap.yaml:40` | **`"enforce"`** (with the comment "CRITICAL: must be `enforce` when BROKER_TYPE != paper") |
+| `deployments/k8s/configmap.yaml:14` | **`"monitor"`** |
+
+Both ConfigMaps are named `hopefx-config`. This is **F98/F139 again, in a third
+manifest pair**: whichever `kubectl apply` ran last decides whether the
+constitutional gate blocks a trade or merely writes a log line. There is no
+indication in either file that the other exists.
+
+Credit where due: the *code* here is careful. `core/startup_factories.py:141`
+refuses to start with `HOPEFX_INVARIANT_MODE != enforce` on a non-paper broker,
+and `.env.example` / `docker-compose.yml` both ship
+`HOPEFX_INVARIANT_ENFORCE_KINDS=order_authorization,pre_trade` so the two
+highest-value kinds are promoted even under the monitor default. The design is
+sound; the deployment manifests contradict it.
+
+## F179 — `verify_balance_after` remains uncalled, and it is not alone · MEDIUM
+Confirms and widens **F138**. `invariants/payments.py` defines 10 predicates;
+none is reachable from a production call site. The wallet write path
+(`F135` id collision, `F136` unlocked read-modify-write) is exactly what these
+predicates were written to catch. The check that would have caught both bugs
+lives in the repository, has tests, and is not wired to the code it describes.
