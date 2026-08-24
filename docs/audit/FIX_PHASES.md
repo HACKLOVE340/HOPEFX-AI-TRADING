@@ -63,11 +63,18 @@ Note on enforcement mode: `HOPEFX_INVARIANT_MODE` defaults to `monitor`, where
 cannot rest on it. The write path refuses on its own exact-Decimal check
 regardless of mode; the invariant makes the violation *observable*.
 
-### B2 — creator balance persistence · BLOCKED ON YOU
-* **F208** — creator balances, sales and payouts exist only in RAM. **There is
-  no table for any of them** — this is a schema decision, not a write-path fix.
-  Cheapest possible moment: nothing to migrate. Needs your call on what a
-  creator balance, a sale and a payout look like as tables.
+### B2 — creator ledger persistence · DONE
+* **F208** — closed. Three tables (`creator_sales`, `creator_payouts`,
+  `creator_balances`) plus migration `s1t2u3v4w5x6`. Events are the truth, the
+  balance is a re-derivable cache. Money is `Numeric(18,2)` — the first exact
+  decimal columns in a schema whose other 104 money columns are `Float`.
+* **Refund policy is yours to set** — Superadmin → Financial → Refund Policy,
+  stored in `config_store`. The policy applied is stamped on the refund, so
+  changing the setting never rewrites history.
+* **F238** — the split CHECK was exact on PostgreSQL and refused a correct
+  1c + 6c = 7c split on SQLite. Now compared in integer cents.
+* **F239** — the refund-policy commit broke the generated API-doc gate. A green
+  targeted suite is not a green build.
 
 ## Phase C — Controls that report success without acting
 The codebase's signature defect.
