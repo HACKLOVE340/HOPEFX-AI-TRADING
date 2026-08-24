@@ -209,10 +209,16 @@ class RevenueSplitEngine:
         self,
         platform_fee_pct: Decimal = PLATFORM_FEE_PCT,
         min_payout_usd: Decimal = MIN_PAYOUT_USD,
+        session_factory=None,
     ) -> None:
         self.platform_fee_pct = platform_fee_pct
         self.creator_share_pct = Decimal("1.00") - platform_fee_pct
         self.min_payout_usd = min_payout_usd
+        #: SQLAlchemy sessionmaker for the creator ledger tables. Without one the
+        #: engine runs entirely in memory, which is the mode tests and paper
+        #: trading use and is not a failure. With one, every sale, refund,
+        #: balance and payout is written through and reloaded on construction.
+        self._session_factory = session_factory
 
         self._transactions: dict[str, SaleTransaction] = {}
         self._balances: dict[str, CreatorBalance] = {}
@@ -226,6 +232,179 @@ class RevenueSplitEngine:
         # in this module, so the read-modify-write raced and the payout also
         # iterated `_balances` while sales could insert into it (F203).
         self._lock = threading.RLock()
+
+        self._load_from_db()
+
+    # ── Persistence ───────────────────────────────────────────────────────────
+    # The ledger tables are the durable record; the dictionaries above are a
+    # working set loaded from them. Everything is written through, and a write
+    # the database rejected raises rather than leaving memory ahead of the
+    # ledger — a sale the ledger did not record has not happened.
+
+    def _write(self, fn) -> None:
+        """Run ``fn(session)`` in one transaction, or raise having changed nothing."""
+        if not self._session_factory:
+            return
+        session = self._session_factory()
+        try:
+            fn(session)
+            session.commit()
+        except Exception:
+            try:
+                session.rollback()
+            except Exception:
+                logger.debug("Creator ledger rollback failed", exc_info=True)
+            logger.exception("Creator ledger write failed")
+            raise
+        finally:
+            try:
+                session.close()
+            except Exception:
+                logger.debug("Creator ledger session close failed", exc_info=True)
+
+    @staticmethod
+    def _sale_row(txn: SaleTransaction):
+        from database.models import CreatorSale
+
+        return CreatorSale(
+            transaction_id=txn.transaction_id,
+            strategy_id=txn.strategy_id,
+            creator_id=txn.creator_id,
+            buyer_id=txn.buyer_id,
+            gross_amount=txn.gross_amount,
+            platform_fee=txn.platform_fee,
+            creator_amount=txn.creator_amount,
+            currency=txn.currency,
+            transaction_type=str(txn.transaction_type),
+            stripe_payment_intent_id=txn.stripe_payment_intent_id,
+            settled_by_payout_id=txn.settled_by_payout_id,
+            refund_policy_applied=txn.refund_policy_applied,
+            created_at=txn.created_at,
+        )
+
+    def _upsert_payout(self, session, payout: PayoutRecord) -> None:
+        from database.models import CreatorPayoutRow
+
+        row = session.query(CreatorPayoutRow).filter_by(payout_id=payout.payout_id).one_or_none()
+        if row is None:
+            row = CreatorPayoutRow(
+                payout_id=payout.payout_id,
+                creator_id=payout.creator_id,
+                # The payout id doubles as the idempotency key today, because
+                # nothing retries a payout yet. The column is separate so a
+                # retry path can reuse the key of the attempt it is retrying
+                # rather than mint a new payout — which is the only way it stops
+                # a timed-out-but-successful transfer being sent twice. Reusing
+                # payout_id as the key does NOT provide that on its own.
+                idempotency_key=payout.payout_id,
+                created_at=payout.created_at,
+            )
+            session.add(row)
+        row.amount_usd = payout.amount_usd
+        row.currency = payout.currency
+        row.status = str(payout.status)
+        row.stripe_transfer_id = payout.stripe_transfer_id
+        row.failure_reason = payout.failure_reason
+        row.completed_at = payout.completed_at
+
+    def _mark_settled(self, session, payout: PayoutRecord) -> None:
+        from database.models import CreatorSale
+
+        for txn_id in payout.transaction_ids:
+            row = session.query(CreatorSale).filter_by(transaction_id=txn_id).one_or_none()
+            if row is not None:
+                row.settled_by_payout_id = payout.payout_id
+
+    def _upsert_balance(self, session, bal: CreatorBalance) -> None:
+        from database.models import CreatorBalanceRow
+
+        row = session.get(CreatorBalanceRow, bal.creator_id)
+        if row is None:
+            row = CreatorBalanceRow(creator_id=bal.creator_id)
+            session.add(row)
+        row.pending_usd = bal.pending_usd
+        row.total_earned_usd = bal.total_earned_usd
+        row.total_paid_usd = bal.total_paid_usd
+        row.recoverable_usd = bal.recoverable_usd
+        row.stripe_account_id = bal.stripe_account_id
+        row.last_payout_at = bal.last_payout_at
+        # Optimistic-lock counter. Nothing reads it yet — the engine is
+        # single-process today — but every write must advance it, or the column
+        # is useless the moment a second worker starts writing.
+        row.version = (row.version or 0) + 1
+
+    def _load_from_db(self) -> None:
+        """Restore sales, balances and payouts from the ledger tables.
+
+        Without this the tables would be write-only: a restart would still
+        forget every sale and every balance, which is the defect the tables
+        exist to fix (F208).
+        """
+        if not self._session_factory:
+            return
+        from database.models import CreatorBalanceRow, CreatorPayoutRow, CreatorSale
+
+        session = self._session_factory()
+        try:
+            for row in session.query(CreatorSale).all():
+                self._transactions[row.transaction_id] = SaleTransaction(
+                    transaction_id=row.transaction_id,
+                    strategy_id=row.strategy_id,
+                    creator_id=row.creator_id,
+                    buyer_id=row.buyer_id,
+                    gross_amount=Decimal(str(row.gross_amount)),
+                    platform_fee=Decimal(str(row.platform_fee)),
+                    creator_amount=Decimal(str(row.creator_amount)),
+                    currency=row.currency,
+                    transaction_type=TransactionType(row.transaction_type),
+                    stripe_payment_intent_id=row.stripe_payment_intent_id,
+                    created_at=row.created_at,
+                    settled_by_payout_id=row.settled_by_payout_id,
+                    refund_policy_applied=row.refund_policy_applied,
+                )
+
+            for row in session.query(CreatorBalanceRow).all():
+                self._balances[row.creator_id] = CreatorBalance(
+                    creator_id=row.creator_id,
+                    pending_usd=Decimal(str(row.pending_usd)),
+                    total_earned_usd=Decimal(str(row.total_earned_usd)),
+                    total_paid_usd=Decimal(str(row.total_paid_usd)),
+                    last_payout_at=row.last_payout_at,
+                    stripe_account_id=row.stripe_account_id,
+                    recoverable_usd=Decimal(str(row.recoverable_usd)),
+                )
+
+            for row in session.query(CreatorPayoutRow).all():
+                # transaction_ids is not a column: it is exactly the set of sales
+                # this payout settled, which the foreign key already records.
+                settled = [
+                    t.transaction_id for t in self._transactions.values() if t.settled_by_payout_id == row.payout_id
+                ]
+                self._payouts[row.payout_id] = PayoutRecord(
+                    payout_id=row.payout_id,
+                    creator_id=row.creator_id,
+                    amount_usd=Decimal(str(row.amount_usd)),
+                    currency=row.currency,
+                    status=PayoutStatus(row.status),
+                    stripe_transfer_id=row.stripe_transfer_id,
+                    transaction_ids=settled,
+                    created_at=row.created_at,
+                    completed_at=row.completed_at,
+                    failure_reason=row.failure_reason,
+                )
+            logger.info(
+                "Creator ledger restored: %d sales, %d balances, %d payouts",
+                len(self._transactions),
+                len(self._balances),
+                len(self._payouts),
+            )
+        except Exception:
+            logger.exception("Creator ledger load failed — starting from an empty working set")
+        finally:
+            try:
+                session.close()
+            except Exception:
+                logger.debug("Creator ledger session close failed", exc_info=True)
 
     # ── Sales ─────────────────────────────────────────────────────────────────
 
@@ -270,12 +449,11 @@ class RevenueSplitEngine:
             transaction_type=transaction_type,
             stripe_payment_intent_id=stripe_payment_intent_id,
         )
-        self._transactions[txn.transaction_id] = txn
-
         # Credit creator balance under the lock: a payout cycle may be reading
         # and writing this same field concurrently (F203).
         with self._lock:
             bal = self._get_or_create_balance(creator_id)
+            before = (bal.pending_usd, bal.total_earned_usd, bal.recoverable_usd)
             bal.total_earned_usd += creator_amount
             # A debt carried from a refunded-after-payout sale is netted off
             # first. Without this, "deduct from next payout" would be a label on
@@ -293,6 +471,21 @@ class RevenueSplitEngine:
             else:
                 creator_amount_net = creator_amount
             bal.pending_usd += creator_amount_net
+
+            # Write the sale and the balance in one transaction, and only keep
+            # the in-memory change if it landed. A sale the ledger rejected has
+            # not happened, and reporting it would leave the balance moved in
+            # memory with no durable record to reconcile against.
+            try:
+                self._write(lambda s: (s.add(self._sale_row(txn)), self._upsert_balance(s, bal)))
+            except Exception:
+                bal.pending_usd, bal.total_earned_usd, bal.recoverable_usd = (
+                    before[0],
+                    before[1],
+                    before[2],
+                )
+                raise
+            self._transactions[txn.transaction_id] = txn
 
         logger.info(
             "Sale recorded: strategy=%s creator=%s gross=%.2f creator_share=%.2f",
@@ -366,7 +559,6 @@ class RevenueSplitEngine:
         )
 
         with self._lock:
-            self._transactions[refund_txn.transaction_id] = refund_txn
             bal = self._get_or_create_balance(orig.creator_id)
             already_paid_out = orig.settled_by_payout_id is not None
 
@@ -394,6 +586,9 @@ class RevenueSplitEngine:
             if bal.total_earned_usd < 0:
                 bal.total_earned_usd = Decimal("0.00")
 
+            self._write(lambda s: (s.add(self._sale_row(refund_txn)), self._upsert_balance(s, bal)))
+            self._transactions[refund_txn.transaction_id] = refund_txn
+
         logger.info(
             "Refund recorded: original=%s amount=%.2f settled=%s policy=%s",
             original_transaction_id,
@@ -407,8 +602,12 @@ class RevenueSplitEngine:
 
     def register_stripe_account(self, creator_id: str, stripe_account_id: str) -> None:
         """Link a creator's Stripe Connect account for payouts."""
-        bal = self._get_or_create_balance(creator_id)
-        bal.stripe_account_id = stripe_account_id
+        with self._lock:
+            bal = self._get_or_create_balance(creator_id)
+            bal.stripe_account_id = stripe_account_id
+            # Durable: a restart that forgets the payout account makes every
+            # creator ineligible and the next cycle silently pays nobody.
+            self._write(lambda s: self._upsert_balance(s, bal))
         logger.info(
             "Stripe account registered: creator=%s account=%s",
             creator_id,
@@ -483,6 +682,21 @@ class RevenueSplitEngine:
 
             if payout.status == PayoutStatus.PAID:
                 self._settle_paid_payout(bal, amount, payout)
+                # Payout row, the sales it settled, and the debited balance in
+                # one transaction. Splitting them would let a crash leave a paid
+                # payout whose sales are still unsettled — and the next cycle
+                # would pay for them again (F207).
+                self._write(
+                    lambda s, p=payout, b=bal: (
+                        self._upsert_payout(s, p),
+                        self._mark_settled(s, p),
+                        self._upsert_balance(s, b),
+                    )
+                )
+            else:
+                # Not paid: record what happened, but nothing is settled and the
+                # balance is untouched, so only the payout row is written.
+                self._write(lambda s, p=payout: self._upsert_payout(s, p))
 
             payouts.append(payout)
 

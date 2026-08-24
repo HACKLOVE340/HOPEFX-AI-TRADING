@@ -98,8 +98,13 @@ def upgrade() -> None:
             name="fk_creator_sales_settled_by_payout",
             ondelete="SET NULL",
         ),
+        # Integer cents, not the column type: SQLite stores NUMERIC as REAL, so
+        # the plain form is evaluated in binary floating point there and refuses
+        # a correct 1c + 6c = 7c split. Exact on both backends.
         sa.CheckConstraint(
-            "platform_fee + creator_amount = gross_amount",
+            "CAST(ROUND(platform_fee * 100) AS INTEGER) "
+            "+ CAST(ROUND(creator_amount * 100) AS INTEGER) "
+            "= CAST(ROUND(gross_amount * 100) AS INTEGER)",
             name="ck_creator_sales_split_sums_to_gross",
         ),
         sa.CheckConstraint(

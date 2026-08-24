@@ -795,6 +795,8 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/superadmin/financial/reconciliation` | JWT |  |  |
 | `POST` | `/api/superadmin/financial/reconciliation/run` | JWT |  |  |
 | `PATCH` | `/api/superadmin/financial/reconciliation/{recon_id}` | JWT |  |  |
+| `GET` | `/api/superadmin/financial/refund-policy` | JWT |  |  |
+| `PUT` | `/api/superadmin/financial/refund-policy` | JWT |  |  |
 | `GET` | `/api/superadmin/financial/revenue` | JWT |  |  |
 | `GET` | `/api/superadmin/financial/subscriptions` | JWT |  |  |
 | `GET` | `/api/superadmin/financial/tax-reports` | JWT |  |  |

@@ -1262,8 +1262,18 @@ if SQLALCHEMY_AVAILABLE:
             # truncation bug in to_cents() unrepresentable rather than merely
             # fixed: no row can exist where the parts do not sum to the whole
             # (F206).
+            # Compared in integer cents, not in the column type. SQLite has no
+            # exact decimal: it stores NUMERIC as REAL, so "platform_fee +
+            # creator_amount = gross_amount" is evaluated in binary floating
+            # point there and refuses a correct 1c + 6c = 7c split
+            # (0.01 + 0.06 == 0.06999999999999999). PostgreSQL, where NUMERIC is
+            # exact, would have accepted it — so the constraint was right in
+            # production and silently wrong on every SQLite deployment. Scaling
+            # to integers first is exact on both and still refuses a wrong split.
             CheckConstraint(
-                "platform_fee + creator_amount = gross_amount",
+                "CAST(ROUND(platform_fee * 100) AS INTEGER) "
+                "+ CAST(ROUND(creator_amount * 100) AS INTEGER) "
+                "= CAST(ROUND(gross_amount * 100) AS INTEGER)",
                 name="ck_creator_sales_split_sums_to_gross",
             ),
             CheckConstraint(

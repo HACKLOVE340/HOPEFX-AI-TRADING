@@ -252,3 +252,62 @@ def test_the_pending_balance_can_be_rederived_from_unsettled_sales(session):
     ).scalar_one()
 
     assert Decimal(str(derived)) == Decimal("160.00")
+
+
+# --------------------------------------------------------------------------
+# The split CHECK must be exact for small amounts on every backend
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("gross", "fee", "creator"),
+    [
+        ("0.07", "0.01", "0.06"),  # the case that exposed it
+        ("0.03", "0.01", "0.02"),
+        ("0.01", "0.00", "0.01"),
+        ("19.99", "4.00", "15.99"),
+        ("100.00", "20.00", "80.00"),
+        ("1234.56", "246.91", "987.65"),
+        ("-0.07", "-0.01", "-0.06"),  # the refund mirror
+    ],
+)
+def test_a_correct_split_is_accepted_at_every_scale(session, gross, fee, creator):
+    """
+    SQLite has no exact decimal — it stores NUMERIC as REAL. Written as
+    ``platform_fee + creator_amount = gross_amount`` this CHECK evaluates in
+    binary floating point there and refuses a correct 1c + 6c = 7c split, since
+    0.01 + 0.06 is 0.06999999999999999. PostgreSQL, where NUMERIC is exact,
+    would have accepted it: the constraint was right in production and silently
+    wrong on every SQLite deployment, rejecting legitimate small sales.
+
+    Comparing in integer cents is exact on both.
+    """
+    row = a_sale(
+        session,
+        transaction_id=f"txn-{gross}",
+        gross_amount=Decimal(gross),
+        platform_fee=Decimal(fee),
+        creator_amount=Decimal(creator),
+        transaction_type="refund" if Decimal(gross) < 0 else "purchase",
+    )
+    assert row.platform_fee + row.creator_amount == row.gross_amount
+
+
+@pytest.mark.parametrize(
+    ("gross", "fee", "creator"),
+    [
+        ("0.07", "0.01", "0.07"),  # one cent too much
+        ("100.00", "20.00", "79.99"),
+        ("100.00", "20.01", "80.00"),
+    ],
+)
+def test_a_wrong_split_is_still_refused_at_every_scale(session, gross, fee, creator):
+    """The looser comparison must not have loosened what it catches."""
+    with pytest.raises(IntegrityError):
+        a_sale(
+            session,
+            transaction_id=f"bad-{gross}-{creator}",
+            gross_amount=Decimal(gross),
+            platform_fee=Decimal(fee),
+            creator_amount=Decimal(creator),
+        )
