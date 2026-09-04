@@ -59,11 +59,22 @@ async def test_llm_path_parses_plain_json() -> None:
     )
     s = _enabled_scorer(content)
     sev, action, score, meta = await s.score_event_llm("strike on the enrichment facility")
-    assert sev == 8
-    assert action == "hedge_mode"  # severity 7-8 → hedge_mode; 9-10 → nuclear_mode
+
+    # The parse is what this test is about, and it still holds: the model's own
+    # number arrives intact in meta.
     assert meta["source"] == "llm"
+    assert meta["llm_severity_raw"] == 8
     assert meta["category"] == "nuclear"
     assert meta["gold_impact"] == "bullish"
+
+    # What changed: this used to assert `action == "hedge_mode"` — an LLM alone
+    # placing a real short on XAU_USD off a headline the deterministic wordmap
+    # scored at zero. Untrusted news may no longer raise severity into an action
+    # tier the wordmap did not independently reach, so the effective severity is
+    # capped and no order is triggered.
+    assert meta["llm_capped"] is True
+    assert sev <= meta["llm_severity_raw"]
+    assert action != "hedge_mode"
 
 
 @pytest.mark.asyncio
@@ -91,8 +102,18 @@ async def test_llm_malformed_json_falls_back() -> None:
 
 
 @pytest.mark.asyncio
-async def test_severity_clamped() -> None:
+async def test_severity_out_of_range_is_rejected_not_clamped() -> None:
+    """Was `test_severity_clamped`, asserting that severity 99 became 10 and
+    tripped `nuclear_mode`.
+
+    Two things were wrong with that. Coercing a nonsense value into the top of
+    the scale invents a reading the model never gave; and it let an
+    uncorroborated response halt the platform. A response outside the requested
+    range is a failed extraction, so the deterministic wordmap answers instead.
+    """
     s = _enabled_scorer('{"severity": 99}')
-    sev, action, _score, _meta = await s.score_event_llm("anything")
-    assert sev == 10
-    assert action == "nuclear_mode"
+    sev, action, _score, meta = await s.score_event_llm("anything")
+
+    assert meta["source"] == "wordmap"
+    assert sev == 0
+    assert action == "normal"
