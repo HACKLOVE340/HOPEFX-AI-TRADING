@@ -292,10 +292,26 @@ def _register_default_probes(engine: HealthEngine) -> None:
                     }
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+        # Redis had no answer, so nothing has been contacted. This used to
+        # return "ok" whenever BROKER_TYPE was "paper" -- the active mode -- so
+        # the broker component reported healthy having read an environment
+        # variable (F160). The broker could be absent, misconfigured, or an
+        # alias with no place_market_order at all (F107), and this stayed green.
+        #
+        # The detail string already said "(config only)" and was honest, but
+        # HealthReport.ok_count and _STATUS_RANK aggregate on `status`, not
+        # `detail`, so every rollup, badge and dashboard tile showed green. An
+        # operator reads the colour, not the string.
+        #
+        # "unknown" rather than "warning": "could not check" and "checked, and
+        # it is down" are different facts, and collapsing them would make an
+        # unreachable Redis look identical to a dead broker to whoever is on
+        # call. _STATUS_RANK already ranks unknown alongside warning, so
+        # rollups treat it with the same weight without losing the distinction.
         broker_type = os.getenv("BROKER_TYPE", os.getenv("BROKER_DEFAULT", "paper"))
         return {
-            "status": "ok" if broker_type == "paper" else "warning",
-            "detail": f"broker={broker_type} (config only)",
+            "status": "unknown",
+            "detail": f"broker={broker_type} (config only — no live status available)",
             "broker_type": broker_type,
         }
 
