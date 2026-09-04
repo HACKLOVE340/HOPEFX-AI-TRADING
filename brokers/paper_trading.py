@@ -202,6 +202,46 @@ class PaperTradingBroker(BrokerConnector):
     without connecting to real exchanges.
     """
 
+    #: Every Redis namespace created during a test run carries this prefix, so a
+    #: run's keys can be swept as a group instead of accumulating for ever.
+    TEST_NAMESPACE_PREFIX = "pytest:"
+
+    #: One token per process. Assigned lazily so importing this module outside a
+    #: test run costs nothing.
+    _TEST_RUN_TOKEN: str | None = None
+
+    @staticmethod
+    def _in_test_mode() -> bool:
+        """True when this process is a test run.
+
+        ``PYTEST_CURRENT_TEST`` is set by pytest for the duration of each test,
+        and ``APP_ENV=test`` is what the integration modules set at import. Both
+        are checked because a broker can be constructed at collection time,
+        before the first test has started.
+        """
+        return bool(os.getenv("PYTEST_CURRENT_TEST")) or os.getenv("APP_ENV", "").lower() == "test"
+
+    @classmethod
+    def _test_run_token(cls) -> str:
+        """The token scoping Redis keys for the current test.
+
+        Rotated per test by ``tests/conftest.py``, not merely per process. A
+        per-process token would keep two tests in the same run on one namespace:
+        dropping the in-memory registry between tests does not help, because the
+        next broker simply reloads the same keys from Redis. Stability *within*
+        a test is what matters — two resolves of the same user must reach the
+        same account.
+        """
+        if cls._TEST_RUN_TOKEN is None:
+            cls._TEST_RUN_TOKEN = uuid.uuid4().hex[:12]
+        return cls._TEST_RUN_TOKEN
+
+    @classmethod
+    def _new_test_run_token(cls) -> str:
+        """Start a fresh namespace scope. Called between tests."""
+        cls._TEST_RUN_TOKEN = uuid.uuid4().hex[:12]
+        return cls._TEST_RUN_TOKEN
+
     def __init__(
         self,
         config: dict[str, Any] | None = None,
@@ -280,19 +320,40 @@ class PaperTradingBroker(BrokerConnector):
 
         # ── Redis namespace ───────────────────────────────────────────────────
         # Resolve the Redis namespace used to scope this instance's keys.
-        # Explicit value always wins.  When None, use a stable identifier in
-        # production (so state survives restarts) but a fresh UUID in test
-        # environments (so concurrent test instances don't share state).
+        # Explicit value wins.  When None, derive a stable identifier from the
+        # user so production state survives restarts.
         if namespace is not None:
             self._redis_namespace: str = namespace
-        elif os.getenv("APP_ENV", "").lower() == "test":
-            # In test mode, auto-isolate each instance to prevent cross-test
-            # pollution when a real Redis is available in the test environment.
-            self._redis_namespace = str(uuid.uuid4())
         else:
             # Production default: derive from user_id ("paper" by default).
             # Stable across restarts so Redis persists open positions/orders.
             self._redis_namespace = user_id
+
+        # Under a test run, scope whatever was resolved above to this process.
+        #
+        # This used to be an ``elif`` on the ``namespace is None`` branch, so an
+        # explicit namespace opted out of test isolation entirely — and
+        # ``core/account_registry.py`` always passes one
+        # (``namespace=f"user:{user_id}"``), which is exactly the path the
+        # isolation tests exercise. Two users therefore got two *permanent*
+        # namespaces and every order they placed accumulated in the shared Redis
+        # for ever.
+        #
+        # The damage was not theoretical. ``test_trading_endpoints_are_isolated``
+        # failed with "alice's order is visible in bob's positions". It was not
+        # alice's order: it was bob's own position, 13 lots accumulated across
+        # earlier runs of the same test and reloaded from
+        # ``hopefx:user:bob:positions:XAUUSD``. The registry and the endpoints
+        # were both correct.
+        #
+        # Prefixing rather than replacing keeps per-user namespaces distinct
+        # *within* a run, so the isolation tests still do real work, while
+        # guaranteeing nothing survives *between* runs. The shared prefix also
+        # makes a run's keys sweepable as a group — 424 orphaned key sets had
+        # accumulated from the old auto-isolating UUID branch, which prevented
+        # sharing but cleaned up nothing.
+        if self._in_test_mode():
+            self._redis_namespace = f"{self.TEST_NAMESPACE_PREFIX}{self._test_run_token()}:{self._redis_namespace}"
 
         # ── Redis state persistence ───────────────────────────────────────────
         # Orders and positions are persisted to Redis so they survive process

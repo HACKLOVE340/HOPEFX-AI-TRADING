@@ -122,8 +122,12 @@ async def test_the_poll_loop_reaches_the_close_on_a_real_position():
     from execution.position_manager import Position
 
     pos = Position(
-        position_id="p1", symbol="XAUUSD", side="BUY", quantity=1.0,
-        entry_price=2000.0, stop_loss=1950.0,
+        position_id="p1",
+        symbol="XAUUSD",
+        side="BUY",
+        quantity=1.0,
+        entry_price=2000.0,
+        stop_loss=1950.0,
     )
     monitor = _monitor(pos)
 

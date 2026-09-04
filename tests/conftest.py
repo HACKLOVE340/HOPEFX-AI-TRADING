@@ -8,6 +8,7 @@ HOPEFX Test Configuration
 Pytest fixtures and test utilities
 """
 
+import logging
 import os
 import tempfile
 
@@ -111,6 +112,49 @@ def _restore_env():
                 os.environ.pop(_alias, None)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _sweep_this_runs_redis_keys():
+    """Delete the Redis keys this test run created, when it finishes.
+
+    PaperTradingBroker persists orders and positions to Redis. Under a test run
+    every namespace it builds is prefixed with ``pytest:<run token>:`` so the
+    run's keys are identifiable as a group — this removes them afterwards.
+
+    Without it the shared Redis fills with dead state: 424 orphaned key sets had
+    accumulated from the previous auto-isolating UUID namespaces, which stopped
+    tests sharing state but cleaned nothing up. Worse, before that isolation was
+    applied to explicit namespaces at all, keys like
+    ``hopefx:user:bob:positions:XAUUSD`` persisted between runs and made a
+    user-isolation regression test fail against its own stale position.
+
+    Never raises: no Redis, wrong password, or a sweep failure must not fail a
+    test run that has otherwise passed.
+    """
+    yield
+    try:
+        import redis as _redis
+
+        from brokers.paper_trading import PaperTradingBroker
+
+        if PaperTradingBroker._TEST_RUN_TOKEN is None:  # no broker was ever constructed
+            return
+        client = _redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            decode_responses=True,
+            socket_connect_timeout=2,
+        )
+        # Every token this run used, not just the last: the scope rotates per
+        # test, so matching one token would leave every earlier test's keys.
+        pattern = f"*{PaperTradingBroker.TEST_NAMESPACE_PREFIX}*"
+        removed = 0
+        for key in client.scan_iter(match=pattern, count=500):
+            removed += client.delete(key)
+        if removed:
+            logging.getLogger(__name__).info("Swept %d Redis keys from this test run", removed)
+    except Exception:  # nosec B110 - cleanup is best-effort by design
+        logging.getLogger(__name__).debug("Redis sweep skipped", exc_info=True)
+
+
 @pytest.fixture(autouse=True)
 def _reset_account_registry():
     """
@@ -130,8 +174,13 @@ def _reset_account_registry():
     ``reset_account_registry()`` has existed all along with the docstring "For
     tests and shutdown". Nothing called it.
     """
+    from brokers.paper_trading import PaperTradingBroker
     from core.account_registry import reset_account_registry
 
+    # A fresh Redis namespace scope per test. Dropping the in-memory registry is
+    # not enough on its own: the next broker for the same user reloads the same
+    # keys from Redis, so two tests in one run would still share a book.
+    PaperTradingBroker._new_test_run_token()
     reset_account_registry()
     try:
         yield

@@ -5396,8 +5396,8 @@ survives casual testing.
 `api/kyc.py:33` mounts a router at the **bare** `/kyc` prefix:
 
 ```python
-router           = APIRouter(prefix="/kyc",     tags=["kyc"])     # line 33
-kyc_alias_router = APIRouter(prefix="/api/kyc", tags=["KYC"])     # line 282
+router = APIRouter(prefix="/kyc", tags=["kyc"])  # line 33
+kyc_alias_router = APIRouter(prefix="/api/kyc", tags=["KYC"])  # line 282
 ```
 
 and the mobile v2 API registers `/mobile/api/v2/*` and `/mobile/health`. Both
@@ -5486,9 +5486,9 @@ most implementations get wrong — quantizes only the platform fee and gives the
 creator the remainder:
 
 ```python
-gross          = Decimal(str(gross_amount)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-platform_fee   = (gross * self.platform_fee_pct).quantize(Decimal("0.01"), ROUND_HALF_UP)
-creator_amount = gross - platform_fee          # remainder — always sums to gross
+gross = Decimal(str(gross_amount)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+platform_fee = (gross * self.platform_fee_pct).quantize(Decimal("0.01"), ROUND_HALF_UP)
+creator_amount = gross - platform_fee  # remainder — always sums to gross
 ```
 
 `platform_fee + creator_amount == gross` exactly, with no lost or invented
@@ -5500,10 +5500,10 @@ cent. The defects below are in state handling around that correct core.
 then **zeroes** the balance instead of subtracting what it paid:
 
 ```python
-amount = bal.pending_usd            # :328  captured
-...                                 # :346  Stripe transfer — seconds of I/O
-bal.total_paid_usd += amount        # :359
-bal.pending_usd = Decimal("0.00")   # :360  ZEROES — does not subtract
+amount = bal.pending_usd  # :328  captured
+...  # :346  Stripe transfer — seconds of I/O
+bal.total_paid_usd += amount  # :359
+bal.pending_usd = Decimal("0.00")  # :360  ZEROES — does not subtract
 ```
 
 `record_sale()` credits the same field (`bal.pending_usd += creator_amount`)
@@ -5608,8 +5608,8 @@ paid, and select only unpaid ones.
 
 ```python
 self._transactions: dict[str, SaleTransaction] = {}
-self._balances:     dict[str, CreatorBalance]  = {}
-self._payouts:      dict[str, PayoutRecord]    = {}
+self._balances: dict[str, CreatorBalance] = {}
+self._payouts: dict[str, PayoutRecord] = {}
 ```
 
 Grepping the whole 432-line module for `session`, `commit()`, `db.`, `redis`,
@@ -5796,10 +5796,10 @@ the function that decides whether the online learner blends into live signals:
 
 ```python
 def _get_online_learner_store() -> Any | None:
-    enabled = bool(flags.ONLINE_LEARNING)          # …or the env var
+    enabled = bool(flags.ONLINE_LEARNING)  # …or the env var
     if not enabled:
         return None
-    ...                                            # no phase3_ready() anywhere
+    ...  # no phase3_ready() anywhere
 ```
 
 `phase3_ready()` **is** called — once, at `ml/inference_engine.py:1558` — and
@@ -6011,7 +6011,7 @@ Check it against a case known to work before reporting it.
 if not self.fcm_enabled or not tokens:
     print(f"[FCM-LOG] {user_id} -> {title}: {body}")
     logger.info("[FCM-LOG] %s -> %s: %s", user_id, title, body)
-    return True                      # <- reports SUCCESS for a no-op
+    return True  # <- reports SUCCESS for a no-op
 ```
 
 **Executed on the running configuration:**
@@ -6199,7 +6199,7 @@ are "does not raise" smoke tests:
 def test_write_redis_latch_no_redis_non_fatal(self, tmp_path):
     ks = _ks(tmp_path)
     with patch.object(ks, "_get_latch_redis", return_value=None):
-        ks._write_redis_latch("test reason")   # should not raise
+        ks._write_redis_latch("test reason")  # should not raise
 ```
 
 That is a legitimate, if weak, pattern — it does verify the non-fatal contract.
@@ -7093,3 +7093,104 @@ attribute, so a fixture can set the *wrong* field name and never be told:
 Both are now set to the field the real object exposes. The general fix — `spec=`
 on these mocks — would turn a silent divergence into an `AttributeError` at the
 point of the mistake, and is worth doing across the suite.
+
+## F243 — CORRECTION to F241's follow-up: the isolation leak was stale Redis state · correction + HIGH
+
+I reported that the user-isolation failures pointed at "a leak at the endpoint
+layer". **That was wrong**, and it is worth recording how the wrong conclusion
+was reached.
+
+The evidence looked damning: `test_trading_endpoints_are_isolated.py` — a
+regression test for a reported defect, written against the real handlers with no
+broker mocking — failed with *"alice's order is visible in bob's positions"*. I
+verified the account registry hands alice and bob separate brokers with separate
+position dicts, and concluded the leak must therefore be in a handler.
+
+It was not. Running the single test **alone** showed bob holding a **SELL of
+13.0** when the test had placed one `buy 2.0`. That is not alice's order in any
+reading. It was bob's *own* position, accumulated across earlier runs and
+reloaded from `hopefx:user:bob:positions:XAUUSD`. Redis confirmed it — order
+records timestamped from the previous hour's test runs, one per run.
+
+The registry was correct. The endpoints were correct. The state was stale.
+
+**Root cause.** `PaperTradingBroker.__init__` already tried to protect tests:
+
+```python
+elif os.getenv("APP_ENV", "").lower() == "test":
+    # In test mode, auto-isolate each instance to prevent cross-test
+    # pollution when a real Redis is available in the test environment.
+    self._redis_namespace = str(uuid.uuid4())
+```
+
+It is an `elif` — it applies only when `namespace is None`. `core/account_registry.py`
+**always** passes `namespace=f"user:{user_id}"`, so the guard is bypassed on
+exactly the path the isolation tests exercise. Another control that exists, is
+documented accurately, and does not run where it matters.
+
+Measured: **424** orphaned key sets from the UUID branch (which prevented
+sharing but cleaned up nothing) and **90** `user:*` keys surviving between runs.
+
+It stayed hidden because `.env` set `REDIS_PASSWORD`, Redis auth failed, and
+persistence silently did nothing. Removing the `.env` leak (F241) made Redis
+connect for the first time and the accumulated state became visible.
+
+**Fix.** Under a test run, every resolved namespace is prefixed
+`pytest:<token>:`, rotated **per test** rather than per process — dropping the
+in-memory registry does not help, because the next broker reloads the same keys.
+Per-user namespaces stay distinct within a test, so the isolation tests still do
+real work; nothing survives between tests or between runs. A session fixture
+sweeps the prefix afterwards. Production namespaces are untouched and that is
+asserted directly.
+
+Two lessons, and the first is about me:
+
+1. **A failing test that confirms a suspected bug is the easiest evidence to
+   over-read.** The message said "alice's order is visible in bob's positions",
+   the defect it names is real and previously reported, and I accepted the
+   framing without asking whether the position was actually alice's. Running the
+   test *alone* took one command and refuted it outright.
+2. **Test isolation that keys off "was a namespace supplied" isolates the wrong
+   cases.** It protected the callers that did not need it and skipped the one
+   caller that did.
+
+## F244 — the last four "failures" were the verification method again · correction
+
+Four tests failed in the fresh-worktree run and passed when run alone:
+
+```
+tests/system/test_production_readiness.py::test_app_imports_with_only_jwt_secret
+tests/unit/test_missing_endpoints_are_diagnosable.py::test_an_api_404_carries_a_body_naming_the_route
+tests/unit/test_missing_endpoints_are_diagnosable.py::test_spa_paths_still_get_html_not_json
+tests/unit/test_ui_reported_defects.py::test_spa_routes_are_untouched
+```
+
+Pass-alone-fail-together is the signature of pollution, and I started bisecting
+for a polluter. It was not pollution.
+
+`static/` is a build output, gitignored (`.gitignore:28`, 0 tracked files). It
+exists in a working directory where `npm run build` has been run and **not** in
+a fresh `git worktree`. `core/page_routes.py:255` mounts the SPA only if
+`static/index.html` exists, and the catch-all that produces
+`{"detail": "No route for GET /..."}` is registered inside that mount. No
+`static/` → no catch-all → FastAPI's default `{"detail": "Not Found"}` → those
+four assertions fail.
+
+Proven rather than argued, same worktree, one variable:
+
+```
+worktree WITHOUT static/  ->  3 failed 47 passed
+worktree WITH static/     ->  50 passed
+```
+
+This is the third time in this audit that an alarming test result turned out to
+be the measurement (F229, F236, and now this), and the second time in one
+session. The standing rule held again — *when a measurement suddenly looks
+alarming, suspect the measurement first* — but only after a wasted bisect.
+
+The refinement worth keeping: **F236's advice to verify in a fresh worktree is
+incomplete.** A fresh worktree reproduces the tracked tree exactly, which is the
+point — and therefore omits every gitignored build artifact the suite depends
+on. For this repo that means `static/` (and a frontend build) must be present,
+or four tests fail for a reason that has nothing to do with the change under
+test. CI builds the frontend before running pytest, so CI has it.

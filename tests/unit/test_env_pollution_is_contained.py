@@ -98,8 +98,7 @@ def test_the_paper_broker_stale_flag_specifically_is_contained():
 
 def test_the_paper_broker_stale_flag_did_not_leak():
     assert os.environ.get("PAPER_RAISE_ON_STALE") in (None, "false"), (
-        "PAPER_RAISE_ON_STALE leaked; every later paper order will raise "
-        "StalePriceError"
+        "PAPER_RAISE_ON_STALE leaked; every later paper order will raise StalePriceError"
     )
 
 
