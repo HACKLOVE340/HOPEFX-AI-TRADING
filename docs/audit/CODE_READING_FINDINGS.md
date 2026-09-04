@@ -7398,3 +7398,78 @@ cannot tell you the object still works.** F242 recorded this for `MagicMock`
 fixtures and F248 for unspec'd alert mocks; here it was a hand-written recorder
 in my own new tests. Reproducing against the real object is not optional, and
 neither is running the thing you changed.
+
+## F252 — `deactivate_hedge_mode` forgets a hedge it could not close · CRITICAL
+
+Found while fixing F81, in the same function pair, and the worse half of the
+two.
+
+```python
+self._hedge_positions.clear()      # unconditional
+self._hedge_active = False
+```
+
+The close loop caught a rejected order (`logger.error("Failed to close hedge on
+%s")`) and the no-broker case (`logger.warning("Manual close required")`), then
+cleared the list regardless. So a hedge the venue refused to close was dropped
+from tracking while the short stayed open at the venue.
+
+F81 leaves you believing you are hedged when you are not. This leaves a **live,
+unhedged, untracked short position** that nothing in the system — not the state
+file, not `/exposure`, not the reconciler's view of what it should be holding —
+knows exists. It is discovered by the account balance moving.
+
+Fixed together with F81: a position that could not be closed is kept, hedge mode
+stays active so a retry has something to close, the gauge stays at 1, and both
+`deactivate_hedge_mode` and its endpoints report partial closure rather than
+success.
+
+**Three existing tests asserted this family as the requirement** —
+`test_no_broker_still_activates`, `test_broker_order_failure_still_activates`,
+`test_broker_close_failure_still_deactivates` — and four more opened a hedge
+with no broker at all and asserted it was open. This is F246's rule for the
+third time: *a suite cannot tell you a control is off; it reports the absence of
+the control as success.*
+
+## F253 — CORRECTION: the wordmap has two defects, not one · correction to F80
+
+F80 filed the substring matcher: `if term in text_lower` firing "coup" inside
+"coupon". Word-boundary matching fixes four of the five verified false
+positives. It does **not** fix two of them, and the reason is worth recording:
+
+    "Tropical depression forms off the Florida coast"   -> "depression"
+    "ETF seen as the gold standard of liquidity"        -> "gold standard"
+
+Those are whole-word matches. The word really is present; the *sense* is wrong.
+No boundary rule can separate them, so F80 as filed was two defects wearing one
+description: a mechanical matching bug and a term-ambiguity problem.
+
+The second is handled with a deliberately narrow, per-occurrence context guard
+(`AMBIGUOUS_TERM_CONTEXTS`), suppressing a term only inside a named idiom.
+Per-occurrence matters: "Tropical depression nears Florida as economists warn of
+a depression" still scores, because only the first occurrence is suppressed.
+"Economists warn of a depression" and "a return to the gold standard" are
+untouched — they are exactly what the wordmap exists for, and a guard that
+swallowed them would be a worse defect than the one it fixed.
+
+The general shape: **a false positive and a false negative are the same
+control's two failure modes, and a fix aimed at one can create the other.** The
+tests pin both directions for every term touched.
+
+## F254 — the EMA seed residual is not the EMA bug · correction, in my own work
+
+While fixing F125 I asserted that a correct EMA gives the newest bar more weight
+than the oldest. It does not, for this window and alpha: seeded on its oldest
+value, a 20-bar EMA at alpha=0.1 leaves that seed `(1-alpha)**19 = 13.5%` of the
+result — more than the newest bar's 10%.
+
+That is the ordinary warm-up residual of a short EMA window, present in any
+textbook implementation and in the "correct EMA20 3254.59" figure F125 itself
+computed. My assertion was wrong; the code was right. Corrected in the test, not
+the code, and the residual is now stated in a test of its own so the next reader
+does not mistake it for a defect. The way to shrink it is a longer warm-up
+window, not a different fold.
+
+Recorded because the temptation in that moment is to adjust the implementation
+until the assertion passes. The check that caught it was asking what the
+*reference* implementation does before deciding which side was wrong.

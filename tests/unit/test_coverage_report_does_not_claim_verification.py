@@ -122,8 +122,7 @@ def test_the_exit_code_does_not_signal_success_for_a_declaration(monkeypatch):
 
     report = invariant_coverage.build_report()
     assert "declared" in str(report).lower() or "verified" in str(report).lower(), (
-        "the machine-readable report gives a consumer no way to tell that the "
-        "component matrix is a declaration"
+        "the machine-readable report gives a consumer no way to tell that the component matrix is a declaration"
     )
 
 

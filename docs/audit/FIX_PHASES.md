@@ -96,10 +96,10 @@ plans by the time we reached them.
 |-------|-------|----------|------|
 | ~~1~~ | ~~**E — Risk gates**~~ · **DONE** | The only phase where the defects moved money on a path running today | `plans/2026-09-04-phase-e-risk-gates.md` |
 | ~~2~~ | ~~**C — Controls that report success without acting**~~ · **DONE** | The signature defect; nothing here moves money, but it is why nobody noticed E | `plans/2026-09-04-phase-c-honest-controls.md` |
-| **1** | **G — Correctness bugs** · NEXT | Isolated, low blast radius, individually provable. Cheap now that C has made failures visible | not written yet |
-| 2 | D — AI Core prerequisites | Blocks the AI Core build. Not urgent until that starts | not written yet |
-| 3 | H — Config contradicting code | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
-| 4 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
+| ~~3~~ | ~~**G — Correctness bugs**~~ · **DONE** | Isolated, low blast radius, individually provable. Cheap now that C has made failures visible | `plans/2026-09-04-phase-g-correctness.md` |
+| **1** | **D — AI Core prerequisites** · NEXT | Blocks the AI Core build. Not urgent until that starts | not written yet |
+| 2 | H — Config contradicting code | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
+| 3 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
 
 **E before C** is the call worth defending. C contains the most *embarrassing*
 findings — a coverage report printing `FULL COVERAGE ✅` from a hardcoded `True`.
@@ -205,12 +205,34 @@ Do these immediately before AI Core work, not after.
 * **F99 / F105 / F106 / F108** — tests that skip the case they exist for,
   gates that measure the wrong thing, a class that never existed.
 
-## Phase G — Correctness bugs (isolated, low risk)
-* **F119** annualised return **34× understated** · **F120** Sortino denominator
-* **F125** regime EMA weights the oldest bar **7.4×** the newest
-* **F145** features zero-filled **before** scaling — measured **−15σ**
-* **F80** wordmap matches bare substrings ("coupon" → severity 7)
-* **F81** hedge marked active before the broker call
+## Phase G — Correctness bugs · DONE
+
+Full plan: `docs/audit/plans/2026-09-04-phase-g-correctness.md`
+
+Ordered by whether the defect produced a wrong *action* or a wrong *number*.
+The first three move money or decide trades; the last three are figures on a
+screen.
+
+| Finding | What was done |
+|---|---|
+| **F81** | A hedge is recorded only after the venue returns an order id. A rejected order, an empty response or a missing broker now leaves the flag clear (so the next call is a real retry), logs at ERROR, records `activate_hedge_failed` and raises a critical alert. Both endpoints and the supervisor's operator alert report the real outcome. |
+| **F80** | Terms compile once to word-boundary patterns, normalised the same way the text is. All five verified false positives now score 0/normal; every true positive keeps its exact severity. No weight changed. |
+| **F145** | Cells with no live value are recorded before any fill and set to 0.0 **after** scaling, where 0.0 is the training mean — not `-mean/std`, which was −15σ for a price column. Per cell, so one bar's gap does not neutralise another's value. A failing scaler now refuses instead of handing the learners an unscaled frame. |
+| **F119** | The annualisation exponent divides the bar count by `bars_per_day`. A doubling year reports ~100%, not 2.93%; Calmar follows. |
+| **F120** | Both engines use `sqrt(mean(min(r - target, 0)**2))` over all periods, sharing one implementation — a test asserts the two agree. |
+| **F125** | `_ema(values, alpha)` folds oldest → newest, so weight increases towards the present instead of the oldest bar carrying 7.4× the newest. |
+
+Found while doing it: **F252** (`deactivate_hedge_mode` cleared a hedge it could
+not close, leaving a live *untracked* short — the worse half of F81), **F253**
+(F80 was two defects under one description: substring matching, and genuine term
+ambiguity that no boundary rule can fix), and **F254** (an assertion of mine that
+was wrong where the code was right — the EMA seed residual is a warm-up artifact,
+not a bug).
+
+**Left open, deliberately:** F146 — the inference engine already measures feature
+coverage and never acts on it. F145 makes the number visible at the point of use;
+wiring it to a refusal is F146's own fix and changes when the platform declines
+to trade.
 
 ## Phase H — Config that contradicts the code
 * **F98 / F178** — two ConfigMaps named `hopefx-config` with contradictory
