@@ -312,3 +312,9 @@ security/yara_rules/
 
 # Playwright sweep session (contains a live token)
 frontend/.auth.json
+
+# k6 load-test output. The directory is tracked (via .gitkeep) because CI writes
+# summaries into it and tests/unit/test_k6_load_tests.py checks it exists; the
+# run artifacts themselves are per-run and belong in the workflow's upload.
+k6/results/*
+!k6/results/.gitkeep
