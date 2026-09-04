@@ -109,8 +109,13 @@ def test_ws_audit_events_handles_handshake_disconnect():
             self.closed = False
             self.headers = {}  # no Origin → origin check allows (JWT still gates)
 
-        async def accept(self):
+        async def accept(self, subprotocol=None, headers=None):
+            # Mirrors starlette.websockets.WebSocket.accept. The double
+            # previously took no arguments, so it passed while diverging from
+            # the object it stands in for — exactly the gap that lets a real
+            # signature change through unnoticed.
             self.accepted = True
+            self.subprotocol = subprotocol
 
         async def send_text(self, _data):
             raise WebSocketDisconnect(code=1006)

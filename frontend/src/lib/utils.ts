@@ -341,8 +341,14 @@ export function getApiBase(): string {
  *      This avoids mixed-content errors on production HTTPS deployments
  *      where a hardcoded ws:// fallback would be blocked by the browser.
  *
- * Callers append the endpoint path:
- *   const ws = new WebSocket(`${getWsBase()}/ws/notifications?token=${token}`);
+ * Callers append the endpoint path. For an *authenticated* socket use
+ * `openAuthenticatedWebSocket` from `./ws` instead of building the URL here:
+ * it carries the token in the `hopefx.auth.bearer` subprotocol, which travels
+ * in a header. A token in the query string reaches access logs, browser
+ * history and `Referer`.
+ *
+ *   import { openAuthenticatedWebSocket } from './ws';
+ *   const ws = openAuthenticatedWebSocket('/ws/notifications', token);
  */
 export function getWsBase(): string {
   const envUrl = import.meta.env.VITE_WS_URL as string | undefined;

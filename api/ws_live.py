@@ -154,6 +154,75 @@ async def _reject_ws_bad_origin(websocket: Any) -> bool:
     return True
 
 
+# ─── WebSocket credential channel ─────────────────────────────────────────────
+#
+# Browsers give `new WebSocket()` no way to set a header, so the token has to
+# ride on something the handshake already carries. The subprotocol list is that
+# something: it travels in `Sec-WebSocket-Protocol`, a header, and so stays out
+# of access logs, browser history and `Referer` — unlike the query string, which
+# is where this product used to put it.
+
+WS_AUTH_SUBPROTOCOL = "hopefx.auth.bearer"
+
+
+def ws_accept_subprotocol(websocket: Any) -> str | None:
+    """The subprotocol to echo on ``accept()``, or None.
+
+    RFC 6455 requires the server to name back one of the client's offered
+    subprotocols. A browser that offers ``hopefx.auth.bearer`` and hears
+    nothing back closes the connection immediately — a silent failure that
+    looks like a broken endpoint rather than a handshake mismatch.
+    """
+    try:
+        offered = websocket.headers.get("sec-websocket-protocol") or ""
+    except Exception:
+        return None
+    parts = [p.strip() for p in offered.split(",")]
+    return WS_AUTH_SUBPROTOCOL if WS_AUTH_SUBPROTOCOL in parts else None
+
+
+def ws_auth_token(websocket: Any) -> str | None:
+    """Extract the bearer token a client offered, preferring the header.
+
+    Order:
+
+    1. ``Sec-WebSocket-Protocol: hopefx.auth.bearer, <token>`` — preferred.
+    2. ``?token=<token>`` — deprecated. Still accepted so existing scripts and
+       non-browser clients keep working, but every use is logged, and a
+       deployment whose clients have all moved can refuse it outright with
+       ``WS_ALLOW_QUERY_TOKEN=false``.
+
+    Runs before authentication, so every input here is attacker-controlled and
+    nothing in it may raise.
+    """
+    try:
+        offered = websocket.headers.get("sec-websocket-protocol") or ""
+    except Exception:
+        offered = ""
+    parts = [p.strip() for p in offered.split(",") if p.strip()]
+    if len(parts) >= 2 and parts[0] == WS_AUTH_SUBPROTOCOL:
+        return parts[1]
+
+    if os.getenv("WS_ALLOW_QUERY_TOKEN", "true").strip().lower() in {"0", "false", "no", "off"}:
+        return None
+
+    try:
+        token = websocket.query_params.get("token") or ""
+    except Exception:
+        return None
+    if not token:
+        return None
+
+    client = getattr(getattr(websocket, "client", None), "host", "unknown")
+    logger.warning(
+        "WS auth token supplied in the query string by %s — deprecated, it reaches access "
+        "logs and Referer headers; use the %r subprotocol instead",
+        client,
+        WS_AUTH_SUBPROTOCOL,
+    )
+    return token
+
+
 def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
     token = token.removeprefix("Bearer ")
@@ -2099,7 +2168,9 @@ async def ws_notifications(websocket: WebSocket) -> None:
     """
     Real-time notification push channel.
 
-    Auth: JWT token passed as query param ?token=<jwt> or as
+    Auth: JWT token offered as the `hopefx.auth.bearer` subprotocol (preferred —
+    it travels in a header, so it stays out of access logs and Referer), as a
+    deprecated ?token=<jwt> query param, or as an
     { type: 'auth', token: 'Bearer <jwt>' } message after connect.
 
     Outbound message types:
@@ -2111,11 +2182,12 @@ async def ws_notifications(websocket: WebSocket) -> None:
     """
     if await _reject_ws_bad_origin(websocket):
         return
-    await websocket.accept()
+    await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
     await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
 
-    # Support token as query param (simpler for some clients)
-    token_param = websocket.query_params.get("token", "")
+    # Preferred: the hopefx.auth.bearer subprotocol (a header). The query
+    # string is still accepted for existing clients, and logged.
+    token_param = ws_auth_token(websocket) or ""
     payload = _validate_ws_token(token_param) if token_param else None
 
     if not payload:
@@ -2223,7 +2295,9 @@ async def ws_audit_events(websocket: WebSocket) -> None:
     """
     Real-time audit event stream (admin/superadmin only).
 
-    Auth: JWT token passed as query param ?token=<jwt> or as
+    Auth: JWT token offered as the `hopefx.auth.bearer` subprotocol (preferred —
+    it travels in a header, so it stays out of access logs and Referer), as a
+    deprecated ?token=<jwt> query param, or as an
     { type: 'auth', token: 'Bearer <jwt>' } message after connect.
 
     Outbound message types:
@@ -2235,7 +2309,7 @@ async def ws_audit_events(websocket: WebSocket) -> None:
     """
     if await _reject_ws_bad_origin(websocket):
         return
-    await websocket.accept()
+    await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
     try:
         await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
     except (WebSocketDisconnect, RuntimeError):
@@ -2243,8 +2317,9 @@ async def ws_audit_events(websocket: WebSocket) -> None:
         # rather than letting the ASGI layer surface a WebSocketDisconnect traceback.
         return
 
-    # Support token as query param
-    token_param = websocket.query_params.get("token", "")
+    # Preferred: the hopefx.auth.bearer subprotocol (a header). The query
+    # string is still accepted for existing clients, and logged.
+    token_param = ws_auth_token(websocket) or ""
     payload = _validate_ws_token(token_param) if token_param else None
 
     if not payload:
