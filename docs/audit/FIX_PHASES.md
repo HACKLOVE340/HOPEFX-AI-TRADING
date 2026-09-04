@@ -222,12 +222,17 @@ screen.
 | **F120** | Both engines use `sqrt(mean(min(r - target, 0)**2))` over all periods, sharing one implementation — a test asserts the two agree. |
 | **F125** | `_ema(values, alpha)` folds oldest → newest, so weight increases towards the present instead of the oldest bar carrying 7.4× the newest. |
 
+**Outcome: 17364 passed, 0 failed** (fresh worktree, `static/` present).
+
 Found while doing it: **F252** (`deactivate_hedge_mode` cleared a hedge it could
 not close, leaving a live *untracked* short — the worse half of F81), **F253**
 (F80 was two defects under one description: substring matching, and genuine term
 ambiguity that no boundary rule can fix), and **F254** (an assertion of mine that
 was wrong where the code was right — the EMA seed residual is a warm-up artifact,
-not a bug).
+not a bug), plus **F255/F256** from the verification run itself: the repo's own
+`nan_leak` gate caught two real NaN leaks in the F120 fix, and its rule was
+scanning docstrings and comments for code because the `in_doc` exemption it
+needed already existed and was never invoked.
 
 **Left open, deliberately:** F146 — the inference engine already measures feature
 coverage and never acts on it. F145 makes the number visible at the point of use;

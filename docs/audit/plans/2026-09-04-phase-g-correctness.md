@@ -149,6 +149,10 @@ derived from a spread that is not a 20/50 EMA spread.
 
 - [x] Fresh worktree with `static/` copied in; full fast suite; failure set
       diffed against the 17294-pass baseline.
+      **17364 passed, 50 skipped, 0 failed.**
+      The first attempt failed four "the repo is still clean" gates on three
+      `nan_leak` findings in the F120 fix — two real (F256), one a rule defect
+      (F255). Both fixed; the gate was not relaxed and nothing was suppressed.
 - [x] Update `CODE_READING_FINDINGS.md` and `FIX_PHASES.md`; push.
 
 
