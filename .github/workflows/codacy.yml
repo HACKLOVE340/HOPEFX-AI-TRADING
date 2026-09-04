@@ -21,6 +21,28 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Exists only so the scan job can gate on a secret. `secrets` is unavailable
+  # in a job-level `if`, but `needs` is, and a step *can* read a secret into an
+  # output.
+  token-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      has_token: ${{ steps.probe.outputs.has_token }}
+    steps:
+      - id: probe
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+        run: |
+          if [ -n "$CODACY_PROJECT_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "CODACY_PROJECT_TOKEN is not set — skipping the Codacy scan."
+          fi
+
   codacy-security-scan:
     permissions:
       contents: read
@@ -32,9 +54,13 @@ jobs:
     # The action requires CODACY_PROJECT_TOKEN (Settings → Secrets → Actions) and
     # fails immediately without it. The job used to run anyway and swallow that
     # failure via continue-on-error, so every push checked out the repository and
-    # started the action to reach a foregone conclusion. Skipping outright is the
-    # same signal for none of the capacity.
-    if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}
+    # started the action to reach a foregone conclusion.
+    #
+    # The guard must come through `needs`, not `secrets` directly: the secrets
+    # context is not available in a job-level `if`, so `secrets.X != ''` there
+    # evaluates as '' != '' and skips the job unconditionally — token or not.
+    needs: token-check
+    if: needs.token-check.outputs.has_token == 'true'
     # Still non-blocking when it does run: the scan reports findings, it does not
     # gate. pr-quality-gate below is the job in this file with teeth.
     continue-on-error: true

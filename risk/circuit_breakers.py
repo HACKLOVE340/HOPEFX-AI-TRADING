@@ -11,6 +11,7 @@ drawdown monitoring, and automated trading halts.
 
 import asyncio
 import json
+import itertools
 import logging
 import math
 import os
@@ -168,7 +169,7 @@ class CircuitBreaker:
         # nothing outside the test suite ever called register_circuit_breaker,
         # so the registry was empty in production and every operator control
         # fell through to editing a cached JSON blob instead.
-        self.name = name or self._derive_name(broker)
+        self.name = name or self._unique_name(self._derive_name(broker))
         register_circuit_breaker(self.name, self)
 
     @staticmethod
@@ -184,6 +185,32 @@ class CircuitBreaker:
             if isinstance(value, str) and value.strip():
                 return value.strip()
         return type(broker).__name__
+
+    @staticmethod
+    def _unique_name(base: str) -> str:
+        """Ensure *base* does not displace an already-registered breaker.
+
+        ``register_circuit_breaker`` overwrites by key, and ``_derive_name``
+        falls back to the broker's class name, so two brokers of the same class
+        with no ``broker_name`` would map to one entry. A superadmin force-open
+        would then halt the survivor and answer ``new_orders_blocked: true``
+        while the other breaker kept passing orders — the same "reports success
+        without controlling anything" failure this class was just fixed for.
+        """
+        existing = _registry
+        if base not in existing:
+            return base
+        for suffix in itertools.count(2):
+            candidate = f"{base}-{suffix}"
+            if candidate not in existing:
+                logger.warning(
+                    "CircuitBreaker: %r is already registered; this one is %r. "
+                    "Pass name= or set broker.broker_name so operators can tell them apart.",
+                    base,
+                    candidate,
+                )
+                return candidate
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _initialize_monitoring(self):
         """Start background monitoring"""

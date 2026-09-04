@@ -104,6 +104,20 @@ _PACKAGED = _packaged_model_dir()
 _CHECKSUM_FILE = _PACKAGED / "model_checksums.json"
 
 
+def _checksum_file_for(directory: _Path) -> _Path:
+    """The integrity baseline for *directory*.
+
+    Checksums are per directory. They used to be a single file covering the
+    packaged models, which was consistent while the packaged directory was the
+    only one ever loaded. Once ML_MODEL_DIR became a real read location, a
+    retrained advanced_oos.pkl there had the same *name* as the packaged one
+    and different bytes, so it was refused with "MODEL INTEGRITY FAILURE ...
+    may have been tampered with" — defeating the point of resolving the
+    variable at all, and reporting a path change as a security incident.
+    """
+    return directory / "model_checksums.json"
+
+
 def _saved(name: str) -> _Path:
     """Resolve artifact *name*, preferring ML_MODEL_DIR over the packaged copy.
 
@@ -156,21 +170,22 @@ def _verify_checksum(path: _Path) -> bool:
     The checksum file is written automatically on first successful load so
     subsequent loads can detect modifications.
     """
-    if not _CHECKSUM_FILE.exists():
-        # First run — record checksums for all existing models
-        _record_checksums()
+    checksum_file = _checksum_file_for(path.parent)
+    if not checksum_file.exists():
+        # First run for this directory — record a baseline for it.
+        _record_checksums(path.parent)
         return True
 
     try:
-        stored = _json.loads(_CHECKSUM_FILE.read_text())
+        stored = _json.loads(checksum_file.read_text())
     except Exception as exc:
         _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
         return True
 
     name = path.name
     if name not in stored:
-        # New model file not yet in checksum registry — record and allow
-        _record_checksums()
+        # New model file not yet in this directory's registry — record and allow
+        _record_checksums(path.parent)
         return True
 
     actual = _sha256(path)
@@ -187,14 +202,19 @@ def _verify_checksum(path: _Path) -> bool:
     return True
 
 
-def _record_checksums() -> None:
-    """Write SHA-256 checksums for all .pkl files in saved_models/."""
+def _record_checksums(directory: _Path | None = None) -> None:
+    """Write SHA-256 checksums for every .pkl in *directory*.
+
+    Defaults to the packaged directory, whose baseline is committed and
+    verified in CI.
+    """
+    target = directory or _PACKAGED
     try:
         checksums = {}
-        for pkl in _PACKAGED.glob("*.pkl"):
+        for pkl in target.glob("*.pkl"):
             checksums[pkl.name] = _sha256(pkl)
-        _CHECKSUM_FILE.write_text(_json.dumps(checksums, indent=2))
-        _ml_logger.info("Model checksums recorded: %d files", len(checksums))
+        _checksum_file_for(target).write_text(_json.dumps(checksums, indent=2))
+        _ml_logger.info("Model checksums recorded for %s: %d files", target, len(checksums))
     except Exception as exc:
         _ml_logger.warning("Could not record model checksums: %s", exc)
 

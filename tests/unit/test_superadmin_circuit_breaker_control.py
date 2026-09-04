@@ -263,3 +263,56 @@ class TestTheEndpointTellsTheTruth:
         states = _load_cb_states()
 
         assert any(entry.get("live") is True for entry in states)
+
+
+class TestTwoBreakersDoNotCollide:
+    """A second breaker must not silently replace the first.
+
+    `_derive_name` falls back to `type(broker).__name__` and
+    `register_circuit_breaker` overwrites by key, so two brokers of the same
+    class with no `broker_name` mapped to one registry entry. A superadmin
+    force-open would then halt only the surviving instance while answering
+    `{"ok": true, "new_orders_blocked": true}` — a narrower form of the very
+    "the control reports success without controlling anything" bug this
+    subsystem was fixed for.
+    """
+
+    def test_both_breakers_are_registered(self):
+        from risk.circuit_breakers import get_circuit_breakers
+
+        get_circuit_breakers().clear()
+        first = _make_cb()
+        second = _make_cb()
+
+        registered = list(get_circuit_breakers().values())
+        assert first in registered
+        assert second in registered, (
+            "the second breaker overwrote the first in the registry, so halting 'MagicMock' would halt only one of them"
+        )
+
+    def test_they_get_distinct_names(self):
+        from risk.circuit_breakers import get_circuit_breakers
+
+        get_circuit_breakers().clear()
+        _make_cb()
+        _make_cb()
+
+        assert len(get_circuit_breakers()) == 2
+
+    def test_an_explicit_name_is_respected(self):
+        from risk.circuit_breakers import CircuitBreaker, get_circuit_breakers
+
+        get_circuit_breakers().clear()
+        cb = CircuitBreaker(broker=_make_broker(), redis_client=None, name="oanda_live")
+
+        assert get_circuit_breakers()["oanda_live"] is cb
+
+    def test_a_broker_name_attribute_is_used_verbatim(self):
+        from risk.circuit_breakers import CircuitBreaker, get_circuit_breakers
+
+        get_circuit_breakers().clear()
+        broker = _make_broker()
+        broker.broker_name = "ftmo_challenge"
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+
+        assert get_circuit_breakers()["ftmo_challenge"] is cb

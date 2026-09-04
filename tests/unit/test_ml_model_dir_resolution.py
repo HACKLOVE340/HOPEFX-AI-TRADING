@@ -193,3 +193,65 @@ class TestConfigurationAgrees:
     def test_the_superadmin_page_reports_the_real_default(self):
         src = Path("api/superadmin/reliability.py").read_text()
         assert '"ML_MODEL_DIR": "ml/saved_models"' in src
+
+
+class TestChecksumsFollowTheDirectory:
+    """A retrained artifact must not be refused as a forgery.
+
+    `_verify_checksum` matches on `path.name` against a single checksum file.
+    Once readers could load from `ML_MODEL_DIR`, a retrained `advanced_oos.pkl`
+    there had the same *name* as the packaged one and a different hash, so it
+    tripped
+
+        MODEL INTEGRITY FAILURE: advanced_oos.pkl checksum mismatch ...
+        The file may have been tampered with. Refusing to load.
+
+    and `_try_load` returned None. That defeats the whole point of resolving
+    `ML_MODEL_DIR` — retrained models still never reach inference — and it does
+    so while crying tampering, which is the worst way to fail: an operator
+    chasing a security incident that is really a path change.
+
+    Checksums are now per directory. Each directory keeps its own baseline, so
+    the tamper-detection property is unchanged within a directory while a fresh
+    retrain target records its baseline on first load.
+    """
+
+    def test_a_fresh_directory_records_its_own_baseline(self, tmp_path):
+        import ml as ml_pkg
+
+        (tmp_path / "advanced_oos.pkl").write_bytes(b"retrained-artifact")
+
+        assert ml_pkg._verify_checksum(tmp_path / "advanced_oos.pkl") is True
+        assert (tmp_path / "model_checksums.json").exists(), (
+            "the retrain directory must get its own baseline, not be judged against the packaged one"
+        )
+
+    def test_a_retrained_artifact_is_not_flagged_as_tampering(self, tmp_path):
+        """Same filename as a packaged model, different bytes — must be allowed."""
+        import ml as ml_pkg
+
+        packaged_names = [p.name for p in ml_pkg._PACKAGED.glob("*.pkl")]
+        assert packaged_names, "expected the repository to ship packaged .pkl artifacts"
+        name = packaged_names[0]
+
+        (tmp_path / name).write_bytes(b"freshly retrained, different bytes")
+
+        assert ml_pkg._verify_checksum(tmp_path / name) is True
+
+    def test_tampering_within_a_directory_is_still_refused(self, tmp_path):
+        """The property that matters must survive the change."""
+        import ml as ml_pkg
+
+        target = tmp_path / "advanced_oos.pkl"
+        target.write_bytes(b"original")
+        assert ml_pkg._verify_checksum(target) is True  # records the baseline
+
+        target.write_bytes(b"modified after the baseline was recorded")
+
+        assert ml_pkg._verify_checksum(target) is False
+
+    def test_the_packaged_directory_keeps_its_committed_baseline(self):
+        """CI verifies these; the file must stay where it is."""
+        import ml as ml_pkg
+
+        assert ml_pkg._checksum_file_for(ml_pkg._PACKAGED) == ml_pkg._PACKAGED / "model_checksums.json"
