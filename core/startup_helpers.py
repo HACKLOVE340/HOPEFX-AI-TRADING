@@ -95,27 +95,65 @@ async def prewarm_ml_predictor(state) -> None:
 
 
 async def start_data_layer_orchestrator(state) -> None:
-    """Await the data layer orchestrator startup (non-fatal).
+    """Await the data layer orchestrator startup, retrying on failure.
 
     Uses ``asyncio.wait_for`` with a configurable timeout so a slow feed
     connection does not block other startup tasks indefinitely.
+
+    **Why this retries now.** ``_started = True`` is the last line of
+    ``orchestrator.start()``, so a failure in any of its ten feed-startup steps
+    left the data layer down for the life of the process with no second attempt.
+    That was survivable while the execution safety gate ignored ``_started``
+    (F84) — the app simply traded blind. Now that the gate fails closed, the same
+    single transient failure stops trading entirely and nothing ever tries again.
+    The retry is part of that fix rather than an addition to it.
+
+    Still non-fatal: exhausting the attempts logs and returns, so the rest of
+    startup runs. Bounded and backing off, because an orchestrator that cannot
+    start due to a wrong credential must not be reconnected to for ever at full
+    speed.
     """
     orch_timeout = float(os.getenv("ORCHESTRATOR_STARTUP_TIMEOUT_S", "60.0"))
-    try:
-        from data_layer.orchestrator import orchestrator
+    attempts = max(1, int(os.getenv("ORCHESTRATOR_STARTUP_ATTEMPTS", "3")))
+    base_delay = float(os.getenv("ORCHESTRATOR_RETRY_BASE_S", "5.0"))
 
-        await asyncio.wait_for(orchestrator.start(), timeout=orch_timeout)
-        state.data_layer_orchestrator = orchestrator
-        logger.info("Data layer orchestrator started")
-    except TimeoutError:
-        logger.warning(
-            "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
-            "return degraded responses until feeds connect. "
-            "Set ORCHESTRATOR_STARTUP_TIMEOUT_S to increase the limit.",
-            orch_timeout,
-        )
-    except Exception as exc:
-        logger.warning("Data layer orchestrator failed to start (non-fatal): %s", exc)
+    last_error: str = ""
+    for attempt in range(1, attempts + 1):
+        try:
+            from data_layer.orchestrator import orchestrator
+
+            await asyncio.wait_for(orchestrator.start(), timeout=orch_timeout)
+            state.data_layer_orchestrator = orchestrator
+            logger.info("Data layer orchestrator started (attempt %d/%d)", attempt, attempts)
+            return
+        except TimeoutError:
+            last_error = f"timed out after {orch_timeout:.0f}s"
+        except Exception as exc:
+            last_error = str(exc)
+
+        if attempt < attempts:
+            delay = base_delay * (2 ** (attempt - 1))
+            logger.warning(
+                "Data layer orchestrator start failed (attempt %d/%d): %s — retrying in %.0fs",
+                attempt,
+                attempts,
+                last_error,
+                delay,
+            )
+            if delay > 0:
+                await asyncio.sleep(delay)
+
+    # Every attempt used. Say what this means, not just what happened: with the
+    # execution gate failing closed, no data layer means no orders (F84).
+    logger.error(
+        "Data layer orchestrator FAILED to start after %d attempt(s): %s. "
+        "Trading is BLOCKED — the execution safety gate refuses orders without a "
+        "data layer, and data-layer endpoints will return degraded responses. "
+        "Set ORCHESTRATOR_STARTUP_ATTEMPTS / ORCHESTRATOR_STARTUP_TIMEOUT_S to "
+        "adjust, and check feed credentials and connectivity.",
+        attempts,
+        last_error,
+    )
 
 
 def init_kyc_gateway(state) -> None:
