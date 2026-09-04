@@ -1153,6 +1153,28 @@ async def _try_connect_oanda(
         from brokers.oanda import AsyncOANDAConnector
 
         broker = AsyncOANDAConnector(api_key=token, account_id=account_id, practice=practice)
+
+        # Verify the connector can actually place an order before reporting the
+        # broker as ready. AsyncOANDAConnector is a bare alias for OANDABroker
+        # (brokers/oanda.py:681), which has place_order(dict) but NOT
+        # place_market_order — the method execution/trade_executor.py:409 calls.
+        # So this configuration used to boot cleanly, log "OANDA broker
+        # connected", and raise AttributeError on the first signal instead
+        # (F61/F107). deployments/k8s/k8s-configmap.yaml:33-34 already sets
+        # BROKER_TYPE=oanda with OANDA_PRACTICE=false.
+        #
+        # Refusing at startup is the whole point: a deployment that cannot trade
+        # should say so while someone is watching the logs, not on the first
+        # live order.
+        _required = ("place_market_order", "get_account_info", "get_positions")
+        _missing = [m for m in _required if not hasattr(broker, m)]
+        if _missing:
+            raise RuntimeError(
+                f"BROKER_TYPE=oanda selected, but {type(broker).__name__} is missing "
+                f"{_missing}. This deployment cannot place an order. Refusing to start "
+                "rather than failing on the first signal (F61/F107)."
+            )
+
         if not await broker.connect():
             logger.warning(
                 "OANDA connection failed — falling back to paper broker. "
@@ -1166,6 +1188,12 @@ async def _try_connect_oanda(
         _start_oanda_paper_clock(account_id, practice)
         return broker
 
+    except RuntimeError:
+        # The interface check above. Re-raised deliberately: silently falling back
+        # to paper would mean a deployment that asked for a LIVE venue trades on
+        # a simulated one and reports success, which is a worse failure than not
+        # starting.
+        raise
     except Exception as exc:
         logger.warning("OANDA broker init failed (%s) — falling back to paper broker.", exc)
         return None
