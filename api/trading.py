@@ -3739,6 +3739,30 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 # ── Regime status endpoint ────────────────────────────────────────────────────
 
 
+def _ema(values: list[float], alpha: float) -> float:
+    """Exponential moving average over *values*, oldest first.
+
+    Seeded on the oldest value and folded forward, so the newest bar carries the
+    full ``alpha`` and each earlier one decays by ``1 - alpha``.
+
+    This was written as ``ema = closes[-1]`` followed by
+    ``for c in reversed(window)``, which walks newest -> oldest. In that
+    recurrence the value folded in LAST carries the full coefficient, so the
+    weighting was inverted end to end and the oldest bar in a 20-bar window
+    weighed 7.4x the newest (0.10000 against 0.01351). The regime badge's
+    classification still came out right — the EMA still sat below price in an
+    uptrend — but it lagged far more than a 20-period EMA should, and the
+    confidence figure shown to the trader was derived from a spread that was not
+    the spread between a 20- and a 50-period EMA (F125).
+    """
+    if not values:
+        return 0.0
+    ema = values[0]
+    for value in values[1:]:
+        ema = ema * (1 - alpha) + value * alpha
+    return ema
+
+
 @router.get("/regime", response_model=None, summary="Current market regime and active strategy")
 async def get_regime_status(
     symbol: str = "XAUUSD",
@@ -3809,12 +3833,8 @@ async def get_regime_status(
 
     if len(closes) >= 20:
         # EMA 20 and EMA 50
-        ema20 = closes[-1]
-        for c in reversed(closes[-20:]):
-            ema20 = ema20 * 0.9 + c * 0.1
-        ema50 = closes[-1]
-        for c in reversed(closes[-min(50, len(closes)) :]):
-            ema50 = ema50 * 0.96 + c * 0.04
+        ema20 = _ema(closes[-20:], 0.1)
+        ema50 = _ema(closes[-min(50, len(closes)) :], 0.04)
 
         ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
         price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
