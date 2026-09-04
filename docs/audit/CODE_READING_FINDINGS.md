@@ -7785,3 +7785,55 @@ required `action == "hedge_mode"` from an uncorroborated LLM severity of 8, and
 were legitimate — parsing, and out-of-range handling — so both survive with
 corrected expectations and a docstring recording what changed. That is the
 fifth occurrence of this pattern in the audit (F246, F248, F252, F253, here).
+
+## F262 — the rotation helper on the spec's top-priority path destroys credentials and reports success · CRITICAL
+
+Closing F180-F183 for the method that matters, while scanning history for spec
+open item 6 (rotate the exposed superadmin credential).
+
+`security/encryption.py::SecureVault.rotate_key` promised, in its own docstring:
+
+> Re-encrypt all credentials with new key
+
+and did this:
+
+```python
+# Store old cipher          <- an orphan comment; nothing follows it
+self._master_key = new_master_key
+self._initialize_cipher()
+logger.info("Key rotation successful")
+return True
+```
+
+The orphan comment is the tell: the correct implementation was started and
+abandoned, and what remained reports success.
+
+**It re-encrypts nothing, and it cannot.** `SecureVault` holds no credentials —
+only `_master_key`, `_cipher` and `_salt`. It is a stateless cipher, so swapping
+its key leaves every ciphertext produced under the old key permanently
+undecryptable, *wherever that ciphertext is stored*, while the caller records a
+successful rotation. The class docstring advertised "Automatic key rotation
+support", so a reviewer reading the promise would never look at the body.
+
+It is unreferenced — zero non-test callers — which is why it survived. It is
+also the first thing someone searching for "rotate a key" finds, on the single
+highest-priority operation in the platform spec.
+
+Demonstrated rather than described: encrypt a token, call `rotate_key`, and the
+token no longer decrypts while the call returns `True`.
+
+`rotate_key` now raises `NotImplementedError` naming `config/vault.py` — the
+live vault, which stages the new key in a temporary keyring slot *before*
+swapping the active cipher, so a crash mid-rotation leaves a recoverable state.
+Refusing loudly is the only safe behaviour available to a stateless cipher asked
+to rotate. `security/vault.py::rotate_keys` needed no change: its docstring
+already says "Callers are responsible for re-encrypting stored secrets after
+rotating the master key", which is honest.
+
+**And once more in my own test.** The first version asserted the string
+"re-encrypt all credentials" was absent from the docstring — and failed against
+the corrected version, which *quotes* the old promise in past tense to explain
+what changed. Grepping prose cannot distinguish a promise from a quotation of
+one: F255's mistake, in a test written to close a finding about exactly that.
+The assertion now reads the summary line and requires it to say the method
+refuses.

@@ -48,7 +48,11 @@ class SecureVault:
     - Master key derivation from password or environment
     - AES-256-GCM authenticated encryption
     - Secure credential storage
-    - Automatic key rotation support
+
+    **Not** key rotation: this is a stateless cipher and holds no credentials to
+    re-encrypt, so ``rotate_key`` refuses. It previously advertised "Automatic
+    key rotation support" and silently orphaned every ciphertext (F180-F183).
+    Rotation lives in ``config/vault.py``.
     """
 
     def __init__(self, master_key: str | None = None):
@@ -135,23 +139,40 @@ class SecureVault:
             return ""
 
     def rotate_key(self, new_master_key: str) -> bool:
-        """
-        Re-encrypt all credentials with new key
-        """
-        try:
-            # Store old cipher
+        """Refuse: this class cannot rotate a key without destroying data.
 
-            # Set new key
+        This method promised "Re-encrypt all credentials with new key" and did
+        this instead::
+
+            # Store old cipher          <- an orphan comment; nothing followed
             self._master_key = new_master_key
             self._initialize_cipher()
-
-            logger.info("Key rotation successful")
             return True
 
-        except Exception as e:
-            logger.error("Key rotation failed: %s", e)
+        It re-encrypted nothing, and it cannot: ``SecureVault`` holds no
+        credentials — only ``_master_key``, ``_cipher`` and ``_salt``. It is a
+        stateless cipher, so swapping its key leaves every ciphertext produced
+        under the old key permanently undecryptable, wherever that ciphertext is
+        stored, while the caller is told the rotation succeeded (F180-F183).
 
-            return False
+        That mattered because rotating the exposed superadmin credential is the
+        highest-priority item in the platform spec, and this is the method
+        someone reaching for "rotate a key" would find first.
+
+        Rotation lives in ``config/vault.py``, which stages the new key in a
+        temporary keyring slot *before* swapping the active cipher, so a crash
+        mid-rotation leaves a recoverable state.
+
+        Raises:
+            NotImplementedError: always. Refusing loudly is the only safe
+            behaviour available to a stateless cipher asked to rotate.
+        """
+        raise NotImplementedError(
+            "SecureVault cannot rotate its key: it holds no credentials to re-encrypt, so "
+            "changing the key would make every existing ciphertext permanently unreadable "
+            "while reporting success. Use config/vault.py, which stages the new key before "
+            "swapping the cipher. (F180-F183)"
+        )
 
 
 class APICredentialManager:
