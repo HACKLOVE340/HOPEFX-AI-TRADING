@@ -48,16 +48,25 @@ TIERS: tuple[tuple[str, float, float], ...] = (
 
 
 def total_ram_gib() -> float:
+    """Total RAM in GiB, from /proc/meminfo with a sysconf fallback.
+
+    Both failures are reported rather than swallowed: this number decides which
+    model tier gets deployed, so silently returning 0.0 would recommend the
+    smallest tier on a machine that could run more — a wrong answer dressed as a
+    measurement.
+    """
     try:
         with open("/proc/meminfo", encoding="utf-8") as fh:
             for line in fh:
                 if line.startswith("MemTotal:"):
                     return int(line.split()[1]) / (1024 * 1024)
-    except OSError:
-        pass
+    except OSError as exc:
+        print(f"  note: /proc/meminfo unreadable ({exc}); trying sysconf", file=sys.stderr)
+
     try:
         return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024**3)
-    except (ValueError, OSError, AttributeError):
+    except (ValueError, OSError, AttributeError) as exc:
+        print(f"  note: sysconf could not report memory ({exc}); reporting 0", file=sys.stderr)
         return 0.0
 
 
@@ -74,7 +83,8 @@ def total_vram_gib() -> float:
             timeout=10,
             check=False,
         ).stdout
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"  note: nvidia-smi failed ({exc}); reporting 0 VRAM", file=sys.stderr)
         return 0.0
     total = 0.0
     for line in out.splitlines():

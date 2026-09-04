@@ -7837,3 +7837,139 @@ what changed. Grepping prose cannot distinguish a promise from a quotation of
 one: F255's mistake, in a test written to close a finding about exactly that.
 The assertion now reads the summary line and requires it to say the method
 refuses.
+
+## F263 — CI is red, and it is five real failures the fresh-worktree method cannot see · CRITICAL
+
+**F95 is stale and the correction matters.** F95 recorded "CI has not run on
+main for at least 30 consecutive pushes" — an Actions billing block. It is
+resolved: the workflow has 3,971 runs, jobs are assigned runners, and today's
+runs take ~50 minutes. The last `main` push (2026-08-18) still shows the
+4-second no-runner signature, but every run since gets a real runner.
+
+CI is now **running and failing**, which is worse than not running, because a
+red build nobody reads is indistinguishable from a green one.
+
+**Six of eight jobs pass** — dependency-scan, frontend, typecheck, pre-commit,
+build-cpp-shim, e2e. Only `test (3.11)` and `test (3.12)` fail, both at the same
+step, "Run tests with coverage (full suite, 70% baseline)", after 16 minutes of
+real execution. Everything downstream is skipped, including the invariant
+coverage report and all nine per-package coverage gates — so those gates have
+not run in CI for as long as this step has been red.
+
+Reproduced locally by running the workflow's exact command:
+
+```
+5 failed, 17419 passed, 47 skipped in 985.24s
+TOTAL  43696  10210  10328  1339  74.42%
+Required test coverage of 70% reached. Total coverage: 74.42%
+```
+
+**Coverage was never the problem** — 74.42% against a 70% floor. Five real test
+failures were.
+
+### Why every fresh-worktree verification missed them
+
+The verification method this audit relies on creates a worktree and copies
+`static/` in (F244). It does not copy `.env`, which is gitignored. Four of the
+five failures depend on a local `.env` existing. So the method that was built to
+remove environment sensitivity **introduced a blind spot of exactly the same
+kind**: a suite that passes in a worktree and fails on a developer's box is not
+measuring the code either way.
+
+### The five
+
+| Test | Cause |
+|---|---|
+| `test_fixes.py::test_total_issues_zero` | **Mine.** `scripts/vps_capability_report.py:56` swallowed an `OSError` with a bare `pass`; the repo's own analyzer flags it. Committed minutes earlier, caught by the gate I had verified as clean. Fixed by reporting the failure — the number decides which model tier is deployed, so a silent 0.0 recommends the smallest tier on a machine that could run more. |
+| `test_code_analyzer_suppression_is_uniform.py::test_the_repo_is_still_clean` | Same cause. |
+| `test_core.py::test_settings_validation` | **F241, second path** — see below. |
+| `test_core.py::test_settings_production` | Same. |
+| `test_diagnose_deploy_report.py::…[POSTGRES_PASSWORD / DB_PASSWORD / DATABASE_URL]` | A test that passed only on a broken deployment — see below. |
+
+### F241 survived through a reader I did not close
+
+F241's fix neutralised `dotenv.load_dotenv` for the session. **pydantic-settings
+never calls it.** `config/settings.py:377` declares
+`SettingsConfigDict(env_file=".env")`, and `DotEnvSettingsSource` opens the file
+itself.
+
+Proven rather than inferred: the repository's `.env` carries a bare `BROKER=` at
+line 1891, `Settings.broker` is a nested model, so pydantic JSON-parses the empty
+string and raises `SettingsError`, while `Settings(_env_file=None)` constructs
+cleanly. Two tests therefore passed or failed according to a gitignored file.
+
+The root `conftest.py` now clears `env_file` on every `BaseSettings` subclass for
+the session. Real environment variables still apply — that is how a test
+configures something deliberately; only the file is closed.
+
+### A test that asserted the deployment was broken
+
+`test_it_checks_each_failure_this_deployment_actually_hit` asserts the string
+`POSTGRES_PASSWORD / DB_PASSWORD / DATABASE_URL` appears in the diagnostic
+report. That string existed **only in the MISMATCH branch**; the success branch
+read `POSTGRES_PASSWORD == DB_PASSWORD == password inside DATABASE_URL`.
+
+So it passed when the three disagreed, passed when there was no `.env` at all
+(the empty-`PGPW` path also reaches MISMATCH — which is why worktrees were
+green), and failed once a deployment was configured correctly. It asserted the
+failure, not the check.
+
+Both branches now name the same three variables, so an operator scanning the
+report finds the check whatever its outcome, and a new test pins that both
+branches do. **Sixth occurrence** of a test encoding the defect as the
+requirement (F246, F248, F252, F253, F261, here).
+
+### The method changes
+
+A fresh worktree removes gitignored *build* artifacts, which was the point, and
+gitignored *configuration*, which was not. The CI command must be run in the
+working tree as well — `pytest -m "not slow and not e2e" --cov
+--cov-config=.coveragerc --cov-fail-under=70` — because that is where a `.env`
+exists. Neither run subsumes the other.
+
+## F264 — a documented environment variable makes the whole Settings object unconstructable · HIGH
+
+Found while clearing the CI failures in F263.
+
+`config/settings.py` composes `Settings` from nested sub-models:
+
+```python
+db: DatabaseSettings = Field(default_factory=DatabaseSettings)
+redis: RedisSettings = Field(default_factory=RedisSettings)
+broker: BrokerSettings = Field(default_factory=BrokerSettings)
+ml: MLSettings = Field(default_factory=MLSettings)
+risk: RiskSettings = Field(default_factory=RiskSettings)
+```
+
+For a nested-model field, pydantic-settings looks for an environment variable of
+the same name — `DB`, `REDIS`, `BROKER`, `ML`, `RISK` — and **JSON-parses
+whatever it finds**. Anything that is not JSON raises `SettingsError` and takes
+the entire settings object with it, naming a field nobody has touched.
+
+`.env` ships a bare `BROKER=` at line 1891. The empty string is not JSON:
+
+```
+SettingsError: error parsing value for field "broker" from source "EnvSettingsSource"
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+```
+
+`BROKER` is not an obscure name. `.env` documents it, `BROKER_TYPE` is the
+canonical spelling used by `core/account_registry`, and both
+`tests/unit/test_nuclear_supervisor.py` and `tests/e2e/test_auth_billing_trading.py`
+set `os.environ["BROKER"]` deliberately. `ML` and `RISK` are one careless
+`export` away from the same result.
+
+`env_ignore_empty=True` on `Settings` fixes the case that actually ships — an
+unset variable now means unset.
+
+**`BROKER=paper` still raises, and that is recorded rather than fixed.**
+Repairing it means changing how `Settings` maps environment variables onto its
+sub-models, which is an API decision about a config surface with many readers,
+not a bug fix, and it is not what "get CI green" licenses. A test pins the
+current boundary so the behaviour is visible and a future change is deliberate.
+
+`BrokerSettings` is also the only sub-model without an `env_prefix` — its
+siblings carry `DB_`, `REDIS_`, `ML_`, `RISK_`, `SECURITY_`, `NEWS_`. Adding
+`env_prefix="BROKER_"` was tried and **does not help**: the prefix governs how
+the child reads its own fields, not how the parent resolves the field name. It
+was reverted rather than left in as a change that looks like a fix and is not.

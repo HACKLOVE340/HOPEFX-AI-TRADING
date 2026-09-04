@@ -79,3 +79,53 @@ def _disable_dotenv_for_tests() -> None:
 
 
 _disable_dotenv_for_tests()
+
+
+def _disable_pydantic_env_file_for_tests() -> None:
+    """Stop pydantic-settings reading the developer's ``.env``.
+
+    ``_disable_dotenv_for_tests`` above closes ``dotenv.load_dotenv``.
+    pydantic-settings never calls it: ``DotEnvSettingsSource`` opens the file
+    named by ``model_config["env_file"]`` itself. So ``config.settings.Settings``
+    kept reading ``.env`` after F241 was "fixed", and two tests in
+    ``tests/unit/test_core.py`` passed or failed according to a gitignored file —
+    green in every fresh-worktree verification, because a worktree has no
+    ``.env``, and red under CI.
+
+    The repository's own ``.env`` carries a bare ``BROKER=``; ``Settings.broker``
+    is a nested model, so pydantic tries to JSON-parse the empty string and
+    raises ``SettingsError``. Nothing about that is a defect in the code under
+    test.
+
+    Setting ``env_file`` to None leaves every other settings source intact —
+    real environment variables still apply, which is how tests configure things
+    deliberately.
+    """
+    try:
+        from pydantic_settings import BaseSettings
+    except ImportError:  # pydantic-settings absent: nothing to neutralise
+        return
+
+    def _clear(cls: type) -> None:
+        config = getattr(cls, "model_config", None)
+        if isinstance(config, dict) and config.get("env_file") is not None:
+            config["env_file"] = None
+        for subclass in cls.__subclasses__():
+            _clear(subclass)
+
+    # Import for the side effect of defining the settings classes, so the walk
+    # below reaches them. A project without this module simply has nothing to do —
+    # but say so rather than swallowing it, because a silent failure here means
+    # the whole suite quietly goes back to reading the developer's .env.
+    try:
+        import config.settings  # noqa: F401
+    except Exception as exc:  # pragma: no cover - reported, never hidden
+        print(
+            f"conftest: could not import config.settings ({exc}); settings classes defined there will still read .env",
+            file=sys.stderr,
+        )
+
+    _clear(BaseSettings)
+
+
+_disable_pydantic_env_file_for_tests()

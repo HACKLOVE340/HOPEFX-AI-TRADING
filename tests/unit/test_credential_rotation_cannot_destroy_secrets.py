@@ -61,7 +61,7 @@ def test_rotation_does_not_silently_orphan_existing_ciphertext(vault):
     # Rotating must either re-encrypt (it cannot — there is nothing to
     # re-encrypt from) or refuse. What it must never do is change the key,
     # report success, and leave this ciphertext unreadable.
-    with pytest.raises(Exception) as excinfo:
+    with pytest.raises(RuntimeError) as excinfo:
         vault.rotate_key("a-new-master-key")
 
     assert vault.decrypt(ciphertext) == "OANDA-LIVE-TOKEN", (

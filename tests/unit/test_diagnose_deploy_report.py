@@ -120,6 +120,30 @@ def test_it_checks_each_failure_this_deployment_actually_hit(report, needle):
     assert needle in report
 
 
+def test_the_password_consistency_check_is_reported_either_way():
+    """This assertion used to pass only on a BROKEN deployment.
+
+    The needle "POSTGRES_PASSWORD / DB_PASSWORD / DATABASE_URL" appeared solely
+    in the MISMATCH branch; the success branch read "POSTGRES_PASSWORD ==
+    DB_PASSWORD == password inside DATABASE_URL". So the test was green when the
+    three disagreed — or when there was no `.env` at all, which is why every
+    fresh-worktree verification passed — and red once they agreed. It asserted
+    the failure, not the check.
+
+    Both branches now name the same three variables, so an operator scanning the
+    report finds the check whatever its outcome, and this test means "the check
+    ran" rather than "the check failed".
+    """
+    src = _SCRIPT.read_text(encoding="utf-8")
+    branches = [line for line in src.splitlines() if "POSTGRES_PASSWORD / DB_PASSWORD / DATABASE_URL" in line]
+    assert len(branches) >= 2, (
+        "the consistency check names the three variables on only one branch, so the "
+        f"report mentions them only when it fails: {branches}"
+    )
+    assert any("ok" in line for line in branches), "the success branch does not name the check"
+    assert any("MISMATCH" in line for line in branches), "the failure branch does not name the check"
+
+
 def test_it_explains_the_env_file_versus_flag_distinction():
     """The mistake that made three rounds of corrected secrets land nowhere."""
     src = _SCRIPT.read_text()

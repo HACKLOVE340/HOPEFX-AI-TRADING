@@ -374,9 +374,17 @@ class NewsSettings(BaseSettings):
 
 
 class Settings(BaseSettings):
+    # env_ignore_empty: each sub-settings field below is a nested model, so
+    # pydantic-settings looks for an env var of the same name (`DB`, `REDIS`,
+    # `BROKER`, `ML`, `RISK`…) and JSON-parses whatever it finds. `.env` ships a
+    # bare `BROKER=`, which parsed as the empty string and made the whole
+    # Settings object unconstructable with a JSONDecodeError pointing at
+    # "broker" — a field nobody had touched. Ignoring empty values makes an
+    # unset variable mean unset (F264).
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_ignore_empty=True,
         extra="ignore",
     )
 

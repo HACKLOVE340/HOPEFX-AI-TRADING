@@ -164,10 +164,17 @@ class SecureVault:
         mid-rotation leaves a recoverable state.
 
         Raises:
-            NotImplementedError: always. Refusing loudly is the only safe
-            behaviour available to a stateless cipher asked to rotate.
+            RuntimeError: always. Refusing loudly is the only safe behaviour
+            available to a stateless cipher asked to rotate.
+
+        ``RuntimeError``, not ``NotImplementedError``: this is not work waiting
+        to be finished by a subclass, which is what ``NotImplementedError``
+        announces in Python. It is an operation this class cannot correctly
+        perform. The repository's own pre-commit healer reads
+        ``NotImplementedError`` as an unfinished stub and blocks the commit —
+        correctly, for the pattern it is looking for.
         """
-        raise NotImplementedError(
+        raise RuntimeError(
             "SecureVault cannot rotate its key: it holds no credentials to re-encrypt, so "
             "changing the key would make every existing ciphertext permanently unreadable "
             "while reporting success. Use config/vault.py, which stages the new key before "
