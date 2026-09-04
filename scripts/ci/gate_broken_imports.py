@@ -81,11 +81,6 @@ KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
         "core.email_service",
     ): "S-41 admin password reset; module is functions, needs a reset token",
     ("api/admin.py", "get_email_service", "core.email_service"): "S-41 SMTP test; no public generic send_email",
-    (
-        "api/superadmin/risk_management.py",
-        "_GLOBAL_REGISTRY",
-        "risk.circuit_breakers",
-    ): "S-41 reset/force-open call methods CircuitBreaker lacks",
 }
 
 
