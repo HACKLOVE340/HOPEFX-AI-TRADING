@@ -12,6 +12,14 @@ on:
 permissions:
   contents: read
 
+# Superseded runs are cancelled on feature branches and PRs; main is left alone
+# because its runs are the release record. This block previously keyed the group
+# on github.sha, giving every commit its own group — so it collided with nothing
+# and superseded nothing, and every push queued another complete pipeline.
+concurrency:
+  group: codacy-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   codacy-security-scan:
     permissions:
@@ -21,10 +29,14 @@ jobs:
     name: Codacy Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # continue-on-error: the Codacy action requires CODACY_PROJECT_TOKEN to be
-    # set in repo secrets (Settings → Secrets → Actions).  Until the token is
-    # configured the action fails immediately; this prevents that from blocking
-    # other CI checks.
+    # The action requires CODACY_PROJECT_TOKEN (Settings → Secrets → Actions) and
+    # fails immediately without it. The job used to run anyway and swallow that
+    # failure via continue-on-error, so every push checked out the repository and
+    # started the action to reach a foregone conclusion. Skipping outright is the
+    # same signal for none of the capacity.
+    if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}
+    # Still non-blocking when it does run: the scan reports findings, it does not
+    # gate. pr-quality-gate below is the job in this file with teeth.
     continue-on-error: true
     steps:
       - name: Checkout code
