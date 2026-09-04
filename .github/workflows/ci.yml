@@ -375,9 +375,13 @@ jobs:
             --timeout=120 \
             -q
 
-      # Invariant coverage report — pure introspection (no app boot). Fails the
-      # build if a critical component lacks invariant or alert coverage. Cheap
-      # meta-gate that catches "we added a component but forgot to protect it".
+      # Invariant coverage report — pure introspection (no app boot). The
+      # registry inventory is measured; the critical-component matrix is a
+      # DECLARATION in invariants/registry.py, not a probe (F176). This step
+      # fails the build when a component declared critical does not declare
+      # invariant or alert coverage — "we added a component but forgot to
+      # declare its protection". It does not verify that the protection exists;
+      # the runtime invariant check below is what exercises real behaviour.
       - name: Invariant coverage report
         run: python scripts/invariant_coverage.py
 

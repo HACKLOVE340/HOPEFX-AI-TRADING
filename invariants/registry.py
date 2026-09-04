@@ -72,8 +72,13 @@ def registry_summary() -> dict[str, Any]:
 
 
 # ── Critical-component manifest (the one place to declare criticality) ────────────
-# protected/monitored/alerted/recoverable are booleans the coverage report checks.
-# Keep this honest: a component marked critical without protection is a real gap.
+# protected/monitored/alerted/recoverable are DECLARATIONS, not measurements:
+# nothing probes the component to set them, and coverage_counts() below only
+# counts the ones that say True. A literal cannot fail, so a complete matrix is
+# a statement of intent — never evidence (F176). The coverage report labels it
+# as such; do not reintroduce language that reads as verification.
+# Keep this honest: a component marked critical without protection is a real gap,
+# and a component marked protected that is not is a worse one.
 CRITICAL_COMPONENTS: dict[str, dict[str, bool]] = {
     "order_execution": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},
     "risk_engine": {"protected": True, "monitored": True, "alerted": True, "recoverable": True},

@@ -472,14 +472,27 @@ class SharpeCircuitBreaker:
             from core.app_state import app_state
 
             ae = getattr(app_state, "alert_engine", None)
-            if ae and hasattr(ae, "send_alert"):
-                ae.send_alert(
-                    title="Sharpe Circuit Breaker Tripped",
-                    message=(f"Model '{state.model_version}' gated out of production.\nReason: {state.trip_reason}"),
-                    severity="critical",
-                )
+
+            # As in ml/performance_monitor.py: title=/severity= are not parameters
+            # of send_alert, and the coroutine was never awaited, so a tripped
+            # circuit breaker raised a TypeError into the except below and
+            # notified nobody (F248).
+            from notifications import send_alert_nowait
+
+            send_alert_nowait(
+                "critical",
+                f"Sharpe Circuit Breaker Tripped: model '{state.model_version}' gated out of production.",
+                {
+                    "event": "sharpe_circuit_breaker_trip",
+                    "model_version": state.model_version,
+                    "reason": state.trip_reason,
+                },
+                engine=ae,
+            )
         except Exception as exc:
-            logger.debug("SharpeCircuitBreaker alert failed: %s", exc)
+            # A tripped circuit breaker that could not be announced is an
+            # operator-visible event, not a debug detail.
+            logger.error("SharpeCircuitBreaker alert failed: %s", exc)
 
     async def _retire_model(self, model_version: str, reason: str) -> None:
         """Retire the model in the registry so it cannot be re-promoted without review."""

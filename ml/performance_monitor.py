@@ -312,12 +312,19 @@ class ModelPerformanceMonitor:
             from core.app_state import app_state
 
             ae = getattr(app_state, "alert_engine", None)
-            if ae and hasattr(ae, "send_alert"):
-                ae.send_alert(
-                    title="ML Model Auto-Rollback",
-                    message=(f"Model '{current}' was automatically reverted to '{previous}'.\nReason: {reason}"),
-                    severity="critical",
-                )
+
+            # send_alert(level, message, data) — this used to pass title=/severity=,
+            # which the signature rejects, and never awaited the coroutine, so the
+            # TypeError landed in the except below and the alert was never sent
+            # (F248). This method is sync, hence send_alert_nowait.
+            from notifications import send_alert_nowait
+
+            send_alert_nowait(
+                "critical",
+                f"ML Model Auto-Rollback: model '{current}' was automatically reverted to '{previous}'.",
+                {"event": "ml_model_rollback", "current": current, "previous": previous, "reason": reason},
+                engine=ae,
+            )
         except Exception as exc:
             logger.warning("ML rollback alert failed: %s", exc)
 

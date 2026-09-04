@@ -18,6 +18,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+def _alert_engine_mock():
+    """A mock that enforces AlertEngine.send_alert's real signature.
+
+    A bare MagicMock accepts any call, so these tests were green while the
+    production call passed ``title=``/``severity=`` — kwargs the real method
+    rejects — and never awaited the coroutine (F248). ``autospec`` makes a
+    signature mismatch fail here instead of at 3am.
+    """
+    from unittest.mock import create_autospec
+
+    from notifications.alert_engine import AlertEngine
+
+    return create_autospec(AlertEngine, instance=True)
+
+
 @pytest.fixture(autouse=True)
 def flush_sharpe_cb_redis():
     """Flush persisted Sharpe circuit-breaker state from Redis before each test.
@@ -468,7 +483,7 @@ class TestFireTripEvent:
         state.trip_reason = "test"
 
         mock_outbox = MagicMock()
-        mock_ae = MagicMock()
+        mock_ae = _alert_engine_mock()
         mock_ae.send_alert.side_effect = RuntimeError("alert down")
         mock_app_state_module = MagicMock()
         mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
@@ -490,7 +505,7 @@ class TestFireTripEvent:
         state.trip_reason = "test"
 
         mock_outbox = MagicMock()
-        mock_ae = MagicMock()
+        mock_ae = _alert_engine_mock()
         mock_app_state_module = MagicMock()
         mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
 
@@ -504,6 +519,7 @@ class TestFireTripEvent:
             cb._fire_trip_event(state)
 
         mock_ae.send_alert.assert_called_once()
+        assert mock_ae.send_alert.call_args.args[0] == "critical"
 
 
 # ── _retire_model ─────────────────────────────────────────────────────────────

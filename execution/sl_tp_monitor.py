@@ -82,20 +82,24 @@ except ImportError:
 
 
 def _send_alert(subject: str, body: str) -> None:
-    """Fire-and-forget Telegram/notification alert (non-blocking)."""
+    """Fire-and-forget notification alert (non-blocking).
+
+    Delegates the loop handling to ``notifications.send_alert_nowait`` so this
+    path shares the one dispatch policy: never crash the caller, never fail
+    silently. This used to schedule ``notifications.send_alert``, which was a
+    bare ``logger.log`` — so "CLOSE FAILURE — MANUAL INTERVENTION REQUIRED"
+    never left the process (F247).
+    """
     try:
-        from notifications import send_alert as _notify_send_alert
+        from notifications import send_alert_nowait
 
-        async def _do() -> None:
-            await _notify_send_alert("critical", f"🔴 SL/TP MONITOR — {subject}: {body}")
-
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(_do())
-        except RuntimeError:
-            asyncio.run(_do())
-    except Exception as exc:  # nosec B110
-        logger.debug("SL/TP monitor alert suppressed: %s", exc)
+        send_alert_nowait(
+            "critical",
+            f"🔴 SL/TP MONITOR — {subject}: {body}",
+            {"event": "sl_tp_monitor", "subject": subject},
+        )
+    except Exception as exc:  # nosec B110 — the monitor must keep running
+        logger.error("SL/TP monitor alert failed: %s", exc)
 
 
 class SLTPMonitor:

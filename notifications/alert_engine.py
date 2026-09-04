@@ -871,38 +871,57 @@ class AlertEngine:
         level: str,
         message: str,
         data: dict | None = None,
-    ) -> None:
-        """Send a system-level alert through all registered notification handlers.
+    ) -> bool:
+        """Send a system-level alert to the log **and** the notification channels.
 
-        Called by HOPEFXBrain._safe_notify() and RiskManager._send_telegram_alert()
-        to dispatch critical events (emergency stop, drawdown breach, etc.).
+        Called by HOPEFXBrain._safe_notify(), RiskManager._send_telegram_alert(),
+        the circuit breakers and the position reconciler to dispatch critical
+        events (emergency stop, drawdown breach, position drift).
+
+        This used to delegate to ``notifications.get_alert_engine()`` guarded by
+        ``singleton is not self``. That guard could never open: ``notifications``
+        re-exports ``get_alert_engine`` from this very module, so the "singleton"
+        it returned *was* this AlertEngine. The guard and the delivery were the
+        same branch, and every alert stopped at the log line (F159). The target
+        is ``notifications.notifications`` — the NotificationManager wrapper that
+        owns the Telegram / Discord / webhook fan-out.
 
         Args:
             level:   Severity string — 'debug', 'info', 'warning', 'error', 'critical'.
             message: Human-readable alert text.
             data:    Optional structured payload attached to the alert.
+
+        Returns:
+            True when the alert was handed to at least one channel. False means
+            it exists in the log and nowhere else — never treat that as sent.
         """
+        import logging as _logging
+
         logger.log(
-            getattr(__import__("logging"), level.upper(), __import__("logging").INFO),
+            getattr(_logging, level.upper(), _logging.INFO),
             "AlertEngine [%s]: %s",
             level,
             message,
         )
 
-        # Delegate to the notifications singleton when available so the alert
-        # reaches Telegram / Discord / email channels in addition to the log.
         try:
-            from notifications import get_alert_engine as _get_singleton
+            from notifications import notifications as _channels
 
-            singleton = _get_singleton()
-            # Avoid infinite recursion — only delegate if the singleton is a
-            # different object (NotificationManager, not this AlertEngine).
-            if singleton is not None and singleton is not self and hasattr(singleton, "send_alert"):
-                coro = singleton.send_alert(level, message, data)
-                if __import__("asyncio").iscoroutine(coro):
-                    await coro
-        except Exception as exc:  # nosec B110 — notification must never crash the caller
-            logger.debug("AlertEngine.send_alert delegation failed: %s", exc)
+            delivered = bool(await _channels.send_alert(level, message, data))
+        except Exception as exc:
+            # Delivery must never crash the caller — an emergency stop still has
+            # to complete. It must not be silent either: this was logged at
+            # DEBUG, which is off in production.
+            logger.error("Alert dispatch failed for [%s] %s: %s", level, message, exc)
+            return False
+
+        if not delivered and level.lower() in ("error", "critical", "fatal", "emergency"):
+            logger.error(
+                "Alert NOT DELIVERED — no notification channel is configured. [%s] %s reached the log only.",
+                level,
+                message,
+            )
+        return delivered
 
 
 # ================================================================

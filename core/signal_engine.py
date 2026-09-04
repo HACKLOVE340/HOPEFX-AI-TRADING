@@ -308,8 +308,7 @@ def _phase_gate_permits(phase: str, feature: str) -> bool:
 
     if not passed:
         logger.warning(
-            "%s is enabled by flag but its %s gate has not passed: %s "
-            "The feature stays OFF until the gate passes.",
+            "%s is enabled by flag but its %s gate has not passed: %s The feature stays OFF until the gate passes.",
             feature,
             phase,
             reason,

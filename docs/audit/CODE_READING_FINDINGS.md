@@ -7260,3 +7260,94 @@ it go green and stay green.** A suite cannot tell you a control is off — it
 reports the absence of the control as success. That is why F176 (a coverage
 report printing `FULL COVERAGE ✅` from a hardcoded `True`) and this finding are
 the same family: the measurement agrees with you because it is not measuring.
+
+## F247 — `notifications.send_alert()` is a `logger.log` call · CRITICAL
+
+Found while fixing F159. The module-level "Global alert function" in
+`notifications/__init__.py`:
+
+```python
+# Simple alert function for compatibility
+async def send_alert(level: str, message: str, **kwargs):
+    """Global alert function"""
+    logger.log(getattr(logging, level.upper(), logging.INFO), "ALERT [%s]: %s", level, message)
+```
+
+That is the whole body. It dispatches to nothing.
+
+`execution/sl_tp_monitor.py` raises three alerts through it, including:
+
+```python
+_send_alert("CLOSE FAILURE — MANUAL INTERVENTION REQUIRED", msg)
+```
+
+A stop-loss that could not be closed is the event the monitor exists to escalate,
+and the escalation was a log line — inside a `try/except` whose handler logged
+the failure at `DEBUG`, which is off in production.
+
+Fixed: `send_alert` now dispatches through the `notifications` singleton and
+returns whether a channel took it. `sl_tp_monitor._send_alert` delegates to the
+shared `send_alert_nowait` rather than hand-rolling its own loop handling.
+
+## F248 — three alert call sites that could never succeed · HIGH
+
+All three pass keyword arguments `AlertEngine.send_alert(self, level, message,
+data)` does not have, and two never await the coroutine:
+
+| Site | Call | Failure |
+|------|------|---------|
+| `core/position_reconciler.py:369` | `send_alert(title=…, message=…, level=…)` | `TypeError` → `except` → `logger.warning` |
+| `ml/performance_monitor.py:316` | `send_alert(title=…, message=…, severity=…)` | `TypeError`, and not awaited |
+| `ml/sharpe_circuit_breaker.py:476` | `send_alert(title=…, message=…, severity=…)` | `TypeError`, and not awaited; handler logs at **debug** |
+
+Position drift, an automatic model rollback and a tripped Sharpe circuit breaker
+each produced a swallowed `TypeError` instead of an alert.
+
+The unit tests covering all three assert `mock_ae.send_alert.assert_called_once()`
+against a bare `MagicMock`, which accepts any signature. They were green against
+a call the real object rejects — F246's rule again, in a different costume: *a
+mock with no spec agrees with you because it is not checking.* Those tests now
+build the mock with `create_autospec(AlertEngine)`.
+
+Fixed: all three call positionally, and the sync sites go through
+`notifications.send_alert_nowait(...)`, which handles the running-loop case,
+reports non-delivery at ERROR, and accepts the caller's own engine so
+engine-registered handlers still fire.
+
+## F249 — a notification channel that is advertised and never dispatched · MEDIUM
+
+`NotificationManager.__init__` registered four channels:
+
+```python
+"email": bool(self.config.get("smtp_host")),
+```
+
+`_dispatch()` has branches for discord, telegram and webhook. There is no email
+branch, and `_NotificationsSingleton` never passes `smtp_host` at all — so the
+key was either always `False`, or `True` and inert for anyone constructing the
+manager directly. An operator reading `channels` was told email alerts were on.
+
+Real email delivery exists — `notifications/manager.py`'s `EmailChannel`, with
+templates, SendGrid/SMTP modes and bounce suppression — it is simply not wired
+to this lightweight manager. Fixed by not advertising the channel and warning
+when `smtp_host` is handed to a manager that cannot send it. Wiring
+`EmailChannel` in is a separate, larger change: it pulls DB suppression lookups
+into the alert path.
+
+## F250 — the superadmin "test alert" button reported channels it never reached · HIGH
+
+`api/superadmin/alerting.py`:
+
+```python
+await engine.send_alert(rule["severity"], f"[TEST] {rule['name']}: …")
+sent_channels = rule.get("channels", [])
+```
+
+The response's `sent_channels` came from the rule's *configuration*, not from the
+send. Under F159 the alert reached no channel at all, so the button that exists
+to verify alert delivery reported successful delivery on every configured
+channel, every time. This is the audit's signature shape at its sharpest: **the
+control that verifies the control returns success for work that did not happen.**
+
+Fixed: `send_alert` now returns whether a channel took the alert, and
+`sent_channels` is `[]` when it did not.

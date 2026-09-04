@@ -109,14 +109,15 @@ cannot print anything else.
 Real probes for twelve components are a project. The honest interim is to stop
 the report claiming verification it has not performed.
 
-- [ ] Test: the report never prints `FULL COVERAGE` from declarations alone.
-- [ ] Test: the output states these are declarations, not measurements.
-- [ ] Test: `coverage_counts()` still returns the declared counts — the manifest
+- [x] Test: the report never prints `FULL COVERAGE` from declarations alone.
+- [x] Test: the output states these are declarations, not measurements.
+- [x] Test: `coverage_counts()` still returns the declared counts — the manifest
       is a legitimate statement of intent; only the *claim* was false.
-- [ ] Implement: rename the reported dimension to DECLARED, and print an explicit
+- [x] Implement: rename the reported dimension to DECLARED, and print an explicit
       "not verified by probe" line naming which components have real coverage
-      checks and which do not.
-- [ ] Commit.
+      checks and which do not (`PROBED_COMPONENTS` — currently empty, and the
+      report says so).
+- [x] Commit.
 
 ### Task 6 — F159: critical alerts must leave the process
 
@@ -127,14 +128,29 @@ singleton `is not self`. `notifications/__init__.py` re-exports
 the delegation never fires. Emergency stops and drawdown breaches reach the log
 and stop there.
 
-- [ ] Test: `send_alert` on the singleton reaches a configured channel.
-- [ ] Test: it does not recurse when no separate manager exists.
-- [ ] Test: a delivery failure is reported, not swallowed.
-- [ ] Test: with no channel configured at all, the result says so rather than
+- [x] Test: `send_alert` on the singleton reaches a configured channel.
+- [x] Test: it does not recurse when no separate manager exists.
+- [x] Test: a delivery failure is reported, not swallowed.
+- [x] Test: with no channel configured at all, the result says so rather than
       claiming delivery.
-- [ ] Implement: resolve the NotificationManager explicitly rather than by
+- [x] Implement: resolve the NotificationManager explicitly rather than by
       identity comparison against a function that returns self.
-- [ ] Commit.
+- [x] Commit.
+
+
+**Done.** Task 5: `scripts/invariant_coverage.py` separates a MEASURED registry
+section (introspection, real) from a DECLARED matrix (the manifest), prints the
+not-verified notice and the probe list, and no longer prints `FULL COVERAGE`.
+`main()` now takes `argv` — reading `sys.argv` meant the test harness parsed
+pytest's own arguments, exited 2, and handed three assertions an empty string to
+pass against.
+
+Task 6 grew: F159's guard was one of five defects on the same path. Fixing only
+the guard would have left `notifications.send_alert()` a bare `logger.log`
+(F247), three call sites raising swallowed `TypeError`s (F248), an advertised
+email channel nothing dispatches (F249), and a superadmin test-alert button
+reporting delivery on channels it never reached (F250). All five are fixed; see
+`CODE_READING_FINDINGS.md`.
 
 ### Task 7 — Verify
 

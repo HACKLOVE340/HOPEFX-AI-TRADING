@@ -23,6 +23,21 @@ from ml.performance_monitor import (
 )
 
 
+def _alert_engine_mock():
+    """A mock that enforces AlertEngine.send_alert's real signature.
+
+    A bare MagicMock accepts any call, so these tests were green while the
+    production call passed ``title=``/``severity=`` — kwargs the real method
+    rejects — and never awaited the coroutine (F248). ``autospec`` makes a
+    signature mismatch fail here instead of at 3am.
+    """
+    from unittest.mock import create_autospec
+
+    from notifications.alert_engine import AlertEngine
+
+    return create_autospec(AlertEngine, instance=True)
+
+
 # ── _VersionWindow ────────────────────────────────────────────────────────────
 
 
@@ -297,8 +312,7 @@ class TestFireRollbackAlert:
         assert call_kwargs[1]["event_type"] == "ML_ROLLBACK" or call_kwargs[0][0] == "ML_ROLLBACK"
 
     def test_alert_engine_send_alert_called(self):
-        mock_ae = MagicMock()
-        mock_ae.send_alert = MagicMock()
+        mock_ae = _alert_engine_mock()
         mock_app_state = MagicMock()
         mock_app_state.alert_engine = mock_ae
 
@@ -318,6 +332,7 @@ class TestFireRollbackAlert:
             self.mon._fire_rollback_alert("v2", "v1", "reason")
 
         mock_ae.send_alert.assert_called_once()
+        assert mock_ae.send_alert.call_args.args[0] == "critical"
 
     def test_outbox_exception_does_not_raise(self):
         with patch.dict(

@@ -113,7 +113,7 @@ async def test_a_live_disconnected_broker_is_not_ok(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_an_unverified_status_is_distinguishable_from_a_failure(monkeypatch):
-    """"Could not check" and "checked, and it is broken" are different facts.
+    """ "Could not check" and "checked, and it is broken" are different facts.
     Collapsing them into "warning" would make a dead broker and an unreachable
     Redis look identical to whoever is on call."""
     monkeypatch.setenv("BROKER_TYPE", "paper")

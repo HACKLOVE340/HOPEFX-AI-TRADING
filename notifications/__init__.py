@@ -9,6 +9,7 @@ Multi-channel alerts: Discord, Telegram, Email, SMS, Webhooks
 """
 
 import asyncio
+import inspect
 import json  # noqa: F401
 import logging
 from dataclasses import dataclass
@@ -50,12 +51,33 @@ class NotificationManager:
 
     def __init__(self, config: dict | None = None):
         self.config = config or {}
+        # Only channels _dispatch() can actually send are advertised here.
+        # "email" used to be listed off an ``smtp_host`` key that _dispatch has
+        # no branch for (and that no caller in this module ever passes), so an
+        # operator reading ``channels`` was told email alerts were on when
+        # nothing would ever be sent (F249). Email delivery lives in
+        # notifications.manager.EmailChannel — templates, SendGrid/SMTP modes
+        # and bounce suppression — and is routed through NotificationService,
+        # not through this lightweight manager.
         self.channels: dict[str, bool] = {
             "discord": bool(self.config.get("discord_webhook")),
             "telegram": bool(self.config.get("telegram_bot_token")),
-            "email": bool(self.config.get("smtp_host")),
             "webhook": bool(self.config.get("webhook_url")),
         }
+        if self.config.get("smtp_host"):
+            logger.warning(
+                "NotificationManager was given smtp_host but does not send email; "
+                "use notifications.manager.EmailChannel for email delivery"
+            )
+
+    def has_channel(self) -> bool:
+        """True when at least one channel is configured and dispatchable.
+
+        The alert path needs to distinguish "delivered" from "there was nowhere
+        to deliver it" — reporting the second as the first is how a critical
+        alert goes missing quietly.
+        """
+        return any(self.channels.values())
         self.queue: asyncio.Queue = asyncio.Queue()
         self._running = False
 
@@ -271,9 +293,71 @@ class NotificationManager:
 
 
 # Simple alert function for compatibility
-async def send_alert(level: str, message: str, **kwargs):
-    """Global alert function"""
+async def send_alert(level: str, message: str, **kwargs) -> bool:
+    """Global alert function — logs *and* dispatches to configured channels.
+
+    ``execution/sl_tp_monitor.py`` raises "CLOSE FAILURE — MANUAL INTERVENTION
+    REQUIRED" through here. This used to be a ``logger.log`` call and nothing
+    else, so that alert never left the process (F247).
+
+    Returns True when the alert was handed to at least one channel.
+    """
     logger.log(getattr(logging, level.upper(), logging.INFO), "ALERT [%s]: %s", level, message)
+    data = kwargs.get("data")
+    if data is None and kwargs:
+        data = dict(kwargs)
+    return await notifications.send_alert(level, message, data)
+
+
+def send_alert_nowait(level: str, message: str, data: dict | None = None, engine=None) -> bool:
+    """Dispatch an alert from **synchronous** code.
+
+    Several alert sites are sync methods on otherwise-async objects
+    (``PerformanceMonitor._fire_rollback_alert``,
+    ``SharpeCircuitBreaker._fire_trip_event``,
+    ``execution.sl_tp_monitor._send_alert``). Calling the coroutine and dropping
+    it produced a "coroutine was never awaited" warning and no alert (F248).
+
+    Schedules on the running loop when there is one, otherwise runs the
+    dispatch to completion. Returns False when the alert could not be handed
+    off at all — the caller has only a log line.
+
+    ``engine`` — when a caller holds an alert engine (``app_state.alert_engine``),
+    pass it and its ``send_alert`` is used, so engine-registered handlers still
+    fire. Otherwise the module-level dispatcher is used.
+    """
+
+    async def _deliver() -> bool:
+        target = getattr(engine, "send_alert", None) if engine is not None else None
+        if target is None:
+            return await send_alert(level, message, data=data)
+        result = target(level, message, data)
+        if inspect.isawaitable(result):
+            result = await result
+        # An engine that returns None predates the delivered/undelivered
+        # distinction; treat a completed call as handed off.
+        return True if result is None else bool(result)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        try:
+            return bool(asyncio.run(_deliver()))
+        except Exception as exc:
+            logger.error("Alert dispatch failed for [%s] %s: %s", level, message, exc)
+            return False
+
+    task = loop.create_task(_deliver())
+
+    def _report(t: asyncio.Task) -> None:
+        try:
+            if not t.result():
+                logger.error("Alert NOT DELIVERED — [%s] %s reached the log only.", level, message)
+        except Exception as exc:
+            logger.error("Alert dispatch failed for [%s] %s: %s", level, message, exc)
+
+    task.add_done_callback(_report)
+    return True
 
 
 # Compatibility alias
@@ -355,6 +439,48 @@ class _NotificationsSingleton:
         """Pass-through to underlying NotificationManager."""
         await self._ensure_started()
         await self._manager.send(notification)
+
+    # Level strings arrive from many callers ('warn', 'fatal', 'emergency').
+    # An unrecognised one is mapped UP, never down: silently demoting an
+    # emergency to INFO is the failure mode this whole path exists to prevent.
+    _LEVEL_ALIASES = {
+        "debug": NotificationLevel.INFO,
+        "info": NotificationLevel.INFO,
+        "notice": NotificationLevel.INFO,
+        "warn": NotificationLevel.WARNING,
+        "warning": NotificationLevel.WARNING,
+        "error": NotificationLevel.ERROR,
+        "err": NotificationLevel.ERROR,
+        "critical": NotificationLevel.CRITICAL,
+        "crit": NotificationLevel.CRITICAL,
+        "fatal": NotificationLevel.CRITICAL,
+        "emergency": NotificationLevel.CRITICAL,
+    }
+
+    @classmethod
+    def _coerce_level(cls, level: str) -> NotificationLevel:
+        key = str(level).strip().lower()
+        mapped = cls._LEVEL_ALIASES.get(key)
+        if mapped is None:
+            logger.warning("Unrecognised alert level %r — treating as ERROR", level)
+            return NotificationLevel.ERROR
+        return mapped
+
+    async def send_alert(self, level: str, message: str, data: dict | None = None) -> bool:
+        """Dispatch an alert to every configured channel.
+
+        Returns True only when a channel was actually configured to receive it.
+        A False return means the alert exists in the log and nowhere else —
+        callers must be able to tell those apart (F159).
+        """
+        # Tolerant of an injected manager that predates has_channel().
+        probe = getattr(self._manager, "has_channel", None)
+        configured = probe() if callable(probe) else any(getattr(self._manager, "channels", {}).values())
+        if not configured:
+            return False
+        await self._ensure_started()
+        await self._manager.send(Notification(level=self._coerce_level(level), message=message, data=data))
+        return True
 
     async def stop(self) -> None:
         """Stop the underlying manager."""

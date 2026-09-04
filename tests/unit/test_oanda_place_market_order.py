@@ -146,8 +146,12 @@ async def test_brackets_are_passed_through_and_reported():
     they are protected' (F151). place_order does attach them, so say so."""
     b = _Broker()
     result = await b.place_market_order(
-        symbol="XAU_USD", side="buy", quantity=1.0, client_order_id="c1",
-        stop_loss=3290.0, take_profit=3320.0,
+        symbol="XAU_USD",
+        side="buy",
+        quantity=1.0,
+        client_order_id="c1",
+        stop_loss=3290.0,
+        take_profit=3320.0,
     )
 
     assert b.seen[0]["stop_loss"] == 3290.0

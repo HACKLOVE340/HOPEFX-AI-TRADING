@@ -366,13 +366,16 @@ class PositionReconciler:
         # Notify via alert engine
         if self._alert_engine is not None:
             try:
+                # Positional: send_alert(level, message, data). The previous call
+                # passed title=, which is not a parameter, so every drift alert
+                # raised TypeError into the except below (F248).
                 await self._alert_engine.send_alert(
-                    title="⚠ Position Drift Detected",
-                    message=reason,
-                    level="critical",
+                    "critical",
+                    f"⚠ Position Drift Detected: {reason}",
+                    {"event": "position_drift", "reason": reason},
                 )
             except Exception as ae_exc:
-                logger.warning("Alert engine notification failed: %s", ae_exc)
+                logger.error("Alert engine notification failed: %s", ae_exc)
 
         # Instruct risk manager to halt if available
         try:

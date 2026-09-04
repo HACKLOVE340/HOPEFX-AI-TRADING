@@ -113,9 +113,7 @@ def test_no_template_flag_contradicts_its_code_default():
     # template that ENABLES what the code disables walks every deployment past a
     # deliberate decision. An exemption here would defeat the file.
     enabled_beyond_code = [
-        name
-        for name in sorted(template)
-        if name in defaults and template[name] and not defaults[name]
+        name for name in sorted(template) if name in defaults and template[name] and not defaults[name]
     ]
     assert not enabled_beyond_code, (
         "The template ENABLES flags the code deliberately defaults to False. This "
@@ -124,8 +122,7 @@ def test_no_template_flag_contradicts_its_code_default():
 
     assert not contradictions, (
         "The template ships a state the code deliberately rejects. bootstrap_dev.py "
-        "generates .env from this file, so every fresh deployment inherits it:\n  "
-        + "\n  ".join(contradictions)
+        "generates .env from this file, so every fresh deployment inherits it:\n  " + "\n  ".join(contradictions)
     )
 
 

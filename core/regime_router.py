@@ -60,9 +60,7 @@ def _detect_now(router: RegimeRouter, symbol: str) -> bool:
     try:
         from data_layer.orchestrator import orchestrator
 
-        df = orchestrator.get_ohlcv_window(
-            symbol=symbol, bars=_DETECT_BARS, timeframe=_DETECT_TIMEFRAME
-        )
+        df = orchestrator.get_ohlcv_window(symbol=symbol, bars=_DETECT_BARS, timeframe=_DETECT_TIMEFRAME)
     except Exception as exc:
         logger.debug("Regime detection: no bar source for %s: %s", symbol, exc)
         return False
