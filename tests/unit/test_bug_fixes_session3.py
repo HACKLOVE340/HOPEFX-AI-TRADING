@@ -452,17 +452,25 @@ class TestSuperadminInfrastructureFixes:
 
 
 class TestSuperadminRiskManagementFixes:
-    def test_global_registry_not_aliased_as_reg(self):
-        """_GLOBAL_REGISTRY must not be imported as _reg (N811 constant naming)."""
+    """These two originally policed the *spelling* of a symbol that does not exist.
+
+    They asserted `_GLOBAL_REGISTRY` was imported un-aliased, for N811 naming
+    compliance. But `risk/circuit_breakers.py` exports `_registry` behind
+    `get_circuit_breakers()` and has never had a `_GLOBAL_REGISTRY`, so the
+    import raised ImportError into a bare `except` and the breaker controls
+    silently did nothing. A lint-shaped test held the broken name in place.
+    """
+
+    def test_the_dead_symbol_is_gone(self):
         src = _source("api/superadmin/risk_management.py")
-        assert "import _GLOBAL_REGISTRY as _reg" not in src, (
-            "_GLOBAL_REGISTRY must not be aliased as _reg (violates N811)"
+        assert "_GLOBAL_REGISTRY" not in src, (
+            "risk.circuit_breakers exports no _GLOBAL_REGISTRY; importing it "
+            "raises ImportError and the operator control becomes a no-op"
         )
 
-    def test_global_registry_used_directly(self):
-        """_GLOBAL_REGISTRY must be used directly after import."""
+    def test_the_real_registry_accessor_is_used(self):
         src = _source("api/superadmin/risk_management.py")
-        assert "_GLOBAL_REGISTRY" in src
+        assert "get_circuit_breakers" in src
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
