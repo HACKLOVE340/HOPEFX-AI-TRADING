@@ -76,6 +76,58 @@ regardless of mode; the invariant makes the violation *observable*.
 * **F239** — the refund-policy commit broke the generated API-doc gate. A green
   targeted suite is not a green build.
 
+## How the remaining phases are ordered
+
+Phases A and B are complete. The six below are ordered by **what moves money or
+loses it**, not by how many findings each contains. Two things decide position:
+
+1. **Does it move money right now?** A defect on a live path outranks a defect in
+   a report, however alarming the report's wording.
+2. **Does anything else depend on it?** Phase F (measurement) is deliberately
+   late: fixing the coverage gate before the code it measures just produces a
+   more accurate picture of a system still doing the wrong thing.
+
+Each phase gets its own executable plan under `docs/audit/plans/` when it starts.
+They are separate documents on purpose — one plan per subsystem, each producing
+something testable on its own. Writing all six up front would mean five stale
+plans by the time we reached them.
+
+| Order | Phase | Why here | Plan |
+|-------|-------|----------|------|
+| **1** | **E — Risk gates** | The only phase where the defects move money on a path that is running today | `plans/2026-09-04-phase-e-risk-gates.md` |
+| 2 | C — Controls that report success without acting | The signature defect; nothing here moves money, but it is why nobody noticed E | not written yet |
+| 3 | G — Correctness bugs | Isolated, low blast radius, individually provable. Cheap once C makes failures visible | not written yet |
+| 4 | D — AI Core prerequisites | Blocks the AI Core build. Not urgent until that starts | not written yet |
+| 5 | H — Config contradicting code | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
+| 6 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
+
+**E before C** is the call worth defending. C contains the most *embarrassing*
+findings — a coverage report printing `FULL COVERAGE ✅` from a hardcoded `True`.
+But an honest report of a broken risk layer is still a broken risk layer. E is
+where money is being sized and routed with no gate at all, on the path
+`CLAUDE.md` describes as the platform's current status.
+
+---
+
+## Phase E — Risk gates · NEXT
+
+Full plan: `docs/audit/plans/2026-09-04-phase-e-risk-gates.md`
+
+* **F142** — CRITICAL. **The active paper pipeline has no risk layer at all.**
+  `run.py:372-380` routes `PAPER_TRADING=true` to `PaperRunner`, not to the
+  engine every other finding examined. `FIXRouter._route` has exactly one gate —
+  `if self._halted` — and then goes straight to the broker. No `RiskManager`, no
+  sizing, no stop-loss, no drawdown or exposure check. Size is the constant
+  `PAPER_ORDER_UNITS` (default 1000).
+* **F94** — HIGH, proven by execution. `RegimeRouter.route()` is never called, so
+  `_last_regime` stays `"unknown"` from the constructor, and
+  `_REGIME_SIZE_MAP.get(name.upper(), 0.5)` therefore **halves every position**.
+* **F61 / F107** — CRITICAL. `AsyncOANDAConnector = OANDABroker` is a bare alias;
+  the class has no `place_market_order`, which `trade_executor.py:409` calls.
+  `BROKER_TYPE=oanda` raises `AttributeError` before an order is built — and
+  `k8s-configmap.yaml:33-34` already sets it with `OANDA_PRACTICE=false`.
+* **F84** — the data-layer gate is skipped in the condition it exists for.
+
 ## Phase C — Controls that report success without acting
 The codebase's signature defect.
 
@@ -87,6 +139,9 @@ The codebase's signature defect.
 * **F219** — push notifications return `True` with FCM off and zero tokens.
 * **F160** — the broker probe reports `ok` from config, not a live check.
 * **F159** — critical alerts never leave the log.
+* **F240** — *(new, fixed in this session)* the SL/TP monitor swallowed an
+  `AttributeError` every poll and checked nothing. Kept here as the reference
+  example of the shape.
 
 ## Phase D — AI Core prerequisites
 Do these immediately before AI Core work, not after.
@@ -96,13 +151,6 @@ Do these immediately before AI Core work, not after.
 * **F130** — self-healer patch signing off, key set nowhere.
 * **F184** — `_run_tests()` returns `True` on `FileNotFoundError`: "could not
   test" recorded as "tests passed" on the gate that admits a patch.
-
-## Phase E — Risk gates
-* **F142** — the ACTIVE paper path has no risk layer at all.
-* **F84** — the data-layer gate is skipped in the condition it exists for.
-* **F94** — regime detection never runs → **every position sized at 0.5×**.
-* **F61/F107** — `BROKER_TYPE=oanda` cannot place an order, and the k8s
-  ConfigMap already sets it.
 
 ## Phase F — Measurement integrity
 * **F221** — the coverage gate measures **34%** of the application and omits
@@ -126,3 +174,23 @@ Do these immediately before AI Core work, not after.
   safety values; last `kubectl apply` wins.
 * **F216 / F217** — `CLAUDE.md` calls `data/` legacy; it holds the live
   real-time price engine and is imported 22× from production.
+
+---
+
+## Test-integrity work (done, out of band)
+
+Not a numbered phase — it was prerequisite to trusting any verification the
+phases above depend on.
+
+* **F240** — the SL/TP monitor never fired a stop (`pos.id` vs `position_id`).
+* **F241** — the suite read the developer's `.env`; `app.py:12` loads it at
+  import, during collection.
+* **F242** — `MagicMock` fixtures silently diverging from the real object.
+* **F243** — the paper broker's test isolation was bypassed by an explicit
+  namespace, so state accumulated in Redis across runs.
+* **F244** — a fresh worktree omits gitignored build artifacts (`static/`), so
+  four tests fail for reasons unrelated to the change under test.
+
+Result: the fast suite is **17171 passed, 0 failed** — green for the first time
+in this audit. Every phase below can now be verified against a clean baseline,
+which was not previously true.
