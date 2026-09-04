@@ -7171,3 +7171,154 @@ processes. Recorded rather than half-built.
 * **k6 load tests run in no workflow.** Confirmed: nothing under
   `.github/workflows/` references k6. Wiring it in needs a target environment
   to point at.
+
+---
+
+## Round 22 — the "still open" list, closed
+
+Every item under "Still open, re-verified, unchanged" above is now done, plus
+three the audit had not reached. Three of them were recorded as blocked on a
+product decision; in each case the decision turned out to be derivable from the
+code rather than a matter of taste, and the reasoning is in the commit and the
+test docstring rather than here.
+
+### S-58 — superadmin circuit-breaker controls did nothing (BLOCKER, fixed)
+
+`POST /superadmin/risk/circuit-breakers/{name}/{reset,open}` returned
+`{"ok": true, "new_state": "open"}` for actions that had no effect. Three
+independent failures, each sufficient alone: `_GLOBAL_REGISTRY` does not exist
+(the registry is `_registry`, behind `get_circuit_breakers()`), `CircuitBreaker`
+had neither `force_open()` nor `reset()`, and the registry was empty in
+production because `register_circuit_breaker()` was called by nothing outside
+tests. All three were swallowed by a bare `except`. An operator watching a live
+drawdown clicked halt and nothing was halted; only a JSON blob in Redis changed,
+which the page then read back so the fabricated state looked persistent. The
+breaker list was fabricated too — six invented names cached for an hour.
+
+Semantics came from the class, not from preference: `pre_trade_check` rejects
+while `state is OPEN`, and `_schedule_recovery` returns early while
+`_manual_override` is set. So force-open trips and pins; reset lifts the pin and
+re-arms the normal cooldown, and deliberately does **not** force CLOSED —
+resuming trading through a live breach on a click is what the subsystem exists
+to prevent. `CircuitBreaker.__init__` now self-registers, rows carry
+`live: true|false`, and acting on an unregistered name returns `ok: false`.
+
+Two tests in `test_bug_fixes_session3.py` had policed the *spelling* of
+`_GLOBAL_REGISTRY` for N811 compliance, holding the broken name in place.
+
+### S-59 — admin password reset sent nothing (fixed)
+
+`POST /admin/users/{id}/reset-password` always answered "Password reset email
+queued" and never queued anything, for two independent reasons: it imported a
+mail facade `core/email_service.py` does not define (ImportError into its own
+`except`), and it read the address from `db_get(f"user:{id}")`, a namespace
+written only by ban/suspend/unban and never carrying an email.
+
+**The open question — may an admin mint a reset token? No, and it need not.**
+`auth/service.py` already mints one and `auth/router.py` signs and mails it. A
+second minting path means a second expiry policy and a second hashing choice on
+the highest-blast-radius endpoint in the panel. That sequence moved to
+`auth/password_reset.py` and both callers use it. The token goes to the user's
+registered address and never appears in the admin's response: an admin causes a
+reset, they do not perform one.
+
+`/admin/settings/test-smtp` had the same dead import. Driving the fix surfaced a
+second defect — `_send` returns `True` with no transport configured (it logs
+instead), so the endpoint whose entire job is detecting that state reported
+success. `core.email_service.active_transport()` now shares `_send`'s precedence.
+
+### S-60 — WebSocket tokens in the URL (fixed)
+
+Four pages plus the documented example in `lib/utils.ts` built
+`?token=${token}`; `api/ws_live.py` (twice) and `api/gateway.py` read it back,
+and in the gateway's case it was the only accepted credential. Tokens now ride
+the `hopefx.auth.bearer` subprotocol, which travels in `Sec-WebSocket-Protocol`
+— a header, so it stays out of access logs, history and `Referer`. The server
+must echo the subprotocol on `accept()` or browsers close the socket, which is
+why `ws_accept_subprotocol()` exists and why call sites go through
+`frontend/src/lib/ws.ts`.
+
+The query parameter still works: non-browser clients use it, and breaking them
+to fix a logging problem is its own outage. It logs a warning naming the client
+and `WS_ALLOW_QUERY_TOKEN=false` refuses it outright once clients have moved.
+
+### S-61 — retraining never reached inference (fixed)
+
+`ML_MODEL_DIR` had four defaults across the writers and `.env.example`, and both
+readers — `ml/inference_engine.py` and `ml/__init__.py` — ignored it entirely,
+hardcoding the packaged directory. Production Helm sets `/app/data/models`, so
+every retrain wrote there while inference loaded the artifacts baked into the
+image at build time. **Retraining has never changed what the model serves.**
+`ml/hourly_trainer.py` was worse: its `ml/models` default is a directory no
+reader consults under any configuration.
+
+`ml/model_paths.py` is now the single answer. Readers *search* rather than
+switch — `ML_MODEL_DIR` first, packaged directory as fallback — because a pod
+whose configured directory is empty (first boot, a failed mount) would otherwise
+find no model at all, turning a configuration mistake into an outage on a system
+that places real trades. The fallback logs a warning naming the empty directory.
+
+### S-62 — CI starved itself (fixed)
+
+Measured over this repo's last ten Codacy runs: wall times of 28–44 minutes,
+almost all ending `cancelled`, against `timeout-minutes: 15` — those are queue
+waits, not work. `codacy.yml` and `codeql.yml` had no concurrency block;
+`ci.yml` and `tests.yml` grouped on `${{ github.ref }}-${{ github.sha }}`, a
+per-commit group that can never collide and therefore supersedes nothing. The
+earlier note that "Codacy burns 15 minutes per push" named the wrong mechanism.
+
+All four now group by ref and cancel superseded runs everywhere except `main`.
+The Codacy scan is skipped outright when `CODACY_PROJECT_TOKEN` is absent rather
+than running a full checkout to fail and swallow it.
+
+### S-63 — k6 ran nowhere, and was broken when it did (fixed)
+
+Wiring it in found four real bugs in the suite: `ml_predict` sent GET to a
+POST-only route; `ml_status` probed `/api/ml/status`, which is not registered;
+the rate-limit probe ran mid-iteration, and the limiter being per-caller meant
+its 429s starved all nine later groups so they read as endpoint outages; and
+`http_req_failed` counted every 4xx including the 60 deliberately-rejected
+logins the probe sends per run, making its <1% threshold unreachable by
+construction. Fixing those took the suite from 75.97% of checks passing
+(error_rate 70.37%, http_req_failed 86.95%) to 95.55% (6.66%, 3.30%), with every
+latency budget green — p95 110 ms against a 500 ms ceiling.
+
+`load-test.yml` runs nightly and on demand, **not** on pull requests. The
+remaining failures are all `/api/trading/ohlcv/{symbol}` answering 503 because
+CI has no market-data feed, and a required check that is red for an
+environmental reason is the pathology S-62 removes. Wire it to `pull_request` in
+the change that gives CI a feed.
+
+### S-64 — the order-intent alarm never converged (fixed)
+
+The earlier note claimed `execution/redis_state.py` had no crash-recovery
+reconciliation. That was stale: S7-02/03/04 already reconcile restored positions
+against `broker.get_positions()`, adopting broker-only positions, dropping
+Redis-only ones and taking the broker's quantity on a mismatch.
+
+What was actually wrong is narrower and worse. `audit_order_intents` logged
+`UNRECONCILED ORDER INTENT` at CRITICAL for every stale intent, and nothing ever
+cleared one — `_clear_intent` is reached only on `TradeExecutor`'s happy path,
+and the audit's return value was discarded by its only caller. So a single crash
+produced a CRITICAL line on every boot forever, and a genuinely new intent — the
+one meaning money may be moving unwatched *now* — arrived indistinguishable from
+that permanent backlog.
+
+An intent whose symbol is open after broker reconciliation is resolved: the
+broker confirmed the position, so the order completed and only the journal write
+failed. It is cleared, with a log line saying so. An intent whose symbol is not
+open is never auto-cleared, but now carries `first_seen_at` and
+`boots_survived`, so a new one is visibly distinct from a known one. Nothing
+here closes, cancels or places anything at the broker.
+
+### Still open
+
+* **S-51 dynamic-strategy persistence** and **S-57 monetization persistence**
+  remain product decisions, unchanged. S-51 as specified would execute
+  caller-supplied Python at boot.
+* **A market-data feed for CI**, which is what blocks the k6 gate from moving to
+  `pull_request`.
+* **17 pre-existing failures** surfaced by running
+  `pytest -k "position or execution or redis_state or trade_executor or intent"`.
+  They pass in isolation and fail under that selection, both before and after
+  Round 22 — cross-test pollution, not a regression, and not investigated here.

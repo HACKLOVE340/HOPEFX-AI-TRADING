@@ -243,6 +243,10 @@ class PositionManager:
         self._positions: dict[str, Position] = {}
         self._history: deque[PositionCloseResult] = deque(maxlen=history_maxlen)
         self._redis_store: Any = None
+        # Unresolved order intents from the last boot audit. Previously the
+        # audit's result was computed and dropped, so the only trace of a
+        # possibly-live unmanaged position was a log line.
+        self._last_order_intent_audit: list[dict] = []
 
         if redis_client is not None:
             try:
@@ -654,7 +658,7 @@ class PositionManager:
         # never finished recording — i.e. we may have died between the broker
         # ack and add_position. Surface it, or the write-ahead record is state
         # nothing ever reads. See docs/HARDENING_BACKLOG.md S7-02.
-        await self.audit_order_intents(parsed)
+        self._last_order_intent_audit = await self.audit_order_intents(parsed)
 
         return len(parsed)
 
@@ -677,26 +681,105 @@ class PositionManager:
 
         intents = [o for o in orders if str(o.get("status", "")).lower() == "intent"]
         if not intents:
+            self._last_order_intent_audit = []
             return []
 
-        open_symbols = set(restored or self._positions)
+        open_symbols = set(restored if restored is not None else self._positions)
+        orphans: list[dict] = []
+
         for intent in intents:
             symbol = intent.get("symbol")
-            known = symbol in open_symbols
+            order_id = intent.get("client_order_id") or intent.get("id")
+
+            if symbol in open_symbols:
+                # _reconcile_with_broker has already dropped every persisted
+                # position the broker does not hold, so a symbol still open here
+                # was confirmed by the broker itself. The order completed; only
+                # the journal write did not. Resolved — clear it, or this line
+                # repeats at CRITICAL on every boot forever and buries the
+                # intents that actually matter.
+                await self._resolve_intent(order_id, symbol)
+                continue
+
+            # The dangerous case: either the order never reached the broker, or
+            # it filled and there is no local record. Never auto-cleared.
+            aged = await self._age_intent(intent)
+            orphans.append(aged)
             logger.critical(
                 "UNRECONCILED ORDER INTENT | client_order_id=%s symbol=%s side=%s qty=%s "
-                "position_now_open=%s — this order was submitted but never fully "
-                "recorded. If it filled while the process was down, the position "
-                "may be live and unmanaged. Verify against the broker.",
-                intent.get("client_order_id") or intent.get("id"),
+                "position_now_open=False first_seen=%s boots_survived=%s — this order was "
+                "submitted but never fully recorded. If it filled while the process was "
+                "down, the position may be live and unmanaged. Verify against the broker.",
+                order_id,
                 symbol,
                 intent.get("side"),
                 intent.get("quantity"),
-                known,
+                aged.get("first_seen_at"),
+                aged.get("boots_survived"),
             )
 
-        logger.critical("PositionManager: %d unreconciled order intent(s) found at boot", len(intents))
-        return intents
+        if orphans:
+            logger.critical(
+                "PositionManager: %d unreconciled order intent(s) found at boot (oldest survived %d boot(s))",
+                len(orphans),
+                max(o.get("boots_survived", 1) for o in orphans),
+            )
+
+        self._last_order_intent_audit = orphans
+        return orphans
+
+    async def _resolve_intent(self, order_id: str | None, symbol: str | None) -> None:
+        """Clear a journal record the broker has already confirmed.
+
+        This touches the journal only. It never closes, cancels or places
+        anything at the broker.
+        """
+        if not order_id:
+            return
+        try:
+            await self._redis_store.remove_order(order_id)
+        except Exception as exc:
+            # Failing to clear costs another boot's alert, not correctness.
+            logger.warning(
+                "PositionManager: could not clear resolved order intent %s (%s): %s",
+                order_id,
+                symbol,
+                exc,
+            )
+            return
+        logger.info(
+            "PositionManager: order intent %s for %s resolved — the broker holds the "
+            "position, so the order completed and only the journal write was lost",
+            order_id,
+            symbol,
+        )
+
+    async def _age_intent(self, intent: dict) -> dict:
+        """Stamp an unresolved intent with how long it has been unresolved.
+
+        Without this every boot prints the same undifferentiated CRITICAL line,
+        so a new intent — the one that may mean money is moving unwatched right
+        now — is invisible beside a backlog from weeks ago.
+        """
+        aged = dict(intent)
+        aged["first_seen_at"] = intent.get("first_seen_at") or datetime.now(timezone.utc).isoformat()
+        aged["boots_survived"] = int(intent.get("boots_survived", 0) or 0) + 1
+
+        order_id = aged.get("client_order_id") or aged.get("id")
+        if order_id:
+            try:
+                await self._redis_store.save_order(aged)
+            except Exception as exc:
+                logger.debug("PositionManager: could not stamp order intent %s: %s", order_id, exc)
+        return aged
+
+    def last_order_intent_audit(self) -> list[dict]:
+        """Unresolved order intents from the most recent audit.
+
+        The audit result used to be computed inside restore_from_redis and
+        dropped, so no caller could act on it — the only trace was a log line.
+        """
+        return list(self._last_order_intent_audit)
 
     async def _reconcile_with_broker(self, parsed: dict[str, Position], broker: Any) -> dict[str, Position]:
         """Diff persisted positions against the broker's live positions.
