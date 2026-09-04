@@ -1,0 +1,39 @@
+=== POST /api/admin/users/{id}/reset-password ===
+
+-- unknown user (previously answered ok:true, 'Password reset email queued') --
+{
+  "ok": false,
+  "user_id": "no-such-user",
+  "error": "User not found, or has no email address on file"
+}
+
+-- known user: the existing auth flow runs; token goes to their inbox only --
+mailed to: trader@hopefx.io
+{
+  "ok": true,
+  "user_id": "user-42",
+  "message": "Password reset email sent to the user's registered address"
+}
+admin response contains the token? False
+
+=== POST /api/admin/settings/test-smtp ===
+
+-- no transport configured (the state this endpoint exists to detect) --
+{
+  "ok": false,
+  "error": "No mail transport is configured; set SENDGRID_API_KEY or the SMTP_* variables"
+}
+
+-- smtp configured, provider accepts --
+{
+  "ok": true,
+  "sent_to": "admin@hopefx.io",
+  "transport": "smtp"
+}
+
+-- smtp configured, provider refuses --
+{
+  "ok": false,
+  "transport": "smtp",
+  "error": "The mail provider refused the message"
+}

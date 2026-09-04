@@ -75,12 +75,6 @@ KNOWN_BROKEN: dict[tuple[str, str, str], str] = {
     # ── Features written against an API that was never built (S-41) ──────────
     # Each degrades to a documented no-op today. Fixing them is implementation
     # work, not a rename, and several need a product decision first.
-    (
-        "api/admin.py",
-        "email_service",
-        "core.email_service",
-    ): "S-41 admin password reset; module is functions, needs a reset token",
-    ("api/admin.py", "get_email_service", "core.email_service"): "S-41 SMTP test; no public generic send_email",
 }
 
 
