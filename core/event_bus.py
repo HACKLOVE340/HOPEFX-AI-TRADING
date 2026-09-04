@@ -387,9 +387,11 @@ def _make_redis() -> aioredis.Redis:
     # (unlike the Sentinel path above which passes password= explicitly).
     # We only inject when the URL has no userinfo component to avoid
     # overwriting credentials that were intentionally embedded in REDIS_URL.
-    if password and "@" not in url.split("://", 1)[-1]:
-        scheme, rest = url.split("://", 1)
-        url = f"{scheme}://:{password}@{rest}"
+    # Shared helper: the inline version raised ValueError on an empty or
+    # schemeless REDIS_URL instead of degrading.
+    from cache.redis_client import inject_redis_password
+
+    url = inject_redis_password(url, password)
 
     # socket_timeout=None: pub/sub connections must not time out on idle channels.
     # socket_connect_timeout=5: fail fast if Redis is unreachable at connect time.

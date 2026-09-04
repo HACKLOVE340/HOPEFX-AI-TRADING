@@ -255,3 +255,79 @@ class TestChecksumsFollowTheDirectory:
         import ml as ml_pkg
 
         assert ml_pkg._checksum_file_for(ml_pkg._PACKAGED) == ml_pkg._PACKAGED / "model_checksums.json"
+
+
+class TestRedirectingSavedIsHonoured:
+    """`_SAVED` is a seam, and the resolver must not reach past it.
+
+    `ml/__init__.py` and `ml/inference_engine.py` expose `_SAVED` as the module
+    attribute meaning "where models live", and callers redirect it — the
+    parabolic-regime and drift-guard tests assign `ml_module._SAVED = tmp_path`
+    to isolate a fixture directory.
+
+    The first version of `_saved()` called `find_model_file()`, which resolves
+    from the environment and the packaged directory and never looks at `_SAVED`
+    at all. Redirecting it stopped doing anything, so those tests silently read
+    the real committed `registry.json` and `feature_stats.json` instead of their
+    own — `'xgb_horizon5_v3'` where they expected `'test_v1'`, and a live
+    Pipeline where they expected None.
+
+    The production fallback still matters: a pod whose `ML_MODEL_DIR` is empty
+    must not end up with no model. So the rule is narrower than "always fall
+    back" — fall back only while `_SAVED` is still the directory the environment
+    named. An explicit reassignment is an instruction to look *there*, and
+    nowhere else.
+    """
+
+    def test_a_redirected_saved_is_used(self, tmp_path):
+        import ml as ml_pkg
+
+        (tmp_path / "registry.json").write_text('{"marker": "from-tmp"}')
+        original = ml_pkg._SAVED
+        try:
+            ml_pkg._SAVED = tmp_path
+            assert ml_pkg._saved("registry.json") == tmp_path / "registry.json"
+        finally:
+            ml_pkg._SAVED = original
+
+    def test_a_redirected_saved_does_not_fall_back_to_the_packaged_copy(self, tmp_path):
+        """An empty redirect target must read as empty, not as the shipped models."""
+        import ml as ml_pkg
+
+        original = ml_pkg._SAVED
+        try:
+            ml_pkg._SAVED = tmp_path  # deliberately empty
+            resolved = ml_pkg._saved("registry.json")
+            assert resolved.parent == tmp_path, (
+                "reaching past an explicitly redirected _SAVED to the packaged copy "
+                "makes an isolated directory silently read the committed models"
+            )
+            assert not resolved.exists()
+        finally:
+            ml_pkg._SAVED = original
+
+    def test_the_env_configured_directory_still_falls_back(self, tmp_path, monkeypatch):
+        """The production property this whole change exists for."""
+        import importlib
+
+        monkeypatch.setenv("ML_MODEL_DIR", str(tmp_path))
+        ml_pkg = importlib.reload(importlib.import_module("ml"))
+        try:
+            resolved = ml_pkg._saved("registry.json")
+            assert resolved.parent == ml_pkg._PACKAGED, (
+                "an empty ML_MODEL_DIR must degrade to the packaged models, not to nothing"
+            )
+        finally:
+            monkeypatch.delenv("ML_MODEL_DIR", raising=False)
+            importlib.reload(importlib.import_module("ml"))
+
+    def test_the_inference_engine_exposes_the_same_seam(self, tmp_path):
+        import ml.inference_engine as eng
+
+        (tmp_path / "feature_stats.json").write_text("{}")
+        original = eng._SAVED
+        try:
+            eng._SAVED = tmp_path
+            assert eng._saved("feature_stats.json") == tmp_path / "feature_stats.json"
+        finally:
+            eng._SAVED = original
