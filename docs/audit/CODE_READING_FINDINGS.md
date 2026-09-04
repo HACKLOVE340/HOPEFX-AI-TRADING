@@ -7473,3 +7473,64 @@ window, not a different fold.
 Recorded because the temptation in that moment is to adjust the implementation
 until the assertion passes. The check that caught it was asking what the
 *reference* implementation does before deciding which side was wrong.
+
+## F255 — the nan_leak rule scans prose, and the exemption it needed already existed · MEDIUM
+
+The Phase G verification run failed four "the repo is still clean" gates on
+three `nan_leak` findings in code I had just written. Two were real and are
+fixed. The third was not, and its cause is this audit's signature shape turned
+on the analyzer itself.
+
+`security/code_analyzer.py` computes `docstring_lines` and passes `in_doc` to
+the look-ahead rule, with the reason stated in `_build_docstring_lines`:
+
+> This prevents the regex scanner from flagging code examples in docstrings
+> (e.g. shift(-1) in a docstring showing what NOT to do).
+
+**The nan_leak rule never consulted it.** So a docstring explaining a fix —
+"this replaces ``returns[returns < 0].std()``" — raised a high-severity finding
+on a line that is not executed, in a repo whose own gate requires zero findings.
+The exemption existed, was documented, and was not invoked.
+
+Two more gaps came out of the same investigation:
+
+* **`np.sqrt(252)` was flagged.** The rule flags `np.log|sqrt|exp(` because they
+  produce NaN for invalid input — but not for a numeric literal, which is
+  decided at authoring time. The pre-existing Sortino line passed only because
+  an unrelated `np.nan_to_num(` in the same expression satisfied the ±5-line
+  guard window; removing that as part of F120 exposed the constant. Only a bare
+  literal argument is exempt — `np.sqrt(variance)` still fires, and a literal
+  call does not mask a real one beside it on the same line.
+* **`#` comments were still scanned.** `in_doc` covers triple-quoted strings
+  only. The comment block I wrote to explain the docstring fix tripped the rule
+  it was explaining, which is how this one was found. The comment marker is
+  located with the existing `_strip_string_literals`, so a `#` inside a string
+  does not truncate a line before a real finding.
+
+None of the three can hide a defect: a string is not executed, a comment is not
+executed, and `np.sqrt(<literal>)` cannot be NaN unless it was written that way.
+
+**A note on the test harness, because it nearly passed vacuously.** The analyzer
+skips test files (`is_test = "/test" in rel`) and `_rel` falls back to the
+absolute path outside `PROJECT_ROOT` — so a sample written into pytest's
+`tmp_path`, which is named after the running test, is silently exempt. The first
+version of these tests reported "not a finding" for everything, including the
+cases that must still fire. The fixture now points `PROJECT_ROOT` at `tmp_path`
+and asserts the sample's relative path does not read as a test. F246's rule
+again: **a scanner that never ran agrees with every assertion you make.**
+
+## F256 — two real NaN leaks in the F120 fix, caught by the repo's own gate
+
+Not every finding in that run was a false positive. `_downside_deviation` and
+`calculate_sortino_ratio` aggregated with `np.mean` / `.mean()` over values that
+can be NaN, with no guard — the old code had been passing only because
+`np.nan_to_num(...)` happened to sit in the same expression.
+
+Both now drop non-finite values before aggregating, rather than zero-filling
+them: a bar with no return is an absent observation, and counting it as a zero
+shortfall would understate the downside over a series with gaps. Numerator and
+denominator are taken over the same filtered periods.
+
+Worth recording plainly: **the gate caught a real defect in a fix that its
+author had already verified.** Ten targeted tests passed against code that
+propagated NaN, because none of them fed it a NaN.

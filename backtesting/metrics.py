@@ -143,13 +143,19 @@ class PerformanceMetrics:
         from backtesting.engine_config import BacktestEngine
 
         target = self.risk_free_rate / 252
+        # Same treatment on both sides of the ratio: an absent return is
+        # dropped, not counted as a zero, so the numerator and denominator are
+        # taken over the same periods.
+        returns = returns[np.isfinite(returns)]
+        if returns.empty:
+            return 0.0
+        mean_excess = float((returns - target).mean())
+
         downside_deviation = BacktestEngine._downside_deviation(returns.to_numpy(), target=target)
         if downside_deviation <= 0:
             return 0.0
 
-        excess_returns = returns - target
-
-        return float(np.sqrt(252) * (excess_returns.mean() / downside_deviation))
+        return float(np.sqrt(252) * (mean_excess / downside_deviation))
 
     def calculate_max_drawdown(self) -> float:
         """Calculate maximum drawdown percentage."""

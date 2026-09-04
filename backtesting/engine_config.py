@@ -959,6 +959,11 @@ class BacktestEngine:
         import numpy as _np
 
         arr = _np.asarray(returns, dtype=float)
+        # Drop non-finite values rather than zero-filling them: a bar with no
+        # return is an absent observation, and counting it as a zero shortfall
+        # would understate the downside over a series with gaps. np.mean over a
+        # NaN returns NaN, which would propagate silently into the Sortino.
+        arr = arr[_np.isfinite(arr)]
         if arr.size == 0:
             return 0.0
         return float(_np.sqrt(_np.mean(_np.minimum(arr - target, 0.0) ** 2)))
