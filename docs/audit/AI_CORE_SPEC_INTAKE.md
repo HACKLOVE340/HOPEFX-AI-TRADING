@@ -150,6 +150,19 @@ relevant precedent:
 **Still needed from you:** the hive chat details themselves — what a user does
 on that page versus what a superadmin does. Not yet supplied.
 
+**Criterion 1 is now enforced** (`tests/unit/test_superadmin_capabilities_are_server_enforced.py`).
+Verified rather than assumed: all **220** endpoints under `api/superadmin/`
+already carry a server-side role dependency, and the seven nuclear controls —
+halt, resume, hedge activate/deactivate, risk override — additionally require a
+TOTP-verified token through `require_superadmin_2fa`. The test exists so the
+221st cannot ship without one; it was proved to catch an unguarded endpoint by
+adding one and watching it fail.
+
+A first pass reported those seven nuclear endpoints as *unguarded*. They are the
+most strictly guarded in the package — they reach the base dependency through a
+wrapper, which a narrower pattern did not see. Trace reachability before
+assigning severity.
+
 ---
 
 ## 5. Item 6 — the exposed superadmin credential
@@ -207,7 +220,10 @@ live vault is `config/vault.py`, which is correct.
 3. **F139, F130, F184** — the three prerequisites in Section 2. Small, and they
    unblock the kill switch and sandbox.
 4. **Adopt the two acceptance tests in Section 1** before writing agent code —
-   scope-bypass and approval-bypass must fail the build.
+   scope-bypass and approval-bypass must fail the build. **DONE** —
+   `enforce_agent_action` (a new `agent_action` enforcement kind) plus
+   `tests/unit/test_agent_actions_are_enforced_not_prompted.py`. See F260: every
+   predicate already existed and none was reachable.
 5. **Confirm the six Business Operations department names** (spec item 2), then
    rebuild Figma once.
 6. Then the AI Gateway / MCP bus / cache / guardrails plumbing (spec item 1).
