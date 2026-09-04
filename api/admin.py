@@ -1309,23 +1309,80 @@ async def unban_user(
     return {"ok": True, "user_id": user_id, "status": "active"}
 
 
+def _lookup_user_email(user_id: str) -> str | None:
+    """Resolve a user's email from the SQL user row.
+
+    The `user:{id}` key-value namespace is an admin-flags overlay written only
+    by ban/suspend/unban; it has never carried an email. The `User` table is
+    the real record, and it is what auth/service.py and this file's own KYC
+    handler read.
+    """
+    try:
+        from core.app_state import app_state as _state
+        from database.user_models import User as _User
+
+        if not _state or not _state.db_session_factory:
+            return None
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
+            row = session.query(_User).filter_by(id=user_id).first()
+            email = getattr(row, "email", None) if row else None
+            return email.strip() if isinstance(email, str) and email.strip() else None
+    except Exception as exc:
+        logger.warning("user email lookup failed for %s: %s", user_id, exc)
+        return None
+
+
 @router.post("/users/{user_id}/reset-password", summary="Trigger password reset email")
 async def reset_user_password(
     user_id: str,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
-    """Send a password reset email to the user."""
-    try:
-        from core.email_service import email_service
-        from api.db_store import db_get as _db_g4
+    """Trigger the standard password reset flow for a user.
 
-        u = _db_g4(f"user:{user_id}") or {}
-        email = u.get("email", "")
-        if email:
-            await email_service.send_password_reset(email)
+    This does not mint a token. It runs the same
+    ``auth/password_reset.send_password_reset_for_email`` path as the anonymous
+    ``POST /auth/forgot-password``, so there is one expiry policy, one salt and
+    one hashing choice, and the link goes to the user's registered address.
+
+    The token is deliberately absent from the response: an admin who could read
+    it could complete the reset and take the account. An admin causes a reset;
+    they do not perform one.
+
+    The previous implementation resolved the address from
+    ``db_get(f"user:{user_id}")``. Only ban/suspend/unban write that namespace,
+    and none of them store an email, so the lookup returned ``""`` for every
+    user — and the send it guarded was unreachable anyway, because
+    that module exports no such mail facade. The handler
+    answered ``{"ok": true, "message": "Password reset email queued"}``
+    regardless, so an admin helping a locked-out user saw success while the
+    user got nothing.
+
+    It also imported a mail facade that module does not define, so even a
+    correct address would not have produced a send.
+    """
+    import asyncio as _aio
+
+    email = await _aio.to_thread(_lookup_user_email, user_id)
+    if not email:
+        return {
+            "ok": False,
+            "user_id": user_id,
+            "error": "User not found, or has no email address on file",
+        }
+
+    try:
+        from auth.password_reset import send_password_reset_for_email
+
+        issued = await _aio.to_thread(send_password_reset_for_email, email)
     except Exception as exc:
-        logger.warning("reset_user_password email: %s", exc)
-    return {"ok": True, "user_id": user_id, "message": "Password reset email queued"}
+        logger.warning("reset_user_password for %s: %s", user_id, exc)
+        return {"ok": False, "user_id": user_id, "error": safe_error(exc)}
+
+    if not issued:
+        return {"ok": False, "user_id": user_id, "error": "No account is registered for that address"}
+
+    log_activity(f"Password reset triggered for user {user_id} by admin {user.sub}")
+    return {"ok": True, "user_id": user_id, "message": "Password reset email sent to the user's registered address"}
 
 
 @router.get("/audit-log", summary="Paginated audit log")
@@ -1663,18 +1720,46 @@ async def test_smtp(
     payload: dict,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
-    """Send a test email to the admin's address to verify SMTP settings."""
-    try:
-        from core.email_service import get_email_service
+    """Send a test email to the admin's address to verify SMTP settings.
 
-        svc = get_email_service()
-        recipient = payload.get("email") or user.sub
-        await svc.send_email(
-            to=recipient,
-            subject="HOPEFX SMTP Test",
-            body="This is a test email from the HOPEFX admin panel. SMTP is configured correctly.",
+    This previously imported a factory that `core.email_service` does not
+    define, so it raised ImportError into its own handler and reported
+    `ok: false` no matter how SMTP was configured — the panel could never
+    confirm a working setup.
+    `_send` is the real sender, and it returns a bool rather than raising, so
+    a refused delivery is reported as a failure instead of a silent success.
+    """
+    recipient = payload.get("email") or user.sub
+    if not recipient:
+        return {"ok": False, "error": "No recipient address"}
+
+    import asyncio as _aio
+
+    body = "This is a test email from the HOPEFX admin panel. SMTP is configured correctly."
+    try:
+        from core.email_service import _send, active_transport
+
+        transport = active_transport()
+        if transport is None:
+            # _send would answer True here — it logs the message rather than
+            # sending it, which is right for a signup email in dev and useless
+            # for the one endpoint whose job is to detect this exact state.
+            return {
+                "ok": False,
+                "error": "No mail transport is configured; set SENDGRID_API_KEY or the SMTP_* variables",
+            }
+
+        delivered = await _aio.to_thread(
+            _send,
+            recipient,
+            "HOPEFX SMTP Test",
+            f"<p>{body}</p>",
+            body,
         )
-        return {"ok": True, "sent_to": recipient}
     except Exception as exc:
         logger.warning("SMTP test failed: %s", exc)
         return {"ok": False, "error": safe_error(exc)}
+
+    if not delivered:
+        return {"ok": False, "transport": transport, "error": "The mail provider refused the message"}
+    return {"ok": True, "sent_to": recipient, "transport": transport}

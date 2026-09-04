@@ -121,6 +121,23 @@ def _send_via_smtp(to: str, subject: str, html: str, text: str) -> bool:
         return False
 
 
+def active_transport() -> str | None:
+    """Name the transport ``_send`` would use, or None if there is none.
+
+    Shares the precedence below so the two cannot drift. This exists because
+    ``_send`` returns ``True`` when nothing is configured — it logs the message
+    instead, which is right for a signup email in dev and wrong for
+    ``/admin/settings/test-smtp``, whose entire job is answering "is mail
+    configured?". Without this, that endpoint reports a working SMTP setup on a
+    box with no mail transport at all.
+    """
+    if os.getenv("SENDGRID_API_KEY"):
+        return "sendgrid"
+    if _smtp_config():
+        return "smtp"
+    return None
+
+
 def _send(to: str, subject: str, html: str, text: str) -> bool:
     """Send an email using the best available transport."""
     # 1. SendGrid (primary — high deliverability)
