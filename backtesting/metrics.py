@@ -131,16 +131,25 @@ class PerformanceMetrics:
             return 0.0
 
         returns = self.equity_curve["equity"].pct_change().dropna()
-        downside_returns = returns[returns < 0]
 
-        if len(downside_returns) == 0 or downside_returns.std() == 0:
+        # Downside deviation: RMS of the shortfall below the target, over ALL
+        # periods. This used to be `returns[returns < 0].std()` — the dispersion
+        # among the losses, about the mean loss, over the losing periods only.
+        # Different centre, different N, different statistic; the bias flips
+        # sign with the shape of the return distribution, so the reported figure
+        # was not Sortino at all (F120). Shared with
+        # backtesting.engine_config.BacktestEngine._downside_deviation so the
+        # two engines cannot report different Sortinos for the same returns.
+        from backtesting.engine_config import BacktestEngine
+
+        target = self.risk_free_rate / 252
+        downside_deviation = BacktestEngine._downside_deviation(returns.to_numpy(), target=target)
+        if downside_deviation <= 0:
             return 0.0
 
-        excess_returns = returns - (self.risk_free_rate / 252)
+        excess_returns = returns - target
 
-        return float(
-            np.sqrt(252) * (excess_returns.mean() / max(float(np.nan_to_num(downside_returns.std(), nan=0.0)), 1e-9))
-        )
+        return float(np.sqrt(252) * (excess_returns.mean() / downside_deviation))
 
     def calculate_max_drawdown(self) -> float:
         """Calculate maximum drawdown percentage."""

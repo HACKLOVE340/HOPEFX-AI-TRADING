@@ -939,6 +939,49 @@ class BacktestEngine:
     # Main results calculation
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _downside_deviation(returns, target: float = 0.0) -> float:
+        """Root-mean-square shortfall below *target*, over ALL periods.
+
+        This is the Sortino denominator. Both engines used
+        ``returns[returns < 0].std()`` — the dispersion *among the losses*,
+        about the mean loss, over only the losing periods: a different centre,
+        a different N, and a different statistic. Measured against the textbook
+        definition the bias flips sign with the shape of the distribution
+        (1.13x high on symmetric returns, 0.71x low on the negatively skewed
+        shape strategies actually produce), so the reported figure was not
+        Sortino at all rather than wrong in one direction (F120).
+
+        A steadily-losing strategy makes the old form's failure plain: identical
+        losses have a standard deviation of zero, so the denominator vanished
+        for exactly the return series a downside measure exists to penalise.
+        """
+        import numpy as _np
+
+        arr = _np.asarray(returns, dtype=float)
+        if arr.size == 0:
+            return 0.0
+        return float(_np.sqrt(_np.mean(_np.minimum(arr - target, 0.0) ** 2)))
+
+    def _annualised_return(self, total_return: float, n_bars: int) -> float:
+        """Annualise a total return over *n_bars* bars.
+
+        The exponent is 252 / (trading days elapsed). ``n_bars`` is a BAR count
+        and the engine runs on hourly bars, so dividing by ``bars_per_day`` is
+        what turns one into the other. Omitting it — as this line did — reported
+        a year that doubled capital as +2.93% and made Calmar meaningless
+        (F119). The same function divides by ``bars_per_day`` correctly for the
+        Sharpe annualisation and the average hold time; this was the one place
+        it was left out.
+        """
+        days = n_bars / max(float(self.config.bars_per_day), 1e-9)
+        return (1 + total_return) ** (252.0 / max(days, 1e-9)) - 1
+
+    @staticmethod
+    def _calmar(annual_return: float, max_drawdown: float) -> float:
+        """Annualised return over maximum drawdown; 0.0 when there is no drawdown."""
+        return float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+
     def _calculate_results(self) -> BacktestResult:
         """Calculate performance metrics including all Area 1 additions."""
         trades = self.broker.trades
@@ -1017,14 +1060,13 @@ class BacktestEngine:
         # ── Sortino (bar-level — acceptable for downside deviation) ───
         sortino = 0.0
         if len(bar_returns) > 0:
-            downside = bar_returns[bar_returns < 0]
-            downside_std = float(np.std(downside)) if len(downside) > 0 else 0.0
-            if downside_std > 0:
-                sortino = float(np.mean(bar_returns) / downside_std * ann_factor)
+            downside_dev = self._downside_deviation(bar_returns)
+            if downside_dev > 0:
+                sortino = float(np.mean(bar_returns) / downside_dev * ann_factor)
 
         # ── Calmar ────────────────────────────────────────────────────
-        annual_return = (1 + total_return) ** (252.0 / max(len(equity_values), 1)) - 1
-        calmar = float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+        annual_return = self._annualised_return(total_return, len(equity_values))
+        calmar = self._calmar(annual_return, max_drawdown)
 
         # ── Omega ─────────────────────────────────────────────────────
         threshold = 0.0
