@@ -172,13 +172,64 @@ def _load_regime_size_map() -> dict[str, float]:
 _REGIME_SIZE_MAP: dict[str, float] = _load_regime_size_map()
 
 
+#: Set once the "regime is permanently unknown" warning has been emitted. This
+#: runs on the per-signal sizing path, so warning per order would bury the log it
+#: exists to make readable.
+_regime_unknown_warned: bool = False
+
+
 def get_regime_position_scalar(regime_name: str) -> float:
     """Return the position size scalar for the given regime name (0–1).
 
     Used by the risk manager and execution engine to scale lot size based on
     the current market regime detected by RegimeDetector.
+
+    **The scalars themselves are unchanged, deliberately.** ``UNKNOWN: 0.5`` is
+    an explicit entry in ``_DEFAULT_REGIME_SIZE_MAP``, overridable via the
+    ``REGIME_SIZE_MAP`` env var. It is a risk policy — "when you do not know the
+    regime, take half a position" — and the caller describes this overlay as one
+    that "never increases size above the risk-manager-approved maximum, only
+    reduces it in adverse regimes". Raising UNKNOWN to 1.0 would double every
+    position on the platform, which is weakening a risk control and the
+    dangerous direction to be wrong in.
+
+    What was wrong was the silence. ``RegimeRouter.route()`` is never called
+    anywhere in the repo, so the regime is the constructor's "unknown" for the
+    life of the process and the conservative fallback became the *universal*
+    case — with no signal that detection was not running at all (F94). The
+    warning below is that signal. Fixing the cause means wiring ``route()``,
+    which changes sizing behaviour and is tracked separately.
     """
-    return _REGIME_SIZE_MAP.get(regime_name.upper(), 0.5)
+    global _regime_unknown_warned
+
+    key = regime_name.upper()
+    scalar = _REGIME_SIZE_MAP.get(key)
+
+    if scalar is None:
+        # Not merely undetected — a name the size map has never heard of, which
+        # means the detector and the map disagree. Always logged: unlike a
+        # permanently-unknown regime this should be rare, and silence would hide
+        # a genuine mismatch.
+        logger.warning(
+            "Regime %r is not in the size map %s — falling back to the conservative "
+            "0.5 scalar. The regime detector and REGIME_SIZE_MAP disagree.",
+            regime_name,
+            sorted(_REGIME_SIZE_MAP),
+        )
+        return 0.5
+
+    if key == "UNKNOWN" and not _regime_unknown_warned:
+        _regime_unknown_warned = True
+        logger.warning(
+            "Regime is UNKNOWN — every position is being scaled by %.2f. If this "
+            "is constant, RegimeRouter.route() is not being called and detection "
+            "is not running at all (F94); the scalar is a conservative fallback "
+            "being applied universally rather than a detected adverse regime. "
+            "Logged once per process.",
+            scalar,
+        )
+
+    return scalar
 
 
 def _get_deep_ensemble_store() -> Any | None:
