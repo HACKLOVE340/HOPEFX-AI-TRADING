@@ -178,16 +178,39 @@ its own list. Agreed, and it should sit above the AI Core work entirely.
   since baselined. Baselined means *reviewed and accepted*, not *proven safe*;
   it is worth re-reading that list rather than trusting the acceptance.
 
-**What I could not determine:** I found no live credential in the tracked
-working tree. I did not scan the full commit history, and the spec does not say
-where the exposure was found. **Tell me the file or the commit and I will
-verify it precisely.** Until then this stays open, and note that rotation is
-the fix regardless — removing a secret from history does not un-leak it.
+**History now scanned — nothing found.**
+`scripts/scan_git_history_for_secrets.py` walks every object reachable from
+every ref (**4,301 unique text blobs across 194 commits**) against 13 patterns
+that have no legitimate placeholder form: AWS key id, GitHub PAT, Slack token,
+Stripe live/test key, OpenAI and Anthropic keys, private-key blocks, three-part
+JWTs, Google API keys, SendGrid keys, OANDA tokens, Telegram bot tokens.
+**Zero matches.**
+
+A second, filtered pass over credential-shaped assignments and basic-auth URLs
+returned only placeholders (`user:pass` in docstrings), `${VAR}` interpolations
+and test fixtures — one literally named `sk-ant-VERY-SECRET-KEY-do-not-leak`.
+The eight "Basic Auth Credentials" entries in `.secrets.baseline` were read
+individually: all documentation placeholders.
+
+**What that establishes, precisely:** no credential of a recognised format has
+ever been committed to *this repository*. It does **not** mean the credential is
+safe. The exposure may have been a screenshot, a chat, a `.env` on the VPS, or
+another repository — and **rotation is the fix regardless**, because removing a
+secret from history does not un-leak it: anyone who cloned or forked has it.
+
+**Still needed from you:** where the exposure was seen, if it was not here.
+
+The scanner is re-runnable and honours the repository's existing
+`pragma: allowlist secret` marker, so it cannot drift from `detect-secrets`.
 
 Related and already logged: **F180-F183** — `security/encryption.py` and
 `security/vault.py` are two unreferenced `SecureVault` classes whose
 `rotate_key()` **destroys every stored credential and returns `True`**. If any
-rotation tooling is written for this credential, it must not use those. The
+rotation tooling is written for this credential, it must not use those.
+**Now disarmed (F262):** `security/encryption.py::rotate_key` raises
+`NotImplementedError` naming `config/vault.py` instead of silently orphaning
+every ciphertext. `security/vault.py::rotate_keys` needed no change — its
+docstring already tells callers they must re-encrypt. The
 live vault is `config/vault.py`, which is correct.
 
 ---
