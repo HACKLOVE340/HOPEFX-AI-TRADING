@@ -33,33 +33,25 @@ pytestmark = pytest.mark.unit
 REQUIRED = ("place_market_order", "get_account_info", "get_positions")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "F61/F107: AsyncOANDAConnector is a bare alias for OANDABroker, which has "
-        "place_order(dict) rather than place_market_order(). Implementing the "
-        "connector is open work. strict=True so this flips to a failure the moment "
-        "someone does implement it, and nobody has to remember to un-skip it."
-    ),
-)
 def test_the_oanda_connector_satisfies_the_interface_trade_executor_calls():
+    """This was xfail(strict=True) while the connector had no place_market_order.
+
+    It flipped to a failure the moment the adapter was written, which is what
+    strict is for — nobody had to remember to un-skip it. Now an ordinary
+    assertion: the interface is satisfied and must stay satisfied.
+    """
     from brokers.oanda import AsyncOANDAConnector
 
     missing = [m for m in REQUIRED if not hasattr(AsyncOANDAConnector, m)]
     assert not missing, f"AsyncOANDAConnector is missing {missing}; BROKER_TYPE=oanda cannot place an order"
 
 
-def test_the_gap_is_exactly_the_order_method():
-    """Pins what is broken, so the xfail above cannot quietly widen into 'OANDA
-    is entirely unimplemented' without someone noticing."""
+def test_the_underlying_order_method_is_still_there():
+    """place_market_order is an adapter over place_order. Losing the latter
+    would break the former silently."""
     from brokers.oanda import AsyncOANDAConnector
 
-    assert not hasattr(AsyncOANDAConnector, "place_market_order")
-    assert hasattr(AsyncOANDAConnector, "place_order"), (
-        "OANDABroker has lost place_order too — this is now a bigger gap than F107 described"
-    )
-    assert hasattr(AsyncOANDAConnector, "get_account_info")
-    assert hasattr(AsyncOANDAConnector, "get_positions")
+    assert hasattr(AsyncOANDAConnector, "place_order")
 
 
 @pytest.mark.asyncio
