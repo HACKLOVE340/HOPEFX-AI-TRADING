@@ -95,11 +95,11 @@ plans by the time we reached them.
 | Order | Phase | Why here | Plan |
 |-------|-------|----------|------|
 | ~~1~~ | ~~**E — Risk gates**~~ · **DONE** | The only phase where the defects moved money on a path running today | `plans/2026-09-04-phase-e-risk-gates.md` |
-| **1** | **C — Controls that report success without acting** · NEXT | The signature defect; nothing here moves money, but it is why nobody noticed E | not written yet |
-| 3 | G — Correctness bugs | Isolated, low blast radius, individually provable. Cheap once C makes failures visible | not written yet |
-| 4 | D — AI Core prerequisites | Blocks the AI Core build. Not urgent until that starts | not written yet |
-| 5 | H — Config contradicting code | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
-| 6 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
+| ~~2~~ | ~~**C — Controls that report success without acting**~~ · **DONE** | The signature defect; nothing here moves money, but it is why nobody noticed E | `plans/2026-09-04-phase-c-honest-controls.md` |
+| **1** | **G — Correctness bugs** · NEXT | Isolated, low blast radius, individually provable. Cheap now that C has made failures visible | not written yet |
+| 2 | D — AI Core prerequisites | Blocks the AI Core build. Not urgent until that starts | not written yet |
+| 3 | H — Config contradicting code | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
+| 4 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
 
 **E before C** is the call worth defending. C contains the most *embarrassing*
 findings — a coverage report printing `FULL COVERAGE ✅` from a hardcoded `True`.
@@ -127,16 +127,21 @@ submodule with an instance, defeating patching) and **F246** (twelve execution
 tests were green because the F84 gate was switched off; two asserted the defect
 as the requirement).
 
-**Left open, deliberately, and each needs a decision rather than a default:**
+**The three items left open at the end of E — now closed:**
 
-1. `RegimeRouter.route()` is still never called, so the regime is still always
-   UNKNOWN and every position is still scaled by 0.5. Wiring it changes sizing
-   materially.
-2. OANDA still cannot place an order. This made it honest, not working.
-   `place_order(dict)` and `place_market_order(side=…)` are not interchangeable
-   and a guessed adapter could place the opposite side of a trade.
-3. The engine now refuses to trade while the data layer is down, where it
-   previously traded blind. Correct, and a real operational change.
+1. `RegimeRouter.route()` is called. `core/regime_router._detect_now()` fetches
+   bars through `data_layer.orchestrator.get_ohlcv_window()` and routes, behind
+   a 60s TTL and a 50-bar minimum. The scalars themselves are unchanged: the
+   regime is now detected rather than permanently UNKNOWN, which is what the
+   0.5 scalar was silently applying to every position.
+2. OANDA has `place_market_order()` returning a `MarketOrderResult`, with side
+   normalisation that raises on an ambiguous value rather than guessing (`"b"`
+   and `"s"` are refused). **Still not venue-verified** — it must be exercised
+   against a practice account before `OANDA_PRACTICE=false`.
+3. The engine refusing to trade while the data layer is down is kept, and
+   `start_data_layer_orchestrator` now retries (3 attempts, exponential
+   backoff) and logs at ERROR naming that *"Trading is BLOCKED"* — so the
+   operational change announces itself instead of appearing as silence.
 
 * **F142** — CRITICAL. **The active paper pipeline has no risk layer at all.**
   `run.py:372-380` routes `PAPER_TRADING=true` to `PaperRunner`, not to the
@@ -153,20 +158,33 @@ as the requirement).
   `k8s-configmap.yaml:33-34` already sets it with `OANDA_PRACTICE=false`.
 * **F84** — the data-layer gate is skipped in the condition it exists for.
 
-## Phase C — Controls that report success without acting
+## Phase C — Controls that report success without acting · DONE
 The codebase's signature defect.
 
-* **F176** — `invariant_coverage.py` prints `FULL COVERAGE ✅` from hardcoded
-  `True`. Interim: print `DECLARED (unverified)`. Real: probes that can fail.
-* **F214** — the Phase-3 gate is computed into a health dict and gates nothing.
-* **F215** — `.env.example` enables `FEATURE_ONLINE_LEARNING`, the one flag
-  whose code default is `False`, gated on a 90-day paper run.
-* **F219** — push notifications return `True` with FCM off and zero tokens.
-* **F160** — the broker probe reports `ok` from config, not a live check.
-* **F159** — critical alerts never leave the log.
-* **F240** — *(new, fixed in this session)* the SL/TP monitor swallowed an
-  `AttributeError` every poll and checked nothing. Kept here as the reference
-  example of the shape.
+Full plan: `docs/audit/plans/2026-09-04-phase-c-honest-controls.md`
+
+| Finding | What was done |
+|---|---|
+| **F214** | The Phase-3 gate was computed into a health dict and gated nothing. `_phase_gate_permits()` now gates the online-learning and anomaly stores. |
+| **F215** | `.env.example` enabled `FEATURE_ONLINE_LEARNING`, the one flag whose code default is `False`. Now `false`, with the 90-day / 500-fill precondition named inline. |
+| **F219** | `send_notification` returned `True` with FCM off and zero tokens. It now returns `False` when nothing was delivered. |
+| **F160** | The broker probe reported `ok` from config. The config-only fallback now returns `unknown`, not a health verdict. |
+| **F176** | The coverage report printed `FULL COVERAGE ✅` from hand-typed `True`s. It now separates a MEASURED registry section from a DECLARED matrix, states nothing was probed, and names the (empty) probe list. |
+| **F159** | Critical alerts never left the log: the delegation guard compared the AlertEngine against a function returning that same AlertEngine. Delivery now goes to the notification singleton and reports whether a channel took it. |
+| **F240** | The SL/TP monitor swallowed an `AttributeError` every poll and checked nothing. Kept as the reference example of the shape. |
+
+Found while doing it, all on F159's path: **F247** (`notifications.send_alert()`
+was a bare `logger.log`, and the SL/TP monitor's manual-intervention alert went
+through it), **F248** (three call sites passing kwargs `send_alert` does not
+accept, two never awaiting, all swallowed by an enclosing `except` — and their
+tests green because the mocks had no spec), **F249** (an advertised email channel
+`_dispatch` has no branch for) and **F250** (the superadmin *test alert* button
+reporting delivery on channels the alert never reached).
+
+**Left open, deliberately:** real probes for the twelve critical components.
+That is a project, not a fix; the interim is a report that no longer claims to
+have run them. Wiring `notifications.manager.EmailChannel` into the lightweight
+manager is also deferred — it pulls DB suppression lookups into the alert path.
 
 ## Phase D — AI Core prerequisites
 Do these immediately before AI Core work, not after.

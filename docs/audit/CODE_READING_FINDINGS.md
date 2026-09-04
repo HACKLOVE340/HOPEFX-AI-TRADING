@@ -7351,3 +7351,50 @@ control that verifies the control returns success for work that did not happen.*
 
 Fixed: `send_alert` now returns whether a channel took the alert, and
 `sent_channels` is `[]` when it did not.
+
+## F251 — CORRECTION: two defects the F159 fix introduced, caught before push · correction
+
+Recorded because the mechanisms are the audit's own, turned on the fix.
+
+**1. `NotificationManager.__init__` was left without its queue.** Adding a
+`has_channel()` method immediately after the channel map put `self.queue` and
+`self._running` *after* the new method's `return`:
+
+```python
+    def has_channel(self) -> bool:
+        return any(self.channels.values())
+        self.queue: asyncio.Queue = asyncio.Queue()   # unreachable
+        self._running = False                         # unreachable
+```
+
+`ruff check` passed — unreachable code is not a default rule — and a
+1417-test sweep passed, because every alert test substitutes the manager with a
+recorder. The real object was never constructed by anything the suite ran. It
+surfaced only when a throwaway reproduction script built one directly, and then
+as a *log flood*, because `_process_queue`'s `except Exception` had no backoff
+and retried the failure as fast as the CPU allowed. Both are fixed, and a test
+now constructs the real `NotificationManager`.
+
+**2. `send_alert_nowait` returned `True` for an alert it discarded.** With no
+running loop it drives the dispatch under `asyncio.run`, whose loop closes as
+soon as the coroutine returns. The notification had been *queued*, and the queue
+is drained by a background task on that same loop — so the alert died with the
+loop while the caller was told it was sent:
+
+```
+returned: True     dispatched: []
+returned2: True    dispatched: []
+```
+
+That is precisely F159's shape — success reported for work that did not happen —
+reintroduced by the fix for F159, on the path
+`execution/sl_tp_monitor.py` uses for "CLOSE FAILURE — MANUAL INTERVENTION
+REQUIRED". Fixed with an `immediate` dispatch that bypasses the queue when the
+caller owns the loop, plus a loop-affinity guard: `_started` alone was letting
+every later send queue into a dead queue.
+
+The transferable rule, again: **a test that substitutes the object under repair
+cannot tell you the object still works.** F242 recorded this for `MagicMock`
+fixtures and F248 for unspec'd alert mocks; here it was a hand-written recorder
+in my own new tests. Reproducing against the real object is not optional, and
+neither is running the thing you changed.

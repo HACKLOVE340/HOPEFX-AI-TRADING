@@ -202,8 +202,7 @@ def test_no_caller_passes_kwargs_send_alert_does_not_accept(module_path):
             continue
         for kw in node.keywords:
             assert kw.arg in valid, (
-                f"{module_path}:{node.lineno} calls send_alert({kw.arg}=...), "
-                "which AlertEngine.send_alert rejects"
+                f"{module_path}:{node.lineno} calls send_alert({kw.arg}=...), which AlertEngine.send_alert rejects"
             )
         assert len(node.args) + len(node.keywords) >= 2, (
             f"{module_path}:{node.lineno} calls send_alert with too few arguments"
@@ -226,3 +225,69 @@ def test_no_channel_is_advertised_that_dispatch_cannot_send():
     for channel, enabled in mgr.channels.items():
         if enabled:
             assert channel in dispatch_src, f"channels['{channel}'] is advertised but _dispatch never sends it"
+
+
+# ── Defects introduced by the F159 fix itself, caught before they shipped ─────
+
+
+def test_the_notification_manager_is_actually_constructible():
+    """Adding `has_channel()` mid-`__init__` left `self.queue` and
+    `self._running` stranded after a `return`, so every manager was built
+    without them. Ruff does not flag unreachable code, and no test exercised the
+    queue — the alert tests substitute the manager wholesale.
+
+    So: assert the real object, not a stand-in."""
+    from notifications import NotificationManager
+
+    mgr = NotificationManager({"discord_webhook": "https://discord.com/api/webhooks/x"})
+    assert mgr.queue is not None, "NotificationManager was built without its queue"
+    assert mgr._running is False
+    assert mgr.has_channel() is True
+
+
+def test_an_alert_from_synchronous_code_is_delivered_not_queued_into_a_dying_loop(monkeypatch):
+    """`send_alert_nowait` with no running loop drives the dispatch with
+    `asyncio.run`, whose loop closes the moment it returns. A *queued*
+    notification is drained by a background task on that loop — so the alert was
+    discarded with the loop while the caller was told True.
+
+    This is the path `execution/sl_tp_monitor.py` uses for "CLOSE FAILURE —
+    MANUAL INTERVENTION REQUIRED"."""
+    import notifications as nf
+
+    delivered: list[str] = []
+
+    class _Manager(nf.NotificationManager):
+        async def _dispatch(self, notification):
+            delivered.append(notification.message)
+
+    monkeypatch.setattr(
+        nf.notifications, "_manager", _Manager({"discord_webhook": "https://discord.com/api/webhooks/x"})
+    )
+    monkeypatch.setattr(nf.notifications, "_started", False)
+    monkeypatch.setattr(nf.notifications, "_loop", None)
+
+    assert nf.send_alert_nowait("critical", "CLOSE FAILURE") is True
+    assert delivered == ["CLOSE FAILURE"], "the alert was queued into a loop that had already closed"
+
+
+def test_a_second_sync_alert_still_arrives(monkeypatch):
+    """The loop-affinity guard: `_started` stayed True after the first
+    `asyncio.run` loop closed, so every later send queued into a dead queue."""
+    import notifications as nf
+
+    delivered: list[str] = []
+
+    class _Manager(nf.NotificationManager):
+        async def _dispatch(self, notification):
+            delivered.append(notification.message)
+
+    monkeypatch.setattr(
+        nf.notifications, "_manager", _Manager({"discord_webhook": "https://discord.com/api/webhooks/x"})
+    )
+    monkeypatch.setattr(nf.notifications, "_started", False)
+    monkeypatch.setattr(nf.notifications, "_loop", None)
+
+    nf.send_alert_nowait("critical", "first")
+    nf.send_alert_nowait("critical", "second")
+    assert delivered == ["first", "second"]
