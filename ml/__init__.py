@@ -302,7 +302,11 @@ class StackingEnsemblePredictor:
     Calling ``predict_proba(X)`` returns an (N, 2) array where column 1 is
     P(up) — consistent with the sklearn API consumed by the signal engine.
 
-    Missing feature columns are filled with 0.0 (safe default for scaled features).
+    Missing feature columns are set to the training mean — 0.0 in *scaled*
+    space, applied after the scaler runs. Filling them with 0.0 beforehand
+    sent every naturally-scaled feature to ``z = -mean/std``, about -15 sigma
+    for a price column, so the model received a confident description of a
+    market that has never existed rather than an incomplete one (F145).
     """
 
     def __init__(self, payload: dict) -> None:
@@ -320,15 +324,36 @@ class StackingEnsemblePredictor:
         import numpy as np
         import pandas as pd
 
+        imputed = None  # boolean mask of cells with no live value
+
         if isinstance(X, pd.DataFrame):
             # Work on a copy to avoid mutating caller's DataFrame
             X_in = X.copy()
             if self._feature_cols:
                 for col in self._feature_cols:
                     if col not in X_in.columns:
-                        X_in[col] = 0.0
+                        X_in[col] = np.nan
                 X_in = X_in[self._feature_cols]
-            X_in = X_in.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            X_in = X_in.replace([np.inf, -np.inf], np.nan)
+
+            # Which cells have no live value. Recorded BEFORE any fill, because
+            # what the model must see for them depends on the space it is in.
+            imputed = X_in.isna().to_numpy()
+
+            # A finite placeholder so the scaler has numbers to work on. The
+            # value is irrelevant: every cell in `imputed` is overwritten after
+            # scaling.
+            X_in = X_in.fillna(0.0)
+
+            if imputed.any():
+                coverage = 1.0 - (imputed.sum() / imputed.size)
+                _ml_logger.warning(
+                    "StackingEnsemblePredictor: feature coverage %.1f%% — %d of %d cells "
+                    "had no live value and were set to the training mean",
+                    coverage * 100.0,
+                    int(imputed.sum()),
+                    int(imputed.size),
+                )
         else:
             X_in = X
 
@@ -336,7 +361,19 @@ class StackingEnsemblePredictor:
             try:
                 X_in = self._scaler.transform(X_in)
             except Exception as exc:
-                _ml_logger.debug("StackingEnsemblePredictor: scaler.transform failed: %s", exc)
+                # This used to log at DEBUG — off in production — and pass the
+                # UNSCALED frame to the base learners. A raw price of 3200 where
+                # the model expects a z-score is not a degraded prediction, it
+                # is a meaningless one, so refuse instead of guessing (F145).
+                _ml_logger.error("StackingEnsemblePredictor: scaler.transform failed: %s", exc)
+                raise RuntimeError("feature scaling failed; refusing to predict on an unscaled frame") from exc
+
+            if imputed is not None and imputed.any():
+                # 0.0 in scaled space IS the training mean. Filling before the
+                # scaler ran instead sent every naturally-scaled feature to
+                # z = -mean/std — about -15 sigma for a price column (F145).
+                X_in = np.asarray(X_in, dtype=float)
+                X_in[imputed] = 0.0
 
         base_probas = []
         for idx, m in enumerate(self._base_learners):
