@@ -94,8 +94,8 @@ plans by the time we reached them.
 
 | Order | Phase | Why here | Plan |
 |-------|-------|----------|------|
-| **1** | **E — Risk gates** | The only phase where the defects move money on a path that is running today | `plans/2026-09-04-phase-e-risk-gates.md` |
-| 2 | C — Controls that report success without acting | The signature defect; nothing here moves money, but it is why nobody noticed E | not written yet |
+| ~~1~~ | ~~**E — Risk gates**~~ · **DONE** | The only phase where the defects moved money on a path running today | `plans/2026-09-04-phase-e-risk-gates.md` |
+| **1** | **C — Controls that report success without acting** · NEXT | The signature defect; nothing here moves money, but it is why nobody noticed E | not written yet |
 | 3 | G — Correctness bugs | Isolated, low blast radius, individually provable. Cheap once C makes failures visible | not written yet |
 | 4 | D — AI Core prerequisites | Blocks the AI Core build. Not urgent until that starts | not written yet |
 | 5 | H — Config contradicting code | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
@@ -109,9 +109,34 @@ where money is being sized and routed with no gate at all, on the path
 
 ---
 
-## Phase E — Risk gates · NEXT
+## Phase E — Risk gates · DONE
 
 Full plan: `docs/audit/plans/2026-09-04-phase-e-risk-gates.md`
+
+**Outcome: 17207 passed, 0 failed, 1 xfailed** (fresh worktree, `static/` present).
+
+| Finding | What was done |
+|---|---|
+| **F142** | `FIXRouter` now consults an injected pre-trade gate after the halt check and adopts the size it returns. `PaperRunner` wires a real `RiskManager`. Fails closed: a raising risk manager, an approval with no size, and a non-positive size are all refused. |
+| **F94** | **Scalars deliberately unchanged.** `UNKNOWN: 0.5` is a risk policy, not a `.get()` default — raising it to 1.0 would double every position. The silence was the defect: UNKNOWN now warns once per process naming `route()`, and a regime absent from the map warns every time. |
+| **F61/F107** | `BROKER_TYPE=oanda` refuses at startup instead of failing on the first live order, and is no longer silently downgraded to paper. The interface gap is `xfail(strict=True)` so it flips when someone implements it. |
+| **F84** | The `_started` conjunct is gone; the gate asks unconditionally and treats a raise as "not safe". |
+
+Found while doing it: **F245** (`data_layer/__init__.py` shadows its own
+submodule with an instance, defeating patching) and **F246** (twelve execution
+tests were green because the F84 gate was switched off; two asserted the defect
+as the requirement).
+
+**Left open, deliberately, and each needs a decision rather than a default:**
+
+1. `RegimeRouter.route()` is still never called, so the regime is still always
+   UNKNOWN and every position is still scaled by 0.5. Wiring it changes sizing
+   materially.
+2. OANDA still cannot place an order. This made it honest, not working.
+   `place_order(dict)` and `place_market_order(side=…)` are not interchangeable
+   and a guessed adapter could place the opposite side of a trade.
+3. The engine now refuses to trade while the data layer is down, where it
+   previously traded blind. Correct, and a real operational change.
 
 * **F142** — CRITICAL. **The active paper pipeline has no risk layer at all.**
   `run.py:372-380` routes `PAPER_TRADING=true` to `PaperRunner`, not to the

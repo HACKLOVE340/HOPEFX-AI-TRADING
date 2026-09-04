@@ -7194,3 +7194,69 @@ point — and therefore omits every gitignored build artifact the suite depends
 on. For this repo that means `static/` (and a frontend build) must be present,
 or four tests fail for a reason that has nothing to do with the change under
 test. CI builds the frontend before running pytest, so CI has it.
+
+## F245 — `data_layer/__init__.py` shadows its own submodule with an instance · MEDIUM
+
+Found while writing the F84 tests.
+
+```python
+>>> import data_layer.orchestrator as m
+>>> type(m)
+<class 'data_layer.orchestrator.MarketDataOrchestrator'>   # an instance, not a module
+```
+
+`data_layer/__init__.py` binds the name `orchestrator` on the **package** to a
+`MarketDataOrchestrator` instance, which shadows the `data_layer/orchestrator.py`
+submodule of the same name. `sys.modules["data_layer.orchestrator"]` is still the
+real module, so `from data_layer.orchestrator import orchestrator` works — but
+`import data_layer.orchestrator as m` hands back the singleton.
+
+The practical cost: `monkeypatch.setattr(m, "orchestrator", stub)` silently
+patches an attribute on the instance and reaches nothing. A test written that way
+does not fail — it passes while exercising the real singleton, which is the worst
+outcome for a test of a safety gate. That is how the first version of the F84
+tests behaved: green on a gate that was never patched.
+
+The correct target is `sys.modules["data_layer.orchestrator"]`, which the tests
+now use and say why.
+
+This is the same hazard `CLAUDE.md` records for the deleted top-level
+`websocket/` package — *"it shadows the `websocket-client` library for the whole
+project and silently disables the REST fallback"*. Here the shadowing is
+internal, so nothing breaks; it just makes a module unaddressable by its own name
+and quietly defeats patching.
+
+Not fixed here: renaming the singleton (to `market_data_orchestrator`, say) or
+moving it out of `__init__` touches every importer, and the F84 fix should not
+carry a rename. Worth doing deliberately.
+
+## F246 — twelve execution tests were green because a safety gate was switched off · HIGH
+
+A consequence of F84 worth recording separately, because the finding is about
+the tests rather than the gate.
+
+With `if orchestrator._started and not orchestrator.is_safe_to_trade():`, the
+gate was skipped whenever the data layer had not started — which is always, in a
+unit test. So every order in `tests/unit/test_execution_engine.py` and in
+`test_chaos.py`'s broker fault-injection class passed through a check that never
+ran. Removing the `_started` conjunct turned twelve of them red at once.
+
+None of those tests is about data-layer safety; they cover order flow, fills,
+callbacks, metrics and broker faults. They now state their assumption with a
+fixture that supplies a safe data layer. The point is that they never had to
+state it, because the gate they were passing through was inert.
+
+Two further tests asserted the defect *as the requirement*:
+
+* `test_orchestrator_not_started_skips_check` — *"When orchestrator._started is
+  False, safety check is not run."*
+* `test_skips_when_is_safe_to_trade_raises_value_error` — a raise is
+  "non-fatal" and the order proceeds.
+
+Both now assert the opposite.
+
+The transferable rule: **when a gate is disabled, the tests that route through
+it go green and stay green.** A suite cannot tell you a control is off — it
+reports the absence of the control as success. That is why F176 (a coverage
+report printing `FULL COVERAGE ✅` from a hardcoded `True`) and this finding are
+the same family: the measurement agrees with you because it is not measuring.

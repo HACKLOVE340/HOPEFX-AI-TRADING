@@ -242,9 +242,7 @@ def _data_layer_reports_safe(monkeypatch):
         def get_latest_tick(_symbol):
             return None
 
-    monkeypatch.setattr(
-        sys.modules["data_layer.orchestrator"], "orchestrator", _SafeOrchestrator(), raising=False
-    )
+    monkeypatch.setattr(sys.modules["data_layer.orchestrator"], "orchestrator", _SafeOrchestrator(), raising=False)
 
 
 @pytest.mark.usefixtures("_data_layer_reports_safe")

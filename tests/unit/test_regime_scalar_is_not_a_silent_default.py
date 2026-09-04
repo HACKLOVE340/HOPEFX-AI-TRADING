@@ -99,7 +99,9 @@ def test_a_regime_that_is_not_in_the_map_at_all_is_also_flagged(caplog):
     assert "nonsense-regime" in text
 
 
-@pytest.mark.parametrize("regime", ["TRENDING_UP", "TRENDING_DOWN", "MEAN_REVERTING", "RANGE_BOUND", "HIGH_VOL", "LOW_VOL"])
+@pytest.mark.parametrize(
+    "regime", ["TRENDING_UP", "TRENDING_DOWN", "MEAN_REVERTING", "RANGE_BOUND", "HIGH_VOL", "LOW_VOL"]
+)
 def test_a_known_regime_keeps_its_configured_scalar(regime):
     from core.signal_engine import _REGIME_SIZE_MAP, get_regime_position_scalar
 

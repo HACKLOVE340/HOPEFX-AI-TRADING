@@ -348,9 +348,7 @@ class TestEnrichPriceFromDataLayer:
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
             result = await eng._enrich_price_from_data_layer(req, time.monotonic())
-        assert not isinstance(result, ExecutionRequest), (
-            "an orchestrator that raised was treated as safe to trade"
-        )
+        assert not isinstance(result, ExecutionRequest), "an orchestrator that raised was treated as safe to trade"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
