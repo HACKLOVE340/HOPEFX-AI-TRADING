@@ -6970,3 +6970,126 @@ not the selection that covers your diff.
 
 Regenerate with `python scripts/api_documentation_generator.py` after any route
 change.
+
+## F240 — the stop-loss monitor never fires a stop · CRITICAL
+
+Found while classifying "pre-existing test failures". The tests were right and
+the implementation was wrong, which is the opposite of what the triage assumed.
+
+Two `Position` classes are live, both provide `get_all_positions()`, and both
+reach `SLTPMonitor`:
+
+| Provider | Identifier |
+|---|---|
+| `execution/position_tracker.py` | `Position.id` |
+| `execution/position_manager.py` | `Position.position_id` |
+
+`execution/sl_tp_monitor.py:202` read `pos.id`. On the `position_manager` shape —
+**the one this class's own docstring names as its parameter** — that raises
+`AttributeError` on the first position examined.
+
+`_loop` catches every exception and keeps polling:
+
+```python
+try:
+    await self._check_all_positions()
+except Exception as exc:
+    logger.error("SLTPMonitor._loop error: %s", exc)
+await asyncio.sleep(poll_seconds)
+```
+
+So nothing crashes. The task stays alive, `start()` has already logged
+"SLTPMonitor started", `enforcement.status` shows a running monitor — and no
+stop loss is ever checked. Reproduced end to end:
+
+```
+price 1940.0 is below stop_loss 1950.0 -> the stop MUST fire
+breach detected by the pure check: stop_loss
+AttributeError from _check_all_positions: 'Position' object has no attribute 'id'
+ERROR SLTPMonitor._loop error: 'Position' object has no attribute 'id'
+closing set after polling: set()   ->  the stop never fired
+```
+
+`_check_breach` correctly returns `stop_loss`; the loop dies before it can act.
+Reachable from `ExecutionEngine.start()`, which constructs and starts the
+monitor whenever a position manager is present.
+
+This is the audit's signature defect in its worst location: **a safety control
+that is present, running, and doing nothing.** `hopefx_engine.py` happens to
+pass a `PositionTracker`, which has `.id`, so the deployed path works today —
+but the class accepts both, documents the broken one, and a swap in either
+direction is silent.
+
+Fixed with a `_position_id()` helper that accepts either shape and **raises**
+rather than inventing an id: a generated identifier would be absent from
+`_closing` on every poll, so the duplicate-close guard would pass every time
+and the same position would be closed repeatedly — a double market order.
+
+Rule this reinforces: **an `except Exception: logger.error(...)` around a safety
+loop converts a crash into silence.** A monitor that cannot do its job must stop
+or shout, not log at a level nobody reads and continue.
+
+## F241 — the test suite reads the developer's `.env` · HIGH
+
+The root cause behind nearly all of the suite's order-dependent failures.
+
+`app.py:12` calls `load_dotenv(override=False)` at module import. That is correct
+for production — `app.py` is the entrypoint. Several test modules do
+`from app import app` **at module scope**, so the load happens during pytest
+*collection*: before any test runs, and therefore before any per-test environment
+snapshot exists. A per-test restore cannot undo pollution that predates every
+snapshot, so the values stay for the whole session.
+
+`.env` sets `PAPER_RAISE_ON_STALE=true`. `PaperTradingBroker` reads it once in
+`__init__`. Every paper order placed anywhere in the session then raised
+`StalePriceError`, and `POST /api/trading/order` returned 400 instead of 201:
+
+```
+pytest tests/unit/test_trading_auth.py                     -> 36 passed
+pytest <23 other files> tests/unit/test_trading_auth.py    ->  5 failed
+```
+
+**`.env` is gitignored, so CI has none.** The same commit passed in CI and failed
+locally, which reads as "your machine is broken" rather than "an import leaked" —
+and that is why this survived so long.
+
+Three fixes, in order of generality:
+
+1. **Root `conftest.py` neutralises `dotenv.load_dotenv` for the session.** It
+   runs before any test module is imported. Guarding the loader rather than one
+   variable covers whatever `.env` gains next, and makes local runs match CI —
+   the only environment the suite is actually specified against.
+2. **`tests/conftest.py` now snapshots the whole environment**, not a hardcoded
+   list of seven keys. The old fixture's docstring claimed it "prevents
+   test-ordering pollution from tests that mutate env vars"; it covered seven.
+   An allowlist can only cover pollution someone already found.
+3. **The per-user broker cache is reset between tests.** Restoring `os.environ`
+   does not reach an object that already captured a value in `__init__`, and
+   `core/account_registry.py` caches one broker per user in a module-level
+   singleton. `reset_account_registry()` existed all along, documented "For
+   tests and shutdown"; nothing called it.
+
+That third point is the transferable one: **restoring the environment is not
+enough when configuration is read once at construction and the object is
+cached.** Both have to be reset, and the cache reset is the one that is easy to
+forget because the leak is invisible from the environment.
+
+## F242 — mock fixtures that silently diverge from the real object · MEDIUM
+
+Three of the "broken" tests failed because a bare `MagicMock` auto-creates any
+attribute, so a fixture can set the *wrong* field name and never be told:
+
+- `tests/unit/test_sltp_monitor_comprehensive.py` set `p.position_id` while the
+  code read `pos.id`; on a MagicMock the read silently produced a fresh mock, so
+  the duplicate-close guard never matched and the assertion failed with no hint
+  as to why.
+- `tests/unit/test_execution_coverage11.py` set `order_result.id` while
+  `execution/trade_executor.py` reads
+  `getattr(order, "order_id", None) or getattr(order, "id", None)`. MagicMock
+  made `order_id` truthy, so the fixture's value was never reached and the test
+  compared against an auto-generated mock. The real contract is
+  `brokers/base.py` `MarketOrderResult.order_id`.
+
+Both are now set to the field the real object exposes. The general fix — `spec=`
+on these mocks — would turn a silent divergence into an `AttributeError` at the
+point of the mistake, and is worth doing across the suite.

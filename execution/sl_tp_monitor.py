@@ -199,7 +199,15 @@ class SLTPMonitor:
         # get_all_positions() returns dict[str, Position]; iterate values.
         pos_iter = positions.values() if isinstance(positions, dict) else positions
         for pos in pos_iter:
-            if pos.id in self._closing:
+            try:
+                pos_id = self._position_id(pos)
+            except AttributeError as exc:
+                # Skip this position rather than abandoning the whole sweep:
+                # one unrecognisable object must not stop every other stop loss
+                # from being checked.
+                logger.error("SLTPMonitor: cannot identify position, skipping: %s", exc)
+                continue
+            if pos_id in self._closing:
                 continue
             mid = self._get_mid(pos.symbol)
             if mid is None or mid <= 0:
@@ -212,11 +220,40 @@ class SLTPMonitor:
                 # would re-pass the `in self._closing` check above and spawn a
                 # duplicate close (double market order). The add() inside
                 # _close_position is now redundant but kept as defense-in-depth.
-                self._closing.add(pos.id)
+                self._closing.add(pos_id)
                 asyncio.create_task(
                     self._close_position(pos, reason, mid),
-                    name=f"sltp_close_{pos.id}",
+                    name=f"sltp_close_{pos_id}",
                 )
+
+    @staticmethod
+    def _position_id(pos: Any) -> str:
+        """Return *pos*'s identifier, whichever of the two shapes it is.
+
+        Two Position classes are live and both provide ``get_all_positions()``,
+        so both reach this monitor:
+
+            execution/position_tracker.py   Position.id
+            execution/position_manager.py   Position.position_id
+
+        This read ``pos.id`` directly. On the position_manager shape — the one
+        this class's own docstring names — that raises AttributeError on the
+        first position examined. ``_loop`` catches every exception and keeps
+        polling, so the task stayed alive, ``start()`` had already logged
+        "SLTPMonitor started", and no stop loss was ever checked.
+
+        Raises rather than inventing an id: a generated one would be absent from
+        ``_closing`` on every poll, so the duplicate-close guard would pass every
+        time and the same position would be closed repeatedly.
+        """
+        for attr in ("position_id", "id"):
+            value = getattr(pos, attr, None)
+            if value is not None:
+                return str(value)
+        raise AttributeError(
+            f"{type(pos).__name__} exposes neither 'position_id' nor 'id'; "
+            "SLTPMonitor cannot track it for duplicate closes."
+        )
 
     @staticmethod
     def _tick_age_seconds(ts: Any) -> float | None:
@@ -295,7 +332,7 @@ class SLTPMonitor:
         Emits Prometheus counter, logs, and sends Telegram alert on success.
         Captures to Sentry and increments error counter if all retries fail.
         """
-        pos_id = pos.id
+        pos_id = self._position_id(pos)
         symbol = pos.symbol
         self._closing.add(pos_id)
         logger.warning(

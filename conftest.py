@@ -32,3 +32,50 @@ for _p in (_repo_root, _src_dir):
 # completes within the 120s pytest timeout.  Production training is unaffected
 # because this env var is only set when pytest is running.
 os.environ.setdefault("CI_FAST", "1")
+
+
+# ── Keep the developer's .env out of the test session ─────────────────────────
+# ``app.py`` calls ``load_dotenv(override=False)`` at module import, which is
+# correct for production — app.py is the entrypoint. Several test modules do
+# ``from app import app`` at module scope, so that load happens during pytest
+# **collection**: before any test runs, and therefore before any per-test
+# environment snapshot is taken. A per-test restore cannot undo pollution that
+# predates every snapshot, so the values stayed for the whole session.
+#
+# What that cost: ``.env`` sets ``PAPER_RAISE_ON_STALE=true`` and
+# ``PaperTradingBroker`` reads it once in ``__init__``, so every paper order in
+# the session raised ``StalePriceError`` and ``POST /api/trading/order``
+# returned 400 instead of 201 — but only when the polluting module was collected
+# first, and only on a machine that has a ``.env`` at all.
+#
+# That last part is the reason this was expensive to find. ``.env`` is
+# gitignored; CI has none. The same commit passed in CI and failed locally,
+# which reads as "your machine is broken" rather than "an import leaked".
+#
+# Neutralising ``load_dotenv`` for the session is the fix rather than unsetting
+# one variable, because it covers whatever ``.env`` gains next. It also makes
+# local runs match CI, which is the only environment the suite is specified
+# against: a test that needs a value must set it explicitly.
+#
+# This must run before any test module is imported. Root conftest.py is loaded
+# first by pytest, and patching ``dotenv.load_dotenv`` here means app.py's
+# ``from dotenv import load_dotenv`` picks up the no-op.
+def _disable_dotenv_for_tests() -> None:
+    try:
+        import dotenv
+    except ImportError:  # python-dotenv absent: nothing to neutralise
+        return
+
+    def _noop(*_args, **_kwargs) -> bool:
+        """Stand-in for load_dotenv during tests. Returns False: "nothing loaded"."""
+        return False
+
+    dotenv.load_dotenv = _noop
+    # main_impl is what `from dotenv import load_dotenv` resolves through in
+    # some versions; patch both so neither import style escapes.
+    main = getattr(dotenv, "main", None)
+    if main is not None and hasattr(main, "load_dotenv"):
+        main.load_dotenv = _noop
+
+
+_disable_dotenv_for_tests()

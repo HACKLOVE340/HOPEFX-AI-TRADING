@@ -58,46 +58,85 @@ _CANONICAL_JWT_SECRET = os.environ.get(
 
 
 @pytest.fixture(autouse=True)
-def _restore_critical_env_vars():
+def _restore_env():
     """
-    Snapshot and restore critical environment variables after every test.
+    Snapshot and restore the **entire** environment around every test.
 
-    Prevents test-ordering pollution from tests that mutate env vars without
-    using monkeypatch (e.g. setting SECURITY_JWT_SECRET to a short value to
-    test validation, then failing to restore it).
+    This used to restore a hardcoded list of seven keys while its docstring
+    claimed it "prevents test-ordering pollution from tests that mutate env
+    vars". Everything outside that list leaked.
 
-    Covers all JWT secret aliases recognised by auth/jwt.py and api/auth.py:
-      - SECURITY_JWT_SECRET  (primary)
-      - JWT_SECRET_KEY       (legacy alias in auth/jwt.py)
-      - JWT_SECRET           (legacy alias in api/auth.py)
+    The failure that exposed it: ``core/main_loop.py`` calls ``load_dotenv()``
+    inside ``MainLoop.run()``, so a test exercising the main loop injected the
+    developer's ``.env`` into ``os.environ`` for the rest of the session. That
+    file sets ``PAPER_RAISE_ON_STALE=true``, and ``PaperTradingBroker`` reads it
+    once in ``__init__`` — so every broker built afterwards refused every fill
+    with ``StalePriceError``:
+
+        pytest tests/unit/test_trading_auth.py                  -> 36 passed
+        pytest tests/unit/test_core_main_loop.py \
+               tests/unit/test_trading_auth.py                  -> 5 failed
+
+    An allowlist can only cover the pollution someone already found. Snapshotting
+    the whole mapping costs one dict copy per test and covers the pollution
+    nobody has found yet — including anything a future ``.env`` gains.
+
+    ``.env`` being gitignored made it worse: CI has no such file and stayed
+    green, so the same commit passed remotely and failed locally, which reads as
+    a broken machine rather than a leaking test.
     """
-    _KEYS = (
-        "SECURITY_JWT_SECRET",
-        "JWT_SECRET_KEY",
-        "JWT_SECRET",
-        "APP_ENV",
-        "BROKER",
-        "PAPER_TRADING",
-        "BROKER_TYPE",
-    )
-    snapshot = {k: os.environ.get(k) for k in _KEYS}
-    # Ensure canonical JWT secret is always set going into each test
+    snapshot = dict(os.environ)
+    # A valid JWT secret must be present going in: several modules read it at
+    # import time and a short one fails validation rather than defaulting.
     os.environ.setdefault("SECURITY_JWT_SECRET", _CANONICAL_JWT_SECRET)
-    yield
-    # Restore exact pre-test state
-    for k, v in snapshot.items():
-        if v is None:
-            os.environ.pop(k, None)
-        else:
-            os.environ[k] = v
-    # Always guarantee a valid JWT secret after teardown — covers all aliases
-    for _alias in ("SECURITY_JWT_SECRET", "JWT_SECRET_KEY", "JWT_SECRET"):
-        if len(os.environ.get(_alias, "")) < 32:
-            # Only force-set the primary; aliases are optional
-            if _alias == "SECURITY_JWT_SECRET":
-                os.environ[_alias] = _CANONICAL_JWT_SECRET
-            else:
+    try:
+        yield
+    finally:
+        # Restore exactly: put back what was there, drop what was added.
+        # os.environ.clear() then update() would work, but mutating in place
+        # keeps any os.environ reference a test is holding valid.
+        for key in list(os.environ):
+            if key not in snapshot:
+                del os.environ[key]
+        for key, value in snapshot.items():
+            if os.environ.get(key) != value:
+                os.environ[key] = value
+        # Guarantee a usable JWT secret afterwards regardless of what the
+        # snapshot held — an invalid one breaks every subsequent auth test with
+        # an error that points nowhere near the test that caused it.
+        if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:
+            os.environ["SECURITY_JWT_SECRET"] = _CANONICAL_JWT_SECRET
+        for _alias in ("JWT_SECRET_KEY", "JWT_SECRET"):
+            if 0 < len(os.environ.get(_alias, "")) < 32:
                 os.environ.pop(_alias, None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_account_registry():
+    """
+    Drop the process-wide per-user broker cache around every test.
+
+    ``core/account_registry.py`` caches one ``PaperTradingBroker`` per user in a
+    module-level singleton, and a broker reads its configuration **once, in
+    __init__**. So restoring ``os.environ`` after a test does not undo a broker
+    that already captured a polluted value: a broker built while
+    ``PAPER_RAISE_ON_STALE`` was set keeps refusing every fill with
+    ``StalePriceError`` for the rest of the session, from a cache no later test
+    can see.
+
+    The same cache also carries balances, open positions and order history
+    between tests, which is its own quiet source of order-dependent failures.
+
+    ``reset_account_registry()`` has existed all along with the docstring "For
+    tests and shutdown". Nothing called it.
+    """
+    from core.account_registry import reset_account_registry
+
+    reset_account_registry()
+    try:
+        yield
+    finally:
+        reset_account_registry()
 
 
 @pytest.fixture(autouse=True)
