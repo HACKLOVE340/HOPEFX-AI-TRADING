@@ -24,6 +24,19 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
+def _ok_broker(order_id: str = "hedge-ok"):
+    """A broker that accepts the order.
+
+    Most of these tests used to call `_make_orch(tmp_path)` with **no broker**
+    and still assert a hedge was opened, because `activate_hedge_mode` recorded
+    one regardless (F81). A hedge now requires a venue that took the order, so
+    the tests supply one.
+    """
+    broker = MagicMock()
+    broker.place_order = AsyncMock(return_value={"id": order_id})
+    return broker
+
+
 def _make_orch(tmp_path=None, **kwargs):
     from risk.orchestrator import RiskOrchestrator
 
@@ -198,20 +211,20 @@ class TestSetMaxRisk:
 class TestActivateHedgeMode:
     @pytest.mark.asyncio
     async def test_sets_hedge_active(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         assert orch._hedge_active is True
 
     @pytest.mark.asyncio
     async def test_adds_hedge_position(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         assert len(orch._hedge_positions) == 1
         assert orch._hedge_positions[0].symbol == "XAU_USD"
 
     @pytest.mark.asyncio
     async def test_no_duplicate_activation(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         await orch.activate_hedge_mode("XAU_USD")
         assert len(orch._hedge_positions) == 1
@@ -226,30 +239,36 @@ class TestActivateHedgeMode:
         assert orch._hedge_positions[0].order_id == "hedge-001"
 
     @pytest.mark.asyncio
-    async def test_no_broker_still_activates(self, tmp_path):
+    async def test_no_broker_does_not_activate(self, tmp_path):
+        """Was `test_no_broker_still_activates`, asserting F81 as the
+        requirement: with no broker the order cannot be placed, so recording a
+        hedge (`order_id is None`) told the whole system it was hedged when the
+        account was not."""
         orch = _make_orch(tmp_path)
-        await orch.activate_hedge_mode("XAU_USD")
-        assert orch._hedge_active is True
-        assert orch._hedge_positions[0].order_id is None
+        assert await orch.activate_hedge_mode("XAU_USD") is False
+        assert orch._hedge_active is False
+        assert orch._hedge_positions == []
 
     @pytest.mark.asyncio
-    async def test_broker_order_failure_still_activates(self, tmp_path):
+    async def test_broker_order_failure_does_not_activate(self, tmp_path):
+        """Was `test_broker_order_failure_still_activates` (F81 as the
+        requirement). A rejected order leaves the account unhedged."""
         broker = MagicMock()
         broker.place_order = AsyncMock(side_effect=RuntimeError("broker down"))
         orch = _make_orch(tmp_path, broker=broker)
-        await orch.activate_hedge_mode("XAU_USD")
-        assert orch._hedge_active is True
+        assert await orch.activate_hedge_mode("XAU_USD") is False
+        assert orch._hedge_active is False
 
     @pytest.mark.asyncio
     async def test_records_event(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         types = [e["type"] for e in orch._history]
         assert "activate_hedge" in types
 
     @pytest.mark.asyncio
     async def test_persists_state(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         data = json.loads(orch._state_file.read_text())
         assert data["hedge_active"] is True
@@ -293,17 +312,21 @@ class TestDeactivateHedgeMode:
         broker.place_order.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_broker_close_failure_still_deactivates(self, tmp_path):
+    async def test_broker_close_failure_keeps_the_hedge_tracked(self, tmp_path):
+        """Was `test_broker_close_failure_still_deactivates`. Clearing the
+        position after a rejected close left a live short at the venue that
+        nothing in the system tracked."""
         broker = MagicMock()
         broker.place_order = AsyncMock(side_effect=[{"id": "h1"}, RuntimeError("close failed")])
         orch = _make_orch(tmp_path, broker=broker)
         await orch.activate_hedge_mode("XAU_USD")
-        await orch.deactivate_hedge_mode()
-        assert orch._hedge_active is False
+        assert await orch.deactivate_hedge_mode() is False
+        assert orch._hedge_active is True
+        assert len(orch._hedge_positions) == 1
 
     @pytest.mark.asyncio
     async def test_clears_state_file(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         assert orch._state_file.exists()
         await orch.deactivate_hedge_mode()
@@ -311,7 +334,7 @@ class TestDeactivateHedgeMode:
 
     @pytest.mark.asyncio
     async def test_records_event(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         await orch.deactivate_hedge_mode()
         types = [e["type"] for e in orch._history]
@@ -405,7 +428,7 @@ class TestGetStatus:
 
     @pytest.mark.asyncio
     async def test_hedge_positions_in_status(self, tmp_path):
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         await orch.activate_hedge_mode("XAU_USD")
         s = orch.get_status()
         assert len(s["hedge_positions"]) == 1
@@ -749,7 +772,7 @@ class TestFastAPIRouterEndpoints:
         except ImportError:
             pytest.skip("FastAPI not available")
 
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         router = create_orchestrator_router(orch)
         if router is None:
             pytest.skip("FastAPI not available")
@@ -789,7 +812,7 @@ class TestFastAPIRouterEndpoints:
         except ImportError:
             pytest.skip("FastAPI not available")
 
-        orch = _make_orch(tmp_path)
+        orch = _make_orch(tmp_path, broker=_ok_broker())
         router = create_orchestrator_router(orch)
         if router is None:
             pytest.skip("FastAPI not available")

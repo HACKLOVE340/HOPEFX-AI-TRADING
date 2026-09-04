@@ -651,23 +651,42 @@ class NuclearHopeFXSupervisor:
           2. Send warning alert
         """
         ro = _get_risk_orchestrator()
+        hedged = False
         if ro is not None:
             try:
                 await ro.set_max_risk(0.15)
-                await ro.activate_hedge_mode(symbol="XAU_USD")
+                hedged = bool(await ro.activate_hedge_mode(symbol="XAU_USD"))
             except Exception as exc:
                 logger.error("risk_orchestrator hedge failed: %s", exc)
 
         notif = _get_notifications()
         if notif is not None:
             try:
-                await notif.send_critical_alert(
-                    "⚠️ HOPEFX HEDGE MODE ACTIVATED\nMax risk reduced to 15%. Inverse hedges opened on XAU_USD."
-                )
+                # The alert says what happened. It used to announce "Inverse
+                # hedges opened on XAU_USD" whether or not an order was ever
+                # placed, so the one message an operator would act on carried
+                # the same false state as the dashboards (F81).
+                if hedged:
+                    message = (
+                        "⚠️ HOPEFX HEDGE MODE ACTIVATED\nMax risk reduced to 15%. Inverse hedges opened on XAU_USD."
+                    )
+                else:
+                    message = (
+                        "🔴 HOPEFX HEDGE MODE FAILED\n"
+                        "Max risk reduced to 15%, but the inverse hedge on XAU_USD was NOT opened. "
+                        "The account is UNHEDGED — manual intervention required."
+                    )
+                await notif.send_critical_alert(message)
             except Exception as exc:
                 logger.error("Notification send failed: %s", exc)
 
-        logger.warning("⚠️ HEDGE MODE ACTIVE | nuclear_level=%d", self.nuclear_level)
+        if hedged:
+            logger.warning("⚠️ HEDGE MODE ACTIVE | nuclear_level=%d", self.nuclear_level)
+        else:
+            logger.error(
+                "🔴 HEDGE MODE REQUESTED BUT NOT HEDGED | nuclear_level=%d | account is UNHEDGED",
+                self.nuclear_level,
+            )
 
     # ── Manual controls ───────────────────────────────────────────────────────
 

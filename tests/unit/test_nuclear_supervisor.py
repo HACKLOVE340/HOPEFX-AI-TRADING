@@ -253,9 +253,17 @@ class TestRiskOrchestrator:
     def orchestrator(self, tmp_path):
         from risk.orchestrator import RiskOrchestrator
 
+        # A broker that accepts the order. These tests used to run with no
+        # broker at all and still assert a hedge was open, because
+        # activate_hedge_mode recorded one regardless (F81). A hedge now
+        # requires a venue that took it.
+        broker = MagicMock()
+        broker.place_order = AsyncMock(return_value={"id": "hedge-1"})
+
         return RiskOrchestrator(
             default_max_risk=1.0,
             hedge_units=1000.0,
+            broker=broker,
             state_file=tmp_path / "orch_state.json",
         )
 
@@ -291,11 +299,18 @@ class TestRiskOrchestrator:
 
     @pytest.mark.asyncio
     async def test_activate_hedge_mode_no_broker(self, orchestrator):
-        """Hedge activation without a broker logs a warning but does not raise."""
-        await orchestrator.activate_hedge_mode("XAU_USD")
-        assert orchestrator._hedge_active is True
-        assert len(orchestrator._hedge_positions) == 1
-        assert orchestrator._hedge_positions[0].symbol == "XAU_USD"
+        """Hedge activation without a broker does not raise — and does not
+        record a hedge.
+
+        This previously asserted `_hedge_active is True` with a position whose
+        `order_id` was None: with no broker no order can be placed, so that
+        recorded an imaginary hedge and told the whole system the account was
+        covered (F81)."""
+        orchestrator._broker = None
+
+        assert await orchestrator.activate_hedge_mode("XAU_USD") is False
+        assert orchestrator._hedge_active is False
+        assert orchestrator._hedge_positions == []
 
     @pytest.mark.asyncio
     async def test_activate_hedge_mode_idempotent(self, orchestrator):
@@ -318,9 +333,12 @@ class TestRiskOrchestrator:
 
         sf = tmp_path / "orch_state.json"
 
-        ro1 = RiskOrchestrator(state_file=sf)
+        broker = MagicMock()
+        broker.place_order = AsyncMock(return_value={"id": "hedge-1"})
+
+        ro1 = RiskOrchestrator(state_file=sf, broker=broker)
         await ro1.set_max_risk(0.15)
-        await ro1.activate_hedge_mode("XAU_USD")
+        assert await ro1.activate_hedge_mode("XAU_USD") is True
 
         # Simulate restart
         ro2 = RiskOrchestrator(state_file=sf)

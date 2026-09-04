@@ -303,25 +303,36 @@ class RiskOrchestrator:
 
     # ── Hedge mode ────────────────────────────────────────────────────────────
 
-    async def activate_hedge_mode(self, symbol: str = "XAU_USD") -> None:
+    async def activate_hedge_mode(self, symbol: str = "XAU_USD") -> bool:
         """
         Open an inverse hedge position on the given symbol.
 
         In nuclear/hedge mode we open a short on XAU_USD to offset long
         exposure.  The hedge size is self._hedge_units.
+
+        Returns True only when the venue accepted the order and returned an id.
+
+        State is mutated **after** the order, never before. Setting
+        ``_hedge_active`` first meant a rejected order left the process, the
+        state file, the Prometheus gauge and every dashboard reading "hedged"
+        while the account carried no hedge — during the exact event the hedge
+        exists for — and the duplicate-activation guard then latched, so no
+        retry was possible without a restart (F81).
         """
         async with self._lock:
             if self._hedge_active:
                 logger.info("Hedge already active — skipping duplicate activation")
-                return
+                return True
 
-            self._hedge_active = True
             logger.warning("RiskOrchestrator: activating hedge mode on %s", symbol)
 
             broker = self._get_broker()
             order_id: str | None = None
+            failure: str | None = None
 
-            if broker is not None:
+            if broker is None:
+                failure = "no broker configured"
+            else:
                 try:
                     result = await broker.place_order(
                         symbol=symbol,
@@ -330,23 +341,43 @@ class RiskOrchestrator:
                         label="NUCLEAR_HEDGE",
                     )
                     order_id = str(result.get("id", "")) if isinstance(result, dict) else str(result)
-                    logger.info("Hedge order placed: %s", order_id)
+                    if not order_id:
+                        # An empty response is not a fill. Recording a position
+                        # with order_id=None is how an unplaced hedge became a
+                        # tracked one.
+                        order_id = None
+                        failure = "broker returned no order id"
+                    else:
+                        logger.info("Hedge order placed: %s", order_id)
                 except Exception as exc:
-                    logger.error("Hedge order failed: %s", exc)
-            else:
-                logger.warning(
-                    "No broker available — hedge position NOT placed. Manual hedge required on %s (%.0f units short)",
+                    failure = f"{type(exc).__name__}: {exc}"
+
+            if failure is not None:
+                logger.error(
+                    "HEDGE NOT PLACED on %s (%.0f units short) — %s. "
+                    "The account is UNHEDGED and manual intervention is required.",
                     symbol,
                     self._hedge_units,
+                    failure,
                 )
+                self._record_event(
+                    "activate_hedge_failed",
+                    {"symbol": symbol, "units": self._hedge_units, "error": failure},
+                )
+                self._alert_hedge_failure(symbol, failure)
+                # _hedge_active stays False, nothing is appended, nothing is
+                # persisted: the next call is a real retry.
+                return False
 
-            pos = HedgePosition(
-                symbol=symbol,
-                units=self._hedge_units,
-                direction="short",
-                order_id=order_id,
+            self._hedge_active = True
+            self._hedge_positions.append(
+                HedgePosition(
+                    symbol=symbol,
+                    units=self._hedge_units,
+                    direction="short",
+                    order_id=order_id,
+                )
             )
-            self._hedge_positions.append(pos)
             self._record_event(
                 "activate_hedge",
                 {
@@ -364,49 +395,94 @@ class RiskOrchestrator:
                     logger.debug("Prometheus hedge metric failed: %s", _pe)
 
             self._persist_state()
+            return True
 
-    async def deactivate_hedge_mode(self) -> None:
-        """Close all open hedge positions and restore normal mode."""
+    @staticmethod
+    def _alert_hedge_failure(symbol: str, reason: str) -> None:
+        """Escalate an unplaced or unclosed hedge off the log."""
+        try:
+            from notifications import send_alert_nowait
+
+            send_alert_nowait(
+                "critical",
+                f"HEDGE FAILURE on {symbol}: {reason}. Manual intervention required.",
+                {"event": "hedge_failure", "symbol": symbol, "reason": reason},
+            )
+        except Exception as exc:  # nosec B110 — must never block the risk path
+            logger.error("Could not alert hedge failure on %s: %s", symbol, exc)
+
+    async def deactivate_hedge_mode(self) -> bool:
+        """Close all open hedge positions and restore normal mode.
+
+        Returns True only when every hedge was closed.
+
+        F81's mirror image, and the worse half: this used to
+        ``self._hedge_positions.clear()`` unconditionally, so a close order the
+        venue rejected — or one attempted with no broker at all — dropped the
+        position from tracking while the short stayed open at the venue. That
+        leaves a live, unhedged, *untracked* short. A position that could not be
+        closed is kept, and the mode stays active so a retry still has something
+        to close.
+        """
         async with self._lock:
             if not self._hedge_active:
-                return
+                return True
 
             broker = self._get_broker()
             closed: list[str] = []
+            still_open: list[HedgePosition] = []
 
             for pos in self._hedge_positions:
-                if broker is not None:
-                    try:
-                        # Close by placing opposite order
-                        await broker.place_order(
-                            symbol=pos.symbol,
-                            units=pos.units,  # positive = buy back short
-                            order_type="MARKET",
-                            label="NUCLEAR_HEDGE_CLOSE",
-                        )
-                        closed.append(pos.symbol)
-                        logger.info("Hedge closed on %s", pos.symbol)
-                    except Exception as exc:
-                        logger.error("Failed to close hedge on %s: %s", pos.symbol, exc)
-                else:
-                    logger.warning(
-                        "No broker — hedge on %s NOT closed. Manual close required.",
+                if broker is None:
+                    logger.error(
+                        "No broker — hedge on %s NOT closed and still open at the venue. Manual close required.",
                         pos.symbol,
                     )
+                    self._alert_hedge_failure(pos.symbol, "no broker configured to close the hedge")
+                    still_open.append(pos)
+                    continue
+                try:
+                    # Close by placing opposite order
+                    await broker.place_order(
+                        symbol=pos.symbol,
+                        units=pos.units,  # positive = buy back short
+                        order_type="MARKET",
+                        label="NUCLEAR_HEDGE_CLOSE",
+                    )
+                    closed.append(pos.symbol)
+                    logger.info("Hedge closed on %s", pos.symbol)
+                except Exception as exc:
+                    logger.error("Failed to close hedge on %s: %s — the short is STILL OPEN", pos.symbol, exc)
+                    self._alert_hedge_failure(pos.symbol, f"close failed: {type(exc).__name__}: {exc}")
+                    still_open.append(pos)
 
-            self._hedge_positions.clear()
-            self._hedge_active = False
-            self._record_event("deactivate_hedge", {"closed_symbols": closed})
-            logger.info("RiskOrchestrator: hedge mode deactivated")
+            self._hedge_positions = still_open
+            fully_closed = not still_open
+            self._hedge_active = not fully_closed
+            self._record_event(
+                "deactivate_hedge" if fully_closed else "deactivate_hedge_partial",
+                {"closed_symbols": closed, "still_open": [p.symbol for p in still_open]},
+            )
+            if fully_closed:
+                logger.info("RiskOrchestrator: hedge mode deactivated")
+            else:
+                logger.error(
+                    "RiskOrchestrator: hedge mode STILL ACTIVE — %d position(s) could not be closed",
+                    len(still_open),
+                )
 
             if _PROM_ORCH_AVAILABLE:
                 try:
-                    _ORCH_HEDGE_ACTIVE_GAUGE.set(0.0)
+                    _ORCH_HEDGE_ACTIVE_GAUGE.set(0.0 if fully_closed else 1.0)
                     _ORCH_RISK_EVENTS_TOTAL.labels(event_type="hedge_deactivate").inc()
                 except Exception as _pe:
                     logger.debug("Prometheus hedge deactivate metric failed: %s", _pe)
 
-            self._clear_state()
+            if fully_closed:
+                self._clear_state()
+            else:
+                self._persist_state()
+            return fully_closed
 
     # ── Exposure query ────────────────────────────────────────────────────────
 
@@ -524,13 +600,19 @@ def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
 
     @router.post("/hedge/activate")
     async def activate_hedge(req: HedgeRequest):
-        await orchestrator_instance.activate_hedge_mode(req.symbol)
-        return {"status": "ok", "hedge_active": orchestrator_instance._hedge_active}
+        placed = await orchestrator_instance.activate_hedge_mode(req.symbol)
+        return {
+            "status": "ok" if placed else "failed",
+            "hedge_active": orchestrator_instance._hedge_active,
+        }
 
     @router.post("/hedge/deactivate")
     async def deactivate_hedge():
-        await orchestrator_instance.deactivate_hedge_mode()
-        return {"status": "ok", "hedge_active": orchestrator_instance._hedge_active}
+        closed = await orchestrator_instance.deactivate_hedge_mode()
+        return {
+            "status": "ok" if closed else "failed",
+            "hedge_active": orchestrator_instance._hedge_active,
+        }
 
     @router.get("/exposure")
     async def get_exposure():
