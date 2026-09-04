@@ -274,13 +274,22 @@ class TestEnrichPriceFromDataLayer:
         assert result.price == 1995.0  # existing price preserved
 
     @pytest.mark.asyncio
-    async def test_orchestrator_not_started_skips_check(self):
-        """When orchestrator._started is False, safety check is not run."""
+    async def test_orchestrator_not_started_is_still_asked(self):
+        """A data layer that has not started is still asked whether it is safe.
+
+        This test used to assert the opposite -- "When orchestrator._started is
+        False, safety check is not run" -- which stated F84 as the requirement.
+        The `_started` conjunct made the gate a no-op in the normal degraded
+        state: core/startup_helpers.py starts the orchestrator "(non-fatal)",
+        catching TimeoutError and bare Exception, so `_started` stays False
+        permanently while the app serves and executes orders.
+        """
         eng = _make_engine()
         req = _buy_request()
 
         mock_orch = MagicMock()
         mock_orch._started = False
+        mock_orch.is_safe_to_trade.return_value = False
 
         mock_module = MagicMock()
         mock_module.orchestrator = mock_orch
@@ -288,9 +297,10 @@ class TestEnrichPriceFromDataLayer:
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
             result = await eng._enrich_price_from_data_layer(req, time.monotonic())
 
-        # Not started → should NOT call is_safe_to_trade
-        mock_orch.is_safe_to_trade.assert_not_called()
-        assert isinstance(result, ExecutionRequest)
+        mock_orch.is_safe_to_trade.assert_called_once()
+        assert not isinstance(result, ExecutionRequest), (
+            "an order executed while the data layer reported unsafe conditions"
+        )
 
     @pytest.mark.asyncio
     async def test_skips_when_data_layer_raises_import_error(self):
@@ -318,8 +328,14 @@ class TestEnrichPriceFromDataLayer:
         assert isinstance(result, ExecutionRequest)
 
     @pytest.mark.asyncio
-    async def test_skips_when_is_safe_to_trade_raises_value_error(self):
-        """ValueError from is_safe_to_trade is non-fatal."""
+    async def test_blocks_when_is_safe_to_trade_raises(self):
+        """An orchestrator that cannot answer has not said yes.
+
+        This used to assert the raise was "non-fatal" and the order proceeded.
+        Every sibling call site fails closed -- ml/inference_engine.py logs
+        "failing CLOSED (not safe)" -- and treating an error as permission is
+        the shape of F84.
+        """
         eng = _make_engine()
         req = _buy_request()
 
@@ -332,7 +348,9 @@ class TestEnrichPriceFromDataLayer:
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
             result = await eng._enrich_price_from_data_layer(req, time.monotonic())
-        assert isinstance(result, ExecutionRequest)
+        assert not isinstance(result, ExecutionRequest), (
+            "an orchestrator that raised was treated as safe to trade"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

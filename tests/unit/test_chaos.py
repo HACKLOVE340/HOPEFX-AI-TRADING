@@ -213,6 +213,41 @@ class TestCircuitBreakerFaultInjection:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def _data_layer_reports_safe(monkeypatch):
+    """A data layer that says it is safe to trade.
+
+    These tests inject *broker* faults; the data layer is not their subject.
+    They previously passed without saying so because the safety gate read
+    ``if orchestrator._started and not orchestrator.is_safe_to_trade()`` and the
+    real singleton is never started in a unit test, so the check was skipped
+    entirely (F84). With the gate failing closed, the assumption has to be
+    stated.
+
+    Patched via sys.modules: data_layer/__init__.py binds `orchestrator` on the
+    package to a MarketDataOrchestrator instance, shadowing its own submodule.
+    """
+    import sys
+
+    import data_layer.orchestrator  # noqa: F401  — populate sys.modules
+
+    class _SafeOrchestrator:
+        _started = True
+
+        @staticmethod
+        def is_safe_to_trade() -> bool:
+            return True
+
+        @staticmethod
+        def get_latest_tick(_symbol):
+            return None
+
+    monkeypatch.setattr(
+        sys.modules["data_layer.orchestrator"], "orchestrator", _SafeOrchestrator(), raising=False
+    )
+
+
+@pytest.mark.usefixtures("_data_layer_reports_safe")
 class TestExecutionEngineBrokerFaultInjection:
     """
     The ExecutionEngine must handle broker failures gracefully:

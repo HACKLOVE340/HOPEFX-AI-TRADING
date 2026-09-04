@@ -684,7 +684,34 @@ class ExecutionEngine:
         try:
             from data_layer.orchestrator import orchestrator
 
-            if orchestrator._started and not orchestrator.is_safe_to_trade():
+            # No `_started` conjunct. It used to read
+            #     if orchestrator._started and not orchestrator.is_safe_to_trade()
+            # which made the whole gate a no-op whenever the data layer was not
+            # running — and that is the *normal degraded state*, not a rare one.
+            # core/startup_helpers.py starts the orchestrator "(non-fatal)":
+            # it catches both TimeoutError and bare Exception, logs at warning,
+            # and returns, after which the app serves and executes orders.
+            # `_started = True` is the last line of start(), so a failure in any
+            # of the ten feed-startup steps leaves it False permanently with no
+            # retry. is_safe_to_trade() reported unsafe and the caller discarded
+            # the answer (F84), bypassing the blackout window, the no-tick check,
+            # the confidence floor and the dead-feed check.
+            #
+            # Every sibling call site fails closed, and one says so in a comment:
+            # ml/inference_engine.py logs "failing CLOSED (not safe)";
+            # execution/hopefx_engine.py:392 has no _started guard at all;
+            # data_layer/orchestrator.py: "a missing tick must NOT be treated as
+            # safe to trade."
+            try:
+                _safe = orchestrator.is_safe_to_trade()
+            except Exception as _dl_exc:
+                # An orchestrator that cannot answer has not said yes.
+                logger.error(
+                    "Data-layer safety check failed — BLOCKING order (fail closed): %s",
+                    _dl_exc,
+                )
+                _safe = False
+            if not _safe:
                 await self._inc_blocks()
                 return self._blocked_report(request, "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)", t0)
 
