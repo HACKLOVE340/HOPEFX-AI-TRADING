@@ -277,6 +277,46 @@ def _get_deep_ensemble_store() -> Any | None:
     return _deep_ensemble_store or None
 
 
+def _phase_gate_permits(phase: str, feature: str) -> bool:
+    """Return True when the paper-trading gate for *phase* has passed.
+
+    ``research/pipeline/paper_trading_gate.py`` implements both gates properly —
+    elapsed calendar days since PAPER_RUN_START_UTC plus a minimum fill count,
+    with a state file so they survive restarts. **Nothing consulted them before
+    enabling the feature.** ``phase3_ready()`` was called once, in
+    ``ml/inference_engine.py``, and its result went into a health dict: measured
+    and reported, gating nothing (F214).
+
+    Combined with F215 — the template shipped FEATURE_ONLINE_LEARNING=true —
+    every deployment ran an unvalidated online learner against live signals
+    while a gate sat next to it reporting that it was not ready.
+
+    Fails closed: a gate that cannot answer has not said yes.
+    """
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+
+        passed, reason = getattr(get_gate(), f"{phase}_ready")()
+    except Exception as exc:
+        logger.warning(
+            "%s: %s gate could not be evaluated (%s) — feature stays OFF (fail closed).",
+            feature,
+            phase,
+            exc,
+        )
+        return False
+
+    if not passed:
+        logger.warning(
+            "%s is enabled by flag but its %s gate has not passed: %s "
+            "The feature stays OFF until the gate passes.",
+            feature,
+            phase,
+            reason,
+        )
+    return bool(passed)
+
+
 def _get_online_learner_store() -> Any | None:
     """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
     global _online_learner_store
@@ -293,6 +333,11 @@ def _get_online_learner_store() -> Any | None:
         enabled = os.getenv("FEATURE_ONLINE_LEARNING", "").lower() in ("1", "true", "yes")
 
     if not enabled:
+        return None
+
+    # The flag is permission to try, not permission to run. The Phase-3 gate is
+    # the actual precondition and used to gate nothing at all (F214).
+    if not _phase_gate_permits("phase3", "FEATURE_ONLINE_LEARNING"):
         return None
 
     if _online_learner_store is None:
@@ -322,6 +367,11 @@ def _get_anomaly_store() -> Any | None:
         enabled = os.getenv("FEATURE_ANOMALY_WEIGHTING", "").lower() in ("1", "true", "yes")
 
     if not enabled:
+        return None
+
+    # Same shape as Phase 3: the flag was the only condition checked, and the
+    # Phase-2 gate that exists for this feature gated nothing (F214).
+    if not _phase_gate_permits("phase2", "FEATURE_ANOMALY_WEIGHTING"):
         return None
 
     if _anomaly_store is None:

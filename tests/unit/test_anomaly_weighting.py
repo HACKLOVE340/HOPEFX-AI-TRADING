@@ -49,6 +49,29 @@ def _make_ohlcv(n: int = 300, anomaly_at: int = -1) -> pd.DataFrame:
 # ── AnomalyWeighter ───────────────────────────────────────────────────────────
 
 
+@pytest.fixture
+def _phase_gate_passed(monkeypatch):
+    """Satisfy the paper-trading phase gate.
+
+    The feature flag used to be the only condition. It is now permission to try;
+    the Phase-2/3 gate is the actual precondition and previously gated nothing
+    (F214). Tests asserting the feature works when enabled therefore have to
+    enable it fully, rather than relying on the gate being absent.
+    """
+    import research.pipeline.paper_trading_gate as ptg
+
+    class _Passed:
+        @staticmethod
+        def phase2_ready():
+            return True, "ok"
+
+        @staticmethod
+        def phase3_ready():
+            return True, "ok"
+
+    monkeypatch.setattr(ptg, "get_gate", lambda: _Passed(), raising=False)
+
+
 class TestAnomalyWeighter:
     def setup_method(self):
         from research.pipeline.anomaly import AnomalyWeighter
@@ -208,7 +231,7 @@ class TestAnomalyWeightingSignalEngine:
         store = se._get_anomaly_store()
         assert store is None
 
-    def test_flag_on_returns_store_instance(self, monkeypatch):
+    def test_flag_on_returns_store_instance(self, monkeypatch, _phase_gate_passed):
         monkeypatch.setenv("FEATURE_ANOMALY_WEIGHTING", "true")
         import core.signal_engine as se
 
