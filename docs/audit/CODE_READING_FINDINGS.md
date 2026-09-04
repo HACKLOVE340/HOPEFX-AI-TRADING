@@ -7640,3 +7640,74 @@ genuinely required, restore the module in a fixture teardown.
 
 Related: F245 (a package shadowing its own submodule with an instance defeats
 `monkeypatch`) and F243 (state surviving between tests through Redis).
+
+## F260 — the AI Core's load-bearing control had every predicate and no enforcement path · CRITICAL
+
+`docs/audit/AI_CORE_SPEC.md` §2 states the architecture spine:
+
+> every department can *recommend*. Nothing places a trade, deploys code,
+> rotates a credential or changes a setting without passing the superadmin
+> approval queue.
+
+and §6 names the mechanism that must make it true:
+
+> **per-agent permission scoping enforced at the tool layer, not just
+> prompted** — so a compromised agent can't call an action outside its scope
+> even if tricked.
+
+`AI_CORE_SPEC_INTAKE.md` §1 calls that sentence "the load-bearing requirement of
+the entire build".
+
+**Every predicate it needs was already written.** Sixteen CONSTITUTIONAL checks
+across two modules:
+
+| Predicate | Module | What the spec calls it |
+|---|---|---|
+| `verify_agent_action_authorized` | `invariants/ai.py` | per-agent action scope |
+| `verify_tool_allowed` | `invariants/ai.py` | "at the tool layer" |
+| `verify_agent_no_self_escalation` | `invariants/ai.py` | agents cannot widen their own grant |
+| `verify_agent_authority` | `invariants/ai.py` | the autonomy dial |
+| `verify_autonomous_capital_limit` | `invariants/ai_governance.py` | bounded agents |
+| `verify_no_self_replication` | `invariants/ai_governance.py` | no uncontrolled agent chains |
+| `verify_autonomous_strategy_control` | `invariants/ai_governance.py` | no strategy to production without a human |
+
+**Not one was reachable from an enforcement path.** `invariants/ai_governance.py`
+was imported by nothing outside its own tests — grepped across the repository.
+`KNOWN_KINDS` had no `agent_action` entry, so there was no per-kind mode
+override and the enforcement status endpoint could not report on it. No
+`enforce_agent_*` wrapper existed.
+
+This is F177 ("338 predicates inventoried, ~31 wired") concentrated on exactly
+the module the AI Core stands on, and it is the intake's own warning coming
+true: *"an approval queue that is designed but enforced only by convention will
+fail in exactly this way, and it will fail silently."* Building agents on top of
+it would have shipped the audit's signature defect with more autonomy.
+
+**Closed by** `enforce_agent_action(request)` — a new `agent_action` kind
+composing all seven predicates plus one that did not exist:
+`verify_agent_action_approved(action, approval_required, approved_by)`, which is
+§2's approval queue as a predicate. It reuses the existing constitutional rule
+"No Unapproved AI Action"; no new rule was invented, which would have been a
+governance decision rather than a code change.
+
+The request object is read defensively (dict, dataclass, or `metadata` mapping),
+matching `enforce_order_authorization`. Absent fields are not checked — a
+request that says nothing about capital is not making a capital claim — so the
+gate is usable before every department exists.
+
+**The two acceptance tests the intake demanded before any agent code is
+written** are `tests/unit/test_agent_actions_are_enforced_not_prompted.py`:
+calling an action outside scope directly, and executing an approval-required
+action with no approval record, each must be refused or the build fails. Both
+assert in `enforce` mode, and one asserts the violation is still *detected*
+under the default `monitor` mode — a gate that only detects in the mode nobody
+runs is the thing being fixed.
+
+One test deliberately asserts a well-formed in-scope action is **allowed**: a
+gate that refuses everything passes every negative test while making the
+platform unusable, and is indistinguishable from a working control until
+somebody tries to use it.
+
+Predicate count 338 → 339. `scripts/verify_skill_claims.py` caught the stale
+count in `hopefx-invariants/SKILL.md` on the next run, which is what it was
+written for (F257).

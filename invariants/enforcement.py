@@ -57,7 +57,21 @@ from invariants.constitution import (
     verify_tick,
     verify_within_limit,
 )
-from invariants.ai import verify_trust_floor, verify_trust_score, verify_trust_weighted_allocation
+from invariants.ai import (
+    verify_agent_action_approved,
+    verify_agent_action_authorized,
+    verify_agent_authority,
+    verify_agent_no_self_escalation,
+    verify_tool_allowed,
+    verify_trust_floor,
+    verify_trust_score,
+    verify_trust_weighted_allocation,
+)
+from invariants.ai_governance import (
+    verify_autonomous_capital_limit,
+    verify_autonomous_strategy_control,
+    verify_no_self_replication,
+)
 from invariants.governance import verify_action_audited, verify_human_approval, verify_pod_isolation
 from invariants.payments import (
     verify_amount_valid,
@@ -108,6 +122,7 @@ KNOWN_KINDS: tuple[str, ...] = (
     "spof",
     "blast_radius",
     "action_audit",
+    "agent_action",
     "pod_isolation",
     "recovery_readiness",
     "audit_chain",
@@ -582,6 +597,96 @@ def enforce_action_audited(action_id: Any, audited_ids: Any) -> EnforcementResul
     """Assert an executed AI action/decision left a structured audit record
     (No Hidden AI Action)."""
     return _safe("action_audit", lambda: verify_action_audited(action_id, audited_ids))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# AGENT ACTIONS — an agent's scope is enforced here, not in its prompt
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_agent_action(request: Any) -> EnforcementResult:
+    """Assert an agent action is inside its granted scope and carries the
+    approval the platform requires for it.
+
+    ``invariants/ai.py`` and ``invariants/ai_governance.py`` hold sixteen
+    CONSTITUTIONAL predicates covering exactly what the AI Core spec promises —
+    scoped actions, scoped tools, no self-escalation, hard capital limits, no
+    uncontrolled agent spawning, no strategy reaching production without a
+    human. **None of them was reachable from any enforcement path**:
+    ``ai_governance`` was imported by nothing outside its own tests and there
+    was no ``agent_action`` kind. The spec's own load-bearing sentence is "per
+    agent permission scoping enforced at the tool layer, not just prompted";
+    this function is where that stops being a sentence.
+
+    ``request`` is read defensively so it works with a dict, a dataclass, or an
+    object carrying a ``metadata`` mapping — the same shape
+    ``enforce_order_authorization`` accepts. Recognised fields:
+
+    ==========================  ====================================================
+    ``action``                  what the agent wants to do
+    ``allowed_actions``         the actions its role grants
+    ``tool``                    the tool it reaches for (optional)
+    ``allowed_tools``           the tools its role grants
+    ``approval_required``       actions that need a superadmin approval record
+    ``approved_by``             the human who approved it
+    ``modified_own_permissions``whether it changed its own grant
+    ``action_risk``             risk of this action, against ``authority_level``
+    ``capital_allocated``       capital it is moving, against ``capital_limit``
+    ``spawned_agents``          sub-agents created, gated by ``spawn_approved``
+    ``strategy_auto_deployed``  gated by ``human_approved``
+    ==========================  ====================================================
+
+    Absent fields are not checked: a request that says nothing about capital is
+    not making a capital claim. What is present is checked, and every check is
+    CONSTITUTIONAL — in ``enforce`` mode a violation refuses the action.
+    """
+
+    def _get(name: str, default: Any = None) -> Any:
+        val = getattr(request, name, None)
+        if val is None and isinstance(getattr(request, "metadata", None), dict):
+            val = request.metadata.get(name)
+        if val is None and isinstance(request, dict):
+            val = request.get(name)
+        return default if val is None else val
+
+    def _num(name: str) -> float | None:
+        v = _get(name)
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    def _check() -> list[Violation]:
+        violations: list[Violation] = []
+
+        action = _get("action")
+        if action is not None:
+            violations += verify_agent_action_authorized(str(action), set(_get("allowed_actions", set()) or ()))
+            violations += verify_agent_action_approved(
+                str(action),
+                set(_get("approval_required", set()) or ()),
+                _get("approved_by"),
+            )
+
+        tool = _get("tool")
+        if tool is not None:
+            violations += verify_tool_allowed(str(tool), set(_get("allowed_tools", set()) or ()))
+
+        violations += verify_agent_no_self_escalation(bool(_get("modified_own_permissions", False)))
+
+        risk, authority = _num("action_risk"), _num("authority_level")
+        if risk is not None and authority is not None:
+            violations += verify_agent_authority(risk, authority)
+
+        allocated, limit = _num("capital_allocated"), _num("capital_limit")
+        if allocated is not None and limit is not None:
+            violations += verify_autonomous_capital_limit(allocated, limit)
+
+        spawned = _num("spawned_agents")
+        if spawned is not None:
+            violations += verify_no_self_replication(int(spawned), bool(_get("spawn_approved", False)))
+
+        if _get("strategy_auto_deployed", False):
+            violations += verify_autonomous_strategy_control(True, bool(_get("human_approved", False)))
+
+        return violations
+
+    return _safe("agent_action", _check)
 
 
 # ════════════════════════════════════════════════════════════════════════════════

@@ -146,6 +146,36 @@ def verify_tool_allowed(tool: str, allowed_tools: set[str]) -> list[Violation]:
     return []
 
 
+def verify_agent_action_approved(
+    action: str,
+    approval_required: set[str],
+    approved_by: Any,
+) -> list[Violation]:
+    """An action on the approval-required list must carry a named human approver.
+
+    The AI Core's central promise is that every department can *recommend* and
+    nothing places a trade, deploys code, rotates a credential or changes a
+    setting without passing through the superadmin approval queue. This is that
+    promise as a predicate, so the queue is a gate rather than a convention.
+
+    ``approved_by`` must be a non-empty string. A blank one is the shape a
+    missing field takes after a round trip through JSON, and it must not read as
+    a human. Membership decides applicability: an action outside
+    ``approval_required`` needs no approver.
+    """
+    if action not in approval_required:
+        return []
+    if isinstance(approved_by, str) and approved_by.strip():
+        return []
+    return [
+        _v(
+            "No Unapproved AI Action",
+            CONSTITUTIONAL,
+            f"agent action '{action}' requires approval and carries no approver",
+        )
+    ]
+
+
 def verify_reasoning_depth(depth: int, limit: int) -> list[Violation]:
     """Prevent infinite/recursive agent reasoning loops."""
     if depth > limit:

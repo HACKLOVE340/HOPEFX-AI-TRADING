@@ -57,7 +57,7 @@ selected against a measured profile of the codebase rather than by guesswork.
 | k8s + helm + kubernetes-asyncio | | `k8s-security-policies` |
 | Deep OTel + prometheus-client + structlog + sentry | | `python-observability`, `distributed-tracing`, `prometheus-configuration`, `slo-implementation` |
 | `data_layer/` 19,610 LOC | | `data-quality-frameworks` |
-| **338 invariant predicates across 34 modules** | | **`hopefx-invariants`** (custom) |
+| **339 invariant predicates across 34 modules** | | **`hopefx-invariants`** (custom) |
 | `brokers/ibkr_fix_bridge.py` + quickfix/simplefix | | **`hopefx-fix-bridge`** (custom) |
 | **249 audit findings, one defect shape dominating** | | **`hopefx-dead-controls`** (custom) |
 
