@@ -192,6 +192,8 @@ of these.
 
 Full plan: `docs/audit/plans/2026-09-04-phase-d-ai-core-prereqs.md`
 
+**Outcome: 17385 passed, 0 failed** (fresh worktree, `static/` present).
+
 | Finding | What was done |
 |---|---|
 | **F139** | `deployments/k8s/` shipped no RBAC and no `serviceAccountName`, so pods ran as `default` and every get/patch on the kill-switch ConfigMap was denied — layer 5 gone. It now ships `kill-switch-rbac.yaml` and `kill-switch-configmap.yaml`, mirroring `k8s/` and scoped identically: one named ConfigMap, verbs get and patch. |

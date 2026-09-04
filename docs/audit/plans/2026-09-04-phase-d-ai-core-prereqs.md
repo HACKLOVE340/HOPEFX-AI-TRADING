@@ -49,5 +49,6 @@ There was also no environment override, so nothing could move it.
 
 ### Task 4 — Verify
 
-- [ ] Fresh worktree with `static/`, full fast suite, failure set diffed.
-- [ ] Update `CODE_READING_FINDINGS.md` and `FIX_PHASES.md`; push.
+- [x] Fresh worktree with `static/`, full fast suite, failure set diffed.
+      **17385 passed, 50 skipped, 0 failed** (baseline 17364).
+- [x] Update `CODE_READING_FINDINGS.md` and `FIX_PHASES.md`; push.
