@@ -640,6 +640,23 @@ class PaperRunner:
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
+    def _build_router(self):
+        """Construct the order router with its pre-trade risk gate.
+
+        Extracted so the wiring is testable on its own. The gate existing is
+        worth nothing if the runner never passes one: this pipeline had no risk
+        layer at all (F142), and a router that quietly defaults to
+        ``AlwaysAllowGate`` would be the same defect in a new place.
+
+        ``RiskManager()`` takes all-default arguments and reads its equity from
+        the environment, which is how every other construction site builds it.
+        """
+        from execution.fix_router import FIXRouter
+        from execution.order_gate import RiskManagerGate
+        from risk.manager import RiskManager
+
+        return FIXRouter(gate=RiskManagerGate(RiskManager()))
+
     async def run(self) -> None:
         """Entry point — runs until stop_event is set."""
         self._enforce_paper_mode()
@@ -662,9 +679,7 @@ class PaperRunner:
         )
 
         # Start FIXRouter in background
-        from execution.fix_router import FIXRouter
-
-        self._router = FIXRouter()
+        self._router = self._build_router()
         router_task = asyncio.create_task(self._router.start(), name="fix_router")
         self._tasks.append(router_task)
 
