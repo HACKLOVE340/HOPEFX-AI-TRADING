@@ -11,7 +11,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase, extractApiError } from '../lib/utils';
+import { extractApiError } from '../lib/utils';
+import { openAuthenticatedWebSocket } from '../lib/ws';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
@@ -189,7 +190,7 @@ const AuditLog: React.FC = () => {
     if (!token) return;
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${getWsBase()}/ws/audit-events?token=${token}`);
+      ws = openAuthenticatedWebSocket('/ws/audit-events', token);
       wsRef.current = ws;
       ws.onmessage = (ev) => {
         try {
