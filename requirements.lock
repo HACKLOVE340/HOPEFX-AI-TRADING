@@ -38,7 +38,7 @@ annotated-doc==0.0.5
     #   typer
 annotated-types==0.8.0
     # via pydantic
-anyio==4.14.2
+anyio==4.15.0
     # via
     #   -r requirements.txt
     #   httpx
@@ -71,7 +71,7 @@ bcrypt==5.0.0
     #   chromadb
 beautifulsoup4==4.15.0
     # via yfinance
-bidict==0.23.1
+bidict==0.24.1
     # via python-socketio
 billiard==4.2.4
     # via celery
@@ -79,7 +79,7 @@ blinker==1.9.0
     # via flask
 brotli==1.2.0
     # via geventhttpclient
-build==1.5.0
+build==1.6.0
     # via chromadb
 cbor2==5.9.0
     # via hdwallet
@@ -117,7 +117,7 @@ circuitbreaker==2.1.3
     # via -r requirements.txt
 clamd==1.0.2
     # via -r requirements.txt
-click==8.4.2
+click==8.5.0
     # via
     #   celery
     #   click-didyoumean
@@ -136,6 +136,7 @@ click-repl==0.3.0
 cloudpickle==3.1.2
     # via
     #   gymnasium
+    #   joblib
     #   shap
     #   stable-baselines3
 coincurve==20.0.0
@@ -152,7 +153,7 @@ crcmod==1.7
     # via hdwallet
 cross-web==0.7.0
     # via strawberry-graphql
-cryptography==50.0.0
+cryptography==50.0.1
     # via
     #   -r requirements.txt
     #   ccxt
@@ -160,11 +161,11 @@ cryptography==50.0.0
     #   sendgrid
 cuda-bindings==13.3.1
     # via torch
-cuda-pathfinder==1.6.1
+cuda-pathfinder==1.8.1
     # via cuda-bindings
 cuda-toolkit==13.0.3.0
     # via torch
-curl-cffi==0.16.1
+curl-cffi==0.16.3
     # via
     #   -r requirements.txt
     #   yfinance
@@ -176,7 +177,7 @@ deprecated==1.3.1
     # via limits
 dnspython==2.8.0
     # via email-validator
-durationpy==0.10
+durationpy==0.11
     # via kubernetes
 ecdsa==0.19.2
     # via hdwallet
@@ -203,7 +204,7 @@ feedparser==6.0.14
     # via -r requirements.txt
 feedparser-sgmllib==2.1.0
     # via feedparser
-filelock==3.32.4
+filelock==3.32.5
     # via
     #   huggingface-hub
     #   torch
@@ -218,8 +219,10 @@ flask-login==0.6.3
     # via locust
 flatbuffers==25.12.19
     # via onnxruntime
-fonttools==4.63.0
+fonttools==4.64.0
     # via matplotlib
+formulaic==1.2.2
+    # via statsmodels
 frozenlist==1.8.0
     # via
     #   aiohttp
@@ -234,17 +237,17 @@ gevent==26.8.0
     #   locust
 geventhttpclient==2.3.9
     # via locust
-googleapis-common-protos==1.75.1
+googleapis-common-protos==1.75.3
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-graphql-core==3.2.11
+graphql-core==3.2.12
     # via strawberry-graphql
 greenlet==3.5.5
     # via
     #   gevent
     #   sqlalchemy
-grpcio==1.83.0
+grpcio==1.83.1
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
@@ -280,7 +283,7 @@ httpx==0.28.1
     #   python-telegram-bot
 httpx2==2.12.0
     # via openai
-huggingface-hub==1.28.0
+huggingface-hub==1.30.0
     # via
     #   sentence-transformers
     #   tokenizers
@@ -300,7 +303,9 @@ importlib-resources==7.1.0
     # via chromadb
 iniconfig==2.3.0
     # via pytest
-ipython==9.16.1
+interface-meta==2.0.1
+    # via formulaic
+ipython==9.17.1
     # via -r requirements.txt
 ipython-pygments-lexers==1.1.1
     # via ipython
@@ -327,7 +332,7 @@ jinja2==3.1.6
     #   torch
 jiter==0.16.0
     # via openai
-joblib==1.5.3
+joblib==1.6.0
     # via
     #   -r requirements.txt
     #   nltk
@@ -342,7 +347,7 @@ jupyter-core==5.9.1
     # via nbformat
 keyring==25.7.0
     # via -r requirements.txt
-kiwisolver==1.5.0
+kiwisolver==1.5.1
     # via matplotlib
 kombu==5.6.2
     # via celery
@@ -360,9 +365,9 @@ llvmlite==0.49.0
     # via
     #   numba
     #   shap
-locust==2.46.3
+locust==2.46.4
     # via -r requirements.txt
-lxml==6.1.2
+lxml==6.1.3
     # via yfinance
 lz4==4.4.5
     # via -r requirements.txt
@@ -388,7 +393,7 @@ matplotlib-inline==0.2.2
     # via ipython
 mdurl==0.1.2
     # via markdown-it-py
-mmh3==5.2.1
+mmh3==5.3.0
     # via chromadb
 more-itertools==11.1.0
     # via
@@ -396,7 +401,7 @@ more-itertools==11.1.0
     #   jaraco-functools
 mpmath==1.3.0
     # via sympy
-msgpack==1.2.1
+msgpack==1.2.2
     # via
     #   -r requirements.txt
     #   locust
@@ -408,6 +413,7 @@ multitasking==0.0.13
     # via yfinance
 narwhals==2.25.0
     # via
+    #   formulaic
     #   lightgbm
     #   plotly
     #   scikit-learn
@@ -429,6 +435,7 @@ numpy==2.5.2
     #   chromadb
     #   contourpy
     #   eventkit
+    #   formulaic
     #   gymnasium
     #   hmmlearn
     #   lightgbm
@@ -463,7 +470,7 @@ nvidia-cuda-nvrtc==13.0.88
     #   nvidia-cublas
 nvidia-cuda-runtime==13.0.96
     # via cuda-toolkit
-nvidia-cudnn-cu13==9.20.0.48
+nvidia-cudnn-cu13==9.24.0.43
     # via torch
 nvidia-cufft==12.0.0.61
     # via cuda-toolkit
@@ -479,7 +486,7 @@ nvidia-cusparse==12.6.3.3
     #   nvidia-cusolver
 nvidia-cusparselt-cu13==0.8.1
     # via torch
-nvidia-nccl-cu13==2.29.7
+nvidia-nccl-cu13==2.30.7
     # via
     #   torch
     #   xgboost
@@ -499,7 +506,7 @@ onnxruntime==1.29.0
     # via
     #   -r requirements.txt
     #   chromadb
-openai==3.3.1
+openai==3.8.0
     # via -r requirements.txt
 opentelemetry-api==1.44.0
     # via
@@ -585,6 +592,7 @@ packaging==26.3
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-sqlalchemy
     #   optuna
+    #   patsy
     #   plotly
     #   pytest
     #   shap
@@ -596,6 +604,7 @@ packaging==26.3
 pandas==3.0.5
     # via
     #   -r requirements.txt
+    #   formulaic
     #   seaborn
     #   shap
     #   statsmodels
@@ -605,7 +614,7 @@ parso==0.8.7
     # via jedi
 passlib==1.7.4
     # via -r requirements.txt
-patsy==1.0.2
+patsy==1.0.3
     # via statsmodels
 peewee==4.4.0
     # via yfinance
@@ -617,11 +626,11 @@ pillow==12.3.0
     #   matplotlib
     #   reportlab
     #   tensorboard
-platformdirs==4.11.3
+platformdirs==4.11.7
     # via
     #   jupyter-core
     #   yfinance
-plotly==6.9.0
+plotly==7.0.0
     # via -r requirements.txt
 pluggy==1.6.0
     # via pytest
@@ -635,7 +644,7 @@ propcache==0.5.2
     # via
     #   aiohttp
     #   yarl
-protobuf==7.36.0
+protobuf==7.36.1
     # via
     #   -r requirements.txt
     #   googleapis-common-protos
@@ -662,14 +671,14 @@ pycparser==3.0
     # via cffi
 pycryptodome==3.23.0
     # via hdwallet
-pydantic==2.13.4
+pydantic==2.13.5
     # via
     #   -r requirements.txt
     #   chromadb
     #   fastapi
     #   openai
     #   pydantic-settings
-pydantic-core==2.46.4
+pydantic-core==2.46.5
     # via pydantic
 pydantic-settings==2.15.0
     # via
@@ -709,7 +718,7 @@ python-dotenv==1.2.3
     #   -r requirements.txt
     #   pydantic-settings
     #   uvicorn
-python-engineio==4.13.5
+python-engineio==4.14.0
     # via
     #   locust
     #   python-socketio
@@ -749,7 +758,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-regex==2026.7.19
+regex==2026.9.3
     # via
     #   nltk
     #   transformers
@@ -790,6 +799,7 @@ scikit-learn==1.9.0
 scipy==1.18.1
     # via
     #   -r requirements.txt
+    #   formulaic
     #   hmmlearn
     #   lightgbm
     #   scikit-learn
@@ -805,7 +815,7 @@ sendgrid==6.12.5
     # via -r requirements.txt
 sentence-transformers==5.7.0
     # via -r requirements.txt
-sentry-sdk==2.68.0
+sentry-sdk==2.68.1
     # via -r requirements.txt
 shap==0.52.0
     # via -r requirements.txt
@@ -844,11 +854,11 @@ starlette==1.6.0
     # via
     #   -r requirements.txt
     #   fastapi
-statsmodels==0.14.6
+statsmodels==0.15.0
     # via -r requirements.txt
-strawberry-graphql==0.324.0
+strawberry-graphql==0.327.2
     # via -r requirements.txt
-stripe==15.5.1
+stripe==15.6.1
     # via -r requirements.txt
 structlog==26.1.0
     # via -r requirements.txt
@@ -870,12 +880,12 @@ textblob==0.20.1
     # via -r requirements.txt
 threadpoolctl==3.6.0
     # via scikit-learn
-tokenizers==0.22.2
+tokenizers==0.23.2
     # via
     #   chromadb
     #   sentence-transformers
     #   transformers
-torch==2.13.0
+torch==2.14.0
     # via
     #   sentence-transformers
     #   stable-baselines3
@@ -895,9 +905,9 @@ traitlets==5.16.1
     #   jupyter-core
     #   matplotlib-inline
     #   nbformat
-transformers==5.15.1
+transformers==5.16.1
     # via sentence-transformers
-triton==3.7.1
+triton==3.8.0
     # via torch
 truststore==0.10.4
     # via
@@ -905,7 +915,7 @@ truststore==0.10.4
     #   httpx2
 twelvedata==1.4.0
     # via -r requirements.txt
-typer==0.27.1
+typer==0.27.2
     # via
     #   chromadb
     #   transformers
@@ -920,6 +930,7 @@ typing-extensions==4.16.0
     #   chromadb
     #   cross-web
     #   fastapi
+    #   formulaic
     #   grpcio
     #   gymnasium
     #   httpx2
@@ -974,9 +985,9 @@ vine==5.1.0
     #   kombu
 watchfiles==1.2.0
     # via uvicorn
-wcwidth==0.8.2
+wcwidth==0.8.3
     # via prompt-toolkit
-websocket-client==1.9.0
+websocket-client==1.9.2
     # via
     #   kubernetes
     #   python-socketio
@@ -996,9 +1007,10 @@ werkzeug==3.1.8
     #   tensorboard
 wheel==0.48.0
     # via -r requirements.txt
-wrapt==2.3.0
+wrapt==2.4.0
     # via
     #   deprecated
+    #   formulaic
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-aiohttp-client
     #   opentelemetry-instrumentation-redis
@@ -1013,7 +1025,7 @@ yarl==1.24.5
     # via
     #   aiohttp
     #   ccxt
-yfinance==1.6.0
+yfinance==1.7.0
     # via -r requirements.txt
 zipp==4.1.0
     # via -r requirements.txt
