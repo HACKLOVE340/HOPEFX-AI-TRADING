@@ -499,11 +499,16 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
     """
     import asyncio
 
-    # Auth — token passed as query param (same pattern as /ws/live).
+    # Auth — same channel as /ws/live: the hopefx.auth.bearer subprotocol
+    # (a header) is preferred, with the deprecated ?token= query parameter as
+    # a fallback. Reading only the query string here would reject every browser
+    # client, because the SPA moved to the subprotocol.
     # FIX: invalid or missing tokens must reject the connection, not silently
     # allow unauthenticated access.  Chat rooms contain user-generated content
     # that should only be visible to authenticated members.
-    token_param = websocket.query_params.get("token", "")
+    from api.ws_live import ws_accept_subprotocol, ws_auth_token
+
+    token_param = ws_auth_token(websocket) or ""
     _ws_chat_auth_required: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
 
     if _ws_chat_auth_required:
@@ -523,7 +528,7 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
             # Guard every send/close: the client may already be gone, which
             # otherwise surfaces as an unhandled ASGI ConnectionClosed error.
             try:
-                await websocket.accept()
+                await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
                 await websocket.send_text(
                     json.dumps({"type": "error", "code": "AUTH_REQUIRED", "message": "Valid JWT required"})
                 )
@@ -535,7 +540,9 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
         _chat_user_id = "anonymous"
 
     try:
-        await websocket.accept()
+        # The negotiated subprotocol must be echoed or the browser closes the
+        # socket the moment the handshake completes.
+        await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
     except Exception:  # nosec B110 — client disconnected during handshake
         return
 

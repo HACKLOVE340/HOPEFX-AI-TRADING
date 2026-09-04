@@ -152,7 +152,20 @@ class TestTheAcceptedSubprotocolIsEchoed:
 
 
 class TestTheHandlersUseIt:
-    @pytest.mark.parametrize("path", ["api/ws_live.py", "api/gateway.py"])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "api/ws_live.py",
+            "api/gateway.py",
+            # community_chat and social_feed were missed on the first pass: the
+            # frontend pages were moved onto the subprotocol while their handlers
+            # still read only the query string, so chat and the social feed
+            # rejected every browser client. The original sweep grepped two named
+            # files instead of the whole api/ package.
+            "api/community_chat.py",
+            "api/social_feed.py",
+        ],
+    )
     def test_no_handler_reads_the_token_straight_off_the_query_string(self, path):
         """The one permitted read is the deprecated fallback inside ws_auth_token.
 
@@ -187,6 +200,31 @@ class TestTheHandlersUseIt:
             src = Path(path).read_text()
             if "ws_auth_token" in src:
                 assert "ws_accept_subprotocol" in src, f"{path} authenticates but never echoes the subprotocol"
+
+
+class TestNoHandlerWasMissed:
+    def test_every_websocket_handler_in_the_api_package_uses_the_extractor(self):
+        """The sweep must cover api/, not a hand-listed pair of files.
+
+        Missing one is silent and fail-closed: the page sends the subprotocol,
+        the handler looks only at the query string, finds nothing, and closes
+        4001. The product breaks and no test notices.
+        """
+        from pathlib import Path
+
+        offenders = []
+        for py in sorted(Path("api").rglob("*.py")):
+            src = py.read_text()
+            if 'websocket.query_params.get("token"' not in src:
+                continue
+            if py.name == "ws_live.py":
+                continue  # the deprecated fallback lives inside ws_auth_token
+            offenders.append(str(py))
+
+        assert not offenders, (
+            f"{offenders} read the token from the URL without going through "
+            f"ws_auth_token(), so a client using the subprotocol is rejected"
+        )
 
 
 class TestTheFrontendStoppedPuttingItInTheUrl:

@@ -101,7 +101,31 @@ class TestCodacyDoesNotBurnCapacityForNothing:
         job = _load("codacy.yml")["jobs"]["codacy-security-scan"]
 
         assert "if" in job, "the Codacy job should not run at all without its token"
-        assert "CODACY_PROJECT_TOKEN" in str(job["if"])
+
+    def test_the_guard_does_not_read_secrets_in_a_job_level_if(self):
+        """`secrets` is not available there, so the check silently inverts.
+
+        A first attempt used `if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}`.
+        GitHub does not expose the secrets context to a job-level `if`, so that
+        evaluates as '' != '' and skips the job unconditionally — including for
+        the repositories that do have the token configured. The guard has to
+        come through `needs`, which *is* available there.
+        """
+        job = _load("codacy.yml")["jobs"]["codacy-security-scan"]
+        condition = str(job["if"])
+
+        assert "secrets." not in condition, (
+            "the secrets context is unavailable in a job-level if; this condition "
+            "is always false and the job never runs"
+        )
+        assert "needs." in condition
+
+    def test_the_gate_job_reads_the_secret_where_it_is_allowed(self):
+        gate = _load("codacy.yml")["jobs"]["token-check"]
+        probe = gate["steps"][0]
+
+        assert "CODACY_PROJECT_TOKEN" in str(probe.get("env", {})), "a step env: is where a secret can legally be read"
+        assert "has_token" in str(gate["outputs"])
 
     def test_the_pr_quality_gate_still_runs_unconditionally(self):
         """ruff + bandit on changed files is the job in this file with teeth."""

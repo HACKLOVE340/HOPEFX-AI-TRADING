@@ -7322,3 +7322,42 @@ here closes, cancels or places anything at the broker.
   `pytest -k "position or execution or redis_state or trade_executor or intent"`.
   They pass in isolation and fail under that selection, both before and after
   Round 22 — cross-test pollution, not a regression, and not investigated here.
+
+### Round 22b — four defects the adversarial pass found in Round 22 itself
+
+An independent security review of the branch found no exploitable
+vulnerability, but four functional defects — one of them a regression this
+work introduced.
+
+* **S-60a (regression, fixed).** `api/community_chat.py` and
+  `api/social_feed.py` were missed when WebSocket auth moved to the
+  subprotocol. Their frontend pages were converted while the handlers still
+  read only `query_params`, so chat and the social feed rejected every browser
+  client with 4001. Fail-closed, so not a vulnerability — but the product was
+  broken. Cause: the original sweep grepped two named files rather than the
+  whole `api/` package. The test now enumerates every `.py` under `api/` rather
+  than a hand-listed pair, which is the check that would have caught it.
+* **S-61a (fixed).** Making the readers honour `ML_MODEL_DIR` left
+  `_verify_checksum` matching on `path.name` against the packaged baseline, so
+  a retrained `advanced_oos.pkl` in the configured directory hashed differently
+  and was refused as `MODEL INTEGRITY FAILURE ... may have been tampered with`.
+  That defeated the fix entirely *and* reported a path change as a security
+  incident. Checksums are now per directory: tamper detection within a
+  directory is unchanged, and a fresh retrain target records its own baseline.
+* **S-62a (fixed).** `if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}` does not
+  work: GitHub does not expose the `secrets` context to a job-level `if`, so it
+  evaluated as `'' != ''` and skipped the job unconditionally — including where
+  the token *is* configured. The guard now goes through a `token-check` job
+  whose step reads the secret into an output, because `needs` **is** available
+  in a job-level `if`.
+* **S-58a (fixed).** `_derive_name` falls back to the broker's class name and
+  `register_circuit_breaker` overwrites by key, so two brokers of the same class
+  with no `broker_name` collapsed to one registry entry. A superadmin
+  force-open would halt the survivor and answer `new_orders_blocked: true`
+  while the other kept passing orders — a narrower instance of the exact bug
+  S-58 fixed. Names are now de-duplicated with a warning naming both.
+
+Two stale test doubles declared `async def accept(self)` while standing in for
+`starlette.websockets.WebSocket.accept(subprotocol=None, headers=None)`. They
+passed by diverging from the object they double, which is precisely how a real
+signature change goes unnoticed; both now match.
