@@ -194,3 +194,71 @@ def test_low_feature_coverage_is_reported(caplog):
     assert any("coverage" in r.message.lower() or "missing" in r.message.lower() for r in caplog.records), (
         "two of three features were imputed and nothing was reported"
     )
+
+
+# ── The refusal must degrade, not crash ──────────────────────────────────────
+
+
+def test_a_refused_prediction_degrades_the_signal_instead_of_crashing_it(monkeypatch, caplog):
+    """Making `predict_proba` raise is only correct if the signal path treats it
+    as "no ML available" rather than propagating out of the request.
+
+    `_predict_basic` calls `active_model.predict_proba(X)` with no local guard;
+    the protection is one level up, in `_compute_ml_probability`'s
+    `except Exception` (core/signal_engine.py). That is a load-bearing detail of
+    a change that turned a silent wrong answer into a refusal, so it is asserted
+    rather than assumed.
+    """
+    import logging
+
+    import core.signal_engine as se
+
+    class _Refusing:
+        def predict_proba(self, X):
+            raise RuntimeError("feature scaling failed; refusing to predict on an unscaled frame")
+
+    monkeypatch.setattr(se, "get_active_model", lambda: _Refusing(), raising=False)
+    monkeypatch.setattr(se, "get_model_version", lambda: "stacking_v1", raising=False)
+    monkeypatch.setattr(se, "get_advanced_predictor", lambda: None, raising=False)
+
+    data = {"close": 3000.0, "prices": [3000.0 + i for i in range(30)], "volume": 100.0}
+
+    with caplog.at_level(logging.DEBUG):
+        prob, version = se._compute_ml_probability(data, "XAUUSD", base_confidence=0.61)
+
+    assert prob == pytest.approx(0.61), "a refused prediction did not fall back to the base confidence"
+    assert version == "none", f"a refused prediction was reported as model {version!r}"
+
+
+def test_the_refusal_itself_is_logged_at_error_by_the_predictor():
+    """The fallback above is logged at DEBUG — off in production — so the only
+    operator-visible trace of a refusal is the predictor's own ERROR. If that
+    were quiet, the platform would silently trade on base confidence with no
+    signal that its model had stopped contributing."""
+    import logging
+
+    class _BrokenScaler:
+        def transform(self, X):
+            raise RuntimeError("scaler state does not match the frame")
+
+    predictor, _ = _predictor(scaler=_BrokenScaler())
+
+    records: list[logging.LogRecord] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    from ml import _ml_logger
+
+    handler = _Capture()
+    _ml_logger.addHandler(handler)
+    try:
+        with pytest.raises(RuntimeError):
+            predictor.predict_proba(pd.DataFrame({"close": [3200.0], "rsi_14": [65.0], "macd_hist": [0.0]}))
+    finally:
+        _ml_logger.removeHandler(handler)
+
+    assert any(r.levelno >= logging.ERROR for r in records), (
+        "the refusal left no ERROR-level trace; an operator would see silence"
+    )

@@ -385,6 +385,14 @@ jobs:
       - name: Invariant coverage report
         run: python scripts/invariant_coverage.py
 
+      # Custom-skill claim verification — the four hopefx-* skills in
+      # .claude/skills cite constants, defaults, counts and file paths. A skill
+      # that cites a stale constant is worse than no skill, because it is
+      # believed: an agent acts on it without re-deriving it. This step fails
+      # the build when a cited claim stops being true of the codebase.
+      - name: Custom-skill claim verification
+        run: python scripts/verify_skill_claims.py
+
       # Runtime invariant check — boots the app, probes endpoints, asserts output
       # invariants and scans the event log so "looks right, behaves wrong" fails
       # the build.  Exit 1 (invariant findings) fails CI; exit 2 (could not boot

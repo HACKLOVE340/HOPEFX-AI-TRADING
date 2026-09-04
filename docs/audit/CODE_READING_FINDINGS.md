@@ -7534,3 +7534,49 @@ denominator are taken over the same filtered periods.
 Worth recording plainly: **the gate caught a real defect in a fix that its
 author had already verified.** Ten targeted tests passed against code that
 propagated NaN, because none of them fed it a NaN.
+
+## F257 — the README claimed a verification whose script was not in the repo · MEDIUM
+
+`.claude/skills/README.md` said of the three custom skills:
+
+> Every factual claim in these three was verified against the codebase by an
+> assertion script (26 checks: line numbers, constants, defaults, predicate
+> count, file lengths). **Re-run that verification after any refactor that moves
+> the cited lines** — a skill that cites a stale line number is worse than no
+> skill.
+
+The script is not in the repository. So the verification could not be re-run,
+the instruction could not be followed, and the "26 checks" were unauditable —
+a claimed control with no artifact behind it, in the documentation of the skills
+an agent is told to trust. A skill that cites a stale constant is worse than a
+missing skill precisely because an agent acts on it without re-deriving it.
+
+Written for real as `scripts/verify_skill_claims.py`: 51 checks across all four
+custom skills — predicate and module counts, the resolved
+`HOPEFX_INVARIANT_MODE` default, FIX ports and store path, the reconciliation
+tolerance, every cited file path, and whether each control
+`hopefx-dead-controls` describes is still wired. It runs in CI, so the claim is
+now enforced rather than asserted.
+
+**Two defects in that script, both instructive, both mine:**
+
+1. **It read prose as code.** The first run reported four correct files as
+   broken — `execution/engine.py`, `notifications/alert_engine.py`,
+   `scripts/invariant_coverage.py`, `risk/orchestrator.py` — because each now
+   carries a comment quoting the defect it fixed
+   (`# if orchestrator._started and not orchestrator.is_safe_to_trade()`). That
+   is **F255**, the analyzer rule that scanned docstrings as source, reproduced
+   inside a script written to confirm F255 was fixed, in the same session.
+   Now strips prose using the analyzer's own `_build_docstring_lines` and
+   `_strip_string_literals`, so the repository has one definition of "this line
+   is prose" rather than a fifth regex.
+
+2. **It matched text where it could have called the function.** It grepped for
+   `HOPEFX_INVARIANT_MODE", "monitor"` and reported a *true* claim stale: the
+   default is real, it just arrives through `_DEFAULT_MODE = MODE_MONITOR`. A
+   text match tests how code is written; the check now unsets the variable and
+   calls `current_mode()`.
+
+The lesson the audit keeps paying for: **the shape is not something other people
+do.** It recurred in my own tooling within an hour of my documenting it, which
+is the strongest argument available for the skill existing at all.
