@@ -574,6 +574,13 @@ class TestFIXRouter:
         router._order_count = 0
         router._fill_count = 0
         router._reject_count = 0
+        # __new__ bypasses __init__, so the pre-trade gate has to be supplied by
+        # hand like everything else here. AlwaysAllowGate keeps this test about
+        # FIX-vs-fallback routing rather than risk (F142).
+        from execution.order_gate import AlwaysAllowGate
+
+        router._gate = AlwaysAllowGate()
+        router._gate_refused_count = 0
 
         fill = {
             "type": "fill_confirmation",
