@@ -7361,3 +7361,48 @@ Two stale test doubles declared `async def accept(self)` while standing in for
 `starlette.websockets.WebSocket.accept(subprotocol=None, headers=None)`. They
 passed by diverging from the object they double, which is precisely how a real
 signature change goes unnoticed; both now match.
+
+### Round 22c — the 22 test failures were two real product bugs
+
+The five full-suite failures and the seventeen that appeared under
+`-k "position or execution or …"` had two distinct root causes, and neither was
+"flaky tests". Both were defects the tests were correctly reporting.
+
+**S-65 — `get_sync_redis()` raised where it promised to degrade (fixed).**
+Six modules carried a copy-pasted password injection::
+
+    if password and "@" not in url.split("://", 1)[-1]:
+        scheme, rest = url.split("://", 1)
+
+`"".split("://", 1)` is a one-element list, so unpacking it raises
+`ValueError: not enough values to unpack`. Every copy was wrong the same way,
+for any URL without a scheme — including `""`, which is the natural way to say
+"this deployment has no Redis". In `cache/redis_client.py` the unpack sat
+*outside* the `try`, so a function whose docstring promises it "falls back
+gracefully to None" raised instead. The same lines were in `kill_switch.py`,
+where the Redis latch is what survives a restart: a config typo became an
+exception in the one component that has to work when things are going wrong.
+
+`tests/e2e/test_auth_billing_trading.py:33` sets `REDIS_URL=""` at module
+import, which pytest executes during *collection* even when e2e is deselected
+by `-m "not e2e"`. With a `REDIS_PASSWORD` present, every later
+`get_sync_redis()` in the session raised, and `execution/tca.py` caught only
+`(ImportError, ConnectionError, RuntimeError)` — hence 17 TCA failures under one
+selection and 5 under another, all passing in isolation.
+`cache.redis_client.inject_redis_password` is now the single implementation and
+all six sites use it; an empty `REDIS_URL` resolves to "no Redis" rather than a
+guessed default.
+
+**S-66 — `_saved()` reached past the `_SAVED` seam (fixed, regression from
+S-61).** `ml/__init__.py` and `ml/inference_engine.py` expose `_SAVED` as the
+module attribute meaning "where models live", and callers reassign it to isolate
+a directory — `test_parabolic_regime.py` and `test_drift_guard_has_a_writer.py`
+both do. S-61's `_saved()` delegated to `find_model_file()`, which resolves from
+the environment and the packaged directory and never consulted `_SAVED`, so
+redirecting it silently stopped working and those tests read the committed
+`registry.json` and `feature_stats.json` instead of their own fixtures.
+
+The fallback still applies to the environment-configured directory — a pod whose
+`ML_MODEL_DIR` is empty must not end up with no model — but not once `_SAVED`
+has been reassigned, which is an explicit instruction to read that directory and
+nowhere else.

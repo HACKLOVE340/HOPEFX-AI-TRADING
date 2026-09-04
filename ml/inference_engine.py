@@ -49,17 +49,42 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-from ml.model_paths import find_model_file as _find_model_file
 from ml.model_paths import model_dir as _model_dir
+from ml.model_paths import packaged_model_dir as _packaged_model_dir
 
 # This used to be the packaged path computed from __file__, which ignored
 # ML_MODEL_DIR — so retrained artifacts were never the ones served.
 _SAVED = _model_dir()
 
 
+# The directory the environment named at import, so a deliberate reassignment
+# of _SAVED can be told apart from the configured default.
+_ENV_RESOLVED = _model_dir()
+_PACKAGED = _packaged_model_dir()
+
+
 def _saved(name: str) -> Path:
-    """Resolve artifact *name*, preferring ML_MODEL_DIR over the packaged copy."""
-    return _find_model_file(name) or (_SAVED / name)
+    """Resolve artifact *name* under `_SAVED`, falling back to the packaged copy.
+
+    `_SAVED` is a seam callers reassign to isolate a directory; the fallback
+    applies only while it is still the environment-configured value. See the
+    fuller note on `ml.__init__._saved`.
+    """
+    candidate = _SAVED / name
+    if candidate.exists():
+        return candidate
+
+    if _SAVED == _ENV_RESOLVED and _SAVED != _PACKAGED:
+        fallback = _PACKAGED / name
+        if fallback.exists():
+            logger.warning(
+                "%r is not in the configured model directory %s; using the packaged copy.",
+                name,
+                _SAVED,
+            )
+            return fallback
+
+    return candidate
 
 
 _MIN_BARS = 100

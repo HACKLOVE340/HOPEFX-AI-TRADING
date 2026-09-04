@@ -71,9 +71,11 @@ class ConfigStore:
             password = os.getenv("REDIS_PASSWORD", "") or None
 
             # Inject password into URL when not already embedded.
-            if password and "@" not in url.split("://", 1)[-1]:
-                scheme, rest = url.split("://", 1)
-                url = f"{scheme}://:{password}@{rest}"
+            # Shared helper: the inline version raised ValueError on an empty or
+            # schemeless REDIS_URL instead of degrading.
+            from cache.redis_client import inject_redis_password
+
+            url = inject_redis_password(url, password)
 
             return _redis.from_url(
                 url,

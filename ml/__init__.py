@@ -89,7 +89,6 @@ from typing import Any as _Any
 from api.error_details import safe_error
 
 _ml_logger = _logging.getLogger(__name__)
-from ml.model_paths import find_model_file as _find_model_file
 from ml.model_paths import model_dir as _model_dir
 from ml.model_paths import packaged_model_dir as _packaged_model_dir
 
@@ -118,13 +117,44 @@ def _checksum_file_for(directory: _Path) -> _Path:
     return directory / "model_checksums.json"
 
 
-def _saved(name: str) -> _Path:
-    """Resolve artifact *name*, preferring ML_MODEL_DIR over the packaged copy.
+# The directory the environment named at import. Compared against `_SAVED` so a
+# deliberate reassignment can be told apart from the configured default.
+_ENV_RESOLVED = _model_dir()
 
-    Falls back to a path under the configured directory when neither holds the
-    file, so callers keep the missing-model handling they already have.
+
+def _saved(name: str) -> _Path:
+    """Resolve artifact *name* under `_SAVED`, falling back to the packaged copy.
+
+    `_SAVED` is a seam: callers and tests reassign it to point the package at a
+    specific directory. The first version of this helper delegated to
+    `find_model_file`, which resolves from the environment and the packaged
+    directory and never consulted `_SAVED` — so redirecting it silently stopped
+    working and an isolated fixture directory read the committed models instead.
+
+    The fallback still applies to the *configured* directory, because a pod
+    whose `ML_MODEL_DIR` is empty must not end up with no model at all. It does
+    not apply once `_SAVED` has been reassigned: that is an explicit instruction
+    to read that directory and nowhere else.
+
+    Returns a path that may not exist, so callers keep the missing-model
+    handling they already have.
     """
-    return _find_model_file(name) or (_SAVED / name)
+    candidate = _SAVED / name
+    if candidate.exists():
+        return candidate
+
+    if _SAVED == _ENV_RESOLVED and _SAVED != _PACKAGED:
+        fallback = _PACKAGED / name
+        if fallback.exists():
+            _ml_logger.warning(
+                "%r is not in the configured model directory %s; using the packaged copy. "
+                "Retrained artifacts there are not being served.",
+                name,
+                _SAVED,
+            )
+            return fallback
+
+    return candidate
 
 
 # ── PyTorch availability check ────────────────────────────────────────────────
