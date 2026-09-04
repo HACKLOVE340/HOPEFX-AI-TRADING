@@ -233,3 +233,22 @@ with a different skill set. **The file needs a rebuild, not an addition.**
 5. Decide image generation: external API vs self-hosted SDXL.
 6. **Rotate the exposed superadmin credential in git history** — flagged
    repeatedly, still unresolved, higher priority than everything above.
+
+---
+
+## 13. Status of the open items (2026-09-04)
+
+Added below the spec, not inside it: §12 records what was asked, this records
+where each stands. Detail and evidence live in `AI_CORE_SPEC_INTAKE.md`.
+
+| # | Status | Where it stands |
+|---|--------|-----------------|
+| 1 | **Prerequisite done, build not started** | The load-bearing piece — per-agent scope "enforced at the tool layer, not just prompted" — is now enforced: `enforce_agent_action` plus the two acceptance tests the intake demanded before any agent code (F260). The Gateway, MCP bus, cache and Evals pipelines remain unbuilt. |
+| 2 | **Confirmed** | The six in §4 stand: Design · Marketing & Content · Social & Comms · Corporate Finance · Legal · Client & Operations. "Growth & Business Intelligence" stays folded into Marketing and Corporate Finance. Figma can be rebuilt against this list. |
+| 3 | **Confirmed** | Two clusters as described in §4 — Trading Core inner ring, Business Operations outer — with the centre AI Core node and the four-part anatomy strip beneath the hub (§11 "Planned, not built"). |
+| 4 | **Measurable now** | `scripts/vps_capability_report.py` reports the machine's RAM, VRAM, CPU count and the largest tier §8's own table supports, and prints the `LOCAL_MODEL_TIER` value to set. **Run it on the VPS.** It reports; it does not guess, because an oversized local model does not degrade gracefully — it fails to load or swaps the box to a standstill. |
+| 5 | **Blocked on 4, not independent** | §5 already says self-hosted SDXL "needs real GPU headroom (§8)". So this is not a free choice: if the report in item 4 shows no GPU, self-hosted SDXL is not an option and the external API is the only path. Measure first, then this decides itself. |
+| 6 | **Not found in this repository; rotation still required** | `scripts/scan_git_history_for_secrets.py` scanned 4,301 unique text blobs across all 194 commits against 13 patterns with no legitimate placeholder form — zero matches. No credential of a recognised format was ever committed here. That does not make it safe: the exposure may have been elsewhere, and removing a secret from history does not un-leak it. **Rotation is still the fix**, and the tool that would have destroyed every credential while reporting success now refuses (F262). |
+
+**Still needed from you:** where the exposure in item 6 was seen, if not here;
+and the item 4 report, run on the VPS.
