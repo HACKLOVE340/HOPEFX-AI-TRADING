@@ -49,7 +49,19 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-_SAVED = Path(__file__).parent / "saved_models"
+from ml.model_paths import find_model_file as _find_model_file
+from ml.model_paths import model_dir as _model_dir
+
+# This used to be the packaged path computed from __file__, which ignored
+# ML_MODEL_DIR — so retrained artifacts were never the ones served.
+_SAVED = _model_dir()
+
+
+def _saved(name: str) -> Path:
+    """Resolve artifact *name*, preferring ML_MODEL_DIR over the packaged copy."""
+    return _find_model_file(name) or (_SAVED / name)
+
+
 _MIN_BARS = 100
 _THRESHOLD_LONG = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58"))
 _THRESHOLD_SHORT = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42"))
@@ -363,7 +375,7 @@ class InferenceEngine:
         """Load isotonic calibrator from saved_models if available."""
         if self._calibrator is not None:
             return self._calibrator
-        cal_path = _SAVED / "isotonic_calibrator.pkl"
+        cal_path = _saved("isotonic_calibrator.pkl")
         if not cal_path.exists():
             return None
         try:
@@ -707,7 +719,7 @@ class InferenceEngine:
             self._model_age_days = None
             return False
 
-        model_path = self._active_model_path or (_SAVED / "advanced_oos.pkl")
+        model_path = self._active_model_path or (_saved("advanced_oos.pkl"))
         if not model_path.exists():
             # No model file — not stale (just unavailable; handled elsewhere)
             self._model_stale = False
@@ -752,7 +764,7 @@ class InferenceEngine:
         """
         if self._train_stats is not None:
             return self._train_stats
-        stats_path = _SAVED / "feature_stats.json"
+        stats_path = _saved("feature_stats.json")
         if not stats_path.exists():
             return None
         try:
@@ -1467,7 +1479,7 @@ class InferenceEngine:
         Re-reads from disk when the file mtime changes so a retrain
         automatically refreshes health() without a restart.
         """
-        meta_path = _SAVED / "advanced_oos_meta.json"
+        meta_path = _saved("advanced_oos_meta.json")
         try:
             mtime = meta_path.stat().st_mtime if meta_path.exists() else 0.0
             if self._meta_cache is None or mtime != self._meta_mtime:
@@ -1677,7 +1689,7 @@ class InferenceEngine:
 
         Returns True on success, False on failure.
         """
-        target = model_path or (_SAVED / "advanced_oos.pkl")
+        target = model_path or (_saved("advanced_oos.pkl"))
         if not target.exists():
             logger.error("reload_model: path does not exist: %s", target)
             return False
