@@ -37,14 +37,25 @@ def _make_manager(server_key: str = ""):
 
 
 class TestLogOnlyMode:
+    """Log-only mode: FCM is not configured, so nothing is delivered.
+
+    These assertions used to require ``result is True`` — a notification that
+    reached no device reporting success (F219). All three Firebase variables are
+    blank in .env.example, so that was the default state of every fresh
+    deployment, and callers could not distinguish "delivered" from "logged".
+
+    Log mode still logs; that observability is why the branch exists. What
+    changed is that it no longer claims to have sent anything.
+    """
+
     def test_fcm_disabled_without_key(self):
         mgr = _make_manager(server_key="")
         assert mgr.fcm_enabled is False
 
-    def test_send_returns_true_in_log_mode(self, capsys):
+    def test_send_does_not_claim_delivery_in_log_mode(self, capsys):
         mgr = _make_manager(server_key="")
         result = mgr.send_notification("user1", "Test", "Body")
-        assert result is True
+        assert result is False, "a notification that reached no device reported success"
 
     def test_log_mode_prints_to_stdout(self, capsys):
         mgr = _make_manager(server_key="")
@@ -56,24 +67,24 @@ class TestLogOnlyMode:
     def test_send_new_signal_log_mode(self, capsys):
         mgr = _make_manager(server_key="")
         result = mgr.send_new_signal("u1", "XAUUSD", "BUY", 82.5)
-        assert result is True
+        assert result is False
         out = capsys.readouterr().out
         assert "XAUUSD" in out
 
     def test_send_drawdown_warning_log_mode(self, capsys):
         mgr = _make_manager(server_key="")
         result = mgr.send_drawdown_warning("u1", drawdown_pct=8.5, limit_pct=10.0)
-        assert result is True
+        assert result is False
 
     def test_send_trade_filled_log_mode(self, capsys):
         mgr = _make_manager(server_key="")
         result = mgr.send_trade_filled("u1", "XAUUSD", "buy", 2050.0, 0.1)
-        assert result is True
+        assert result is False
 
     def test_send_challenge_warning_log_mode(self, capsys):
         mgr = _make_manager(server_key="")
         result = mgr.send_challenge_warning("u1", "daily_loss", 4.5, 5.0)
-        assert result is True
+        assert result is False
 
 
 # ── Device token management ───────────────────────────────────────────────────
@@ -153,14 +164,19 @@ class TestFCMHttpCall:
 
         assert result is False
 
-    def test_no_tokens_returns_true_without_http_call(self):
-        """No registered tokens → log-only path, no HTTP call."""
+    def test_no_tokens_makes_no_http_call_and_claims_nothing(self):
+        """No registered tokens → nothing is sent, and nothing is claimed.
+
+        Named ``..._returns_true_without_http_call`` before, which stated F219
+        as the requirement: no HTTP call was made and the caller was told the
+        notification had been delivered.
+        """
         mgr = _make_manager(server_key="fake-key")
         # user has no tokens registered
         with patch("urllib.request.urlopen") as mock_open:
             result = mgr.send_notification("user-no-tokens", "T", "B")
         mock_open.assert_not_called()
-        assert result is True
+        assert result is False
 
 
 # ── Confidence threshold ──────────────────────────────────────────────────────

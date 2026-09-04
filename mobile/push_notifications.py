@@ -176,7 +176,26 @@ class PushNotificationManager:
             # (pytest's capsys only captures direct sys.stdout writes).
             print(f"[FCM-LOG] {user_id} -> {title}: {body}")
             logger.info("[FCM-LOG] %s -> %s: %s", user_id, title, body)
-            return True
+
+            # Returns False. This used to return True, so every push on a fresh
+            # deployment -- all three Firebase variables are blank in
+            # .env.example -- reported success and reached no device (F219). The
+            # callers cannot distinguish "delivered" from "logged", so the return
+            # value has to.
+            #
+            # The two no-send cases are logged differently on purpose. FCM
+            # switched off is the expected state of a dev box and warning per
+            # notification would be noise. FCM configured while this user has no
+            # device token is a real gap: somebody enabled notifications and will
+            # not receive any.
+            if self.fcm_enabled and not tokens:
+                logger.warning(
+                    "Push not delivered to %s: no device token registered. FCM is "
+                    "configured, so this user expects notifications and will not "
+                    "receive them.",
+                    user_id,
+                )
+            return False
 
         str_data = {str(k): str(v) for k, v in (data or {}).items()}
 
