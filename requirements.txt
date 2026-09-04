@@ -108,7 +108,7 @@ prometheus-client>=0.19.0
 structlog>=24.0.0
 
 # ── Payments ──────────────────────────────────────────────────────────────────
-stripe>=7.0.0
+stripe>=15.5.1
 
 # ── Visualisation ─────────────────────────────────────────────────────────────
 plotly>=5.18.0
@@ -176,7 +176,7 @@ circuitbreaker>=2.0.0
 # quickfix requires a C compiler and the quickfix C++ library headers.
 # On Ubuntu/Debian: sudo apt-get install libquickfix-dev
 # On macOS:         brew install quickfix
-quickfix==1.15.1; sys_platform != "win32"
+quickfix==1.16.0; sys_platform != "win32"
 # pyfixmsg/simplefix removed — not available on PyPI for Python 3.12; FIX adapter uses quickfix or stub
 simplefix>=1.0.1
 
