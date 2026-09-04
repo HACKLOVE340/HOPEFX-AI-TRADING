@@ -135,8 +135,19 @@ RUNTIME_PATHS: set[str] = {
 # Patches written to fixes:approved must be signed with this key so that a
 # compromised Redis instance cannot inject arbitrary code.  Set
 # HEAL_PATCH_SIGNING_KEY in the environment (min 32 bytes recommended).
-# If unset, signing is skipped and a warning is emitted on every drain cycle.
+# If unset, the patch queue is REFUSED — see _patch_entry_is_trusted. It used to
+# be accepted with a warning, and this variable was set in no shipped
+# configuration anywhere in the repository, so the control was on nowhere (F130).
 _PATCH_SIGNING_KEY: bytes = os.getenv("HEAL_PATCH_SIGNING_KEY", "").encode()
+
+# Explicit development opt-out. Without a signing key the patch queue is
+# refused; this is the only way through, and it is deliberately not the default
+# — the control it disables exists to stop Redis injecting executable code.
+_ALLOW_UNSIGNED_PATCHES: bool = os.getenv("HEAL_ALLOW_UNSIGNED_PATCHES", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Dangerous AST node types / call patterns that must never appear in a patch.
 # This is a defence-in-depth check on top of the compile() gate.
@@ -335,11 +346,27 @@ def _patch_entry_is_trusted(raw: str, fix: dict[str, Any]) -> bool:
     is logged so operators know signing is disabled.
     """
     if not _PATCH_SIGNING_KEY:
-        logger.warning(
-            "SelfHealer: HEAL_PATCH_SIGNING_KEY not set — patch queue trust "
-            "verification disabled.  Set this env var to prevent Redis injection."
+        if _ALLOW_UNSIGNED_PATCHES:
+            # A deliberate act, for local development. Loud every time, because
+            # a queue anyone can write to is writing Python onto this machine.
+            logger.warning(
+                "SelfHealer: accepting an UNSIGNED patch because "
+                "HEAL_ALLOW_UNSIGNED_PATCHES is set. Anything able to write to the "
+                "Redis patch queue can execute code here. Never set this in production."
+            )
+            return True
+        # Fail closed. This returned True — accepting every entry — and
+        # HEAL_PATCH_SIGNING_KEY was set in no shipped configuration anywhere in
+        # the repository, so there was no deployment in which the control was
+        # on. The threat is the one this module's own comment names: "a
+        # compromised Redis instance cannot inject arbitrary code" (F130).
+        logger.error(
+            "SelfHealer: REJECTING patch — HEAL_PATCH_SIGNING_KEY is not set, so the "
+            "entry cannot be verified. Set it (min 32 bytes) to enable the patch queue, "
+            "or set HEAL_ALLOW_UNSIGNED_PATCHES=true to accept unsigned patches in "
+            "development."
         )
-        return True
+        return False
     sig = fix.get("_sig", "")
     if not sig:
         logger.warning("SelfHealer: patch entry has no _sig field — rejecting")
@@ -1899,10 +1926,19 @@ Return the complete fixed file:"""
             )
             return success
 
-        except FileNotFoundError:
-            # python -m pytest failed — python itself not on PATH (shouldn't happen)
-            self._log("warning", "SelfHealer: python not found on PATH — skipping test run")
-            return True
+        except FileNotFoundError as exc:
+            # This returned True: "could not run the tests" recorded as "the
+            # tests passed", on the gate that admits a patch to the running
+            # system and on the check that validates it afterwards. The safe
+            # value for "I could not verify" is False — which is what the
+            # timeout and generic-exception branches already return (F184).
+            self._log(
+                "error",
+                "SelfHealer: could not start the test run (%s) — treating as FAILED, "
+                "no patch will be applied or validated on this cycle",
+                exc,
+            )
+            return False
         except Exception as exc:
             logger.warning("SelfHealer: test run error: %s", exc)
             return False
