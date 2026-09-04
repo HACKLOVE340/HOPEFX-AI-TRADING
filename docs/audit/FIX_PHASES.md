@@ -97,9 +97,9 @@ plans by the time we reached them.
 | ~~1~~ | ~~**E — Risk gates**~~ · **DONE** | The only phase where the defects moved money on a path running today | `plans/2026-09-04-phase-e-risk-gates.md` |
 | ~~2~~ | ~~**C — Controls that report success without acting**~~ · **DONE** | The signature defect; nothing here moves money, but it is why nobody noticed E | `plans/2026-09-04-phase-c-honest-controls.md` |
 | ~~3~~ | ~~**G — Correctness bugs**~~ · **DONE** | Isolated, low blast radius, individually provable. Cheap now that C has made failures visible | `plans/2026-09-04-phase-g-correctness.md` |
-| **1** | **D — AI Core prerequisites** · NEXT | Blocks the AI Core build. Not urgent until that starts | not written yet |
-| 2 | H — Config contradicting code | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
-| 3 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
+| ~~4~~ | ~~**D — AI Core prerequisites**~~ · **DONE** | Blocks the AI Core build. Not urgent until that starts | `plans/2026-09-04-phase-d-ai-core-prereqs.md` |
+| **1** | **H — Config contradicting code** · NEXT | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
+| 2 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
 
 **E before C** is the call worth defending. C contains the most *embarrassing*
 findings — a coverage report printing `FULL COVERAGE ✅` from a hardcoded `True`.
@@ -186,14 +186,23 @@ That is a project, not a fix; the interim is a report that no longer claims to
 have run them. Wiring `notifications.manager.EmailChannel` into the lightweight
 manager is also deferred — it pulls DB suppression lookups into the alert path.
 
-## Phase D — AI Core prerequisites
-Do these immediately before AI Core work, not after.
+## Phase D — AI Core prerequisites · DONE
+Done before AI Core work, not after: an autonomous component inherits every one
+of these.
 
-* **F139** — cross-pod kill-switch propagation denied (no RBAC in
-  `deployments/k8s/`). An AI kill switch inherits this.
-* **F130** — self-healer patch signing off, key set nowhere.
-* **F184** — `_run_tests()` returns `True` on `FileNotFoundError`: "could not
-  test" recorded as "tests passed" on the gate that admits a patch.
+Full plan: `docs/audit/plans/2026-09-04-phase-d-ai-core-prereqs.md`
+
+| Finding | What was done |
+|---|---|
+| **F139** | `deployments/k8s/` shipped no RBAC and no `serviceAccountName`, so pods ran as `default` and every get/patch on the kill-switch ConfigMap was denied — layer 5 gone. It now ships `kill-switch-rbac.yaml` and `kill-switch-configmap.yaml`, mirroring `k8s/` and scoped identically: one named ConfigMap, verbs get and patch. |
+| **F130** | The patch queue accepted every entry when no signing key was set, and the key was settable from no shipped configuration at all. It now fails closed, `HEAL_ALLOW_UNSIGNED_PATCHES` is the deliberate development escape that cannot override a key that IS set, and both env examples carry the key with a generation command. |
+| **F184** | `_run_tests()` returned `True` on `FileNotFoundError` — "could not test" as "tests passed", on the gate that admits a patch and the check that validates it. Now returns `False` and logs at ERROR, matching the timeout branch. |
+
+Found while doing it: **F258** — layer 2 of the kill switch never worked on
+*either* manifest set, not merely across a reschedule: both run
+`readOnlyRootFilesystem: true` with no volume covering `/app`, so the flag write
+raised `OSError` into a WARNING, and no environment override existed to move it.
+And **F259** — a third `importlib.reload` foot-gun, this one in a test of mine.
 
 ## Phase F — Measurement integrity
 * **F221** — the coverage gate measures **34%** of the application and omits

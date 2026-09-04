@@ -7580,3 +7580,63 @@ now enforced rather than asserted.
 The lesson the audit keeps paying for: **the shape is not something other people
 do.** It recurred in my own tooling within an hour of my documenting it, which
 is the strongest argument available for the skill existing at all.
+
+## F258 — the kill switch's file layer never worked, on either manifest set · extends F139
+
+F139 recorded that layer 2 "does not survive a pod replacement", because
+`_DEFAULT_FLAG_FILE` resolves to `/app/kill_switch.flag` inside the image layer.
+Reading the manifests to fix it turned up something stronger:
+
+**Both** shipped deployments set `readOnlyRootFilesystem: true`, and neither
+mounted a volume covering `/app`. So the write raised `OSError` on every
+activation, into:
+
+```python
+except OSError as exc:
+    logger.warning("Could not write kill switch flag file: %s", exc)
+```
+
+The file layer did not degrade on reschedule — it never functioned at all, in
+any Kubernetes deployment, and said so once at WARNING.
+
+`readOnlyRootFilesystem: true` is correct and stays. What was missing is
+somewhere to write: an `emptyDir` at `/app/state` on both sets, and a
+`KILL_SWITCH_FLAG_FILE` override so the path can point at it. **There was no
+such override** — `flag_file=` was passed by exactly one test script in the
+whole repository, so even an operator who diagnosed this had no way to fix it
+without a code change.
+
+`emptyDir` is the honest choice and the manifests say why: it carries the flag
+across a process restart inside the container, which is what layer 2 is for.
+Layers 4 (Redis latch) and 5 (ConfigMap) are what carry a halt across a pod
+replacement — which is the argument for all three existing, and the reason F139
+mattered.
+
+A failed write is now an ERROR naming the lost layer. Activation still succeeds:
+the in-memory layer has already halted the process, and a control of last resort
+must not decline to fire because it could not write a file.
+
+Twelve manifest-reading tests now cover both sets. They parse YAML, need no
+cluster, and would have caught the original gap on the commit that introduced
+it.
+
+## F259 — the third `importlib.reload` foot-gun in this audit · LOW
+
+Recorded because it has now cost time three times, in three different files.
+
+`tests/unit/test_kill_switch_layers_survive_deployment.py` reloaded
+`kill_switch` to pick up an environment variable. The reload replaced the
+module's `KillSwitch` class object and its module-level singleton, and three
+unrelated tests asserting singleton identity —
+`test_app_uses_the_module_singleton`, `test_router_and_gate_share_one_instance`,
+`test_singleton_keeps_the_event_bus_wiring` — failed for the rest of the
+session. Each passed when run alone.
+
+The reload was unnecessary: the fix resolves the path per construction, so
+setting the variable is enough. The rule worth keeping: **`importlib.reload` on
+a module that owns a singleton breaks identity for everything downstream.**
+Prefer a function that reads the environment at call time; where a reload is
+genuinely required, restore the module in a fixture teardown.
+
+Related: F245 (a package shadowing its own submodule with an instance defeats
+`monkeypatch`) and F243 (state surviving between tests through Redis).
