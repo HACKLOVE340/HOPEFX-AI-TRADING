@@ -13,6 +13,11 @@ spec:
       labels:
         app: hopefx-api
     spec:
+      # Named so the kill-switch RoleBinding actually reaches this pod. Without
+      # it the pod runs as the namespace `default` ServiceAccount, which the
+      # binding does not name, and layer 5 of the kill switch is denied by RBAC
+      # (F139). See kill-switch-rbac.yaml.
+      serviceAccountName: hopefx-api
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -30,6 +35,12 @@ spec:
             name: hopefx-config
         - secretRef:
             name: hopefx-secrets
+        env:
+        # The flag file defaults to /app/kill_switch.flag, inside the image
+        # layer. With readOnlyRootFilesystem below, that write raises and the
+        # file layer of the kill switch never works. Point it at a volume.
+        - name: KILL_SWITCH_FLAG_FILE
+          value: /app/state/kill_switch.flag
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -60,3 +71,17 @@ spec:
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5
+        volumeMounts:
+        - name: kill-switch-state
+          mountPath: /app/state
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      # emptyDir, not a PVC: this survives a process restart inside the
+      # container, which is what the file layer is for. It does NOT survive a
+      # pod replacement — layers 4 (Redis latch) and 5 (ConfigMap) are what
+      # carry the halt across that, which is why all three must be present.
+      - name: kill-switch-state
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}

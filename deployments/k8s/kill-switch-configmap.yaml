@@ -1,0 +1,31 @@
+# deployments/k8s/kill-switch-configmap.yaml
+# Kill switch ConfigMap — cross-pod propagation fallback when Redis is unreachable.
+#
+# Layer 5 of the kill switch's five activation layers. When a breach fires and
+# Redis (layer 4) is unreachable, the detecting pod patches this ConfigMap and
+# every other pod picks the halt up on its next poll (K8S_KS_POLL_INTERVAL_S,
+# default 5s). Without this object the watcher has nothing to read or patch.
+#
+# This directory shipped without it, and without the RBAC that makes it
+# reachable — see kill-switch-rbac.yaml and F139.
+#
+# Reset procedure, after the event is resolved:
+#   kubectl patch configmap hopefx-kill-switch -n hopefx \
+#     --patch '{"data":{"kill_switch_active":"false","kill_switch_reason":"","kill_switch_timestamp":""}}'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopefx-kill-switch
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/part-of: hopefx-platform
+    app.kubernetes.io/component: kill-switch
+  annotations:
+    description: "Kill switch state for cross-pod propagation fallback"
+data:
+  # kill_switch_active: set to "true" by any pod that detects a breach when
+  # Redis is unavailable. All pods poll this and halt trading.
+  kill_switch_active: "false"
+  kill_switch_reason: ""
+  kill_switch_timestamp: ""

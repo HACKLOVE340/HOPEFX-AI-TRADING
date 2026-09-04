@@ -75,7 +75,22 @@ except ImportError:  # pydantic not installed (e.g. minimal test env)
 # --------------------------------------------------------------------------- #
 # Default path for the manual file flag                                        #
 # --------------------------------------------------------------------------- #
-_DEFAULT_FLAG_FILE = Path(__file__).parent / "kill_switch.flag"
+# Overridable, because the default resolves inside the image layer
+# (/app/kill_switch.flag) and every shipped Kubernetes deployment runs with
+# `readOnlyRootFilesystem: true`. There the write raises OSError, so the file
+# layer of a five-layer control never worked at all — and nothing in the
+# repository could move it, since `flag_file=` was set only by a test script
+# (F139). Point this at a persistent volume in production; the manifests do.
+_FLAG_FILE_ENV = "KILL_SWITCH_FLAG_FILE"
+
+
+def _default_flag_file() -> Path:
+    """Resolved per call, so the environment can be set before construction."""
+    override = os.environ.get(_FLAG_FILE_ENV, "").strip()
+    return Path(override) if override else Path(__file__).parent / "kill_switch.flag"
+
+
+_DEFAULT_FLAG_FILE = _default_flag_file()
 
 
 class KillSwitch:
@@ -103,7 +118,7 @@ class KillSwitch:
         event_bus=None,
         deactivation_token: str | None = None,
     ) -> None:
-        self._flag_file: Path = flag_file or _DEFAULT_FLAG_FILE
+        self._flag_file: Path = flag_file or _default_flag_file()
         # JSON state file sits next to the flag file and survives restarts.
         self._state_file: Path = self._flag_file.with_suffix(".state.json")
         self._poll_interval: float = poll_interval_sec
@@ -587,11 +602,24 @@ class KillSwitch:
         if self._event_bus is not None:
             self._publish_event(reason)
 
-        # Write the flag file so that sibling processes can also detect it
+        # Write the flag file so that sibling processes can also detect it.
+        # A failure here does not stop the activation — the in-memory layer has
+        # already halted this process — but it does mean one of the five
+        # independent layers is gone, and cross-process detection with it. That
+        # is an operator event on the control of last resort, not the WARNING
+        # it used to be (F139).
         try:
+            self._flag_file.parent.mkdir(parents=True, exist_ok=True)
             self._flag_file.write_text(f"activated_at={self._activated_at.isoformat()}\nreason={reason}\n")
         except OSError as exc:
-            logger.warning("Could not write kill switch flag file: %s", exc)
+            logger.error(
+                "KILL SWITCH FLAG FILE NOT WRITTEN (%s): %s. This process is halted, but sibling "
+                "processes cannot detect the halt through the file layer. Set %s to a writable "
+                "volume.",
+                self._flag_file,
+                exc,
+                _FLAG_FILE_ENV,
+            )
 
         # Persist state to JSON so the next process restart can restore it.
         self._persist_state()
