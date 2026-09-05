@@ -78,7 +78,25 @@ jobs:
           else
             echo "SAFETY_API_KEY not set — using pip-audit as fallback"
             pip-audit -r requirements.txt --desc --no-deps \
-              --format json -o safety-report.json
+              --format json -o safety-report.json || true
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("safety-report.json").read_text())
+          fixable = [
+              vulnerability
+              for dependency in report.get("dependencies", [])
+              for vulnerability in dependency.get("vulns", [])
+              if vulnerability.get("fix_versions")
+          ]
+          if fixable:
+              print(f"BLOCKED: {len(fixable)} vulnerability(s) have a published fix")
+              for vulnerability in fixable:
+                  print(f"  {vulnerability['id']}: {vulnerability.get('description', '')[:120]}")
+              raise SystemExit(1)
+          print("pip-audit: no fixable CVEs found")
+          PY
           fi
         env:
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
