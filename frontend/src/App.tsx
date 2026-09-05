@@ -40,6 +40,7 @@ import { usePlan } from './hooks/usePlan';
 import { useBootstrapData } from './hooks/useOrchestratorData';
 import { getCsrfToken } from './hooks/useApi';
 import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
+import { Analytics } from '@vercel/analytics/react';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
@@ -288,7 +289,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
   }
 }
 
-// ── No-live-feed banner ───────────────────────────────────────────────────────
+// ── No-live-feed banner ───────────���─────────────────���─────────────────────────
 const NoLiveFeedBanner: React.FC = () => {
   const status       = useStore((s) => s.wsStatus);
   const noLiveFeed   = useStore((s) => s.noLiveFeed);
@@ -707,6 +708,7 @@ const App: React.FC = () => (
             </Suspense>
           </ErrorBoundary>
         </BrowserRouter>
+        <Analytics />
       </ConfirmDialogProvider>
     </ToastProvider>
   </QueryClientProvider>

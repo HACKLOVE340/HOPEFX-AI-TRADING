@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { Analytics } from '@vercel/analytics/react'
 
 // ── Core pages ────────────────────────────────────────────────────────────────
 import { Dashboard }        from './pages/Dashboard'
@@ -71,6 +72,7 @@ function App() {
 
   return (
     <ErrorBoundary label="App">
+      <Analytics />
       <Routes>
         {/* ── Public full-screen pages ───────────────────────────────────── */}
         <Route path="/"           element={<LandingPage />} />
