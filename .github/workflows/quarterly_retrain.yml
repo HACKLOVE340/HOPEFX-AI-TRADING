@@ -9,8 +9,8 @@
 #   2. Full 50-year walk-forward retrain (8-year OOS, 6 folds)
 #   3. Sharpe gate validation      — blocks promotion if N < 600 or gate fails
 #   4. Model integrity check       — ml/verify_model.py
-#   5. Registry update             — bumps active_version in registry.json
-#   6. Artefact commit             — commits model metadata back to branch
+#   5. Registry validation          — verifies metadata without serving it
+#   6. Review artifact              — uploads outputs for explicit promotion
 #   7. Failure notification        — opens a GitHub issue on any step failure
 #
 # Secrets required
@@ -48,10 +48,10 @@ env:
   PYTHONPATH: .
   PYTHONUNBUFFERED: "1"
 
-# Least-privilege token. The retrain commits model metadata back to the branch
-# (contents: write) and opens a GitHub issue on failure (issues: write).
+# Least-privilege token. Retraining uploads review artifacts only and opens
+# a GitHub issue on failure.
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 jobs:
@@ -211,14 +211,13 @@ jobs:
     timeout-minutes: 180
 
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
