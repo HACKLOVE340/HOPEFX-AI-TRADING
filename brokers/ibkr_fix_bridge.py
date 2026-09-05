@@ -215,6 +215,12 @@ class IBKRFIXBridge:
             logger.warning("IBKRFIXBridge.start() called while already started — ignored.")
             return
 
+        if os.getenv("IBKR_FIX_ALLOW_START", "false").lower() not in {"1", "true", "yes"}:
+            raise RuntimeError(
+                "IBKR FIX startup is disabled by default; set IBKR_FIX_ALLOW_START=true "
+                "only after broker credentials and gateway connectivity are verified",
+            )
+
         cfg_content = self._cfg.generate_quickfix_cfg()
 
         # Write to temp file — FIXAdapter reads from filesystem
