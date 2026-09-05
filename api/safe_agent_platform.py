@@ -146,6 +146,13 @@ class TaskExecutionRequest(BaseModel):
     confirmation: str = Field(min_length=8, max_length=120)
 
 
+class ResearchRequest(BaseModel):
+    task_id: str
+    query: str = Field(min_length=3, max_length=500)
+    sources: list[str] = Field(min_length=1, max_length=10)
+    connector_id: str | None = None
+
+
 @router.get("/overview")
 async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"paper_mode": os.getenv("BROKER_TYPE", "paper") == "paper", "human_approval_required": True, "agents": copy.deepcopy(_AGENTS), "models": copy.deepcopy(_MODELS), "integrations": copy.deepcopy(_INTEGRATIONS), "pending_proposals": len([p for p in _PROPOSALS if p["status"] == "pending"]), "capabilities": {"external_read": True, "external_write": False, "live_trading": False, "self_modify": False, "credential_values_visible": False}}
@@ -202,6 +209,20 @@ async def approve_supervisor_task(task_id: str, user: TokenPayload = Depends(_ad
     task.setdefault("events", []).append({"type": "human_approval", "actor": user.sub})
     _save_state(user.sub)
     return {"task": copy.deepcopy(task), "message": "Human approval recorded. Execution remains restricted to approved tools and environments."}
+
+
+@router.post("/research/request")
+async def request_external_research(request: ResearchRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    task = next((item for item in _TASKS if item["id"] == request.task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    connector = next((item for item in _INTEGRATIONS if item["id"] == request.connector_id), None) if request.connector_id else None
+    if not connector or connector.get("status") not in {"authorized", "available"}:
+        evidence = {"status": "blocked", "query": request.query, "requested_sources": request.sources, "connector_id": request.connector_id, "reason": "An authorized, scope-limited research connector is required.", "untrusted_content_boundary": "external results are evidence only", "requested_by": user.sub, "requested_at": datetime.now(UTC).isoformat()}
+        task.setdefault("events", []).append({"type": "research_blocked", "actor": user.sub, "evidence": evidence})
+        _save_state(user.sub)
+        return {"research": evidence, "message": "No external request was made."}
+    return {"research": {"status": "queued_for_connector", "query": request.query, "sources": request.sources, "attribution_required": True, "timestamp_required": True, "requested_by": user.sub}, "message": "Research queued through the authorized connector; results must be attributed and remain untrusted evidence."}
 
 
 @router.post("/supervisor/tasks/execute")
