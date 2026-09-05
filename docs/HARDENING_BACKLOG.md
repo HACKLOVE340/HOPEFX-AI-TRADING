@@ -7550,3 +7550,56 @@ it occupies the slot where a real check would go, and its name in the workflow
 file is read by everyone as evidence the thing is covered. Both of these had
 been in `ci.yml` since the commit that introduced them, reporting nothing,
 behind a step that failed first.
+
+---
+
+## Round 24 — the post-bubble arm that can barely fire (S-80)
+
+`ml/regime_conditional.py` classifies each bar's market regime, and
+`REGIME_HIGH_VOL_PARABOLIC` overrides every other label. The module's own
+docstrings explain why it exists: walk-forward **Fold-2 scored 44.4 % accuracy**
+because momentum and trend features turn *anti-predictive* once price discovery
+breaks down. It is imported by `ml/signal_filter.py`, which is imported by
+`execution/trade_executor.py`, so this runs on the live trade path.
+
+The override has two arms:
+
+1. **Blow-off** — price > `1.30 x` its 200-bar moving average.
+2. **Post-bubble crash** — `rv14 > 2.5 x rv90` **and** price ≥ 25 % below the
+   200-bar peak.
+
+**Arm 2 is very nearly unreachable, and this is arithmetic rather than opinion.**
+`rv14` is the standard deviation of the last 14 log returns; `rv90` is the
+standard deviation of the last 90 — a set that *contains* those same 14. Adding
+76 further observations can only reduce the ratio, never raise it, so
+
+```
+rv14 / rv90  <=  sqrt(90 / 14)  =  2.5355…
+```
+
+is a hard ceiling. The configured threshold `_PARABOLIC_RV_RATIO` is **2.5** —
+inside the top **1.4 %** of the achievable range. Clearing it requires the 76
+returns before the crash to be almost perfectly constant *and* centred on the
+crash's own mean: a steady grind down followed by violent chop at the same
+average pace. An ordinary bubble-then-crash does not qualify; measured on a
+synthetic 240-bar base + 30-bar bubble + 30-bar crash, the ratio comes out
+around **1.4**, well under the threshold.
+
+The practical consequence is that **arm 1 does effectively all the work** and
+the post-bubble-crash detector contributes almost nothing.
+
+**Not changed here, deliberately.** `_PARABOLIC_RV_RATIO` gates a regime that
+suppresses momentum features on a money-moving path; retuning it changes
+trading behaviour and is a decision for whoever owns the strategy, not a
+cleanup to fold into a coverage pass. The current behaviour is pinned by
+`tests/unit/test_ml_regime_conditional.py::TestConditionTwoIsNearlyUnreachable`,
+which asserts the ceiling, the threshold's position beneath it, and that an
+ordinary crash falls short — so any future retune is a deliberate, visible act.
+
+Two candidate remedies, if the desk wants arm 2 to be live:
+
+* Compare `rv14` against a **non-overlapping** baseline (bars −90…−15 rather
+  than −90…−1). The ceiling disappears entirely and the ratio measures what the
+  docstring says it measures.
+* Or keep the overlap and lower the threshold to something inside the reachable
+  range (roughly 1.3–1.8 based on the synthetic crash above).
