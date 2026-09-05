@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from ml.research_validation_gate import evaluate_research_validation
 from core.ai_contracts import (
     DecisionEvidence,
     HumanApproval,
@@ -13,7 +14,16 @@ from core.ai_contracts import (
 
 
 def candidate(validation: ValidationReport | None = None) -> ResearchCandidate:
-    return ResearchCandidate(
+    """Build a candidate, binding real evidence when a validation report is given.
+
+    This fixture used to set `research_validation_hash="research-evidence-sha"`
+    directly. That literal was the whole of D2: the promotion gate checked only
+    that the string was non-empty, while its reason code claimed replay,
+    walk-forward, leakage, slippage and model quality had all passed — and the
+    module that computes them had no production caller. The hash is now derived
+    from evidence that actually passed, via the only supported writer.
+    """
+    base = ResearchCandidate(
         candidate_id="candidate-1",
         name="test_strategy",
         source_hash="source-hash",
@@ -21,7 +31,17 @@ def candidate(validation: ValidationReport | None = None) -> ResearchCandidate:
         prompt_hash="prompt-hash",
         data_scope="research-fixture",
         validation=validation,
-        research_validation_hash="research-evidence-sha" if validation is not None else "",
+    )
+    if validation is None:
+        return base
+    return base.attach_research_validation(
+        evaluate_research_validation(
+            replay_ok=True,
+            walk_forward_ok=True,
+            leakage_check_ok=True,
+            slippage_costs_ok=True,
+            model_quality_ok=True,
+        )
     )
 
 

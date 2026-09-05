@@ -28,7 +28,22 @@ from pydantic import BaseModel, Field
 from api.auth import TokenPayload, get_current_user, require_role
 from core.ai_quota import ai_quota
 
+from strategies.strategy_execution_boundary import ExecutionScope
+
 logger = logging.getLogger(__name__)
+
+
+def _activation_scope() -> ExecutionScope:
+    """The scope this deployment actually activates at.
+
+    Derived from BROKER_TYPE rather than defaulted. The gate this feeds
+    (`StrategyExecutionBoundary`) previously took `ExecutionScope.RESEARCH` as
+    its default and short-circuited every check on it, so activation happened
+    under a scope no caller had chosen. Choosing here means the claim matches
+    what the registry then does -- it sets StrategyState.ACTIVE either way.
+    """
+    return ExecutionScope.PAPER if os.getenv("BROKER_TYPE", "paper").strip().lower() == "paper" else ExecutionScope.LIVE
+
 
 router = APIRouter(prefix="/api/brain", tags=["AI Brain"])
 
@@ -298,7 +313,7 @@ async def deploy_strategy(
 
     # Phase 2: activate (atomic swap into the live active strategy set).
     try:
-        await registry.activate_strategy(version_id)
+        await registry.activate_strategy(scope=_activation_scope(), version_id=version_id)
     except Exception as exc:
         # Registered/validated but activation failed — be honest about the
         # partial state instead of reporting a successful deploy.

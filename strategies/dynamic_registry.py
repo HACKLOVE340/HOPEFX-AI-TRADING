@@ -368,7 +368,8 @@ class DynamicStrategyRegistry:
     async def activate_strategy(
         self,
         version_id: str,
-        scope: ExecutionScope = ExecutionScope.RESEARCH,
+        *,
+        scope: ExecutionScope,
         approval: HumanApproval | None = None,
     ) -> None:
         """

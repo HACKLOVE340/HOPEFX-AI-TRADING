@@ -132,7 +132,58 @@ class ResearchCandidate:
     lifecycle: StrategyLifecycle = StrategyLifecycle.RESEARCH
     validation: ValidationReport | None = None
     research_validation_hash: str = ""
+    research_evidence: Any = None
     human_approval: HumanApproval | None = None
+
+    def _research_evidence_is_verified(self) -> bool:
+        """True only when the hash is backed by evidence that actually passed.
+
+        The hash used to be a plain string any caller could set, and the module
+        that computes the real thing had no production caller, so `"x"`
+        satisfied a gate whose reason code claimed five validations had run.
+        A hash with no evidence behind it, or one that does not match the
+        evidence it claims to summarise, is refused.
+        """
+        if not self.research_validation_hash.strip():
+            return False
+        evidence = self.research_evidence
+        if evidence is None:
+            return False
+        if not getattr(evidence, "passed", False):
+            return False
+        return str(getattr(evidence, "evidence_hash", "")) == self.research_validation_hash
+
+    def attach_research_validation(self, evidence: Any) -> ResearchCandidate:
+        """Bind verified research evidence to this candidate.
+
+        `research_validation_hash` used to be a free string that any caller
+        could set, while the gate that would compute the real thing
+        (`ml.research_validation_gate.evaluate_research_validation`) had no
+        production caller at all. So the string "x" satisfied a check whose
+        reason code claimed replay, walk-forward, leakage, slippage and
+        model-quality had all passed. This is the only supported way to set it:
+        the hash comes from the evidence object, and failing evidence is
+        refused rather than recorded.
+        """
+        if not getattr(evidence, "passed", False):
+            reasons = ", ".join(getattr(evidence, "reason_codes", ()) or ("unknown",))
+            raise ValueError(f"research validation did not pass: {reasons}")
+        evidence_hash = getattr(evidence, "evidence_hash", "")
+        if not str(evidence_hash).strip():
+            raise ValueError("research validation evidence carries no hash")
+        return ResearchCandidate(
+            candidate_id=self.candidate_id,
+            name=self.name,
+            source_hash=self.source_hash,
+            skill_version=self.skill_version,
+            prompt_hash=self.prompt_hash,
+            data_scope=self.data_scope,
+            lifecycle=self.lifecycle,
+            validation=self.validation,
+            research_validation_hash=evidence_hash,
+            research_evidence=evidence,
+            human_approval=self.human_approval,
+        )
 
     def transition(self, target: StrategyLifecycle) -> ResearchCandidate:
         if target not in _ALLOWED_TRANSITIONS[self.lifecycle]:
@@ -148,7 +199,7 @@ class ResearchCandidate:
                 StrategyLifecycle.PAPER_PENDING,
                 StrategyLifecycle.LIVE_PENDING_APPROVAL,
             }
-            and not self.research_validation_hash.strip()
+            and not self._research_evidence_is_verified()
         ):
             raise ValueError("promotion requires replay and research validation evidence")
         if target == StrategyLifecycle.LIVE_APPROVED and (
@@ -165,6 +216,7 @@ class ResearchCandidate:
             lifecycle=target,
             validation=self.validation,
             research_validation_hash=self.research_validation_hash,
+            research_evidence=self.research_evidence,
             human_approval=self.human_approval,
         )
 

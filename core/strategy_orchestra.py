@@ -196,7 +196,8 @@ class StrategyOrchestra:
     def activate_ai_strategy(
         self,
         strategy_id: str,
-        scope: ExecutionScope = ExecutionScope.RESEARCH,
+        *,
+        scope: ExecutionScope,
         approval: HumanApproval | None = None,
     ) -> bool:
         """Activate an AI candidate only when its explicit boundary permits it."""

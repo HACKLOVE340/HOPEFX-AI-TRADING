@@ -35,15 +35,45 @@ class StrategyExecutionBoundary:
         candidate: ResearchCandidate,
         scope: ExecutionScope,
         approval: HumanApproval | None = None,
+        *,
+        research_only: bool = False,
     ) -> StrategyExecutionDecision:
+        """Decide whether `candidate` may execute at `scope`.
+
+        `ExecutionScope.RESEARCH` used to return allowed=True before any check,
+        and every caller reached this method with that scope by default -- so a
+        candidate with no validation, no evidence and no approval was waved
+        through, and the caller then set `StrategyState.ACTIVE`. The scope
+        argument described what the caller claimed, not what happened.
+
+        Research scope now permits research and nothing else: the caller must
+        affirm that no activation follows (`research_only=True`), and the
+        candidate must still be in the research lifecycle. A candidate already
+        promoted past research is not doing research.
+        """
         if scope is ExecutionScope.RESEARCH:
-            return StrategyExecutionDecision(True, scope, "RESEARCH_ALLOWED", "research execution is permitted")
+            if not research_only:
+                return StrategyExecutionDecision(
+                    False,
+                    scope,
+                    "RESEARCH_LIFECYCLE_REQUIRED",
+                    "research scope does not authorise activation; pass research_only=True "
+                    "for a run that activates nothing",
+                )
+            if candidate.lifecycle is not StrategyLifecycle.RESEARCH:
+                return StrategyExecutionDecision(
+                    False,
+                    scope,
+                    "RESEARCH_LIFECYCLE_REQUIRED",
+                    f"candidate is {candidate.lifecycle}, past research; it cannot run under research scope",
+                )
+            return StrategyExecutionDecision(True, scope, "RESEARCH_ALLOWED", "research-only execution is permitted")
 
         if candidate.validation is None or not candidate.validation.passed:
             return StrategyExecutionDecision(
                 False, scope, "VALIDATION_REQUIRED", "a passing validation report is required"
             )
-        if not candidate.research_validation_hash.strip():
+        if not candidate._research_evidence_is_verified():
             return StrategyExecutionDecision(
                 False,
                 scope,
