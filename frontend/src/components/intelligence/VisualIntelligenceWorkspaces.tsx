@@ -12,9 +12,30 @@ const Badge = ({ children, tone = 'muted' }: { children: React.ReactNode; tone?:
 export const HologramPanel: React.FC<{ degraded?: boolean }> = ({ degraded = false }) => {
   const [state, setState] = useState<'ready' | 'analyzing' | 'approval' | 'degraded'>('ready');
   const [readinessNote, setReadinessNote] = useState('Listening for safe operator requests.');
+  // "Analyze state" and "Explain decision" only called setState -- no request was
+  // made, so the panel narrated an analysis that never happened. One button that
+  // re-reads real readiness replaces two that described nothing.
+  const refreshReadiness = () => {
+    setState('analyzing');
+    api.get('/safe-platform/overview')
+      .then((response) => {
+        const capabilities = response.data?.capabilities ?? {};
+        setReadinessNote(
+          capabilities.live_trading === false
+            ? 'Supervisor is paper-safe. Consequential actions remain approval-gated.'
+            : 'Readiness reported, but live trading is not disabled on this deployment.',
+        );
+        setState('ready');
+      })
+      .catch(() => {
+        setReadinessNote('Safe platform readiness is unavailable; visual state is informational only.');
+        setState('degraded');
+      });
+  };
+
   useEffect(() => { if (degraded) return; let active = true; api.get('/safe-platform/overview').then((response) => { if (!active) return; const capabilities = response.data?.capabilities ?? {}; if (capabilities.live_trading === false) setReadinessNote('Supervisor is paper-safe. Consequential actions remain approval-gated.'); }).catch(() => { if (active) { setState('degraded'); setReadinessNote('Safe platform readiness is unavailable; visual state is informational only.'); } }); return () => { active = false; }; }, [degraded]);
   const status = degraded ? 'degraded' : state;
-  return <section aria-labelledby="hologram-title" style={{ ...panel, padding: 16, overflow: 'hidden', position: 'relative' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><div style={label}>Active visual intelligence</div><h2 id="hologram-title" style={{ margin: '5px 0', color: '#edf3fc', fontSize: 18 }}>AI Hologram</h2><p style={{ color: '#8b9ab1', fontSize: 11, margin: 0 }}>A readable system presence driven by readiness and agent state.</p></div><Badge tone={status === 'ready' ? 'green' : status === 'degraded' ? 'amber' : 'blue'}><CircleDot size={10} /> {status.toUpperCase()}</Badge></div><div className="ai-hologram-stage" aria-hidden="true"><div className="ai-hologram-ring ring-one" /><div className="ai-hologram-ring ring-two" /><div className="ai-hologram-core"><Sparkles size={28} /><span>{status === 'ready' ? 'READY' : status === 'analyzing' ? 'ANALYZING' : status === 'approval' ? 'REVIEW' : 'DEGRADED'}</span></div></div><div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#a9b7ca', fontSize: 11, minHeight: 26 }}>{status === 'ready' && <><CheckCircle2 size={14} color={colors.green} /> {readinessNote} No capital action is available from this surface.</>}{status === 'analyzing' && <><Eye size={14} color={colors.blue} /> Inspecting authoritative model, risk, and agent evidence.</>}{status === 'approval' && <><ShieldCheck size={14} color={colors.amber} /> Waiting for human approval before any permissioned workflow.</>}{status === 'degraded' && <><XCircle size={14} color={colors.amber} /> Visual state is available, but authoritative sources need attention.</>}</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 10 }}><button type="button" onClick={() => setState('analyzing')} style={buttonStyle('#162741')}>Analyze state</button><button type="button" onClick={() => setState('approval')} style={buttonStyle('#162741')}>Explain decision</button><button type="button" onClick={() => setState('ready')} style={buttonStyle('#111b2d')}>Reset visual</button></div></section>;
+  return <section aria-labelledby="hologram-title" style={{ ...panel, padding: 16, overflow: 'hidden', position: 'relative' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><div style={label}>Active visual intelligence</div><h2 id="hologram-title" style={{ margin: '5px 0', color: '#edf3fc', fontSize: 18 }}>AI Hologram</h2><p style={{ color: '#8b9ab1', fontSize: 11, margin: 0 }}>A readable system presence driven by readiness and agent state.</p></div><Badge tone={status === 'ready' ? 'green' : status === 'degraded' ? 'amber' : 'blue'}><CircleDot size={10} /> {status.toUpperCase()}</Badge></div><div className="ai-hologram-stage" aria-hidden="true"><div className="ai-hologram-ring ring-one" /><div className="ai-hologram-ring ring-two" /><div className="ai-hologram-core"><Sparkles size={28} /><span>{status === 'ready' ? 'READY' : status === 'analyzing' ? 'ANALYZING' : status === 'approval' ? 'REVIEW' : 'DEGRADED'}</span></div></div><div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#a9b7ca', fontSize: 11, minHeight: 26 }}>{status === 'ready' && <><CheckCircle2 size={14} color={colors.green} /> {readinessNote} No capital action is available from this surface.</>}{status === 'analyzing' && <><Eye size={14} color={colors.blue} /> Inspecting authoritative model, risk, and agent evidence.</>}{status === 'approval' && <><ShieldCheck size={14} color={colors.amber} /> Waiting for human approval before any permissioned workflow.</>}{status === 'degraded' && <><XCircle size={14} color={colors.amber} /> Visual state is available, but authoritative sources need attention.</>}</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 10 }}><button type="button" onClick={refreshReadiness} style={buttonStyle('#162741')}>Refresh readiness</button><button type="button" onClick={() => setState('ready')} style={buttonStyle('#111b2d')}>Reset visual</button></div></section>;
 };
 
 export const VisionScanner: React.FC = () => {
@@ -23,7 +44,34 @@ export const VisionScanner: React.FC = () => {
   useEffect(() => () => stop(), []);
   const start = async () => { if (!navigator.mediaDevices?.getUserMedia) { setStatus('denied'); return; } setStatus('requesting'); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); streamRef.current = stream; if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); } setStatus('ready'); } catch { setStatus('denied'); } };
   const capture = () => { if (!videoRef.current) return; const canvas = document.createElement('canvas'); canvas.width = videoRef.current.videoWidth || 640; canvas.height = videoRef.current.videoHeight || 360; canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height); setStatus('captured'); setResult('Frame captured in memory only. Nothing has been uploaded or persisted.'); };
-  const scan = async () => { setStatus('processing'); await new Promise((resolve) => window.setTimeout(resolve, 650)); if (status !== 'processing') return; setResult('Visual interpretation is ready for review. Provenance: camera frame, operator initiated, paper-safe, no trade action.'); setStatus('captured'); };
+  // Two defects lived here (audit D6). The result string was fabricated: the
+  // function slept 650ms and declared an interpretation ready, having analysed
+  // nothing. And it never ran -- `status` was captured by the closure at render
+  // time, so after setStatus('processing') the awaited guard still read the
+  // previous value and returned early, jamming the panel on "Processing" with a
+  // disabled button for ever.
+  //
+  // There is no vision analysis backend yet (AI Core plan, Task 13/18). The
+  // honest behaviour is to say so rather than to describe a reading nobody took.
+  const scan = async () => {
+    setStatus('processing');
+    try {
+      const response = await api.post('/safe-platform/vision/interpret', { source: 'camera_frame' });
+      const interpretation = response.data?.interpretation;
+      setResult(
+        interpretation
+          ? `${interpretation} Provenance: camera frame, operator initiated, paper-safe, no trade action.`
+          : 'The vision service returned no interpretation. Nothing is inferred from the frame.',
+      );
+    } catch {
+      setResult(
+        'A vision analysis service is not connected, so this frame has not been interpreted. ' +
+          'The captured image stays in memory and nothing has been uploaded.',
+      );
+    } finally {
+      setStatus('captured');
+    }
+  };
   return <section aria-labelledby="scanner-title" style={{ ...panel, padding: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><div style={label}>Permission-gated vision</div><h2 id="scanner-title" style={{ margin: '5px 0', color: '#edf3fc', fontSize: 18 }}>Camera Scanner</h2><p style={{ color: '#8b9ab1', fontSize: 11, margin: 0 }}>Scan a chart or incident surface for review. Camera frames stay in memory unless explicitly processed.</p></div><Badge tone={status === 'denied' ? 'amber' : status === 'ready' ? 'green' : 'muted'}><Camera size={11} /> {status.toUpperCase()}</Badge></div><div style={{ marginTop: 14, aspectRatio: '16 / 9', background: '#070d17', border: '1px solid #273752', borderRadius: 8, overflow: 'hidden', display: 'grid', placeItems: 'center', position: 'relative' }}>{status === 'idle' || status === 'denied' ? <div style={{ textAlign: 'center', color: '#70809a', padding: 20 }}><ScanLine size={26} /><div style={{ marginTop: 8 }}>{status === 'denied' ? 'Camera permission denied or unavailable.' : 'Camera is off until you explicitly start it.'}</div></div> : <video ref={videoRef} muted playsInline aria-label="Live camera preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}{status === 'ready' && <div style={{ position: 'absolute', inset: 12, border: '1px solid #42d39288', pointerEvents: 'none' }} />}</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 10 }}>{(status === 'idle' || status === 'denied') && <button type="button" onClick={start} style={buttonStyle('#162741')}><Play size={13} /> Start camera</button>}{status === 'ready' && <button type="button" onClick={capture} style={buttonStyle('#162741')}><Camera size={13} /> Capture frame</button>}{status === 'captured' && <><button type="button" onClick={scan} style={buttonStyle('#162741')}><Eye size={13} /> Scan captured frame</button><button type="button" onClick={start} style={buttonStyle('#111b2d')}><RotateCcw size={13} /> Retake</button></>}{status === 'processing' && <button type="button" disabled style={buttonStyle('#111b2d')}><Pause size={13} /> Processing</button>}{status !== 'idle' && <button type="button" onClick={stop} style={buttonStyle('#111b2d')}><StopCircle size={13} /> Stop camera</button>}</div>{result && <div role="status" style={{ marginTop: 10, padding: 10, borderRadius: 7, background: '#111b2d', color: '#a9b7ca', fontSize: 11, lineHeight: 1.5 }}>{result}</div>}<div style={{ marginTop: 10, color: '#70809a', fontSize: 10 }}>Safety boundary: scan results can explain or document a visual state, but cannot place, modify, or approve trades.</div></section>;
 };
 
