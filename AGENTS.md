@@ -44,7 +44,7 @@ docs/                   Documentation (archive/ holds superseded docs)
 |--------|-----|--------------------|
 | Backtesting | `backtesting/` | `backtest/` (re-exports shim) |
 | Strategies | `strategies/` | `strategy/` (live ML engine only) |
-| Data pipeline | `data_layer/` | `data/` (CSV files + old utilities) |
+| Data pipeline | `data_layer/` for market-data *access* | *(nothing — `data/` is live; see CLAUDE.md)* |
 | WebSocket | `api/ws_live.py` | `websocket/manager.py` (standalone server) |
 
 ---

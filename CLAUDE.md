@@ -33,15 +33,30 @@ Add new code to the **canonical** dir, never the legacy shim:
 |--------|-----------------|--------------------|
 | Backtesting | `backtesting/` | `backtest/` (re-export shim) |
 | Strategies | `strategies/` | `strategy/` (live ML engine only) |
-| Data pipeline | `data_layer/` | `data/` (CSV + old utilities) |
+| Data pipeline | `data_layer/` for market-data *access* | *(nothing — see the note below)* |
 
 WebSocket work goes in `api/ws_live.py`. The old standalone `websocket/`
 server is **deleted** — never recreate a top-level `websocket/` package: it
 shadows the `websocket-client` library for the whole project and silently
 disables the REST fallback in `market_data/mt5_live_feed.py` (audit S13-02a).
 
-Import data via the public surface only: `data_layer.orchestrator`,
-`data_layer.tick_store`, `data_layer.feeds.*`.
+Import market-data *access* via the public surface only:
+`data_layer.orchestrator`, `data_layer.tick_store`, `data_layer.feeds.*`.
+
+**`data/` is live runtime infrastructure.** These three docs used to describe it
+as legacy data files, which was wrong and actionable: it told contributors to put
+tick-feed and depth-of-market work in `data_layer/`, splitting one subsystem
+across two packages (F216). The measured reality:
+
+| Package | LOC | Production importers | What it is |
+|---|---:|---:|---|
+| `data_layer/` | 19,610 | 86 | Market-data **access**: orchestrator, tick store, feed adapters. The canonical public surface. |
+| `data/` | 6,259 | 20 | Live **streaming and serving**: `real_time_price_engine.py`, `scheduler.py`, `depth_of_market.py`, `tick_feed.py`, `time_and_sales.py`, `streaming.py`, `feeds/macro.py`. Constructed in `core/startup_factories.py`, mounts three HTTP routers via `core/router_registry.py`, and `ml/training.py` reads its macro feed. |
+| `market_data/` | 4,031 | 6 | Broker-side feeds, e.g. `mt5_live_feed.py`. |
+
+**The boundary between them is not documented anywhere, and this file does not
+invent one** (F217). Until it is agreed, extend the package a module already
+lives in rather than moving code between them, and say which you chose in the PR.
 
 ---
 

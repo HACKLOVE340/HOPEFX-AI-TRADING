@@ -14,7 +14,7 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 |--------|-----------|---------------|-------|
 | Backtesting | `backtesting/` | `backtest/` | `backtest/` re-exports from `backtesting/` |
 | Strategies | `strategies/` | `strategy/` | `strategy/` = live ML engine; `strategies/` = backtestable classes |
-| Data pipeline | `data_layer/` | `data/` | `data/` = CSV files + pre-`data_layer/` utilities |
+| Data pipeline | `data_layer/` (access) | — | `data/` is live streaming/serving (real-time price engine, scheduler, DOM, tick feed, time & sales), 20 production importers; `market_data/` is broker-side feeds. The boundary between the three is undocumented (F216/F217). |
 | WebSocket | `api/ws_live.py` | `websocket/manager.py` | `websocket/manager.py` = standalone server; FastAPI uses `api/ws_live.py` |
 
 ---

@@ -1,7 +1,21 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: hopefx-config
+  # Renamed from `hopefx-config`, which `k8s/k8s-configmap.yaml` also declares in
+  # this namespace. `kubectl apply` replaces `data` wholesale, so two files with
+  # one name meant whichever was applied last defined the safety posture for BOTH
+  # deployments — silently downgrading enforcement, deleting DRIFT_BLOCK and
+  # STALE_MODEL_BLOCK, and narrowing enforcement scope (F98/F178/F265).
+  #
+  # The two sets have genuinely different intents: `k8s/` runs full enforcement
+  # against a live broker, this one runs the documented staged rollout. Both are
+  # legitimate; neither should be able to overwrite the other. Separate names is
+  # what makes that true.
+  #
+  # MIGRATION: apply this file before the Deployment in this directory, or the
+  # pods will not start — they mount it by name. `kubectl apply -f deployments/k8s/`
+  # does both in one pass.
+  name: hopefx-config-staged
   namespace: hopefx
 data:
   APP_ENV: "production"
@@ -9,9 +23,34 @@ data:
   TRADING_MODE: "paper"
   DB_POOL_SIZE: "20"
   REDIS_SOCKET_TIMEOUT: "5"
+  # ── Safety posture ────────────────────────────────────────────────────────
+  # k8s/k8s-configmap.yaml declares a ConfigMap with THIS SAME NAME in THIS SAME
+  # NAMESPACE, and `kubectl apply` replaces `data` wholesale — so whichever file
+  # was applied last decides the safety posture for both deployments (F98).
+  #
+  # Every key below must therefore be stated explicitly and at a value no weaker
+  # than its sibling's. Absence is the dangerous half: a missing key falls back
+  # to a code default nobody reading this file can see, and DRIFT_BLOCK defaults
+  # to FALSE. Applying this file used to delete both ML safety blocks and
+  # downgrade enforcement, leaving the platform trading on drifted models while
+  # the sibling file's own comment called that combination CRITICAL.
+  #
+  # tests/unit/test_configmaps_do_not_contradict_on_safety.py fails if these
+  # drift apart again. Broker selection may legitimately differ between the two
+  # sets; the safety posture may not.
+
   # Constitutional invariant enforcement — see docs/INVARIANT_ROLLOUT.md.
-  # monitor = observe + log (safe default); flip to "enforce" after a clean soak.
+  # "monitor" is this set's DELIBERATE staged posture: the global mode stays
+  # monitor while HOPEFX_INVARIANT_ENFORCE_KINDS below turns enforcement on one
+  # kind at a time. That is the documented rollout lever, not an oversight —
+  # which is exactly why this ConfigMap must not share a name with the sibling
+  # that runs full enforcement.
   HOPEFX_INVARIANT_MODE: "monitor"
+  # CRITICAL: halts ML inference when the live feature distribution drifts from
+  # training. Code default is FALSE, so omitting this key switches it off.
+  DRIFT_BLOCK: "true"
+  # CRITICAL: refuses to trade on a model past its staleness window.
+  STALE_MODEL_BLOCK: "true"
   # Staged rollout: enforce the can't-halt-the-desk pair now (order_authorization,
   # pre_trade — they only refuse a single bad order). Promote reconciliation + ledger
   # (which can trip the kill switch / halt ALL trading) only after a clean monitor

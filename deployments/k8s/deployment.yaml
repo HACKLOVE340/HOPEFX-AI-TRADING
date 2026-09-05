@@ -32,7 +32,11 @@ spec:
         - containerPort: 8000
         envFrom:
         - configMapRef:
-            name: hopefx-config
+            # Renamed from `hopefx-config`: k8s/k8s-configmap.yaml declares that
+            # name in this namespace too, and `kubectl apply` replaces `data`
+            # wholesale, so apply order decided the safety posture for both
+            # deployments (F98/F178/F265). See configmap.yaml in this directory.
+            name: hopefx-config-staged
         - secretRef:
             name: hopefx-secrets
         env:

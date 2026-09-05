@@ -98,8 +98,8 @@ plans by the time we reached them.
 | ~~2~~ | ~~**C — Controls that report success without acting**~~ · **DONE** | The signature defect; nothing here moves money, but it is why nobody noticed E | `plans/2026-09-04-phase-c-honest-controls.md` |
 | ~~3~~ | ~~**G — Correctness bugs**~~ · **DONE** | Isolated, low blast radius, individually provable. Cheap now that C has made failures visible | `plans/2026-09-04-phase-g-correctness.md` |
 | ~~4~~ | ~~**D — AI Core prerequisites**~~ · **DONE** | Blocks the AI Core build. Not urgent until that starts | `plans/2026-09-04-phase-d-ai-core-prereqs.md` |
-| **1** | **H — Config contradicting code** · NEXT | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
-| 2 | F — Measurement integrity | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
+| ~~5~~ | ~~**H — Config contradicting code**~~ · **DONE** | Two ConfigMaps with conflicting safety values; dangerous, but only on a k8s deploy | not written yet |
+| **1** | **F — Measurement integrity** · NEXT | Last on purpose: measuring accurately is worth most once the code is right | not written yet |
 
 **E before C** is the call worth defending. C contains the most *embarrassing*
 findings — a coverage report printing `FULL COVERAGE ✅` from a hardcoded `True`.
@@ -250,11 +250,27 @@ coverage and never acts on it. F145 makes the number visible at the point of use
 wiring it to a refusal is F146's own fix and changes when the platform declines
 to trade.
 
-## Phase H — Config that contradicts the code
-* **F98 / F178** — two ConfigMaps named `hopefx-config` with contradictory
-  safety values; last `kubectl apply` wins.
-* **F216 / F217** — `CLAUDE.md` calls `data/` legacy; it holds the live
-  real-time price engine and is imported 22× from production.
+## Phase H — Config that contradicts the code · DONE
+
+| Finding | What was done |
+|---|---|
+| **F98 / F178** | Two files declared `hopefx-config` in one namespace, so `kubectl apply` order decided the safety posture for both deployments. `deployments/k8s/` now declares `hopefx-config-staged` and mounts that name, so each set keeps its own deliberate posture and neither can overwrite the other. `DRIFT_BLOCK` and `STALE_MODEL_BLOCK` are stated explicitly there at `true` — they were absent, and absence meant the code default of `false` for drift. |
+| **F216 / F217** | `CLAUDE.md`, `AGENTS.md` and `ARCHITECTURE.md` all called `data/` legacy. It is 6,259 LOC with **20** production importers, holding the real-time price engine, scheduler, DOM, tick feed, time and sales, streaming and the macro feed — constructed at startup and mounting three HTTP routers. All three are corrected, with the measured LOC and importer counts for all three market-data packages. F217 is answered by stating plainly that the boundary is undocumented, rather than inventing one that would then be followed. |
+
+Found while doing it: **F265** — the same ConfigMaps also disagreed on
+enforcement *scope* (`ENFORCE_KINDS` absent in one, so all seventeen kinds
+enforce; two kinds in the other) and on `FAIL_CLOSED`. The first fix attempt set
+both to `enforce` and was wrong: `docs/INVARIANT_ROLLOUT.md` documents
+`monitor` + named kinds as the staged-rollout lever, so that value is deliberate,
+and flipping it would have widened enforcement to all kinds on a live cluster —
+an operational decision that can halt the desk. And **F266** — a fourth mistake,
+mine, in the guard test: a line-based prose scan flagged the correction itself,
+three times, before being replaced with targeted assertions.
+
+Two guards added, each proved to catch a regression by re-introducing it:
+`test_configmaps_do_not_contradict_on_safety.py` (a shared ConfigMap name with
+divergent data) and `test_contract_docs_match_the_packages.py` (a contract doc
+repeating the retracted claim).
 
 ---
 

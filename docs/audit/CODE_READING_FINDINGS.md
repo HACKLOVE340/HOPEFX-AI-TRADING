@@ -7973,3 +7973,96 @@ siblings carry `DB_`, `REDIS_`, `ML_`, `RISK_`, `SECURITY_`, `NEWS_`. Adding
 `env_prefix="BROKER_"` was tried and **does not help**: the prefix governs how
 the child reads its own fields, not how the parent resolves the field name. It
 was reverted rather than left in as a change that looks like a fix and is not.
+
+## F265 — the colliding ConfigMaps also disagree on enforcement SCOPE and fail-closed · extends F98/F178
+
+F98 recorded that `k8s/k8s-configmap.yaml` and `deployments/k8s/configmap.yaml`
+both declare `hopefx-config` in namespace `hopefx` and disagree on
+`HOPEFX_INVARIANT_MODE`, `DRIFT_BLOCK` and `STALE_MODEL_BLOCK`. Reading them to
+fix it turned up two more keys, and they change what "enforce" *means*:
+
+| Key | `k8s/` | `deployments/k8s/` |
+|---|---|---|
+| `HOPEFX_INVARIANT_ENFORCE_KINDS` | **absent** → all 17 kinds enforce | `order_authorization,pre_trade` → two |
+| `HOPEFX_INVARIANT_FAIL_CLOSED` | **absent** → code default `0` | `0` |
+
+So apply order decided not only whether enforcement was on, but **how much of
+it**. Applying `deployments/k8s/` last narrowed a live cluster from seventeen
+enforced kinds to two — while `k8s/k8s-configmap.yaml` carries
+`OANDA_PRACTICE: "false"` and `BROKER_TYPE: "oanda"`, i.e. real money.
+
+### Why the fix is a rename, not a merge
+
+The first attempt set `deployments/k8s/` to `enforce` to match its sibling.
+That was wrong, and `docs/INVARIANT_ROLLOUT.md` says why:
+
+> `HOPEFX_INVARIANT_ENFORCE_KINDS` — **Staged rollout lever.** Comma-separated
+> check *kinds* to enforce **while the global mode stays `monitor`**. This is how
+> you turn enforcement on one check at a time instead of flipping everything at
+> once.
+
+`monitor` + two kinds is that set's **documented, deliberate posture**, not an
+oversight. Flipping it to `enforce` would have silently widened enforcement to
+all seventeen kinds on whatever cluster runs it — an operational decision that
+can halt the desk, belonging to whoever owns that cluster, not to this audit.
+
+The two sets have genuinely different intents. Both are legitimate. Neither
+should be able to overwrite the other. So `deployments/k8s/` now declares
+`hopefx-config-staged`, its Deployment mounts that name, and each set keeps its
+own posture. Apply order stops mattering.
+
+`DRIFT_BLOCK` and `STALE_MODEL_BLOCK` **are** now stated explicitly in that file
+at `true`. That is not an operational judgement call: they were absent, and
+absence meant the code default — `false` for `DRIFT_BLOCK` — so the platform
+would trade on drifted models. Stating a safety key that was silently off is
+strengthening, and the sibling file's own comment already called that
+combination CRITICAL.
+
+### The guard
+
+`tests/unit/test_configmaps_do_not_contradict_on_safety.py` fails when two
+manifest sets declare one ConfigMap name with **different data**. Sharing a name
+is not the defect: `hopefx-kill-switch` is declared in both sets deliberately —
+one cross-pod state object, mounted by name, granted by name in the RBAC — and
+its data is byte-identical, so apply order changes nothing. Divergent data under
+a shared name is the defect. Proved by re-introducing the collision and watching
+the test name it.
+
+## F266 — three contract docs called a live package legacy, and a fourth mistake in the fix
+
+`CLAUDE.md`, `AGENTS.md` and `ARCHITECTURE.md` — the files every contributor and
+every AI assistant is told to read first — all described `data/` as CSV files and
+old utilities, and instructed readers **not to add code to it** (F216).
+
+Measured now, not remembered:
+
+| Package | LOC | Production importers |
+|---|---:|---:|
+| `data_layer/` | 19,610 | 86 |
+| `data/` | 6,259 | 20 |
+| `market_data/` | 4,031 | 6 |
+
+`data/` holds the real-time price engine, scheduler, depth of market, tick feed,
+time and sales, streaming and the macro feed. It is constructed in
+`core/startup_factories.py`, mounts three HTTP routers via
+`core/router_registry.py`, and `ml/training.py` reads its macro feed. The audit
+counted 22 importers; there are more now, because the instruction to avoid the
+package did not stop anyone using it — it only stopped them *maintaining* it.
+
+All three docs are corrected, and **F217 is answered by saying it is unanswered**:
+three packages own market data, no document defines the boundary, and CLAUDE.md
+now says so rather than inventing one. An invented boundary would be followed.
+
+**The fourth mistake was mine, three times over.** The guard test began as a
+general "does a contract doc call any package legacy?" scan. It is line-based, so
+it cannot tell which package a word on a line refers to — it flagged
+`data_layer/` because the word "legacy" appeared elsewhere on the same table row,
+and then flagged the sentence explaining that `data/` is *not* what it was called.
+Rewritten to assert the specific retracted phrases stay absent and the replacement
+facts stay present, the correction still failed, because it **quoted** the
+retracted phrase. The prose was rephrased to state what the package is rather
+than what it was wrongly called.
+
+Grepping prose cannot distinguish a claim from a description of a retracted
+claim. That is F255, for the third time in this session, and it does not become
+sound by living in a test.
