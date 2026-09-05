@@ -125,7 +125,11 @@ class PositionReconciler:
                     raise RuntimeError("broker returned no position snapshot")
                 broker_positions = {}
                 for position in raw or []:
-                    symbol = position.get("symbol") if isinstance(position, dict) else getattr(position, "symbol", None)
+                    if isinstance(position, dict):
+                        symbol = position.get("symbol")
+                    else:
+                        symbol = getattr(position, "symbol", None)
+
                     if symbol:
                         broker_positions[str(symbol)] = position
                 broker_snapshot_available = True
