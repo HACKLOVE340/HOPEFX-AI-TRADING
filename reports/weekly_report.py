@@ -561,7 +561,7 @@ async def _run_weekly_report_job() -> None:
             report.data_source,
         )
     except Exception:
-        logger.exception("Weekly report job failed: %s")
+        logger.exception("Weekly report job failed")
 
 
 async def _load_trade_data() -> tuple:

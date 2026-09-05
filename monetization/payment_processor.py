@@ -318,7 +318,10 @@ class PaymentProcessor:
             return True
 
         except Exception:
-            logger.exception("Payment processing failed for %s: %s", payment_id)
+            # Two placeholders, one argument: this raised inside logging and
+            # printed "--- Logging error ---" instead of the failure record, so
+            # the one log line describing a failed payment lost its traceback.
+            logger.exception("Payment processing failed for %s", payment_id)
             payment.mark_failed("Payment processing error — check server logs")
             self._handle_payment_failed(
                 {

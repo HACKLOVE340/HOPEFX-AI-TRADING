@@ -163,7 +163,7 @@ def main() -> None:
                 all_reports[ticker] = report
                 _print_report(report, ticker)
             except Exception:
-                logger.exception("Failed %s: %s", ticker)
+                logger.exception("Failed %s", ticker)
                 all_reports[ticker] = {"error": "Pipeline failed — check server logs"}
 
         if args.output:

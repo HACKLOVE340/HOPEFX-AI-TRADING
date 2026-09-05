@@ -348,7 +348,7 @@ class RiskManager:
                 "reason": result.reason,
             }
         except Exception:
-            logger.exception("RiskManager.approve_trade: %s")
+            logger.exception("RiskManager.approve_trade")
             return {"approved": False, "reason": "Risk check failed — check server logs"}
 
 

@@ -364,7 +364,7 @@ Examples:
                 logger.info("  %s accuracy=%s  f1=%s", f"{name:<20}", acc, f1)
                 logger.info("  %s saved → %s", f"{'':20}", path)
         except Exception:
-            logger.exception("Failed for %s: %s", sym)
+            logger.exception("Failed for %s", sym)
             all_ok = False
 
     if not all_ok:

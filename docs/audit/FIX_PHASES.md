@@ -223,16 +223,23 @@ USDT-ERC20 — syntactically valid Ethereum addresses that every wallet accepts.
 Derivation is ported to the pinned hdwallet v3 and checked against the published
 BIP44/BIP84 vectors. See the finding for the full chain.
 
+| **F105** | `.coveragerc` omitted four files from `risk/` as "covered by integration tests, not unit tests", `risk/manager.py` among them -- the file CLAUDE.md names as the risk core. Measured against the unit suite with the omit removed: pre_trade_gate 94.39%, manager 89.65%, gatekeeper 85.63%, post_trade_analyzer 82.40% -- all four clear the 80% gate they were excluded from. The claim was false the other way too: no integration test references `execution/engine.py` or `HOPEFXDecisionEngine.py` at all. The risk files are measured now (`risk/` 92.43%, `execution/` 83.95%, total 70.54% -> 71.06%); the execution exclusions keep their omit but carry measured coverage instead of a justification naming a suite that does not cover them. |
+| **F108** | 14 of 37 tests in `test_auth_analytics_backtest_coverage.py` wrapped whole bodies in `except (ImportError, AttributeError): pytest.skip()` and had skipped on every run since being written, against names that never existed (`PerformanceAnalyzer`, `MonteCarloSimulation`, `calculate_var`, `backtesting.reports.PerformanceReport`, module-level `plot_equity_curve`). Sharpest case: `SimulatedExecutionHandler` is real, but was called with the wrong constructor kwarg, and the `TypeError` was reported as "not available". Now 46 tests, **0 skipped**, against the real API. |
+| **F268** | 33 log calls whose placeholders and arguments disagree -- they raise inside `logging` and print `--- Logging error ---` instead of the record. All on exception paths, where the log is the only evidence: the payment processor, Stripe failures, the whole mobile trading API, and `brain/brain.py`'s CATASTROPHIC LOSS alert, which never emitted because `50%` was unescaped. Fixed and guarded by an AST sweep. |
+
 Remaining:
-* **F222** — 9 critical modules still never named in a test:
+* **F222** — 8 critical modules still never named in a test:
   `payment_processor`, `strategy_allocator`, `transaction_manager`,
   `marketplace_submission`, `paystack`, `access_codes`, `payment_gateway`,
   `tick_data_repository`. (`revenue_split` and `pms` gained tests in phases D/G;
-  `address_generator` gained them with F267.)
+  `address_generator` gained them with F267.) Triaged for a second F267: none of
+  the eight fabricates a value on a money path. `access_codes` uses SHA-256 as a
+  typo checksum with `secrets.choice` for the actual randomness, which is correct
+  use; `payment_processor` carried one broken log line, fixed under F268.
 * **F218** — 14 model tables have no migration; they exist only via
   `create_all()`, which never ALTERs.
-* **F105 / F106 / F108** — gates that measure the wrong thing, a class that
-  never existed.
+* **F106** — already fixed in an earlier phase (verified: `execution/trade_executor.py`
+  references the old `order.status.value` / `order.id` only in explanatory comments).
 
 ## Phase G — Correctness bugs · DONE
 

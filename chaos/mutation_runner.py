@@ -220,7 +220,7 @@ class MutationTestRunner:
             return await self._parse_mutmut_results()
 
         except Exception:
-            logger.exception("mutmut run failed: %s")
+            logger.exception("mutmut run failed")
             return self._empty_report("mutmut", error="mutmut run failed — check server logs")
 
     async def _parse_mutmut_results(self) -> MutationReport:
@@ -257,7 +257,7 @@ class MutationTestRunner:
                 engine="mutmut",
             )
         except Exception:
-            logger.exception("mutmut results parse failed: %s")
+            logger.exception("mutmut results parse failed")
             return self._empty_report("mutmut", error="mutmut results parse failed — check server logs")
 
     # ── Built-in AST mutator ──────────────────────────────────────────────────

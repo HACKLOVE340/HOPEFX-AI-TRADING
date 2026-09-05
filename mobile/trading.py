@@ -136,7 +136,7 @@ class MobileTradingEngine:
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception:
-            logger.exception("MobileTradingEngine.place_order_async: %s")
+            logger.exception("MobileTradingEngine.place_order_async")
             return {
                 "order_id": None,
                 "status": "error",
@@ -183,7 +183,7 @@ class MobileTradingEngine:
                 result["preset_id"] = preset_id
                 return result
             except Exception:
-                logger.exception("MobileTradingEngine.quick_order: %s")
+                logger.exception("MobileTradingEngine.quick_order")
                 return {
                     "order_id": None,
                     "status": "error",
@@ -257,7 +257,7 @@ class MobileTradingEngine:
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception:
-            logger.exception("MobileTradingEngine.close_position_async: %s")
+            logger.exception("MobileTradingEngine.close_position_async")
             return {"status": "error", "error": "Operation failed — check server logs", "position_id": position_id}
 
     async def close_all_positions_async(
@@ -326,7 +326,7 @@ class MobileTradingEngine:
         try:
             return self._run(self.close_all_positions_async(user_id))
         except Exception:
-            logger.exception("MobileTradingEngine.close_all_positions: %s")
+            logger.exception("MobileTradingEngine.close_all_positions")
             return {
                 "action": "close_all",
                 "user_id": user_id,
@@ -363,7 +363,7 @@ class MobileTradingEngine:
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception:
-            logger.exception("MobileTradingEngine.cancel_order_async: %s")
+            logger.exception("MobileTradingEngine.cancel_order_async")
             return {"status": "error", "error": "Operation failed — check server logs", "order_id": order_id}
 
     # ── Position / order queries ──────────────────────────────────────────────

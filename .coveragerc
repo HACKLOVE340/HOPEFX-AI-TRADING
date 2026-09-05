@@ -72,15 +72,40 @@ omit =
     ml/advanced_ai.py
     # Whitelabel customisations are not part of the core test suite
     whitelabel/*
-    # Risk modules that depend on live event bus / orchestrator wiring.
-    # Covered by integration tests, not unit tests; excluded from both the
-    # global 70% gate and the per-package 80% risk gate.
-    risk/gatekeeper.py
-    risk/pre_trade_gate.py
-    risk/post_trade_analyzer.py
-    risk/manager.py
-    # Execution modules that require live broker/FIX/engine wiring.
-    # These are integration-only and excluded from the 80% unit gate.
+    # ── F105 ──────────────────────────────────────────────────────────────────
+    # The four risk files that used to sit here -- risk/manager.py,
+    # gatekeeper.py, pre_trade_gate.py, post_trade_analyzer.py -- were excluded
+    # with the justification "depend on live event bus / orchestrator wiring;
+    # covered by integration tests, not unit tests". Measured against the unit
+    # suite with the omit removed, they come out at:
+    #
+    #     risk/pre_trade_gate.py        94.39%
+    #     risk/manager.py               89.65%
+    #     risk/gatekeeper.py            85.63%
+    #     risk/post_trade_analyzer.py   82.40%
+    #
+    # All four clear the 80% gate they were excluded from, on the unit suite
+    # alone. `risk/manager.py` is the file CLAUDE.md names as the risk core --
+    # the pre-trade gate, VaR/CVaR, Kelly sizing and the kill switch -- and
+    # "risk/ >= 80%" was a true statement about the two thirds of risk/ that is
+    # not the dangerous part. They are measured now.
+    #
+    # The execution files below stay omitted, but not for the reason previously
+    # given. No integration test references execution/engine.py or
+    # core/decision/HOPEFXDecisionEngine.py at all (grep of tests/integration/:
+    # zero files), so "covered by integration tests" was not true of them
+    # either. What is true is their measured unit coverage, recorded here so the
+    # exclusion is a known debt rather than a claim:
+    #
+    #     execution/engine.py                     76.11%
+    #     core/decision/HOPEFXDecisionEngine.py   64.71%
+    #     execution/hopefx_engine.py              63.05%
+    #     execution/fix_adapter.py                35.00%
+    #     execution/execution.py                  17.75%
+    #
+    # engine.py is close enough that testing it is the way to remove it from
+    # this list; the others are genuinely thin. Do not re-add a justification
+    # that names a test suite without checking that the suite exists.
     execution/execution.py
     execution/hopefx_engine.py
     execution/fix_adapter.py

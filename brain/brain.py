@@ -375,7 +375,7 @@ class HOPEFXBrain:
         }
         self.error_history.append(error_info)
 
-        logger.exception("Error in brain cycle %s: %s", self._cycle_count)
+        logger.exception("Error in brain cycle %s", self._cycle_count)
 
         # Record failure
         await self._circuit_breaker.record_failure()
@@ -719,7 +719,7 @@ class HOPEFXBrain:
 
             # Check catastrophic loss (50% of initial balance)
             if balance > 0 and equity < balance * 0.5:
-                logger.critical("CATASTROPHIC LOSS: Equity $%s < 50% of Balance $%s", equity, balance)
+                logger.critical("CATASTROPHIC LOSS: Equity $%s < 50%% of Balance $%s", equity, balance)
 
                 return True
 

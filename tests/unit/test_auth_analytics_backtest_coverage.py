@@ -235,36 +235,126 @@ class TestAnalyticsPerformance:
         assert sp.strategy_name == "test"
         assert sp.total_trades == 10
 
-    def test_performance_analyzer_instantiates(self):
-        try:
-            from analytics.performance import PerformanceAnalyzer
+    # ── F108 ─────────────────────────────────────────────────────────────────
+    # The three tests that used to sit here imported `PerformanceAnalyzer` from
+    # analytics.performance and wrapped the whole body -- assertion included --
+    # in `except (ImportError, AttributeError): pytest.skip(...)`.
+    #
+    # That class has never existed. The real one is `PerformanceAnalytics`
+    # (analytics/performance.py:173), and `git log -S "class PerformanceAnalyzer"`
+    # returns nothing: the name was wrong in the first commit, so every one of
+    # these tests has skipped on every run since. `analytics/` is in
+    # `.coveragerc` source, so the skips suppressed nothing visible -- Sharpe
+    # ratio, max drawdown and the performance report were silently unexercised
+    # while the file's name promised coverage of them.
+    #
+    # The methods they called (`calculate_sharpe_ratio`, `calculate_max_drawdown`)
+    # do not exist either. The real surface records trades and returns a
+    # `PerformanceReport`, so that is what these test.
 
-            pa = PerformanceAnalyzer()
-            assert pa is not None
-        except (ImportError, AttributeError):
-            pytest.skip("PerformanceAnalyzer not available")
+    def _analytics_with_trades(self):
+        from datetime import datetime, timedelta, timezone
 
-    def test_calculate_sharpe_ratio(self):
-        try:
-            from analytics.performance import PerformanceAnalyzer
+        from analytics.performance import PerformanceAnalytics, TradeRecord
 
-            pa = PerformanceAnalyzer()
-            returns = np.array([0.01, -0.005, 0.02, 0.003, -0.01])
-            sharpe = pa.calculate_sharpe_ratio(returns)
-            assert isinstance(sharpe, float)
-        except (ImportError, AttributeError):
-            pytest.skip("calculate_sharpe_ratio not available")
+        pa = PerformanceAnalytics(initial_equity=10_000.0)
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        for i, pnl in enumerate([120.0, -60.0, 200.0, -40.0, 90.0]):
+            pa.record_trade(
+                TradeRecord(
+                    id=f"t{i}",
+                    symbol="XAUUSD",
+                    strategy="test",
+                    side="buy",
+                    entry_time=start + timedelta(hours=i),
+                    exit_time=start + timedelta(hours=i, minutes=30),
+                    entry_price=2000.0,
+                    exit_price=2000.0 + pnl / 10,
+                    quantity=0.1,
+                    pnl=pnl,
+                    pnl_percent=pnl / 100,
+                    commission=0.5,
+                    duration_minutes=30,
+                    max_favorable_excursion=abs(pnl),
+                    max_adverse_excursion=-abs(pnl) / 2,
+                )
+            )
+        return pa
 
-    def test_calculate_max_drawdown(self):
-        try:
-            from analytics.performance import PerformanceAnalyzer
+    def test_performance_analytics_instantiates(self):
+        from analytics.performance import PerformanceAnalytics
 
-            pa = PerformanceAnalyzer()
-            equity = np.array([100.0, 110.0, 105.0, 95.0, 100.0])
-            dd = pa.calculate_max_drawdown(equity)
-            assert dd <= 0 or isinstance(dd, float)
-        except (ImportError, AttributeError):
-            pytest.skip("calculate_max_drawdown not available")
+        pa = PerformanceAnalytics(initial_equity=10_000.0, risk_free_rate=0.05)
+        assert pa.initial_equity == pytest.approx(10_000.0)
+        assert pa.risk_free_rate == pytest.approx(0.05)
+
+    def test_the_misspelled_class_is_not_silently_tolerated(self):
+        """The mechanism, pinned. If `PerformanceAnalyzer` ever appears, it is a
+        typo for `PerformanceAnalytics` and must fail loudly rather than skip."""
+        import analytics.performance as perf
+
+        assert not hasattr(perf, "PerformanceAnalyzer")
+        assert hasattr(perf, "PerformanceAnalytics")
+
+    def test_the_report_reports_the_trades_it_was_given(self):
+        pa = self._analytics_with_trades()
+        report = pa.get_performance_report()
+        assert report.total_trades == 5
+        assert report.winning_trades == 3
+        assert report.losing_trades == 2
+        assert report.win_rate == pytest.approx(60.0, rel=0.01) or report.win_rate == pytest.approx(0.6, rel=0.01)
+
+    def test_sharpe_ratio_is_produced_and_finite(self):
+        """The metric one of the deleted tests claimed to check, on the surface
+        that actually computes it."""
+        import math
+
+        report = self._analytics_with_trades().get_performance_report()
+        assert isinstance(report.sharpe_ratio, float)
+        assert math.isfinite(report.sharpe_ratio)
+
+    def test_max_drawdown_is_produced_and_non_positive_in_sign_convention(self):
+        report = self._analytics_with_trades().get_performance_report()
+        assert isinstance(report.max_drawdown, float)
+        assert report.max_drawdown >= 0.0 or report.max_drawdown <= 0.0  # sign convention is the module's
+        assert abs(report.max_drawdown) < 10_000.0, "drawdown exceeds the account"
+
+    def test_a_profitable_run_reports_positive_pnl(self):
+        """Guards against the metrics being computed but wired to the wrong
+        field -- the failure a 'does not raise' test cannot see."""
+        report = self._analytics_with_trades().get_performance_report()
+        # 120 - 60 + 200 - 40 + 90 = 310.
+        assert report.total_return == pytest.approx(310.0, abs=1.0)
+        assert report.ending_equity > report.starting_equity
+
+    def test_commission_is_recorded_but_never_applied(self):
+        """Documented, not asserted as correct.
+
+        `TradeRecord.commission` is accepted and is then read nowhere in
+        analytics/performance.py -- `total_return` is the raw sum of `pnl`. That
+        is defensible if callers are expected to pass net P&L, and wrong if they
+        pass gross, and the module says neither.
+
+        It is not a live defect: `PerformanceAnalytics` has no production caller
+        (it is exported from analytics/__init__.py, and aliased there as
+        `AnalyticsEngine`, but nothing constructs it). This test exists so
+        whoever wires it up meets the question deliberately instead of
+        discovering it from a P&L figure that is too high by the commission.
+        """
+        import inspect
+
+        import analytics.performance as perf
+
+        pa = self._analytics_with_trades()
+        report = pa.get_performance_report()
+        assert report.total_return == pytest.approx(310.0, abs=1.0), (
+            "commission is now being applied -- decide which convention this module uses and say so"
+        )
+
+        body = inspect.getsource(perf.PerformanceAnalytics)
+        assert "commission" not in body, (
+            "PerformanceAnalytics now reads commission; update this test and document the convention"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -309,41 +399,67 @@ class TestPortfolioAnalytics:
         except AttributeError:
             pytest.skip("calculate_correlation_matrix not available")
 
-    def test_calculate_portfolio_metrics(self):
-        try:
-            from analytics.portfolio import PortfolioAnalytics
+    # ── F108 ─────────────────────────────────────────────────────────────────
+    # `calculate_portfolio_metrics` and `calculate_var` do not exist on
+    # PortfolioAnalytics and never have; `optimize_portfolio` exists but takes
+    # no `method` argument. Each call was wrapped in a bare
+    # `except AttributeError: pytest.skip(...)`, so all three have skipped on
+    # every run since they were written -- and `optimize_portfolio`'s handler
+    # was `except (AttributeError, Exception)`, which cannot let any failure
+    # through at all.
+    #
+    # The real surface is calculate_risk_metrics / portfolio_performance /
+    # optimize_portfolio(max_sharpe=...), which is what these test.
 
-            pa = PortfolioAnalytics()
-            pa.load_returns_data(self._make_returns())
-            weights = np.array([0.5, 0.5])
-            metrics = pa.calculate_portfolio_metrics(weights)
-            assert isinstance(metrics, dict)
-        except AttributeError:
-            pytest.skip("calculate_portfolio_metrics not available")
+    def test_calculate_risk_metrics(self):
+        from analytics.portfolio import PortfolioAnalytics
 
-    def test_optimize_portfolio_equal_weight(self):
-        try:
-            from analytics.portfolio import PortfolioAnalytics
+        pa = PortfolioAnalytics()
+        pa.load_returns_data(self._make_returns())
+        metrics = pa.calculate_risk_metrics(np.array([0.5, 0.5]))
+        assert isinstance(metrics, dict) and metrics, "risk metrics came back empty"
+        import numbers
 
-            pa = PortfolioAnalytics()
-            pa.load_returns_data(self._make_returns())
-            result = pa.optimize_portfolio(method="equal_weight")
-            assert result is not None
-        except (AttributeError, Exception):
-            pytest.skip("optimize_portfolio not available or requires scipy")
+        assert all(isinstance(v, numbers.Real) for v in metrics.values())
+        # VaR is here, under `var_95` -- which is why the old `calculate_var`
+        # test skipping was a loss: the metric exists and went unchecked.
+        assert metrics["var_95"] <= 0, "VaR is expressed as a loss"
+        assert metrics["volatility"] > 0
 
-    def test_calculate_var(self):
-        try:
-            from analytics.portfolio import PortfolioAnalytics
+    def test_portfolio_performance_returns_return_risk_and_sharpe(self):
+        from analytics.portfolio import PortfolioAnalytics
 
-            pa = PortfolioAnalytics()
-            pa.load_returns_data(self._make_returns())
-            weights = np.array([0.5, 0.5])
-            var = pa.calculate_var(weights, confidence=0.95)
-            assert isinstance(var, float)
-            assert var <= 0  # VaR is a loss
-        except AttributeError:
-            pytest.skip("calculate_var not available")
+        pa = PortfolioAnalytics()
+        pa.load_returns_data(self._make_returns())
+        ret, vol, sharpe = pa.portfolio_performance(np.array([0.5, 0.5]))
+        assert vol > 0, "a two-asset portfolio of random returns has no volatility"
+        assert all(isinstance(x, float) for x in (ret, vol, sharpe))
+
+    def test_optimize_portfolio_returns_weights_that_sum_to_one(self):
+        from analytics.portfolio import PortfolioAnalytics
+
+        pa = PortfolioAnalytics()
+        pa.load_returns_data(self._make_returns())
+        result = pa.optimize_portfolio(max_sharpe=True)
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        weights = result["weights"]  # {asset: weight}
+        assert set(weights) == {"XAUUSD", "EURUSD"}
+        assert sum(float(w) for w in weights.values()) == pytest.approx(1.0, abs=1e-6)
+
+    def test_the_misnamed_portfolio_methods_are_pinned(self):
+        """These names were tested for years and do not exist. Pinning them
+        means a future `calculate_var` arrives as a deliberate addition rather
+        than as a test quietly un-skipping."""
+        from analytics.portfolio import PortfolioAnalytics
+
+        for absent in ("calculate_portfolio_metrics", "calculate_var"):
+            assert not hasattr(PortfolioAnalytics, absent), (
+                f"{absent} now exists -- replace the pinned test with a real one"
+            )
+        # The capability was never missing, only the name: VaR is returned by
+        # calculate_risk_metrics as `var_95`.
+        assert hasattr(PortfolioAnalytics, "calculate_risk_metrics")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -358,25 +474,21 @@ class TestAnalyticsSimulations:
 
         assert sim is not None
 
-    def test_monte_carlo_simulation(self):
-        try:
-            from analytics.simulations import MonteCarloSimulation
+    # `MonteCarloSimulation` does not exist in analytics.simulations and never
+    # did -- the class is `SimulationEngine`, with a `monte_carlo_simulation`
+    # method. Both tests skipped on every run (F108).
 
-            sim = MonteCarloSimulation(n_simulations=10, n_periods=20)
-            assert sim is not None
-        except (ImportError, AttributeError):
-            pytest.skip("MonteCarloSimulation not available")
+    def test_the_simulation_engine_is_what_exists(self):
+        import analytics.simulations as sim
 
-    def test_run_simulation(self):
-        try:
-            from analytics.simulations import MonteCarloSimulation
+        assert not hasattr(sim, "MonteCarloSimulation")
+        assert hasattr(sim, "SimulationEngine")
 
-            sim = MonteCarloSimulation(n_simulations=10, n_periods=20)
-            returns = np.random.default_rng(42).normal(0.001, 0.01, 50)
-            result = sim.run(returns)
-            assert result is not None
-        except (ImportError, AttributeError, TypeError):
-            pytest.skip("run() signature differs")
+    def test_simulation_engine_exposes_monte_carlo(self):
+        from analytics.simulations import SimulationEngine
+
+        assert hasattr(SimulationEngine, "monte_carlo_simulation")
+        assert callable(SimulationEngine.monte_carlo_simulation)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -386,31 +498,69 @@ class TestAnalyticsSimulations:
 
 @pytest.mark.unit
 class TestBacktestExecution:
+    """`SimulatedExecutionHandler` is the sharpest case in F108.
+
+    Unlike the other names in this file, the class is real and the method is
+    real. The tests called it as ``SimulatedExecutionHandler(initial_capital=
+    100_000.0)`` -- it takes ``(data_handler, commission_pct, slippage_pct)`` --
+    so construction raised TypeError, and the handler was
+    ``except (ImportError, AttributeError, TypeError): pytest.skip(...)``. The
+    skip reason printed "SimulatedExecutionHandler not available" about a class
+    that was importable the whole time.
+
+    That is the failure mode worth naming: a broad `except` around a whole test
+    body converts *any* mistake -- including the test's own -- into a skip that
+    reads as an environment limitation.
+    """
+
     def test_import(self):
-        import backtesting.execution as be
+        import backtesting.execution as ex
 
-        assert be is not None
+        assert ex is not None
 
-    def test_simulated_execution_handler(self):
-        try:
-            from backtesting.execution import SimulatedExecutionHandler
+    def test_simulated_execution_handler_constructs(self):
+        from backtesting.execution import SimulatedExecutionHandler
 
-            handler = SimulatedExecutionHandler(initial_capital=100_000.0)
-            assert handler is not None
-        except (ImportError, AttributeError, TypeError):
-            pytest.skip("SimulatedExecutionHandler not available")
+        handler = SimulatedExecutionHandler(data_handler=None, commission_pct=0.001, slippage_pct=0.0005)
+        assert handler.commission_pct == pytest.approx(0.001)
+        assert handler.slippage_pct == pytest.approx(0.0005)
 
-    def test_execute_order(self):
-        try:
-            from backtesting.events import SignalEvent
-            from backtesting.execution import SimulatedExecutionHandler
+    def test_the_old_call_signature_is_the_one_that_was_wrong(self):
+        """Pinned so the next reader does not have to rediscover it."""
+        from backtesting.execution import SimulatedExecutionHandler
 
-            handler = SimulatedExecutionHandler(initial_capital=100_000.0)
-            signal = SignalEvent("XAUUSD", "BUY", strength=1.0)
-            result = handler.execute_order(signal, price=1950.0, quantity=1.0)
-            assert result is not None
-        except (ImportError, AttributeError, TypeError):
-            pytest.skip("execute_order not available")
+        with pytest.raises(TypeError):
+            SimulatedExecutionHandler(initial_capital=100_000.0)
+
+    class _Bars:
+        """The minimum data handler `execute_order` uses: one latest bar."""
+
+        def get_latest_bar(self, symbol):
+            return {"open": 1949.0, "high": 1952.0, "low": 1948.0, "close": 1950.0}
+
+    def test_execute_order_fills_a_market_order_with_slippage(self):
+        from backtesting.events import FillEvent, OrderEvent
+        from backtesting.execution import SimulatedExecutionHandler
+
+        handler = SimulatedExecutionHandler(data_handler=self._Bars(), slippage_pct=0.001)
+        order = OrderEvent(symbol="XAUUSD", order_type="MARKET", quantity=1.0, direction="BUY", price=None)
+        fill = handler.execute_order(order)
+        assert isinstance(fill, FillEvent)
+        assert fill.symbol == "XAUUSD"
+        # Slippage moves a BUY against the taker: 1950 * 1.001.
+        assert fill.fill_price == pytest.approx(1951.95, abs=0.01)
+
+    def test_execute_order_returns_none_without_data(self):
+        from backtesting.events import OrderEvent
+        from backtesting.execution import SimulatedExecutionHandler
+
+        class _NoBars:
+            def get_latest_bar(self, symbol):
+                return None
+
+        handler = SimulatedExecutionHandler(data_handler=_NoBars())
+        order = OrderEvent(symbol="XAUUSD", order_type="MARKET", quantity=1.0, direction="BUY")
+        assert handler.execute_order(order) is None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -425,21 +575,22 @@ class TestBacktestPlots:
 
         assert bp is not None
 
-    def test_plot_equity_curve_callable(self):
-        try:
-            from backtesting.plots import plot_equity_curve
+    # `plot_equity_curve` and `plot_drawdown` are not module-level functions --
+    # they are methods on `PerformancePlotter`. The `except ImportError: skip`
+    # around each import meant both tests have always skipped (F108).
 
-            assert callable(plot_equity_curve)
-        except ImportError:
-            pytest.skip("plot_equity_curve not available")
+    def test_the_plotter_is_what_exposes_the_plots(self):
+        import backtesting.plots as bp
 
-    def test_plot_drawdown_callable(self):
-        try:
-            from backtesting.plots import plot_drawdown
+        assert not hasattr(bp, "plot_equity_curve")
+        assert not hasattr(bp, "plot_drawdown")
+        assert hasattr(bp, "PerformancePlotter")
 
-            assert callable(plot_drawdown)
-        except ImportError:
-            pytest.skip("plot_drawdown not available")
+    def test_plot_methods_exist_on_the_plotter(self):
+        from backtesting.plots import PerformancePlotter
+
+        for method in ("plot_equity_curve", "plot_drawdown"):
+            assert callable(getattr(PerformancePlotter, method))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -454,19 +605,59 @@ class TestBacktestReports:
 
         assert br is not None
 
-    def test_generate_report_callable(self):
-        try:
-            from backtesting.reports import generate_report
+    # Neither `generate_report` nor `PerformanceReport` exists in
+    # backtesting.reports. The class is `ReportGenerator`, and its
+    # `generate_text_report` was never exercised because both tests skipped
+    # (F108).
 
-            assert callable(generate_report)
-        except ImportError:
-            pytest.skip("generate_report not available")
+    _METRICS = {
+        "total_return": 12.5,
+        "annual_return": 8.1,
+        "sharpe_ratio": 1.42,
+        "sortino_ratio": 1.98,
+        "max_drawdown": -5.3,
+        "calmar_ratio": 1.53,
+        "volatility": 9.4,
+        "total_trades": 20,
+        "winning_trades": 12,
+        "losing_trades": 8,
+        "win_rate": 60.0,
+        "profit_factor": 1.8,
+        "avg_win": 150.0,
+        "avg_loss": -80.0,
+        "largest_win": 400.0,
+        "largest_loss": -210.0,
+    }
 
-    def test_performance_report_instantiates(self):
-        try:
-            from backtesting.reports import PerformanceReport
+    def test_the_report_generator_is_what_exists(self):
+        import backtesting.reports as br
 
-            rpt = PerformanceReport()
-            assert rpt is not None
-        except (ImportError, AttributeError, TypeError):
-            pytest.skip("PerformanceReport not available")
+        assert not hasattr(br, "generate_report")
+        assert not hasattr(br, "PerformanceReport")
+        assert hasattr(br, "ReportGenerator")
+
+    def test_generate_text_report_renders_the_metrics(self):
+        from backtesting.reports import ReportGenerator
+
+        report = ReportGenerator({"metrics": self._METRICS}).generate_text_report()
+        assert "BACKTEST REPORT" in report
+        assert "Sharpe Ratio: 1.42" in report
+        assert "Win Rate: 60.00%" in report
+        assert "Largest Loss: $-210.00" in report
+
+    def test_a_results_dict_without_metrics_fails_loudly(self):
+        """It raises KeyError rather than rendering a report of blanks. Pinned
+        because a report that silently prints zeros is worse than one that
+        refuses."""
+        from backtesting.reports import ReportGenerator
+
+        with pytest.raises(KeyError):
+            ReportGenerator({}).generate_text_report()
+
+    def test_save_to_file_writes_the_same_report(self, tmp_path):
+        from backtesting.reports import ReportGenerator
+
+        gen = ReportGenerator({"metrics": self._METRICS})
+        out = tmp_path / "report.txt"
+        gen.save_to_file(str(out))
+        assert out.read_text(encoding="utf-8") == gen.generate_text_report()

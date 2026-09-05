@@ -91,7 +91,6 @@ def generator(monkeypatch, tmp_path):
     for var in ("BITCOIN_MNEMONIC", "ETHEREUM_MNEMONIC", "TRON_MNEMONIC"):
         monkeypatch.setenv(var, TEST_MNEMONIC)
     module = importlib.import_module("payments.crypto.address_generator")
-    monkeypatch.setattr(module, "_COUNTER_PATH", tmp_path / "counters.json")
     return module.AddressGenerator()
 
 
@@ -302,7 +301,6 @@ def test_indices_survive_a_restart(monkeypatch, tmp_path):
     monkeypatch.setenv("HOPEFX_CRYPTO_COUNTER_PATH", str(counter))
     monkeypatch.setenv("ETHEREUM_MNEMONIC", TEST_MNEMONIC)
     module = importlib.import_module("payments.crypto.address_generator")
-    monkeypatch.setattr(module, "_COUNTER_PATH", counter)
 
     first = {module.AddressGenerator().generate_address("u", "ETH") for _ in range(3)}
     # A fresh instance is what a process restart looks like to this class.
@@ -343,6 +341,34 @@ def test_a_configured_mnemonic_is_used_in_every_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("ETHEREUM_MNEMONIC", TEST_MNEMONIC)
     assert _load_mnemonic("ETH") == TEST_MNEMONIC
+
+
+def test_the_counter_path_env_var_is_read_per_call(monkeypatch, tmp_path):
+    """`HOPEFX_CRYPTO_COUNTER_PATH` was captured into a module constant at
+    import, so setting it after this module was first imported did nothing --
+    silently, including in production, where the docstring advertises it as the
+    way to put the counter on a durable volume rather than the container FS.
+
+    It also made this file's own tests order-dependent: they set the variable,
+    got the in-repo default anyway, shared one counter between tests, and one
+    of them failed only when another had run first."""
+    from payments.crypto.address_generator import _counter_path
+
+    monkeypatch.setenv("HOPEFX_CRYPTO_COUNTER_PATH", str(tmp_path / "a.json"))
+    assert _counter_path() == tmp_path / "a.json"
+    monkeypatch.setenv("HOPEFX_CRYPTO_COUNTER_PATH", str(tmp_path / "b.json"))
+    assert _counter_path() == tmp_path / "b.json", "the override is captured once, not read per call"
+
+
+def test_the_tests_never_write_to_the_repo_counter_file(generator, tmp_path):
+    """The symptom that exposed it: the suite left data/crypto_counters.json
+    behind in the working tree, because every test that set only the env var was
+    in fact writing to the default path."""
+    from payments.crypto.address_generator import _DEFAULT_COUNTER_PATH, _counter_path
+
+    generator.generate_address("user-1", "ETH")
+    assert _counter_path() != _DEFAULT_COUNTER_PATH
+    assert not _DEFAULT_COUNTER_PATH.exists(), f"the suite wrote to {_DEFAULT_COUNTER_PATH}"
 
 
 def test_the_module_is_shadowed_by_its_own_singleton():

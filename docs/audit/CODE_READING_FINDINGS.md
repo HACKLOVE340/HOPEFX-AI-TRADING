@@ -8160,3 +8160,138 @@ the first version of the two "no longer hashes" tests failed on the fixed code,
 because the fix quotes the SHA-256 line it replaced in a comment. That is F255
 for the fourth time; the tests now strip comments via the AST rather than
 substring-matching source.
+
+---
+
+## F268 — 33 log calls raise instead of logging, all on error paths · MEDIUM
+
+`logging` formats lazily, so a call whose placeholders and arguments disagree
+does not fail at the call site — it raises inside the logging machinery and
+prints `--- Logging error ---` where the record should be. The call site reads
+correctly and no linter objects.
+
+Found by an AST sweep while fixing an instance of it in
+`monetization/payment_processor.py`. 33 live calls, in two shapes.
+
+**32 × an orphaned trailing placeholder.** `logger.exception()` appends the
+traceback itself, so the `exc` argument was dropped and the `: %s` left behind:
+
+```python
+logger.exception("Stripe PaymentIntent failed: %s")            # 1 placeholder, 0 args
+logger.exception("Order placement failed for %s: %s", user_id) # 2 placeholders, 1 arg
+```
+
+**1 × an unescaped literal percent**, in `brain/brain.py`:
+
+```python
+logger.critical("CATASTROPHIC LOSS: Equity $%s < 50% of Balance $%s", equity, balance)
+```
+
+`50% o` parses as a `%o` conversion, so the call needs three arguments and has
+two: `TypeError: %o format: an integer is required, not float`. The brain's most
+severe alert has never emitted.
+
+Every one of the 33 is on an exception path — `logger.exception` or
+`logger.critical` inside an `except` — which is precisely where the log line is
+the only record that anything happened. Affected: the payment processor, Stripe
+payment-intent failure, subscription webhook handling, the whole mobile trading
+API (order placement, close, cancel), the weekly report job, and the brain's
+catastrophic-loss alert.
+
+**Fixed** and guarded by `tests/unit/test_log_calls_have_matching_arguments.py`,
+which re-runs the sweep over the tree.
+
+**Method note — the first scan was wrong, twice.** It reported **53**
+mismatches. Its regex counted `%%` as a conversion: in `%.2f%% of`, the second
+`%` followed by a space and `o` matches `%[flags]o`, an octal conversion. Twenty
+of the fifty-three were in code that was entirely correct, and they clustered in
+the *most* careful code — the modules that escape their percent signs properly.
+Stripping `%%` before counting gives 33.
+
+The guard test then failed on `stats.info("latency_ms", value)` — a metrics
+object, not a logger. Matching on the method name alone indicts anything sharing
+a verb with `logging`, so the scan now also requires a logger-shaped receiver.
+Both of those are the same mistake as F255 in a different medium: a detector
+confident about text it has not actually parsed.
+
+## F105 — the `risk/ ≥ 80%` gate excluded the risk core, on a checkable and false premise · HIGH
+
+`.coveragerc` omitted four files from `risk/` with the justification "depend on
+live event bus / orchestrator wiring; covered by integration tests, not unit
+tests", `risk/manager.py` among them — the file CLAUDE.md names as the risk
+core (pre-trade gate, VaR/CVaR, Kelly sizing, kill switch). The CI step
+`Coverage gate - risk/ (80% required)` therefore reported on the two thirds of
+`risk/` that is not the dangerous part.
+
+The premise was checkable. Measured against the **unit** suite with the omit
+removed:
+
+| File | Coverage |
+|---|---:|
+| `risk/pre_trade_gate.py` | 94.39% |
+| `risk/manager.py` | 89.65% |
+| `risk/gatekeeper.py` | 85.63% |
+| `risk/post_trade_analyzer.py` | 82.40% |
+
+All four clear the 80% gate they were excluded from, using the unit tests that
+were said not to cover them. 170 test files reference `risk.manager`; two of
+them are integration tests.
+
+The claim was false in the other direction too. `execution/engine.py` and
+`core/decision/HOPEFXDecisionEngine.py` are omitted as "covered by integration
+tests" and **no integration test references either** — `grep -rl` over
+`tests/integration/` returns zero files for both.
+
+**Fixed.** The four risk files are measured: `risk/` now reports **92.43%** with
+the risk core included, and `execution/` **83.95%**; total coverage rose from
+70.54% to 71.06%. The execution exclusions stay, but the justification is
+replaced with their measured coverage (engine.py 76.11%, the decision engine
+64.71%, fix_adapter.py 35.00%, execution.py 17.75%) so the debt is a recorded
+number rather than a claim about a test suite that does not exist.
+`tests/unit/test_coverage_omit_does_not_hide_the_risk_core.py` guards it
+structurally — parsing the omit list rather than grepping the justification,
+because the corrected comment quotes the claim it retracts (F255 again).
+
+## F108 — 14 tests in one file skip on API names that never existed · HIGH
+
+`tests/unit/test_auth_analytics_backtest_coverage.py` wrapped whole test bodies
+— assertion included — in `except (ImportError, AttributeError): pytest.skip()`.
+Fourteen of its 37 tests skipped on every run since they were written. The names
+they import do not exist and never have:
+
+| Tested name | What actually exists |
+|---|---|
+| `analytics.performance.PerformanceAnalyzer` | `PerformanceAnalytics` |
+| `PortfolioAnalytics.calculate_portfolio_metrics` | `calculate_risk_metrics` |
+| `PortfolioAnalytics.calculate_var` | VaR is returned as `var_95` by `calculate_risk_metrics` |
+| `analytics.simulations.MonteCarloSimulation` | `SimulationEngine.monte_carlo_simulation` |
+| `backtesting.reports.generate_report` / `PerformanceReport` | `ReportGenerator.generate_text_report` |
+| `backtesting.plots.plot_equity_curve` / `plot_drawdown` | methods on `PerformancePlotter` |
+
+`analytics/` is in `.coveragerc` source, so the skips suppressed nothing
+visible: Sharpe ratio, max drawdown, VaR, portfolio optimisation, Monte Carlo,
+the execution handler and report generation were all silently unexercised behind
+a file whose name promised coverage of them.
+
+**The sharpest case is `SimulatedExecutionHandler`**, because the class and the
+method are both real. The test called
+`SimulatedExecutionHandler(initial_capital=100_000.0)`; the constructor takes
+`(data_handler, commission_pct, slippage_pct)`. The `TypeError` was caught by the
+same handler and reported as *"SimulatedExecutionHandler not available"* — about
+a class that was importable the whole time. A broad `except` around a whole test
+body converts the test's own mistakes into a skip that reads as an environment
+limitation. One test's handler was `except (AttributeError, Exception)`, which
+cannot let any failure through at all.
+
+**Fixed**: 46 tests, **0 skipped** (was 25 passed / 11 skipped / 3 phantom), all
+against the real API — including the slippage arithmetic in `execute_order`, the
+rendered text report, and the fact that `optimize_portfolio` returns weights
+summing to 1. The absent names are pinned by name so a future `calculate_var`
+arrives as a deliberate addition rather than as a test quietly un-skipping.
+
+Recorded, not asserted as correct: `TradeRecord.commission` is accepted by
+`analytics/performance.py` and read nowhere in it, so `total_return` is the raw
+sum of `pnl`. That is right if callers pass net P&L and wrong if they pass
+gross, and the module says neither. It is not live — `PerformanceAnalytics` has
+no production caller — so the test documents the question for whoever wires it
+up rather than inventing an answer.

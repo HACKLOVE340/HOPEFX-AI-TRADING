@@ -87,7 +87,29 @@ logger = logging.getLogger(__name__)
 # Default path is relative to the project root.  Override via env var in
 # production so the file lands on a durable volume, not the container FS.
 _DEFAULT_COUNTER_PATH = Path(__file__).resolve().parents[2] / "data" / "crypto_counters.json"
-_COUNTER_PATH = Path(os.getenv("HOPEFX_CRYPTO_COUNTER_PATH", str(_DEFAULT_COUNTER_PATH)))
+
+
+def _counter_path() -> Path:
+    """Resolve the counter file path, reading the environment each call.
+
+    This was a module-level constant::
+
+        _COUNTER_PATH = Path(os.getenv("HOPEFX_CRYPTO_COUNTER_PATH", ...))
+
+    evaluated once at import. The docstring above advertises the variable as the
+    production override "so the file lands on a durable volume, not the
+    container FS" -- but anything that imports this module before the variable
+    is set gets the in-repo default and never looks again, silently. The file it
+    points at is the only thing preventing two users being issued the same
+    deposit address, so an override that quietly does nothing puts that on
+    ephemeral container storage.
+
+    Reading it per call is the same fix applied to the kill-switch flag file
+    (F139), and for the same reason: a path that decides a safety property
+    should not be frozen by import order.
+    """
+    return Path(os.getenv("HOPEFX_CRYPTO_COUNTER_PATH", str(_DEFAULT_COUNTER_PATH)))
+
 
 # ── Derivation path constants ─────────────────────────────────────────────────
 #
@@ -220,12 +242,13 @@ class AddressGenerator:
     def _load_counters(self) -> dict[str, int]:
         """Read persisted counters from disk; return empty dict on first run."""
         try:
-            if _COUNTER_PATH.exists():
-                data = json.loads(_COUNTER_PATH.read_text())
+            path = _counter_path()
+            if path.exists():
+                data = json.loads(path.read_text())
                 if isinstance(data, dict):
                     return {k: int(v) for k, v in data.items()}
         except Exception as exc:
-            logger.error("Failed to load crypto counters from %s: %s", _COUNTER_PATH, exc)
+            logger.error("Failed to load crypto counters from %s: %s", _counter_path(), exc)
         return {}
 
     def _save_counters(self) -> None:
@@ -243,10 +266,11 @@ class AddressGenerator:
         reconciliation time, so the safe response to an unwritable counter is to
         stop issuing addresses, not to keep issuing ones we cannot account for.
         """
-        _COUNTER_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _COUNTER_PATH.with_suffix(".tmp")
+        path = _counter_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self._counters, indent=2))
-        os.replace(tmp, _COUNTER_PATH)
+        os.replace(tmp, path)
 
     def _get_mnemonic(self, currency: str) -> str:
         if currency not in self._mnemonics:
@@ -269,7 +293,7 @@ class AddressGenerator:
             except Exception as exc:
                 self._counters[currency] = idx  # roll back; nothing was issued
                 raise RuntimeError(
-                    f"Cannot persist the {currency} derivation counter to {_COUNTER_PATH}: {exc}. "
+                    f"Cannot persist the {currency} derivation counter to {_counter_path()}: {exc}. "
                     "Refusing to issue a deposit address that a restart could re-issue to "
                     "another user."
                 ) from exc

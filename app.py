@@ -916,7 +916,7 @@ async def startup_event():
             logger.warning("Could not mark startup complete: %s", _hc_err)
 
     except Exception:
-        logger.exception("Startup failed: %s")
+        logger.exception("Startup failed")
         raise
 
 
@@ -1068,7 +1068,7 @@ app.include_router(_compat_router)
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler."""
-    logger.exception("Unhandled exception: %s")
+    logger.exception("Unhandled exception")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"error": "Internal server error"},
