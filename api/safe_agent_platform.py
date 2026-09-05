@@ -45,6 +45,8 @@ _APPROVALS: list[dict[str, Any]] = []
 _PROPOSALS_KEY = "safe_platform:proposals"
 _APPROVALS_KEY = "safe_platform:approvals"
 _INTEGRATIONS_KEY = "safe_platform:integrations"
+_TASKS_KEY = "safe_platform:tasks"
+_TASKS: list[dict[str, Any]] = []
 
 
 def _load_state() -> None:
@@ -52,10 +54,13 @@ def _load_state() -> None:
     stored_proposals = config_store.get(_PROPOSALS_KEY, default=[])
     stored_approvals = config_store.get(_APPROVALS_KEY, default=[])
     stored_integrations = config_store.get(_INTEGRATIONS_KEY, default=[])
+    stored_tasks = config_store.get(_TASKS_KEY, default=[])
     if isinstance(stored_proposals, list):
         _PROPOSALS.extend(item for item in stored_proposals if isinstance(item, dict))
     if isinstance(stored_approvals, list):
         _APPROVALS.extend(item for item in stored_approvals if isinstance(item, dict))
+    if isinstance(stored_tasks, list):
+        _TASKS.extend(item for item in stored_tasks if isinstance(item, dict))
     if isinstance(stored_integrations, list):
         for stored in stored_integrations:
             if isinstance(stored, dict) and stored.get("id"):
@@ -69,6 +74,7 @@ def _save_state(changed_by: str) -> None:
     config_store.set(_PROPOSALS_KEY, _PROPOSALS, changed_by=changed_by)
     config_store.set(_APPROVALS_KEY, _APPROVALS, changed_by=changed_by)
     config_store.set(_INTEGRATIONS_KEY, [{key: value for key, value in item.items() if key not in {"secret", "token_value", "access_token", "refresh_token"}} for item in _INTEGRATIONS], changed_by=changed_by)
+    config_store.set(_TASKS_KEY, _TASKS, changed_by=changed_by)
 
 
 _load_state()
@@ -113,9 +119,30 @@ class IntegrationAction(BaseModel):
     reason: str = Field(min_length=3, max_length=400)
 
 
+class SupervisorTaskRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=4000)
+    requested_agents: list[str] = Field(default_factory=list, max_length=12)
+    allow_external_read: bool = False
+
+
 @router.get("/overview")
 async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"paper_mode": os.getenv("BROKER_TYPE", "paper") == "paper", "human_approval_required": True, "agents": copy.deepcopy(_AGENTS), "models": copy.deepcopy(_MODELS), "integrations": copy.deepcopy(_INTEGRATIONS), "pending_proposals": len([p for p in _PROPOSALS if p["status"] == "pending"]), "capabilities": {"external_read": True, "external_write": False, "live_trading": False, "self_modify": False, "credential_values_visible": False}}
+
+
+@router.post("/supervisor/tasks")
+async def create_supervisor_task(request: SupervisorTaskRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    allowed_ids = {agent["id"] for agent in _AGENTS}
+    requested = sorted(set(request.requested_agents) & allowed_ids)
+    task = {"id": _id("task", [user.sub, request.prompt, datetime.now(UTC).isoformat()]), "prompt": request.prompt, "status": "awaiting_plan", "requested_agents": requested or ["supervisor"], "external_read": request.allow_external_read, "external_access": "connector_required" if request.allow_external_read else "disabled", "side_effects": "blocked", "human_approval_required": True, "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "events": [{"type": "task_created", "actor": user.sub}]}
+    _TASKS.append(task)
+    _save_state(user.sub)
+    return {"task": copy.deepcopy(task), "message": "Task accepted for planning. No tool or external action has run."}
+
+
+@router.get("/supervisor/tasks")
+async def list_supervisor_tasks(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    return {"items": list(reversed(copy.deepcopy(_TASKS))), "side_effects": "blocked_until_human_approval"}
 
 
 @router.post("/diagnostics/run")
