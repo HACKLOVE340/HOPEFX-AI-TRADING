@@ -173,6 +173,31 @@ class TradeExecutor:
             )
 
         try:
+            requested_size = float(signal["size"])
+        except (TypeError, ValueError) as exc:
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.ERROR,
+                message=f"Invalid size: {exc}",
+                latency_ms=0,
+            )
+        if not math.isfinite(requested_size) or requested_size <= 0:
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.ERROR,
+                message="Invalid size: must be finite and positive",
+                latency_ms=0,
+            )
+
+        try:
             if action == "close":
                 result = await self._execute_close(signal)
             else:
