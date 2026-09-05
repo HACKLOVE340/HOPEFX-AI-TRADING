@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -41,8 +42,18 @@ def main() -> int:
     csv = os.getenv("AB_CSV", "data/XAUUSD_40Y.csv")
     horizon = os.getenv("AB_HORIZON", "5")
     oos_years = os.getenv("AB_OOS_YEARS", "3")
-    min_lift = float(os.getenv("AB_MIN_LIFT", "0.0"))
-    min_ml_acc = float(os.getenv("AB_MIN_ML_ACC", "0.52"))
+    try:
+        min_lift = float(os.getenv("AB_MIN_LIFT", "0.0"))
+        min_ml_acc = float(os.getenv("AB_MIN_ML_ACC", "0.52"))
+    except ValueError as exc:
+        print(f"Gate M FAILED — invalid threshold configuration: {exc}")
+        return 1
+    if not math.isfinite(min_lift) or not math.isfinite(min_ml_acc):
+        print("Gate M FAILED — thresholds must be finite numbers")
+        return 1
+    if not 0.0 <= min_ml_acc <= 1.0:
+        print("Gate M FAILED — AB_MIN_ML_ACC must be between 0 and 1")
+        return 1
 
     csv_path = REPO_ROOT / csv
     if not csv_path.exists():
@@ -78,10 +89,21 @@ def main() -> int:
         print(f"Gate M FAILED — report not produced at {REPORT_PATH}")
         return 1
 
-    report = json.loads(REPORT_PATH.read_text())
-    lift = float(report.get("ml_accuracy_lift", -1.0))
-    ml_acc = float(report.get("ml", {}).get("accuracy", 0.0))
-    base_acc = float(report.get("baseline", {}).get("accuracy", 0.0))
+    try:
+        report = json.loads(REPORT_PATH.read_text())
+        lift = float(report["ml_accuracy_lift"])
+        ml_acc = float(report["ml"]["accuracy"])
+        base_acc = float(report["baseline"]["accuracy"])
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        print(f"Gate M FAILED — invalid or incomplete report: {exc}")
+        return 1
+    metrics = (lift, ml_acc, base_acc)
+    if any(not math.isfinite(value) for value in metrics):
+        print("Gate M FAILED — report metrics must be finite numbers")
+        return 1
+    if any(value < 0.0 or value > 1.0 for value in (ml_acc, base_acc)):
+        print("Gate M FAILED — accuracy metrics must be between 0 and 1")
+        return 1
 
     print(
         f"Gate M — baseline_acc={base_acc:.3f} ml_acc={ml_acc:.3f} "

@@ -506,6 +506,7 @@ from core.startup_helpers import (
     start_l2_feed as _start_l2_feed,
     start_nuclear_price_bridge as _start_nuclear_price_bridge,
 )
+from api.professional_control_plane import mark_startup_component as _mark_control_plane_component
 
 
 @asynccontextmanager
@@ -514,6 +515,8 @@ async def lifespan(_app: FastAPI):
     # Re-validate environment on every startup/restart (catches config drift on
     # hot-reload or container restart without a full process exit).
     validate_environment(strict=True)
+    _mark_control_plane_component("configuration", "ready")
+    _mark_control_plane_component("startup", "starting")
 
     # Build the React frontend in the background if static/index.html is absent.
     # Runs as a fire-and-forget thread so the API starts immediately without

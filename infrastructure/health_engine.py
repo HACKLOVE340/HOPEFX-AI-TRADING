@@ -197,6 +197,13 @@ class HealthEngine:
             probe_duration_ms=duration_ms,
         )
 
+    async def run_ai_observation(self, observation_id: str, names: list[str] | None = None) -> Any:
+        """Return an immutable AI evidence record without triggering recovery."""
+        from core.ai_operations import observe_health
+
+        report = await self.run_all(names)
+        return observe_health(report, observation_id)
+
 
 # ---------------------------------------------------------------------------
 # Singleton

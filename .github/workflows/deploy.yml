@@ -70,7 +70,10 @@ jobs:
             # them unrecorded. Costs nothing when the tree is clean.
             if ! git diff --quiet HEAD 2>/dev/null; then
               drift="/tmp/hopefx-drift-$(date -u +%Y%m%d-%H%M%S).patch"
-              git diff --binary HEAD > "$drift" || true
+              if ! git diff --binary HEAD > "$drift"; then
+                echo "[ci] ERROR: could not preserve server drift; refusing destructive reset"
+                exit 1
+              fi
               echo "[ci] WARNING: server had local modifications; saved to $drift"
               echo "[ci]          restore with: git apply -3 $drift"
               git status --porcelain | head -40

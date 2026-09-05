@@ -1,9 +1,10 @@
 # Live Trading Gate — 30-Day Paper Trade Requirement
 
-!!! warning "This is the only gap that cannot be closed by writing code"
-    Every other item in the platform is built and deployed. This one requires
-    **30 calendar days** of the application running against a real OANDA practice
-    account. No amount of code can substitute for that time.
+!!! warning "This is one required gate, not the only readiness check"
+    A live-trading decision also depends on successful model retraining,
+    reviewed model promotion, broker reconciliation, restart recovery, and
+    end-to-end execution tests. The 30-day paper-trading period is required,
+    but it cannot substitute for those technical and operational controls.
 
 ---
 
@@ -67,7 +68,8 @@ If any check fails, see [DEBUGGING.md](DEBUGGING.md) for OANDA-specific troubles
 ## Step 4 — Start paper trading
 
 ```bash
-python main.py
+# Unified paper-trading entry point; keep the broker explicit.
+python run.py --broker oanda --mode paper
 ```
 
 The application logs a `paper_trading_started_at` timestamp on first run.
@@ -101,7 +103,13 @@ Live trading prerequisites
 
 ---
 
-## Step 6 — Enable live trading (after 30 days)
+## Step 6 — Request live trading review (after all gates pass)
+
+Thirty days of clean paper trading is only one prerequisite. Before any live
+activation, confirm current model-promotion evidence, broker reconciliation,
+restart recovery, execution and kill-switch tests, security/CI status,
+conservative risk limits, and an explicit operator review. Do not enable live
+trading by only changing environment variables.
 
 Once all checks pass:
 
@@ -144,8 +152,9 @@ Start conservative. You can always increase limits after observing live behaviou
 python scripts/enable_live_trading.py --force
 ```
 
-`--force` bypasses the duration check. Use only in development environments
-with a practice account — never on a live account.
+`--force` bypasses the duration check only; it does not replace model,
+reconciliation, recovery, security, risk, or operator gates. Use only in
+development environments with a practice account — never on a live account.
 
 **What counts as an "execution error"?**
 

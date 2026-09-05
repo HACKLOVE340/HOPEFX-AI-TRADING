@@ -185,6 +185,15 @@ class TestExecuteSignalValidation:
         assert "Invalid action" in result.message
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("size", [0, -1, float("nan"), float("inf"), "not-a-number"])
+    async def test_invalid_size_is_rejected_before_risk_gate(self, size):
+        ex = _make_executor()
+        result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": size})
+        assert result.success is False
+        assert result.status == OrderStatus.ERROR
+        assert "Invalid size" in result.message
+
+    @pytest.mark.asyncio
     async def test_latency_recorded_on_success(self):
         ex = _make_executor()
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:

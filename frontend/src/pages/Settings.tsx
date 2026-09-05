@@ -61,6 +61,7 @@ const SASystemHealthSection    = lazy(() => import('./superadmin/SystemHealthSec
 const SAAutoHealingSection     = lazy(() => import('./superadmin/AutoHealingSection'));
 const PlatformConfigSection    = lazy(() => import('./settings/PlatformConfiguration'));
 const SystemReliabilitySection = lazy(() => import('./superadmin/SystemReliabilitySection'));
+const ProfessionalControlPlane = lazy(() => import('./settings/ProfessionalControlPlane'));
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -115,6 +116,25 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'notifications', label: 'Notifications',  icon: '🔔', keywords: 'alerts email discord slack telegram webhook' },
       { id: 'accessibility', label: 'Accessibility',  icon: '♿', keywords: 'contrast motion screen reader colour blind text size' },
       { id: 'privacy',       label: 'Privacy & Data', icon: '🔏', keywords: 'gdpr export delete consent sharing leaderboard retention' },
+    ],
+  },
+  {
+    label: 'Professional Operations',
+    tabs: [
+      { id: 'control-overview', label: 'Readiness', icon: '◈', adminOnly: true, keywords: 'startup health degraded status' },
+      { id: 'control-brain', label: 'Core Brain', icon: '◎', adminOnly: true, keywords: 'brain policy approval' },
+      { id: 'control-models', label: 'Models', icon: '⌁', adminOnly: true, keywords: 'model routing fallback provider' },
+      { id: 'control-agents', label: 'Agents', icon: '◇', adminOnly: true, keywords: 'agents teams schedules' },
+      { id: 'control-connectors', label: 'Connectors', icon: '↔', adminOnly: true, keywords: 'plugins tools integrations' },
+      { id: 'control-sandbox', label: 'Sandbox', icon: '□', adminOnly: true, keywords: 'sandbox sessions limits network' },
+      { id: 'control-startup', label: 'Startup', icon: '↻', adminOnly: true, keywords: 'lifecycle boot restart' },
+      { id: 'control-audit', label: 'Config Audit', icon: '≡', adminOnly: true, keywords: 'audit versions revision rollback' },
+      { id: 'safe-supervisor', label: 'Supervisor', icon: '◎', adminOnly: true, keywords: 'multi agent orchestration delegation' },
+      { id: 'safe-agents', label: 'Specialist Agents', icon: '◇', adminOnly: true, keywords: 'agents teams capabilities' },
+      { id: 'safe-models', label: 'Model Router', icon: '⌁', adminOnly: true, keywords: 'models fallback routing costs' },
+      { id: 'safe-integrations', label: 'External Access', icon: '↔', adminOnly: true, keywords: 'api tokens connectors vault scopes' },
+      { id: 'safe-repairs', label: 'Repairs & Upgrades', icon: '⚙', adminOnly: true, keywords: 'diagnostics repair upgrade rollback approval' },
+      { id: 'safe-chat', label: 'Operator Chat', icon: '◌', adminOnly: true, keywords: 'chat voice tools citations' },
     ],
   },
   {
@@ -286,6 +306,11 @@ const Settings: React.FC = () => {
       case 'notifications':     return <NotificationsSection />;
       case 'accessibility':     return <AccessibilitySection />;
       case 'privacy':           return <PrivacySection />;
+      // Professional operations
+      case 'control-overview': case 'control-brain': case 'control-models': case 'control-agents':
+      case 'control-connectors': case 'control-sandbox': case 'control-startup': case 'control-audit':
+      case 'safe-supervisor': case 'safe-agents': case 'safe-models': case 'safe-integrations': case 'safe-repairs': case 'safe-chat':
+        return admin ? <ProfessionalControlPlane tab={activeTab} /> : null;
       // Administration
       case 'system':            return admin      ? <SystemSection />          : null;
       case 'performance':       return admin      ? <PerformanceSection />     : null;

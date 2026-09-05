@@ -25,7 +25,6 @@ import os
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -112,14 +111,28 @@ class PositionReconciler:
         if not db_positions:
             return
 
-        # Fetch broker positions if available
-        broker_positions: ClassVar[dict] = {}
+        # Fetch broker positions if available. Keep fetch success separate from
+        # mapping truthiness: an honest empty broker book must detect DB-only
+        # positions, while a failed fetch must remain an unknown state.
+        broker_positions: dict = {}
+        broker_snapshot_available = False
         if self._broker and hasattr(self._broker, "get_positions"):
             try:
                 raw = self._broker.get_positions()
                 if asyncio.iscoroutine(raw):
                     raw = await raw
-                broker_positions = {p.get("symbol", p): p for p in (raw or [])}
+                if raw is None:
+                    raise RuntimeError("broker returned no position snapshot")
+                broker_positions = {}
+                for position in raw or []:
+                    if isinstance(position, dict):  # noqa: SIM108 — explicit branch is audit-critical
+                        symbol = position.get("symbol")
+                    else:
+                        symbol = getattr(position, "symbol", None)
+
+                    if symbol:
+                        broker_positions[str(symbol)] = position
+                broker_snapshot_available = True
             except Exception as exc:
                 logger.warning("Could not fetch broker positions: %s", exc)
 
@@ -150,7 +163,7 @@ class PositionReconciler:
                     updated += 1
 
             # ── Drift detection ───────────────────────────────────────────────
-            if broker_positions:
+            if broker_snapshot_available:
                 if pos.symbol not in broker_positions:
                     self._mismatches += 1
                     self._consecutive_mismatches[pos.symbol] = self._consecutive_mismatches.get(pos.symbol, 0) + 1

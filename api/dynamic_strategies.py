@@ -130,7 +130,7 @@ async def register_strategy(request: RegisterStrategyRequest, user=_require_admi
             source_code=request.source_code,
             symbol=request.symbol,
             timeframe=request.timeframe,
-            author_id="system",  # Will be replaced with actual user ID from auth
+            author_id=str(getattr(user, "sub", None) or getattr(user, "id", None) or "unknown"),
         )
         return {
             "status": "success",

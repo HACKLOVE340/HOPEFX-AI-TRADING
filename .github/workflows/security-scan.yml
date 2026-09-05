@@ -28,17 +28,15 @@ jobs:
         run: pip install bandit[toml]
 
       - name: Run bandit
-        # Reports HIGH-severity findings but does not block CI — pre-existing
-        # HIGH findings are tracked in the security dashboard.
-        # Change || true to a hard exit once all HIGH findings are resolved.
+        # HIGH-severity findings are merge blockers. The JSON report is written
+        # before the human-readable check so it is retained on failure.
         run: |
+          set -o pipefail
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
             --severity-level high \
-            -f json -o bandit-report.json || true
-          # Ensure report file always exists so the upload step never errors
-          test -f bandit-report.json || echo '{"results":[],"errors":[]}' > bandit-report.json
+            -f json -o bandit-report.json
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
-            --severity-level high -q || true
+            --severity-level high -q
 
       - name: Upload report
         if: always()
@@ -70,19 +68,36 @@ jobs:
       - name: Run safety check
         # safety scan requires authentication since Safety CLI 3.x.
         # Falls back to pip-audit (no auth required) when SAFETY_API_KEY is absent.
-        # Both paths use || true — CVE reports go to the security dashboard,
-        # not as CI blockers, until all transitive CVEs have fixes available.
+        # Vulnerability findings are merge blockers; reports remain available
+        # through the always-run artifact upload.
         run: |
+          set -o pipefail
           if [ -n "$SAFETY_API_KEY" ]; then
-            safety scan -r requirements.txt --output json > safety-report.json || true
-            safety scan -r requirements.txt --severity high || true
+            safety scan -r requirements.txt --output json > safety-report.json
+            safety scan -r requirements.txt --severity high
           else
             echo "SAFETY_API_KEY not set — using pip-audit as fallback"
             pip-audit -r requirements.txt --desc --no-deps \
               --format json -o safety-report.json || true
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("safety-report.json").read_text())
+          fixable = [
+              vulnerability
+              for dependency in report.get("dependencies", [])
+              for vulnerability in dependency.get("vulns", [])
+              if vulnerability.get("fix_versions")
+          ]
+          if fixable:
+              print(f"BLOCKED: {len(fixable)} vulnerability(s) have a published fix")
+              for vulnerability in fixable:
+                  print(f"  {vulnerability['id']}: {vulnerability.get('description', '')[:120]}")
+              raise SystemExit(1)
+          print("pip-audit: no fixable CVEs found")
+          PY
           fi
-          # Ensure report file always exists so the upload step never errors
-          test -f safety-report.json || echo '[]' > safety-report.json
         env:
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
 
@@ -123,12 +138,10 @@ jobs:
           trivy version
           trivy fs . \
             --severity CRITICAL,HIGH \
-            --exit-code 0 \
+            --exit-code 1 \
             --ignore-unfixed \
             --format sarif \
-            --output trivy-results.sarif || true
-          # Ensure file always exists so the upload step never errors
-          test -f trivy-results.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
+            --output trivy-results.sarif
 
       - name: Upload Trivy scan results to GitHub Security tab
         # continue-on-error: SARIF upload requires GHAS; fails gracefully
@@ -151,13 +164,11 @@ jobs:
           persist-credentials: false
 
       - name: Secret Detection
-        # Pinned to SHA for supply-chain safety (tag: v3.88.1)
-        # continue-on-error: TruffleHog exits non-zero when verified secrets
-        # are found; we report but do not block CI until the finding backlog
-        # is cleared.  Also handles the zero-SHA edge case on first push to
-        # a new branch where github.event.before is all zeros.
+        # Pinned to SHA for supply-chain safety (tag: v3.88.1). Verified
+        # credentials are a merge blocker; unverified matches are intentionally
+        # excluded to avoid turning ordinary documentation examples into false
+        # positives.
         uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11
-        continue-on-error: true
         with:
           path: ./
           base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD~1' }}

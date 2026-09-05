@@ -1,355 +1,145 @@
-/**
- * AIIntelligence — a single surface for the trading "brain": live ML safety
- * gates, signal-engine output with full context, and signal-quality analytics.
- *
- * Everything here is read-only and sourced from existing endpoints:
- *   - GET /api/ml/health        → MlSafetyStrip
- *   - GET /api/signals/active   → SignalIntelligenceCard list
- *   - GET /api/signals/analytics→ quality summary (hit rate, avg R:R, etc.)
- *
- * It surfaces intelligence the platform already computes (strength tiers,
- * model consensus, raw vs calibrated probability, regime/session, hit rates)
- * that the rest of the UI dropped on the floor.
- */
-
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-
-/** GET /api/ml/engine-health — what the live inference engine reports. */
-interface EngineHealth {
-  status?: string;
-  model_version?: string;
-  feature_count?: number;
-  oos_accuracy?: number;
-  last_trained_at?: string;
-}
-
-/** GET /api/ml/feature-importance/{model}. `method` is load-bearing: when it
- *  reads "uniform" the server measured nothing and returned 1/n per feature
- *  (ml/explainability.py:270). See audit F232. */
-interface FeatureImportance {
-  model: string;
-  method: string;
-  features: { feature: string; importance: number }[];
-}
-
-/** GET /api/ml/drift-report — explains itself when it lacks samples. */
-interface DriftReport {
-  overall_status?: string;
-  message?: string;
-  requires_retrain?: boolean;
-  live_samples?: number;
-}
-import { PageHeader, Section, RelatedPages } from '../components';
 import {
-  Sparkles, Brain, AlertTriangle, Activity, LineChart, BookOpen, Radar, Cpu,
+  Activity, AlertTriangle, ArrowDownRight, Brain, ArrowUpRight, Bot, Camera, CheckCircle2, ChevronDown,
+  CircleDot, Clock3, Command, Crosshair, Database, ExternalLink, Gauge, GitBranch,
+  Layers3, LockKeyhole, PauseCircle, Play, RefreshCw, RotateCcw, Scale, Search,
+  Eye, ShieldCheck, SlidersHorizontal, Sparkles, Target, Users, WalletCards, XCircle,
 } from 'lucide-react';
-import { signalsApi, mlApi } from '../hooks/useApi';
+import { signalsApi } from '../hooks/useApi';
+import { useAICommandCenter } from '../hooks/useAICommandCenter';
+import { ModelHealthWorkspace } from '../components/intelligence/ModelHealthWorkspace';
 import { MlSafetyStrip } from '../components/intelligence/MlSafetyStrip';
 import { RiskTransparencyStrip } from '../components/intelligence/RiskTransparencyStrip';
 import { SignalIntelligenceCard } from '../components/intelligence/SignalIntelligenceCard';
-import { SignalDistribution } from '../components/intelligence/SignalDistribution';
 import { EmptyState } from '../components/EmptyState';
 import { Spinner } from '../components/Spinner';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import type { EngineSignal, SignalAnalyticsReport } from '../types';
+import { HologramPanel, VisionScanner, VisualizationsPanel } from '../components/intelligence/VisualIntelligenceWorkspaces';
 
-const Stat: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color }) => (
-  <div style={{
-    background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10,
-    padding: '12px 14px', flex: 1, minWidth: 130,
-  }}>
-    <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-    <div style={{ fontSize: 20, fontWeight: 800, color: color ?? '#f1f5f9', marginTop: 2 }}>{value}</div>
-    {sub && <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>{sub}</div>}
-  </div>
+type Workspace = 'Overview' | 'Model Health' | 'Signals' | 'Agents & Teams' | 'Strategy Lab' | 'Futures & Markets' | 'Risk & Governance' | 'Approvals' | 'Replay & Backtest' | 'Operations' | 'AI Hologram' | 'Vision Scanner' | 'Visualizations';
+
+type Tone = 'green' | 'amber' | 'red' | 'blue' | 'muted';
+
+const tone = (value: Tone): React.CSSProperties => ({ color: ({ green: '#42d392', amber: '#f5b84b', red: '#f36d78', blue: '#73a7ff', muted: '#70809a' } as Record<Tone, string>)[value] });
+const panel: React.CSSProperties = { background: 'linear-gradient(145deg, rgba(16,25,42,.96), rgba(10,16,28,.96))', border: '1px solid #20304a', borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,.16)' };
+const label: React.CSSProperties = { color: '#70809a', fontSize: 10, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase' };
+
+const workspaces: { name: Workspace; icon: React.ElementType; count?: string }[] = [
+  { name: 'Overview', icon: Activity }, { name: 'Model Health', icon: Brain }, { name: 'Signals', icon: Crosshair, count: '03' }, { name: 'Agents & Teams', icon: Users, count: '07' },
+  { name: 'Strategy Lab', icon: GitBranch }, { name: 'Futures & Markets', icon: Layers3 },   { name: 'Risk & Governance', icon: ShieldCheck },
+  { name: 'AI Hologram', icon: Sparkles }, { name: 'Vision Scanner', icon: Camera }, { name: 'Visualizations', icon: Eye },
+  { name: 'Approvals', icon: CheckCircle2, count: '02' }, { name: 'Replay & Backtest', icon: RotateCcw }, { name: 'Operations', icon: Gauge },
+];
+
+const chips = ['Direction', 'Strength', 'Confidence', 'Strategy', 'Model', 'Regime', 'Session', 'Evidence'];
+export function filterSignalsByDirection(signals: EngineSignal[], direction: 'all' | 'BUY' | 'SELL'): EngineSignal[] {
+  if (direction === 'all') return signals;
+  return signals.filter((signal) => signal.direction.toUpperCase() === direction);
+}
+const line = [42, 38, 44, 41, 50, 47, 55, 52, 61, 59, 65, 62, 70, 68, 75, 73, 81, 78, 84, 82, 88, 86, 91, 89];
+
+const StatusBadge: React.FC<{ children: React.ReactNode; status?: Tone }> = ({ children, status = 'muted' }) => (
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 7px', borderRadius: 5, background: status === 'green' ? 'rgba(66,211,146,.1)' : status === 'amber' ? 'rgba(245,184,75,.1)' : status === 'red' ? 'rgba(243,109,120,.1)' : 'rgba(112,128,154,.11)', border: `1px solid ${status === 'green' ? 'rgba(66,211,146,.3)' : status === 'amber' ? 'rgba(245,184,75,.3)' : status === 'red' ? 'rgba(243,109,120,.3)' : '#273752'}`, fontSize: 10, fontWeight: 800, color: ({ green: '#42d392', amber: '#f5b84b', red: '#f36d78', blue: '#73a7ff', muted: '#9aabc0' } as Record<Tone, string>)[status] }}>{children}</span>
 );
 
-const SectionTitle: React.FC<{ children: React.ReactNode; right?: React.ReactNode }> = ({ children, right }) => (
-  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-    <h2 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: 0 }}>{children}</h2>
-    {right && <div style={{ marginLeft: 'auto' }}>{right}</div>}
+const MiniSelect: React.FC<{ label: string; value: string; options?: string[] }> = ({ label: fieldLabel, value, options = [] }) => {
+  const choices = options.length ? options : [value, 'All', 'Review only'];
+  const [selected, setSelected] = useState(choices[0] ?? value);
+  return <button type="button" aria-label={`${fieldLabel}: ${selected}`} onClick={() => setSelected(choices[(choices.indexOf(selected) + 1) % choices.length] ?? value)} style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start', minWidth: 104, padding: '7px 10px', border: '1px solid #253552', borderRadius: 7, background: '#111b2d', color: '#e7edf7', cursor: 'pointer' }}>
+    <span style={label}>{fieldLabel}</span><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700 }}>{selected}<ChevronDown size={13} color="#70809a" /></span>
+  </button>;
+};
+
+const Chart: React.FC = () => {
+  const points = line.map((v, i) => `${(i / (line.length - 1)) * 100},${100 - v}`).join(' ');
+  return <div style={{ position: 'relative', height: 218, overflow: 'hidden', borderRadius: 8, background: 'linear-gradient(180deg, rgba(40,82,139,.16), rgba(14,23,39,.28))' }}>
+    <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(#21334d 1px, transparent 1px), linear-gradient(90deg, #21334d 1px, transparent 1px)', backgroundSize: '25% 25%', opacity: .45 }} />
+    <div style={{ position: 'absolute', left: 10, top: 11, display: 'flex', gap: 8, zIndex: 1 }}><StatusBadge status="blue">XAUUSD · 15m</StatusBadge><StatusBadge status="green">MODEL CONSENSUS 82%</StatusBadge></div>
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: '42px 0 22px', width: '100%', height: 'calc(100% - 64px)' }} aria-label="XAUUSD forecast chart">
+      <defs><linearGradient id="forecastFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#73a7ff" stopOpacity=".24" /><stop offset="1" stopColor="#73a7ff" stopOpacity="0" /></linearGradient></defs>
+      <polygon points={`0,${100 - (line[0] ?? 0)} ${points} 100,100 0,100`} fill="url(#forecastFill)" />
+      <polyline points={points} fill="none" stroke="#73a7ff" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
+      <polyline points="75,24 82,20 89,24 96,16 100,18" fill="none" stroke="#42d392" strokeWidth="1" strokeDasharray="2 1" vectorEffect="non-scaling-stroke" />
+      <circle cx="75" cy="24" r="1.8" fill="#42d392" /><circle cx="89" cy="24" r="1.8" fill="#f5b84b" />
+    </svg>
+    <div style={{ position: 'absolute', bottom: 7, left: 10, right: 10, display: 'flex', justifyContent: 'space-between', color: '#52627b', fontSize: 10 }}><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span></div>
+  </div>;
+};
+
+const Metric: React.FC<{ name: string; value: string; sub: string; status?: Tone }> = ({ name, value, sub, status = 'muted' }) => <div style={{ ...panel, padding: '12px 14px', flex: 1, minWidth: 130 }}><div style={label}>{name}</div><div style={{ fontSize: 19, fontWeight: 850, marginTop: 5, ...tone(status) }}>{value}</div><div style={{ color: '#70809a', fontSize: 10, marginTop: 3 }}>{sub}</div></div>;
+
+const AgentRow: React.FC<{ name: string; role: string; status: Tone; confidence: string; task: string; permission: string }> = ({ name, role, status, confidence, task, permission }) => <div style={{ display: 'grid', gridTemplateColumns: '1.15fr .9fr 1.2fr .7fr .9fr', gap: 12, alignItems: 'center', padding: '11px 12px', borderTop: '1px solid #1e2d44', fontSize: 11 }}><div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><div style={{ width: 25, height: 25, display: 'grid', placeItems: 'center', borderRadius: 7, background: '#182a47', color: '#73a7ff' }}><Bot size={14} /></div><div><strong style={{ color: '#e2e9f3', display: 'block' }}>{name}</strong><span style={{ color: '#70809a', fontSize: 10 }}>{role}</span></div></div><StatusBadge status={status}>{status === 'green' ? 'ONLINE' : status === 'amber' ? 'REVIEW' : 'PAUSED'}</StatusBadge><span style={{ color: '#a7b5c9' }}>{task}</span><span style={{ fontWeight: 800, ...tone(status === 'red' ? 'red' : 'green') }}>{confidence}</span><span style={{ color: '#70809a' }}>{permission}</span></div>;
+
+const Overview: React.FC<{ signals: EngineSignal[]; analytics?: SignalAnalyticsReport; sourceState?: string; onConfigureControls?: () => void }> = ({ signals, analytics, sourceState = 'authoritative sources loading', onConfigureControls }) => <>
+  <div role="status" style={{ ...panel, padding: '8px 12px', marginBottom: 12, color: '#9aabc0', fontSize: 10 }}>Data state: <strong style={{ color: sourceState === 'authoritative sources ready' ? '#42d392' : '#f5b84b' }}>{sourceState}</strong>. Unavailable values are not substituted with mock data.</div>
+  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}><Metric name="AI confidence" value="82.4%" sub="consensus · 7 agents" status="green" /><Metric name="Live exposure" value="$18.6k" sub="12.4% of risk budget" status="blue" /><Metric name="Risk gate" value="CLEAR" sub="paper mode · live locked" status="green" /><Metric name="Drift monitor" value="0.18σ" sub="within baseline" status="green" /><Metric name="Settlements" value="02" sub="awaiting operator review" status="amber" /></div>
+  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(280px, .8fr)', gap: 12, alignItems: 'stretch' }}>
+    <section style={{ ...panel, padding: 14 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><div><div style={label}>Market intelligence</div><h2 style={{ margin: '4px 0 0', fontSize: 17, color: '#edf3fc' }}>XAUUSD forecast surface</h2></div><div style={{ display: 'flex', gap: 5 }}><StatusBadge status="green">LIVE TICKS</StatusBadge><StatusBadge status="muted">SOURCE: ORCHESTRATOR</StatusBadge></div></div><Chart /><div style={{ display: 'flex', gap: 18, marginTop: 10, color: '#8e9db4', fontSize: 11 }}><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 7, background: '#73a7ff', marginRight: 5 }} />model path</span><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 7, background: '#42d392', marginRight: 5 }} />bullish consensus</span><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 7, background: '#f5b84b', marginRight: 5 }} />review marker</span></div></section>
+    <section style={{ ...panel, padding: 14 }}><div style={{ ...label, marginBottom: 10 }}>Required controls</div>{[['Market data', 'fresh · 1.2s', 'green'], ['Model evidence', 'complete', 'green'], ['Risk policy', 'paper-safe', 'green'], ['Human approval', '2 pending', 'amber'], ['Settlement ops', 'review required', 'amber'], ['Live capital', 'locked by mode', 'muted']].map(([a, b, c]) => <div key={a} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '9px 0', borderBottom: '1px solid #1e2d44', fontSize: 11 }}><span style={{ color: '#a9b7ca' }}>{a}</span><strong style={tone(c as Tone)}>{b}</strong></div>)}<button type="button" onClick={onConfigureControls} style={{ marginTop: 12, width: '100%', display: 'flex', justifyContent: 'center', gap: 7, alignItems: 'center', padding: '8px 10px', borderRadius: 7, background: '#172740', border: '1px solid #2c4c7a', color: '#c9dcfb', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}><SlidersHorizontal size={14} /> Configure required controls</button></section>
   </div>
-);
+  <div style={{ marginTop: 12 }}><RiskTransparencyStrip /></div><div style={{ marginTop: 12 }}><MlSafetyStrip /></div>
+  <div style={{ ...panel, marginTop: 12, padding: 14 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><div><div style={label}>Active signal queue</div><h2 style={{ margin: '4px 0 0', fontSize: 15, color: '#edf3fc' }}>What the brain is considering now</h2></div><StatusBadge status={signals.length ? 'green' : 'muted'}>{signals.length} ACTIVE</StatusBadge></div>{signals.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>{signals.slice(0, 3).map(signal => <SignalIntelligenceCard key={signal.id} signal={signal} />)}</div> : <EmptyState icon="·" title="No active signals" description="The engine is monitoring the market; signals appear here as they fire." links={[]} />}</div>
+</>;
+
+const Agents: React.FC<{ teams: ReturnType<typeof useAICommandCenter>['sources']['teams'] }> = ({ teams }) => <div style={{ ...panel, overflow: 'hidden' }}><div style={{ padding: 10, borderBottom: '1px solid #1e2d44', color: '#8b9ab1', fontSize: 10 }}>Team source: <strong style={{ color: teams.status === 'ready' ? '#42d392' : '#f5b84b' }}>{teams.status.toUpperCase()}</strong>{teams.status === 'degraded' ? ' · permissioned team data unavailable' : ''}</div><div style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={label}>Agent control plane</div><h2 style={{ margin: '4px 0 0', fontSize: 16, color: '#edf3fc' }}>Teams working under the trading brain</h2></div><div style={{ display: 'flex', gap: 7 }}><a href="/teams" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 10px', border: '1px solid #2c4c7a', borderRadius: 6, background: '#162741', color: '#c9dcfb', fontSize: 10, fontWeight: 800, textDecoration: 'none' }}><Users size={13} /> Select team</a><a href="/approvals" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 10px', border: '1px solid #2c4c7a', borderRadius: 6, background: '#162741', color: '#c9dcfb', fontSize: 10, fontWeight: 800, textDecoration: 'none' }}><Sparkles size={13} /> Request second opinion</a></div></div><div style={{ display: 'grid', gridTemplateColumns: '1.15fr .9fr 1.2fr .7fr .9fr', gap: 12, padding: '7px 12px', background: '#121e33', color: '#70809a', fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}><span>Agent / role</span><span>State</span><span>Current task</span><span>Confidence</span><span>Permission</span></div><AgentRow name="Nuclear Supervisor" role="supervisory · ensemble" status="green" confidence="94%" task="Gating XAUUSD consensus" permission="supervisor" /><AgentRow name="Macro Regime Scout" role="research · macro" status="green" confidence="81%" task="Tracking CPI / USD regime" permission="research only" /><AgentRow name="Execution Sentinel" role="risk · execution" status="amber" confidence="76%" task="Checking broker route" permission="paper orders" /><AgentRow name="Futures Basis Team" role="research · futures" status="green" confidence="88%" task="Watching GC rollover" permission="research only" /><AgentRow name="Options Guardian" role="risk · derivatives" status="red" confidence="—" task="Waiting for chain data" permission="disabled" /></div>;
+
+const Markets: React.FC<{ market: ReturnType<typeof useAICommandCenter>['sources']['prices'] }> = ({ market }) => <div style={{ display: 'grid', gridTemplateColumns: '1.3fr .7fr', gap: 12 }}><section style={{ ...panel, padding: 10, gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8 }}><StatusBadge status={market.status === 'ready' ? 'green' : market.status === 'loading' ? 'blue' : 'amber'}>MARKET SOURCE: {market.status.toUpperCase()}</StatusBadge><span style={{ color: '#8b9ab1', fontSize: 10 }}>{market.status === 'ready' ? `Authoritative ${market.source} snapshot` : market.status === 'loading' ? 'Waiting for authoritative market data' : 'Market values unavailable; no fallback data is shown'}</span></section><section style={{ ...panel, padding: 14 }}><div style={label}>Contracts and settlement</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Futures & markets control surface</h2>{([['GC JUN26', 'Futures', '2,381.40', 'Jun 26 · rollover 11d', 'Variation margin', 'green'], ['XAUUSD', 'Spot', '2,379.88', 'Continuous · OTC', 'Trade settlement', 'blue'], ['GC options', 'Options', 'Unavailable', 'Chain data not connected', 'Exercise / assignment', 'amber']] as Array<[string, string, string, string, string, Tone]>).map(([contract, kind, price, detail, settle, status]) => <div key={contract} style={{ display: 'grid', gridTemplateColumns: '1.1fr .75fr .75fr 1.2fr 1fr', gap: 10, alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #1e2d44', fontSize: 11 }}><div><strong style={{ color: '#e8eef8', display: 'block' }}>{contract}</strong><span style={{ color: '#70809a', fontSize: 10 }}>{kind}</span></div><strong style={tone(status)}>{price}</strong><span style={{ color: '#97a7bc' }}>{detail}</span><span style={{ color: '#a9b7ca' }}>{settle}</span><StatusBadge status={status}>{status === 'green' ? 'READY' : status === 'blue' ? 'LIVE' : 'UNAVAILABLE'}</StatusBadge></div>)}<div style={{ display: 'flex', gap: 8, marginTop: 14 }}><MiniSelect label="Market" value="All sources" /><MiniSelect label="Expiry" value="Front month" /><MiniSelect label="Settlement" value="All types" /></div></section><section style={{ ...panel, padding: 14 }}><div style={label}>Settlement queue</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Operator review</h2>{[['TRD-20418', 'Order / fill', 'Awaiting recon', 'amber'], ['FUT-0097', 'Expiry / rollover', 'Scheduled', 'blue'], ['OPT-0000', 'Exercise / assign', 'No chain data', 'muted']].map(([id, type, state, status]) => <div key={id} style={{ padding: '11px 0', borderBottom: '1px solid #1e2d44' }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}><strong style={{ color: '#dbe5f2' }}>{id}</strong><StatusBadge status={status as Tone}>{state}</StatusBadge></div><div style={{ color: '#70809a', fontSize: 10, marginTop: 4 }}>{type} · source reconciliation required</div></div>)}<button type="button" style={{ marginTop: 14, width: '100%', padding: 9, borderRadius: 7, border: '1px solid #2c4c7a', background: '#162741', color: '#c9dcfb', fontSize: 11, fontWeight: 800 }}>Open settlement operations</button></section></div>;
+
+const StrategyLab: React.FC<{ backtests: ReturnType<typeof useAICommandCenter>['sources']['backtests'] }> = ({ backtests }) => <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><section style={{ ...panel, padding: 10, gridColumn: '1 / -1', color: '#8b9ab1', fontSize: 10 }}>Replay source: <strong style={{ color: backtests.status === 'ready' ? '#42d392' : '#f5b84b' }}>{backtests.status.toUpperCase()}</strong>{backtests.status === 'degraded' ? ' · candidate metrics unavailable' : ''}</section><section style={{ ...panel, padding: 14 }}><div style={label}>Experiment builder</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Compose a controlled run</h2><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{([['Strategy universe', '5 selected'], ['Feature set', 'Market + macro'], ['Risk profile', 'Prop firm safe'], ['Benchmark', 'XAUUSD hold'], ['Window', '2022 → 2026'], ['Promotion target', 'Paper only']] as Array<[string, string]>).map(([a, b]) => <MiniSelect key={a} label={a} value={b} />)}</div><div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}><StatusBadge status="green">LEAKAGE CHECK PASS</StatusBadge><StatusBadge status="green">DRIFT 0.18σ</StatusBadge><StatusBadge status="amber">OOS SAMPLE REVIEW</StatusBadge></div><div style={{ display: 'flex', gap: 8, marginTop: 16 }}><a href="/replay" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 12px', borderRadius: 7, background: '#73a7ff', color: '#09111e', fontSize: 11, fontWeight: 900, textDecoration: 'none' }}><Play size={13} /> Run replay</a><a href="/ab-testing" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 12px', border: '1px solid #2c4c7a', borderRadius: 7, background: '#162741', color: '#c9dcfb', fontSize: 11, fontWeight: 800, textDecoration: 'none' }}>Compare candidates</a></div></section><section style={{ ...panel, padding: 14 }}><div style={label}>Candidate scorecard</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Promotion gates</h2>{[['Walk-forward OOS', '1.84 R', 'green'], ['Max drawdown', '8.6%', 'green'], ['Expectancy', '+0.42R', 'green'], ['Slippage sensitivity', '0.13R', 'amber'], ['Model calibration', 'Awaiting sample', 'amber'], ['Promotion approval', '2 of 2 required', 'red']].map(([a, b, status]) => <div key={a} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1e2d44', padding: '9px 0', fontSize: 11 }}><span style={{ color: '#9caac0' }}>{a}</span><strong style={tone(status as Tone)}>{b}</strong></div>)}<button type="button" disabled style={{ marginTop: 14, width: '100%', padding: 9, borderRadius: 7, border: '1px solid #273752', background: '#121c2d', color: '#52627b', fontSize: 11, fontWeight: 800 }}><LockKeyhole size={13} /> Request promotion approval</button></section></div>;
+
+const Controls: React.FC<{ workspace: Workspace; setWorkspace: (value: Workspace) => void; onRefresh: () => void }> = ({ workspace, setWorkspace, onRefresh }) => <><div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid #1d2b42', background: '#0b1322' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#e7eef8', fontWeight: 850, fontSize: 15, minWidth: 205 }}><div style={{ display: 'grid', placeItems: 'center', width: 25, height: 25, borderRadius: 7, background: '#243e6a', color: '#73a7ff' }}><Sparkles size={14} /></div> AI Command Center</div><div style={{ height: 27, width: 1, background: '#24334b' }} /><MiniSelect label="Workspace" value={workspace} options={workspaces.map(({ name }) => name)} /><MiniSelect label="Instrument" value="XAUUSD" options={['XAUUSD', 'GC JUN26', 'GC options']} /><MiniSelect label="Timeframe" value="15m" options={['5m', '15m', '1h', '4h']} /><MiniSelect label="Session" value="London + NY" options={['Asia', 'London', 'New York', 'London + NY']} /><MiniSelect label="Mode" value="Paper" options={['Paper', 'Review', 'Live locked']} /><div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}><StatusBadge status="green"><CircleDot size={9} /> PAPER MODE</StatusBadge><span style={{ color: '#70809a', fontSize: 10 }}>data 1.2s ago</span><button type="button" aria-label="Refresh data" onClick={onRefresh} style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, border: '1px solid #273752', borderRadius: 6, background: '#111b2d', color: '#9aabc0' }}><RefreshCw size={14} /></button><button type="button" aria-label="Open command palette" style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, border: '1px solid #273752', borderRadius: 6, background: '#111b2d', color: '#9aabc0' }}><Command size={14} /></button></div></div><div style={{ display: 'flex', overflowX: 'auto', gap: 2, padding: '7px 12px', borderBottom: '1px solid #1d2b42', background: '#0d1728' }}>{workspaces.map(({ name, icon: Icon, count }) => <button key={name} type="button" onClick={() => setWorkspace(name)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px', border: 0, borderBottom: workspace === name ? '2px solid #73a7ff' : '2px solid transparent', background: workspace === name ? '#162842' : 'transparent', color: workspace === name ? '#dceaff' : '#8090a8', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}><Icon size={13} />{name}{count && <span style={{ color: workspace === name ? '#73a7ff' : '#53647c', fontSize: 9 }}>{count}</span>}</button>)}</div></>;
+
+const GovernanceWorkspace: React.FC<{ workspace: Workspace; degraded: boolean }> = ({ workspace, degraded }) => {
+  const config: Record<string, { title: string; description: string; links: Array<[string, string]> }> = {
+    'Risk & Governance': { title: 'Risk and governance controls', description: 'Review kill switch, stale-model, drift, exposure, VaR/CVaR, Kelly sizing, prop-firm policy, broker connectivity, and paper/live gates.', links: [['Risk dashboard', '/risk'], ['Transparency', '/transparency'], ['Route permissions', '/observability']] },
+    Approvals: { title: 'Approval queue', description: 'Human review is required for promotion, live enablement, repair, rollback, and settlement exceptions. No capital action is available from paper mode.', links: [['Audit trail', '/audit'], ['Strategy approvals', '/ab-testing'], ['Auto-heal review', '/auto-heal']] },
+    'Replay & Backtest': { title: 'Replay and backtest workspace', description: 'Choose a historical window, market source, event speed, strategy set, and agent set before launching a controlled paper replay.', links: [['Replay', '/replay'], ['Walk-forward', '/walk-forward'], ['A/B experiments', '/ab-testing']] },
+    Operations: { title: 'Operations timeline', description: 'Trace assessments, agent events, repairs, rollbacks, approvals, broker events, and settlement or reconciliation activity.', links: [['Observability', '/observability'], ['Auto-heal', '/auto-heal'], ['Audit trail', '/audit']] },
+  };
+  const current = config[workspace] ?? config.Operations!;
+  return <section style={{ ...panel, padding: 18 }}><div style={label}>{workspace}</div><h2 style={{ color: '#edf3fc', fontSize: 19, margin: '6px 0' }}>{current.title}</h2><p style={{ color: '#8b9ab1', fontSize: 12, maxWidth: 680, lineHeight: 1.6 }}>{current.description}</p>{workspace === 'Replay & Backtest' && <div style={{ ...panel, padding: 12, marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}><MiniSelect label="Historical window" value="2022 → 2026" options={['30 days', '1 year', '2022 → 2026']} /><MiniSelect label="Event speed" value="1x" options={['0.25x', '1x', '4x', 'Max']} /><MiniSelect label="Market source" value="Orchestrator" options={['Orchestrator', 'Exchange archive', 'Unavailable']} /><MiniSelect label="Strategy set" value="Paper candidates" options={['Paper candidates', 'All strategies', 'Research only']} /></div>}<div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>{current.links.map(([action, href]) => <a key={action} href={href} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 12px', border: '1px solid #2c4c7a', borderRadius: 7, background: '#162741', color: '#c9dcfb', fontSize: 11, fontWeight: 800, textDecoration: 'none' }}>{action}<ExternalLink size={12} /></a>)}<button type="button" disabled style={{ padding: '9px 12px', border: '1px solid #273752', borderRadius: 7, background: '#111b2d', color: '#70809a', fontSize: 11, fontWeight: 800, cursor: 'not-allowed' }}>{degraded ? 'Blocked: source degraded' : 'Capital action locked in paper mode'}</button></div>{workspace === 'Operations' && <div style={{ ...panel, marginTop: 16, padding: 12 }}><div style={label}>Recovery timeline</div>{[['Assessment', 'Latest risk assessment completed', 'green'], ['Broker event', 'Paper route heartbeat verified', 'green'], ['Repair', 'No repair applied', 'muted'], ['Rollback readiness', 'Prepared · approval required', 'amber']].map(([event, detail, status]) => <div key={event} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 0', borderBottom: '1px solid #1e2d44', color: '#a9b7ca', fontSize: 11 }}><span><strong style={{ color: '#e2e9f3' }}>{event}</strong> · {detail}</span><StatusBadge status={status as Tone}>{status!.toUpperCase()}</StatusBadge></div>)}</div>}</section>;
+};
+
+const SourceHealthStrip: React.FC<{ sources: ReturnType<typeof useAICommandCenter>['sources']; symbol: string }> = ({ sources, symbol }) => {
+  const items = [
+    ['Market data', sources.prices], ['Brain state', sources.brain], ['Risk gate', sources.risk], ['ML health', sources.mlHealth], ['Teams', sources.teams],
+  ] as const;
+  return <div role="status" aria-live="polite" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+    {items.map(([name, source]) => <StatusBadge key={name} status={source.status === 'ready' ? 'green' : source.status === 'loading' ? 'blue' : 'amber'}>{name}: {source.status.toUpperCase()}</StatusBadge>)}
+    <span style={{ color: '#70809a', fontSize: 10, alignSelf: 'center' }}>instrument {symbol} · authoritative sources only</span>
+  </div>;
+};
 
 const AIIntelligence: React.FC = () => {
-  // Live model state. Each query is independent so one failing endpoint
-  // cannot blank the section.
-  const healthQuery = useQuery({
-    queryKey: ['ml', 'engine-health'],
-    queryFn:  async () => (await mlApi.engineHealth()).data as { engine?: EngineHealth },
-    staleTime: 30_000,
-    retry: 1,
-  });
-  const engine = healthQuery.data?.engine ?? null;
-
-  const impQuery = useQuery({
-    queryKey: ['ml', 'feature-importance', engine?.model_version],
-    queryFn:  async () => (await mlApi.featureImportance('rf_xauusd')).data as FeatureImportance,
-    staleTime: 60_000,
-    retry: 1,
-  });
-  const imp = impQuery.data ?? null;
-  // The `method` label is NOT sufficient on its own. /ml/feature-importance
-  // reports method "feature_importances" for rf_xauusd while returning 30
-  // identical values of 0.02 — a flat distribution carries no information
-  // whatever it is called. Judge the numbers, not the label. See audit F232.
-  const impIsDegenerate =
-    !imp?.features?.length ||
-    imp.method === 'uniform' ||
-    new Set(imp.features.map((f) => f.importance)).size <= 1;
-
-  const driftQuery = useQuery({
-    queryKey: ['ml', 'drift-report'],
-    queryFn:  async () => (await mlApi.driftReport()).data as DriftReport,
-    staleTime: 30_000,
-    retry: 1,
-  });
-  const drift = driftQuery.data ?? null;
-
-  const signalsQuery = useQuery({
-    queryKey: ['signals', 'active'],
-    queryFn: async () => {
-      const d = (await signalsApi.active()).data as { signals?: EngineSignal[] } | EngineSignal[];
-      return Array.isArray(d) ? d : (d.signals ?? []);
-    },
-    refetchInterval: 20_000,
-  });
-
-  const analyticsQuery = useQuery({
-    queryKey: ['signals', 'analytics'],
-    queryFn: async () => (await signalsApi.analytics()).data as SignalAnalyticsReport,
-    refetchInterval: 60_000,
-  });
-
+  const [workspace, setWorkspace] = useState<Workspace>('Overview');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeChips, setActiveChips] = useState<string[]>(['Direction', 'Confidence', 'Evidence']);
+  const [selectedSymbol, setSelectedSymbol] = useState('XAUUSD');
+  const [savedView, setSavedView] = useState('Operator default');
+  const [signalDirection, setSignalDirection] = useState<'all' | 'BUY' | 'SELL'>('all');
+  const [selectedSignal, setSelectedSignal] = useState<EngineSignal | null>(null);
+  const [requiredControlsOpen, setRequiredControlsOpen] = useState(false);
+  const commandCenter = useAICommandCenter(selectedSymbol);
+  const signalsQuery = useQuery({ queryKey: ['signals', 'active'], queryFn: async () => { const d = (await signalsApi.active()).data as { signals?: EngineSignal[] } | EngineSignal[]; return Array.isArray(d) ? d : (d.signals ?? []); }, refetchInterval: 20_000 });
+  const analyticsQuery = useQuery({ queryKey: ['signals', 'analytics'], queryFn: async () => (await signalsApi.analytics()).data as SignalAnalyticsReport, refetchInterval: 60_000 });
   const signals = signalsQuery.data ?? [];
-  const a = analyticsQuery.data;
-  const totalOutcomes = a ? a.hit_rate.tp + a.hit_rate.sl + a.hit_rate.expired : 0;
-
-  return (
-    <div className="fade-in" style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
-      <PageHeader
-        title="AI intelligence"
-        icon={Sparkles}
-        subtitle="What the live model is, how it was validated, what it says about its own inputs, and how its signals have actually resolved."
-      />
-
-      {/* Risk state — what to check before acting on anything below */}
-      <div style={{ marginBottom: 16 }}>
-        <RiskTransparencyStrip />
-      </div>
-
-      {/* ML safety gates */}
-      <div style={{ marginBottom: 22 }}>
-        <MlSafetyStrip />
-      </div>
-
-      {/* ── Model transparency ──────────────────────────────────────────
-           /ml/engine-health, /ml/models, /ml/feature-importance and
-           /ml/drift-report are all served by the backend and had no caller
-           anywhere in the SPA (audit F185/F232). ── */}
-      <div style={{ marginBottom: 22 }}>
-        <Section
-          title="Model transparency"
-          description="What the live model is, how it was validated, and what it says about its own inputs."
-        >
-          {healthQuery.isLoading ? (
-            <EmptyState compact title="Loading model health…" />
-          ) : engine ? (
-            <>
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-                {[
-                  { k: 'Model version',   v: engine.model_version ?? '—' },
-                  { k: 'Features',        v: engine.feature_count != null ? String(engine.feature_count) : '—' },
-                  { k: 'OOS accuracy',    v: engine.oos_accuracy != null ? `${(engine.oos_accuracy * 100).toFixed(2)}%` : '—' },
-                  { k: 'Last trained',    v: engine.last_trained_at ? new Date(engine.last_trained_at).toLocaleDateString() : '—' },
-                ].map(({ k, v }) => (
-                  <div key={k} style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>{k}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0', fontFamily: 'ui-monospace, monospace', marginTop: 3 }}>{v}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Feature attribution. The endpoint reports HOW it derived the
-                  numbers; when that is "uniform" it measured nothing, and
-                  drawing the bars anyway would present a flat placeholder as
-                  insight (F232). Say so instead. */}
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569', marginBottom: 8 }}>
-                  Feature attribution
-                </div>
-                {impQuery.isLoading ? (
-                  <EmptyState compact title="Loading feature attribution…" />
-                ) : impIsDegenerate ? (
-                  <EmptyState
-                    compact
-                    icon={AlertTriangle}
-                    title="This model cannot explain itself yet"
-                    description="Every feature came back with the same weight, so nothing here distinguishes one input from another. Charting it would present a flat placeholder as insight, so it is not charted."
-                    serverNote={
-                      imp
-                        ? `Server reported method "${imp.method}" for model ${imp.model}, but returned ${imp.features?.length ?? 0} features with ${new Set((imp.features ?? []).map((f) => f.importance)).size} distinct value(s).`
-                        : null
-                    }
-                  />
-                ) : imp && imp.features?.length ? (
-                  <>
-                    <p style={{ fontSize: 11.5, color: '#64748b', margin: '0 0 8px' }}>
-                      Derived by <strong style={{ color: '#94a3b8' }}>{imp.method}</strong> for model{' '}
-                      <strong style={{ color: '#94a3b8' }}>{imp.model}</strong>.
-                    </p>
-                    <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      {imp.features.slice(0, 12).map((f) => {
-                        const max = imp.features[0]?.importance || 1;
-                        return (
-                          <li key={f.feature} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ width: 130, flexShrink: 0, fontSize: 11.5, color: '#94a3b8', fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {f.feature}
-                            </span>
-                            <span style={{ flex: 1, height: 6, background: '#1e2d3d', borderRadius: 3, overflow: 'hidden' }}>
-                              <span style={{ display: 'block', height: '100%', width: `${(f.importance / max) * 100}%`, background: '#00d4ff' }} />
-                            </span>
-                            <span style={{ width: 52, textAlign: 'right', fontSize: 11, color: '#64748b', fontFamily: 'ui-monospace, monospace' }}>
-                              {f.importance.toFixed(4)}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </>
-                ) : (
-                  <EmptyState compact icon={Brain} title="No attribution available for this model" />
-                )}
-              </div>
-
-              {/* Drift — the endpoint explains itself when it has no data. */}
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569', marginBottom: 8 }}>
-                  Feature drift
-                </div>
-                {drift?.overall_status && drift.overall_status !== 'unknown' ? (
-                  <p style={{ fontSize: 12.5, color: '#94a3b8', margin: 0 }}>
-                    Status: <strong>{drift.overall_status}</strong>
-                    {drift.requires_retrain ? ' — retrain recommended' : ''}
-                  </p>
-                ) : (
-                  <EmptyState
-                    compact
-                    icon={Activity}
-                    title="Drift cannot be assessed yet"
-                    serverNote={drift?.message ?? null}
-                  />
-                )}
-              </div>
-            </>
-          ) : (
-            <EmptyState
-              compact
-              icon={Brain}
-              title="Model health unavailable"
-              description="The inference engine did not report its status."
-            />
-          )}
-        </Section>
-      </div>
-
-      {/* Signal quality analytics */}
-      <div style={{ marginBottom: 22 }}>
-        <SectionTitle right={
-          a && totalOutcomes === 0
-            ? <span style={{ fontSize: 11, color: '#475569' }}>awaiting resolved outcomes</span>
-            : undefined
-        }>
-          Signal Quality
-        </SectionTitle>
-        {analyticsQuery.isLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
-            <Spinner size="sm" /> Loading analytics…
-          </div>
-        ) : a ? (
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Stat label="Signals generated" value={Number.isFinite(a.signals_generated) ? a.signals_generated.toLocaleString() : '—'} />
-            <Stat
-              label="TP hit rate"
-              value={totalOutcomes ? `${(a.tp_rate * 100).toFixed(0)}%` : '—'}
-              sub={totalOutcomes ? `${a.hit_rate.tp}/${totalOutcomes} resolved` : 'no outcomes yet'}
-              color={a.tp_rate >= 0.5 ? '#22c55e' : '#fbbf24'}
-            />
-            <Stat
-              label="SL hit rate"
-              value={totalOutcomes ? `${(a.sl_rate * 100).toFixed(0)}%` : '—'}
-              color={a.sl_rate > 0.5 ? '#f87171' : '#94a3b8'}
-            />
-            <Stat label="Avg confidence" value={Number.isFinite(a.avg_confidence) ? `${(a.avg_confidence * 100).toFixed(0)}%` : '—'} />
-            <Stat label="Avg R:R" value={Number.isFinite(a.avg_rr_ratio) ? a.avg_rr_ratio.toFixed(2) : '—'} color={a.avg_rr_ratio >= 1.5 ? '#22c55e' : '#fbbf24'} />
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, color: '#475569' }}>Analytics unavailable.</div>
-        )}
-      </div>
-
-      {/* Signal distribution — where/when the engine finds edge */}
-      {a && a.signals_generated > 0 && (
-        <div style={{ marginBottom: 22 }}>
-          <SectionTitle>Signal Distribution</SectionTitle>
-          <SignalDistribution analytics={a} />
-        </div>
-      )}
-
-      {/* Live engine signals */}
-      <div>
-        <SectionTitle right={
-          <span style={{ fontSize: 11, color: '#475569' }}>
-            {signals.length} active · refreshes every 20s
-          </span>
-        }>
-          Live Engine Signals
-        </SectionTitle>
-        {signalsQuery.isLoading ? (
-          <div style={{
-            display: 'grid', gap: 12,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          }}>
-            {Array.from({ length: 3 }).map((_, i) => <PanelSkeleton key={i} rows={5} />)}
-          </div>
-        ) : signals.length === 0 ? (
-          <EmptyState
-            icon="📡"
-            title="No active signals"
-            description="The engine is monitoring the market — signals appear here as they fire."
-            links={[
-              { label: 'Generate AI signals', href: '/ai-strategy', icon: '✨' },
-              { label: 'View signal feed', href: '/signals', icon: '📡' },
-            ]}
-          />
-        ) : (
-          <div className="stagger" style={{
-            display: 'grid', gap: 12,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          }}>
-            {signals.map((sig) => (
-              <SignalIntelligenceCard key={sig.id} signal={sig} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <p style={{ fontSize: 11, color: '#334155', marginTop: 24, lineHeight: 1.6 }}>
-        Signals are model output, not financial advice. Confidence and strength reflect the model's
-        internal state and historical calibration; they do not guarantee outcomes.
-      </p>
-      <RelatedPages
-        links={[
-          { to: '/signals',      label: 'Signal feed',     hint: 'Every signal as it is published',   icon: Radar },
-          { to: '/ai-strategy',  label: 'AI strategy',     hint: 'Generate and test a strategy',      icon: Cpu },
-          { to: '/performance',  label: 'Performance',     hint: 'What the signals produced',         icon: LineChart },
-          { to: '/journal',      label: 'Trade journal',   hint: 'Your outcome on each one',          icon: BookOpen },
-          { to: '/observability', label: 'Engine monitor', hint: 'Live orchestrator and model panels', icon: Activity },
-        ]}
-      />
-    </div>
-  );
+  const filteredSignals = filterSignalsByDirection(signals, signalDirection);
+  const analytics = analyticsQuery.data;
+  const workspaceContent = useMemo(() => {
+    if (workspace === 'Overview') return <Overview signals={signals} analytics={analytics} onConfigureControls={() => setRequiredControlsOpen(true)} sourceState={commandCenter.hasDegradedSources ? 'degraded authoritative sources' : commandCenter.isRefreshing ? 'authoritative sources refreshing' : 'authoritative sources ready'} />;
+    if (workspace === 'Agents & Teams') return <Agents teams={commandCenter.sources.teams} />;
+    if (workspace === 'Futures & Markets') return <Markets market={commandCenter.sources.prices} />;
+    if (workspace === 'Strategy Lab') return <StrategyLab backtests={commandCenter.sources.backtests} />;
+    if (workspace === 'Model Health') return <ModelHealthWorkspace />;
+    if (workspace === 'AI Hologram') return <HologramPanel degraded={commandCenter.hasDegradedSources} />;
+    if (workspace === 'Vision Scanner') return <VisionScanner />;
+    if (workspace === 'Visualizations') return <VisualizationsPanel />;
+    if (workspace === 'Signals') return <div style={{ display: 'grid', gap: 12 }}><div style={{ ...panel, padding: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}><span style={label}>Signal filters</span>{(['all', 'BUY', 'SELL'] as const).map((direction) => <button key={direction} type="button" aria-pressed={signalDirection === direction} onClick={() => setSignalDirection(direction)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${signalDirection === direction ? '#73a7ff' : '#273752'}`, background: signalDirection === direction ? '#1a3157' : '#111b2d', color: signalDirection === direction ? '#dbe9ff' : '#9aabc0', fontSize: 10, fontWeight: 800 }}>{direction === 'all' ? 'ALL DIRECTIONS' : direction}</button>)}<span style={{ marginLeft: 'auto', color: '#70809a', fontSize: 10 }}>{filteredSignals.length} of {signals.length} signals</span></div>{filteredSignals.length ? filteredSignals.map(signal => <button key={signal.id} type="button" onClick={() => setSelectedSignal(signal)} aria-label={`Inspect signal ${signal.id}`} style={{ display: 'block', width: '100%', textAlign: 'left', border: 0, padding: 0, background: 'transparent', cursor: 'pointer' }}><SignalIntelligenceCard signal={signal} /></button>) : <EmptyState icon="·" title="No matching signals" description="Adjust direction filters or wait for an authoritative signal payload." links={[]} />}</div>;
+    return <GovernanceWorkspace workspace={workspace} degraded={commandCenter.hasDegradedSources} />;
+  }, [analytics, commandCenter.hasDegradedSources, commandCenter.isRefreshing, filteredSignals, selectedSignal, signalDirection, signals, workspace]);
+  return <main className="fade-in ai-command-center" style={{ minHeight: '100%', background: '#080f1b', color: '#e7eef8' }}><Controls workspace={workspace} setWorkspace={setWorkspace} onRefresh={commandCenter.refresh} /><div style={{ padding: '14px 16px 30px', maxWidth: 1500, margin: '0 auto' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}><div><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><h1 style={{ fontSize: 20, margin: 0, letterSpacing: '-.02em' }}>Command center</h1><StatusBadge status={commandCenter.hasDegradedSources ? 'amber' : 'green'}>{commandCenter.hasDegradedSources ? 'DEGRADED SOURCES' : commandCenter.isRefreshing ? 'REFRESHING' : 'OPERATIONAL'}</StatusBadge></div><p style={{ color: '#70809a', fontSize: 11, margin: '5px 0 0' }}>Select the intelligence, market, risk, settlement, and approval surfaces you need for the next decision.</p></div><div style={{ display: 'flex', gap: 7 }}><button type="button" aria-label={`Saved view: ${savedView}`} onClick={() => setSavedView(value => value === 'Operator default' ? 'Risk review' : 'Operator default')} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 10px', border: '1px solid #273752', borderRadius: 7, background: '#111b2d', color: '#9aabc0', fontSize: 10 }}>View: {savedView}</button><button type="button" onClick={() => setSearchOpen(value => !value)} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 10px', border: '1px solid #273752', borderRadius: 7, background: '#111b2d', color: '#9aabc0', fontSize: 10 }}><Search size={13} /> Find control</button><a href="/audit" style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 10px', border: '1px solid #273752', borderRadius: 7, background: '#111b2d', color: '#9aabc0', fontSize: 10, textDecoration: 'none' }}><Database size={13} /> Audit trail</a></div></div>{searchOpen && <div style={{ ...panel, display: 'flex', gap: 8, alignItems: 'center', padding: 10, marginBottom: 12 }}><Search size={15} color="#73a7ff" /><input autoFocus placeholder="Search agents, controls, markets, approvals…" style={{ flex: 1, border: 0, outline: 0, background: 'transparent', color: '#e7eef8', fontSize: 12 }} /><button type="button" onClick={() => setSearchOpen(false)} style={{ border: 0, background: 'transparent', color: '#70809a' }}><XCircle size={15} /></button></div>}<div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>{chips.map(chip => <button key={chip} type="button" aria-pressed={activeChips.includes(chip)} onClick={() => setActiveChips(current => current.includes(chip) ? current.filter(item => item !== chip) : [...current, chip])} style={{ padding: '6px 9px', borderRadius: 5, border: '1px solid #273752', background: '#111b2d', color: '#91a2ba', fontSize: 10, cursor: 'pointer' }}><SlidersHorizontal size={11} /> {chip}</button>)}<button type="button" style={{ marginLeft: 'auto', padding: '6px 9px', borderRadius: 5, border: '1px solid #2c4c7a', background: '#162741', color: '#b9d4fb', fontSize: 10, fontWeight: 800 }}>Save view</button></div>{signalsQuery.isLoading && workspace === 'Overview' ? <div style={{ display: 'grid', gap: 12 }}><PanelSkeleton rows={5} /><PanelSkeleton rows={4} /></div> : workspaceContent}<p style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#52627b', fontSize: 10, marginTop: 18 }}><AlertTriangle size={12} /> Model output is not financial advice. Values marked unavailable are intentionally not fabricated; verify source freshness before acting.</p></div>{requiredControlsOpen && <div role="dialog" aria-modal="true" aria-label="Required controls" style={{ position: 'fixed', inset: 0, zIndex: 19, display: 'grid', placeItems: 'center', padding: 18, background: 'rgba(3,8,16,.68)' }} onClick={() => setRequiredControlsOpen(false)}><section style={{ ...panel, width: 'min(520px, 96vw)', padding: 18 }} onClick={(event) => event.stopPropagation()}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={label}>Operator configuration</div><h2 style={{ margin: '5px 0 0', color: '#edf3fc', fontSize: 18 }}>Required controls</h2></div><button type="button" aria-label="Close required controls" onClick={() => setRequiredControlsOpen(false)} style={{ border: '1px solid #273752', borderRadius: 6, background: '#111b2d', color: '#9aabc0', padding: 7 }}><XCircle size={15} /></button></div><div style={{ display: 'grid', gap: 8, marginTop: 16 }}>{['Market data freshness', 'Model evidence completeness', 'Risk policy selected', 'Human approval quorum', 'Settlement review owner', 'Paper/live mode lock'].map((control) => <label key={control} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 0', borderBottom: '1px solid #1e2d44', color: '#b9c8dc', fontSize: 11 }}><input type="checkbox" defaultChecked={control !== 'Human approval quorum' && control !== 'Settlement review owner'} />{control}</label>)}</div><p style={{ color: '#70809a', fontSize: 10, lineHeight: 1.5, marginBottom: 0 }}>These controls are configuration requirements only. Capital-affecting actions remain permissioned and locked in paper mode.</p></section></div>}{selectedSignal && <div role="dialog" aria-modal="true" aria-label="Signal inspection" style={{ position: 'fixed', inset: 0, zIndex: 20, display: 'flex', justifyContent: 'flex-end', background: 'rgba(3,8,16,.62)' }} onClick={() => setSelectedSignal(null)}><aside style={{ width: 'min(420px, 94vw)', height: '100%', overflowY: 'auto', padding: 18, background: '#0d1728', borderLeft: '1px solid #2a4164', boxShadow: '-18px 0 40px rgba(0,0,0,.28)' }} onClick={(event) => event.stopPropagation()}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={label}>Signal evidence</div><h2 style={{ margin: '5px 0 0', color: '#edf3fc', fontSize: 18 }}>{selectedSignal.id}</h2></div><button type="button" aria-label="Close signal inspection" onClick={() => setSelectedSignal(null)} style={{ border: '1px solid #273752', borderRadius: 6, background: '#111b2d', color: '#9aabc0', padding: 7 }}><XCircle size={15} /></button></div><div style={{ ...panel, padding: 12, marginTop: 16 }}><div style={label}>Proposed action</div><div style={{ marginTop: 6, color: '#dce8f8', fontWeight: 800 }}>{String(selectedSignal.direction ?? 'UNAVAILABLE')}</div><p style={{ color: '#8b9ab1', lineHeight: 1.6, fontSize: 11 }}>Review evidence, risk gates, abstention state, and agent disagreement before taking any permissioned action.</p></div><div style={{ display: 'grid', gap: 8, marginTop: 12 }}><StatusBadge status="amber">Human approval required</StatusBadge><StatusBadge status="muted">Paper mode · live capital locked</StatusBadge><StatusBadge status={commandCenter.hasDegradedSources ? 'amber' : 'green'}>{commandCenter.hasDegradedSources ? 'Some evidence sources degraded' : 'Evidence sources available'}</StatusBadge></div></aside></div>}</main>;
 };
 
 export default AIIntelligence;

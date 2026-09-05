@@ -152,6 +152,22 @@ async def test_reconcile_once_skips_when_price_none():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_detects_empty_broker_snapshot():
+    """A successful empty broker snapshot is evidence of a DB-only position."""
+    pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = []
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1950.0):
+            await r._reconcile_once()
+
+    assert r._mismatches == 1
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_detects_missing_broker_position():
     """Mismatch detected when DB has XAUUSD but broker only has EURUSD."""
     pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
@@ -185,6 +201,22 @@ async def test_reconcile_once_no_mismatch_when_broker_matches():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_accepts_object_broker_positions():
+    pos = _make_db_position(symbol="EURUSD", side="buy", qty=10000.0, entry=1.08)
+    broker_pos = MagicMock(symbol="EURUSD", quantity=10000.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = [broker_pos]
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1.09):
+            await r._reconcile_once()
+
+    assert r._mismatches == 0
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_async_broker_positions():
     pos = _make_db_position(symbol="EURUSD", side="buy", qty=10000.0, entry=1.08)
     mock_broker = MagicMock()
@@ -197,6 +229,26 @@ async def test_reconcile_once_async_broker_positions():
             await r._reconcile_once()
 
     assert r._mismatches == 0
+
+
+@pytest.mark.asyncio
+async def test_reconcile_once_null_broker_snapshot_is_blind(caplog):
+    """A null broker response is treated as unavailable, not an empty book."""
+    pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = None
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1950.0):
+            with patch.object(r, "_trigger_drift_halt", new_callable=AsyncMock) as halt:
+                with caplog.at_level(logging.WARNING, logger="core.position_reconciler"):
+                    await r._reconcile_once()
+
+    assert halt.await_count == 0
+    assert r._mismatches == 0
+    assert any("Could not fetch broker positions" in rec.message for rec in caplog.records)
 
 
 @pytest.mark.asyncio

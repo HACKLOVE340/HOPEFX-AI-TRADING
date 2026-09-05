@@ -144,6 +144,24 @@ class TestGetBrokerFromYamlErrors:
             )
         assert result is None  # unsupported type, but default was resolved
 
+    def test_broker_type_alias_takes_precedence_for_yaml_profile(self, tmp_path):
+        p = _write_yaml(
+            tmp_path,
+            {
+                "brokers": {
+                    "default": "paper_profile",
+                    "paper_profile": {"type": "unsupported_xyz"},
+                    "oanda_profile": {"type": "unsupported_xyz"},
+                }
+            },
+        )
+        from brokers.factory import BrokerFactory
+
+        with patch.dict(os.environ, {"BROKER_TYPE": "oanda_profile", "BROKER": "paper_profile"}):
+            result = BrokerFactory.get_broker_from_yaml(name=None, config_path=str(p))
+
+        assert result is None  # unsupported type, but BROKER_TYPE selected the profile
+
 
 # ── get_broker_from_yaml — type dispatch ──────────────────────────────────────
 

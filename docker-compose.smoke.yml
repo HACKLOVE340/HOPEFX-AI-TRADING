@@ -69,6 +69,11 @@ services:
       IS_FORCE_TLS: "false"
       REDIS_FORCE_TLS: "false"
       REDIS_URL: "redis://:ci-smoke-redis-password@redis:6379/0"
+      # Override the base compose interpolation explicitly. The base file
+      # resolves DATABASE_URL before this service override is merged, so its
+      # password can otherwise differ from the CI postgres container.
+      DATABASE_URL: "postgresql://hopefx:ci_smoke_password@postgres:5432/hopefx"  # pragma: allowlist secret
+      ASYNC_DATABASE_URL: "postgresql+asyncpg://hopefx:ci_smoke_password@postgres:5432/hopefx"  # pragma: allowlist secret
       # Minimal required secrets — safe placeholder values for CI only
       POSTGRES_PASSWORD: "ci_smoke_password"  # pragma: allowlist secret
       REDIS_PASSWORD: "ci-smoke-redis-password"  # pragma: allowlist secret

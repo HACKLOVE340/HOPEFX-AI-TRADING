@@ -101,6 +101,21 @@ async def test_fallback_prediction_preserves_base_confidence():
 
 
 @pytest.mark.asyncio
+def test_no_consensus_is_recorded_as_abstention():
+    """The authoritative engine records why it safely abstained."""
+    eng = _engine(None)
+    eng._brain.analyze_joint.return_value = {
+        "consensus_reached": False,
+        "reason": "conflicting strategies",
+    }
+    result = _result()
+
+    assert eng._phase1_signal(_ctx(), result) is None
+    assert result.abstained is True
+    assert result.abstention_reason == "no_consensus: conflicting strategies"
+
+
+@pytest.mark.asyncio
 async def test_low_real_confidence_filters():
     """A real prediction below the ML threshold filters the signal."""
     ml = MagicMock()
