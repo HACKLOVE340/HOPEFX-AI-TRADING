@@ -82,6 +82,7 @@ __version__ = "1.0.0"
 
 # ── Macro-aware model loader ──────────────────────────────────────────────────
 import hashlib as _hashlib
+import os as _os
 import json as _json
 import logging as _logging
 from pathlib import Path as _Path
@@ -188,35 +189,102 @@ def _sha256(path: _Path) -> str:
     return h.hexdigest()
 
 
+# Environments where bootstrapping an integrity baseline from whatever happens
+# to be on disk is acceptable. Anything else -- production, staging, a typo --
+# requires a baseline that already exists.
+_BOOTSTRAP_OK_ENVS = frozenset({"development", "dev", "test", "testing", "local"})
+
+
+def _bootstrap_allowed(directory: _Path) -> bool:
+    """Whether *directory* may have its integrity baseline created on demand.
+
+    Two cases are legitimate:
+
+    * a recognised development environment, where no baseline has been shipped;
+    * any directory that is not the packaged one -- notably ``ML_MODEL_DIR``,
+      which holds models an operator's own retrain job just wrote. There is no
+      shipped baseline for those and could not be.
+
+    The packaged directory in production is the case that is not legitimate: its
+    baseline is committed alongside the artefacts it covers, so a missing one
+    means the file was removed, not that none was ever made.
+    """
+    if directory.resolve() != _PACKAGED.resolve():
+        return True
+    return _os.getenv("APP_ENV", "development").strip().lower() in _BOOTSTRAP_OK_ENVS
+
+
 def _verify_checksum(path: _Path) -> bool:
     """
     Verify a model file against the stored SHA-256 checksum.
 
-    Returns True if:
-    - The checksum file does not exist (first run — no baseline yet).
-    - The file matches the stored checksum.
+    Returns False -- refusing the load -- when the file does not match its
+    recorded checksum, and, in production, when there is no usable record to
+    match it against.
 
-    Returns False (and logs CRITICAL) if the file has been tampered with.
-    The checksum file is written automatically on first successful load so
-    subsequent loads can detect modifications.
+    This check gates a ``pickle.load`` (see ``_try_load``), so what it permits
+    is arbitrary code execution, not merely a wrong prediction. It used to
+    return True in three separate cases:
+
+    1. the checksum file did not exist -- it recorded a baseline from whatever
+       was on disk and allowed the load;
+    2. the checksum file could not be parsed -- "skipping verification";
+    3. the file was not listed in the baseline -- it recorded and allowed.
+
+    Each is a one-step bypass: delete the baseline, corrupt it, or give the
+    payload a name the baseline does not mention. Worse, ``model_checksums.json``
+    was not committed, so case 1 fired on **every fresh deployment** -- the
+    check established its own reference from the artefacts it was meant to
+    verify, on every container start, and could only ever have detected
+    tampering that happened after the first load inside a container that was
+    about to be replaced anyway.
+
+    The baseline is now committed for the packaged directory, and the three
+    fail-open branches refuse in production instead. Bootstrapping remains for
+    development and for ``ML_MODEL_DIR``, where the operator's own retrain job
+    wrote the files and no shipped baseline can exist.
     """
     checksum_file = _checksum_file_for(path.parent)
     if not checksum_file.exists():
-        # First run for this directory — record a baseline for it.
-        _record_checksums(path.parent)
-        return True
+        if _bootstrap_allowed(path.parent):
+            _record_checksums(path.parent)
+            return True
+        _ml_logger.critical(
+            "MODEL INTEGRITY BASELINE MISSING: %s does not exist. It is committed "
+            "with the packaged models, so its absence means it was removed. Refusing "
+            "to load %s rather than trusting the file to describe itself.",
+            checksum_file,
+            path.name,
+        )
+        return False
 
     try:
         stored = _json.loads(checksum_file.read_text())
     except Exception as exc:
-        _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
-        return True
+        if _bootstrap_allowed(path.parent):
+            _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
+            return True
+        _ml_logger.critical(
+            "MODEL INTEGRITY BASELINE UNREADABLE: %s (%s). Refusing to load %s.",
+            checksum_file,
+            exc,
+            path.name,
+        )
+        return False
 
     name = path.name
     if name not in stored:
-        # New model file not yet in this directory's registry — record and allow
-        _record_checksums(path.parent)
-        return True
+        if _bootstrap_allowed(path.parent):
+            _record_checksums(path.parent)
+            return True
+        _ml_logger.critical(
+            "MODEL NOT IN INTEGRITY BASELINE: %s is not listed in %s. A model file "
+            "that arrived without being recorded is exactly what this check exists "
+            "to catch. Refusing to load it.",
+            name,
+            checksum_file,
+        )
+        return False
 
     actual = _sha256(path)
     if actual != stored[name]:

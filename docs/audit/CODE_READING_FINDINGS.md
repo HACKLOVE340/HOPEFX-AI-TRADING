@@ -8295,3 +8295,73 @@ sum of `pnl`. That is right if callers pass net P&L and wrong if they pass
 gross, and the module says neither. It is not live — `PerformanceAnalytics` has
 no production caller — so the test documents the question for whoever wires it
 up rather than inventing an answer.
+
+---
+
+## F269 — the model integrity check fails open three ways, and two models are already failing it · CRITICAL
+
+Found while investigating CodeQL's critical alert on PR #315
+(`py/unsafe-deserialization` in `ml/__init__.py`). CodeQL cannot see a checksum
+gate as a sanitiser. In this case it was right not to.
+
+`ml/__init__.py:_try_load` calls `_verify_checksum(path)` and, if it passes,
+hands the file to `joblib.load` and then to `pickle.load`. What that check
+permits is arbitrary code execution, not a wrong prediction. It returned `True`
+in three separate cases:
+
+```python
+if not checksum_file.exists():
+    _record_checksums(path.parent)      # 1. record a baseline from whatever is on disk
+    return True
+except Exception as exc:
+    ...  "skipping verification"        # 2. unparseable baseline
+    return True
+if name not in stored:
+    _record_checksums(path.parent)      # 3. a file the baseline does not mention
+    return True
+```
+
+Each is a one-step bypass for anyone who can write to the model directory:
+delete the baseline, corrupt it, or give the payload a name the baseline does
+not list. Case 3 is the subtlest — it needs no access to the baseline at all.
+
+**Fixed:** all three refuse in production. Bootstrapping survives where it is
+legitimate and nowhere else: a recognised development environment, and any
+directory that is not the packaged one — `ML_MODEL_DIR` holds files an
+operator's own retrain job just wrote, and no shipped baseline can cover those.
+Guarded by `tests/unit/test_model_integrity_check_is_not_fail_open.py`, 16
+tests, 9 of which fail on the pre-fix tree.
+
+**And the check is currently failing on two real models.** Measured:
+
+```
+feature_scaler.pkl       verify=False  loaded=None
+stacking_ensemble.pkl    verify=False  loaded=None
+current.pkl              verify=True   loaded=YES
+lstm_signal.pt           listed in the baseline, MISSING from disk
+```
+
+The mismatch branch always worked, so both models return `None` from `_try_load`
+in every environment. The cause is mine: `776b59c` (the F145 fix) rewrote both
+files' bytes and did not regenerate `model_checksums.json`; the merge of `main`
+then took that file from `334e50f`, which describes main's artefacts. Recorded
+as TODO item 1b and left for the owner, because deciding which model artefacts
+are canonical is a decision about what the platform trades on, not a cleanup.
+
+**Two method notes, both corrections to myself.**
+
+I first reported that `model_checksums.json` was *not committed*, and therefore
+that case 1 fired on every fresh deployment. That was wrong. My evidence was
+`git ls-files ml/saved_models/ | grep -iE "checksum|\.json" | head`, whose
+`head` truncated the list before the entry I was looking for. The file has been
+committed throughout. The three fail-open branches are real; the "every fresh
+deploy" severity was not.
+
+Worse, acting on that wrong reading I ran `_record_checksums()` and **overwrote
+the committed baseline** — the exact act this control exists to prevent, done by
+the person auditing it. `git diff` showed it dropping the `lstm_signal.pt` and
+`rl/hopefx_ppo.zip` entries (the function globs `*.pkl` only) and rewriting two
+checksums to match whatever was on disk. Reverted with `git checkout`. The
+incident is the finding's own best illustration: a baseline that can be
+regenerated from the artefacts it verifies is not a baseline, and the regenerator
+silently narrows what it covers.

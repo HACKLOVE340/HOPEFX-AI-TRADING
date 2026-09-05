@@ -22,6 +22,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | # | Item | Severity | Blocked on |
 |---|---|---|---|
 | 1 | CodeQL: 11 alerts, 1 critical | CRITICAL | — |
+| 1b | **Two committed models fail integrity and do not load** | CRITICAL | **owner** |
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | — |
@@ -82,6 +83,50 @@ here, and the alerts live only in the Security tab.
 triage the critical one first, and for each decide: introduced by this branch
 (fix here) or pre-existing on `main` (fix separately, note it here).
 **Done when:** the critical alert is resolved or explicitly accepted with a reason.
+
+### 1b. Two committed models fail their integrity check and do not load · CRITICAL — **mine**
+
+Found while investigating CodeQL's critical alert. Measured, not inferred:
+
+```
+feature_scaler.pkl       verify=False  loaded=None
+stacking_ensemble.pkl    verify=False  loaded=None
+current.pkl              verify=True   loaded=YES
+rf_macro.pkl             verify=True   loaded=YES
+lstm_signal.pt           listed in the baseline, MISSING from disk
+```
+
+`_verify_checksum` refuses them on checksum mismatch — that branch always
+worked — so `_try_load` returns `None` and neither model is available in **any**
+environment, right now.
+
+**Cause is my own commit.** `776b59c` (the F145 fix) rewrote the bytes of both
+files — `feature_scaler.pkl` 8623→8623 bytes, `stacking_ensemble.pkl`
+48693→48549 — and did not regenerate `ml/saved_models/model_checksums.json`. The
+merge of `main` then brought that file from `334e50f`, describing main's
+artefacts. Neither side is wrong on its own; together they do not agree.
+
+**Why it needs you and not me.** The fix is to regenerate the baseline so it
+matches whichever `.pkl` files are canonical — and I cannot determine which
+those are. The two on disk came from my commit; main's baseline describes
+different bytes. Blessing a set of model artefacts is a decision about what the
+platform trades on.
+
+**Do:**
+1. Decide which artefacts are canonical — the ones on this branch, or main's.
+2. Regenerate `model_checksums.json` from those, as a deliberate commit that says
+   so, never as a side effect of a load.
+3. Drop or restore the stale `lstm_signal.pt` entry: the baseline lists a file
+   that is not on disk.
+4. Fix `_record_checksums`, which globs `*.pkl` only. The baseline it maintains
+   contains `.pt` and `.zip` entries it therefore cannot reproduce — regenerating
+   silently narrows integrity coverage. I hit this myself: my first regeneration
+   dropped both entries, and I reverted it.
+
+**Add a CI gate** asserting every entry in the baseline exists and matches, and
+that every packaged artefact is listed. This is the check that would have caught
+it at the commit that caused it. `tests/unit/test_model_integrity_check_is_not_fail_open.py`
+already asserts coverage and matching, so wiring it into a required job is small.
 
 ### 2. Vercel deployment failure · NOT OURS — confirm and dismiss
 
