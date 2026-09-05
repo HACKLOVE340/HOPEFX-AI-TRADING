@@ -831,8 +831,9 @@ def _model_sig_path(path: pathlib.Path) -> pathlib.Path:
 
 
 def _compute_model_hmac(path: pathlib.Path) -> str:
+    _safe_path = _assert_safe_model_path(path)
     mac = hmac.new(_model_hmac_key(), digestmod=hashlib.sha256)
-    with path.open("rb") as f:
+    with _safe_path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             mac.update(chunk)
     return mac.hexdigest()
