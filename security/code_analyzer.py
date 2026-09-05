@@ -433,7 +433,7 @@ class _ASTAnalyzer(ast.NodeVisitor):
                 return
             # Check the except line itself for a nosec annotation
             except_line = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
-            if "nosec" in except_line or "# noqa" in except_line:
+            if _is_suppressed(except_line):
                 self.generic_visit(node)
                 return
             self._add(

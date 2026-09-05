@@ -19,6 +19,35 @@ from execution.fix_adapter import FIXExecType, FIXFillReport, FIXOrder, FIXOrdTy
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
+@pytest.fixture(autouse=True)
+def _allow_fix_start(monkeypatch):
+    """Opt in to FIX startup for tests that exercise start().
+
+    `IBKRFIXBridge.start()` refuses unless IBKR_FIX_ALLOW_START is set -- a
+    fail-closed default so an unconfigured deployment cannot dial a broker
+    gateway. These tests predate that guard and drive start() directly, so they
+    opt in explicitly rather than the guard being softened.
+
+    `test_start_is_refused_without_the_opt_in` below covers the guard itself, so
+    it is pinned rather than merely bypassed.
+    """
+    monkeypatch.setenv("IBKR_FIX_ALLOW_START", "true")
+
+
+def test_start_is_refused_without_the_opt_in(monkeypatch, tmp_path):
+    """The guard must actually refuse -- otherwise the fixture above hides it."""
+    monkeypatch.delenv("IBKR_FIX_ALLOW_START", raising=False)
+    bridge = IBKRFIXBridge(
+        config=IBKRFIXConfig(
+            store_path=str(tmp_path / "store"),
+            log_path=str(tmp_path / "logs"),
+        )
+    )
+    with pytest.raises(RuntimeError, match="IBKR_FIX_ALLOW_START"):
+        bridge.start()
+    assert bridge._started is False
+
+
 def _make_fill_report(cl_ord_id="test_cl_ord"):
     return FIXFillReport(
         cl_ord_id=cl_ord_id,

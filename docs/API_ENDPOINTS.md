@@ -230,6 +230,16 @@ They are excluded from the OpenAPI schema for the same reason.
 | `DELETE` | `/api/chat/rooms/{room_id}/messages/{msg_id}/reactions/{emoji}` | JWT |  | Community Chat |
 | `POST` | `/api/chat/rooms/{room_id}/read` | JWT |  | Community Chat |
 | `GET` | `/api/chat/status` | JWT | AI chat readiness check | AI Chat |
+| `GET` | `/api/control-plane/audit` | JWT |  | Control Plane |
+| `GET` | `/api/control-plane/configuration` | JWT |  | Control Plane |
+| `POST` | `/api/control-plane/configuration/apply` | JWT |  | Control Plane |
+| `GET` | `/api/control-plane/readiness` | JWT |  | Control Plane |
+| `POST` | `/api/control-plane/readiness/reprobe` | JWT |  | Control Plane |
+| `POST` | `/api/control-plane/sandbox/test` | JWT |  | Control Plane |
+| `POST` | `/api/control-plane/startup/restart` | JWT |  | Control Plane |
+| `GET` | `/api/control-plane/versions` | JWT |  | Control Plane |
+| `GET` | `/api/control-plane/{domain}` | JWT |  | Control Plane |
+| `POST` | `/api/control-plane/{domain}/health` | JWT |  | Control Plane |
 | `POST` | `/api/copy-trading/copies/{copy_id}/pause` | JWT |  | Copy Trading |
 | `GET` | `/api/copy-trading/copies/{copy_id}/performance` | JWT |  | Copy Trading |
 | `POST` | `/api/copy-trading/copies/{copy_id}/resume` | JWT |  | Copy Trading |
@@ -617,6 +627,31 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/risk/prop-firm/challenges` | JWT | Active prop firm challenges | Risk / Prop Firm |
 | `GET` | `/api/risk/prop-firm/daily-stats` | JWT | Daily P&L stats for prop firm | Risk / Prop Firm |
 | `GET` | `/api/risk/prop-firm/history` | JWT | Prop firm challenge history | Risk / Prop Firm |
+| `POST` | `/api/safe-platform/approvals` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/chat/capabilities` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/diagnostics/graph` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/diagnostics/run` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/integrations` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/integrations/action` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/models/health` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/models/route` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/models/routes` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/overview` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/proposals` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/proposals` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/proposals/execute` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/proposals/validate` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/proposals/{proposal_id}/checkpoint` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/proposals/{proposal_id}/rollback` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/research/request` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/supervisor/tasks` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/supervisor/tasks` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/supervisor/tasks/delegate` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/supervisor/tasks/execute` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/supervisor/tasks/plan` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/supervisor/tasks/{task_id}/approve` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/supervisor/tasks/{task_id}/cancel` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/upgrades/propose` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/scanner/criteria` | JWT |  | Market Scanner |
 | `POST` | `/api/scanner/criteria` | JWT |  | Market Scanner |
 | `DELETE` | `/api/scanner/criteria` | JWT |  | Market Scanner |
@@ -1093,4 +1128,8 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/mobile/api/v2/trades` | JWT |  | Mobile, Trading |
 | `POST` | `/mobile/api/v2/trades/{trade_id}/close` | JWT |  | Mobile, Trading |
 | `GET` | `/mobile/health` | None |  | Mobile, Health |
+| `GET` | `/superadmin/ai-operations/permissions` | JWT |  | ai-operations |
+| `POST` | `/superadmin/ai-operations/permissions/review` | JWT |  | ai-operations |
+| `POST` | `/superadmin/ai-operations/recovery/assess` | JWT |  | ai-operations |
+| `GET` | `/superadmin/ai-operations/recovery/latest` | JWT |  | ai-operations |
 | `GET` | `/ws/live/stats` | None |  | WebSocket Live |

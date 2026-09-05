@@ -66,9 +66,7 @@ def _validate(proposal_id: str, environment: str = "sandbox") -> dict[str, Any]:
 def test_validation_fails_without_a_checkpoint_or_approval() -> None:
     proposal = _make_proposal()
     result = _validate(proposal["id"])
-    assert result["status"] != "passed", (
-        "a proposal with no checkpoint and no approval validated as passed"
-    )
+    assert result["status"] != "passed", "a proposal with no checkpoint and no approval validated as passed"
 
 
 def test_the_environment_name_does_not_decide_the_verdict() -> None:
@@ -80,9 +78,7 @@ def test_the_environment_name_does_not_decide_the_verdict() -> None:
 
 
 def test_secret_shaped_changes_fail_the_redaction_check() -> None:
-    proposal = _make_proposal(
-        changes={"api_key": "sk-live-0123456789abcdef", "note": "rotate this"}
-    )
+    proposal = _make_proposal(changes={"api_key": "sk-live-0123456789abcdef", "note": "rotate this"})
     result = _validate(proposal["id"])
     assert result["checks"]["secrets_redacted"] is False
     assert result["status"] != "passed"
@@ -107,9 +103,7 @@ def test_a_sound_proposal_still_validates() -> None:
     for approver in ("operator-1", "operator-2"):
         asyncio.run(
             sp.decide_approval(
-                sp.ApprovalRequest(
-                    proposal_id=proposal["id"], decision="approve", reason="reviewed"
-                ),
+                sp.ApprovalRequest(proposal_id=proposal["id"], decision="approve", reason="reviewed"),
                 _user(approver),
             )
         )

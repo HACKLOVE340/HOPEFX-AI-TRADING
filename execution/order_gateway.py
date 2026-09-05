@@ -158,7 +158,11 @@ class OrderGateway:
 
         try:
             asyncio.get_running_loop()
-        except RuntimeError:
+        except RuntimeError:  # healer: ignore - no running loop is the SUCCESS case here.
+            # get_running_loop() raises RuntimeError precisely when there is no
+            # loop, which is the state this synchronous entry point requires.
+            # Nothing is being swallowed: the error IS the answer, and the
+            # failure case is the `else` below, which raises.
             pass
         else:
             raise RuntimeError(

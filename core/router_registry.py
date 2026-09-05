@@ -220,6 +220,13 @@ def register_routers(
     from api.chat import router as chat_router
     from api.professional_control_plane import router as control_plane_router
     from api.safe_agent_platform import router as safe_agent_platform_router
+
+    # Registered here, not only in api/server.py::create_api_app: production runs
+    # `python app.py`, which registers routers through this module. create_api_app
+    # is called only from within api/server.py itself, so a router registered
+    # there alone has no reachable endpoints on the running app -- which is what
+    # security/code_analyzer.py's broken_router rule caught here.
+    from api.superadmin.ai_operations import router as superadmin_ai_operations_router
     from api.explain import router as explain_router
     from api.health import router as health_router
 
@@ -325,6 +332,7 @@ def register_routers(
         calendar_router,
         control_plane_router,
         safe_agent_platform_router,
+        superadmin_ai_operations_router,
         profiles_router,
         social_feed_router,
         social_leaderboard_router,
