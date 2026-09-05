@@ -786,7 +786,7 @@ class SklearnOnlineLearner:
 
 # Canonical root for all persisted model files.  Any load/save outside this
 # directory is rejected to prevent path-traversal / arbitrary-pickle attacks.
-_MODEL_ROOT = pathlib.Path(__file__).resolve().parent / "saved_models"
+_MODEL_ROOT = (pathlib.Path(__file__).resolve().parent / "saved_models").resolve()
 
 
 def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
@@ -802,11 +802,12 @@ def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
     # object does not propagate into the resolved result (CodeQL #24631).
     _resolved_str: str = _os.path.realpath(str(path))
     resolved = _pl.Path(_resolved_str)
+    model_root_resolved = _pl.Path(_os.path.realpath(str(_MODEL_ROOT)))
     try:
-        resolved.relative_to(_MODEL_ROOT)
+        resolved.relative_to(model_root_resolved)
     except ValueError as exc:
         raise ValueError(
-            f"Model path '{resolved}' is outside the permitted directory '{_MODEL_ROOT}'. Refusing to load/save."
+            f"Model path '{resolved}' is outside the permitted directory '{model_root_resolved}'. Refusing to load/save."
         ) from exc
     return resolved
 
@@ -898,17 +899,9 @@ def get_online_learner(
         import os as _os
         import pathlib as _pl
 
-        _m = _SYMBOL_RE.match(symbol)
-        if _m is None:
-            raise ValueError(
-                f"Symbol '{symbol}' contains characters not permitted in a model "
-                "filename. Use only letters, digits, underscores, and hyphens."
-            )
+        _safe_sym = _validate_symbol(symbol)
 
         if persist_path is None:
-            # Reconstruct path from the regex match group only — CodeQL treats
-            # m.group(0) as untainted (CodeQL #24618).
-            _safe_sym: str = _m.group(0)
             _p_str: str = _os.path.join(str(_MODEL_ROOT), f"online_learner_{_safe_sym}.pkl")
             p = _pl.Path(_p_str)
         else:
