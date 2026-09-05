@@ -342,6 +342,38 @@ def _rollback_plan_is_real(proposal: dict[str, Any]) -> bool:
     return bool(plan) and plan != _DEFAULT_ROLLBACK_PLAN
 
 
+#: The eval report the promotion gate reads. `None` until an eval run stores
+#: one, and the gate refuses on None -- fail closed. This is the seam the eval
+#: runner fills; it is deliberately not defaulted to a passing score, because a
+#: gate that permits when it has no evidence is not a gate.
+_EVAL_REPORT: Any = None
+
+
+def set_eval_report(report: Any) -> None:
+    """Record the latest eval suite report for the promotion gate."""
+    global _EVAL_REPORT
+    _EVAL_REPORT = report
+
+
+def _eval_gate_allows(environment: str) -> tuple[bool, str]:
+    """Whether the eval gate permits promotion to `environment`.
+
+    Binds on `canary` -- the closest thing this API has to live. Sandbox and
+    paper are where candidates are supposed to run BEFORE they have a score, so
+    requiring one there would block the very work that produces it.
+    """
+    if environment != "canary":
+        return True, "not_applicable"
+    from ai.evals.gate import PromotionGate, PromotionRefused
+
+    gate = PromotionGate(minimum_score={"canary": 0.9, "live": 0.95})
+    try:
+        gate.check(_EVAL_REPORT, target="canary")
+    except PromotionRefused as refused:
+        return False, ", ".join(refused.reason_codes)
+    return True, "eval_gate_passed"
+
+
 class DiagnosticRequest(BaseModel):
     scope: str = Field(default="all", min_length=1, max_length=80)
     include_external: bool = False
@@ -961,6 +993,9 @@ async def validate_proposal(request: ValidationRequest, user: TokenPayload = Dep
         "rollback_checkpoint_planned": _rollback_plan_is_real(proposal),
         "checkpoint_present": bool(proposal.get("checkpoints")),
         "human_approval_present": proposal["status"] == "approved_pending_execution",
+        # Task 11: promotion to canary additionally requires a passing eval
+        # score. Fail-closed -- no report refuses.
+        "eval_gate_passed": _eval_gate_allows(request.environment)[0],
     }
     validation = {
         "id": _id("validation", [request.proposal_id, request.environment]),
