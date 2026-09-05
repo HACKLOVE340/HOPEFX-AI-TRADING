@@ -61,6 +61,7 @@ const SASystemHealthSection    = lazy(() => import('./superadmin/SystemHealthSec
 const SAAutoHealingSection     = lazy(() => import('./superadmin/AutoHealingSection'));
 const PlatformConfigSection    = lazy(() => import('./settings/PlatformConfiguration'));
 const SystemReliabilitySection = lazy(() => import('./superadmin/SystemReliabilitySection'));
+const ProfessionalControlPlane = lazy(() => import('./settings/ProfessionalControlPlane'));
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -115,6 +116,19 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'notifications', label: 'Notifications',  icon: '🔔', keywords: 'alerts email discord slack telegram webhook' },
       { id: 'accessibility', label: 'Accessibility',  icon: '♿', keywords: 'contrast motion screen reader colour blind text size' },
       { id: 'privacy',       label: 'Privacy & Data', icon: '🔏', keywords: 'gdpr export delete consent sharing leaderboard retention' },
+    ],
+  },
+  {
+    label: 'Professional Operations',
+    tabs: [
+      { id: 'control-overview', label: 'Readiness', icon: '◈', adminOnly: true, keywords: 'startup health degraded status' },
+      { id: 'control-brain', label: 'Core Brain', icon: '◎', adminOnly: true, keywords: 'brain policy approval' },
+      { id: 'control-models', label: 'Models', icon: '⌁', adminOnly: true, keywords: 'model routing fallback provider' },
+      { id: 'control-agents', label: 'Agents', icon: '◇', adminOnly: true, keywords: 'agents teams schedules' },
+      { id: 'control-connectors', label: 'Connectors', icon: '↔', adminOnly: true, keywords: 'plugins tools integrations' },
+      { id: 'control-sandbox', label: 'Sandbox', icon: '□', adminOnly: true, keywords: 'sandbox sessions limits network' },
+      { id: 'control-startup', label: 'Startup', icon: '↻', adminOnly: true, keywords: 'lifecycle boot restart' },
+      { id: 'control-audit', label: 'Config Audit', icon: '≡', adminOnly: true, keywords: 'audit versions revision rollback' },
     ],
   },
   {
@@ -286,6 +300,10 @@ const Settings: React.FC = () => {
       case 'notifications':     return <NotificationsSection />;
       case 'accessibility':     return <AccessibilitySection />;
       case 'privacy':           return <PrivacySection />;
+      // Professional operations
+      case 'control-overview': case 'control-brain': case 'control-models': case 'control-agents':
+      case 'control-connectors': case 'control-sandbox': case 'control-startup': case 'control-audit':
+        return admin ? <ProfessionalControlPlane tab={activeTab} /> : null;
       // Administration
       case 'system':            return admin      ? <SystemSection />          : null;
       case 'performance':       return admin      ? <PerformanceSection />     : null;

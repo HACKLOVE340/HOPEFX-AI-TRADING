@@ -218,6 +218,7 @@ def register_routers(
     from api.broker import router as broker_router
     from api.calendar import router as calendar_router
     from api.chat import router as chat_router
+    from api.professional_control_plane import router as control_plane_router
     from api.explain import router as explain_router
     from api.health import router as health_router
 
@@ -321,6 +322,7 @@ def register_routers(
         status_router,
         brain_router,
         calendar_router,
+        control_plane_router,
         profiles_router,
         social_feed_router,
         social_leaderboard_router,
@@ -810,7 +812,7 @@ def register_routers(
     if not feature_flags.PUSH_NOTIFICATIONS:
         logger.debug("PUSH_NOTIFICATIONS disabled — set FEATURE_PUSH_NOTIFICATIONS=true to enable")
 
-    # ── Transparency Reports (/api/transparency) ──────────────────────────────
+    # ── Transparency Reports (/api/transparency) ───────────────────────────��──
     if feature_flags.TRANSPARENCY_REPORTS:
         try:
             from transparency.router import router as transparency_router
@@ -962,7 +964,7 @@ def register_routers(
     except Exception as _nocode_err:
         logger.warning("No-Code Builder router not registered: %s", _nocode_err)
 
-    # ── API v1 versioned prefix ────────────────────────────────────────────────
+    # ── API v1 versioned prefix ��───────────────────────────────────────────────
     # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.
     # New clients should use /api/v1/; existing /api/* routes remain unchanged
     # for backward compatibility with current frontend and external integrations.
