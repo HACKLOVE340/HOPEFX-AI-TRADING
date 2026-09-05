@@ -50,6 +50,8 @@ Event dict schema:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import time
 from collections import deque
@@ -417,6 +419,8 @@ class NuclearHopeFXSupervisor:
             "exposure": current_exposure,
             "matched_terms": [t["term"] for t in meta.get("matched_terms", [])[:5]],
         }
+        canonical_record = json.dumps(record, sort_keys=True, separators=(",", ":"), default=str)
+        record["evidence_hash"] = hashlib.sha256(canonical_record.encode()).hexdigest()
         self._event_history.append(record)
 
         logger.info(
