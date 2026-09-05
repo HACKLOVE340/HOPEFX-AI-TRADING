@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -46,6 +47,12 @@ class Order:
         price: float,
         commission_rate: float,
     ) -> None:
+        if not math.isfinite(quantity) or quantity == 0:
+            raise ValueError("Order quantity must be finite and non-zero")
+        if not math.isfinite(price) or price < 0:
+            raise ValueError("Order price must be finite and non-negative")
+        if not math.isfinite(commission_rate) or commission_rate < 0:
+            raise ValueError("Commission rate must be finite and non-negative")
         self.order_id = order_id
         self.quantity = quantity
         self.price = price
@@ -61,6 +68,8 @@ class Order:
 
     def fill(self, filled_quantity: float) -> None:
         # Use abs(quantity) so sell orders (negative quantity) work correctly.
+        if not math.isfinite(filled_quantity) or filled_quantity <= 0:
+            raise ValueError("Filled quantity must be finite and positive")
         max_qty = abs(self.quantity)
         if filled_quantity > max_qty + 1e-9:
             raise ValueError(f"Filled quantity {filled_quantity} cannot exceed order quantity {max_qty}.")

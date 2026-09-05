@@ -44,3 +44,20 @@ async def test_async_send_order_routes_without_blocking(successful_executor: Asy
     assert result.success is True
     assert order.is_filled is True
     successful_executor.execute_signal.assert_awaited_once()
+
+
+def test_order_rejects_invalid_numeric_inputs() -> None:
+    with pytest.raises(ValueError, match="finite and non-zero"):
+        OrderGateway().create_order("zero", 0.0, 2000.0, 0.5)
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        OrderGateway().create_order("price", 1.0, -1.0, 0.5)
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        OrderGateway().create_order("commission", 1.0, 2000.0, -0.1)
+
+
+def test_order_rejects_non_positive_or_oversized_fills() -> None:
+    order = OrderGateway().create_order("fill", -1.0, 2000.0, 0.5)
+    with pytest.raises(ValueError, match="positive"):
+        order.fill(0.0)
+    with pytest.raises(ValueError, match="cannot exceed"):
+        order.fill(1.1)
