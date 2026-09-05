@@ -125,9 +125,23 @@ class SupervisorTaskRequest(BaseModel):
     allow_external_read: bool = False
 
 
+class ModelRouteRequest(BaseModel):
+    role: str = Field(pattern="^(reasoning|fast|vision|embedding)$")
+    model_id: str = Field(min_length=3, max_length=160)
+    reason: str = Field(min_length=3, max_length=400)
+
+
 @router.get("/overview")
 async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"paper_mode": os.getenv("BROKER_TYPE", "paper") == "paper", "human_approval_required": True, "agents": copy.deepcopy(_AGENTS), "models": copy.deepcopy(_MODELS), "integrations": copy.deepcopy(_INTEGRATIONS), "pending_proposals": len([p for p in _PROPOSALS if p["status"] == "pending"]), "capabilities": {"external_read": True, "external_write": False, "live_trading": False, "self_modify": False, "credential_values_visible": False}}
+
+
+@router.post("/models/route")
+async def route_model(request: ModelRouteRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    if not request.model_id.startswith(("gateway/", "openai/", "anthropic/", "google/")):
+        raise HTTPException(status_code=400, detail="Model must use an approved provider namespace")
+    route = {"role": request.role, "model_id": request.model_id, "status": "pending_health_check", "reason": request.reason, "changed_by": user.sub, "changed_at": datetime.now(UTC).isoformat(), "side_effects": "none"}
+    return {"route": route, "message": "Route recorded as pending verification; no provider call or secret change was performed."}
 
 
 @router.post("/supervisor/tasks")
