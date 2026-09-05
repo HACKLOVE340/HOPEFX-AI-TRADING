@@ -11,6 +11,8 @@ Continuously adapts to market regime changes without catastrophic forgetting
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import pathlib
@@ -756,6 +758,7 @@ class SklearnOnlineLearner:
         _safe_path = _assert_safe_model_path(_pl.Path(self.persist_path))
         _safe_path.parent.mkdir(parents=True, exist_ok=True)
         _jl.dump(self, _safe_path, compress=3)
+        _write_model_signature(_safe_path)
 
     @classmethod
     def load(cls, path: str) -> SklearnOnlineLearner:
@@ -775,6 +778,7 @@ class SklearnOnlineLearner:
                 "pickle/joblib loading is disabled by default. Set "
                 "HOPEFX_ALLOW_TRUSTED_MODEL_LOAD=1 only in fully trusted deployments."
             )
+        _verify_model_signature(_safe_path)
         return _jl.load(_safe_path)  # nosec B301
 
 
@@ -810,6 +814,43 @@ def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
 def _trusted_pickle_load_enabled() -> bool:
     """Return True only when trusted pickle/joblib model loading is explicitly enabled."""
     return os.getenv("HOPEFX_ALLOW_TRUSTED_MODEL_LOAD", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _model_hmac_key() -> bytes:
+    """Return HMAC key bytes for model integrity checks."""
+    key = os.getenv("HOPEFX_MODEL_HMAC_KEY", "").encode("utf-8")
+    if not key:
+        raise RuntimeError(
+            "HOPEFX_MODEL_HMAC_KEY is required for persisted model integrity verification."
+        )
+    return key
+
+
+def _model_sig_path(path: pathlib.Path) -> pathlib.Path:
+    return path.with_suffix(path.suffix + ".sig")
+
+
+def _compute_model_hmac(path: pathlib.Path) -> str:
+    mac = hmac.new(_model_hmac_key(), digestmod=hashlib.sha256)
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            mac.update(chunk)
+    return mac.hexdigest()
+
+
+def _write_model_signature(path: pathlib.Path) -> None:
+    sig_path = _model_sig_path(path)
+    sig_path.write_text(_compute_model_hmac(path), encoding="utf-8")
+
+
+def _verify_model_signature(path: pathlib.Path) -> None:
+    sig_path = _model_sig_path(path)
+    if not sig_path.exists():
+        raise RuntimeError(f"Missing model signature file: {sig_path}")
+    expected = sig_path.read_text(encoding="utf-8").strip()
+    actual = _compute_model_hmac(path)
+    if not hmac.compare_digest(expected, actual):
+        raise RuntimeError(f"Model integrity check failed for {path}")
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
