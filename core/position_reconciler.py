@@ -125,7 +125,7 @@ class PositionReconciler:
                     raise RuntimeError("broker returned no position snapshot")
                 broker_positions = {}
                 for position in raw or []:
-                    if isinstance(position, dict):
+                    if isinstance(position, dict):  # noqa: SIM108 — explicit branch is audit-critical
                         symbol = position.get("symbol")
                     else:
                         symbol = getattr(position, "symbol", None)

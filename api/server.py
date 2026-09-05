@@ -309,6 +309,9 @@ def create_api_app(trading_app=None) -> Any | None:
     from api.trading import router as trading_router
 
     app.include_router(trading_router)
+    from api.superadmin.ai_operations import router as ai_operations_router
+
+    app.include_router(ai_operations_router)
     _register_brain_routes(app, trading_app, _get_current_user, _require_admin)
     _register_system_routes(app, trading_app, _require_admin)
 
