@@ -54,6 +54,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+from core.ai_contracts import HumanApproval, ResearchCandidate
+from strategies.strategy_execution_boundary import ExecutionScope, StrategyExecutionBoundary
+
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
@@ -145,6 +148,7 @@ class StrategyVersion:
     activated_at: datetime | None = None
     validation_errors: list[str] = field(default_factory=list)
     performance_metrics: dict[str, float] = field(default_factory=dict)
+    candidate: ResearchCandidate | None = None
     instance: Any = None  # The compiled strategy instance
 
     def to_dict(self) -> dict[str, Any]:
@@ -247,6 +251,7 @@ class DynamicStrategyRegistry:
         self._db_session_factory: Any = None
         self._running = False
         self._subscriber_task: asyncio.Task | None = None
+        self._execution_boundary = StrategyExecutionBoundary()
 
     async def start(self, redis_client: Any = None, db_session_factory: Any = None) -> None:
         """Initialize the registry with Redis and DB connections."""
@@ -285,6 +290,7 @@ class DynamicStrategyRegistry:
         symbol: str,
         timeframe: str,
         author_id: str,
+        candidate: ResearchCandidate | None = None,
     ) -> str:
         """
         Register a new strategy version.
@@ -307,6 +313,7 @@ class DynamicStrategyRegistry:
             timeframe=timeframe,
             author_id=author_id,
             state=StrategyState.VALIDATING,
+            candidate=candidate,
         )
 
         # Phase 1: AST safety validation
@@ -349,14 +356,27 @@ class DynamicStrategyRegistry:
         )
         return version_id
 
-    async def activate_strategy(self, version_id: str) -> None:
+    async def activate_strategy(
+        self,
+        version_id: str,
+        scope: ExecutionScope = ExecutionScope.RESEARCH,
+        approval: HumanApproval | None = None,
+    ) -> None:
         """
         Activate a validated strategy version.
 
-        Atomically swaps the previous active version (if any) for this name.
-        Publishes an update event to Redis so other pods sync.
+        Existing callers retain the legacy activation path. AI candidates carry
+        an explicit lifecycle contract and must pass the additive boundary
+        before activation at paper or live scope.
         """
         async with self._lock:
+            version = self._versions.get(version_id)
+            if version and version.candidate is not None:
+                decision = self._execution_boundary.evaluate(version.candidate, scope, approval)
+                if not decision.allowed:
+                    raise ValueError(
+                        f"Strategy activation denied ({decision.reason_code}): {decision.reason}"
+                    )
             version = self._versions.get(version_id)
             if not version:
                 raise ValueError(f"Version not found: {version_id}")
