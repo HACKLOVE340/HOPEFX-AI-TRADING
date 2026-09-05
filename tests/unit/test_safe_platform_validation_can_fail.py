@@ -34,6 +34,26 @@ def _clean_state() -> Any:
     sp._APPROVALS.clear()
 
 
+@pytest.fixture(autouse=True)
+def _working_config_store(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Give these tests a config store whose writes succeed.
+
+    `_save_state` now raises 503 when a write fails (D5), and this environment
+    has no database, so every endpoint that persists would 503 for a reason
+    that has nothing to do with what is under test. The DB-failure path itself
+    is covered deliberately in
+    tests/unit/test_safe_platform_evidence_and_persistence.py.
+    """
+    written: dict[str, Any] = {}
+
+    def _set(key: str, value: Any, changed_by: str = "system") -> bool:
+        written[key] = value
+        return True
+
+    monkeypatch.setattr(sp.config_store, "set", _set)
+    return written
+
+
 def _user(sub: str = "operator-1", role: str = "admin") -> Any:
     return types.SimpleNamespace(sub=sub, role=role)
 

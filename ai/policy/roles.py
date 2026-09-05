@@ -70,6 +70,7 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     "model_health": _VIEW,
     "list_supervisor_tasks": _VIEW,
     "diagnostics_graph": _VIEW,
+    "diagnostics_run": _VIEW,
     "proposals": _VIEW,
     "integrations": _VIEW,
     "chat_capabilities": _VIEW,

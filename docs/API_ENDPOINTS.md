@@ -631,6 +631,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/safe-platform/chat/capabilities` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/safe-platform/diagnostics/graph` | JWT |  | Safe Agent Platform |
 | `POST` | `/api/safe-platform/diagnostics/run` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/diagnostics/runs/{run_id}` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/safe-platform/integrations` | JWT |  | Safe Agent Platform |
 | `POST` | `/api/safe-platform/integrations/action` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/safe-platform/models/health` | JWT |  | Safe Agent Platform |

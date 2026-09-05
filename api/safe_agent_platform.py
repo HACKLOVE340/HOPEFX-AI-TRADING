@@ -136,8 +136,12 @@ _APPROVALS_KEY = "safe_platform:approvals"
 _INTEGRATIONS_KEY = "safe_platform:integrations"
 _TASKS_KEY = "safe_platform:tasks"
 _ROUTES_KEY = "safe_platform:model_routes"
+_EVIDENCE_KEY = "safe_platform:diagnostic_evidence"
+#: Diagnostic runs retained. Old runs age out; the endpoint says what it keeps.
+_EVIDENCE_LIMIT = 200
 _TASKS: list[dict[str, Any]] = []
 _ROUTES: list[dict[str, Any]] = []
+_EVIDENCE: list[dict[str, Any]] = []
 _REQUEST_WINDOW: dict[str, list[float]] = {}
 _BUDGET_WINDOW: dict[str, list[float]] = {}
 _MAX_REQUESTS_PER_MINUTE = 20
@@ -158,6 +162,7 @@ def _load_state() -> None:
     stored_integrations = config_store.get(_INTEGRATIONS_KEY, default=[])
     stored_tasks = config_store.get(_TASKS_KEY, default=[])
     stored_routes = config_store.get(_ROUTES_KEY, default=[])
+    stored_evidence = config_store.get(_EVIDENCE_KEY, default=[])
     if isinstance(stored_proposals, list):
         _PROPOSALS.extend(item for item in stored_proposals if isinstance(item, dict))
     if isinstance(stored_approvals, list):
@@ -166,6 +171,8 @@ def _load_state() -> None:
         _TASKS.extend(item for item in stored_tasks if isinstance(item, dict))
     if isinstance(stored_routes, list):
         _ROUTES.extend(item for item in stored_routes if isinstance(item, dict))
+    if isinstance(stored_evidence, list):
+        _EVIDENCE.extend(item for item in stored_evidence if isinstance(item, dict))
     if isinstance(stored_integrations, list):
         for stored in stored_integrations:
             if isinstance(stored, dict) and stored.get("id"):
@@ -181,10 +188,24 @@ def _load_state() -> None:
 
 
 def _save_state(changed_by: str) -> None:
-    """Persist proposals and approvals without ever persisting secret values."""
-    config_store.set(_PROPOSALS_KEY, _PROPOSALS, changed_by=changed_by)
-    config_store.set(_APPROVALS_KEY, _APPROVALS, changed_by=changed_by)
-    config_store.set(
+    """Persist proposals and approvals without ever persisting secret values.
+
+    Raises 503 when any write fails. `config_store.set` returns bool -- "True if
+    at least the DB write succeeded" -- and logs `ConfigStore.set: DB write
+    failed` otherwise. Every one of these five calls used to ignore that return
+    value, so a failed write still returned 200 to the operator: state survived
+    only in the module-level lists below, an approval recorded that way vanished
+    on restart, and the operator had been told it was recorded.
+    """
+    failed: list[str] = []
+
+    def _write(key: str, value: object) -> None:
+        if not config_store.set(key, value, changed_by=changed_by):
+            failed.append(key)
+
+    _write(_PROPOSALS_KEY, _PROPOSALS)
+    _write(_APPROVALS_KEY, _APPROVALS)
+    _write(
         _INTEGRATIONS_KEY,
         [
             {
@@ -194,10 +215,18 @@ def _save_state(changed_by: str) -> None:
             }
             for item in _INTEGRATIONS
         ],
-        changed_by=changed_by,
     )
-    config_store.set(_TASKS_KEY, _TASKS, changed_by=changed_by)
-    config_store.set(_ROUTES_KEY, _ROUTES, changed_by=changed_by)
+    _write(_TASKS_KEY, _TASKS)
+    _write(_ROUTES_KEY, _ROUTES)
+    _write(_EVIDENCE_KEY, _EVIDENCE)
+
+    if failed:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Could not persist the safe-platform state: {', '.join(failed)}. The action was NOT recorded durably."
+            ),
+        )
 
 
 _load_state()
@@ -688,13 +717,20 @@ async def run_diagnostics(request: DiagnosticRequest, user: TokenPayload = Depen
             "evidence": ["provider_call_not_performed", "route_health_pending"],
         },
     ]
-    evidence = {
+    evidence: dict[str, Any] = {
         "run_id": run_id,
         "scope": request.scope,
         "checked_at": datetime.now(UTC).isoformat(),
         "findings": findings,
         "external": external,
     }
+    # D4: this dict used to be a dead local. _save_state persists proposals,
+    # approvals, integrations, tasks and routes -- evidence was in none of them,
+    # so the endpoint returned "persisted_in_audit_store" and the run_id it
+    # handed the operator resolved to nothing. It is now in the persisted set,
+    # capped so an audit store cannot grow without bound.
+    _EVIDENCE.append(evidence)
+    del _EVIDENCE[:-_EVIDENCE_LIMIT]
     _save_state(user.sub)
     return {
         "run_id": run_id,
@@ -705,6 +741,26 @@ async def run_diagnostics(request: DiagnosticRequest, user: TokenPayload = Depen
         "external": external,
         "evidence_retention": "persisted_in_audit_store",
     }
+
+
+def diagnostic_evidence(run_id: str) -> dict[str, Any] | None:
+    """The stored evidence for a diagnostic run, or None when it is not held."""
+    return next((item for item in _EVIDENCE if item.get("run_id") == run_id), None)
+
+
+@router.get("/diagnostics/runs/{run_id}")
+async def diagnostics_run(run_id: str, _: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    """Retrieve a diagnostic run by the id run_diagnostics returned."""
+    evidence = diagnostic_evidence(run_id)
+    if evidence is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No diagnostic evidence for run {run_id}. Runs are retained for the "
+                f"most recent {_EVIDENCE_LIMIT} diagnostics."
+            ),
+        )
+    return {"evidence": copy.deepcopy(evidence), "retention_limit": _EVIDENCE_LIMIT}
 
 
 @router.get("/diagnostics/graph")

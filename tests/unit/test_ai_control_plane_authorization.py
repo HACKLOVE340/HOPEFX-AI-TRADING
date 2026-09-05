@@ -117,6 +117,11 @@ def test_two_admins_cannot_approve_a_repair_between_them() -> None:
 
     sp._PROPOSALS.clear()
     sp._APPROVALS.clear()
+    # _save_state raises 503 when a write fails (D5) and this environment has no
+    # database; the DB-failure path is covered in
+    # tests/unit/test_safe_platform_evidence_and_persistence.py.
+    original_set = sp.config_store.set
+    sp.config_store.set = lambda *a, **k: True
     try:
         admin_a = types.SimpleNamespace(sub="admin-a", role="admin")
         admin_b = types.SimpleNamespace(sub="admin-b", role="admin")
@@ -145,6 +150,7 @@ def test_two_admins_cannot_approve_a_repair_between_them() -> None:
             "two admins approved a repair between them with no superadmin"
         )
     finally:
+        sp.config_store.set = original_set
         sp._PROPOSALS.clear()
         sp._APPROVALS.clear()
 
@@ -158,6 +164,11 @@ def test_a_superadmin_in_the_quorum_completes_the_approval() -> None:
 
     sp._PROPOSALS.clear()
     sp._APPROVALS.clear()
+    # _save_state raises 503 when a write fails (D5) and this environment has no
+    # database; the DB-failure path is covered in
+    # tests/unit/test_safe_platform_evidence_and_persistence.py.
+    original_set = sp.config_store.set
+    sp.config_store.set = lambda *a, **k: True
     try:
         admin = types.SimpleNamespace(sub="admin-a", role="admin")
         superadmin = types.SimpleNamespace(sub="super-1", role="superadmin")
@@ -184,6 +195,7 @@ def test_a_superadmin_in_the_quorum_completes_the_approval() -> None:
         proposal = next(p for p in sp._PROPOSALS if p["id"] == pid)
         assert proposal["status"] == "approved_pending_execution"
     finally:
+        sp.config_store.set = original_set
         sp._PROPOSALS.clear()
         sp._APPROVALS.clear()
 
