@@ -152,6 +152,22 @@ async def test_reconcile_once_skips_when_price_none():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_detects_empty_broker_snapshot():
+    """A successful empty broker snapshot is evidence of a DB-only position."""
+    pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = []
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1950.0):
+            await r._reconcile_once()
+
+    assert r._mismatches == 1
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_detects_missing_broker_position():
     """Mismatch detected when DB has XAUUSD but broker only has EURUSD."""
     pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
