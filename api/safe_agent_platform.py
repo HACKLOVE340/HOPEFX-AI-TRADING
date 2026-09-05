@@ -49,6 +49,8 @@ _TASKS_KEY = "safe_platform:tasks"
 _ROUTES_KEY = "safe_platform:model_routes"
 _TASKS: list[dict[str, Any]] = []
 _ROUTES: list[dict[str, Any]] = []
+_REQUEST_WINDOW: dict[str, list[float]] = {}
+_MAX_REQUESTS_PER_MINUTE = 20
 
 
 def _load_state() -> None:
@@ -88,6 +90,15 @@ _load_state()
 
 def _admin(user: TokenPayload = Depends(require_role("admin"))) -> TokenPayload:
     return user
+
+
+def _enforce_rate_limit(user: TokenPayload) -> None:
+    now = datetime.now(UTC).timestamp()
+    recent = [timestamp for timestamp in _REQUEST_WINDOW.get(user.sub, []) if now - timestamp < 60]
+    if len(recent) >= _MAX_REQUESTS_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Safe platform request rate limit exceeded")
+    recent.append(now)
+    _REQUEST_WINDOW[user.sub] = recent
 
 
 def _id(prefix: str, payload: Any) -> str:
@@ -188,6 +199,7 @@ async def model_routes(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 @router.post("/supervisor/tasks")
 async def create_supervisor_task(request: SupervisorTaskRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     allowed_ids = {agent["id"] for agent in _AGENTS}
     requested = sorted(set(request.requested_agents) & allowed_ids)
     task = {"id": _id("task", [user.sub, request.prompt, datetime.now(UTC).isoformat()]), "prompt": request.prompt, "status": "awaiting_plan", "requested_agents": requested or ["supervisor"], "external_read": request.allow_external_read, "external_access": "connector_required" if request.allow_external_read else "disabled", "side_effects": "blocked", "human_approval_required": True, "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "events": [{"type": "task_created", "actor": user.sub}]}
@@ -267,6 +279,7 @@ async def delegate_supervisor_task(request: DelegationRequest, user: TokenPayloa
 
 @router.post("/research/request")
 async def request_external_research(request: ResearchRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     task = next((item for item in _TASKS if item["id"] == request.task_id), None)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
