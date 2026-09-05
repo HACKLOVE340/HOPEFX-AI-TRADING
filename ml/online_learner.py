@@ -846,13 +846,14 @@ def _write_model_signature(path: pathlib.Path) -> None:
 
 
 def _verify_model_signature(path: pathlib.Path) -> None:
-    sig_path = _model_sig_path(path)
+    _safe_path = _assert_safe_model_path(path)
+    sig_path = _model_sig_path(_safe_path)
     if not sig_path.exists():
         raise RuntimeError(f"Missing model signature file: {sig_path}")
     expected = sig_path.read_text(encoding="utf-8").strip()
-    actual = _compute_model_hmac(path)
+    actual = _compute_model_hmac(_safe_path)
     if not hmac.compare_digest(expected, actual):
-        raise RuntimeError(f"Model integrity check failed for {path}")
+        raise RuntimeError(f"Model integrity check failed for {_safe_path}")
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
