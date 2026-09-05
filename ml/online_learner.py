@@ -827,7 +827,8 @@ def _model_hmac_key() -> bytes:
 
 
 def _model_sig_path(path: pathlib.Path) -> pathlib.Path:
-    return path.with_suffix(path.suffix + ".sig")
+    sig = path.with_suffix(path.suffix + ".sig")
+    return _assert_safe_model_path(sig)
 
 
 def _compute_model_hmac(path: pathlib.Path) -> str:
