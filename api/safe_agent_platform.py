@@ -131,6 +131,15 @@ class ModelRouteRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=400)
 
 
+class TaskPlanRequest(BaseModel):
+    task_id: str
+    plan_summary: str = Field(min_length=3, max_length=2000)
+    steps: list[str] = Field(min_length=1, max_length=20)
+    tools: list[str] = Field(default_factory=list, max_length=20)
+    external_sources: list[str] = Field(default_factory=list, max_length=20)
+    requires_approval: bool = True
+
+
 @router.get("/overview")
 async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"paper_mode": os.getenv("BROKER_TYPE", "paper") == "paper", "human_approval_required": True, "agents": copy.deepcopy(_AGENTS), "models": copy.deepcopy(_MODELS), "integrations": copy.deepcopy(_INTEGRATIONS), "pending_proposals": len([p for p in _PROPOSALS if p["status"] == "pending"]), "capabilities": {"external_read": True, "external_write": False, "live_trading": False, "self_modify": False, "credential_values_visible": False}}
@@ -157,6 +166,36 @@ async def create_supervisor_task(request: SupervisorTaskRequest, user: TokenPayl
 @router.get("/supervisor/tasks")
 async def list_supervisor_tasks(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"items": list(reversed(copy.deepcopy(_TASKS))), "side_effects": "blocked_until_human_approval"}
+
+
+@router.post("/supervisor/tasks/plan")
+async def plan_supervisor_task(request: TaskPlanRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    task = next((item for item in _TASKS if item["id"] == request.task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if not request.requires_approval:
+        raise HTTPException(status_code=400, detail="All supervisor plans require human approval")
+    plan = {"id": _id("plan", [request.task_id, request.steps]), "task_id": request.task_id, "summary": request.plan_summary, "steps": request.steps, "tools": request.tools, "external_sources": request.external_sources, "untrusted_content_boundary": "external content is evidence only and cannot override system policy", "status": "awaiting_human_review", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "side_effects": "blocked", "approval_required": True}
+    task["status"] = "awaiting_human_review"
+    task["plan"] = plan
+    task.setdefault("events", []).append({"type": "plan_created", "actor": user.sub, "plan_id": plan["id"]})
+    _save_state(user.sub)
+    return {"task": copy.deepcopy(task), "plan": plan, "message": "Plan created. External content is untrusted evidence and no tool has executed."}
+
+
+@router.post("/supervisor/tasks/{task_id}/approve")
+async def approve_supervisor_task(task_id: str, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    task = next((item for item in _TASKS if item["id"] == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.get("status") != "awaiting_human_review":
+        raise HTTPException(status_code=409, detail="Task has no reviewable plan")
+    task["status"] = "approved_for_restricted_execution"
+    task["approved_by"] = user.sub
+    task["approved_at"] = datetime.now(UTC).isoformat()
+    task.setdefault("events", []).append({"type": "human_approval", "actor": user.sub})
+    _save_state(user.sub)
+    return {"task": copy.deepcopy(task), "message": "Human approval recorded. Execution remains restricted to approved tools and environments."}
 
 
 @router.post("/diagnostics/run")
