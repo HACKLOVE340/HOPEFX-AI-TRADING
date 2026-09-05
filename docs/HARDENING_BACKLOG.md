@@ -7603,3 +7603,83 @@ Two candidate remedies, if the desk wants arm 2 to be live:
   docstring says it measures.
 * Or keep the overlap and lower the threshold to something inside the reachable
   range (roughly 1.3–1.8 based on the synthetic crash above).
+
+---
+
+## Round 25 — the SELL gate is inverted (S-81) — **needs a decision**
+
+`ml/signal_filter.py::_gate_confidence` is the last check between a model
+probability and an order. `core/signal_engine.py:1284` calls it, and
+`execution/trade_executor.py` sits downstream. **The short path is inverted.**
+
+`_extract_confidence` returns the raw ML **P(up)** — `core/signal_engine.py`
+passes `signal_payload["probability"]` straight in, and the thresholds confirm
+the intent: `_THRESHOLD_LONG = 0.58` and `_THRESHOLD_SHORT = 0.42` are
+symmetric about 0.5, the classic two-sided band (go long above 0.58, short
+below 0.42).
+
+Measured across the range, with `regime="TRENDING"` (no tightening):
+
+| P(up) | BUY | SELL |
+|---:|:---:|:---:|
+| 0.02 | block | **block** |
+| 0.05 | block | **block** |
+| 0.30 | block | **block** |
+| 0.41 | block | **block** |
+| 0.50 | block | **block** |
+| 0.55 | block | **PASS** |
+| 0.75 | PASS | **PASS** |
+| 0.95 | PASS | **PASS** |
+
+**A SELL is forwarded only when P(up) ≥ 0.55** — precisely when the model
+expects the market to *rise* — and every decisive short is blocked.
+
+Two contributing defects:
+
+1. **The absolute floor is direction-blind.**
+   `min_conf = _MIN_CONFIDENCE_ABS (0.55)` is compared against raw P(up). For a
+   short, conviction is `1 - P(up)`, so this rejects every good short.
+   `SELL @ P(up)=0.05` fails with `confidence 0.050 < floor 0.550`.
+
+2. **The short comparison is the wrong way round.**
+   ```python
+   elif dir_upper in ("SELL", "SHORT") and confidence < threshold_short:
+       return FilterResult(passed=False, ...)
+   ```
+   Given `threshold_short = 0.42` is the *lower* edge of the band, this blocks
+   exactly the shorts that should pass. It should block when
+   `confidence > threshold_short`.
+
+The legacy fallback in `core/signal_engine.py:1298-1305` has the same
+direction-blindness: `if ml_prob < min_prob` for both directions.
+
+**Proposed patch** (not applied):
+
+```python
+# conviction is direction-relative: 1 - P(up) for a short
+conviction = confidence if dir_upper in ("BUY", "LONG") else 1.0 - confidence
+if conviction < min_conf:
+    ...block...
+
+if dir_upper in ("BUY", "LONG") and confidence < threshold_long:
+    ...block...
+elif dir_upper in ("SELL", "SHORT") and confidence > threshold_short:
+    ...block...
+```
+
+**Why it is not applied here.** Fixing this *enables short trades the system
+does not currently take* — a material change to live trading behaviour on a
+money-moving path, and `CLAUDE.md` is explicit that risk gates are not to be
+changed without instruction. The current behaviour is pinned instead, by
+`tests/unit/test_ml_signal_filter.py` (`..._S81` tests), so the defect is
+visible, reproducible, and cannot regress unnoticed — and so that applying the
+patch above is a deliberate, reviewed act rather than a side effect of a
+coverage pass.
+
+**Also noted, lower severity.** `_gate_circuit_breaker` reads only
+`self._outcomes[symbol]` and documents why ("to avoid cross-symbol
+contamination"), but `_gate_expected_value` does
+`self._outcomes.get(symbol, []) or self._global_outcomes` — so a symbol with no
+history of its own inherits every other symbol's EV. Defensible as a prior, but
+it is the opposite choice made two methods apart, and undocumented. Pinned in
+`test_but_the_ev_gate_does_fall_back_to_global_history`.
