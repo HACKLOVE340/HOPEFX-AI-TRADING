@@ -448,6 +448,8 @@ class BrokerManager:
                 t = threading.Thread(target=_run, daemon=True)
                 t.start()
                 t.join(timeout=10)
+                if t.is_alive():
+                    raise TimeoutError("Broker get_positions timed out after 10 seconds")
                 if exc_holder:
                     raise exc_holder[0]
                 positions = positions_holder
@@ -495,6 +497,8 @@ class BrokerManager:
                 t = threading.Thread(target=_run, daemon=True)
                 t.start()
                 t.join(timeout=10)
+                if t.is_alive():
+                    raise TimeoutError("Broker get_positions timed out after 10 seconds")
                 if exc_holder:
                     raise exc_holder[0]
                 positions = positions_holder
@@ -549,8 +553,12 @@ class BrokerManager:
                 t = threading.Thread(target=_run, daemon=True)
                 t.start()
                 t.join(timeout=10)
+                if t.is_alive():
+                    raise TimeoutError("Broker get_account_info timed out after 10 seconds")
                 if exc_holder:
                     raise exc_holder[0]
+                if not result_holder:
+                    raise RuntimeError("Broker get_account_info returned no result")
                 info = result_holder[0]
             else:
                 info = result
