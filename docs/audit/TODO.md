@@ -21,7 +21,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 
 | # | Item | Severity | Blocked on |
 |---|---|---|---|
-| 1 | CodeQL: 11 alerts, 1 critical | CRITICAL | — |
+| 1 | CodeQL: 11 alerts, 1 critical | CRITICAL | **owner** (triaged; needs the rule ID) |
 | 1b | **Two committed models fail integrity and do not load** | CRITICAL | **owner** |
 | 1c | F270 · async pool listened for non-existent events → readiness 503 forever | CRITICAL | fixed |
 | 2 | Vercel check belongs to another project | noise | owner |
@@ -70,19 +70,37 @@ Every item inherits these. They are not negotiable and not restated per item.
 
 ## P0 — Blocking the current PR
 
-### 1. CodeQL: 11 new alerts, 1 critical · OPEN
+### 1. CodeQL: 11 new alerts, 1 critical · OPEN — triaged as far as this session can
 
-`CodeQL` fails on PR #315 head. Its own summary says *"Alerts not introduced by
-this pull request might have been detected because the code changes were too
-large"* — the diff is 430 files, so attribution is unreliable.
+`CodeQL` fails on PR #315. **Still needs the owner** to read the Security tab,
+because no code-scanning tool is exposed to this session: `get_check_run`
+returns an empty `output.text` with no annotations, and the CodeQL CLI is not
+installed here. What follows narrows it.
 
-I could not enumerate these from this session: no code-scanning tool is exposed
-here, and the alerts live only in the Security tab.
+**The alerts are not introduced by this branch's recent commits.** The count has
+been identical — 1 critical / 10 high — across seven consecutive commits,
+including one that changed only YAML and one (`d42fc59f`) that changed **a
+single markdown file**. CodeQL re-ran on that docs-only commit and reported the
+same "New alerts in code changed by this pull request". Its own summary admits
+why: *"Alerts not introduced by this pull request might have been detected
+because the code changes were too large"* — the diff is 439 files.
 
-**Do:** open
-`https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/security/code-scanning?query=pr%3A315+tool%3ACodeQL+is%3Aopen`,
-triage the critical one first, and for each decide: introduced by this branch
-(fix here) or pre-existing on `main` (fix separately, note it here).
+**Candidate sinks, measured locally** (production code only; `tests/`,
+`scripts/` and `docs/` excluded). These are what CodeQL's Python queries would
+flag at critical/high in a repository shaped like this one:
+
+| Rule | Location | Disposition |
+|---|---|---|
+| `py/code-injection` | `strategies/dynamic_registry.py:555` — `exec(code_obj, allowed_globals)`, tainted from `api/dynamic_strategies.py:130` and `api/nocode.py:170` | **Already defended and documented.** `ASTSafetyValidator` blocks `__subclasses__`, `__bases__`, `__mro__`, `__code__`, `__globals__`, `__builtins__`, subscript attribute access, and 23 imports / 17 calls. The docstring at `:445` already states it is *"defence in depth, not a boundary, and must not be described as a sandbox."* If this is the critical alert, the disposition is **accept with that reason**, and the real fix is item 19 (a real sandbox). |
+| `py/unsafe-deserialization` | 9 `pickle.load` sinks. Only one sits inside an API route: `api/superadmin/ml_ai.py:452` | Defended: superadmin auth, `re.fullmatch(r"[A-Za-z0-9_]{1,64}")` on the model name, and `Path.relative_to` confinement. CodeQL taint tracking frequently does not recognise `relative_to` as a sanitiser, so this is a **likely false positive**. The other 8 are in `research/`, `ml/` and `deployment_guide.py`, not request-reachable. |
+| `py/code-injection` | `research/__init__.py:440` — `exec(compile(...))` notebook cell executor | Not request-reachable. |
+| `actions/code-injection` | none | The workflow analyses `actions` as well as `python`. Scanned every `run:` block for the 12 documented untrusted `github.event.*` inputs: **zero hits**. The only two untrusted expressions (`summary.yml:34-35`) are `with:` inputs to `actions/ai-inference`, not shell, and the response is already passed to `gh` through an env var. |
+
+**Do (owner):** open
+`https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/security/code-scanning?query=pr%3A315+tool%3ACodeQL+is%3Aopen`
+and supply the rule ID, file and line for the critical alert. If it matches a
+row above, the disposition is already written; if it does not, it is something
+this triage missed and needs fixing here.
 **Done when:** the critical alert is resolved or explicitly accepted with a reason.
 
 ### 1b. Two committed models fail their integrity check and do not load · CRITICAL — **mine**
