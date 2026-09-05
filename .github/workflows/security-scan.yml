@@ -28,17 +28,15 @@ jobs:
         run: pip install bandit[toml]
 
       - name: Run bandit
-        # Reports HIGH-severity findings but does not block CI — pre-existing
-        # HIGH findings are tracked in the security dashboard.
-        # Change || true to a hard exit once all HIGH findings are resolved.
+        # HIGH-severity findings are merge blockers. The JSON report is written
+        # before the human-readable check so it is retained on failure.
         run: |
+          set -o pipefail
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
             --severity-level high \
-            -f json -o bandit-report.json || true
-          # Ensure report file always exists so the upload step never errors
-          test -f bandit-report.json || echo '{"results":[],"errors":[]}' > bandit-report.json
+            -f json -o bandit-report.json
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
-            --severity-level high -q || true
+            --severity-level high -q
 
       - name: Upload report
         if: always()
@@ -70,19 +68,18 @@ jobs:
       - name: Run safety check
         # safety scan requires authentication since Safety CLI 3.x.
         # Falls back to pip-audit (no auth required) when SAFETY_API_KEY is absent.
-        # Both paths use || true — CVE reports go to the security dashboard,
-        # not as CI blockers, until all transitive CVEs have fixes available.
+        # Vulnerability findings are merge blockers; reports remain available
+        # through the always-run artifact upload.
         run: |
+          set -o pipefail
           if [ -n "$SAFETY_API_KEY" ]; then
-            safety scan -r requirements.txt --output json > safety-report.json || true
-            safety scan -r requirements.txt --severity high || true
+            safety scan -r requirements.txt --output json > safety-report.json
+            safety scan -r requirements.txt --severity high
           else
             echo "SAFETY_API_KEY not set — using pip-audit as fallback"
             pip-audit -r requirements.txt --desc --no-deps \
-              --format json -o safety-report.json || true
+              --format json -o safety-report.json
           fi
-          # Ensure report file always exists so the upload step never errors
-          test -f safety-report.json || echo '[]' > safety-report.json
         env:
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
 
@@ -123,12 +120,10 @@ jobs:
           trivy version
           trivy fs . \
             --severity CRITICAL,HIGH \
-            --exit-code 0 \
+            --exit-code 1 \
             --ignore-unfixed \
             --format sarif \
-            --output trivy-results.sarif || true
-          # Ensure file always exists so the upload step never errors
-          test -f trivy-results.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
+            --output trivy-results.sarif
 
       - name: Upload Trivy scan results to GitHub Security tab
         # continue-on-error: SARIF upload requires GHAS; fails gracefully
