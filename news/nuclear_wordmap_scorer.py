@@ -37,6 +37,8 @@ import logging
 import re
 from pathlib import Path
 
+from news.keyword_match import count_keyword
+
 logger = logging.getLogger(__name__)
 
 # ── WORDMAP nuclear/risk keyword dictionary ───────────────────────────────────
@@ -281,9 +283,10 @@ class NuclearWordMapScorer:
         for category, terms in self._keywords.items():
             cat_score = 0.0
             for term, weight in terms.items():
-                if term in text_lower:
+                hits = count_keyword(text_lower, term)
+                if hits:
                     # Count occurrences (capped at 3 to avoid spam amplification)
-                    count = min(text_lower.count(term), 3)
+                    count = min(hits, 3)
                     contribution = weight * (1 + 0.2 * (count - 1))
                     cat_score = max(cat_score, contribution)
                     matched_terms.append(

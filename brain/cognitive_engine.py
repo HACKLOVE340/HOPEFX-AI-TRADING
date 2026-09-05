@@ -167,6 +167,13 @@ class CognitiveEngine:
         volatility = self.assess_volatility()
         support, resistance = self.detect_support_resistance()
 
+        # Run the fifth analysis too. This method documents itself as running
+        # all of them, but skipped sentiment, so the returned dict carried
+        # `sentiment: None` -- the one key a caller is most likely to do
+        # arithmetic on. A caller that already supplied a score keeps it.
+        if self.sentiment is None:
+            self.perform_sentiment_analysis()
+
         # Compute a simple signal strength in [0, 1]
         bullish = (trend == "uptrend") and (momentum > 55)
         bearish = (trend == "downtrend") and (momentum < 45)
