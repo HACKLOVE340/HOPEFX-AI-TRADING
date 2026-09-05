@@ -268,10 +268,21 @@ jobs:
           if [ "$CODE" != "200" ]; then
             echo "FAIL: expected 200, got $CODE"; FAIL=1
           else
+            # api/health.py returns ReadinessResponse: ready, timestamp,
+            # failed_critical, components. There is no `status` key. This block
+            # asserted `d.get('status') in ('ready','ok','healthy')`, which is
+            # `None in (...)` against the real payload and can only fail.
+            #
+            # It had never run. The assertion is reachable only when the probe
+            # returns 200, and readiness returned 503 on every deployment until
+            # F270 removed the pool listeners that kept `db_pool` down. The first
+            # run in which readiness worked was the first run in which this
+            # assertion executed, and it was wrong.
             echo "$BODY" | python3 -c "
           import sys,json
           d=json.load(sys.stdin)
-          assert d.get('status') in ('ready','ok','healthy'), f'bad status: {d}'
+          assert d.get('ready') is True, f'not ready: {d}'
+          assert d.get('failed_critical') == [], f'critical components down: {d[\"failed_critical\"]}'
           print('PASS: readiness probe')
           " || FAIL=1
           fi
