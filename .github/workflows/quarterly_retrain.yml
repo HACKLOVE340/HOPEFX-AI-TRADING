@@ -245,7 +245,6 @@ jobs:
         with:
           name: feature-stability-${{ github.run_id }}
           path: ml/saved_models/
-        continue-on-error: true  # retrain proceeds even if stability report is missing
 
       - name: Run quarterly walk-forward retrain (50Y, OOS 8Y)
         run: |
