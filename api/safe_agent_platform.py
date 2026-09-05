@@ -16,6 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, require_role
+from ai.policy.roles import QUORUM_NEEDS_SUPERADMIN_KINDS
+from api.superadmin._shared import require_superadmin_2fa
 from core.config_store import config_store
 
 router = APIRouter(prefix="/api/safe-platform", tags=["Safe Agent Platform"])
@@ -199,6 +201,21 @@ def _save_state(changed_by: str) -> None:
 
 
 _load_state()
+
+
+def _superadmin_2fa(user: TokenPayload = Depends(require_superadmin_2fa)) -> TokenPayload:
+    """Superadmin role AND a TOTP-verified token.
+
+    Guards the consequential tier of the Part 1B matrix: execute, rollback,
+    model routing, and integration credential actions. Every endpoint in this
+    module used to depend on `_admin` below, and `require_role` is a
+    minimum-rank check, so rank 3 (admin) cleared all of them -- an admin could
+    execute an approved proposal, roll it back, reroute the models and rotate
+    an integration's credentials. `require_superadmin_2fa` already existed in
+    api/superadmin/_shared.py for exactly this class of action; it was simply
+    never used here.
+    """
+    return user
 
 
 def _admin(user: TokenPayload = Depends(require_role("admin"))) -> TokenPayload:
@@ -404,7 +421,7 @@ async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 
 @router.post("/models/route")
-async def route_model(request: ModelRouteRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+async def route_model(request: ModelRouteRequest, user: TokenPayload = Depends(_superadmin_2fa)) -> dict[str, Any]:
     _enforce_rate_limit(user)
     if not request.model_id.startswith(("gateway/", "openai/", "anthropic/", "google/")):
         raise HTTPException(status_code=400, detail="Model must use an approved provider namespace")
@@ -610,7 +627,7 @@ async def request_external_research(request: ResearchRequest, user: TokenPayload
 
 @router.post("/supervisor/tasks/execute")
 async def execute_supervisor_task(
-    request: TaskExecutionRequest, user: TokenPayload = Depends(_admin)
+    request: TaskExecutionRequest, user: TokenPayload = Depends(_superadmin_2fa)
 ) -> dict[str, Any]:
     task = next((item for item in _TASKS if item["id"] == request.task_id), None)
     if not task:
@@ -798,6 +815,7 @@ async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends
     decision = {
         "proposal_id": request.proposal_id,
         "approver": user.sub,
+        "approver_role": getattr(user, "role", "") or "",
         "decision": request.decision,
         "reason": request.reason,
         "created_at": datetime.now(UTC).isoformat(),
@@ -807,8 +825,20 @@ async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends
         proposal["status"] = "rejected"
     else:
         approvals = [a for a in _APPROVALS if a["proposal_id"] == request.proposal_id and a["decision"] == "approve"]
-        if len({a["approver"] for a in approvals}) >= proposal["required_approvals"]:
+        distinct_approvers = {a["approver"] for a in approvals}
+        # Quorum rule (plan Part 1B.2). "An approver cannot decide twice" was
+        # already enforced above and is correct, but both approvers could be
+        # admins -- so two admins could approve a repair between them with no
+        # superadmin involved, which is the overtake case this closes.
+        needs_superadmin = proposal["kind"] in QUORUM_NEEDS_SUPERADMIN_KINDS
+        has_superadmin = any(a.get("approver_role") == "superadmin" for a in approvals)
+        quorum_met = len(distinct_approvers) >= proposal["required_approvals"] and (
+            has_superadmin or not needs_superadmin
+        )
+        if quorum_met:
             proposal["status"] = "approved_pending_execution"
+        elif needs_superadmin and not has_superadmin:
+            proposal["quorum_pending"] = "awaiting_superadmin_approval"
     _save_state(user.sub)
     return {
         "proposal": copy.deepcopy(proposal),
@@ -891,7 +921,9 @@ async def validate_proposal(request: ValidationRequest, user: TokenPayload = Dep
 
 
 @router.post("/proposals/execute")
-async def execute_proposal(request: ProposalExecutionRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+async def execute_proposal(
+    request: ProposalExecutionRequest, user: TokenPayload = Depends(_superadmin_2fa)
+) -> dict[str, Any]:
     proposal = next((p for p in _PROPOSALS if p["id"] == request.proposal_id), None)
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -934,7 +966,7 @@ async def execute_proposal(request: ProposalExecutionRequest, user: TokenPayload
 
 
 @router.post("/proposals/{proposal_id}/rollback")
-async def rollback_proposal(proposal_id: str, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+async def rollback_proposal(proposal_id: str, user: TokenPayload = Depends(_superadmin_2fa)) -> dict[str, Any]:
     proposal = next((p for p in _PROPOSALS if p["id"] == proposal_id), None)
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -963,7 +995,9 @@ async def integrations(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 
 @router.post("/integrations/action")
-async def integration_action(request: IntegrationAction, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+async def integration_action(
+    request: IntegrationAction, user: TokenPayload = Depends(_superadmin_2fa)
+) -> dict[str, Any]:
     _enforce_rate_limit(user)
     item = next((entry for entry in _INTEGRATIONS if entry["id"] == request.integration_id), None)
     if not item:

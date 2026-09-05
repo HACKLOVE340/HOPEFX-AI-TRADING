@@ -34,8 +34,8 @@ def _clean_state() -> Any:
     sp._APPROVALS.clear()
 
 
-def _user(sub: str = "operator-1") -> Any:
-    return types.SimpleNamespace(sub=sub)
+def _user(sub: str = "operator-1", role: str = "admin") -> Any:
+    return types.SimpleNamespace(sub=sub, role=role)
 
 
 def _make_proposal(**overrides: Any) -> dict[str, Any]:
@@ -100,11 +100,14 @@ def test_a_sound_proposal_still_validates() -> None:
         rollback_plan="Restore checkpoint ckpt-17 and re-run the risk gate suite.",
     )
     asyncio.run(sp.create_proposal_checkpoint(proposal["id"], _user()))
-    for approver in ("operator-1", "operator-2"):
+    # A repair's quorum must include a superadmin (plan Part 1B.2), so two
+    # admins between them no longer complete it -- see
+    # tests/unit/test_ai_control_plane_authorization.py.
+    for approver, role in (("operator-1", "admin"), ("super-1", "superadmin")):
         asyncio.run(
             sp.decide_approval(
                 sp.ApprovalRequest(proposal_id=proposal["id"], decision="approve", reason="reviewed"),
-                _user(approver),
+                _user(approver, role),
             )
         )
     result = _validate(proposal["id"])
