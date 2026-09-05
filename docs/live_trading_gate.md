@@ -1,9 +1,10 @@
 # Live Trading Gate — 30-Day Paper Trade Requirement
 
-!!! warning "This is the only gap that cannot be closed by writing code"
-    Every other item in the platform is built and deployed. This one requires
-    **30 calendar days** of the application running against a real OANDA practice
-    account. No amount of code can substitute for that time.
+!!! warning "This is one required gate, not the only readiness check"
+    A live-trading decision also depends on successful model retraining,
+    reviewed model promotion, broker reconciliation, restart recovery, and
+    end-to-end execution tests. The 30-day paper-trading period is required,
+    but it cannot substitute for those technical and operational controls.
 
 ---
 
@@ -67,7 +68,8 @@ If any check fails, see [DEBUGGING.md](DEBUGGING.md) for OANDA-specific troubles
 ## Step 4 — Start paper trading
 
 ```bash
-python main.py
+# Unified paper-trading entry point; keep the broker explicit.
+python run.py --broker oanda --mode paper
 ```
 
 The application logs a `paper_trading_started_at` timestamp on first run.
