@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Bot, CheckCircle2, ChevronDown,
+  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Bot, Camera, CheckCircle2, ChevronDown,
   CircleDot, Clock3, Command, Crosshair, Database, ExternalLink, Gauge, GitBranch,
   Layers3, LockKeyhole, PauseCircle, Play, RefreshCw, RotateCcw, Scale, Search,
-  ShieldCheck, SlidersHorizontal, Sparkles, Target, Users, WalletCards, XCircle,
+  Eye, ShieldCheck, SlidersHorizontal, Sparkles, Target, Users, WalletCards, XCircle,
 } from 'lucide-react';
 import { signalsApi } from '../hooks/useApi';
 import { useAICommandCenter } from '../hooks/useAICommandCenter';
@@ -15,8 +15,9 @@ import { EmptyState } from '../components/EmptyState';
 import { Spinner } from '../components/Spinner';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import type { EngineSignal, SignalAnalyticsReport } from '../types';
+import { HologramPanel, VisionScanner, VisualizationsPanel } from '../components/intelligence/VisualIntelligenceWorkspaces';
 
-type Workspace = 'Overview' | 'Signals' | 'Agents & Teams' | 'Strategy Lab' | 'Futures & Markets' | 'Risk & Governance' | 'Approvals' | 'Replay & Backtest' | 'Operations';
+type Workspace = 'Overview' | 'Signals' | 'Agents & Teams' | 'Strategy Lab' | 'Futures & Markets' | 'Risk & Governance' | 'Approvals' | 'Replay & Backtest' | 'Operations' | 'AI Hologram' | 'Vision Scanner' | 'Visualizations';
 
 type Tone = 'green' | 'amber' | 'red' | 'blue' | 'muted';
 
@@ -26,7 +27,8 @@ const label: React.CSSProperties = { color: '#70809a', fontSize: 10, fontWeight:
 
 const workspaces: { name: Workspace; icon: React.ElementType; count?: string }[] = [
   { name: 'Overview', icon: Activity }, { name: 'Signals', icon: Crosshair, count: '03' }, { name: 'Agents & Teams', icon: Users, count: '07' },
-  { name: 'Strategy Lab', icon: GitBranch }, { name: 'Futures & Markets', icon: Layers3 }, { name: 'Risk & Governance', icon: ShieldCheck },
+  { name: 'Strategy Lab', icon: GitBranch }, { name: 'Futures & Markets', icon: Layers3 },   { name: 'Risk & Governance', icon: ShieldCheck },
+  { name: 'AI Hologram', icon: Sparkles }, { name: 'Vision Scanner', icon: Camera }, { name: 'Visualizations', icon: Eye },
   { name: 'Approvals', icon: CheckCircle2, count: '02' }, { name: 'Replay & Backtest', icon: RotateCcw }, { name: 'Operations', icon: Gauge },
 ];
 
@@ -129,6 +131,9 @@ const AIIntelligence: React.FC = () => {
     if (workspace === 'Agents & Teams') return <Agents teams={commandCenter.sources.teams} />;
     if (workspace === 'Futures & Markets') return <Markets market={commandCenter.sources.prices} />;
     if (workspace === 'Strategy Lab') return <StrategyLab backtests={commandCenter.sources.backtests} />;
+    if (workspace === 'AI Hologram') return <HologramPanel degraded={commandCenter.hasDegradedSources} />;
+    if (workspace === 'Vision Scanner') return <VisionScanner />;
+    if (workspace === 'Visualizations') return <VisualizationsPanel />;
     if (workspace === 'Signals') return <div style={{ display: 'grid', gap: 12 }}><div style={{ ...panel, padding: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}><span style={label}>Signal filters</span>{(['all', 'BUY', 'SELL'] as const).map((direction) => <button key={direction} type="button" aria-pressed={signalDirection === direction} onClick={() => setSignalDirection(direction)} style={{ padding: '7px 10px', borderRadius: 6, border: `1px solid ${signalDirection === direction ? '#73a7ff' : '#273752'}`, background: signalDirection === direction ? '#1a3157' : '#111b2d', color: signalDirection === direction ? '#dbe9ff' : '#9aabc0', fontSize: 10, fontWeight: 800 }}>{direction === 'all' ? 'ALL DIRECTIONS' : direction}</button>)}<span style={{ marginLeft: 'auto', color: '#70809a', fontSize: 10 }}>{filteredSignals.length} of {signals.length} signals</span></div>{filteredSignals.length ? filteredSignals.map(signal => <button key={signal.id} type="button" onClick={() => setSelectedSignal(signal)} aria-label={`Inspect signal ${signal.id}`} style={{ display: 'block', width: '100%', textAlign: 'left', border: 0, padding: 0, background: 'transparent', cursor: 'pointer' }}><SignalIntelligenceCard signal={signal} /></button>) : <EmptyState icon="·" title="No matching signals" description="Adjust direction filters or wait for an authoritative signal payload." links={[]} />}</div>;
     return <GovernanceWorkspace workspace={workspace} degraded={commandCenter.hasDegradedSources} />;
   }, [analytics, commandCenter.hasDegradedSources, commandCenter.isRefreshing, filteredSignals, selectedSignal, signalDirection, signals, workspace]);

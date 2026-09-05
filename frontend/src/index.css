@@ -227,6 +227,13 @@
     .ai-command-center [style*="overflow: hidden"] { overflow-x: auto !important; }
   }
 
+  .ai-hologram-stage { position: relative; height: 190px; margin: 16px 0 10px; display: grid; place-items: center; perspective: 700px; background: radial-gradient(circle, rgba(52,130,210,.18), transparent 58%), linear-gradient(180deg, rgba(10,28,53,.22), rgba(7,13,23,.64)); border: 1px solid #223e63; border-radius: 10px; overflow: hidden; }
+  .ai-hologram-stage::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 6px, rgba(115,167,255,.07) 7px 8px); pointer-events: none; }
+  .ai-hologram-ring { position: absolute; border: 1px solid rgba(115,167,255,.6); border-radius: 50%; transform: rotateX(68deg); animation: ai-hologram-spin 7s linear infinite; }
+  .ring-one { width: 210px; height: 210px; }
+  .ring-two { width: 150px; height: 150px; border-color: rgba(66,211,146,.52); animation-duration: 5s; animation-direction: reverse; }
+  .ai-hologram-core { position: relative; z-index: 1; display: grid; place-items: center; gap: 6px; color: #8fd4ff; text-shadow: 0 0 16px rgba(115,167,255,.8); font-size: 10px; font-weight: 900; letter-spacing: .16em; }
+  @keyframes ai-hologram-spin { from { transform: rotateX(68deg) rotateZ(0deg); } to { transform: rotateX(68deg) rotateZ(360deg); } }
   @media (prefers-reduced-motion: reduce) {
     .ai-command-center *, .ai-command-center *::before, .ai-command-center *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   }
@@ -457,7 +464,7 @@
   .hover-lift:hover { transform: none; }
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ───────────────────────────────────────────────���─────────────────────────────
    LANDING PAGE
 ───────────────────────────────────────────────────────────────────────────── */
 .landing-root {
