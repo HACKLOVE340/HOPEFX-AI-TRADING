@@ -283,12 +283,25 @@ jobs:
           from pathlib import Path
 
           meta_path = Path("ml/saved_models/advanced_oos_meta.json")
-          if not meta_path.exists():
-              print("[WARN] advanced_oos_meta.json not found")
-              sys.exit(0)
+          if not meta_path.is_file() or meta_path.stat().st_size == 0:
+              print("[BLOCKED] advanced_oos_meta.json is missing or empty")
+              sys.exit(1)
 
-          meta = json.loads(meta_path.read_text())
-          sg = meta.get("sharpe_gate", {})
+          try:
+              meta = json.loads(meta_path.read_text())
+          except (OSError, json.JSONDecodeError) as exc:
+              print(f"[BLOCKED] invalid model metadata: {exc}")
+              sys.exit(1)
+
+          required = ("oos_accuracy", "oos_n", "feature_count", "sharpe_gate")
+          missing = [key for key in required if key not in meta]
+          if missing:
+              print(f"[BLOCKED] model metadata missing fields: {missing}")
+              sys.exit(1)
+          sg = meta["sharpe_gate"]
+          if not isinstance(sg, dict) or "gate_passed" not in sg:
+              print("[BLOCKED] sharpe_gate metadata is incomplete")
+              sys.exit(1)
 
           print("=" * 60)
           print("QUARTERLY RETRAIN — OOS METRICS SUMMARY")
