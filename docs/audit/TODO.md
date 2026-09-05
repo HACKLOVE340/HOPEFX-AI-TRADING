@@ -78,6 +78,27 @@ because no code-scanning tool is exposed to this session: `get_check_run`
 returns an empty `output.text` with no annotations, and the CodeQL CLI is not
 installed here. What follows narrows it.
 
+**Update 2026-09-05 21:24 — three of them now ARE attributable.** The count
+moved for the first time in nine commits, and it moved exactly when the
+`v0/hopefx-remediation` merge landed:
+
+| Head | Commit | Critical | High |
+|---|---|---:|---:|
+| `42d67475` | last commit before the merge | 1 | 10 |
+| `0097a440` | first CodeQL run after the merge | **2** | **12** |
+
+So **1 critical and 2 high are new, and they are in v0's merged code** — a
+search space of 15 files rather than 439. The other 11 remain unattributable
+for the reason below.
+
+Candidates in that new code, ranked by how CodeQL's Python queries score them:
+`security/ai_repair_sandbox.py` writes caller-supplied source to a temp file and
+invokes `subprocess.run([sys.executable, "-B", "-m", "py_compile", ...])` on it
+— a request-to-subprocess path that `py/command-line-injection` or
+`py/code-injection` would rate critical even though `py_compile` never executes
+the module body. `api/safe_agent_platform.py` and
+`strategies/dynamic_registry.py` are the next places to look.
+
 **The alerts are not introduced by this branch's recent commits.** The count has
 been identical — 1 critical / 10 high — across seven consecutive commits,
 including one that changed only YAML and one (`d42fc59f`) that changed **a
