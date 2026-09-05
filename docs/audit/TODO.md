@@ -23,6 +23,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 |---|---|---|---|
 | 1 | CodeQL: 11 alerts, 1 critical | CRITICAL | — |
 | 1b | **Two committed models fail integrity and do not load** | CRITICAL | **owner** |
+| 1c | F270 · async pool listened for non-existent events → readiness 503 forever | CRITICAL | fixed |
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | — |

@@ -8365,3 +8365,73 @@ checksums to match whatever was on disk. Reverted with `git checkout`. The
 incident is the finding's own best illustration: a baseline that can be
 regenerated from the artefacts it verifies is not a baseline, and the regenerator
 silently narrows what it covers.
+
+---
+
+## F270 — the async DB pool listens for two events SQLAlchemy does not have, so readiness is 503 forever · CRITICAL
+
+`database/async_connection.py` registered two pool listeners:
+
+```python
+# overflow and timeout events only exist on QueuePool, not NullPool or StaticPool.
+_pool_cls = type(sync_engine.pool)
+if not self.config.use_null_pool and _pool_cls not in (_NullPool, _StaticPool):
+    @event.listens_for(sync_engine.pool, "overflow")   # <- not an event
+    @event.listens_for(sync_engine.pool, "timeout")    # <- not an event
+```
+
+The comment is false. SQLAlchemy 2.x `PoolEvents` is exactly `connect`,
+`first_connect`, `checkout`, `checkin`, `reset`, `invalidate`,
+`soft_invalidate`, `close`, `detach`, `close_detached`. Neither `overflow` nor
+`timeout` exists on any pool.
+
+So the guard was backwards. It excluded `NullPool` and `StaticPool` — the two
+pools where the block would not have run anyway — and then registered on
+`QueuePool` and `AsyncAdaptedQueuePool`, where registration raises. Proven by
+running it both ways on an `AsyncAdaptedQueuePool` engine:
+
+```
+WITHOUT the fix: InvalidRequestError: No such event 'overflow'
+                 for target '<sqlalchemy.pool.impl.AsyncAdaptedQueuePool object ...>'
+WITH the fix   : connect() reached the end without error
+```
+
+The consequence chain:
+
+1. async pool initialisation raises on **every deployment using the default
+   pool** — every Postgres deployment;
+2. the caller catches it and logs `Async DB pool init failed` at WARNING, so the
+   process starts anyway;
+3. the `db_pool` component reports critical-down, permanently;
+4. `/api/health/ready` returns 503 while any critical component is down.
+
+Under Kubernetes the pod never becomes ready. Startup itself looks perfect —
+the startup probe completed with `failed=[]` and the log says `API SERVER
+READY` — which is why nothing pointed at it.
+
+**Why the test suite could not see it.** SQLite `:memory:` uses `StaticPool` or
+`NullPool`, exactly the classes the guard excluded, so the listeners were never
+reached under pytest. It took a Postgres-backed container to hit the branch. The
+regression test now uses a `postgresql+asyncpg://` DSN pointed at a closed port:
+creating an engine does not connect, so the registration is reached without a
+server.
+
+Found from the docker smoke test, which polled `/api/health/ready` 24 times and
+got `failed_critical: ["db_pool"]` on every attempt.
+
+**Also fixed:** the same smoke job's Test 8 expected `POST /api/auth/logout` to
+return 200 and got `403 CSRF token missing`. That is the CSRF guard working —
+`/login` and `/register` are exempt as pre-auth, `/logout` is not — and the
+smoke script never fetched a token. It now performs the double-submit:
+`GET /api/auth/csrf-token` for the `hopefx_csrf` cookie, echoed in the
+`X-CSRF-Token` header.
+
+**Method note.** I first suspected my own F269 change, because the smoke job
+passed on the previous head and the stack runs `APP_ENV=production`, which is
+exactly what F269 made fail-closed. That was the wrong suspect and the way to
+tell was mechanical: every refusal branch in `_verify_checksum` logs at
+CRITICAL, and the container log contains **zero** occurrences of all five
+integrity markers — including the pre-existing mismatch branch. The check never
+refused anything in that container, so the change had no runtime effect on that
+run. Suspecting your own most recent change first is right; stopping there
+because it is plausible is not.

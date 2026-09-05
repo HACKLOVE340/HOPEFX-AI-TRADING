@@ -387,8 +387,22 @@ jobs:
           # ── 8. Logout ───────────────────────────────────────────────────────
           echo "--- Test 8: POST /api/auth/logout ---"
           if [ -n "$ACCESS_TOKEN" ]; then
+            # Logout is a state-changing POST, so core/middleware.py's CSRF
+            # guard requires the double-submit pair: the `hopefx_csrf` cookie
+            # issued by GET /api/auth/csrf-token, and the same value echoed in
+            # the X-CSRF-Token header. /login and /register are exempt (pre-auth,
+            # no cookie yet), /logout is not — so this test asked for a 200 and
+            # got 403 "CSRF token missing", which is the guard working.
+            CSRF=$(curl -s -c /tmp/smoke_cookies \
+              -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              "${BASE}/api/auth/csrf-token" \
+              | python3 -c 'import sys,json; print(json.load(sys.stdin).get("csrf_token",""))' 2>/dev/null || echo "")
+            if [ -z "$CSRF" ]; then
+              echo "FAIL: could not obtain a CSRF token from /api/auth/csrf-token"; FAIL=1
+            fi
             CODE=$(curl_retry "${BASE}/api/auth/logout" \
-              -X POST -H "Authorization: Bearer ${ACCESS_TOKEN}")
+              -X POST -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              -b /tmp/smoke_cookies -H "X-CSRF-Token: ${CSRF}")
             BODY=$(cat /tmp/smoke_body)
             echo "HTTP $CODE  body: ${BODY:0:200}"
             if [ "$CODE" != "200" ]; then
