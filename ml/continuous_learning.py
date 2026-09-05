@@ -296,7 +296,11 @@ class DriftDetector:
         from scipy import stats
 
         ks_stat, p_value = stats.ks_2samp(reference_predictions, recent_predictions)
-        is_drifted = ks_stat > _DRIFT_KS_THRESHOLD
+        # bool(): scipy returns numpy scalars, so a bare comparison yields a
+        # numpy.bool_. DriftReport.to_dict() exists to build a JSON payload,
+        # and json.dumps cannot serialise that -- the score beside it was
+        # already coerced with float() for the same reason.
+        is_drifted = bool(ks_stat > _DRIFT_KS_THRESHOLD)
 
         if _PROM_OK and is_drifted:
             _drift_detections.labels(drift_type="prediction_drift").inc()
@@ -745,14 +749,31 @@ class ChampionChallenger:
         try:
             from scipy import stats
 
-            # One-sided binomial test
-            p_value = stats.binom_test(
-                result.correct_predictions,
-                result.predictions,
-                0.5,
-                alternative="greater",
-            )
-            return p_value < (1 - _SHADOW_CONFIDENCE_LEVEL)
+            # One-sided binomial test.
+            #
+            # This used to call stats.binom_test, which SciPy REMOVED in 1.12 --
+            # the very version this project pins as its floor (scipy>=1.12.0).
+            # So on every supported install the call raised AttributeError, the
+            # bare `except Exception` below swallowed it, and this returned
+            # False. Not "occasionally too strict": no challenger model could
+            # ever be promoted, which is the one thing this pipeline exists to
+            # do. A 70%-accurate challenger over 1000 predictions was rejected
+            # as "not statistically significant".
+            if hasattr(stats, "binomtest"):
+                p_value = stats.binomtest(
+                    result.correct_predictions,
+                    result.predictions,
+                    0.5,
+                    alternative="greater",
+                ).pvalue
+            else:  # pragma: no cover - SciPy < 1.7 only
+                p_value = stats.binom_test(
+                    result.correct_predictions,
+                    result.predictions,
+                    0.5,
+                    alternative="greater",
+                )
+            return bool(p_value < (1 - _SHADOW_CONFIDENCE_LEVEL))
         except ImportError:
             # Fallback: simple threshold check
             return result.accuracy > 0.55 and result.predictions >= _SHADOW_MIN_PREDICTIONS
