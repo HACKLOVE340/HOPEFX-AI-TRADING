@@ -181,6 +181,24 @@ async def list_supervisor_tasks(_: TokenPayload = Depends(_admin)) -> dict[str, 
     return {"items": list(reversed(copy.deepcopy(_TASKS))), "side_effects": "blocked_until_human_approval"}
 
 
+@router.post("/supervisor/tasks/{task_id}/cancel")
+async def cancel_supervisor_task(task_id: str, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    task = next((item for item in _TASKS if item["id"] == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.get("status") in {"completed_reviewable_run", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Task cannot be cancelled in its current state")
+    task["status"] = "cancelled"
+    task.setdefault("events", []).append({"type": "task_cancelled", "actor": user.sub, "at": datetime.now(UTC).isoformat()})
+    _save_state(user.sub)
+    return {"task": copy.deepcopy(task), "message": "Task cancelled and all future tool execution blocked."}
+
+
+@router.get("/models/health")
+async def model_health(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    return {"items": [{**model, "last_checked": None, "provider_call": "not_performed"} for model in _MODELS], "status": "configuration_only", "message": "Live health checks require a configured provider and remain disabled until explicitly enabled."}
+
+
 @router.post("/supervisor/tasks/plan")
 async def plan_supervisor_task(request: TaskPlanRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     task = next((item for item in _TASKS if item["id"] == request.task_id), None)
