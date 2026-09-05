@@ -41,6 +41,13 @@ class StrategyExecutionBoundary:
 
         if candidate.validation is None or not candidate.validation.passed:
             return StrategyExecutionDecision(False, scope, "VALIDATION_REQUIRED", "a passing validation report is required")
+        if not candidate.research_validation_hash.strip():
+            return StrategyExecutionDecision(
+                False,
+                scope,
+                "RESEARCH_VALIDATION_REQUIRED",
+                "replay, walk-forward, leakage, slippage, and model-quality evidence is required",
+            )
 
         if scope is ExecutionScope.PAPER:
             allowed_states = {

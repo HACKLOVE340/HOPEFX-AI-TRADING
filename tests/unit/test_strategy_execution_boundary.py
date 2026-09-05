@@ -14,6 +14,7 @@ def make_candidate() -> ResearchCandidate:
         data_scope="fixture",
         lifecycle=StrategyLifecycle.PAPER_ACTIVE,
         validation=ValidationReport(passed=True, checks={"walk_forward": True}),
+        research_validation_hash="research-evidence-sha",
     )
 
 
