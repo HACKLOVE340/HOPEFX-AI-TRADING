@@ -20,6 +20,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from news.keyword_match import contains_keyword
+
 logger = logging.getLogger(__name__)
 
 # Try importing sentiment libraries
@@ -305,8 +307,8 @@ class FinancialSentimentAnalyzer:
         text_lower = text.lower()
 
         # Count bullish and bearish keywords
-        bullish_count = sum(1 for word in self.BULLISH_KEYWORDS if word in text_lower)
-        bearish_count = sum(1 for word in self.BEARISH_KEYWORDS if word in text_lower)
+        bullish_count = sum(1 for word in self.BULLISH_KEYWORDS if contains_keyword(text_lower, word))
+        bearish_count = sum(1 for word in self.BEARISH_KEYWORDS if contains_keyword(text_lower, word))
 
         # Calculate polarity
         total = bullish_count + bearish_count

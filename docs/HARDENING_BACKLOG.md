@@ -7461,3 +7461,92 @@ Four separate times this session a source-text assertion was tripped by the
 comment written to explain the very thing it asserts. The durable fix, used in
 `test_redis_client_reuse_and_cooldown.py`, is to strip comments before matching
 rather than to reword prose around the test.
+
+---
+
+## Round 23 — the coverage gates that measured nothing (S-76 … S-79)
+
+`ci.yml` runs three per-package coverage gates that had **never once executed**:
+
+```yaml
+- name: Coverage gate - brain/ (70% required)
+  run: coverage report --rcfile=.coveragerc --include="brain/*" --fail-under=70
+```
+
+`.coveragerc`'s `[run] source =` list named neither `brain` nor `news`, so
+coverage never instrumented either package, `--include` matched nothing, and
+`coverage report` exited 1 with *"No data to report."* The gate could not pass
+by construction. It went unnoticed because on `main` the step is unreachable:
+the `Run tests with coverage` step fails first, so the gates below it are all
+skipped. This branch is the first on which they ran at all — and the `ml/` and
+`news/` gates behind `brain/` had likewise never executed.
+
+* **S-76.** `brain` and `news` added to `.coveragerc` `[run] source`. Wiring
+  them up converts "no data" into a real, and initially failing, number:
+  `brain/` measured **50.52 %** and `news/` **45.95 %** against a 70 % gate.
+  Both were brought above the threshold with tests rather than by moving the
+  threshold — a check that passes because it was weakened is the defect class
+  this backlog exists to remove. `brain/cognitive_engine.py` was at **0.00 %**:
+  76 statements of trend/momentum/volatility analysis reached by nothing.
+
+* **S-77 (keyword matching — three scorers).** `news/impact_predictor.py`,
+  `news/sentiment.py` and `news/nuclear_wordmap_scorer.py` all looked their
+  keyword dictionaries up with a plain substring test, `if keyword in text`.
+  On these dictionaries that fires on ordinary English, not on rare edge cases:
+
+  | Text | Keyword | Consequence |
+  |---|---|---|
+  | "Local bakery wins **award**" | `war` | HIGH-impact GEOPOLITICAL, volatility ×1.3 |
+  | "**software** update" | `war` | same |
+  | "went a**gain**st expectations" | `gain` | scored **bullish** |
+  | "a **miss**ion to mars" | `miss` | scored bearish |
+  | "**fall**out shelter" | `fall` | scored bearish |
+  | "a **coup**le of things" | `coup` | match on the `nuclear_mode` scorer |
+
+  Found by writing a test that asserted the boring case and getting the
+  alarming one back. The naive fix — `\bword\b` — overcorrects, because
+  headlines are inflected ("stocks *surges*", "*gains* on the day", "rate
+  *cuts*"), and demanding an exact word drops the matches the dictionaries
+  exist to catch. `news/keyword_match.py` is now the single matcher: a keyword
+  matches at a word boundary, optionally followed by one common inflection, so
+  *falls* matches `fall` and *fallout* does not.
+
+* **S-78 (RSS/Atom parsing).** `news/providers.py::_parse_rss_feed` selected
+  elements with `item.find(a) or item.find(b)`. An `ElementTree.Element` is
+  **falsy when it has no child elements**, which is true of every leaf a feed
+  cares about, so the `or` discarded the element it had just found and fell
+  through to the fallback — usually `None`. Three consequences:
+
+  - RSS `pubDate` was never read, so every article was stamped `now()` and the
+    `hours_back` cutoff dropped nothing: **stale news served as current**.
+  - RSS `dc:creator` was never read.
+  - In Atom feeds the title, summary, link, timestamp and author of **every**
+    entry came back empty.
+
+  Replaced with an explicit `_first()` helper that tests `is not None`.
+
+* **S-79 (`brain/cognitive_engine.py`).** `composite_signal()` documents itself
+  as running all analyses but ran four of five, leaving `sentiment` at its
+  `None` initial value — the one key in the returned signal dict a caller is
+  most likely to do arithmetic on. It now defaults to neutral, the same value
+  `perform_sentiment_analysis()` produces with no score. A caller that supplied
+  a score keeps it.
+
+**Numbers, before → after** (full CI selection, `pytest -m "not slow and not e2e"`):
+
+| Module | Before | After |
+|---|---:|---:|
+| `brain/cognitive_engine.py` | 0.00 % | 100.00 % |
+| `brain/llm_agent.py` | 25.51 % | 92.86 % |
+| `news/__init__.py` | 27.48 % | 100.00 % |
+| `news/economic_calendar.py` | 46.64 % | 99.60 % |
+| `news/providers.py` | 32.08 % | 94.88 % |
+| `news/sentiment.py` | 58.00 % | 97.01 % |
+| `news/nuclear_wordmap_scorer.py` | 69.09 % | 98.21 % |
+| `news/impact_predictor.py` | 74.85 % | 96.95 % |
+
+**The lesson worth keeping.** A gate that has never run is worse than no gate:
+it occupies the slot where a real check would go, and its name in the workflow
+file is read by everyone as evidence the thing is covered. Both of these had
+been in `ci.yml` since the commit that introduced them, reporting nothing,
+behind a step that failed first.
