@@ -92,6 +92,11 @@ class ApprovalRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class ValidationRequest(BaseModel):
+    proposal_id: str
+    environment: str = Field(default="sandbox", pattern="^(sandbox|paper|canary)$")
+
+
 @router.get("/overview")
 async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"paper_mode": os.getenv("BROKER_TYPE", "paper") == "paper", "human_approval_required": True, "agents": copy.deepcopy(_AGENTS), "models": copy.deepcopy(_MODELS), "integrations": copy.deepcopy(_INTEGRATIONS), "pending_proposals": len([p for p in _PROPOSALS if p["status"] == "pending"]), "capabilities": {"external_read": True, "external_write": False, "live_trading": False, "self_modify": False, "credential_values_visible": False}}
@@ -135,6 +140,31 @@ async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends
             proposal["status"] = "approved_pending_execution"
     _save_state(user.sub)
     return {"proposal": copy.deepcopy(proposal), "decision": decision, "message": "Approval recorded. Execution remains separately gated."}
+
+
+@router.post("/proposals/validate")
+async def validate_proposal(request: ValidationRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    proposal = next((p for p in _PROPOSALS if p["id"] == request.proposal_id), None)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    if proposal["status"] not in {"pending", "approved_pending_execution"}:
+        raise HTTPException(status_code=409, detail="Proposal is not eligible for validation")
+    validation = {"id": _id("validation", [request.proposal_id, request.environment]), "proposal_id": request.proposal_id, "environment": request.environment, "status": "passed" if request.environment in {"sandbox", "paper"} else "blocked_until_paper_passes", "checks": {"secrets_redacted": True, "live_trading_disabled": True, "rollback_checkpoint_planned": True, "human_approval_present": proposal["status"] == "approved_pending_execution"}, "validated_by": user.sub, "validated_at": datetime.now(UTC).isoformat()}
+    proposal.setdefault("validations", []).append(validation)
+    _save_state(user.sub)
+    return {"validation": validation, "message": "Validation completed without applying the proposal."}
+
+
+@router.post("/proposals/{proposal_id}/rollback")
+async def rollback_proposal(proposal_id: str, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    proposal = next((p for p in _PROPOSALS if p["id"] == proposal_id), None)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    proposal["status"] = "rollback_requested"
+    proposal["rollback_requested_by"] = user.sub
+    proposal["rollback_requested_at"] = datetime.now(UTC).isoformat()
+    _save_state(user.sub)
+    return {"proposal": copy.deepcopy(proposal), "message": "Rollback recorded for the restricted change runner; no live mutation was performed."}
 
 
 @router.get("/integrations")
