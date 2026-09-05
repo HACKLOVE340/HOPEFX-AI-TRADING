@@ -302,6 +302,13 @@ def create_api_app(trading_app=None) -> Any | None:
 
     _register_probe_routes(app, trading_app, health_checker)
     _register_trading_routes(app, trading_app, _get_current_user, _require_trader, _ALLOWED_SYMBOLS, _MAX_QTY)
+
+    # The dedicated trading router owns the paper-trading controls and the
+    # authenticated trading API under /api/trading. Keep it mounted alongside
+    # the legacy /api/v1 routes so existing clients remain compatible.
+    from api.trading import router as trading_router
+
+    app.include_router(trading_router)
     _register_brain_routes(app, trading_app, _get_current_user, _require_admin)
     _register_system_routes(app, trading_app, _require_admin)
 
