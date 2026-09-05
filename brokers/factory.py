@@ -28,8 +28,14 @@ except ImportError:  # optional dependency for YAML-backed broker loading
 
 logger = logging.getLogger(__name__)
 
-# Default broker from environment — allows `python run.py` to pick up BROKER=mt5
-_DEFAULT_BROKER = os.getenv("BROKER", "paper").lower()
+def _configured_broker() -> str:
+    """Read the broker selector at call time with backwards-compatible aliases."""
+    return (os.getenv("BROKER_TYPE") or os.getenv("BROKER") or "paper").strip().lower()
+
+
+# Kept for callers that import the legacy module constant; broker creation reads
+# the environment at call time so test and process-level configuration changes apply.
+_DEFAULT_BROKER = _configured_broker()
 
 
 class BrokerFactory:
@@ -172,7 +178,7 @@ class BrokerFactory:
         connector that supports the full hot path including modify/cancel.
         """
         cls._ensure_registered()
-        resolved = (name or _DEFAULT_BROKER).lower()
+        resolved = (name or _configured_broker()).lower()
         broker_class = cls._brokers.get(resolved)
         if broker_class is None:
             logger.warning(
@@ -201,7 +207,7 @@ class BrokerFactory:
             "class": broker_class.__name__,
         }
 
-    # ── YAML-config-based factory ──────────────────────────────────────────────
+    # ── YAML-config-based factory ─────────────��────────────────────────────────
 
     @classmethod
     def get_broker_from_yaml(
