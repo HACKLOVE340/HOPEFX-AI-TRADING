@@ -46,7 +46,9 @@ _PROPOSALS_KEY = "safe_platform:proposals"
 _APPROVALS_KEY = "safe_platform:approvals"
 _INTEGRATIONS_KEY = "safe_platform:integrations"
 _TASKS_KEY = "safe_platform:tasks"
+_ROUTES_KEY = "safe_platform:model_routes"
 _TASKS: list[dict[str, Any]] = []
+_ROUTES: list[dict[str, Any]] = []
 
 
 def _load_state() -> None:
@@ -55,12 +57,15 @@ def _load_state() -> None:
     stored_approvals = config_store.get(_APPROVALS_KEY, default=[])
     stored_integrations = config_store.get(_INTEGRATIONS_KEY, default=[])
     stored_tasks = config_store.get(_TASKS_KEY, default=[])
+    stored_routes = config_store.get(_ROUTES_KEY, default=[])
     if isinstance(stored_proposals, list):
         _PROPOSALS.extend(item for item in stored_proposals if isinstance(item, dict))
     if isinstance(stored_approvals, list):
         _APPROVALS.extend(item for item in stored_approvals if isinstance(item, dict))
     if isinstance(stored_tasks, list):
         _TASKS.extend(item for item in stored_tasks if isinstance(item, dict))
+    if isinstance(stored_routes, list):
+        _ROUTES.extend(item for item in stored_routes if isinstance(item, dict))
     if isinstance(stored_integrations, list):
         for stored in stored_integrations:
             if isinstance(stored, dict) and stored.get("id"):
@@ -75,6 +80,7 @@ def _save_state(changed_by: str) -> None:
     config_store.set(_APPROVALS_KEY, _APPROVALS, changed_by=changed_by)
     config_store.set(_INTEGRATIONS_KEY, [{key: value for key, value in item.items() if key not in {"secret", "token_value", "access_token", "refresh_token"}} for item in _INTEGRATIONS], changed_by=changed_by)
     config_store.set(_TASKS_KEY, _TASKS, changed_by=changed_by)
+    config_store.set(_ROUTES_KEY, _ROUTES, changed_by=changed_by)
 
 
 _load_state()
@@ -163,7 +169,15 @@ async def route_model(request: ModelRouteRequest, user: TokenPayload = Depends(_
     if not request.model_id.startswith(("gateway/", "openai/", "anthropic/", "google/")):
         raise HTTPException(status_code=400, detail="Model must use an approved provider namespace")
     route = {"role": request.role, "model_id": request.model_id, "status": "pending_health_check", "reason": request.reason, "changed_by": user.sub, "changed_at": datetime.now(UTC).isoformat(), "side_effects": "none"}
+    _ROUTES[:] = [item for item in _ROUTES if item.get("role") != request.role]
+    _ROUTES.append(route)
+    _save_state(user.sub)
     return {"route": route, "message": "Route recorded as pending verification; no provider call or secret change was performed."}
+
+
+@router.get("/models/routes")
+async def model_routes(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    return {"items": copy.deepcopy(_ROUTES), "status": "pending_health_check" if _ROUTES else "unconfigured"}
 
 
 @router.post("/supervisor/tasks")
