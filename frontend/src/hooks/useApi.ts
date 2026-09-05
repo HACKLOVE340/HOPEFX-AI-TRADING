@@ -456,6 +456,34 @@ export const mlApi = {
   driftReport: ()            => api.get('/ml/drift-report'),
 };
 
+// ── AI Core ───────────────────────────────────────────────────────────────────
+//
+// The read surface behind /ai-core (api/ai_core.py). Every call is a GET: the
+// consequential actions live in /api/safe-platform behind the Part 1B matrix
+// and 2FA, and a second, weaker door to them is not something the page needs.
+//
+// `budget` and `calls` return a WIDER body for a superadmin (per-operator
+// spend, every operator's calls) and a self-scoped one for an admin. The page
+// reads `scope` rather than the caller's role, so what it renders is what the
+// server actually returned.
+
+export const aiCoreApi = {
+  /** One request for the header — chain, reachability, spend and call counts. */
+  summary:      ()               => api.get('/ai-core/summary'),
+  /** What this caller may do, as the server would decide it. */
+  capabilities: ()               => api.get('/ai-core/capabilities'),
+  /** The resolved chain per role, and which legs hold credentials. */
+  chain:        ()               => api.get('/ai-core/chain'),
+  /** Spend against the ceilings; scope depends on role. */
+  budget:       ()               => api.get('/ai-core/budget'),
+  /** Recent model calls. Prompts are SHA-256 digests, never text. */
+  calls:        (limit = 50)     => api.get('/ai-core/calls', { params: { limit } }),
+  /** Response-cache stats, or an explicit "not installed". */
+  cache:        ()               => api.get('/ai-core/cache'),
+  /** The latest eval report and what the promotion gate would do with it. */
+  evals:        ()               => api.get('/ai-core/evals'),
+};
+
 // ── Accounts / Teams ──────────────────────────────────────────────────────────
 
 export const accountsApi = {

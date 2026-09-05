@@ -86,6 +86,7 @@ const ABTesting            = React.lazy(() => import('./pages/ABTesting'));
 const TCADashboard         = React.lazy(() => import('./pages/TCADashboard'));
 const PatternDetector      = React.lazy(() => import('./pages/PatternDetector'));
 const AIIntelligence       = React.lazy(() => import('./pages/AIIntelligence'));
+const AICore               = React.lazy(() => import('./pages/AICore'));
 
 // ── Community ─────────────────────────────────────────────────────────────────
 const Leaderboard  = React.lazy(() => import('./pages/Leaderboard'));
@@ -650,6 +651,7 @@ const AppShell: React.FC = () => {
               ))}
             />
             <Route path="/ml-ops"        element={wrap(adminOnly(<MLDashboard />))} />
+            <Route path="/ai-core"       element={wrap(adminOnly(<AICore />))} />
             <Route path="/strategy-builder" element={wrap(gated('strategy-builder', <StrategyBuilder />))} />
             <Route path="/transparency"  element={wrap(<Transparency />)} />
             <Route path="/news"          element={wrap(<NewsSentiment />)} />
