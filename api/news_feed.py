@@ -29,7 +29,7 @@ def _get_news_manager():
 
         mgr = getattr(app_state, "news_feed_manager", None)
         if mgr is None:
-            from data_layer.feeds.news.base import NewsFeedManager
+            from data_layer.feeds.news.manager import NewsFeedManager
 
             mgr = NewsFeedManager()
             app_state.news_feed_manager = mgr

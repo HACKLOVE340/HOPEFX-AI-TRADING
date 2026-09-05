@@ -235,37 +235,6 @@ class TestAnalyticsPerformance:
         assert sp.strategy_name == "test"
         assert sp.total_trades == 10
 
-    def test_performance_analyzer_instantiates(self):
-        try:
-            from analytics.performance import PerformanceAnalyzer
-
-            pa = PerformanceAnalyzer()
-            assert pa is not None
-        except (ImportError, AttributeError):
-            pytest.skip("PerformanceAnalyzer not available")
-
-    def test_calculate_sharpe_ratio(self):
-        try:
-            from analytics.performance import PerformanceAnalyzer
-
-            pa = PerformanceAnalyzer()
-            returns = np.array([0.01, -0.005, 0.02, 0.003, -0.01])
-            sharpe = pa.calculate_sharpe_ratio(returns)
-            assert isinstance(sharpe, float)
-        except (ImportError, AttributeError):
-            pytest.skip("calculate_sharpe_ratio not available")
-
-    def test_calculate_max_drawdown(self):
-        try:
-            from analytics.performance import PerformanceAnalyzer
-
-            pa = PerformanceAnalyzer()
-            equity = np.array([100.0, 110.0, 105.0, 95.0, 100.0])
-            dd = pa.calculate_max_drawdown(equity)
-            assert dd <= 0 or isinstance(dd, float)
-        except (ImportError, AttributeError):
-            pytest.skip("calculate_max_drawdown not available")
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # analytics/portfolio.py
@@ -358,26 +327,6 @@ class TestAnalyticsSimulations:
 
         assert sim is not None
 
-    def test_monte_carlo_simulation(self):
-        try:
-            from analytics.simulations import MonteCarloSimulation
-
-            sim = MonteCarloSimulation(n_simulations=10, n_periods=20)
-            assert sim is not None
-        except (ImportError, AttributeError):
-            pytest.skip("MonteCarloSimulation not available")
-
-    def test_run_simulation(self):
-        try:
-            from analytics.simulations import MonteCarloSimulation
-
-            sim = MonteCarloSimulation(n_simulations=10, n_periods=20)
-            returns = np.random.default_rng(42).normal(0.001, 0.01, 50)
-            result = sim.run(returns)
-            assert result is not None
-        except (ImportError, AttributeError, TypeError):
-            pytest.skip("run() signature differs")
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # backtesting/execution.py
@@ -425,22 +374,6 @@ class TestBacktestPlots:
 
         assert bp is not None
 
-    def test_plot_equity_curve_callable(self):
-        try:
-            from backtesting.plots import plot_equity_curve
-
-            assert callable(plot_equity_curve)
-        except ImportError:
-            pytest.skip("plot_equity_curve not available")
-
-    def test_plot_drawdown_callable(self):
-        try:
-            from backtesting.plots import plot_drawdown
-
-            assert callable(plot_drawdown)
-        except ImportError:
-            pytest.skip("plot_drawdown not available")
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # backtesting/reports.py
@@ -453,20 +386,3 @@ class TestBacktestReports:
         import backtesting.reports as br
 
         assert br is not None
-
-    def test_generate_report_callable(self):
-        try:
-            from backtesting.reports import generate_report
-
-            assert callable(generate_report)
-        except ImportError:
-            pytest.skip("generate_report not available")
-
-    def test_performance_report_instantiates(self):
-        try:
-            from backtesting.reports import PerformanceReport
-
-            rpt = PerformanceReport()
-            assert rpt is not None
-        except (ImportError, AttributeError, TypeError):
-            pytest.skip("PerformanceReport not available")

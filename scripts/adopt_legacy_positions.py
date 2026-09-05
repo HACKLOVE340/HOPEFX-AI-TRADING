@@ -97,9 +97,11 @@ def connect_redis(url: str | None = None):
 
     redis_url = (url or os.getenv("REDIS_URL", "")).strip() or "redis://localhost:6379/0"
     password = os.getenv("REDIS_PASSWORD", "").strip()
-    if password and "@" not in redis_url.split("://", 1)[-1]:
-        scheme, rest = redis_url.split("://", 1)
-        redis_url = f"{scheme}://:{password}@{rest}"
+    # Shared helper: the inline version raised ValueError on an empty or
+    # schemeless REDIS_URL instead of degrading.
+    from cache.redis_client import inject_redis_password
+
+    redis_url = inject_redis_password(redis_url, password)
     client = redis_lib.from_url(redis_url, decode_responses=True, socket_connect_timeout=5)
     client.ping()
     return client

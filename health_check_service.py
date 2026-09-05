@@ -326,6 +326,10 @@ async def _check_disk() -> ComponentStatus:
 # Checks that must pass for the service to be considered "ready"
 _CRITICAL_CHECKS = {"redis", "database", "data_feed"}
 
+# Most recent result from _run_all_checks(), for sync readers such as the admin
+# performance endpoint. None until the first health check runs.
+_last_health_result: dict[str, Any] | None = None
+
 
 async def _run_all_checks() -> dict[str, ComponentStatus]:
     """Run all component checks concurrently and return results."""
@@ -346,6 +350,26 @@ async def _run_all_checks() -> dict[str, ComponentStatus]:
             out[name] = ComponentStatus(status="error", latency_ms=0.0, detail=str(result)[:200])
         else:
             out[name] = result  # type: ignore[assignment]
+
+    # Cache the result for readers that cannot run the checks themselves.
+    # api/settings_new_endpoints.get_performance_metrics is a sync route and
+    # imported `_last_health_result` from here, which never existed — health was
+    # computed on demand and thrown away, so that endpoint's "components" block
+    # was always absent. Stored in the shape that consumer reads (name and
+    # critical are not on ComponentStatus itself).
+    global _last_health_result
+    _last_health_result = {
+        "checked_at": _now_iso(),
+        "components": [
+            {
+                "name": comp_name,
+                "status": comp.status,
+                "latency_ms": comp.latency_ms,
+                "critical": comp_name in _CRITICAL_CHECKS,
+            }
+            for comp_name, comp in out.items()
+        ],
+    }
     return out
 
 

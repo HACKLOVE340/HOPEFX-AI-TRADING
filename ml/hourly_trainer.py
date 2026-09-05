@@ -32,7 +32,7 @@ ML_HOURLY_ENABLED          — "true" to enable (default: false in dev)
 ML_HOURLY_INTERVAL_SECONDS — online update interval (default: 3600)
 ML_FULL_RETRAIN_HOURS      — full retrain every N hours (default: 24)
 ML_SYMBOLS                 — comma-separated symbols (default: XAU_USD)
-ML_MODEL_DIR               — model output directory (default: ml/models)
+ML_MODEL_DIR               — model output directory (default: ml/saved_models)
 """
 
 from __future__ import annotations
@@ -55,7 +55,11 @@ _ENABLED = os.getenv("ML_HOURLY_ENABLED", "false").lower() in ("true", "1", "yes
 _INTERVAL_SECS = int(os.getenv("ML_HOURLY_INTERVAL_SECONDS", "3600"))
 _FULL_RETRAIN_HRS = int(os.getenv("ML_FULL_RETRAIN_HOURS", "24"))
 _SYMBOLS = [s.strip() for s in os.getenv("ML_SYMBOLS", "XAU_USD").split(",") if s.strip()]
-_MODEL_DIR = os.getenv("ML_MODEL_DIR", "ml/models")
+from ml.model_paths import model_dir as _resolve_model_dir
+
+# This resolved the env var itself and defaulted to ml/models — a directory no
+# reader consults under any configuration, so the trainer's output went nowhere.
+_MODEL_DIR = str(_resolve_model_dir())
 
 
 class HourlyTrainer:

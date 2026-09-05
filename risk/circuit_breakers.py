@@ -11,6 +11,7 @@ drawdown monitoring, and automated trading halts.
 
 import asyncio
 import json
+import itertools
 import logging
 import math
 import os
@@ -117,7 +118,7 @@ class CircuitBreaker:
     - Redis-backed state persistence
     """
 
-    def __init__(self, broker, redis_client: redis.Redis | None = None):
+    def __init__(self, broker, redis_client: redis.Redis | None = None, name: str | None = None):
         self.broker = broker
         self.redis = redis_client
         self.limits = RiskLimits()
@@ -162,6 +163,54 @@ class CircuitBreaker:
         # Initialize
         self._load_state()
         self._initialize_monitoring()
+
+        # Register so the superadmin risk page has a live object to show and
+        # act on. get_circuit_breakers() has always documented this; until now
+        # nothing outside the test suite ever called register_circuit_breaker,
+        # so the registry was empty in production and every operator control
+        # fell through to editing a cached JSON blob instead.
+        self.name = name or self._unique_name(self._derive_name(broker))
+        register_circuit_breaker(self.name, self)
+
+    @staticmethod
+    def _derive_name(broker) -> str:
+        """Registry key for this breaker, from the broker it guards.
+
+        Only a real string is accepted off the broker: test doubles answer any
+        attribute, so a permissive ``getattr`` would key the registry on a
+        ``<MagicMock id=…>`` repr.
+        """
+        for attr in ("broker_name", "name"):
+            value = getattr(broker, attr, None)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return type(broker).__name__
+
+    @staticmethod
+    def _unique_name(base: str) -> str:
+        """Ensure *base* does not displace an already-registered breaker.
+
+        ``register_circuit_breaker`` overwrites by key, and ``_derive_name``
+        falls back to the broker's class name, so two brokers of the same class
+        with no ``broker_name`` would map to one entry. A superadmin force-open
+        would then halt the survivor and answer ``new_orders_blocked: true``
+        while the other breaker kept passing orders — the same "reports success
+        without controlling anything" failure this class was just fixed for.
+        """
+        existing = _registry
+        if base not in existing:
+            return base
+        for suffix in itertools.count(2):
+            candidate = f"{base}-{suffix}"
+            if candidate not in existing:
+                logger.warning(
+                    "CircuitBreaker: %r is already registered; this one is %r. "
+                    "Pass name= or set broker.broker_name so operators can tell them apart.",
+                    base,
+                    candidate,
+                )
+                return candidate
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _initialize_monitoring(self):
         """Start background monitoring"""
@@ -617,8 +666,129 @@ class CircuitBreaker:
 
             if not enable:
                 # Re-evaluate state
-                _t = asyncio.create_task(self._check_risk_limits())
-                _t.add_done_callback(lambda _: None)
+                self._spawn(self._check_risk_limits())
+
+    @staticmethod
+    def _spawn(coro) -> None:
+        """Schedule *coro* if a loop is running, otherwise close it cleanly.
+
+        These controls are reachable from an async request handler and from a
+        synchronous operator script alike. ``asyncio.create_task`` raises
+        ``RuntimeError`` outside a running loop, and an un-awaited coroutine
+        emits a "never awaited" warning, so neither is left to chance.
+        """
+        try:
+            task = asyncio.create_task(coro)
+        except RuntimeError:
+            coro.close()
+            logger.warning(
+                "circuit breaker: no running event loop, skipping deferred re-evaluation; "
+                "state remains as set (fail-closed)"
+            )
+            return
+        task.add_done_callback(lambda _: None)
+
+    # ── Operator controls ────────────────────────────────────────────────────
+    #
+    # Both are reached from POST /superadmin/risk/circuit-breakers/{name}/…
+    #
+    # The state model these build on:
+    #   * ``pre_trade_check`` rejects every order while ``state is OPEN``, so
+    #     tripping the state is what halts trading.
+    #   * ``_schedule_recovery`` returns early while ``_manual_override`` is
+    #     set, so the override is what keeps a breaker open rather than letting
+    #     it heal on the cooldown timer.
+
+    def force_open(self, reason: str, authorized_by: str) -> None:
+        """Halt trading now and hold the breaker open until a human resets it.
+
+        Trips the state to OPEN and sets the manual override so the cooldown
+        timer cannot walk it back to HALF_OPEN on its own.
+
+        This stops *new* orders. It deliberately does not flatten open positions
+        or cancel resting orders — that is the kill switch's job
+        (``kill_switch.activate``), and quietly closing a book from a button
+        labelled "force open" would be a surprising amount of money to move.
+        """
+        with self.state_lock:
+            state_before = self.state.value
+            self.state = CircuitState.OPEN
+            self._manual_override = True
+            self._override_reason = reason
+
+            logger.critical(
+                "🔴 CIRCUIT BREAKER FORCE-OPENED by %s: %s (was %s)",
+                authorized_by,
+                reason,
+                state_before,
+            )
+            self.state_changes.append(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "MANUAL_FORCE_OPEN",
+                    "authorized_by": authorized_by,
+                    "reason": reason,
+                    "state_before": state_before,
+                    "state_after": self.state.value,
+                }
+            )
+            # Record the breach too, not just the state change: it is
+            # breach_history that pre_trade_check quotes back when it rejects an
+            # order, so without this every rejected order reads
+            # "Circuit breaker OPEN: Unknown" and the trader has no idea a human
+            # halted it deliberately.
+            self.breach_history.append(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "reason": f"MANUAL_HALT by {authorized_by}: {reason}",
+                    "message": reason,
+                    "severity": "HIGH",
+                    "manual": True,
+                }
+            )
+            self._persist_state()
+
+    def reset(self, reason: str, authorized_by: str) -> None:
+        """Lift the operator's hold and let the risk state decide from here.
+
+        Reset clears the manual override and re-enters the normal recovery
+        path: OPEN → HALF_OPEN after the cooldown → CLOSED only once the daily
+        drawdown is back under half the limit.
+
+        It does **not** force the state to CLOSED. An operator clicking reset
+        during a live drawdown breach would otherwise resume trading straight
+        through the limit the breaker exists to enforce, and the next tick of
+        ``_check_risk_limits`` would simply trip it again — after orders had
+        already gone out.
+        """
+        with self.state_lock:
+            state_before = self.state.value
+            self._manual_override = False
+            self._override_reason = None
+
+            logger.critical(
+                "🔧 CIRCUIT BREAKER RESET by %s: %s (state %s, recovery re-armed)",
+                authorized_by,
+                reason,
+                state_before,
+            )
+            self.state_changes.append(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "MANUAL_RESET",
+                    "authorized_by": authorized_by,
+                    "reason": reason,
+                    "state_before": state_before,
+                    "state_after": self.state.value,
+                }
+            )
+            self._persist_state()
+
+            if self.state == CircuitState.OPEN:
+                # Re-arm the cooldown that force_open suppressed.
+                self._spawn(self._schedule_recovery())
+            else:
+                self._spawn(self._check_risk_limits())
 
     def _persist_state(self):
         """Persist state to Redis for recovery"""

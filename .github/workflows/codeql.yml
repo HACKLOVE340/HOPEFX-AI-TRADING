@@ -20,6 +20,14 @@ on:
 permissions:
   contents: read
 
+# Superseded runs are cancelled on feature branches and PRs; main is left alone
+# because its runs are the release record. This block previously keyed the group
+# on github.sha, giving every commit its own group — so it collided with nothing
+# and superseded nothing, and every push queued another complete pipeline.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})

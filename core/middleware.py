@@ -15,6 +15,7 @@ Extracted from app.py to keep the application entry point under 300 lines.
 from __future__ import annotations
 
 import logging
+import json as _json
 import os
 import sys
 import uuid
@@ -298,55 +299,102 @@ _BODY_LIMIT_EXEMPT_PREFIXES: tuple[str, ...] = (
 )
 
 
-class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Reject oversized request bodies with 413 before reading them.
+class BodySizeLimitMiddleware:
+    """Reject oversized request bodies with 413 without ever buffering them.
 
     Checks Content-Length when present, which is the cheap path and covers
-    ordinary clients. A chunked request omits it, so the body is also metered as
-    it streams and cut off once it exceeds the cap — otherwise the header check
-    would be trivially skipped by sending `Transfer-Encoding: chunked`.
+    ordinary clients. A chunked request omits it, so bytes are counted as the
+    handler pulls them and the connection is answered 413 the moment the cap is
+    crossed — otherwise the header check is trivially skipped by sending
+    `Transfer-Encoding: chunked`.
+
+    Pure ASGI, deliberately. As a `BaseHTTPMiddleware` this drained
+    `request.stream()` and reassigned `request._receive` to replay the body,
+    with a comment claiming that is "the documented way". It is not: Starlette
+    binds its own wrapped receive before `dispatch` runs and short-circuits on
+    `_stream_consumed`, so the reassignment was ignored and **every chunked
+    request reached its handler with a zero-byte body**. Silent data loss, and
+    invisible because the size cap itself still worked. Wrapping `receive` keeps
+    the metering without ever taking the body away from the route.
     """
 
-    async def dispatch(self, request: Request, call_next):
-        path = request.url.path
-        if path.startswith(_BODY_LIMIT_EXEMPT_PREFIXES):
-            return await call_next(request)
+    def __init__(self, app) -> None:
+        self.app = app
 
-        declared = request.headers.get("content-length")
+    async def __call__(self, scope, receive, send) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if path.startswith(_BODY_LIMIT_EXEMPT_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        declared = headers.get("content-length")
         if declared is not None:
             try:
                 if int(declared) > _MAX_BODY_BYTES:
-                    return JSONResponse(
-                        status_code=413,
-                        content={"detail": f"Request body exceeds {_MAX_BODY_BYTES} bytes"},
-                    )
+                    await _send_413(send)
+                    return
             except ValueError:
-                return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
+                await _send_json(send, 400, {"detail": "Invalid Content-Length header"})
+                return
 
-        # No Content-Length (chunked) — meter the stream. Starlette caches the
-        # body on the request, so replacing the receive channel here does not
-        # prevent the route from reading it again downstream.
-        if declared is None:
-            total = 0
-            chunks: list[bytes] = []
-            async for chunk in request.stream():
-                total += len(chunk)
-                if total > _MAX_BODY_BYTES:
-                    return JSONResponse(
-                        status_code=413,
-                        content={"detail": f"Request body exceeds {_MAX_BODY_BYTES} bytes"},
-                    )
-                chunks.append(chunk)
-            body = b"".join(chunks)
+        received = 0
+        too_large = False
 
-            async def _receive() -> dict:
-                return {"type": "http.request", "body": body, "more_body": False}
+        async def metered_receive() -> dict:
+            nonlocal received, too_large
+            message = await receive()
+            if message.get("type") == "http.request":
+                received += len(message.get("body", b"") or b"")
+                if received > _MAX_BODY_BYTES:
+                    too_large = True
+                    # End the stream rather than handing the route a partial
+                    # body it would parse as a malformed request.
+                    return {"type": "http.request", "body": b"", "more_body": False}
+            return message
 
-            # Replacing the receive channel is the documented way to replay a
-            # body that has already been consumed by the middleware.
-            request._receive = _receive
+        route_response_started = False
+        replaced_with_413 = False
 
-        return await call_next(request)
+        async def guarded_send(message) -> None:
+            nonlocal route_response_started, replaced_with_413
+            if replaced_with_413:
+                # Already answered 413; drop whatever the route still emits.
+                return
+            if too_large and not route_response_started:
+                # The route read past the cap before writing anything, so its
+                # reply can still be replaced.
+                replaced_with_413 = True
+                await _send_413(send)
+                return
+            if message.get("type") == "http.response.start":
+                route_response_started = True
+            await send(message)
+
+        await self.app(scope, metered_receive, guarded_send)
+
+
+async def _send_json(send, status: int, payload: dict) -> None:
+    body = _json.dumps(payload).encode()
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+async def _send_413(send) -> None:
+    await _send_json(send, 413, {"detail": f"Request body exceeds {_MAX_BODY_BYTES} bytes"})
 
 
 def setup_body_size_limit(app: FastAPI) -> None:

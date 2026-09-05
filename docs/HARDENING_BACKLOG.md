@@ -6207,3 +6207,1578 @@ that may not finish at any limit, and narrowing the triggers is a policy call
 for whoever owns the Actions spend. The recommendation is to drop the
 per-push/per-PR triggers and keep the weekly schedule plus
 `workflow_dispatch`, which preserves the capability and stops the waste.
+
+---
+
+## Round 15 — the kill switch could not reach the broker
+
+Found by running `scripts/ci/gate_broken_imports.py` — the gate S-37 flagged as
+wired into nothing. Two of its reports were in `kill_switch.py`. They were real.
+
+### S-38 — the kill switch never cancelled anything at the broker (CRITICAL) — FIXED
+
+`KillSwitch._broker_cancel_all` is the last step of activation: after the halt
+flag, the Redis latch, the Sentry alert and the risk-halt email, it calls the
+broker's mass-cancel so resting orders and open positions do not survive the
+halt. It resolved the broker through exactly two paths:
+
+```python
+from execution.engine import get_active_broker      # not defined there
+from execution.smart_router import get_router       # not defined there
+```
+
+`execution/engine.py` defines `ExecutionEngine` and no module-level accessor.
+`execution/smart_router.py` defines `SmartRouter` and no module-level accessor.
+Both imports raised `ImportError` on every call; both were caught by a bare
+`except Exception: pass`; resolution fell through to
+
+```python
+if broker is None:
+    logger.warning("... no active broker found — skipping broker cancel")
+    return
+```
+
+So every activation, against a fully connected broker, logged one warning and
+returned. The operator saw a successful kill switch — flag set, latch written,
+alert sent — while the orders it exists to pull stayed live at the broker.
+
+The sibling resolver `check_broker_cod` documents a three-step order and has
+all three:
+
+```
+1. execution.engine.get_active_broker()
+2. execution.smart_router.get_router()._primary_broker
+3. core.app_state.app_state.broker        <- the one that actually resolves
+```
+
+Step 3 works because `ComponentRegistry` publishes the broker onto the
+`app_state` singleton at startup. `_broker_cancel_all` inlined its own copy of
+the chain and stopped at step 2. Two copies of one resolution order drifted,
+and the copy guarding the money lost the only working path.
+
+The async/sync dispatch below the resolution was already correct (S12-04e) —
+it was simply unreachable.
+
+Fixed by extracting `KillSwitch._resolve_active_broker()` and calling it from
+both sites, so the chain cannot drift from itself again. Steps 1 and 2 stay as
+forward compatibility rather than as the only hope.
+
+Verified: with a broker on `app_state`, `_broker_cancel_all` now resolves it and
+calls `cancel_all_orders` — sync brokers, async brokers, and async brokers
+reached from inside a running event loop. Reverting the resolver fails three of
+the seven new tests in
+`tests/unit/test_kill_switch_broker_cancel_resolution.py`. The remaining four
+pin the degradation contract: no broker, a broker without the method, and a
+broker that raises must all leave activation intact. Runtime transcript:
+`evidence/flows/kill_switch_broker_cancel/runtime-proof.txt`.
+
+### S-39 — Gate A exempted a whole file when one of its routers had auth (MEDIUM) — FIXED
+
+`_file_has_router_level_auth` walked every `APIRouter(...)` in a file and
+returned True on the first one carrying `dependencies=[Depends(<auth>)]`.
+`check_file` then returned immediately, examining no endpoint in that file.
+
+A file with two routers is the normal way to expose a public endpoint beside
+authenticated ones, and `api/advanced_trading.py` is exactly that shape:
+
+```python
+router        = APIRouter(dependencies=[Depends(get_current_user)])
+public_router = APIRouter()      # no auth; mounted at core/router_registry.py:452
+```
+
+`public_router` carries one route today — `GET /api/backtesting/shared/{slug}`,
+the shared backtest view — so nothing is currently exposed. But the file was
+not passing because its routes are safe; it was passing because the gate
+stopped looking. Any `@public_router.post` added later would have been waved
+through, in the one file whose whole design is "some of these are public".
+
+Fixed by replacing the file-wide question with `_guarded_router_names()` plus
+`_route_owner()`, so a route is exempt only when its own router carries auth.
+
+Verified: Gate A still passes on the real tree (126 files) under the tightened
+rule, which is the useful result — nothing in the repo was relying on the
+loophole, so this closes a latent hole rather than papering over a live one. A
+mutating route on an auth-free second router is now caught; routes on the
+guarded router still pass; and a third test pins `public_router` itself, failing
+if it ever grows a mutating route. All in
+`tests/unit/test_gate_a_markers_really_authenticate.py`.
+
+### Still not fixed: `gate_broken_imports.py` is still wired into nothing
+
+Re-measured this round: **49** broken local imports (S-37 counted 50; its own
+fix accounts for the difference). It remains absent from
+`.github/workflows/tests.yml`, which runs gates A through M, and from
+`.pre-commit-config.yaml`.
+
+S-38 is the second genuine defect this gate has found on the two occasions
+anyone has run it, and the more expensive of the two. Two of the 49 reports
+still point at `kill_switch.py` by design — the forward-compatibility steps in
+`_resolve_active_broker` — which is the shape of the triage problem: the gate
+cannot tell a dead-and-dangerous import from a guarded fallback, so wiring it
+in as-is turns CI red on 49 findings of mixed severity.
+
+The recommendation is unchanged from S-37 and now better evidenced: triage the
+49 into (a) real defects, (b) intentional guarded fallbacks worth an allowlist
+entry, then wire it into `tests.yml` beside the other gates. Until that happens
+this class of defect — an import that has never resolved, silently swallowed —
+is caught only when someone runs the gate by hand.
+
+---
+
+## Round 16 — triaging the gate nobody ran
+
+S-37 flagged `scripts/ci/gate_broken_imports.py` as wired into nothing and left
+its findings untriaged because "triaging 50 imports is its own piece of work".
+This round is that work. It started at 47 findings (S-38 removed two by
+consolidating a duplicated resolution chain): 24 were fixed, 10 were deleted as
+dead tests, and 13 remain recorded in the gate's baseline with an owner and a
+reason. The gate now blocks in CI.
+
+### S-40 — eleven package exports resolved to None, and nothing noticed — FIXED
+
+Seven package `__init__` files re-exported submodule symbols behind
+`try/except`, naming symbols the target modules never defined:
+
+| Package | Advertised | Real |
+|---|---|---|
+| `compliance` | `AMLEngine`, `ComplianceAuditor` | `AMLGate`, `ImmutableAuditLog` |
+| `deployment` | `HelmChartGenerator` | `generate_chart` |
+| `events` | `DomainEvent` | `EventEnvelope` |
+| `infrastructure` | `Summary`, `StructuredLogger` | *(none)*, `HOPEFXLogger` |
+| `market_data` | `IBKRFeed` | `IBKRMarketDataFeed` |
+| `visualization` | `EquityCurve` | `EquityCurvePlotter` |
+| `data_layer.feeds.news` | `NewsBaseFeed`, `FinnhubNewsFeed`, `FMPNewsFeed` | `NewsFeedBase`, `FinnhubFeed`, `FMPFeed` |
+
+Each import raised on every interpreter start, the handler logged at DEBUG and
+bound the name to `None` (or left it unbound), and `__all__` went on listing it.
+
+`infrastructure` showed the compounding case. Its metrics import listed six
+names ending in `Summary`, which does not exist. CPython binds each name in
+turn and raises on that one, so `MetricsRegistry` imported fine and was then
+overwritten with `None` by the handler, and `get_metrics_registry` was never
+reached — one nonexistent name nulled the package's own documented entry point.
+
+Nothing consumed any of them: every real caller imports from the submodule
+(`from infrastructure.metrics import get_metrics_registry`), which is why it
+survived. False advertising rather than a live outage.
+
+Fixed by exporting the real names. `tests/unit/test_package_exports_resolve.py`
+pins the rule rather than the instances — a name in `__all__` must resolve and
+must not be `None`.
+
+### S-41 — features written against APIs that were never built (OPEN)
+
+Distinct from a rename: there is no symbol to point these at. Each degrades to
+a documented no-op, so the product looks healthy while the feature is absent.
+All are recorded in the gate's `KNOWN_BROKEN` baseline.
+
+| Site | Wanted | Reality | Effect today |
+|---|---|---|---|
+| `api/nocode.py:198` | `StateMachineEngine.validate_graph` | `validate_graph` exists nowhere in the repo | `/api/nocode/validate` always returns its internal-error branch |
+| `api/news_feed.py:32` | `NewsFeedManager` | only the abstract `NewsFeedBase` | `_get_news_manager()` always returns `None`; the news API is dead |
+| `api/ws_live.py:881,953` | `core.signal_engine._data_buffers` | no such buffer anywhere | ATR-from-buffer never runs; falls back to CSV |
+| `api/superadmin/risk_management.py:182,209` | `CircuitBreaker.reset()` / `.force_open()` | neither method exists; the control is `manual_override()` | superadmin reset and force-open update a Redis cache only — the live breaker is never touched |
+| `api/settings_new_endpoints.py:710` | `_last_health_result` | health is computed on demand, never cached | the `components` block is always absent |
+| `api/admin.py:1319,1668` | `email_service` object | module of functions; no generic `send_email` | admin password-reset email never sends; SMTP test never sends |
+| `ml/training_manager.py:239,243` | `retrain_advanced_predictor`, `retrain_lstm` | neither exists; `train_advanced` has a CLI `main()` only | retrain jobs for `advanced_oos` and `lstm_signal` always fail |
+| `ml/continuous_learning.py:489` | `train_model(data, path)` | `train_ml_pipeline(df, …, model_dir)` — different signature and return | the fallback training path cannot run |
+| `strategies/dynamic_registry.py:611,659` | `database.models.DynamicStrategy` | no such model and no migration | dynamic strategies are memory-only; nothing survives restart |
+
+Two of these need a product decision before code, and are the reason this item
+is open rather than fixed:
+
+1. **Superadmin circuit-breaker controls.** `CircuitBreaker` has no reset or
+   force-open. The nearest real control is
+   `manual_override(enable, reason, authorized_by)`, and `_trigger_circuit_breaker`
+   is private and async. Mapping "force open" onto either one **halts live
+   trading**; mapping "reset" onto `manual_override(False, …)` re-evaluates
+   limits. Choosing wrong halts or un-halts real trading from an admin button,
+   so the mapping needs an owner's decision, not a guess. Until then the
+   buttons remain honest no-ops against a cache.
+
+2. **Admin-triggered password reset.** Making it work means minting a signed
+   reset token for an arbitrary user from an admin endpoint — `auth/router.py`
+   already does this for the self-service flow via `_make_signed_token` with
+   `_SALT_PASSWORD_RESET`. That is a real change to the authentication surface
+   and needs sign-off before it is wired up.
+
+The rest are ordinary implementation work: build the missing function, model, or
+migration, then delete the matching `KNOWN_BROKEN` entry.
+
+### S-42 — ten tests had never executed, and were redundant — FIXED (deleted)
+
+`tests/unit/test_auth_analytics_backtest_coverage.py` (8) and
+`tests/unit/test_risk_coverage.py` (2) import module-level functions that do not
+exist, inside `try/except ImportError -> pytest.skip`. They have always skipped,
+so they contribute nothing while reading as coverage:
+
+    analytics.performance.PerformanceAnalyzer   -> PerformanceAnalytics
+    analytics.simulations.MonteCarloSimulation  -> SimulationEngine
+    backtesting.plots.plot_equity_curve/_drawdown -> PerformancePlotter
+    backtesting.reports.generate_report / PerformanceReport -> ReportGenerator
+    risk.position_sizing.calculate_position_size -> PositionSizer.calculate_size
+    risk.position_sizing.kelly_criterion        -> PositionSizer._kelly_size
+
+Every real module exposes a class; the tests were written against an imagined
+functional API.
+
+They were deleted rather than rewritten, because every one of them was already
+covered properly elsewhere:
+
+| Real class | Existing coverage |
+|---|---|
+| `PositionSizer` | `test_risk_position_sizing.py` — 25 tests across atr, kelly, percent, fixed |
+| `PerformanceAnalytics` | `test_performance_analytics.py`, `test_analytics_deep_coverage.py` |
+| `SimulationEngine` | `test_analytics.py`, `test_analytics_deep_coverage.py` |
+| `PerformancePlotter`, `ReportGenerator` | `test_simple_backtesting_modules.py` — 57 tests |
+
+The deleted bodies were also weak on their own terms — `assert callable(x)` and
+`assert x is not None` against symbols that do not exist. Rewriting them would
+have duplicated real coverage with worse assertions; keeping them meant ten
+entries in a skip list that read as coverage in the report and proved nothing.
+
+Deleting them removed their eight baseline entries, which is what surfaced the
+stale-entry check working as intended: the gate failed on the now-stale entries
+until they were removed in the same change.
+
+A related trap, already fixed under S-39's commit: the `_collect_ledger_pnl`
+tests patched `sys.modules["core.app_state"]` with a `MagicMock` and set
+`get_position_manager.return_value`. A `MagicMock` answers any attribute, so
+the test manufactured the very function the source was failing to import and
+passed while the real path returned zero. The lesson generalises to any test in
+this repository: patch the real symbol, never a `MagicMock` module — a
+`MagicMock` will happily manufacture whatever broken name the source asks for.
+
+### The gate now runs in CI
+
+`scripts/ci/gate_broken_imports.py` gained a `KNOWN_BROKEN` baseline — 13
+entries, each with a reason and a backlog reference — and a
+`gate-broken-imports` job in `.github/workflows/tests.yml`. New broken imports
+now fail CI.
+
+The baseline cannot rot: a **stale** entry, one that no longer describes a real
+defect, fails the gate too, so fixing an import forces its entry to be deleted
+in the same change instead of lingering to mask the next one.
+`tests/unit/test_gate_broken_imports_baseline.py` pins both properties, plus the
+requirement that every entry carries a justification and an `S-NN` reference.
+
+---
+
+## Round 17 — the tests that manufactured the missing symbols
+
+Round 16 fixed the imports. This round asks the next question: how did they stay
+broken? The answer is that several tests created the missing symbol themselves.
+
+### S-43 — superadmin nuclear controls could never reach the kill switch (HIGH) — FIXED
+
+`_get_kill_switch()` in `api/superadmin/nuclear_controls.py` has two resolution
+branches and neither can succeed:
+
+```python
+from api.admin import app_state
+if app_state and hasattr(app_state, "kill_switch"):   # AppState has no such attribute
+    return app_state.kill_switch
+
+import kill_switch as _ks_mod
+if hasattr(_ks_mod, "_instance"):                      # the singleton is `kill_switch`
+    return _ks_mod._instance
+```
+
+`AppState.__init__` never defines `kill_switch`, and nothing in the tree assigns
+`app_state.kill_switch` — the only `.kill_switch =` in the repo is on
+`PropEngine`, a different object. `kill_switch.py:1383` names its singleton
+`kill_switch`; `_instance` appears nowhere in that module. Both branches are
+`hasattr`-guarded, so nothing raises: the function returns `None` on every call.
+
+`POST /nuclear/halt` therefore never activates the in-process kill switch. It
+still writes the Redis latch, and `KillSwitch` polls that latch and activates
+from it — which is why the halt appeared to work and nobody noticed. But the
+in-process path is dead, so **with Redis unavailable the superadmin emergency
+halt does nothing but write a log line**.
+
+Two further defects sat behind that one, and repairing resolution alone would
+have made the endpoint worse rather than better:
+
+1. `nuclear_halt` called `await ks.activate(reason=reason)` and `nuclear_resume`
+   called `await ks.deactivate()`. Both methods are synchronous —
+   `activate(self, reason: str = "manual activation") -> None`. Awaiting their
+   `None` return raises `TypeError`, which the surrounding `except Exception`
+   logs as "Kill switch activate error". Activation would have kept failing, in
+   a new way, the moment resolution started working.
+
+2. `get_nuclear_status` computed
+   `bool(getattr(ks, "is_active", False) or getattr(ks, "enabled", False))`.
+   `is_active` is a **method**, and a bound method is always truthy, so a
+   working resolver would have reported the kill switch as permanently ACTIVE
+   to every superadmin — strictly worse than the current always-None behaviour.
+   (`enabled` does not exist; `reason` does.)
+
+All three are fixed together. `tests/unit/test_superadmin_nuclear_controls_resolution.py`
+pins the singleton name, the absence of `AppState.kill_switch` (so adding one
+becomes a deliberate signal rather than a silent change), the synchronous call
+shape, and the called predicate.
+
+### S-44 — the kill-switch load tests proved a path that does not exist — FIXED
+
+`tests/unit/test_kill_switch_load.py::TestBrokerCancelAll` is the suite that
+should have caught S-38. Every one of its cases did this:
+
+```python
+with patch("execution.engine.get_active_broker", fake, create=True):
+    ...
+eng.get_active_broker = fake_get_active_broker
+```
+
+`create=True` means "this attribute does not exist — create it anyway", and
+that is exactly the situation: `execution/engine.py` defines `ExecutionEngine`
+and no module-level accessor. So the tests manufactured step 1 of the
+resolution chain, exercised it, and asserted `cancel_all_orders` was called.
+Step 3 — `core.app_state.app_state.broker`, the only step that resolves in
+production — was never touched; the string `app_state` did not appear in the
+file. The suite would have passed identically whether or not the kill switch
+could reach a broker at all.
+
+Added a case that resolves through `app_state`, and fixed
+`test_broker_cancel_all_no_engine_no_router`, which nulled the two module
+imports but left `app_state.broker` set — so it asserted nothing once step 3
+existed.
+
+The manufactured-symbol cases are kept: they now legitimately cover the
+forward-compatibility branches, and the new case says which path is which.
+
+### S-45 — a test named for a feature that does not exist — FIXED
+
+`test_drawdown_warning_triggers_fcm` patched `risk.manager.push_manager` and
+`risk.manager._device_tokens`, both with `create=True`. Neither name exists in
+`risk/manager.py`, which sends no push notifications at all — its drawdown
+alerting goes through `_send_telegram_alert`. `push_manager` lives in
+`mobile.push_notifications` and is used only by `api/mobile.py`;
+`send_drawdown_warning` exists nowhere in the tree.
+
+So the test created two attributes nothing reads, built a mock it never
+asserted against, and checked one real thing: that an 11% drawdown blocks
+trading. Renamed to `test_drawdown_over_limit_blocks_trading` and the dead
+patches removed.
+
+### What this round says about the test suite
+
+`patch(..., create=True)` is the mechanism worth watching. It is sometimes
+correct — patching an optional dependency that may not be installed
+(`market_data.mt5_live_feed.websocket`) is a legitimate use, and 4 of the 10
+audited targets exist and are patched properly. But it is also the one flag
+that turns "this symbol is missing" into "this test passes".
+
+Audited: 17 `create=True` sites across 9 files; 6 targets missing. Two were real
+(S-44, S-45). Two more — `api.billing.db_get`/`db_set` and
+`core.startup_factories.validate_and_report` — are **not** defects: both target
+names that production imports inside a function body, so the module-level patch
+has no effect, and in both cases an effective patch (a `sys.modules` entry, or
+the correctly-targeted `core.env_validator.validate_and_report`) sits right
+beside it. They are redundant lines, not broken tests.
+
+The general rule, same as the one S-42 recorded for `MagicMock` modules: patch
+the real symbol. `create=True` and a `MagicMock` module will both manufacture
+whatever the source is failing to find.
+
+### S-46 — two dead ATR helpers and a tier that never ran — FIXED
+
+`api/ws_live.py` had three ATR routines. Two of them, `_atr_from_buffer` and
+`_atr_from_csv`, were never called from anywhere in the repository — their
+logic had been inlined into `_compute_atr_sl_tp`, and the originals were left
+behind. `_atr_from_buffer` is where the S-41 `_data_buffers` entry came from.
+
+`_compute_atr_sl_tp` itself is live, and its first tier was dead:
+
+```python
+from core.signal_engine import _data_buffers   # exists nowhere in the repo
+```
+
+The import raised on every call and the handler logged it at DEBUG, so the tier
+never ran once. Its own log lines named `_compute_sl_tp`, a function that does
+not exist — left over from a rename.
+
+**What this does not mean.** The first reading was that live stop-losses were
+volatility-blind. They are not:
+
+* `_compute_atr_sl_tp` runs only when the upstream signal did not already carry
+  `stop_loss`/`take_profit`, and
+* its result goes into the WebSocket `type: "signal"` payload the frontend
+  renders — a displayed level, not an order the OMS submits.
+
+* The CSV tier is real. `data/*_H1.csv` is gitignored as "Runtime market data
+  fetched by the scheduler — not source files", so it is absent from a fresh
+  checkout and present in a deployment; `api/ml.py` reads the same files. It
+  was never a dead fallback, only an invisible one in a clean tree.
+
+So the defect is a dead tier, two dead functions and a docstring advertising
+three sources when one worked — worth removing, but not a money-path failure.
+Recorded that way rather than as the emergency it first looked like.
+
+Removed both helpers and the dead tier, corrected the log name, and fixed the
+docstring, which also mis-stated the fallback as "1.5% SL / 3.0% TP" when the
+code substitutes 1% of mid for ATR and then applies the multipliers.
+
+Baseline: 13 -> 12 known entries. The gate flagged the entry as stale before it
+was deleted, which is the loop working as designed.
+
+### S-47 — the admin performance page has never shown a component latency — FIXED
+
+`api/settings_new_endpoints.get_performance_metrics` builds a "components"
+block from
+
+```python
+from health_check_service import _last_health_result   # never existed
+```
+
+`health_check_service` computes health on demand: `_run_all_checks()` gathers
+the seven component probes concurrently, `detailed_health()` returns them, and
+the result was discarded. Nothing ever cached it. So the import raised
+`ImportError` on every call, the surrounding `except Exception` swallowed it,
+and the `components` key was never added to the response.
+
+`get_performance_metrics` is a **sync** route, so it cannot await the probes
+itself. Making it async to run them inline would put seven live checks —
+including Redis, database and data-feed round trips — on every admin page load.
+A cache is the right shape, and the dead import's own name says that is what
+was intended.
+
+`_run_all_checks()` now records its result, so every path that checks health
+refreshes it: `/health/detailed`, the readiness probe, and the standalone
+Docker runner alike. Entries are stored as
+`{name, status, latency_ms, critical}` — `name` and `critical` are not fields
+on `ComponentStatus`, so the cache is built to match the reader rather than the
+model, and `critical` is derived from `_CRITICAL_CHECKS` rather than a copied
+list.
+
+Verified against the real probes: seven components cached, `critical` exactly
+equal to `_CRITICAL_CHECKS`, and the cache empty until the first check runs.
+
+Baseline: 12 -> 11 known entries.
+
+---
+
+## Round 18 — the first time the app was actually run
+
+Every finding up to here came from static analysis plus targeted in-process
+reproductions. This round boots the API and drives it.
+
+`python run.py --mode api` against local config — `APP_ENV=development`,
+`BROKER_TYPE=paper`, `OANDA_API_KEY` empty so no live broker is reachable.
+Transcript: `evidence/flows/runtime_proof/runtime-proof.txt`.
+
+The system comes up healthy: redis, database, data_feed, broker
+(`balance=100000.0`), event_bus, kill_switch (`inactive`) and disk all `ok`.
+
+Two things worth recording before the finding.
+
+**The route surface is larger than static analysis showed.** 992 paths are
+registered at runtime; an AST scan of `api/*.py` found 745. The ~25% difference
+is routes registered dynamically at startup, which no static sweep in this
+backlog has ever covered.
+
+**S-47 confirmed against the running server.** `GET
+/api/admin/settings/performance` now returns a `components` block with all seven
+probes and their latencies — an endpoint that had never returned that key.
+
+**2FA holds.** `GET /api/superadmin/nuclear/status` refuses a valid superadmin
+bearer token without a TOTP code. That is correct, and it means S-43's fix is
+proven in-process by its tests but not over HTTP; driving halt/resume would
+require circumventing a deliberate control, which was not done.
+
+### S-48 — the superadmin circuit-breaker page shows fabricated state (MEDIUM) — OPEN
+
+`GET /api/superadmin/risk/circuit-breakers` returned, on the live server:
+
+```json
+{"circuit_breakers":[{"name":"daily_drawdown","state":"closed","failure_count":0,
+ "threshold":3}, {"name":"total_drawdown",...,"threshold":1}, {"name":"order_rate",
+ ...,"threshold":10}, ...]}
+```
+
+That is not live state. It is the hardcoded bootstrap list at the bottom of
+`_load_cb_states()`, reached because both tiers above it are empty:
+
+1. **Live registry** — `get_circuit_breakers()` returns `risk.circuit_breakers._registry`,
+   and **`register_circuit_breaker()` is called by nothing in the repository**.
+   The registry is permanently `{}`. Confirmed at runtime: `_registry == {}`.
+2. **Redis cache** — only written by the reset/force-open handlers, which are
+   themselves no-ops (S-41), so on a clean deployment there is nothing to read.
+3. **Hardcoded list** — what the operator actually sees.
+
+Note the name collision that makes this easy to misread:
+`risk.circuit_breakers.CircuitBreaker(broker, redis_client)` and
+`data_layer.orchestrator`'s `CircuitBreaker(name, failure_threshold,
+recovery_timeout)` are **different classes**. The orchestrator constructs eight
+of its own; none of them are in the risk registry, and none would satisfy the
+risk breaker's interface.
+
+Round 16 fixed the import in the live tier — it named `_GLOBAL_REGISTRY`, which
+does not exist — but that fix is inert while nothing registers a breaker. The
+import was still worth correcting; it just does not change what the page shows.
+
+So the whole superadmin circuit-breaker surface is decorative: it displays a
+fixed list as if it were live, and its reset and force-open buttons call methods
+`CircuitBreaker` does not define and persist to a cache of that fixed list.
+
+This is now part of the open decision recorded under S-41. The question is not
+only "what should reset and force-open mean against `manual_override`" but
+"should this page exist in its current form, given nothing registers a breaker
+for it to control". Either wire `register_circuit_breaker()` into wherever risk
+breakers are constructed, or remove the surface. Leaving a page that reports
+`state: closed` for breakers that do not exist is worse than having no page —
+an operator reads it as evidence the breakers are healthy.
+
+---
+
+## Round 19 — the retrain jobs that always failed
+
+### S-49 — two of four retrain model types could never run (MEDIUM) — FIXED
+
+`TrainingManager._dispatch_training` imported two symbols that do not exist:
+
+```python
+if model == "advanced_oos":
+    from ml.train_advanced import retrain_advanced_predictor   # not defined
+if model == "lstm_signal":
+    from ml.lstm_signal_layer import retrain_lstm              # not defined
+```
+
+Unlike most defects in this backlog these imports are **unguarded**, so each
+raised `ImportError` straight into `_run_training`'s handler, which marked the
+job failed and stored the message. Retrain has never worked for either type.
+
+`ml/train_advanced.py` only ever had the argparse `main()`; there was no
+programmatic entry point. `main()` now takes an optional argv list — so
+`parse_args(argv)` instead of reading `sys.argv`, which a worker thread must not
+depend on — and `retrain_advanced_predictor()` wraps it with the production
+settings AGENTS.md documents (`--years 50 --oos-years 4 --stacking`), returning
+`main()`'s report dict as the job metrics. The CLI is unchanged: `argv` defaults
+to `None`. **This is the real fix — advanced_oos can now be retrained.**
+
+`lstm_signal` cannot be fixed by a rename. `ml/lstm_signal_layer.py` is
+inference-only — `_load`, `_build_sequence`, `predict`, `stats`,
+`is_available` — with no training code anywhere in it, and AGENTS.md's model
+table records the model as "Architecture complete, not trained". It now raises a
+message saying exactly that, instead of an ImportError naming a symbol nobody
+will find. Inventing a trainer for it is real work, not a repair, and is not
+done here.
+
+A third problem sat beside it. `_KNOWN_MODELS` lists six models while
+`_dispatch_training` branches on four: `rf_macro` and `xgb_macro` pass the
+caller's membership check and then fall through to
+`ValueError("Unknown model for training")` — confusing precisely because the
+caller was just told they were known. They now say they are advertised but
+undispatchable, and name the two ways to resolve it.
+
+### S-50 — a fallback that was dead twice over (LOW) — FIXED
+
+`ContinuousLearning._train_model` caught `ImportError` from `AdvancedTrainer`
+and fell back to `from ml.training import train_model`, which does not exist.
+
+Two things make this lower severity than it looks, both verified:
+
+1. **`AdvancedTrainer` does exist**, so the primary path works and the fallback
+   is only reachable if `ml.train_advanced` stops importing altogether — a
+   deployment fault, not a runtime condition.
+2. **The fallback could not have worked even with the right name.** The nearest
+   real function is `train_ml_pipeline`, which takes a pandas DataFrame and
+   calls `df.iloc` and `FeatureEngineer.create_features`; `_train_model`
+   receives an `np.ndarray`. No rename fixes a type mismatch.
+
+So the branch was dead twice over. Replaced with an explicit error saying there
+is no fallback trainer and naming the likely cause, rather than a second import
+that would fail differently.
+
+Baseline: 11 -> 8 known entries.
+
+### S-51 — dynamic strategies never persisted, and enabling it is a security decision (OPEN decision, code made honest)
+
+`DynamicStrategyRegistry` reads as if it stores registered strategies. It does
+not, and never has. The database path is dead for three independent reasons:
+
+1. **No model.** `_load_from_database` and `_persist_version` both did
+   `from database.models import DynamicStrategy`. `database/models.py` defines
+   nineteen models and not that one.
+2. **No table.** Nothing under `alembic/` references a dynamic-strategy table.
+3. **No session factory.** `_db_session_factory` is assigned only by
+   `DynamicStrategyRegistry.start()`, and **`start()` is called from nowhere** —
+   not in production, not in tests. `api/dynamic_strategies.py` reaches the
+   registry through `get_dynamic_registry()`, which constructs the singleton
+   lazily and never starts it. Both methods returned at their first guard,
+   before the missing import was ever evaluated.
+
+`_redis` comes from the same unused `start()`, so the cross-pod sync in
+`_publish_update` is inert too. Registered strategies live in `self._versions`
+and `self._active`, are lost on restart, and `POST /register` reports success.
+
+**Why this was not simply "add the model and a migration".**
+
+`/register` accepts `source_code: str` — Python source, which the registry
+compiles through `_compile_strategy` after `_validate_safety`. The body that
+was in `_load_from_database` re-compiled every record whose state was ACTIVE,
+at startup. So enabling persistence means caller-supplied Python is stored in
+the database and executed on every boot, which converts any future gap in
+`_validate_safety` from a live-process problem into one that survives restarts
+and reboots cleanly into the same code.
+
+That is a decision for the product owner. The endpoints are role-gated
+(`_router_require_role("trader")` on the router, `_require_admin()` on
+register), so this is not an unauthenticated path — but "admin can persist code
+that runs at every startup" is still a different security posture from "admin
+can run code in the current process", and it should be chosen deliberately.
+
+**What changed here:** the dead database code is removed and the memory-only
+behaviour is stated in both methods. The methods and their six call sites stay
+in place, so wiring persistence later means filling them in rather than
+rediscovering where they belong, and `_load_from_database` now warns if a
+session factory is ever supplied while persistence remains unimplemented.
+
+`tests/unit/test_dynamic_registry_is_memory_only.py` pins the memory-only
+contract and fails if a `DynamicStrategy` model ever appears — which is the
+signal to revisit this decision rather than let the path quietly switch on.
+
+Baseline: 8 -> 7 known entries.
+
+### S-52 — /api/nocode/validate answered "invalid" to everything — FIXED
+
+The endpoint did:
+
+```python
+from nocode.state_machine import StateMachineEngine
+engine = StateMachineEngine()
+result = engine.validate_graph(nodes=request.nodes, edges=request.edges)
+```
+
+Neither name exists. `nocode/state_machine.py` defines `StateMachineBuilder`,
+`StateMachineDefinition`, `State`, `Transition`, `Condition` and `Action` — a
+states-and-transitions builder, not a nodes-and-edges graph validator — and
+`validate_graph` appears nowhere in the repository. The import raised
+`ImportError` on every request, the handler's own `except Exception` caught it,
+and the response was
+
+```json
+{"valid": false, "errors": ["<internal error>"], "warnings": []}
+```
+
+for every input. The builder UI had no working validation, and a caller could
+not distinguish a broken strategy from a broken endpoint — the error branch
+wears the same shape as a genuine finding.
+
+Implemented `nocode/graph_validation.py` against the contract the endpoint's own
+docstring states — "valid node types, proper connections, no cycles in
+execution flow, and required parameters":
+
+* **node types** — checked against the taxonomy, with duplicate-id detection;
+* **required parameters** — each type's declared `params` must be present;
+* **connections** — every edge endpoint must name a real node;
+* **cycles** — iterative DFS with white/grey/black colouring, so a diamond (two
+  paths reconverging) is not mistaken for a loop the way a plain visited-set
+  would be. Self-loops are caught too;
+* **advisories** — an empty graph, or one with no `actions` node, is a warning
+  rather than an error: it is legal but can never place a trade.
+
+It never raises. Malformed input is a finding, not a 500 — turning bad input
+into a server error on a validation endpoint tells the caller the wrong thing.
+
+**The taxonomy moved, deliberately.** All 22 node types were defined inline
+inside the `/node-types` handler. The validator needs the same list, and a
+second copy would drift from the first — the exact failure this backlog keeps
+finding (S-38's resolution chain, S-47's cache, `_executable_lot_ceiling`).
+`NODE_TYPES` now lives in `nocode/graph_validation.py` and `/node-types` serves
+it, so the palette the UI renders and the rules the validator enforces cannot
+disagree. A test asserts the handler no longer carries its own copy.
+
+Proven over HTTP against a running server, not only in unit tests —
+`evidence/flows/nocode_validation/runtime-proof.txt` shows a valid strategy
+passing and a graph with a cycle, an unknown type, a missing parameter and a
+dangling edge returning all four findings by name.
+
+Baseline: 7 -> 6 known entries.
+
+### S-53 — the news feed has always returned an empty list — FIXED
+
+`api/news_feed.py::_get_news_manager` did:
+
+```python
+from data_layer.feeds.news.base import NewsFeedManager
+mgr = NewsFeedManager()
+```
+
+`base.py` defines `NewsFeedBase`, an abstract class whose one abstract method is
+`fetch_articles`. There is no manager in it, and no `NewsFeedManager` anywhere
+in the repository. The import raised on every call, the handler logged
+"News manager init failed" at WARNING and returned `None`, and all three
+endpoints skipped their work:
+
+```python
+articles = []
+if mgr:
+    ...
+return {"articles": articles[:limit], "total": len(articles)}
+```
+
+There is no fallback, so `/api/news/latest`, `/api/news/feed` and
+`/api/news/nuclear-score` answered empty regardless of configuration.
+
+The five adapters all exist and all implement `fetch_articles(limit)` —
+`FinnhubFeed`, `FMPFeed`, `NewsDataFeed`, `AlphaVantageNewsFeed`,
+`NewsAPIFeed`. What was missing is the piece that queries them together.
+
+`data_layer/feeds/news/manager.py` fans out with `asyncio.gather`, merges on
+`article_id`, sorts newest first and truncates to `limit`. Two translations
+carried the risk:
+
+* the adapters return `NewsArticle` dataclasses (`article_id`, `headline`,
+  `sentiment_label`, `impact_score`) while the endpoints read dicts with
+  different names (`id`, `title`, `sentiment`, `impact`). Getting that mapping
+  wrong would return articles whose fields are all quietly empty — the same
+  shape of failure as the original bug, which is why each key has its own test;
+* `impact_score` is a 0-1 float but `GET /articles` filters on
+  `impact == "low"|"medium"|"high"`, so it is bucketed.
+
+Degradation is explicit: an adapter with no API key is skipped rather than
+called and failed, one failing provider does not lose the others, and no
+configured providers returns `[]` rather than raising.
+
+**On the runtime evidence.** This environment has no news API keys, so the
+endpoints still answer `{"articles": [], "total": 0}` — over HTTP that is
+indistinguishable from the old broken behaviour. The distinction is recorded
+in-process instead: `_get_news_manager()` now returns a `NewsFeedManager` with
+all five adapters constructed and none configured, and "News manager init
+failed" no longer appears in the server log. A keyed environment is needed to
+see articles actually flow; the sixteen unit tests cover that path with stub
+feeds. `evidence/flows/news_feed/runtime-proof.txt`.
+
+Baseline: 6 -> 5 known entries.
+
+---
+
+## Round 20 — the frontend, examined for the first time
+
+303 files under `frontend/src` had never been opened in this work. Baseline
+first: `tsc --noEmit` is clean and `vitest` runs 1629 tests across 68 files, all
+passing. The frontend is in good health.
+
+The useful question was whether it suffers the backend's characteristic defect —
+a call to something that does not exist, failing quietly. So: extract every
+axios call site and check it against the routes the backend actually registers
+at runtime.
+
+The SPA's axios instance sets `baseURL: '/api'`, so call sites use paths without
+that prefix (`api.get('/trading/status')` → `GET /api/trading/status`). A first
+pass that searched for `/api/...` string literals found only nine and was
+therefore measuring nothing; correcting for the baseURL found **644** distinct
+calls.
+
+Of those 644, four did not match a registered route. Three were artefacts of the
+extraction, not defects:
+
+* `GET /endpoint` — inside a JSDoc usage example in `hooks/useFetch.ts`;
+* `GET /payments/crypto/status/` — the call is
+  `api.get('/payments/crypto/status/' + paymentId)`, and
+  `/api/payments/crypto/status/{payment_id}` exists;
+* `POST /alerts/${alert.id}/${action}` — `action` is `pause` or `resume`, and
+  both `/api/alerts/{alert_id}/pause` and `.../resume` exist.
+
+The fourth was real.
+
+### S-54 — creating a team from the UI returned 405 (MEDIUM) — FIXED
+
+`frontend/src/hooks/useApi.ts`:
+
+```ts
+list:   ()     => api.get('/teams'),
+create: (body) => api.post('/teams', body),
+```
+
+`teams/__init__.py` registered the verbs asymmetrically:
+
+```python
+@router.get("")      # GET  /api/teams
+@router.get("/")     # GET  /api/teams/
+@router.post("/")    # POST /api/teams/   <- slash only
+```
+
+So listing teams worked and creating one did not. Confirmed against a running
+server: `POST /api/teams` answered `{"detail":"Method Not Allowed"}` with 405 on
+three consecutive attempts, while `POST /api/teams/` created the team.
+
+`redirect_slashes` did not rescue it, and it is worth being precise about why:
+Starlette issues its slash redirect only when the request would otherwise
+**404**. `/api/teams` is a real path that merely lacks a POST handler, so the
+result is a 405, and 405s are not redirected. Relying on that redirect would
+have been an incorrect assumption — it was tested rather than assumed.
+
+Fixed by stacking `@router.post("")` above `@router.post("/")`, matching what
+`list_teams` already did for GET, so any client works with or without the
+slash. Changing the frontend instead would have fixed one caller and left the
+next one to rediscover this.
+
+Verified over HTTP after the change: both forms return 200 and create a team,
+and both GET forms still return 200.
+`evidence/flows/teams_slash/runtime-proof.txt`.
+
+A note on the measurement: an earlier probe of the same endpoint returned 503
+rather than 405, which was transient startup state. Re-running it three times
+is what produced a trustworthy answer — a single sample would have recorded the
+wrong cause.
+
+### S-55 — a smoke test overwrote committed model artefacts — FIXED
+
+This item began with a wrong premise, and correcting it is most of its value.
+
+The claim was "the test suite dirties tracked model artefacts". Measured, that
+is **false for CI**. From a clean tree:
+
+| Run | Artefacts dirtied |
+|---|---|
+| `pytest tests/unit -m "not slow and not e2e"` (full) | 0 |
+| `pytest tests/integration tests/system -m "not slow and not e2e"` | 0 |
+| `gate_d_model_accuracy.py` | 0 |
+| `gate_m_ml_edge.py` | 0 |
+
+The earlier suspicion pointed at `ml/drift_monitor.py`, which turned out to be a
+*reader* of `feature_stats.json`, not a writer. Bisecting the thirteen test
+functions in `tests/unit/test_ml_training_pipeline.py` found the single real
+writer: `test_retrain_model_smoke_exits_zero`, which shells out to
+`scripts/retrain_model.py --smoke --advanced` and overwrites six tracked files
+in `ml/saved_models/`.
+
+It carries `@pytest.mark.slow`, so CI never selects it — which is why CI stays
+clean and why this went unnoticed. Anyone running `pytest` plainly, or that
+file directly, gets a dirty working tree. That is exactly how three regenerated
+`.pkl`/`.json` artefacts rode along in an unrelated commit earlier in this work
+and had to be reverted.
+
+**The tidier-looking fix is unsafe.** `--model-dir` exists on
+`retrain_model.py` but is only threaded through the *non-advanced* branch; the
+`--advanced/--smoke` path delegates to `ml/train_advanced.py`, whose `MODEL_DIR`
+is hardcoded. The obvious repair — have `train_advanced` honour `ML_MODEL_DIR`
+like `ml/run_training.py` and `ml/hourly_trainer.py` already do — would change
+production behaviour, because that variable is already live:
+
+    .env.example:858              ML_MODEL_DIR=models
+    deployment/helm_chart.py:116  ML_MODEL_DIR: "/app/data/models"
+
+while `ml/advanced_predictor.py` reads models back from `ml/saved_models`. In
+any deployment that sets it, a retrain would start writing where inference does
+not look. So the test cleans up after itself instead: a `_preserve_saved_models`
+fixture snapshots the six artefacts and restores any whose bytes changed.
+
+A companion pair of tests mutates an artefact inside the fixture's scope and
+asserts the scribble is gone afterwards, so the fixture cannot rot into a no-op
+and let the pollution back in quietly.
+
+Verified: `pytest tests/unit/test_ml_training_pipeline.py` with **no** marker
+filter — the slow retrain included — now leaves `git status ml/saved_models/`
+empty. It dirtied three files before.
+
+**Noted, not chased:** `ML_MODEL_DIR` has four different defaults across the
+tree — `models` (.env.example), `ml/saved_models` (retrain_model, run_training,
+superadmin/reliability), `ml/models` (hourly_trainer) and `/app/data/models`
+(helm). Whether the components that honour it agree with the ones that do not
+is a separate question worth its own pass.
+
+---
+
+## Round 21 — the Round-2 open list, re-verified
+
+The "Open (lower-priority, documented for next pass)" list at the top of this
+file dates from Round 2. Each item was re-checked against the current tree
+before anything was touched; several needed their severity restated rather than
+their code changed.
+
+### S-56 — Sentry scrubbed three regions and left the three with the most text — FIXED
+
+`monitoring/sentry_config._before_send` scrubbed `request.data`,
+`request.headers` and `extra`. It did not touch:
+
+* **`logentry`** — the log message and its interpolation params. Every
+  `logger.error("auth failed for %s", token)` put the token here verbatim.
+* **`breadcrumbs`** — the trail of log lines and HTTP calls leading up to the
+  error, usually the richest part of an event.
+* **`contexts`** — despite the function's own docstring claiming it scrubbed
+  "request data, extra, and contexts". It never did.
+* **`request.query_string`** — where a token lands when a client passes one in
+  the URL, which this codebase does for WebSocket endpoints (see the still-open
+  item below).
+
+The scrubbing machinery was never the problem: `_scrub_dict` already walks
+nested dicts and lists, and `_scrub_string` already matches Bearer tokens, JWTs,
+32-hex keys, IPv4 and email. It simply was not pointed at most of the event.
+
+All four regions are covered now, including both breadcrumb shapes
+(`{"values": [...]}` from modern SDKs and a bare list from older ones), and the
+docstring is true. 21 tests build events carrying a JWT, a Bearer token, an
+OANDA-shaped key and an email in each region and assert none survive; a
+parametrised case feeds malformed regions through, because raising inside
+`before_send` loses the event entirely.
+
+### S-57 — the affiliate payout task pays a manager that is always empty (OPEN)
+
+The Round-2 list carried two separate items: "persistent audit log for
+subscription/affiliate money actions" and "affiliate payout TOCTOU double-pay
+window". Re-checking collapses them into one sharper finding.
+
+`AffiliateManager.__init__` initialises five dicts and loads nothing:
+
+```python
+self._affiliates = {}; self._referrals = {}; self._payouts = {}
+self._affiliate_codes = {}; self._user_affiliates = {}
+```
+
+`celery_app.affiliate_commission_payout` then does:
+
+```python
+mgr = AffiliateManager()          # fresh instance, all dicts empty
+result = mgr.process_pending_payouts()
+```
+
+while `api/billing.py` and `api/monetization.py` reach the module **singleton**
+`affiliate_manager`. So the scheduled payout runs against a different object
+from the one the API populates, and that object is empty on every run — in a
+separate Celery worker process the singleton would be empty too. Nothing
+persists, so nothing is ever paid.
+
+That reframes the TOCTOU item. `request_payout` does have a genuine race — it
+reads `_calculate_pending_commission`, creates a payout for that amount, then
+marks referrals paid, with no lock, so two concurrent calls both pay the full
+balance. But `request_payout` **has no caller anywhere in the repository**, and
+the path that does run is wrapped in a global `_redis_lock("affiliate_payout")`.
+The race is real in the code and unreachable in the product.
+
+Fixing this is not adding a lock. It is giving the monetization managers
+persistence — which is the original Round-2 item, and a product decision of the
+same shape as S-51: it determines what "paid" means across restarts and across
+processes. Recorded rather than half-built.
+
+### Still open, re-verified, unchanged
+
+* **WebSocket tokens in the query string.** `api/ws_live.py:2118` and `:2246`
+  and `api/gateway.py:291` accept `?token=<jwt>`. Tokens in URLs reach access
+  logs, proxy logs and browser history. Removing the query-string path is a
+  client-compatibility decision, not a repair — the docstrings advertise it as
+  supported. S-56 above at least closes the Sentry leg of the leak.
+* **`execution/redis_state.py` crash recovery.** `load_state_on_boot` restores
+  orders and positions but does not reconcile them against live broker state,
+  and nothing prunes orphaned index members. Real design work: it needs broker
+  access at boot and a stated conflict rule.
+* **Codacy still burns 15 minutes per push.** `timeout-minutes: 15` on both
+  jobs, triggers still `push` + `pull_request` + weekly `schedule` +
+  `workflow_dispatch`. The recommendation from S-37 stands — drop the per-push
+  and per-PR triggers, keep the schedule and dispatch — and remains a spend
+  decision for whoever owns the Actions bill.
+* **k6 load tests run in no workflow.** Confirmed: nothing under
+  `.github/workflows/` references k6. Wiring it in needs a target environment
+  to point at.
+
+---
+
+## Round 22 — the "still open" list, closed
+
+Every item under "Still open, re-verified, unchanged" above is now done, plus
+three the audit had not reached. Three of them were recorded as blocked on a
+product decision; in each case the decision turned out to be derivable from the
+code rather than a matter of taste, and the reasoning is in the commit and the
+test docstring rather than here.
+
+### S-58 — superadmin circuit-breaker controls did nothing (BLOCKER, fixed)
+
+`POST /superadmin/risk/circuit-breakers/{name}/{reset,open}` returned
+`{"ok": true, "new_state": "open"}` for actions that had no effect. Three
+independent failures, each sufficient alone: `_GLOBAL_REGISTRY` does not exist
+(the registry is `_registry`, behind `get_circuit_breakers()`), `CircuitBreaker`
+had neither `force_open()` nor `reset()`, and the registry was empty in
+production because `register_circuit_breaker()` was called by nothing outside
+tests. All three were swallowed by a bare `except`. An operator watching a live
+drawdown clicked halt and nothing was halted; only a JSON blob in Redis changed,
+which the page then read back so the fabricated state looked persistent. The
+breaker list was fabricated too — six invented names cached for an hour.
+
+Semantics came from the class, not from preference: `pre_trade_check` rejects
+while `state is OPEN`, and `_schedule_recovery` returns early while
+`_manual_override` is set. So force-open trips and pins; reset lifts the pin and
+re-arms the normal cooldown, and deliberately does **not** force CLOSED —
+resuming trading through a live breach on a click is what the subsystem exists
+to prevent. `CircuitBreaker.__init__` now self-registers, rows carry
+`live: true|false`, and acting on an unregistered name returns `ok: false`.
+
+Two tests in `test_bug_fixes_session3.py` had policed the *spelling* of
+`_GLOBAL_REGISTRY` for N811 compliance, holding the broken name in place.
+
+### S-59 — admin password reset sent nothing (fixed)
+
+`POST /admin/users/{id}/reset-password` always answered "Password reset email
+queued" and never queued anything, for two independent reasons: it imported a
+mail facade `core/email_service.py` does not define (ImportError into its own
+`except`), and it read the address from `db_get(f"user:{id}")`, a namespace
+written only by ban/suspend/unban and never carrying an email.
+
+**The open question — may an admin mint a reset token? No, and it need not.**
+`auth/service.py` already mints one and `auth/router.py` signs and mails it. A
+second minting path means a second expiry policy and a second hashing choice on
+the highest-blast-radius endpoint in the panel. That sequence moved to
+`auth/password_reset.py` and both callers use it. The token goes to the user's
+registered address and never appears in the admin's response: an admin causes a
+reset, they do not perform one.
+
+`/admin/settings/test-smtp` had the same dead import. Driving the fix surfaced a
+second defect — `_send` returns `True` with no transport configured (it logs
+instead), so the endpoint whose entire job is detecting that state reported
+success. `core.email_service.active_transport()` now shares `_send`'s precedence.
+
+### S-60 — WebSocket tokens in the URL (fixed)
+
+Four pages plus the documented example in `lib/utils.ts` built
+`?token=${token}`; `api/ws_live.py` (twice) and `api/gateway.py` read it back,
+and in the gateway's case it was the only accepted credential. Tokens now ride
+the `hopefx.auth.bearer` subprotocol, which travels in `Sec-WebSocket-Protocol`
+— a header, so it stays out of access logs, history and `Referer`. The server
+must echo the subprotocol on `accept()` or browsers close the socket, which is
+why `ws_accept_subprotocol()` exists and why call sites go through
+`frontend/src/lib/ws.ts`.
+
+The query parameter still works: non-browser clients use it, and breaking them
+to fix a logging problem is its own outage. It logs a warning naming the client
+and `WS_ALLOW_QUERY_TOKEN=false` refuses it outright once clients have moved.
+
+### S-61 — retraining never reached inference (fixed)
+
+`ML_MODEL_DIR` had four defaults across the writers and `.env.example`, and both
+readers — `ml/inference_engine.py` and `ml/__init__.py` — ignored it entirely,
+hardcoding the packaged directory. Production Helm sets `/app/data/models`, so
+every retrain wrote there while inference loaded the artifacts baked into the
+image at build time. **Retraining has never changed what the model serves.**
+`ml/hourly_trainer.py` was worse: its `ml/models` default is a directory no
+reader consults under any configuration.
+
+`ml/model_paths.py` is now the single answer. Readers *search* rather than
+switch — `ML_MODEL_DIR` first, packaged directory as fallback — because a pod
+whose configured directory is empty (first boot, a failed mount) would otherwise
+find no model at all, turning a configuration mistake into an outage on a system
+that places real trades. The fallback logs a warning naming the empty directory.
+
+### S-62 — CI starved itself (fixed)
+
+Measured over this repo's last ten Codacy runs: wall times of 28–44 minutes,
+almost all ending `cancelled`, against `timeout-minutes: 15` — those are queue
+waits, not work. `codacy.yml` and `codeql.yml` had no concurrency block;
+`ci.yml` and `tests.yml` grouped on `${{ github.ref }}-${{ github.sha }}`, a
+per-commit group that can never collide and therefore supersedes nothing. The
+earlier note that "Codacy burns 15 minutes per push" named the wrong mechanism.
+
+All four now group by ref and cancel superseded runs everywhere except `main`.
+The Codacy scan is skipped outright when `CODACY_PROJECT_TOKEN` is absent rather
+than running a full checkout to fail and swallow it.
+
+### S-63 — k6 ran nowhere, and was broken when it did (fixed)
+
+Wiring it in found four real bugs in the suite: `ml_predict` sent GET to a
+POST-only route; `ml_status` probed `/api/ml/status`, which is not registered;
+the rate-limit probe ran mid-iteration, and the limiter being per-caller meant
+its 429s starved all nine later groups so they read as endpoint outages; and
+`http_req_failed` counted every 4xx including the 60 deliberately-rejected
+logins the probe sends per run, making its <1% threshold unreachable by
+construction. Fixing those took the suite from 75.97% of checks passing
+(error_rate 70.37%, http_req_failed 86.95%) to 95.55% (6.66%, 3.30%), with every
+latency budget green — p95 110 ms against a 500 ms ceiling.
+
+`load-test.yml` runs nightly and on demand, **not** on pull requests. The
+remaining failures are all `/api/trading/ohlcv/{symbol}` answering 503 because
+CI has no market-data feed, and a required check that is red for an
+environmental reason is the pathology S-62 removes. Wire it to `pull_request` in
+the change that gives CI a feed.
+
+### S-64 — the order-intent alarm never converged (fixed)
+
+The earlier note claimed `execution/redis_state.py` had no crash-recovery
+reconciliation. That was stale: S7-02/03/04 already reconcile restored positions
+against `broker.get_positions()`, adopting broker-only positions, dropping
+Redis-only ones and taking the broker's quantity on a mismatch.
+
+What was actually wrong is narrower and worse. `audit_order_intents` logged
+`UNRECONCILED ORDER INTENT` at CRITICAL for every stale intent, and nothing ever
+cleared one — `_clear_intent` is reached only on `TradeExecutor`'s happy path,
+and the audit's return value was discarded by its only caller. So a single crash
+produced a CRITICAL line on every boot forever, and a genuinely new intent — the
+one meaning money may be moving unwatched *now* — arrived indistinguishable from
+that permanent backlog.
+
+An intent whose symbol is open after broker reconciliation is resolved: the
+broker confirmed the position, so the order completed and only the journal write
+failed. It is cleared, with a log line saying so. An intent whose symbol is not
+open is never auto-cleared, but now carries `first_seen_at` and
+`boots_survived`, so a new one is visibly distinct from a known one. Nothing
+here closes, cancels or places anything at the broker.
+
+### Still open
+
+* **S-51 dynamic-strategy persistence** and **S-57 monetization persistence**
+  remain product decisions, unchanged. S-51 as specified would execute
+  caller-supplied Python at boot.
+* **A market-data feed for CI**, which is what blocks the k6 gate from moving to
+  `pull_request`.
+* **17 pre-existing failures** surfaced by running
+  `pytest -k "position or execution or redis_state or trade_executor or intent"`.
+  They pass in isolation and fail under that selection, both before and after
+  Round 22 — cross-test pollution, not a regression, and not investigated here.
+
+### Round 22b — four defects the adversarial pass found in Round 22 itself
+
+An independent security review of the branch found no exploitable
+vulnerability, but four functional defects — one of them a regression this
+work introduced.
+
+* **S-60a (regression, fixed).** `api/community_chat.py` and
+  `api/social_feed.py` were missed when WebSocket auth moved to the
+  subprotocol. Their frontend pages were converted while the handlers still
+  read only `query_params`, so chat and the social feed rejected every browser
+  client with 4001. Fail-closed, so not a vulnerability — but the product was
+  broken. Cause: the original sweep grepped two named files rather than the
+  whole `api/` package. The test now enumerates every `.py` under `api/` rather
+  than a hand-listed pair, which is the check that would have caught it.
+* **S-61a (fixed).** Making the readers honour `ML_MODEL_DIR` left
+  `_verify_checksum` matching on `path.name` against the packaged baseline, so
+  a retrained `advanced_oos.pkl` in the configured directory hashed differently
+  and was refused as `MODEL INTEGRITY FAILURE ... may have been tampered with`.
+  That defeated the fix entirely *and* reported a path change as a security
+  incident. Checksums are now per directory: tamper detection within a
+  directory is unchanged, and a fresh retrain target records its own baseline.
+* **S-62a (fixed).** `if: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}` does not
+  work: GitHub does not expose the `secrets` context to a job-level `if`, so it
+  evaluated as `'' != ''` and skipped the job unconditionally — including where
+  the token *is* configured. The guard now goes through a `token-check` job
+  whose step reads the secret into an output, because `needs` **is** available
+  in a job-level `if`.
+* **S-58a (fixed).** `_derive_name` falls back to the broker's class name and
+  `register_circuit_breaker` overwrites by key, so two brokers of the same class
+  with no `broker_name` collapsed to one registry entry. A superadmin
+  force-open would halt the survivor and answer `new_orders_blocked: true`
+  while the other kept passing orders — a narrower instance of the exact bug
+  S-58 fixed. Names are now de-duplicated with a warning naming both.
+
+Two stale test doubles declared `async def accept(self)` while standing in for
+`starlette.websockets.WebSocket.accept(subprotocol=None, headers=None)`. They
+passed by diverging from the object they double, which is precisely how a real
+signature change goes unnoticed; both now match.
+
+### Round 22c — the 22 test failures were two real product bugs
+
+The five full-suite failures and the seventeen that appeared under
+`-k "position or execution or …"` had two distinct root causes, and neither was
+"flaky tests". Both were defects the tests were correctly reporting.
+
+**S-65 — `get_sync_redis()` raised where it promised to degrade (fixed).**
+Six modules carried a copy-pasted password injection::
+
+    if password and "@" not in url.split("://", 1)[-1]:
+        scheme, rest = url.split("://", 1)
+
+`"".split("://", 1)` is a one-element list, so unpacking it raises
+`ValueError: not enough values to unpack`. Every copy was wrong the same way,
+for any URL without a scheme — including `""`, which is the natural way to say
+"this deployment has no Redis". In `cache/redis_client.py` the unpack sat
+*outside* the `try`, so a function whose docstring promises it "falls back
+gracefully to None" raised instead. The same lines were in `kill_switch.py`,
+where the Redis latch is what survives a restart: a config typo became an
+exception in the one component that has to work when things are going wrong.
+
+`tests/e2e/test_auth_billing_trading.py:33` sets `REDIS_URL=""` at module
+import, which pytest executes during *collection* even when e2e is deselected
+by `-m "not e2e"`. With a `REDIS_PASSWORD` present, every later
+`get_sync_redis()` in the session raised, and `execution/tca.py` caught only
+`(ImportError, ConnectionError, RuntimeError)` — hence 17 TCA failures under one
+selection and 5 under another, all passing in isolation.
+`cache.redis_client.inject_redis_password` is now the single implementation and
+all six sites use it; an empty `REDIS_URL` resolves to "no Redis" rather than a
+guessed default.
+
+**S-66 — `_saved()` reached past the `_SAVED` seam (fixed, regression from
+S-61).** `ml/__init__.py` and `ml/inference_engine.py` expose `_SAVED` as the
+module attribute meaning "where models live", and callers reassign it to isolate
+a directory — `test_parabolic_regime.py` and `test_drift_guard_has_a_writer.py`
+both do. S-61's `_saved()` delegated to `find_model_file()`, which resolves from
+the environment and the packaged directory and never consulted `_SAVED`, so
+redirecting it silently stopped working and those tests read the committed
+`registry.json` and `feature_stats.json` instead of their own fixtures.
+
+The fallback still applies to the environment-configured directory — a pod whose
+`ML_MODEL_DIR` is empty must not end up with no model — but not once `_SAVED`
+has been reassigned, which is an explicit instruction to read that directory and
+nowhere else.
+
+### Round 22d — nine findings from an independent review of the branch
+
+A `/code-review` pass over the whole branch found nine defects. Three were
+introduced by this work; six were pre-existing. All nine are fixed.
+
+* **S-67 (mine, severe).** `NewsFeedManager._is_configured` called
+  `feed.is_configured()`, but `NewsFeedBase.is_configured` is a `@property`.
+  `True()` raises `TypeError`, the bare `except` reported "not configured", and
+  **every adapter was skipped** — so `/api/news-feed/*` returned `[]` for every
+  request and S-49's fix never worked at all. The reason the tests passed is the
+  lesson: `_StubFeed` declared `is_configured` as a *method*, so the double
+  disagreed with the class it stood in for. The stub now uses a property and the
+  suite asserts against the five real adapters.
+* **S-68 (mine).** `_published_sort_key` compared naive datetimes (FMP,
+  NewsData) against aware ones (Finnhub, AlphaVantage, NewsAPI). `sorted` raises
+  the moment both kinds are merged, which the endpoint reports as a fetch
+  failure — an outage decided by which two providers happen to be configured.
+  Naive timestamps are now read as UTC.
+* **S-69 (mine).** `_resolve_intent` cleared a write-ahead record based on
+  `parsed`, which is only broker-reconciled when a broker was passed. Startup
+  passes `getattr(s, "broker", None)`, so a deployment with no broker wired
+  could clear an intent nothing had confirmed. Documented in the audit's
+  docstring; the clearing path now requires the reconciled set.
+* **S-70.** `BodySizeLimitMiddleware` drained `request.stream()` and reassigned
+  `request._receive` to replay the body. Under `BaseHTTPMiddleware` that
+  reassignment is ignored, so **every chunked request reached its handler with
+  zero bytes** — silent data loss, invisible because the size cap still worked.
+  Reproduced (`len: 0`), now a pure ASGI middleware that meters `receive`
+  without ever buffering the body.
+* **S-71.** `rate_limiting/advanced.py` never set `_redis_loop` on its failure
+  path, so `loop_changed` was True on the next call and wiped
+  `_redis_retry_after`. The 30-second cooldown was unreachable, and with the
+  per-request default rate-limit middleware that meant a reconnect attempt and a
+  WARNING on every request.
+* **S-72.** `core/idempotency.py::_redis` built a client and issued a blocking
+  `ping()` per store operation — two or three per order, never closed, on the
+  async order path. Resolved once per process now.
+* **S-73 / S-74 (authorization).** `research/__init__.py` and
+  `nocode/router.py` gated their *mutating* routes with the *read* predicate,
+  which exempts shared built-ins. Templates live in the shared `engine.notebooks`
+  / `builder.strategies` dicts, so any authenticated trader could delete a
+  built-in notebook for the entire deployment, or edit the strategy templates
+  `create_from_template` hands to the next caller. Reads keep the exemption;
+  mutations require real ownership, and a built-in has no owner.
+* **S-75.** `dashboard/index.html` hand-registered `/sw.js` while the bundle is
+  mounted at the `/godmode/` base and `vite-plugin-pwa` already injects a
+  correctly-scoped `registerSW.js`. The hand-written call requested a root path
+  the SPA catch-all answers with HTML, so it always failed.
+
+**A recurring self-inflicted trap, recorded so the next person avoids it.**
+Four separate times this session a source-text assertion was tripped by the
+comment written to explain the very thing it asserts. The durable fix, used in
+`test_redis_client_reuse_and_cooldown.py`, is to strip comments before matching
+rather than to reword prose around the test.
+
+---
+
+## Round 23 — the coverage gates that measured nothing (S-76 … S-79)
+
+`ci.yml` runs three per-package coverage gates that had **never once executed**:
+
+```yaml
+- name: Coverage gate - brain/ (70% required)
+  run: coverage report --rcfile=.coveragerc --include="brain/*" --fail-under=70
+```
+
+`.coveragerc`'s `[run] source =` list named neither `brain` nor `news`, so
+coverage never instrumented either package, `--include` matched nothing, and
+`coverage report` exited 1 with *"No data to report."* The gate could not pass
+by construction. It went unnoticed because on `main` the step is unreachable:
+the `Run tests with coverage` step fails first, so the gates below it are all
+skipped. This branch is the first on which they ran at all — and the `ml/` and
+`news/` gates behind `brain/` had likewise never executed.
+
+* **S-76.** `brain` and `news` added to `.coveragerc` `[run] source`. Wiring
+  them up converts "no data" into a real, and initially failing, number:
+  `brain/` measured **50.52 %** and `news/` **45.95 %** against a 70 % gate.
+  Both were brought above the threshold with tests rather than by moving the
+  threshold — a check that passes because it was weakened is the defect class
+  this backlog exists to remove. `brain/cognitive_engine.py` was at **0.00 %**:
+  76 statements of trend/momentum/volatility analysis reached by nothing.
+
+* **S-77 (keyword matching — three scorers).** `news/impact_predictor.py`,
+  `news/sentiment.py` and `news/nuclear_wordmap_scorer.py` all looked their
+  keyword dictionaries up with a plain substring test, `if keyword in text`.
+  On these dictionaries that fires on ordinary English, not on rare edge cases:
+
+  | Text | Keyword | Consequence |
+  |---|---|---|
+  | "Local bakery wins **award**" | `war` | HIGH-impact GEOPOLITICAL, volatility ×1.3 |
+  | "**software** update" | `war` | same |
+  | "went a**gain**st expectations" | `gain` | scored **bullish** |
+  | "a **miss**ion to mars" | `miss` | scored bearish |
+  | "**fall**out shelter" | `fall` | scored bearish |
+  | "a **coup**le of things" | `coup` | match on the `nuclear_mode` scorer |
+
+  Found by writing a test that asserted the boring case and getting the
+  alarming one back. The naive fix — `\bword\b` — overcorrects, because
+  headlines are inflected ("stocks *surges*", "*gains* on the day", "rate
+  *cuts*"), and demanding an exact word drops the matches the dictionaries
+  exist to catch. `news/keyword_match.py` is now the single matcher: a keyword
+  matches at a word boundary, optionally followed by one common inflection, so
+  *falls* matches `fall` and *fallout* does not.
+
+* **S-78 (RSS/Atom parsing).** `news/providers.py::_parse_rss_feed` selected
+  elements with `item.find(a) or item.find(b)`. An `ElementTree.Element` is
+  **falsy when it has no child elements**, which is true of every leaf a feed
+  cares about, so the `or` discarded the element it had just found and fell
+  through to the fallback — usually `None`. Three consequences:
+
+  - RSS `pubDate` was never read, so every article was stamped `now()` and the
+    `hours_back` cutoff dropped nothing: **stale news served as current**.
+  - RSS `dc:creator` was never read.
+  - In Atom feeds the title, summary, link, timestamp and author of **every**
+    entry came back empty.
+
+  Replaced with an explicit `_first()` helper that tests `is not None`.
+
+* **S-79 (`brain/cognitive_engine.py`).** `composite_signal()` documents itself
+  as running all analyses but ran four of five, leaving `sentiment` at its
+  `None` initial value — the one key in the returned signal dict a caller is
+  most likely to do arithmetic on. It now defaults to neutral, the same value
+  `perform_sentiment_analysis()` produces with no score. A caller that supplied
+  a score keeps it.
+
+**Numbers, before → after** (full CI selection, `pytest -m "not slow and not e2e"`):
+
+| Module | Before | After |
+|---|---:|---:|
+| `brain/cognitive_engine.py` | 0.00 % | 100.00 % |
+| `brain/llm_agent.py` | 25.51 % | 92.86 % |
+| `news/__init__.py` | 27.48 % | 100.00 % |
+| `news/economic_calendar.py` | 46.64 % | 99.60 % |
+| `news/providers.py` | 32.08 % | 94.88 % |
+| `news/sentiment.py` | 58.00 % | 97.01 % |
+| `news/nuclear_wordmap_scorer.py` | 69.09 % | 98.21 % |
+| `news/impact_predictor.py` | 74.85 % | 96.95 % |
+
+**The lesson worth keeping.** A gate that has never run is worse than no gate:
+it occupies the slot where a real check would go, and its name in the workflow
+file is read by everyone as evidence the thing is covered. Both of these had
+been in `ci.yml` since the commit that introduced them, reporting nothing,
+behind a step that failed first.
+
+---
+
+## Round 24 — the post-bubble arm that can barely fire (S-80)
+
+`ml/regime_conditional.py` classifies each bar's market regime, and
+`REGIME_HIGH_VOL_PARABOLIC` overrides every other label. The module's own
+docstrings explain why it exists: walk-forward **Fold-2 scored 44.4 % accuracy**
+because momentum and trend features turn *anti-predictive* once price discovery
+breaks down. It is imported by `ml/signal_filter.py`, which is imported by
+`execution/trade_executor.py`, so this runs on the live trade path.
+
+The override has two arms:
+
+1. **Blow-off** — price > `1.30 x` its 200-bar moving average.
+2. **Post-bubble crash** — `rv14 > 2.5 x rv90` **and** price ≥ 25 % below the
+   200-bar peak.
+
+**Arm 2 is very nearly unreachable, and this is arithmetic rather than opinion.**
+`rv14` is the standard deviation of the last 14 log returns; `rv90` is the
+standard deviation of the last 90 — a set that *contains* those same 14. Adding
+76 further observations can only reduce the ratio, never raise it, so
+
+```
+rv14 / rv90  <=  sqrt(90 / 14)  =  2.5355…
+```
+
+is a hard ceiling. The configured threshold `_PARABOLIC_RV_RATIO` is **2.5** —
+inside the top **1.4 %** of the achievable range. Clearing it requires the 76
+returns before the crash to be almost perfectly constant *and* centred on the
+crash's own mean: a steady grind down followed by violent chop at the same
+average pace. An ordinary bubble-then-crash does not qualify; measured on a
+synthetic 240-bar base + 30-bar bubble + 30-bar crash, the ratio comes out
+around **1.4**, well under the threshold.
+
+The practical consequence is that **arm 1 does effectively all the work** and
+the post-bubble-crash detector contributes almost nothing.
+
+**Not changed here, deliberately.** `_PARABOLIC_RV_RATIO` gates a regime that
+suppresses momentum features on a money-moving path; retuning it changes
+trading behaviour and is a decision for whoever owns the strategy, not a
+cleanup to fold into a coverage pass. The current behaviour is pinned by
+`tests/unit/test_ml_regime_conditional.py::TestConditionTwoIsNearlyUnreachable`,
+which asserts the ceiling, the threshold's position beneath it, and that an
+ordinary crash falls short — so any future retune is a deliberate, visible act.
+
+Two candidate remedies, if the desk wants arm 2 to be live:
+
+* Compare `rv14` against a **non-overlapping** baseline (bars −90…−15 rather
+  than −90…−1). The ceiling disappears entirely and the ratio measures what the
+  docstring says it measures.
+* Or keep the overlap and lower the threshold to something inside the reachable
+  range (roughly 1.3–1.8 based on the synthetic crash above).
+
+---
+
+## Round 25 — the SELL gate is inverted (S-81) — **needs a decision**
+
+`ml/signal_filter.py::_gate_confidence` is the last check between a model
+probability and an order. `core/signal_engine.py:1284` calls it, and
+`execution/trade_executor.py` sits downstream. **The short path is inverted.**
+
+`_extract_confidence` returns the raw ML **P(up)** — `core/signal_engine.py`
+passes `signal_payload["probability"]` straight in, and the thresholds confirm
+the intent: `_THRESHOLD_LONG = 0.58` and `_THRESHOLD_SHORT = 0.42` are
+symmetric about 0.5, the classic two-sided band (go long above 0.58, short
+below 0.42).
+
+Measured across the range, with `regime="TRENDING"` (no tightening):
+
+| P(up) | BUY | SELL |
+|---:|:---:|:---:|
+| 0.02 | block | **block** |
+| 0.05 | block | **block** |
+| 0.30 | block | **block** |
+| 0.41 | block | **block** |
+| 0.50 | block | **block** |
+| 0.55 | block | **PASS** |
+| 0.75 | PASS | **PASS** |
+| 0.95 | PASS | **PASS** |
+
+**A SELL is forwarded only when P(up) ≥ 0.55** — precisely when the model
+expects the market to *rise* — and every decisive short is blocked.
+
+Two contributing defects:
+
+1. **The absolute floor is direction-blind.**
+   `min_conf = _MIN_CONFIDENCE_ABS (0.55)` is compared against raw P(up). For a
+   short, conviction is `1 - P(up)`, so this rejects every good short.
+   `SELL @ P(up)=0.05` fails with `confidence 0.050 < floor 0.550`.
+
+2. **The short comparison is the wrong way round.**
+   ```python
+   elif dir_upper in ("SELL", "SHORT") and confidence < threshold_short:
+       return FilterResult(passed=False, ...)
+   ```
+   Given `threshold_short = 0.42` is the *lower* edge of the band, this blocks
+   exactly the shorts that should pass. It should block when
+   `confidence > threshold_short`.
+
+The legacy fallback in `core/signal_engine.py:1298-1305` has the same
+direction-blindness: `if ml_prob < min_prob` for both directions.
+
+**Proposed patch** (not applied):
+
+```python
+# conviction is direction-relative: 1 - P(up) for a short
+conviction = confidence if dir_upper in ("BUY", "LONG") else 1.0 - confidence
+if conviction < min_conf:
+    ...block...
+
+if dir_upper in ("BUY", "LONG") and confidence < threshold_long:
+    ...block...
+elif dir_upper in ("SELL", "SHORT") and confidence > threshold_short:
+    ...block...
+```
+
+**Why it is not applied here.** Fixing this *enables short trades the system
+does not currently take* — a material change to live trading behaviour on a
+money-moving path, and `CLAUDE.md` is explicit that risk gates are not to be
+changed without instruction. The current behaviour is pinned instead, by
+`tests/unit/test_ml_signal_filter.py` (`..._S81` tests), so the defect is
+visible, reproducible, and cannot regress unnoticed — and so that applying the
+patch above is a deliberate, reviewed act rather than a side effect of a
+coverage pass.
+
+**Also noted, lower severity.** `_gate_circuit_breaker` reads only
+`self._outcomes[symbol]` and documents why ("to avoid cross-symbol
+contamination"), but `_gate_expected_value` does
+`self._outcomes.get(symbol, []) or self._global_outcomes` — so a symbol with no
+history of its own inherits every other symbol's EV. Defensible as a prior, but
+it is the opposite choice made two methods apart, and undocumented. Pinned in
+`test_but_the_ev_gate_does_fall_back_to_global_history`.
+
+---
+
+## Round 26 — the ML training inventory (S-82)
+
+### S-82 — `_static_model_status` reported every model as trained — **FIXED**
+
+`ml/training_manager.py::_static_model_status` is the model inventory returned
+by `list_jobs()` when the database has no `ml_training` history — the list an
+operator sees on a fresh deployment, surfaced through `/api/ml/training/jobs`
+and the superadmin ML page.
+
+**What it did.** For each of the six `_KNOWN_MODELS` it checked
+
+```python
+found = fpath.exists() or pt_path.exists() or zip_path.exists()
+```
+
+where `zip_path` was `ml/saved_models/rl/hopefx_ppo.zip` — the *RL agent's*
+artifact, recomputed identically inside every iteration. That file is committed
+to this repository (it is whitelisted in `.gitignore` and checksum-verified in
+CI), so the third clause was true for every model, and all six reported
+`completed`. Four of them also took their `started_at`/`finished_at` from the
+zip's mtime, because the loop that picked the timestamp fell through to the
+same shared file.
+
+Measured before the fix, in this working tree:
+
+| model | reported | artifact actually present |
+|---|---|---|
+| advanced_oos | completed | `advanced_oos.pkl` ✅ |
+| lstm_signal | completed | **none** |
+| rl_ppo | completed | `rl/hopefx_ppo.zip` ✅ |
+| hybrid_ensemble | completed | **none** (`hybrid_meta.pkl` is a different artifact) |
+| rf_macro | completed | `rf_macro.pkl` ✅ |
+| xgb_macro | completed | `xgb_macro.pkl` ✅ |
+
+`lstm_signal` is the sharp end: AGENTS.md's model table records it as
+"Architecture complete, not trained", and `_dispatch_training` raises a
+`RuntimeError` explaining that no trainer for it exists (Round 4 / task #4) —
+yet the inventory said it was trained, with a timestamp.
+
+**Second defect in the same function.** The directory was the hardcoded
+relative `Path("ml/saved_models")`. That ignores `ML_MODEL_DIR`, which
+production sets to a mounted volume (`/app/data/models` in
+`deployment/helm_chart.py`), and resolves against the process working
+directory, so a service started from anywhere but the repository root would
+report every model `not_trained`. This is exactly the class of bug Round 21
+consolidated into `ml/model_paths.py`; this call site was missed.
+
+**Fix.** Each model is now resolved to its own artifact through
+`ml.model_paths.find_model_file` — `ML_MODEL_DIR` first, packaged
+`ml/saved_models` as the fallback, the same order inference uses to choose the
+model it serves. The RL zip is named once, as `_RL_ARTIFACT`, and is consulted
+only for `rl_ppo`/`rl`.
+
+After the fix, same tree:
+
+```
+advanced_oos     completed     2026-08-17T12:39:23.338878+00:00
+lstm_signal      not_trained   None
+rl_ppo           completed     2026-08-17T12:39:23.420176+00:00
+hybrid_ensemble  not_trained   None
+rf_macro         completed     2026-08-17T12:39:23.354878+00:00
+xgb_macro        completed     2026-08-17T12:39:23.420176+00:00
+```
+
+**Proof.** `tests/unit/test_ml_training_manager.py::TestStaticModelStatus` —
+six tests, written failing first against the old implementation (each model
+judged by its own artifact, no timestamp for an untrained model, `.pt`
+checkpoints honoured, `ML_MODEL_DIR` honoured, packaged directory as fallback,
+one row per known model). This is a status/reporting fix: it changes no gate,
+no sizing, and no execution path.
+
+### S-83 — observations pinned, not changed
+
+Two behaviours in `ml/signal_scorer.py` are now covered by tests that record
+what the code does, deliberately without changing it. Both are strategy calls
+for the owner, not defects with an obvious right answer:
+
+- **The ADX vote is unconditional.** `_score_technical_consensus` appends a
+  literal `True` vote when ADX > 20, regardless of the signal's direction, so a
+  counter-trend signal in a strong trend scores 1/7 rather than 0/6 — a strong
+  trend slightly *raises* the score of a signal fighting it. ADX is
+  directionless by construction, so this is defensible, and the inline comment
+  says it is intended ("trending = good for trend signals"). Pinned by
+  `test_adx_vote_is_unconditional_when_the_trend_is_strong`.
+- **`NEUTRAL` is scored as a short.** `_score_ml_confidence` branches on
+  `direction.upper() in ("BUY", "LONG")`, so any other value — including the
+  `"NEUTRAL"` default `SignalScorer.score` supplies when a payload carries no
+  direction — takes the bearish branch. Scoring is advisory
+  (`core/signal_engine.py::_enrich_with_signal_score` swallows every failure and
+  the result gates nothing), and no NEUTRAL payload reaches it in practice.
+  Pinned by `test_unrecognised_direction_is_scored_as_bearish`.
+
+Also pinned: feeding every dimension exactly a grade threshold (0.75, 0.60)
+produces `0.7499999999999999` from the six-term weighted sum and grades one band
+low. Advisory, and arbitrary to a part in 1e16 — recorded so nobody reads the
+boundary off the docstring and concludes the grader is broken.

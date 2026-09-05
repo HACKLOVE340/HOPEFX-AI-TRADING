@@ -597,18 +597,36 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     router = APIRouter(prefix="/api/research", tags=["Research"], dependencies=[Depends(require_role("trader"))])
 
-    def _visible_notebook(nb, user_id: str) -> bool:
-        """Templates are shared; everything else belongs to whoever made it."""
+    def _readable_notebook(nb, user_id: str) -> bool:
+        """Templates are shared for *reading*; everything else is its author's."""
         return nb.is_template or getattr(nb, "user_id", None) in (None, user_id)
 
     def _owned_notebook(notebook_id: str, user_id: str):
-        """Return the caller's notebook or raise 404.
+        """Return a notebook the caller owns, or raise 404.
+
+        Ownership, not visibility. This predicate gates the mutating routes —
+        add-cell, execute, delete — and it used to be the read predicate, which
+        exempts templates. Templates live in the **shared** `engine.notebooks`
+        dict, so `DELETE /api/research/notebooks/{id}` on a built-in succeeded
+        for any authenticated trader and removed it for the whole deployment;
+        add-cell and execute likewise wrote into an object every other user was
+        about to read.
+
+        Working from a template is done by copying it, not by editing it in
+        place, and a built-in has no owner — so nobody owns one.
 
         404 rather than 403 so the response does not disclose which notebook
         ids exist — the same choice `api/alerts._get_owned_alert` makes.
         """
         nb = engine.notebooks.get(notebook_id)
-        if nb is None or not _visible_notebook(nb, user_id):
+        if nb is None or getattr(nb, "user_id", None) != user_id:
+            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+        return nb
+
+    def _viewable_notebook(notebook_id: str, user_id: str):
+        """Return a notebook the caller may read (their own, or a template)."""
+        nb = engine.notebooks.get(notebook_id)
+        if nb is None or not _readable_notebook(nb, user_id):
             raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
         return nb
 
@@ -634,7 +652,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         notebooks = [
             nb
             for nb in engine.search_notebooks(query=query, author=author)
-            if _visible_notebook(engine.notebooks[nb["notebook_id"]], user.sub)
+            if _readable_notebook(engine.notebooks[nb["notebook_id"]], user.sub)
         ]
         # Enrich with status field expected by the frontend
         for nb in notebooks:
@@ -714,7 +732,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         This took no user parameter, so any authenticated account could read
         any notebook's full cell contents and outputs.
         """
-        nb = _owned_notebook(notebook_id, user.sub)
+        nb = _viewable_notebook(notebook_id, user.sub)
         cells = nb.cells
         # Determine overall status from cells
         if any(c.status.value == "error" for c in cells):
@@ -817,7 +835,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         This took no user parameter, so any authenticated account could export
         any notebook — including as runnable Python.
         """
-        _owned_notebook(notebook_id, user.sub)
+        _viewable_notebook(notebook_id, user.sub)
         exported = engine.export_notebook(notebook_id, export_format)
         if exported is None:
             raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")

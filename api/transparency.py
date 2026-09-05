@@ -35,9 +35,9 @@ def _get_transparency_engine():
 
         engine = getattr(app_state, "transparency_engine", None)
         if engine is None:
-            from transparency.engine import TransparencyEngine
+            from transparency.engine import ExecutionTransparencyEngine
 
-            engine = TransparencyEngine()
+            engine = ExecutionTransparencyEngine()
             app_state.transparency_engine = engine
         return engine
     except Exception:

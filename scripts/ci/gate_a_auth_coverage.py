@@ -130,27 +130,58 @@ SKIP_FILES: frozenset[str] = frozenset(
 )
 
 
-def _file_has_router_level_auth(tree: ast.Module) -> bool:
+def _guarded_router_names(tree: ast.Module) -> set[str]:
     """
-    Return True if ANY APIRouter in this file is constructed with
-    a `dependencies=[...]` argument that references an auth marker.
+    Return the names of routers constructed with a `dependencies=[...]`
+    argument that references an auth marker.
+
+    Scoped per router, not per file. This used to answer "does ANY router in
+    this file carry auth?" and, on a yes, exempt every endpoint in the file
+    without looking at one of them. A second, auth-free router in the same file
+    then inherited that exemption — which is precisely the shape of
+    `api/advanced_trading.py`:
+
+        router        = APIRouter(dependencies=[Depends(get_current_user)])
+        public_router = APIRouter()      # mounted, no auth
+
+    A mutating route added to `public_router` was waved through by the guard on
+    `router`. Returning the guarded names instead lets `check_file` exempt only
+    the routes whose own router is guarded.
     """
+    guarded: set[str] = set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
+        if not isinstance(node, ast.Assign):
             continue
-        func = node.func
+        call = node.value
+        if not isinstance(call, ast.Call):
+            continue
+        func = call.func
         if not (
             (isinstance(func, ast.Name) and func.id == "APIRouter")
             or (isinstance(func, ast.Attribute) and func.attr == "APIRouter")
         ):
             continue
-        for kw in node.keywords:
-            if kw.arg != "dependencies":
-                continue
-            src = ast.unparse(kw.value)
-            if any(marker in src for marker in AUTH_DEPENDS_MARKERS):
-                return True
-    return False
+        has_auth = any(
+            kw.arg == "dependencies" and any(marker in ast.unparse(kw.value) for marker in AUTH_DEPENDS_MARKERS)
+            for kw in call.keywords
+        )
+        if not has_auth:
+            continue
+        for target in node.targets:
+            guarded.add(ast.unparse(target))
+    return guarded
+
+
+def _route_owner(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """
+    Return the name of the router a route decorator hangs off — the `x` in
+    `@x.post(...)` — or None when this is not a decorated route.
+    """
+    for dec in node.decorator_list:
+        func = dec.func if isinstance(dec, ast.Call) else dec
+        if isinstance(func, ast.Attribute) and func.attr in MUTATING_HTTP_METHODS:
+            return ast.unparse(func.value)
+    return None
 
 
 def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -199,11 +230,10 @@ def check_file(path: Path) -> list[str]:
     except (SyntaxError, UnicodeDecodeError):
         return []
 
-    # If every APIRouter in this file is constructed with a top-level
-    # dependencies=[Depends(<auth>)] argument, all endpoints it owns are
-    # protected — no per-function check needed.
-    if _file_has_router_level_auth(tree):
-        return []
+    # Routers constructed with a top-level dependencies=[Depends(<auth>)]
+    # protect every endpoint registered on *that* router — those need no
+    # per-function check. Routers without it get checked function by function.
+    guarded_routers = _guarded_router_names(tree)
 
     violations: list[str] = []
     for node in ast.walk(tree):
@@ -212,6 +242,8 @@ def check_file(path: Path) -> list[str]:
         if node.name in KNOWN_PUBLIC:
             continue
         if not _is_mutating_endpoint(node):
+            continue
+        if _route_owner(node) in guarded_routers:
             continue
         if not _has_auth_depends(node):
             rel = path.relative_to(REPO_ROOT)

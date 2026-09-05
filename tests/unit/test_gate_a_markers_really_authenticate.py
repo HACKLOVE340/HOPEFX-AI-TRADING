@@ -149,6 +149,103 @@ class TestTheGatePassesAndStillHasTeeth:
 
 
 @pytest.mark.unit
+class TestRouterLevelExemptionIsScopedToItsOwnRouter:
+    """`_file_has_router_level_auth` answered a file-wide question with
+    per-router evidence.
+
+    It walked every `APIRouter(...)` in a file and returned True as soon as one
+    was constructed with `dependencies=[Depends(<auth>)]`. `check_file` then
+    returned immediately — no endpoint in that file was examined at all.
+
+    A file with two routers is the normal way to expose a public endpoint
+    beside authenticated ones, and `api/advanced_trading.py` does exactly that:
+
+        router        = APIRouter(dependencies=[Depends(get_current_user)])
+        public_router = APIRouter()          # no auth, mounted in
+                                             # core/router_registry.py
+
+    Today `public_router` carries one GET (the shared backtest view), so
+    nothing is exposed. But the gate is not passing that file because the
+    routes are safe — it is passing because it stopped looking after seeing
+    the first guarded router. Any `@public_router.post` added later is waved
+    through, in the one file whose whole design is "some of these are public".
+
+    The fix reads which router each decorator names and only exempts functions
+    whose own router carries auth.
+    """
+
+    def test_a_mutating_route_on_an_unguarded_second_router_is_caught(self, scratch_api_dir, monkeypatch):
+        gate = _gate_module()
+
+        (scratch_api_dir / "two_routers.py").write_text(
+            "from fastapi import APIRouter, Depends\n"
+            "from api.auth import get_current_user\n"
+            "router = APIRouter(dependencies=[Depends(get_current_user)])\n"
+            "public_router = APIRouter()\n"
+            "@router.post('/safe')\n"
+            "async def guarded(amount: float):\n"
+            "    return {'ok': amount}\n"
+            "@public_router.post('/danger')\n"
+            "async def wire_money(amount: float):\n"
+            "    return {'sent': amount}\n",
+            encoding="utf-8",
+        )
+        _point_gate_at(gate, scratch_api_dir, monkeypatch)
+
+        assert gate.main() == 1, (
+            "a mutating route on an auth-free second router passed because a different router in the same file had auth"
+        )
+
+    def test_routes_on_the_guarded_router_still_pass(self, scratch_api_dir, monkeypatch):
+        """Router-level auth must keep exempting its own routes."""
+        gate = _gate_module()
+
+        (scratch_api_dir / "guarded_only.py").write_text(
+            "from fastapi import APIRouter, Depends\n"
+            "from api.auth import get_current_user\n"
+            "router = APIRouter(dependencies=[Depends(get_current_user)])\n"
+            "public_router = APIRouter()\n"
+            "@router.post('/one')\n"
+            "async def one(amount: float):\n"
+            "    return {'ok': amount}\n"
+            "@public_router.get('/read-only')\n"
+            "async def read_only():\n"
+            "    return {'ok': True}\n",
+            encoding="utf-8",
+        )
+        _point_gate_at(gate, scratch_api_dir, monkeypatch)
+
+        assert gate.main() == 0, "router-level auth stopped exempting its own mutating routes"
+
+    def test_the_real_advanced_trading_public_router_holds_no_mutating_route(self):
+        """The live instance of this shape, pinned so it cannot grow one quietly."""
+        import ast
+
+        source = (_REPO_ROOT / "api" / "advanced_trading.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+
+        mutating = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for dec in node.decorator_list:
+                if not isinstance(dec, ast.Call):
+                    continue
+                func = dec.func
+                if not isinstance(func, ast.Attribute):
+                    continue
+                owner = getattr(func.value, "id", "")
+                if owner == "public_router" and func.attr in {"post", "put", "patch", "delete"}:
+                    mutating.append(node.name)
+
+        assert not mutating, (
+            f"public_router now carries mutating route(s) {mutating} and is mounted "
+            "without auth in core/router_registry.py — add an auth dependency or "
+            "move them onto `router`"
+        )
+
+
+@pytest.mark.unit
 class TestEveryMarkerNamesSomethingReal:
     """A marker that matches nothing is dead weight; one that matches too
     loosely is a hole. Both are worth knowing about."""
