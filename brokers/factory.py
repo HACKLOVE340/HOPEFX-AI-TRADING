@@ -246,7 +246,13 @@ class BrokerFactory:
             return None
 
         brokers_section: dict = cfg.get("brokers", {})
-        resolved_name = name or os.getenv("BROKER") or brokers_section.get("default", "paper")
+        if name:
+            resolved_name = name
+        elif os.getenv("BROKER_TYPE") or os.getenv("BROKER"):
+            resolved_name = _configured_broker()
+        else:
+            resolved_name = brokers_section.get("default", "paper")
+        resolved_name = str(resolved_name).strip().lower()
 
         broker_cfg = brokers_section.get(resolved_name)
         if broker_cfg is None:
