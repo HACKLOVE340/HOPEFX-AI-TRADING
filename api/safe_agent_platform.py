@@ -137,6 +137,13 @@ class ProposalExecutionRequest(BaseModel):
     environment: str = Field(default="sandbox", pattern="^(sandbox|paper|canary)$")
 
 
+class UpgradeRequest(BaseModel):
+    component: str = Field(min_length=2, max_length=120)
+    target: str = Field(min_length=2, max_length=160)
+    compatibility_checks: list[str] = Field(min_length=1, max_length=20)
+    migration_plan: str = Field(min_length=10, max_length=1200)
+
+
 class IntegrationAction(BaseModel):
     integration_id: str
     action: str = Field(pattern="^(authorize|revoke|rotate|health_probe)$")
@@ -344,6 +351,14 @@ async def create_proposal(request: ProposalRequest, user: TokenPayload = Depends
     return {"proposal": copy.deepcopy(proposal), "message": "Proposal created. No change has been applied."}
 
 
+@router.post("/upgrades/propose")
+async def propose_upgrade(request: UpgradeRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    proposal = {"id": _id("upgrade", [user.sub, request.component, request.target]), "title": f"Upgrade {request.component} to {request.target}", "kind": "upgrade", "scope": request.component, "reason": "Versioned upgrade requires compatibility and migration review", "changes": {"target": request.target, "compatibility_checks": request.compatibility_checks, "migration_plan": request.migration_plan}, "evidence_ids": [], "rollback_plan": "Restore previous version from checkpoint and rerun compatibility gates.", "status": "pending", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(), "required_approvals": 2, "rollback": {"required": True, "automatic_on_failed_health_gate": True}}
+    _PROPOSALS.append(proposal)
+    _save_state(user.sub)
+    return {"proposal": copy.deepcopy(proposal), "message": "Upgrade proposal created. Compatibility checks and human approvals are required before any execution."}
+
+
 @router.get("/proposals")
 async def proposals(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"items": list(reversed(copy.deepcopy(_PROPOSALS))), "approval_required": True}
@@ -412,6 +427,10 @@ async def execute_proposal(request: ProposalExecutionRequest, user: TokenPayload
         raise HTTPException(status_code=404, detail="Proposal not found")
     if proposal["status"] != "approved_pending_execution":
         raise HTTPException(status_code=409, detail="Proposal requires the required human approvals")
+    if datetime.fromisoformat(proposal["expires_at"]) <= datetime.now(UTC):
+        proposal["status"] = "expired"
+        _save_state(user.sub)
+        raise HTTPException(status_code=409, detail="Proposal approval window has expired")
     if request.confirmation != "EXECUTE APPROVED PROPOSAL":
         raise HTTPException(status_code=400, detail="Explicit execution confirmation is required")
     if not proposal.get("checkpoints"):
@@ -431,9 +450,14 @@ async def rollback_proposal(proposal_id: str, user: TokenPayload = Depends(_admi
     proposal = next((p for p in _PROPOSALS if p["id"] == proposal_id), None)
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
+    if proposal["status"] not in {"pending", "approved_pending_execution", "executed_reviewable_simulation"}:
+        raise HTTPException(status_code=409, detail="Proposal is not eligible for rollback")
+    if not proposal.get("checkpoints"):
+        raise HTTPException(status_code=409, detail="Rollback requires a recorded checkpoint")
     proposal["status"] = "rollback_requested"
     proposal["rollback_requested_by"] = user.sub
     proposal["rollback_requested_at"] = datetime.now(UTC).isoformat()
+    proposal["rollback_checkpoint"] = proposal["checkpoints"][-1]["id"]
     _save_state(user.sub)
     return {"proposal": copy.deepcopy(proposal), "message": "Rollback recorded for the restricted change runner; no live mutation was performed."}
 
