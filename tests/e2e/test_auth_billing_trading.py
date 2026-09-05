@@ -141,7 +141,12 @@ async def client(app):
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as c:
-        yield c
+        try:
+            yield c
+        finally:
+            from auth.router import reset_auth_service
+
+            reset_auth_service()
 
 
 @pytest_asyncio.fixture(loop_scope="function")
