@@ -350,6 +350,13 @@ async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends
         raise HTTPException(status_code=404, detail="Proposal not found")
     if proposal["status"] != "pending":
         raise HTTPException(status_code=409, detail="Proposal is no longer pending")
+    expires_at = datetime.fromisoformat(proposal["expires_at"])
+    if expires_at <= datetime.now(UTC):
+        proposal["status"] = "expired"
+        _save_state(user.sub)
+        raise HTTPException(status_code=409, detail="Proposal approval window has expired")
+    if any(a["proposal_id"] == request.proposal_id and a["approver"] == user.sub for a in _APPROVALS):
+        raise HTTPException(status_code=409, detail="This approver has already decided on the proposal")
     decision = {"proposal_id": request.proposal_id, "approver": user.sub, "decision": request.decision, "reason": request.reason, "created_at": datetime.now(UTC).isoformat()}
     _APPROVALS.append(decision)
     if request.decision == "reject":
@@ -362,6 +369,17 @@ async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends
     return {"proposal": copy.deepcopy(proposal), "decision": decision, "message": "Approval recorded. Execution remains separately gated."}
 
 
+@router.post("/proposals/{proposal_id}/checkpoint")
+async def create_proposal_checkpoint(proposal_id: str, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    proposal = next((p for p in _PROPOSALS if p["id"] == proposal_id), None)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    checkpoint = {"id": _id("checkpoint", [proposal_id, datetime.now(UTC).isoformat()]), "proposal_id": proposal_id, "status": "ready", "scope": proposal["scope"], "captured_at": datetime.now(UTC).isoformat(), "captured_by": user.sub, "restore_target": "last-known-good", "live_mutation": False}
+    proposal.setdefault("checkpoints", []).append(checkpoint)
+    _save_state(user.sub)
+    return {"checkpoint": checkpoint, "message": "Checkpoint recorded before any restricted execution."}
+
+
 @router.post("/proposals/validate")
 async def validate_proposal(request: ValidationRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     proposal = next((p for p in _PROPOSALS if p["id"] == request.proposal_id), None)
@@ -369,6 +387,10 @@ async def validate_proposal(request: ValidationRequest, user: TokenPayload = Dep
         raise HTTPException(status_code=404, detail="Proposal not found")
     if proposal["status"] not in {"pending", "approved_pending_execution"}:
         raise HTTPException(status_code=409, detail="Proposal is not eligible for validation")
+    if datetime.fromisoformat(proposal["expires_at"]) <= datetime.now(UTC):
+        proposal["status"] = "expired"
+        _save_state(user.sub)
+        raise HTTPException(status_code=409, detail="Proposal validation window has expired")
     validation = {"id": _id("validation", [request.proposal_id, request.environment]), "proposal_id": request.proposal_id, "environment": request.environment, "status": "passed" if request.environment in {"sandbox", "paper"} else "blocked_until_paper_passes", "checks": {"secrets_redacted": True, "live_trading_disabled": True, "rollback_checkpoint_planned": True, "human_approval_present": proposal["status"] == "approved_pending_execution"}, "validated_by": user.sub, "validated_at": datetime.now(UTC).isoformat()}
     proposal.setdefault("validations", []).append(validation)
     _save_state(user.sub)
