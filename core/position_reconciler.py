@@ -122,6 +122,8 @@ class PositionReconciler:
                 raw = self._broker.get_positions()
                 if asyncio.iscoroutine(raw):
                     raw = await raw
+                if raw is None:
+                    raise RuntimeError("broker returned no position snapshot")
                 broker_positions = {}
                 for position in raw or []:
                     if isinstance(position, dict):

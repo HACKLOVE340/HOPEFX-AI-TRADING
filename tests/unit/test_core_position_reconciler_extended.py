@@ -232,6 +232,26 @@ async def test_reconcile_once_async_broker_positions():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_null_broker_snapshot_is_blind(caplog):
+    """A null broker response is treated as unavailable, not an empty book."""
+    pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = None
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1950.0):
+            with patch.object(r, "_trigger_drift_halt", new_callable=AsyncMock) as halt:
+                with caplog.at_level(logging.WARNING, logger="core.position_reconciler"):
+                    await r._reconcile_once()
+
+    assert halt.await_count == 0
+    assert r._mismatches == 0
+    assert any("Could not fetch broker positions" in rec.message for rec in caplog.records)
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_broker_exception(caplog):
     """A broker outage must leave reconciliation *blind*, not *confident*.
 
