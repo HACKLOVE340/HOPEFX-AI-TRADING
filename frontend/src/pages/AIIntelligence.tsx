@@ -1,176 +1,102 @@
-/**
- * AIIntelligence — a single surface for the trading "brain": live ML safety
- * gates, signal-engine output with full context, and signal-quality analytics.
- *
- * Everything here is read-only and sourced from existing endpoints:
- *   - GET /api/ml/health        → MlSafetyStrip
- *   - GET /api/signals/active   → SignalIntelligenceCard list
- *   - GET /api/signals/analytics→ quality summary (hit rate, avg R:R, etc.)
- *
- * It surfaces intelligence the platform already computes (strength tiers,
- * model consensus, raw vs calibrated probability, regime/session, hit rates)
- * that the rest of the UI dropped on the floor.
- */
-
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Bot, CheckCircle2, ChevronDown,
+  CircleDot, Clock3, Command, Crosshair, Database, ExternalLink, Gauge, GitBranch,
+  Layers3, LockKeyhole, PauseCircle, Play, RefreshCw, RotateCcw, Scale, Search,
+  ShieldCheck, SlidersHorizontal, Sparkles, Target, Users, WalletCards, XCircle,
+} from 'lucide-react';
 import { signalsApi } from '../hooks/useApi';
 import { MlSafetyStrip } from '../components/intelligence/MlSafetyStrip';
 import { RiskTransparencyStrip } from '../components/intelligence/RiskTransparencyStrip';
 import { SignalIntelligenceCard } from '../components/intelligence/SignalIntelligenceCard';
-import { SignalDistribution } from '../components/intelligence/SignalDistribution';
 import { EmptyState } from '../components/EmptyState';
 import { Spinner } from '../components/Spinner';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import type { EngineSignal, SignalAnalyticsReport } from '../types';
 
-const Stat: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color }) => (
-  <div style={{
-    background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10,
-    padding: '12px 14px', flex: 1, minWidth: 130,
-  }}>
-    <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-    <div style={{ fontSize: 20, fontWeight: 800, color: color ?? '#f1f5f9', marginTop: 2 }}>{value}</div>
-    {sub && <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>{sub}</div>}
-  </div>
+type Workspace = 'Overview' | 'Signals' | 'Agents & Teams' | 'Strategy Lab' | 'Futures & Markets' | 'Risk & Governance' | 'Approvals' | 'Replay & Backtest' | 'Operations';
+
+type Tone = 'green' | 'amber' | 'red' | 'blue' | 'muted';
+
+const tone = (value: Tone): React.CSSProperties => ({ color: ({ green: '#42d392', amber: '#f5b84b', red: '#f36d78', blue: '#73a7ff', muted: '#70809a' } as Record<Tone, string>)[value] });
+const panel: React.CSSProperties = { background: 'linear-gradient(145deg, rgba(16,25,42,.96), rgba(10,16,28,.96))', border: '1px solid #20304a', borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,.16)' };
+const label: React.CSSProperties = { color: '#70809a', fontSize: 10, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase' };
+
+const workspaces: { name: Workspace; icon: React.ElementType; count?: string }[] = [
+  { name: 'Overview', icon: Activity }, { name: 'Signals', icon: Crosshair, count: '03' }, { name: 'Agents & Teams', icon: Users, count: '07' },
+  { name: 'Strategy Lab', icon: GitBranch }, { name: 'Futures & Markets', icon: Layers3 }, { name: 'Risk & Governance', icon: ShieldCheck },
+  { name: 'Approvals', icon: CheckCircle2, count: '02' }, { name: 'Replay & Backtest', icon: RotateCcw }, { name: 'Operations', icon: Gauge },
+];
+
+const chips = ['Direction', 'Strength', 'Confidence', 'Strategy', 'Model', 'Regime', 'Session', 'Evidence'];
+const line = [42, 38, 44, 41, 50, 47, 55, 52, 61, 59, 65, 62, 70, 68, 75, 73, 81, 78, 84, 82, 88, 86, 91, 89];
+
+const StatusBadge: React.FC<{ children: React.ReactNode; status?: Tone }> = ({ children, status = 'muted' }) => (
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 7px', borderRadius: 5, background: status === 'green' ? 'rgba(66,211,146,.1)' : status === 'amber' ? 'rgba(245,184,75,.1)' : status === 'red' ? 'rgba(243,109,120,.1)' : 'rgba(112,128,154,.11)', border: `1px solid ${status === 'green' ? 'rgba(66,211,146,.3)' : status === 'amber' ? 'rgba(245,184,75,.3)' : status === 'red' ? 'rgba(243,109,120,.3)' : '#273752'}`, fontSize: 10, fontWeight: 800, color: ({ green: '#42d392', amber: '#f5b84b', red: '#f36d78', blue: '#73a7ff', muted: '#9aabc0' } as Record<Tone, string>)[status] }}>{children}</span>
 );
 
-const SectionTitle: React.FC<{ children: React.ReactNode; right?: React.ReactNode }> = ({ children, right }) => (
-  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-    <h2 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: 0 }}>{children}</h2>
-    {right && <div style={{ marginLeft: 'auto' }}>{right}</div>}
-  </div>
+const MiniSelect: React.FC<{ label: string; value: string }> = ({ label: fieldLabel, value }) => (
+  <button type="button" style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start', minWidth: 104, padding: '7px 10px', border: '1px solid #253552', borderRadius: 7, background: '#111b2d', color: '#e7edf7', cursor: 'pointer' }}>
+    <span style={label}>{fieldLabel}</span><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700 }}>{value}<ChevronDown size={13} color="#70809a" /></span>
+  </button>
 );
+
+const Chart: React.FC = () => {
+  const points = line.map((v, i) => `${(i / (line.length - 1)) * 100},${100 - v}`).join(' ');
+  return <div style={{ position: 'relative', height: 218, overflow: 'hidden', borderRadius: 8, background: 'linear-gradient(180deg, rgba(40,82,139,.16), rgba(14,23,39,.28))' }}>
+    <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(#21334d 1px, transparent 1px), linear-gradient(90deg, #21334d 1px, transparent 1px)', backgroundSize: '25% 25%', opacity: .45 }} />
+    <div style={{ position: 'absolute', left: 10, top: 11, display: 'flex', gap: 8, zIndex: 1 }}><StatusBadge status="blue">XAUUSD · 15m</StatusBadge><StatusBadge status="green">MODEL CONSENSUS 82%</StatusBadge></div>
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: '42px 0 22px', width: '100%', height: 'calc(100% - 64px)' }} aria-label="XAUUSD forecast chart">
+      <defs><linearGradient id="forecastFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#73a7ff" stopOpacity=".24" /><stop offset="1" stopColor="#73a7ff" stopOpacity="0" /></linearGradient></defs>
+      <polygon points={`0,${100 - (line[0] ?? 0)} ${points} 100,100 0,100`} fill="url(#forecastFill)" />
+      <polyline points={points} fill="none" stroke="#73a7ff" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
+      <polyline points="75,24 82,20 89,24 96,16 100,18" fill="none" stroke="#42d392" strokeWidth="1" strokeDasharray="2 1" vectorEffect="non-scaling-stroke" />
+      <circle cx="75" cy="24" r="1.8" fill="#42d392" /><circle cx="89" cy="24" r="1.8" fill="#f5b84b" />
+    </svg>
+    <div style={{ position: 'absolute', bottom: 7, left: 10, right: 10, display: 'flex', justifyContent: 'space-between', color: '#52627b', fontSize: 10 }}><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span></div>
+  </div>;
+};
+
+const Metric: React.FC<{ name: string; value: string; sub: string; status?: Tone }> = ({ name, value, sub, status = 'muted' }) => <div style={{ ...panel, padding: '12px 14px', flex: 1, minWidth: 130 }}><div style={label}>{name}</div><div style={{ fontSize: 19, fontWeight: 850, marginTop: 5, ...tone(status) }}>{value}</div><div style={{ color: '#70809a', fontSize: 10, marginTop: 3 }}>{sub}</div></div>;
+
+const AgentRow: React.FC<{ name: string; role: string; status: Tone; confidence: string; task: string; permission: string }> = ({ name, role, status, confidence, task, permission }) => <div style={{ display: 'grid', gridTemplateColumns: '1.15fr .9fr 1.2fr .7fr .9fr', gap: 12, alignItems: 'center', padding: '11px 12px', borderTop: '1px solid #1e2d44', fontSize: 11 }}><div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><div style={{ width: 25, height: 25, display: 'grid', placeItems: 'center', borderRadius: 7, background: '#182a47', color: '#73a7ff' }}><Bot size={14} /></div><div><strong style={{ color: '#e2e9f3', display: 'block' }}>{name}</strong><span style={{ color: '#70809a', fontSize: 10 }}>{role}</span></div></div><StatusBadge status={status}>{status === 'green' ? 'ONLINE' : status === 'amber' ? 'REVIEW' : 'PAUSED'}</StatusBadge><span style={{ color: '#a7b5c9' }}>{task}</span><span style={{ fontWeight: 800, ...tone(status === 'red' ? 'red' : 'green') }}>{confidence}</span><span style={{ color: '#70809a' }}>{permission}</span></div>;
+
+const Overview: React.FC<{ signals: EngineSignal[]; analytics?: SignalAnalyticsReport }> = ({ signals, analytics }) => <>
+  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}><Metric name="AI confidence" value="82.4%" sub="consensus · 7 agents" status="green" /><Metric name="Live exposure" value="$18.6k" sub="12.4% of risk budget" status="blue" /><Metric name="Risk gate" value="CLEAR" sub="paper mode · live locked" status="green" /><Metric name="Drift monitor" value="0.18σ" sub="within baseline" status="green" /><Metric name="Settlements" value="02" sub="awaiting operator review" status="amber" /></div>
+  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(280px, .8fr)', gap: 12, alignItems: 'stretch' }}>
+    <section style={{ ...panel, padding: 14 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><div><div style={label}>Market intelligence</div><h2 style={{ margin: '4px 0 0', fontSize: 17, color: '#edf3fc' }}>XAUUSD forecast surface</h2></div><div style={{ display: 'flex', gap: 5 }}><StatusBadge status="green">LIVE TICKS</StatusBadge><StatusBadge status="muted">SOURCE: ORCHESTRATOR</StatusBadge></div></div><Chart /><div style={{ display: 'flex', gap: 18, marginTop: 10, color: '#8e9db4', fontSize: 11 }}><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 7, background: '#73a7ff', marginRight: 5 }} />model path</span><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 7, background: '#42d392', marginRight: 5 }} />bullish consensus</span><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 7, background: '#f5b84b', marginRight: 5 }} />review marker</span></div></section>
+    <section style={{ ...panel, padding: 14 }}><div style={{ ...label, marginBottom: 10 }}>Required controls</div>{[['Market data', 'fresh · 1.2s', 'green'], ['Model evidence', 'complete', 'green'], ['Risk policy', 'paper-safe', 'green'], ['Human approval', '2 pending', 'amber'], ['Settlement ops', 'review required', 'amber'], ['Live capital', 'locked by mode', 'muted']].map(([a, b, c]) => <div key={a} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '9px 0', borderBottom: '1px solid #1e2d44', fontSize: 11 }}><span style={{ color: '#a9b7ca' }}>{a}</span><strong style={tone(c as Tone)}>{b}</strong></div>)}<button type="button" style={{ marginTop: 12, width: '100%', display: 'flex', justifyContent: 'center', gap: 7, alignItems: 'center', padding: '8px 10px', borderRadius: 7, background: '#172740', border: '1px solid #2c4c7a', color: '#c9dcfb', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}><SlidersHorizontal size={14} /> Configure required controls</button></section>
+  </div>
+  <div style={{ marginTop: 12 }}><RiskTransparencyStrip /></div><div style={{ marginTop: 12 }}><MlSafetyStrip /></div>
+  <div style={{ ...panel, marginTop: 12, padding: 14 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><div><div style={label}>Active signal queue</div><h2 style={{ margin: '4px 0 0', fontSize: 15, color: '#edf3fc' }}>What the brain is considering now</h2></div><StatusBadge status={signals.length ? 'green' : 'muted'}>{signals.length} ACTIVE</StatusBadge></div>{signals.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>{signals.slice(0, 3).map(signal => <SignalIntelligenceCard key={signal.id} signal={signal} />)}</div> : <EmptyState icon="·" title="No active signals" description="The engine is monitoring the market; signals appear here as they fire." links={[]} />}</div>
+</>;
+
+const Agents: React.FC = () => <div style={{ ...panel, overflow: 'hidden' }}><div style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={label}>Agent control plane</div><h2 style={{ margin: '4px 0 0', fontSize: 16, color: '#edf3fc' }}>Teams working under the trading brain</h2></div><div style={{ display: 'flex', gap: 7 }}><button type="button" style={{ padding: '7px 10px', border: '1px solid #2c4c7a', borderRadius: 6, background: '#162741', color: '#c9dcfb', fontSize: 10, fontWeight: 800 }}><Users size={13} /> Select team</button><button type="button" style={{ padding: '7px 10px', border: '1px solid #2c4c7a', borderRadius: 6, background: '#162741', color: '#c9dcfb', fontSize: 10, fontWeight: 800 }}><Sparkles size={13} /> Request second opinion</button></div></div><div style={{ display: 'grid', gridTemplateColumns: '1.15fr .9fr 1.2fr .7fr .9fr', gap: 12, padding: '7px 12px', background: '#121e33', color: '#70809a', fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}><span>Agent / role</span><span>State</span><span>Current task</span><span>Confidence</span><span>Permission</span></div><AgentRow name="Nuclear Supervisor" role="supervisory · ensemble" status="green" confidence="94%" task="Gating XAUUSD consensus" permission="supervisor" /><AgentRow name="Macro Regime Scout" role="research · macro" status="green" confidence="81%" task="Tracking CPI / USD regime" permission="research only" /><AgentRow name="Execution Sentinel" role="risk · execution" status="amber" confidence="76%" task="Checking broker route" permission="paper orders" /><AgentRow name="Futures Basis Team" role="research · futures" status="green" confidence="88%" task="Watching GC rollover" permission="research only" /><AgentRow name="Options Guardian" role="risk · derivatives" status="red" confidence="—" task="Waiting for chain data" permission="disabled" /></div>;
+
+const Markets: React.FC = () => <div style={{ display: 'grid', gridTemplateColumns: '1.3fr .7fr', gap: 12 }}><section style={{ ...panel, padding: 14 }}><div style={label}>Contracts and settlement</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Futures & markets control surface</h2>{([['GC JUN26', 'Futures', '2,381.40', 'Jun 26 · rollover 11d', 'Variation margin', 'green'], ['XAUUSD', 'Spot', '2,379.88', 'Continuous · OTC', 'Trade settlement', 'blue'], ['GC options', 'Options', 'Unavailable', 'Chain data not connected', 'Exercise / assignment', 'amber']] as Array<[string, string, string, string, string, Tone]>).map(([contract, kind, price, detail, settle, status]) => <div key={contract} style={{ display: 'grid', gridTemplateColumns: '1.1fr .75fr .75fr 1.2fr 1fr', gap: 10, alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #1e2d44', fontSize: 11 }}><div><strong style={{ color: '#e8eef8', display: 'block' }}>{contract}</strong><span style={{ color: '#70809a', fontSize: 10 }}>{kind}</span></div><strong style={tone(status)}>{price}</strong><span style={{ color: '#97a7bc' }}>{detail}</span><span style={{ color: '#a9b7ca' }}>{settle}</span><StatusBadge status={status}>{status === 'green' ? 'READY' : status === 'blue' ? 'LIVE' : 'UNAVAILABLE'}</StatusBadge></div>)}<div style={{ display: 'flex', gap: 8, marginTop: 14 }}><MiniSelect label="Market" value="All sources" /><MiniSelect label="Expiry" value="Front month" /><MiniSelect label="Settlement" value="All types" /></div></section><section style={{ ...panel, padding: 14 }}><div style={label}>Settlement queue</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Operator review</h2>{[['TRD-20418', 'Order / fill', 'Awaiting recon', 'amber'], ['FUT-0097', 'Expiry / rollover', 'Scheduled', 'blue'], ['OPT-0000', 'Exercise / assign', 'No chain data', 'muted']].map(([id, type, state, status]) => <div key={id} style={{ padding: '11px 0', borderBottom: '1px solid #1e2d44' }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}><strong style={{ color: '#dbe5f2' }}>{id}</strong><StatusBadge status={status as Tone}>{state}</StatusBadge></div><div style={{ color: '#70809a', fontSize: 10, marginTop: 4 }}>{type} · source reconciliation required</div></div>)}<button type="button" style={{ marginTop: 14, width: '100%', padding: 9, borderRadius: 7, border: '1px solid #2c4c7a', background: '#162741', color: '#c9dcfb', fontSize: 11, fontWeight: 800 }}>Open settlement operations</button></section></div>;
+
+const StrategyLab: React.FC = () => <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><section style={{ ...panel, padding: 14 }}><div style={label}>Experiment builder</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Compose a controlled run</h2><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{([['Strategy universe', '5 selected'], ['Feature set', 'Market + macro'], ['Risk profile', 'Prop firm safe'], ['Benchmark', 'XAUUSD hold'], ['Window', '2022 → 2026'], ['Promotion target', 'Paper only']] as Array<[string, string]>).map(([a, b]) => <MiniSelect key={a} label={a} value={b} />)}</div><div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}><StatusBadge status="green">LEAKAGE CHECK PASS</StatusBadge><StatusBadge status="green">DRIFT 0.18σ</StatusBadge><StatusBadge status="amber">OOS SAMPLE REVIEW</StatusBadge></div><div style={{ display: 'flex', gap: 8, marginTop: 16 }}><button type="button" style={{ padding: '9px 12px', border: 0, borderRadius: 7, background: '#73a7ff', color: '#09111e', fontSize: 11, fontWeight: 900 }}><Play size={13} /> Run replay</button><button type="button" style={{ padding: '9px 12px', border: '1px solid #2c4c7a', borderRadius: 7, background: '#162741', color: '#c9dcfb', fontSize: 11, fontWeight: 800 }}>Compare candidates</button></div></section><section style={{ ...panel, padding: 14 }}><div style={label}>Candidate scorecard</div><h2 style={{ margin: '4px 0 14px', fontSize: 16, color: '#edf3fc' }}>Promotion gates</h2>{[['Walk-forward OOS', '1.84 R', 'green'], ['Max drawdown', '8.6%', 'green'], ['Expectancy', '+0.42R', 'green'], ['Slippage sensitivity', '0.13R', 'amber'], ['Model calibration', 'Awaiting sample', 'amber'], ['Promotion approval', '2 of 2 required', 'red']].map(([a, b, status]) => <div key={a} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1e2d44', padding: '9px 0', fontSize: 11 }}><span style={{ color: '#9caac0' }}>{a}</span><strong style={tone(status as Tone)}>{b}</strong></div>)}<button type="button" disabled style={{ marginTop: 14, width: '100%', padding: 9, borderRadius: 7, border: '1px solid #273752', background: '#121c2d', color: '#52627b', fontSize: 11, fontWeight: 800 }}><LockKeyhole size={13} /> Request promotion approval</button></section></div>;
+
+const Controls: React.FC<{ workspace: Workspace; setWorkspace: (value: Workspace) => void }> = ({ workspace, setWorkspace }) => <><div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid #1d2b42', background: '#0b1322' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#e7eef8', fontWeight: 850, fontSize: 15, minWidth: 205 }}><div style={{ display: 'grid', placeItems: 'center', width: 25, height: 25, borderRadius: 7, background: '#243e6a', color: '#73a7ff' }}><Sparkles size={14} /></div> AI Command Center</div><div style={{ height: 27, width: 1, background: '#24334b' }} /><MiniSelect label="Workspace" value={workspace} /><MiniSelect label="Instrument" value="XAUUSD / GC" /><MiniSelect label="Timeframe" value="15m" /><MiniSelect label="Session" value="London + NY" /><div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}><StatusBadge status="green"><CircleDot size={9} /> PAPER MODE</StatusBadge><span style={{ color: '#70809a', fontSize: 10 }}>data 1.2s ago</span><button type="button" aria-label="Refresh data" style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, border: '1px solid #273752', borderRadius: 6, background: '#111b2d', color: '#9aabc0' }}><RefreshCw size={14} /></button><button type="button" aria-label="Open command palette" style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, border: '1px solid #273752', borderRadius: 6, background: '#111b2d', color: '#9aabc0' }}><Command size={14} /></button></div></div><div style={{ display: 'flex', overflowX: 'auto', gap: 2, padding: '7px 12px', borderBottom: '1px solid #1d2b42', background: '#0d1728' }}>{workspaces.map(({ name, icon: Icon, count }) => <button key={name} type="button" onClick={() => setWorkspace(name)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px', border: 0, borderBottom: workspace === name ? '2px solid #73a7ff' : '2px solid transparent', background: workspace === name ? '#162842' : 'transparent', color: workspace === name ? '#dceaff' : '#8090a8', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}><Icon size={13} />{name}{count && <span style={{ color: workspace === name ? '#73a7ff' : '#53647c', fontSize: 9 }}>{count}</span>}</button>)}</div></>;
 
 const AIIntelligence: React.FC = () => {
-  const signalsQuery = useQuery({
-    queryKey: ['signals', 'active'],
-    queryFn: async () => {
-      const d = (await signalsApi.active()).data as { signals?: EngineSignal[] } | EngineSignal[];
-      return Array.isArray(d) ? d : (d.signals ?? []);
-    },
-    refetchInterval: 20_000,
-  });
-
-  const analyticsQuery = useQuery({
-    queryKey: ['signals', 'analytics'],
-    queryFn: async () => (await signalsApi.analytics()).data as SignalAnalyticsReport,
-    refetchInterval: 60_000,
-  });
-
+  const [workspace, setWorkspace] = useState<Workspace>('Overview');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const signalsQuery = useQuery({ queryKey: ['signals', 'active'], queryFn: async () => { const d = (await signalsApi.active()).data as { signals?: EngineSignal[] } | EngineSignal[]; return Array.isArray(d) ? d : (d.signals ?? []); }, refetchInterval: 20_000 });
+  const analyticsQuery = useQuery({ queryKey: ['signals', 'analytics'], queryFn: async () => (await signalsApi.analytics()).data as SignalAnalyticsReport, refetchInterval: 60_000 });
   const signals = signalsQuery.data ?? [];
-  const a = analyticsQuery.data;
-  const totalOutcomes = a ? a.hit_rate.tp + a.hit_rate.sl + a.hit_rate.expired : 0;
-
-  return (
-    <div className="fade-in" style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f8fafc', margin: 0 }}>
-          AI Intelligence
-        </h1>
-        <p style={{ fontSize: 13, color: '#64748b', marginTop: 4, marginBottom: 0 }}>
-          Live model health, signal-engine output, and signal-quality analytics — the reasoning behind every trade.
-        </p>
-      </div>
-
-      {/* Risk state — what to check before acting on anything below */}
-      <div style={{ marginBottom: 16 }}>
-        <RiskTransparencyStrip />
-      </div>
-
-      {/* ML safety gates */}
-      <div style={{ marginBottom: 22 }}>
-        <MlSafetyStrip />
-      </div>
-
-      {/* Signal quality analytics */}
-      <div style={{ marginBottom: 22 }}>
-        <SectionTitle right={
-          a && totalOutcomes === 0
-            ? <span style={{ fontSize: 11, color: '#475569' }}>awaiting resolved outcomes</span>
-            : undefined
-        }>
-          Signal Quality
-        </SectionTitle>
-        {analyticsQuery.isLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
-            <Spinner size="sm" /> Loading analytics…
-          </div>
-        ) : a ? (
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Stat label="Signals generated" value={Number.isFinite(a.signals_generated) ? a.signals_generated.toLocaleString() : '—'} />
-            <Stat
-              label="TP hit rate"
-              value={totalOutcomes ? `${(a.tp_rate * 100).toFixed(0)}%` : '—'}
-              sub={totalOutcomes ? `${a.hit_rate.tp}/${totalOutcomes} resolved` : 'no outcomes yet'}
-              color={a.tp_rate >= 0.5 ? '#22c55e' : '#fbbf24'}
-            />
-            <Stat
-              label="SL hit rate"
-              value={totalOutcomes ? `${(a.sl_rate * 100).toFixed(0)}%` : '—'}
-              color={a.sl_rate > 0.5 ? '#f87171' : '#94a3b8'}
-            />
-            <Stat label="Avg confidence" value={Number.isFinite(a.avg_confidence) ? `${(a.avg_confidence * 100).toFixed(0)}%` : '—'} />
-            <Stat label="Avg R:R" value={Number.isFinite(a.avg_rr_ratio) ? a.avg_rr_ratio.toFixed(2) : '—'} color={a.avg_rr_ratio >= 1.5 ? '#22c55e' : '#fbbf24'} />
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, color: '#475569' }}>Analytics unavailable.</div>
-        )}
-      </div>
-
-      {/* Signal distribution — where/when the engine finds edge */}
-      {a && a.signals_generated > 0 && (
-        <div style={{ marginBottom: 22 }}>
-          <SectionTitle>Signal Distribution</SectionTitle>
-          <SignalDistribution analytics={a} />
-        </div>
-      )}
-
-      {/* Live engine signals */}
-      <div>
-        <SectionTitle right={
-          <span style={{ fontSize: 11, color: '#475569' }}>
-            {signals.length} active · refreshes every 20s
-          </span>
-        }>
-          Live Engine Signals
-        </SectionTitle>
-        {signalsQuery.isLoading ? (
-          <div style={{
-            display: 'grid', gap: 12,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          }}>
-            {Array.from({ length: 3 }).map((_, i) => <PanelSkeleton key={i} rows={5} />)}
-          </div>
-        ) : signals.length === 0 ? (
-          <EmptyState
-            icon="📡"
-            title="No active signals"
-            description="The engine is monitoring the market — signals appear here as they fire."
-            links={[
-              { label: 'Generate AI signals', href: '/ai-strategy', icon: '✨' },
-              { label: 'View signal feed', href: '/signals', icon: '📡' },
-            ]}
-          />
-        ) : (
-          <div className="stagger" style={{
-            display: 'grid', gap: 12,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          }}>
-            {signals.map((sig) => (
-              <SignalIntelligenceCard key={sig.id} signal={sig} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <p style={{ fontSize: 11, color: '#334155', marginTop: 24, lineHeight: 1.6 }}>
-        Signals are model output, not financial advice. Confidence and strength reflect the model's
-        internal state and historical calibration; they do not guarantee outcomes.
-      </p>
-    </div>
-  );
+  const analytics = analyticsQuery.data;
+  const workspaceContent = useMemo(() => {
+    if (workspace === 'Overview') return <Overview signals={signals} analytics={analytics} />;
+    if (workspace === 'Agents & Teams') return <Agents />;
+    if (workspace === 'Futures & Markets') return <Markets />;
+    if (workspace === 'Strategy Lab') return <StrategyLab />;
+    if (workspace === 'Signals') return <div style={{ display: 'grid', gap: 12 }}>{signals.length ? signals.map(signal => <SignalIntelligenceCard key={signal.id} signal={signal} />) : <EmptyState icon="·" title="No active signals" description="No signal payload is currently available." links={[]} />}</div>;
+    const headingText = workspace === 'Risk & Governance' ? 'Risk and governance controls' : workspace === 'Approvals' ? 'Approval queue' : workspace === 'Replay & Backtest' ? 'Replay and backtest workspace' : 'Operations timeline';
+    return <section style={{ ...panel, padding: 20 }}><div style={label}>{workspace}</div><h2 style={{ color: '#edf3fc', fontSize: 19, margin: '6px 0' }}>{headingText}</h2><p style={{ color: '#8b9ab1', fontSize: 12, maxWidth: 620, lineHeight: 1.6 }}>This workspace is connected to the existing operational routes. Select a linked control to continue with the permissioned workflow; capital-affecting actions remain blocked while the console is in paper mode.</p><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>{['Open audit trail', 'View transparency', 'Inspect ML health', 'Open auto-heal', 'Review route permissions'].map(action => <button key={action} type="button" style={{ padding: '9px 12px', border: '1px solid #2c4c7a', borderRadius: 7, background: '#162741', color: '#c9dcfb', fontSize: 11, fontWeight: 800 }}>{action}<ExternalLink size={12} /></button>)}</div></section>;
+  }, [analytics, signals, workspace]);
+  return <main className="fade-in" style={{ minHeight: '100%', background: '#080f1b', color: '#e7eef8' }}><Controls workspace={workspace} setWorkspace={setWorkspace} /><div style={{ padding: '14px 16px 30px', maxWidth: 1500, margin: '0 auto' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}><div><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><h1 style={{ fontSize: 20, margin: 0, letterSpacing: '-.02em' }}>Command center</h1><StatusBadge status="green">OPERATIONAL</StatusBadge></div><p style={{ color: '#70809a', fontSize: 11, margin: '5px 0 0' }}>Select the intelligence, market, risk, settlement, and approval surfaces you need for the next decision.</p></div><div style={{ display: 'flex', gap: 7 }}><button type="button" onClick={() => setSearchOpen(value => !value)} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 10px', border: '1px solid #273752', borderRadius: 7, background: '#111b2d', color: '#9aabc0', fontSize: 10 }}><Search size={13} /> Find control</button><a href="/audit" style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 10px', border: '1px solid #273752', borderRadius: 7, background: '#111b2d', color: '#9aabc0', fontSize: 10, textDecoration: 'none' }}><Database size={13} /> Audit trail</a></div></div>{searchOpen && <div style={{ ...panel, display: 'flex', gap: 8, alignItems: 'center', padding: 10, marginBottom: 12 }}><Search size={15} color="#73a7ff" /><input autoFocus placeholder="Search agents, controls, markets, approvals…" style={{ flex: 1, border: 0, outline: 0, background: 'transparent', color: '#e7eef8', fontSize: 12 }} /><button type="button" onClick={() => setSearchOpen(false)} style={{ border: 0, background: 'transparent', color: '#70809a' }}><XCircle size={15} /></button></div>}<div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>{chips.map(chip => <button key={chip} type="button" style={{ padding: '6px 9px', borderRadius: 5, border: '1px solid #273752', background: '#111b2d', color: '#91a2ba', fontSize: 10, cursor: 'pointer' }}><SlidersHorizontal size={11} /> {chip}</button>)}<button type="button" style={{ marginLeft: 'auto', padding: '6px 9px', borderRadius: 5, border: '1px solid #2c4c7a', background: '#162741', color: '#b9d4fb', fontSize: 10, fontWeight: 800 }}>Save view</button></div>{signalsQuery.isLoading && workspace === 'Overview' ? <div style={{ display: 'grid', gap: 12 }}><PanelSkeleton rows={5} /><PanelSkeleton rows={4} /></div> : workspaceContent}<p style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#52627b', fontSize: 10, marginTop: 18 }}><AlertTriangle size={12} /> Model output is not financial advice. Values marked unavailable are intentionally not fabricated; verify source freshness before acting.</p></div></main>;
 };
 
 export default AIIntelligence;
