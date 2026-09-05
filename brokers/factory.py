@@ -28,6 +28,7 @@ except ImportError:  # optional dependency for YAML-backed broker loading
 
 logger = logging.getLogger(__name__)
 
+
 def _configured_broker() -> str:
     """Read the broker selector at call time with backwards-compatible aliases."""
     return (os.getenv("BROKER_TYPE") or os.getenv("BROKER") or "paper").strip().lower()

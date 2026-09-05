@@ -574,8 +574,7 @@ class MasterControlCore:
                         asyncio.run(result)
                     else:
                         raise RuntimeError(
-                            "async close_position cannot run from the active event loop; "
-                            "use the async kill-switch path"
+                            "async close_position cannot run from the active event loop; use the async kill-switch path"
                         )
                 logger.info("Kill switch: closed position for %s", symbol)
             except Exception as _pos_exc:  # pylint: disable=broad-exception-caught

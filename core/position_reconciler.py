@@ -25,7 +25,6 @@ import os
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +125,7 @@ class PositionReconciler:
                     raise RuntimeError("broker returned no position snapshot")
                 broker_positions = {}
                 for position in raw or []:
-                    if isinstance(position, dict):
-                        symbol = position.get("symbol")
-                    else:
-                        symbol = getattr(position, "symbol", None)
+                    symbol = position.get("symbol") if isinstance(position, dict) else getattr(position, "symbol", None)
                     if symbol:
                         broker_positions[str(symbol)] = position
                 broker_snapshot_available = True
