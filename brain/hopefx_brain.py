@@ -55,6 +55,8 @@ Usage
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import threading
@@ -148,9 +150,12 @@ class BrainDecision:
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     latency_ms: float = 0.0
     tick_mid: float = 0.0  # live mid-price at signal time (used by RiskManager.size_order)
+    abstained: bool = False
+    abstention_reason: str = ""
+    evidence_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "action": self.action,
             "confidence": round(self.confidence, 4),
             "regime": self.regime,
@@ -165,7 +170,15 @@ class BrainDecision:
             "timestamp": self.timestamp,
             "latency_ms": round(self.latency_ms, 2),
             "tick_mid": round(self.tick_mid, 5),
+            "abstained": self.abstained,
+            "abstention_reason": self.abstention_reason,
         }
+        if not self.evidence_hash:
+            canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+            payload["evidence_hash"] = hashlib.sha256(canonical.encode()).hexdigest()
+        else:
+            payload["evidence_hash"] = self.evidence_hash
+        return payload
 
 
 # ── HOPEFXBrain ───────────────────────────────────────────────────────────────
@@ -392,7 +405,7 @@ class HOPEFXBrain:
 
             volatility_pct = (atr / current_price) * 100
 
-            # ── Trend (20-bar linear regression slope) ────────────────────────
+            # ── Trend (20-bar linear regression slope) ─────────────────��──────
             window = closes[-20:]
             x = np.arange(len(window), dtype=float)
             slope, _ = np.polyfit(x, window, 1)
