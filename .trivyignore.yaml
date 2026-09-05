@@ -56,3 +56,28 @@ vulnerabilities:
   - id: CVE-2026-81726
     statement: "nltk path traversal in model-artifact APIs; nltk is transitive and imported by no module in this repository, so the vulnerable API is unreachable."
     expired_at: 2026-12-05
+
+  # ── image-size 1.2.1 (mobile-app, transitive via Metro) ───────────────────
+  # Both are denial-of-service via a crafted image buffer, and Trivy lists no
+  # fixed version for either. image-size reaches the tree only through Metro —
+  # the React Native bundler — at three points (metro, @expo/metro/metro,
+  # react-native/metro), all pinned `^1.0.2` by packages this repository does
+  # not control.
+  #
+  # Metro measures images at BUNDLE time, from the app's own asset directory in
+  # this repository. The input is not attacker-supplied: reaching it requires
+  # already being able to commit an image here, which is a larger compromise
+  # than a bundler DoS. Nothing in the shipped app calls image-size at runtime.
+  #
+  # These two appeared between the 21:17 and 21:34 CI runs on identical
+  # mobile-app content — Trivy re-downloads its database each run, so this is
+  # newly published CVE data, not a change in what we depend on.
+  #
+  # Revisit when Expo/React Native move Metro past image-size 1.2.1; that is
+  # the only route to a fix, since there is no patched 1.2.x.
+  - id: CVE-2025-71329
+    statement: "image-size DoS via crafted image buffer; transitive via Metro, bundle-time only, input is this repo's own assets. No fixed version."
+    expired_at: 2026-12-05
+  - id: CVE-2025-71330
+    statement: "image-size DoS via crafted ICNS buffer; transitive via Metro, bundle-time only, input is this repo's own assets. No fixed version."
+    expired_at: 2026-12-05
