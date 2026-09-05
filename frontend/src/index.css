@@ -212,6 +212,25 @@
   .btn-danger    { @apply btn bg-red-600 text-white hover:bg-red-500 active:bg-red-700; }
   .btn-sm        { min-height: 36px; padding: 0.375rem 0.75rem; font-size: 0.8125rem; }
 
+  .ai-command-center button,
+  .ai-command-center a { min-height: 36px; }
+  .ai-command-center [role="dialog"] { overscroll-behavior: contain; }
+  @media (max-width: 720px) {
+    .ai-command-center { font-size: 12px; }
+    .ai-command-center > div:last-child { padding: 10px 10px 24px !important; }
+    .ai-command-center section { min-width: 0 !important; }
+    .ai-command-center h1 { font-size: 17px !important; }
+    .ai-command-center [style*="grid-template-columns: 1.3fr .7fr"],
+    .ai-command-center [style*="grid-template-columns: 1fr 1fr"],
+    .ai-command-center [style*="grid-template-columns: minmax(0, 1.55fr)"] { grid-template-columns: 1fr !important; }
+    .ai-command-center [style*="grid-template-columns: 1.15fr"] { min-width: 620px; }
+    .ai-command-center [style*="overflow: hidden"] { overflow-x: auto !important; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ai-command-center *, .ai-command-center *::before, .ai-command-center *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+
   /* ── Mobile top bar ── */
   .mobile-topbar {
     @apply flex items-center justify-between px-4 border-b border-terminal-border;
@@ -456,7 +475,7 @@
   animation-play-state: paused;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ────────────────────��────────────────────────────────────────────────────────
    RESPONSIVE TABLE — cards on mobile, table on desktop
 ───────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 639px) {
