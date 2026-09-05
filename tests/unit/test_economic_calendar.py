@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qs, urlsplit
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -544,9 +545,15 @@ class TestFetchLiveCalendar:
         with patch("urllib.request.urlopen", opener):
             fetch_live_calendar(days_ahead=3)
 
-        url = opener.call_args.args[0].full_url
-        assert url.startswith("https://finnhub.io/api/v1/calendar/economic")
-        assert "from=" in url and "to=" in url
+        # Decompose rather than prefix-match: a `startswith` on a URL is the
+        # bypassable shape CodeQL flags, and checking the parts separately is a
+        # stricter assertion anyway -- it pins the host rather than a prefix of it.
+        parsed = urlsplit(opener.call_args.args[0].full_url)
+        assert parsed.scheme == "https"
+        assert parsed.netloc == "finnhub.io"
+        assert parsed.path == "/api/v1/calendar/economic"
+        query = parse_qs(parsed.query)
+        assert "from" in query and "to" in query
 
     def test_a_missing_event_name_falls_back_to_a_placeholder(self, monkeypatch):
         monkeypatch.setenv("FINNHUB_API_KEY", "k")

@@ -257,7 +257,10 @@ class TestWorldMonitorUrls:
 
         body = client.get("/api/news/geopolitical/world-monitor").json()
 
-        assert body["gold_regions"].startswith("https://worldmonitor.app")
+        # Assert the whole value, not a prefix. A `startswith` on a URL is the
+        # bypassable shape CodeQL flags (py/incomplete-url-substring-sanitization),
+        # and the stub's value is known exactly, so there is nothing to relax.
+        assert body["gold_regions"] == "https://worldmonitor.app/x"
 
     def test_a_failure_is_a_scrubbed_500(self, client, monkeypatch):
         def _boom():

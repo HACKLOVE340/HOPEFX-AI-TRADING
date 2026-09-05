@@ -487,7 +487,7 @@ class TestRssFeedProvider:
         provider.feeds = {"broken": "https://broken.test/rss", "good": "https://good.test/rss"}
 
         def _get(url, **kwargs):
-            if "broken" in url:
+            if url == provider.feeds["broken"]:
                 raise RuntimeError("feed down")
             return _response(content=good)
 
