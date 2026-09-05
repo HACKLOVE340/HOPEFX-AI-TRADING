@@ -24,9 +24,10 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
+from ai.cache.store import ResponseCache
 from ai.gateway import audit, budget
 from ai.gateway.chain import ChainLeg, resolve_chain, should_fall_through
 from ai.guardrails.input import screen_input
@@ -63,6 +64,11 @@ class ModelRequest:
     prompt: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
     estimated_usd: float = 0.0
+    #: Opaque fingerprint of the state the question is asked against (open
+    #: positions, config, regime). It is part of the cache key: the same prompt
+    #: asked under different state is a different question, and an answer
+    #: computed under old state must never be served against new state.
+    tool_state: str = ""
 
     def __post_init__(self) -> None:
         if not self.prompt.strip():
@@ -79,6 +85,10 @@ class ModelResponse:
     tokens_in: int = 0
     tokens_out: int = 0
     attempts: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    #: True when this answer was served from the response cache. A cached
+    #: answer costs nothing and charges nothing; callers that report spend
+    #: need to be able to tell the two apart.
+    cached: bool = False
 
 
 class Provider(Protocol):
@@ -90,8 +100,21 @@ class Provider(Protocol):
 class GatewayClient:
     """Routes a request along its role's chain and records what happened."""
 
-    def __init__(self, providers: dict[str, Provider] | None = None) -> None:
+    def __init__(
+        self,
+        providers: dict[str, Provider] | None = None,
+        *,
+        cache: ResponseCache | None = None,
+    ) -> None:
         self._providers = providers if providers is not None else {}
+        # Optional by construction: a deployment that wants every call to reach
+        # a live model passes no cache, and nothing about routing, budget or
+        # audit changes. Caching is an economy, never a correctness dependency.
+        self._cache = cache
+
+    @property
+    def cache(self) -> ResponseCache | None:
+        return self._cache
 
     def available_providers(self) -> frozenset[str]:
         """Vendors this deployment can actually reach.
@@ -110,6 +133,17 @@ class GatewayClient:
         # retried on a second vendor, because retrying it would defeat the
         # guardrail. `chain.should_fall_through` encodes the same rule.
         screen_input(request.prompt)
+
+        # A hit is answered before the budget is consulted and before any leg
+        # is tried. It costs nothing, so no ceiling may refuse it and
+        # `budget.charge` is never reached for a call that was not made.
+        # Screening still runs first: a prompt the guardrail rejects must be
+        # rejected whether or not something like it was asked before.
+        cache_model = self._cache_model(request.role)
+        hit = self._cache_lookup(request, cache_model)
+        if hit is not None:
+            self._audit_cache_hit(request, operator, cache_model)
+            return hit
 
         allowed, reason = budget.check(operator, request.estimated_usd)
         if not allowed:
@@ -158,7 +192,7 @@ class GatewayClient:
             attempts.append({"provider": leg.provider, "model": leg.model, "reason": "served"})
             budget.charge(operator, cost)
             self._audit(request, operator, attempts, leg, leg.model, started, cost, tokens_in, tokens_out)
-            return ModelResponse(
+            served = ModelResponse(
                 text=str(getattr(result, "text", "")),
                 provider=leg.provider,
                 model=leg.model,
@@ -168,6 +202,8 @@ class GatewayClient:
                 tokens_out=tokens_out,
                 attempts=tuple(attempts),
             )
+            self._cache_store(request, served)
+            return served
 
         self._audit(request, operator, attempts, None, None, started, 0.0, 0, 0)
         tried = ", ".join(f"{a['provider']}={a['reason']}" for a in attempts) or "no legs"
@@ -191,6 +227,71 @@ class GatewayClient:
         """
         response = self.call_sync(request, operator=operator)
         return validate_output(response.text, required=required, ranges=ranges)
+
+    # -- cache -----------------------------------------------------------------
+
+    def _cache_model(self, role: str) -> str:
+        """The model a lookup is keyed on: the first leg this deployment can reach.
+
+        Not simply the chain head -- a leg whose vendor has no credentials is
+        skipped at dispatch, so keying on it would key every entry on a model
+        that never answers. When a reachable leg fails at runtime and a later
+        leg serves, the answer is stored under the model that actually served,
+        so the next lookup misses. That is a lost economy, never a wrong answer:
+        an answer is only ever served under the identity that produced it.
+        """
+        for leg in resolve_chain(role):
+            if leg.provider in self._providers:
+                return leg.model
+        return ""
+
+    def _cache_lookup(self, request: ModelRequest, cache_model: str) -> ModelResponse | None:
+        if self._cache is None or not cache_model:
+            return None
+        try:
+            hit = self._cache.get(prompt=request.prompt, model=cache_model, tool_state=request.tool_state)
+        except Exception:  # a cache fault must never fail a call
+            logger.exception("ai.gateway: cache lookup failed; treating as a miss")
+            return None
+        if not isinstance(hit, ModelResponse):
+            return None
+        # Reported as free and as cached. A cached answer that still reported
+        # its original cost would double-count spend in every operator report.
+        return replace(
+            hit,
+            cost_usd=0.0,
+            cached=True,
+            attempts=({"provider": hit.provider, "model": hit.model, "reason": "cache_hit"},),
+        )
+
+    def _cache_store(self, request: ModelRequest, response: ModelResponse) -> None:
+        """Store a served answer. Only a served answer ever gets here."""
+        if self._cache is None or not response.text:
+            return
+        try:
+            self._cache.put(
+                prompt=request.prompt,
+                model=response.model,
+                tool_state=request.tool_state,
+                value=response,
+            )
+        except Exception:  # a cache fault must never fail a call
+            logger.exception("ai.gateway: cache store failed; the answer still stands")
+
+    def _audit_cache_hit(self, request: ModelRequest, operator: str, model: str) -> None:
+        """A hit is still a call somebody made, and it is recorded as one."""
+        audit.record_call(
+            operator=operator,
+            role=request.role,
+            prompt=request.prompt,
+            attempts=[{"provider": "cache", "model": model, "reason": "cache_hit"}],
+            served_by="cache",
+            model=model,
+            latency_ms=0.0,
+            cost_usd=0.0,
+            tokens_in=0,
+            tokens_out=0,
+        )
 
     def _audit(
         self,
