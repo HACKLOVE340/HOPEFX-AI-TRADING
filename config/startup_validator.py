@@ -26,6 +26,7 @@ Env-var name alignment (canonical names used throughout the codebase):
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import sys
@@ -193,6 +194,105 @@ def _validate_encryption_key(errors: list[str]) -> None:
     elif is_placeholder(enc_key):
         errors.append(
             "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying",
+        )
+
+
+# ---------------------------------------------------------------------------
+# The published-placeholder sweep (F99)
+# ---------------------------------------------------------------------------
+#
+# `is_placeholder` fixed the *tenth* copy of a check that had been written out
+# nine times. It did not fix the shape that produced it: a secret is guarded
+# only if somebody remembered to write a validator for it. Eight placeholders
+# in `.env.example` had no validator at all, and two of them mattered:
+#
+#   DB_ENCRYPTION_KEY   — the placeholder is not valid base64, so
+#                         database/encryption.py logged an error and returned
+#                         None, which is its documented *dev/CI* fallback:
+#                         field-level encryption silently off, app boots fine.
+#   BOOTSTRAP_SUPERADMIN_PASSWORD
+#                       — scripts/bootstrap_prod.py requires >= 12 characters
+#                         and the placeholder is 45, so it cleared the floor
+#                         exactly the way CHANGE_ME_generate_64_char_hex_secret
+#                         cleared the webhook secret's 32-character floor. The
+#                         superadmin account would be seeded with a password
+#                         printed in the public repository.
+#
+# So the guard is a table rather than a tenth, eleventh and twelfth hand-written
+# validator. Every variable below is rejected when its value is a placeholder.
+# The check is *presence-conditional*: it never requires the variable, so
+# adding one here cannot break a deployment that does not use the feature. It
+# only refuses to start with a value whose plaintext is published.
+#
+# tests/unit/test_placeholder_secrets_are_rejected.py reads `.env.example` and
+# requires every placeholder in it to be either listed here or listed in
+# PLACEHOLDER_NOT_A_SECRET with a reason. A new placeholder that is in neither
+# fails that test. It used to `pytest.skip` when the validator did not know a
+# variable — which skipped precisely the case the test existed to catch.
+PLACEHOLDER_GUARDED: tuple[str, ...] = (
+    # Seeded login credentials — scripts/bootstrap_prod.py and
+    # scripts/bootstrap_dev.py create real accounts from these.
+    "BOOTSTRAP_SUPERADMIN_PASSWORD",
+    "BOOTSTRAP_ADMIN_PASSWORD",
+    "BOOTSTRAP_TRADER_PASSWORD",
+    # Field-level DB encryption key — database/encryption.py.
+    "DB_ENCRYPTION_KEY",
+    # Datastore credentials.
+    "POSTGRES_PASSWORD",
+    # Monitoring UI that renders live trading data.
+    "GRAFANA_ADMIN_PASSWORD",
+    # Exchange credentials — brokers/bybit_connector.py authenticates with them.
+    "BYBIT_API_KEY",
+    "BYBIT_API_SECRET",
+)
+
+# Placeholders in `.env.example` that are deliberately *not* secrets. Empty
+# today, and kept so the test has somewhere to point at other than a skip: a
+# variable belongs here only with a reason a reviewer can check.
+PLACEHOLDER_NOT_A_SECRET: dict[str, str] = {}
+
+
+def _validate_published_placeholders(errors: list[str]) -> None:
+    """Reject any guarded variable whose value is still a published placeholder.
+
+    Presence-conditional by design: an unset variable is not this check's
+    business, so the sweep can cover credentials a given deployment does not
+    use without demanding they be configured.
+    """
+    for name in PLACEHOLDER_GUARDED:
+        value = _env(name)
+        if value and is_placeholder(value):
+            errors.append(
+                f"INSECURE {name}: placeholder value from .env.example detected. "
+                "Its plaintext is published in the repository — generate a real value before deploying",
+            )
+
+
+def _validate_db_encryption_key_shape(errors: list[str]) -> None:
+    """A DB_ENCRYPTION_KEY that is set but unusable must not boot.
+
+    database/encryption.py falls back to storing plaintext when it cannot load
+    a key. That fallback is correct for dev and CI, where no key is set at all.
+    A key that *is* set and does not decode to 32 bytes is a misconfiguration,
+    and letting it degrade to the dev fallback writes user data to the database
+    in the clear while the log line scrolls past.
+    """
+    raw = _env("DB_ENCRYPTION_KEY")
+    if not raw or is_placeholder(raw):
+        return  # absent is the documented fallback; placeholder is reported above
+    try:
+        decoded = base64.urlsafe_b64decode(raw + "==")
+    except Exception:
+        errors.append(
+            "INVALID  DB_ENCRYPTION_KEY: not valid base64. Field-level encryption would be "
+            'silently disabled. Generate with: python -c "import base64,os; '
+            'print(base64.urlsafe_b64encode(os.urandom(32)).decode())"',
+        )
+        return
+    if len(decoded) != 32:
+        errors.append(
+            f"INVALID  DB_ENCRYPTION_KEY: decodes to {len(decoded)} bytes, must be exactly 32 "
+            "(AES-256). Field-level encryption would be silently disabled.",
         )
 
 
@@ -533,6 +633,8 @@ def validate_environment(*, strict: bool = True) -> None:
         _validate_argocd_webhook(errors)
         _validate_cors_wildcard(errors)
         _validate_crypto_webhook_secret(errors)
+        _validate_published_placeholders(errors)
+        _validate_db_encryption_key_shape(errors)
 
     _validate_broker(errors, dev_mode)
     _validate_trading_mode(errors)

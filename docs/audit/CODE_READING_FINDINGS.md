@@ -8066,3 +8066,97 @@ than what it was wrongly called.
 Grepping prose cannot distinguish a claim from a description of a retracted
 claim. That is F255, for the third time in this session, and it does not become
 sound by living in a test.
+
+---
+
+## F267 — the deposit endpoint hands users addresses nobody holds the key to · CRITICAL
+
+F222 flagged `payments/crypto/address_generator.py` as one of thirteen critical
+modules never named in a test, and noted that "a wrong crypto deposit address is
+an irrecoverable loss". Writing those tests found something worse than untested
+code. Measured by calling `api.payments._generate_address`, this is what the
+deposit endpoint returned:
+
+| Currency | Value returned to the user | What it is |
+|---|---|---|
+| BTC | `hopefx_btc_user-abc` | a fabricated string |
+| ETH | `0x` + `sha256("ETH" + user_id)[:40]` | valid Ethereum syntax, no private key exists |
+| USDT-TRC20 | `T` + `sha256("TRC20" + user_id)[:33]` | not base58 — no wallet would accept it |
+| USDT-ERC20 | `0x` + `sha256("ERC20" + user_id)[:40]` | valid Ethereum syntax, no private key exists |
+
+Three independent defects compose into it.
+
+**1. The HD wallet code targets an API that has not existed for two major
+versions.** `address_generator.py` and `bitcoin.py` are written against hdwallet
+v1/v2 — `HDWallet(symbol=...)`, `from_path()`, `p2wpkh_address()`.
+`requirements.txt` pins `hdwallet>=3.6.1,<4.0.0`, where `HDWallet.__init__`
+requires `cryptocurrency=` and neither address method exists. Every call raised
+`TypeError`. The module's own health flag reported the opposite:
+
+```python
+try:
+    from hdwallet import HDWallet as _HDWallet
+    ...
+    _HDWALLET_AVAILABLE = True
+except ImportError:
+    _HDWALLET_AVAILABLE = False
+```
+
+`import hdwallet` succeeds on v3. The flag answers "is the package installed?"
+while every caller reads it as "does derivation work?".
+
+**2. `api/billing.py` converted that failure into a plausible-looking value.**
+
+```python
+try:
+    address = _generate_address(currency, user.sub, "mainnet")
+except Exception:
+    address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
+```
+
+Returned with HTTP 200 and rendered beside a QR code. Not a defensive branch for
+an unlikely case — with defect 1 in place, *every* BTC deposit request took it.
+
+**3. `ethereum.py` and `usdt.py` never derived anything at all.** They returned a
+SHA-256 digest with a prefix glued on. The ERC-20 form is the dangerous one:
+40 hex characters after `0x` is a syntactically valid Ethereum address that
+every wallet and every validator accepts. There is no key for it. A user
+following the UI sends real ETH and it is gone, and nothing about the value
+looks wrong — which is why a shape check would not have caught it, and why the
+test for it asserts against the **published BIP test vectors** instead.
+
+Two further defects in the same module, found while fixing the above:
+
+**The never-reuse guarantee held only while writes succeeded.** The docstring
+promises "the counter file is written atomically after every index increment so
+that a process restart never reuses a derivation index and therefore never
+reuses a deposit address". `_save_counters` swallowed write failures, commented
+"a failed write is recoverable on the next call". It is not: the in-memory
+counter has already advanced, so a restart reloads the stale on-disk value and
+re-derives indices already issued. Two users then share a deposit address and
+their funds cannot be told apart at reconciliation.
+
+**The ephemeral-wallet fallback fired everywhere except literally `production`.**
+The guard was `if app_env == "production": raise`. `staging`, `sandbox`, `demo`,
+`prod`, `Production`, or an unset variable all fell through to a throwaway
+mnemonic whose keys are discarded on restart, behind a WARNING log line. A
+staging deployment that takes one real deposit loses it.
+
+**Fixed.** Derivation ported to hdwallet v3 and checked against the published
+BIP84 (`bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu`) and BIP44
+(`0x9858EfFD232B4033E47d90003D41EC34EcaEda94`) vectors for the standard test
+mnemonic; the three clients delegate to it; billing returns 503 rather than a
+fabricated address; an unwritable counter refuses to issue and rolls back; the
+ephemeral wallet is confined to a named allowlist of development environments.
+`tests/unit/test_crypto_deposit_addresses_are_real.py` — 30 tests, of which 22
+fail against the pre-fix tree.
+
+**Method note.** The Tron vector was nearly asserted from memory. The value
+recalled did not match what the library produced, and the library had just
+reproduced two genuine published vectors exactly — so the recollection was the
+weak link, not the code. The test asserts Tron's *structure* (base58check, 21
+bytes, `0x41` version) instead, which is checkable without a vector. Separately,
+the first version of the two "no longer hashes" tests failed on the fixed code,
+because the fix quotes the SHA-256 line it replaced in a comment. That is F255
+for the fourth time; the tests now strip comments via the AST rather than
+substring-matching source.

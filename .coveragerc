@@ -19,6 +19,37 @@ source =
     analytics
     backtesting
     core
+    # ── Added 2026-09-04 (F221) ───────────────────────────────────────────────
+    # The gate measured 26.9% of the application and every money package was
+    # outside it. These are in because they are already tested well enough to
+    # carry the 70% floor — measured, not assumed:
+    #   invariants 96% · strategies 68% · database 66% · notifications 54%
+    #   news 53% · monetization 55% · payments 42%
+    # `invariants/` is the constitutional safety layer and was not measured at
+    # all; `monetization/` and `payments/` are the code that pays creators and
+    # takes card payments.
+    #
+    # Still outside, with the reason: api/ (43%), data_layer/ (41%),
+    # security/ (38%), data/ (51%), utils/ (57%), scripts/, analysis/,
+    # research/. Adding them today drops the total below the 70% floor, and the
+    # floor is not moving to accommodate them. `scripts/coverage_scope_report.py`
+    # prints the resulting scope in CI so the gap stays visible rather than
+    # implied.
+    #
+    # Measured after this change: 17498 passed, total coverage 70.54% -- i.e.
+    # 0.54 points of headroom over the floor. That is thin on purpose: the
+    # packages were added up to the point where the gate still passes, and no
+    # further. If a commit tips it under 70%, the fix is to test the package
+    # that dropped it, NOT to remove a package from this list or lower the
+    # floor -- both of those restore the number by shrinking what it describes,
+    # which is the defect F221 was about in the first place.
+    invariants
+    strategies
+    database
+    notifications
+    news
+    monetization
+    payments
 branch = true
 omit =
     */tests/*

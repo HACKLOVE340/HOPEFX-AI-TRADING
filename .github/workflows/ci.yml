@@ -375,6 +375,27 @@ jobs:
             --timeout=120 \
             -q
 
+      # Coverage SCOPE report — printed immediately after the coverage figure,
+      # because that figure is a fraction of what `.coveragerc` points at, not
+      # of the application. `[run] source` names a subset of packages and `omit`
+      # removes modules from inside them, so "70% baseline" and the per-package
+      # gates describe a minority of the codebase, not all of it (F221/F105).
+      #
+      # As of the F221 commit that added this step, `source` covers 38.6% of
+      # application statements. Still outside it: api/, data_layer/, security/,
+      # data/, utils/, scripts/, analysis/, research/. Still omitted from inside
+      # packages that ARE in scope: risk/manager.py, execution/engine.py and the
+      # decision engine. Do not restate those two lists anywhere else — read the
+      # step's own output, which is generated from `.coveragerc` and cannot go
+      # stale the way this comment can.
+      #
+      # This does not gate the percentage: widening `source` to the whole
+      # application would drop it below the floor overnight and teach nobody
+      # anything. It gates the honesty — the scope is printed beside the number.
+      - name: Coverage scope report
+        if: always()
+        run: python scripts/coverage_scope_report.py --fail-under-share 25
+
       # Invariant coverage report — pure introspection (no app boot). The
       # registry inventory is measured; the critical-component matrix is a
       # DECLARATION in invariants/registry.py, not a probe (F176). This step

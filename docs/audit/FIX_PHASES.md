@@ -206,15 +206,33 @@ Found while doing it: **F258** — layer 2 of the kill switch never worked on
 raised `OSError` into a WARNING, and no environment override existed to move it.
 And **F259** — a third `importlib.reload` foot-gun, this one in a test of mine.
 
-## Phase F — Measurement integrity
-* **F221** — the coverage gate measures **34%** of the application and omits
-  the risk manager and the decision engine.
-* **F222** — 13 critical modules never named in a test, including
-  `payments/crypto/address_generator.py`.
+## Phase F — Measurement integrity · IN PROGRESS
+
+The phase is about controls that report on other controls. Two are done.
+
+| Finding | What was done |
+|---|---|
+| **F221** | The coverage gate measured **26.9%** of the application — not 34%; the earlier figure counted `[run] source` but not the `omit` list that removes modules from inside it. `scripts/coverage_scope_report.py` now prints the scope beside the number in CI, and `.coveragerc` was widened by seven packages chosen because they already carry the 70% floor (`invariants` 96%, `strategies` 68%, `database` 66%, `monetization` 55%, `notifications` 54%, `news` 53%, `payments` 42%), taking measured scope to **38.6%**. `invariants/` — the constitutional safety layer — was not measured at all. Still outside: `api/`, `data_layer/`, `security/`, `data/`, `utils/`. The floor did not move to accommodate them, and the gap is printed rather than implied. |
+| **F99** | `test_every_unconditional_placeholder_is_rejected` called `pytest.skip` when the startup validator did not mention a variable — that is, it skipped in exactly the situation it existed to detect, since a secret is unguarded *because* nobody wrote a validator for it. 8 of 14 published placeholders were skipping. Two mattered: `DB_ENCRYPTION_KEY` (the placeholder is not valid base64, so `database/encryption.py` took its documented dev/CI path and disabled field-level encryption while the app booted normally) and `BOOTSTRAP_SUPERADMIN_PASSWORD` (45 characters, clearing `bootstrap_prod.py`'s 12-character floor exactly as the webhook placeholder cleared its 32-character one). The validator now carries a declared `PLACEHOLDER_GUARDED` table plus a `PLACEHOLDER_NOT_A_SECRET` exemption map that requires a stated reason, a `DB_ENCRYPTION_KEY` shape check, and the sweep fails rather than skips for anything unclassified. The `_FEATURE_GATED` exemption set it replaced matched **zero** placeholders — a carve-out that had never carved anything out. |
+
+Found while doing it: **F267 · CRITICAL** — writing the F222 tests for
+`payments/crypto/address_generator.py` showed the crypto deposit endpoint was
+returning addresses nobody holds the private key to: a fabricated
+`hopefx_btc_<uid>` string for BTC, and `"0x" + sha256(...)` for ETH and
+USDT-ERC20 — syntactically valid Ethereum addresses that every wallet accepts.
+Derivation is ported to the pinned hdwallet v3 and checked against the published
+BIP44/BIP84 vectors. See the finding for the full chain.
+
+Remaining:
+* **F222** — 9 critical modules still never named in a test:
+  `payment_processor`, `strategy_allocator`, `transaction_manager`,
+  `marketplace_submission`, `paystack`, `access_codes`, `payment_gateway`,
+  `tick_data_repository`. (`revenue_split` and `pms` gained tests in phases D/G;
+  `address_generator` gained them with F267.)
 * **F218** — 14 model tables have no migration; they exist only via
   `create_all()`, which never ALTERs.
-* **F99 / F105 / F106 / F108** — tests that skip the case they exist for,
-  gates that measure the wrong thing, a class that never existed.
+* **F105 / F106 / F108** — gates that measure the wrong thing, a class that
+  never existed.
 
 ## Phase G — Correctness bugs · DONE
 

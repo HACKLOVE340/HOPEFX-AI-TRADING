@@ -320,3 +320,8 @@ data/paper_gate_state.json
 data/paper_trading_gate.json
 # Dead-letter queue written at runtime by the regulatory reporter.
 data/reg_dlq/
+
+# Runtime derivation-index counters for crypto deposit addresses. Written by
+# payments/crypto/address_generator.py at runtime; must live on a durable
+# volume in production (HOPEFX_CRYPTO_COUNTER_PATH), never in the repo.
+data/crypto_counters.json

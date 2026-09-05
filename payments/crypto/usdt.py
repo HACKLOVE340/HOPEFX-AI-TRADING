@@ -42,13 +42,20 @@ class USDTClient:
     def generate_deposit_address(self, user_id: str, network: USDTNetwork = USDTNetwork.TRC20) -> dict:
         """Generate USDT deposit address"""
         try:
-            # Generate network-specific address
-            if network == USDTNetwork.TRC20:
-                address_hash = hashlib.sha256(f"TRC20{user_id}".encode()).hexdigest()
-                address = f"T{address_hash[:33]}"  # TRON address format
-            else:  # ERC20
-                address_hash = hashlib.sha256(f"ERC20{user_id}".encode()).hexdigest()
-                address = f"0x{address_hash[:40]}"  # Ethereum address format
+            # Both branches used to be a SHA-256 digest with a prefix glued on:
+            #
+            #     address = f"T{sha256(f'TRC20{user_id}').hexdigest()[:33]}"
+            #     address = f"0x{sha256(f'ERC20{user_id}').hexdigest()[:40]}"
+            #
+            # The TRC20 form is not even base58, so a wallet would refuse to
+            # send to it. The ERC20 form is indistinguishable from a real
+            # Ethereum address and no private key exists for it, so a wallet
+            # sends happily and the funds are gone (F267). Both are now derived
+            # from the platform's HD wallet on the documented BIP44 paths.
+            from payments.crypto.address_generator import address_generator
+
+            currency = "USDT_TRC20" if network == USDTNetwork.TRC20 else "USDT_ERC20"
+            address = address_generator.generate_address(user_id, currency)
 
             self.addresses[address] = {
                 "user_id": user_id,
