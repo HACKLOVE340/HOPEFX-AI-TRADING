@@ -33,6 +33,7 @@ Usage
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import logging
 import os
@@ -1313,6 +1314,25 @@ class InferenceEngine:
         if model_version == "fallback":
             _PROM.fallback_total.labels(symbol=sym_label, reason="model_fallback").inc()
 
+        decision_id = f"{sym_label}:{self._predict_count}:{time.time_ns()}"
+        feature_schema_hash = hashlib.sha256(
+            json.dumps(list(X.columns), separators=(",", ":")).encode()
+        ).hexdigest()
+        evidence_payload = {
+            "decision_id": decision_id,
+            "model_version": model_version,
+            "model_checksum": hashlib.sha256(model_version.encode()).hexdigest(),
+            "feature_schema_hash": feature_schema_hash,
+            "data_snapshot_at": datetime.now(UTC).isoformat(),
+            "regime": "unknown",
+            "calibration_state": "isotonic" if self._calibrator is not None else "raw",
+            "drift_state": "detected" if drift else "clear_or_unavailable",
+            "data_quality_state": "valid" if data_quality >= 0.3 else "degraded",
+        }
+        evidence_hash = hashlib.sha256(
+            json.dumps(evidence_payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
         return {
             "direction": direction,
             "probability": round(raw_prob, 4),
@@ -1330,6 +1350,9 @@ class InferenceEngine:
             "macro_impact": self._last_macro_impact,
             "data_quality": round(data_quality, 4),
             "is_safe": self.is_safe_to_trade(),
+            "decision_id": decision_id,
+            "evidence_hash": evidence_hash,
+            "evidence": evidence_payload,
         }
 
     def _get_data_layer_nudge(self) -> float:
