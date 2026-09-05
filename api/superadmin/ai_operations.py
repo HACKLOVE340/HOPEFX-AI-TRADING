@@ -53,4 +53,14 @@ async def assess_recovery(user: TokenPayload = Depends(_require_superadmin)) -> 
     healer = get_healer()
     if not hasattr(healer, "run_ai_recovery_assessment"):
         raise HTTPException(status_code=503, detail="AI recovery assessment is unavailable")
-    return await healer.run_ai_recovery_assessment("operator-assessment")
+    assessment = await healer.run_ai_recovery_assessment("operator-assessment")
+    _log_superadmin_action(user, "ai_recovery_assessment", assessment["decision"]["action"])
+    return assessment
+
+
+@router.get("/recovery/latest")
+async def latest_recovery_report(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    from security.self_healer import get_healer
+
+    report = get_healer().get_last_diagnostic_report()
+    return {"report": report, "repair_applied": False, "execution_mode": "assessment_only"}
