@@ -119,7 +119,9 @@ def test_a_fall_through_records_both_legs() -> None:
 
 def test_the_audit_record_never_contains_the_prompt() -> None:
     """Prompts carry position data and secrets; the record holds a hash."""
-    secret_prompt = "our stop is at 2381.40 and the key is sk-live-abcdef"
+    # A deliberately fake credential: the point of this test is that the audit
+    # record must NOT retain it.
+    secret_prompt = "our stop is at 2381.40 and the key is sk-live-abcdef"  # pragma: allowlist secret
     client = GatewayClient(providers={"anthropic": _ok("answer")})
     client.call_sync(ModelRequest(role="reasoning", prompt=secret_prompt), operator="op-1")
     blob = repr(audit_mod.records())
