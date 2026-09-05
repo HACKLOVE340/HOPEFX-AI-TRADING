@@ -103,7 +103,13 @@ Live trading prerequisites
 
 ---
 
-## Step 6 — Enable live trading (after 30 days)
+## Step 6 — Request live trading review (after all gates pass)
+
+Thirty days of clean paper trading is only one prerequisite. Before any live
+activation, confirm current model-promotion evidence, broker reconciliation,
+restart recovery, execution and kill-switch tests, security/CI status,
+conservative risk limits, and an explicit operator review. Do not enable live
+trading by only changing environment variables.
 
 Once all checks pass:
 
@@ -146,8 +152,9 @@ Start conservative. You can always increase limits after observing live behaviou
 python scripts/enable_live_trading.py --force
 ```
 
-`--force` bypasses the duration check. Use only in development environments
-with a practice account — never on a live account.
+`--force` bypasses the duration check only; it does not replace model,
+reconciliation, recovery, security, risk, or operator gates. Use only in
+development environments with a practice account — never on a live account.
 
 **What counts as an "execution error"?**
 
