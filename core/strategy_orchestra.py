@@ -8,6 +8,8 @@ HOPEFX Strategy Orchestra
 Coordinates multiple strategies to prevent conflicts and maximize returns
 """
 
+import hashlib
+import json
 import logging
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -54,6 +56,8 @@ class StrategyOrchestra:
         self._returns_buffer: dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
         self._execution_boundary = StrategyExecutionBoundary()
         self._ai_candidates: dict[str, ResearchCandidate] = {}
+        self.last_composite_evidence_hash: str = ""
+        self.last_composite_abstention_reason: str = ""
 
         self.event_bus.subscribe("POSITION_CLOSED", self._on_position_closed)
         self.event_bus.subscribe("REGIME_CHANGE", self._on_regime_change)
@@ -283,17 +287,33 @@ class StrategyOrchestra:
                 total_weight += weight
 
         if not votes or total_weight == 0:
+            self.last_composite_abstention_reason = "no_weighted_votes"
+            self.last_composite_evidence_hash = ""
             return None
 
         best_signal = max(votes.items(), key=lambda x: x[1])
         if best_signal[1] > 0.3 * total_weight:
+            confidence = min(best_signal[1] / total_weight, 1.0)
+            evidence = {
+                "active_strategies": self.active_strategies,
+                "regime": self.current_regime,
+                "winner": best_signal[0].value,
+                "confidence": confidence,
+                "total_weight": total_weight,
+            }
+            self.last_composite_evidence_hash = hashlib.sha256(
+                json.dumps(evidence, sort_keys=True, default=str, separators=(",", ":")).encode()
+            ).hexdigest()
+            self.last_composite_abstention_reason = ""
             return Signal(
                 signal_type=best_signal[0],
                 symbol="XAUUSD",
                 price=0,
                 timestamp=datetime.now(UTC),
-                confidence=min(best_signal[1] / total_weight, 1.0),
+                confidence=confidence,
             )
+        self.last_composite_abstention_reason = "weighted_consensus_below_threshold"
+        self.last_composite_evidence_hash = ""
         return None
 
     def _on_position_closed(self, event: DomainEvent):
@@ -343,6 +363,8 @@ class StrategyOrchestra:
             },
             "current_regime": self.current_regime,
             "active_count": len(self.active_strategies),
+            "composite_evidence_hash": self.last_composite_evidence_hash,
+            "composite_abstention_reason": self.last_composite_abstention_reason,
         }
 
 
