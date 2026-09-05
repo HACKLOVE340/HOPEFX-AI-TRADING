@@ -296,7 +296,11 @@ class DriftDetector:
         from scipy import stats
 
         ks_stat, p_value = stats.ks_2samp(reference_predictions, recent_predictions)
-        is_drifted = ks_stat > _DRIFT_KS_THRESHOLD
+        # bool(): scipy returns numpy scalars, so a bare comparison yields a
+        # numpy.bool_. DriftReport.to_dict() exists to build a JSON payload,
+        # and json.dumps cannot serialise that -- the score beside it was
+        # already coerced with float() for the same reason.
+        is_drifted = bool(ks_stat > _DRIFT_KS_THRESHOLD)
 
         if _PROM_OK and is_drifted:
             _drift_detections.labels(drift_type="prediction_drift").inc()
@@ -482,18 +486,21 @@ class RetrainingOrchestrator:
 
             return model_path, metrics
 
-        except ImportError:
-            logger.warning("AdvancedTrainer not available — using fallback training")
-            # Fallback: use the basic training pipeline
-            try:
-                from ml.training import train_model
-
-                model_path = Path(f"ml/saved_models/retrained_{int(time.time())}.pkl")
-                metrics = train_model(training_data, str(model_path))
-                return model_path, metrics
-            except Exception as exc:
-                logger.error("Fallback training failed: %s", exc)
-                return None, {}
+        except ImportError as exc:
+            # There is no second trainer to fall back to. This branch used to
+            # import `train_model` from ml.training, which does not exist; the
+            # nearest real function is `train_ml_pipeline`, and it could not
+            # have served as a fallback either — it takes a pandas DataFrame and
+            # does df.iloc / FeatureEngineer.create_features, while this method
+            # receives an np.ndarray. So the fallback was dead twice over, and
+            # only reachable if ml.train_advanced stopped importing at all,
+            # which is a deployment fault rather than a runtime condition.
+            logger.error(
+                "AdvancedTrainer could not be imported (%s) — no fallback trainer exists, "
+                "so this retrain is abandoned. Check that ml/train_advanced.py imports cleanly.",
+                exc,
+            )
+            return None, {}
         except Exception as exc:
             logger.error("Model training failed: %s", exc)
             return None, {}
@@ -742,14 +749,31 @@ class ChampionChallenger:
         try:
             from scipy import stats
 
-            # One-sided binomial test
-            p_value = stats.binom_test(
-                result.correct_predictions,
-                result.predictions,
-                0.5,
-                alternative="greater",
-            )
-            return p_value < (1 - _SHADOW_CONFIDENCE_LEVEL)
+            # One-sided binomial test.
+            #
+            # This used to call stats.binom_test, which SciPy REMOVED in 1.12 --
+            # the very version this project pins as its floor (scipy>=1.12.0).
+            # So on every supported install the call raised AttributeError, the
+            # bare `except Exception` below swallowed it, and this returned
+            # False. Not "occasionally too strict": no challenger model could
+            # ever be promoted, which is the one thing this pipeline exists to
+            # do. A 70%-accurate challenger over 1000 predictions was rejected
+            # as "not statistically significant".
+            if hasattr(stats, "binomtest"):
+                p_value = stats.binomtest(
+                    result.correct_predictions,
+                    result.predictions,
+                    0.5,
+                    alternative="greater",
+                ).pvalue
+            else:  # pragma: no cover - SciPy < 1.7 only
+                p_value = stats.binom_test(
+                    result.correct_predictions,
+                    result.predictions,
+                    0.5,
+                    alternative="greater",
+                )
+            return bool(p_value < (1 - _SHADOW_CONFIDENCE_LEVEL))
         except ImportError:
             # Fallback: simple threshold check
             return result.accuracy > 0.55 and result.predictions >= _SHADOW_MIN_PREDICTIONS

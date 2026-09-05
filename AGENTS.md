@@ -51,7 +51,7 @@ docs/                   Documentation (archive/ holds superseded docs)
 
 ## Development Environment
 
-The devcontainer (`.devcontainer/devcontainer.json`) provides Python 3.10,
+The devcontainer (`.devcontainer/devcontainer.json`) provides Python 3.12,
 Node 20, and Redis. Three automations run on startup:
 
 ```bash
@@ -91,7 +91,10 @@ This generates `.env` with random secrets and seeds three dev users:
 - **Formatter:** `black` (line length 100 for Python, 120 for ruff)
 - **Linter:** `ruff` — run `ruff check .` before committing
 - **Type checker:** `mypy` — strict on `risk/analytics`, `api/`, `ml/inference_engine`
-- **Python version:** 3.10 (matches production Docker image — prevents pickle mismatches)
+- **Python version:** 3.12 — it is what `Dockerfile` runs (`python:3.12-slim`) and
+  what the retrain workflows use, so committed `.pkl` artifacts are pickled on the
+  same interpreter that loads them in production. CI tests 3.11 and 3.12. If you
+  change the Dockerfile's Python, change the retrain workflows in the same commit.
 - Use `from __future__ import annotations` in all new modules
 - Async-first in `api/` — use `async def` for all route handlers
 - Domain-specific numeric literals (RSI levels, ATR multipliers, confidence scores)
@@ -178,8 +181,12 @@ Full list: `.env.example`
 
 ## Security Rules
 
-- **Never commit secrets.** `.env`, `WORDMAP.json`, and `prop_firm_mode.json`
-  are gitignored. `detect-secrets` pre-commit hook enforces this.
+- **Never commit secrets.** `.env` and `WORDMAP.json` are gitignored
+  (`WORDMAP.json.example` is the tracked template). `prop_firm_mode.json` is
+  **not** gitignored — `.gitignore` commits it deliberately with placeholder
+  credentials so CI has a config to load, and it ships `enabled: true` with the
+  FTMO ruleset. Keep real credentials in environment variables, never in that
+  tracked file. `detect-secrets` pre-commit hook enforces this.
 - **Never log credentials.** The LLM agent (`brain/llm_agent.py`) runs in a
   subprocess sandbox — do not bypass this.
 - **Redis TLS:** `REDIS_FORCE_TLS=true` in production. Dev uses plain Redis.
@@ -219,6 +226,16 @@ CI skips `e2e` and `slow` markers automatically (`-m "not slow and not e2e"`).
 | Gate I | `gate_i_migration_chain.py` | Alembic chain is linear with one root and one head |
 | Gate J | `gate_j_circular_imports.py` | No module-level circular imports in guarded packages |
 | Gate K | `gate_k_requirements_consistency.py` | Lock file covers all direct deps; no CI version downgrades |
+| Gate L | `gate_l_safety_invariants.py` | Safety-critical env defaults stay safe (`BROKER_TYPE`, `FEATURE_LIVE_TRADING`, `DRIFT_BLOCK`, `STALE_MODEL_BLOCK`, `WS_AUTH_REQUIRED`, `REDIS_FORCE_TLS`) |
+| Gate M | `gate_m_ml_edge.py` | ML still beats the rule baseline on the leakage-safe OOS split |
+
+| Broken imports | `gate_broken_imports.py` | No `from x import Y` where `Y` is undefined in `x` |
+
+`gate_broken_imports.py` carries a `KNOWN_BROKEN` baseline of imports that are
+still broken on purpose or awaiting implementation (see S-41/S-42 in
+`docs/HARDENING_BACKLOG.md`). Every entry needs a reason and a backlog
+reference. Fixing an import means **deleting its entry in the same change** — a
+stale entry fails the gate, so the list cannot quietly become an excuse list.
 
 ---
 
@@ -427,6 +444,33 @@ cp WORDMAP.json.example WORDMAP.json
 Edit `WORDMAP.json` to add or adjust severity weights (0.0–10.0). The scorer
 merges your file with built-in defaults — you only need to include keys you
 want to override. See `ARCHITECTURE.md` — WORDMAP.json section for details.
+
+---
+
+## Agent Skills
+
+Two skills are installed in `.claude/skills/` and version-locked together at
+`2.0.1`. Both must stay present — the orchestrator cannot complete its UI/UX
+approval gate without its sibling.
+
+| Skill | Use for |
+|-------|---------|
+| `flow-by-flow` | Any development task: features, bugs, refactors, audits, micro changes. Start here. |
+| `flow-prototype` | Throwaway, read-only interactive model of a UI flow, required before any major UI/UX change reaches production code. |
+
+`flow-by-flow` reads `references/orchestration.md` on every task, then loads only
+the route that applies (`foundation`, `audit`, `build`, `delivery`, `review`,
+`verification`). Its conflict hierarchy defers to this file: user instruction >
+repository constitution (`AGENTS.md`) > security and data rules > flow contracts >
+backend and design references > individual flow notes > builder judgment.
+
+Two skill rules bind especially hard in this repository, which moves money:
+
+- Never weaken a risk gate, kill switch, or staleness/drift check to make a flow
+  pass. That is a stop condition, not a judgment call.
+- Live broker activation, real-money order placement, production deployment, and
+  destructive actions on real trade data are stop conditions requiring explicit
+  authority for that exact action and target.
 
 ---
 

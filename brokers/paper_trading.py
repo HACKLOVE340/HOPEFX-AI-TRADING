@@ -466,9 +466,11 @@ class PaperTradingBroker(BrokerConnector):
             password = _os.getenv("REDIS_PASSWORD", "") or None
 
             # Inject REDIS_PASSWORD when not already embedded in the URL.
-            if password and "@" not in redis_url.split("://", 1)[-1]:
-                scheme, rest = redis_url.split("://", 1)
-                redis_url = f"{scheme}://:{password}@{rest}"
+            # Shared helper: the inline version raised ValueError on an empty or
+            # schemeless REDIS_URL instead of degrading.
+            from cache.redis_client import inject_redis_password
+
+            redis_url = inject_redis_password(redis_url, password)
 
             r = _redis_lib.from_url(
                 redis_url,

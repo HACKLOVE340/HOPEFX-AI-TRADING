@@ -1,0 +1,12 @@
+# Kill switch broker-cancel runtime proof
+# captured: 2026-08-18T18:26:37.275985+00:00
+# revision: 8e1d193f70401a2db7a327a0983a20ccd91d0fa0
+# environment: local, BROKER_TYPE unset (no real broker contacted)
+
+step 1  broker registered on app_state: SpyBroker
+step 2  resolver returns: SpyBroker
+WARNING KillSwitch._broker_cancel_all: calling cancel_all_orders on SpyBroker
+WARNING KillSwitch._broker_cancel_all: cancel_all_orders on SpyBroker returned cancelled
+
+RESULT  broker.cancel_all_orders called -> True
+PROOF   PASS — kill switch reaches the broker and cancels

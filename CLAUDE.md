@@ -7,6 +7,9 @@ This file is intentionally short. The authoritative, detailed guides are:
 - **[AGENTS.md](AGENTS.md)** — full agent guide: layout, conventions, testing, ML, workflows.
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — canonical module map, key entry points, env flags.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — contribution workflow.
+- **`.claude/skills/flow-by-flow/SKILL.md`** — start every development task here;
+  its sibling `flow-prototype` owns the UI/UX approval surface. Both are installed
+  and version-locked at `2.0.1`; see the Agent Skills section of AGENTS.md.
 
 Read those before any non-trivial change. The notes below are the high-signal subset.
 

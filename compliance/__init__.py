@@ -9,8 +9,8 @@ compliance — KYC/AML, regulatory reporting, and audit trail.
 Public API
 ----------
     KYCGateway              Multi-provider KYC (Sumsub, Onfido) with webhook handling.
-    AMLEngine               Transaction monitoring, sanctions screening, PEP checks.
-    ComplianceAuditor       Immutable audit trail for all compliance decisions.
+    AMLGate                 Transaction monitoring, sanctions screening, PEP checks.
+    ImmutableAuditLog       Immutable audit trail for all compliance decisions.
     RegulatoryReporter      Automated regulatory report generation (MiFID II, etc.).
 """
 
@@ -25,12 +25,12 @@ except Exception as _exc:
     logger.debug("compliance.kyc_provider unavailable: %s", _exc)
 
 try:
-    from compliance.aml import AMLEngine
+    from compliance.aml import AMLGate, get_aml_gate, init_aml_gate
 except Exception as _exc:
     logger.debug("compliance.aml unavailable: %s", _exc)
 
 try:
-    from compliance.auditor import ComplianceAuditor
+    from compliance.auditor import ImmutableAuditLog
 except Exception as _exc:
     logger.debug("compliance.auditor unavailable: %s", _exc)
 
@@ -40,10 +40,12 @@ except Exception as _exc:
     logger.debug("compliance.regulatory_reporter unavailable: %s", _exc)
 
 __all__ = [
-    "AMLEngine",
-    "ComplianceAuditor",
+    "AMLGate",
+    "ImmutableAuditLog",
     "KYCGateway",
     "RegulatoryReporter",
+    "get_aml_gate",
     "get_kyc_gateway",
+    "init_aml_gate",
     "init_kyc_gateway",
 ]

@@ -119,6 +119,14 @@ const SCENARIOS = {
   },
 };
 
+// http_req_failed counts every 4xx as a failure by default, but this suite's own
+// checks accept 401/403/404 as valid outcomes (unauthenticated probes, endpoints
+// that vary by deployment). Counting them made a <1% threshold unreachable no
+// matter how healthy the server was. Narrowing "failed" to 5xx makes the metric
+// mean what a load test should measure — the server erroring under load — while
+// the per-group checks keep asserting the semantic expectations.
+http.setResponseCallback(http.expectedStatuses({ min: 200, max: 499 }));
+
 export const options = {
   scenarios: {
     default: SCENARIOS[SCENARIO] || SCENARIOS.smoke,
@@ -200,7 +208,10 @@ function testSignalEndpoint() {
 function testMLPredict() {
   group('ml_predict', () => {
     const start = Date.now();
-    const res = http.get(BASE_URL + '/api/ml/predict/' + SIGNAL_SYM, {
+    // POST, not GET: /api/ml/predict/{symbol} is registered for POST only, so
+    // the GET this used to send never reached the handler and the ML latency
+    // budget measured a routing miss.
+    const res = http.post(BASE_URL + '/api/ml/predict/' + SIGNAL_SYM, '{}', {
       headers: headers(), tags: { name: 'ml_predict' },
     });
     mlLatency.add(Date.now() - start);
@@ -210,10 +221,14 @@ function testMLPredict() {
 
 function testMLStatus() {
   group('ml_status', () => {
-    const res = http.get(BASE_URL + '/api/ml/status', {
+    // /api/ml/status is not a registered route — the app serves
+    // /api/ml/drift/status, /api/ml/anomaly/status and /api/ml/rl/status, plus
+    // /api/superadmin/ml/status behind the superadmin gate. This probed a 404
+    // on every iteration and counted it as a pass.
+    const res = http.get(BASE_URL + '/api/ml/drift/status', {
       headers: headers(), tags: { name: 'ml_status' },
     });
-    checkOk(res, 'ml_status', [200, 404, 503]);
+    checkOk(res, 'ml_status', [200, 503]);
   });
 }
 
@@ -339,7 +354,15 @@ function testRateLimitEnforced() {
       const res = http.post(
         BASE_URL + '/auth/login',
         JSON.stringify({ email: 'ratelimit@example.com', password: 'wrong' }),  // pragma: allowlist secret
-        { headers: headers(), tags: { name: 'rate_limit_probe' } },
+        {
+          headers: headers(),
+          tags: { name: 'rate_limit_probe' },
+          // This group sends deliberately-wrong credentials and wants a 429.
+          // Its rejections are counted by the module-level responseCallback
+          // above, which treats every 4xx as expected; enumerating statuses
+          // here instead is how this got it wrong first time (the app answers
+          // 403, not 401, so all 60 probe requests were counted as failures).
+        },
       );
       if (res.status === 429) { got429 = true; break; }
     }
@@ -390,11 +413,15 @@ export default function () {
   testRiskStatus();          sleep(0.1 * THINK_TIME);
   testPrometheusMetrics();   sleep(0.1 * THINK_TIME);
   testAuthLogin();           sleep(0.3 * THINK_TIME);
-  testRateLimitEnforced();   sleep(0.5 * THINK_TIME);
   testWebSocket();           sleep(0.2 * THINK_TIME);
   testOrderEndpoint();       sleep(0.2 * THINK_TIME);
   testPositions();           sleep(0.2 * THINK_TIME);
-  testAccountInfo();         sleep(0.5 * THINK_TIME);
+  testAccountInfo();         sleep(0.2 * THINK_TIME);
+  // Last, deliberately. The limiter is per caller, not per endpoint, so once
+  // this group trips it every request after it in the same iteration is 429'd.
+  // Running it mid-iteration made all nine later groups fail 5 of 9 checks and
+  // read as endpoint outages rather than as the probe doing its job.
+  testRateLimitEnforced();   sleep(0.5 * THINK_TIME);
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────

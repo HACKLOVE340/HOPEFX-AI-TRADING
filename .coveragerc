@@ -17,6 +17,8 @@ source =
     kill_switch
     compliance
     analytics
+    brain
+    news
     backtesting
     core
     # ── Added 2026-09-04 (F221) ───────────────────────────────────────────────

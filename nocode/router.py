@@ -34,15 +34,34 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         owner = getattr(strategy, "user_id", None)
         return owner is None or owner == user_id
 
+    def _viewable_strategy(strategy_id: str, user_id: str):
+        """Return a strategy the caller may read (their own, or a template)."""
+        strategy = builder.strategies.get(strategy_id)
+        if strategy is None or not _visible_to(strategy, user_id):
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        return strategy
+
     def _owned_strategy(strategy_id: str, user_id: str):
-        """Return the caller's strategy or raise 404.
+        """Return a strategy the caller owns, or raise 404.
+
+        Ownership, not visibility. This gates PATCH, DELETE, compile and
+        backtest, and it used to reuse the *read* predicate, which treats an
+        ownerless strategy as everyone's. The built-in templates
+        `_create_templates()`
+        installs carry `user_id=None` in the **shared** `builder.strategies`
+        dict, so any trader could edit or delete the very objects
+        `create_from_template` hands to the next caller.
+
+        Working from a template means copying it — that is what
+        `create_from_template` is for — so a built-in, having no owner, is
+        owned by nobody.
 
         404 rather than 403 for someone else's strategy, so the response does
         not disclose which strategy ids exist — the same choice
         `api/alerts._get_owned_alert` makes.
         """
         strategy = builder.strategies.get(strategy_id)
-        if strategy is None or not _visible_to(strategy, user_id):
+        if strategy is None or getattr(strategy, "user_id", None) != user_id:
             raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
         return strategy
 
@@ -216,7 +235,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         the user's trading logic, and the platform sells strategies through
         /api/monetization/marketplace.
         """
-        _owned_strategy(strategy_id, user.sub)
+        _viewable_strategy(strategy_id, user.sub)
         code = builder.export_to_python(strategy_id)
         if code is None:
             raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")

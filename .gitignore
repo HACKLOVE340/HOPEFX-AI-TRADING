@@ -313,15 +313,8 @@ security/yara_rules/
 # Playwright sweep session (contains a live token)
 frontend/.auth.json
 
-# Runtime state written by research/pipeline/paper_trading_gate.py when the
-# suite or the engine runs. Same class as test-results.xml: generated, not
-# source, and it lands inside the tracked data/ directory.
-data/paper_gate_state.json
-data/paper_trading_gate.json
-# Dead-letter queue written at runtime by the regulatory reporter.
-data/reg_dlq/
-
-# Runtime derivation-index counters for crypto deposit addresses. Written by
-# payments/crypto/address_generator.py at runtime; must live on a durable
-# volume in production (HOPEFX_CRYPTO_COUNTER_PATH), never in the repo.
-data/crypto_counters.json
+# k6 load-test output. The directory is tracked (via .gitkeep) because CI writes
+# summaries into it and tests/unit/test_k6_load_tests.py checks it exists; the
+# run artifacts themselves are per-run and belong in the workflow's upload.
+k6/results/*
+!k6/results/.gitkeep

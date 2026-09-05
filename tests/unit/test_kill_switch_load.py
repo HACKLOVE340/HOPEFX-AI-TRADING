@@ -316,11 +316,44 @@ class TestBrokerCancelAll:
         mock_cancel.assert_called_once_with("drawdown")
         assert ks.is_active()
 
-    def test_broker_cancel_all_no_engine_no_router(self, tmp_path):
-        """When both engine and router imports fail, logs warning and returns."""
+    def test_broker_cancel_all_resolves_through_app_state(self, tmp_path, monkeypatch):
+        """The production resolution path — the one that actually works.
+
+        Every other test in this class manufactures
+        ``execution.engine.get_active_broker`` with ``create=True``. That symbol
+        does not exist: ``execution/engine.py`` defines ``ExecutionEngine`` and
+        no module-level accessor. So those tests exercise step 1 of
+        ``_resolve_active_broker``, which can never resolve in production, and
+        would pass identically whether or not the kill switch could reach a
+        broker at all. That is how S-38 stayed green while the kill switch
+        silently skipped the broker cancel on every activation.
+
+        Step 3, ``core.app_state.app_state.broker``, is the one that resolves,
+        because ComponentRegistry publishes the broker there at startup. It is
+        covered in detail in test_kill_switch_broker_cancel_resolution.py; this
+        case keeps the load suite honest about which path it is proving.
+        """
+        from core.app_state import app_state
+
         ks = self._make_ks(tmp_path)
+        mock_broker = MagicMock()
+        mock_broker.cancel_all_orders.return_value = True
+        mock_broker.name = "AppStateBroker"
+        monkeypatch.setattr(app_state, "broker", mock_broker, raising=False)
+
+        ks._broker_cancel_all("app-state-path")
+
+        mock_broker.cancel_all_orders.assert_called_once()
+
+    def test_broker_cancel_all_no_engine_no_router(self, tmp_path, monkeypatch):
+        """When every resolution step fails, logs warning and returns."""
+        from core.app_state import app_state
+
+        ks = self._make_ks(tmp_path)
+        # app_state is step 3 and must be cleared too, or this asserts nothing.
+        monkeypatch.setattr(app_state, "broker", None, raising=False)
         with patch.dict("sys.modules", {"execution.engine": None, "execution.smart_router": None}):
-            # Should not raise — both imports fail, broker is None
+            # Should not raise — every step fails, broker is None
             ks._broker_cancel_all("test")
 
     def test_broker_cancel_all_sync_broker(self, tmp_path):

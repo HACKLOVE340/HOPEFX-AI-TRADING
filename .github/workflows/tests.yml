@@ -18,9 +18,13 @@ on:
     branches: [ main, develop ]
 
 # Each push/PR gets its own group — no cancellation so coverage always lands.
+# Superseded runs are cancelled on feature branches and PRs; main is left alone
+# because its runs are the release record. This block previously keyed the group
+# on github.sha, giving every commit its own group — so it collided with nothing
+# and superseded nothing, and every push queued another complete pipeline.
 concurrency:
-  group: tests-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: false
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:
@@ -825,3 +829,19 @@ jobs:
         run: pip install --retries 5 --timeout 60 -r requirements-ci.txt
       - name: Run Gate M
         run: python scripts/ci/gate_m_ml_edge.py
+
+  gate-broken-imports:
+    name: Gate — Broken local imports (no new unresolvable symbols)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Run broken-import gate
+        run: python scripts/ci/gate_broken_imports.py

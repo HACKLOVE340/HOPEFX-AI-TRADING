@@ -354,6 +354,55 @@ class KillSwitch:
         except Exception as exc:
             logger.debug("Kill switch: Redis latch check failed (non-fatal): %s", exc)
 
+    def _resolve_active_broker(self):
+        """
+        Resolve the live broker object, or None when nothing is connected.
+
+        Resolution order:
+          1. ``execution.engine.get_active_broker()``
+          2. ``execution.smart_router.get_router()._primary_broker``
+          3. ``core.app_state.app_state.broker``
+
+        Steps 1 and 2 are forward compatibility: neither module exposes that
+        accessor today, so both raise ImportError and fall through. Step 3 is
+        what actually resolves, because ComponentRegistry publishes the broker
+        onto the app_state singleton at startup.
+
+        This lives in one place deliberately. Both callers used to inline the
+        chain, and the copies drifted: ``check_broker_cod`` kept step 3 while
+        ``_broker_cancel_all`` stopped at step 2, which meant the kill switch
+        could never find a broker to cancel against and silently skipped the
+        mass cancel on every activation. One resolver cannot drift from itself.
+
+        Best-effort by contract: this never raises.
+        """
+        try:
+            from execution.engine import get_active_broker
+
+            broker = get_active_broker()
+            if broker is not None:
+                return broker
+        except Exception:  # nosec B110 — execution engine may not expose an accessor  # noqa: S110
+            pass
+
+        try:
+            from execution.smart_router import get_router
+
+            router = get_router()
+            if router is not None:
+                broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
+                if broker is not None:
+                    return broker
+        except Exception:  # nosec B110 — smart router may not expose an accessor  # noqa: S110
+            pass
+
+        try:
+            from core.app_state import app_state as _app_state
+
+            return getattr(_app_state, "broker", None)
+        except Exception:  # nosec B110 — app state may not be importable in isolation
+            return None
+
     async def _check_broker_cod(self) -> None:
         """
         Verify broker-level Cancel-on-Disconnect (CoD) at kill-switch startup.
@@ -387,32 +436,7 @@ class KillSwitch:
 
         The check is best-effort: failure never prevents startup.
         """
-        broker = None
-
-        try:
-            from execution.engine import get_active_broker
-
-            broker = get_active_broker()
-        except Exception:  # nosec B110  # noqa: S110
-            pass
-
-        if broker is None:
-            try:
-                from execution.smart_router import get_router
-
-                router = get_router()
-                if router is not None:
-                    broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-            except Exception:  # nosec B110  # noqa: S110
-                pass
-
-        if broker is None:
-            try:
-                from core.app_state import app_state as _app_state
-
-                broker = getattr(_app_state, "broker", None)
-            except Exception:  # nosec B110  # noqa: S110
-                pass
+        broker = self._resolve_active_broker()
 
         if broker is None:
             logger.debug("KillSwitch.check_broker_cod: no active broker yet — CoD check deferred")
@@ -525,9 +549,13 @@ class KillSwitch:
             password = os.getenv("REDIS_PASSWORD", "") or None
 
             # Inject REDIS_PASSWORD when not already embedded in the URL.
-            if password and "@" not in redis_url.split("://", 1)[-1]:
-                scheme, rest = redis_url.split("://", 1)
-                redis_url = f"{scheme}://:{password}@{rest}"
+            # Shared helper: the inline version raised ValueError on an empty or
+            # schemeless REDIS_URL. On the kill switch, whose Redis latch is what
+            # survives a restart, that turned a config typo into an exception in
+            # the one component that has to work when things are going wrong.
+            from cache.redis_client import inject_redis_password
+
+            redis_url = inject_redis_password(redis_url, password)
 
             # socket_connect_timeout prevents indefinite blocking when Redis is down.
             return _redis_lib.from_url(
@@ -659,31 +687,14 @@ class KillSwitch:
         """
         Best-effort broker-level mass cancel on kill switch activation.
 
-        Resolves the active broker from the module registry and calls
-        cancel_all_orders(). Async brokers (OANDA, MT5) are dispatched
-        via asyncio. Failure is logged but never prevents the kill switch
-        from activating — the flag is already set before this is called.
+        Resolves the active broker via ``_resolve_active_broker`` — the same
+        chain ``check_broker_cod`` uses — and calls cancel_all_orders(). Async
+        brokers (OANDA, MT5) are dispatched via asyncio. Failure is logged but
+        never prevents the kill switch from activating — the flag is already
+        set before this is called.
         """
         try:
-            # Try to get the active broker from the execution engine registry
-            broker = None
-            try:
-                from execution.engine import get_active_broker
-
-                broker = get_active_broker()
-            except Exception:  # nosec B110 — execution engine may not be initialised; try fallback  # noqa: S110
-                pass
-
-            # Fallback: try the smart router's primary broker
-            if broker is None:
-                try:
-                    from execution.smart_router import get_router
-
-                    router = get_router()
-                    if router is not None:
-                        broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-                except Exception:  # nosec B110 — smart router may not be initialised; logged below  # noqa: S110
-                    pass
+            broker = self._resolve_active_broker()
 
             if broker is None:
                 logger.warning("KillSwitch._broker_cancel_all: no active broker found — skipping broker cancel")

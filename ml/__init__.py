@@ -89,8 +89,73 @@ from typing import Any as _Any
 from api.error_details import safe_error
 
 _ml_logger = _logging.getLogger(__name__)
-_SAVED = _Path(__file__).parent / "saved_models"
-_CHECKSUM_FILE = _SAVED / "model_checksums.json"
+from ml.model_paths import model_dir as _model_dir
+from ml.model_paths import packaged_model_dir as _packaged_model_dir
+
+# The directory models are written to and looked for first. This used to be the
+# packaged path computed from __file__, which ignored ML_MODEL_DIR — so a
+# deployment that set it (Helm sets /app/data/models) retrained into a directory
+# this module never read, and kept serving the artifacts baked into the image.
+_SAVED = _model_dir()
+# Checksums cover the committed artifacts CI verifies, which live in the
+# packaged directory regardless of where a deployment retrains to.
+_PACKAGED = _packaged_model_dir()
+_CHECKSUM_FILE = _PACKAGED / "model_checksums.json"
+
+
+def _checksum_file_for(directory: _Path) -> _Path:
+    """The integrity baseline for *directory*.
+
+    Checksums are per directory. They used to be a single file covering the
+    packaged models, which was consistent while the packaged directory was the
+    only one ever loaded. Once ML_MODEL_DIR became a real read location, a
+    retrained advanced_oos.pkl there had the same *name* as the packaged one
+    and different bytes, so it was refused with "MODEL INTEGRITY FAILURE ...
+    may have been tampered with" — defeating the point of resolving the
+    variable at all, and reporting a path change as a security incident.
+    """
+    return directory / "model_checksums.json"
+
+
+# The directory the environment named at import. Compared against `_SAVED` so a
+# deliberate reassignment can be told apart from the configured default.
+_ENV_RESOLVED = _model_dir()
+
+
+def _saved(name: str) -> _Path:
+    """Resolve artifact *name* under `_SAVED`, falling back to the packaged copy.
+
+    `_SAVED` is a seam: callers and tests reassign it to point the package at a
+    specific directory. The first version of this helper delegated to
+    `find_model_file`, which resolves from the environment and the packaged
+    directory and never consulted `_SAVED` — so redirecting it silently stopped
+    working and an isolated fixture directory read the committed models instead.
+
+    The fallback still applies to the *configured* directory, because a pod
+    whose `ML_MODEL_DIR` is empty must not end up with no model at all. It does
+    not apply once `_SAVED` has been reassigned: that is an explicit instruction
+    to read that directory and nowhere else.
+
+    Returns a path that may not exist, so callers keep the missing-model
+    handling they already have.
+    """
+    candidate = _SAVED / name
+    if candidate.exists():
+        return candidate
+
+    if _SAVED == _ENV_RESOLVED and _SAVED != _PACKAGED:
+        fallback = _PACKAGED / name
+        if fallback.exists():
+            _ml_logger.warning(
+                "%r is not in the configured model directory %s; using the packaged copy. "
+                "Retrained artifacts there are not being served.",
+                name,
+                _SAVED,
+            )
+            return fallback
+
+    return candidate
+
 
 # ── PyTorch availability check ────────────────────────────────────────────────
 try:
@@ -135,21 +200,22 @@ def _verify_checksum(path: _Path) -> bool:
     The checksum file is written automatically on first successful load so
     subsequent loads can detect modifications.
     """
-    if not _CHECKSUM_FILE.exists():
-        # First run — record checksums for all existing models
-        _record_checksums()
+    checksum_file = _checksum_file_for(path.parent)
+    if not checksum_file.exists():
+        # First run for this directory — record a baseline for it.
+        _record_checksums(path.parent)
         return True
 
     try:
-        stored = _json.loads(_CHECKSUM_FILE.read_text())
+        stored = _json.loads(checksum_file.read_text())
     except Exception as exc:
         _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
         return True
 
     name = path.name
     if name not in stored:
-        # New model file not yet in checksum registry — record and allow
-        _record_checksums()
+        # New model file not yet in this directory's registry — record and allow
+        _record_checksums(path.parent)
         return True
 
     actual = _sha256(path)
@@ -166,14 +232,19 @@ def _verify_checksum(path: _Path) -> bool:
     return True
 
 
-def _record_checksums() -> None:
-    """Write SHA-256 checksums for all .pkl files in saved_models/."""
+def _record_checksums(directory: _Path | None = None) -> None:
+    """Write SHA-256 checksums for every .pkl in *directory*.
+
+    Defaults to the packaged directory, whose baseline is committed and
+    verified in CI.
+    """
+    target = directory or _PACKAGED
     try:
         checksums = {}
-        for pkl in _SAVED.glob("*.pkl"):
+        for pkl in target.glob("*.pkl"):
             checksums[pkl.name] = _sha256(pkl)
-        _CHECKSUM_FILE.write_text(_json.dumps(checksums, indent=2))
-        _ml_logger.info("Model checksums recorded: %d files", len(checksums))
+        _checksum_file_for(target).write_text(_json.dumps(checksums, indent=2))
+        _ml_logger.info("Model checksums recorded for %s: %d files", target, len(checksums))
     except Exception as exc:
         _ml_logger.warning("Could not record model checksums: %s", exc)
 
@@ -236,7 +307,7 @@ def _load_from_registry() -> "tuple[_Any | None, str]":
 
     Returns (model, version_name) or (None, "") on failure.
     """
-    registry_path = _SAVED / "registry.json"
+    registry_path = _saved("registry.json")
     if not registry_path.exists():
         _ml_logger.debug("_load_from_registry: registry.json not found — skipping")
         return None, ""
@@ -447,7 +518,7 @@ def _load_models() -> None:
         _model_version = _reg_version
         # Log registry metadata
         try:
-            registry = _json.loads((_SAVED / "registry.json").read_text())
+            registry = _json.loads((_saved("registry.json")).read_text())
             entry = registry["versions"].get(_reg_version, {})
             _ml_logger.info(
                 "Active ML model (registry): %s  oos_acc=%.3f  oos_n=%d  horizon=%d  features=%d",
@@ -462,12 +533,12 @@ def _load_models() -> None:
         return
 
     # ── Priority 2: advanced OOS model (hardcoded fallback path) ─────────────
-    _advanced_oos = _try_load(_SAVED / "advanced_oos.pkl")
+    _advanced_oos = _try_load(_saved("advanced_oos.pkl"))
     if _advanced_oos is not None:
         _macro_xgb = _advanced_oos
         _model_version = "advanced_oos_v2"
 
-        _meta_path = _SAVED / "advanced_oos_meta.json"
+        _meta_path = _saved("advanced_oos_meta.json")
         if _meta_path.exists():
             try:
                 with _Path(_meta_path).open(encoding="utf-8") as _f:
@@ -551,12 +622,12 @@ def _load_models() -> None:
         _ml_logger.debug("Discord alert failed (non-fatal): %s", _discord_exc)
 
     # ── Priority 3: basic macro XGBoost ──────────────────────────────────────
-    _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
-    _macro_rf = _try_load(_SAVED / "rf_macro.pkl")
+    _macro_xgb = _try_load(_saved("xgb_macro.pkl"))
+    _macro_rf = _try_load(_saved("rf_macro.pkl"))
 
     # ── Priority 4: baseline models (no macro) ───────────────────────────────
-    _baseline_xgb = _try_load(_SAVED / "xgb_xauusd.pkl")
-    _baseline_rf = _try_load(_SAVED / "rf_xauusd.pkl")
+    _baseline_xgb = _try_load(_saved("xgb_xauusd.pkl"))
+    _baseline_rf = _try_load(_saved("rf_xauusd.pkl"))
 
     if _macro_xgb is not None:
         _model_version = "macro_xgb_v1"
@@ -738,7 +809,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Reads from the saved training report if available; returns demo
         metrics otherwise so the frontend always has data to display.
         """
-        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
+        report_path = _saved("advanced_training_report.json")
         if report_path.exists():
             try:
                 with _Path(report_path).open(encoding="utf-8") as f:
@@ -791,7 +862,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Uses the saved stacking ensemble if available.
         """
         # Try to load a cached prediction from the report
-        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
+        report_path = _saved("advanced_training_report.json")
         if report_path.exists():
             try:
                 with _Path(report_path).open(encoding="utf-8") as f:
@@ -821,7 +892,10 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     @router.get("/models")
     async def list_models():
         """List available trained model files."""
-        model_dir = _Path(__file__).parent / "saved_models"
+        # The directory this deployment actually serves from, not the packaged
+        # one — a /models listing that names files inference never loads is
+        # worse than no listing.
+        model_dir = _SAVED
         if not model_dir.exists():
             return {"models": []}
         files = [
@@ -844,7 +918,10 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
             ml_available = False
             model_version = "unknown"
 
-        model_dir = _Path(__file__).parent / "saved_models"
+        # The directory this deployment actually serves from, not the packaged
+        # one — a /models listing that names files inference never loads is
+        # worse than no listing.
+        model_dir = _SAVED
         model_files = []
         if model_dir.exists():
             model_files = [f.name for f in model_dir.iterdir() if f.suffix in {".pkl", ".json"}]

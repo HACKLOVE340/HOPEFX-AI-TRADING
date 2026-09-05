@@ -294,29 +294,38 @@ class TestReconcile:
 
 
 class TestCollectLedgerPnl:
+    """The ledger reads the PositionManager singleton.
+
+    These tests used to patch ``sys.modules["core.app_state"]`` with a
+    MagicMock and set ``get_position_manager.return_value``. There is no
+    ``get_position_manager`` in ``core.app_state`` — a MagicMock answers any
+    attribute, so the mock manufactured the function the source was importing
+    and the suite proved nothing about the real import. Against the real
+    module the import raised, the handler returned ``(0.0, 0)``, and realized
+    P&L reconciled as zero forever. See docs/HARDENING_BACKLOG.md S-40.
+
+    They now patch the real singleton, ``execution.position_manager``.
+    """
+
     def test_returns_zero_when_position_manager_absent(self, tmp_path):
         r = _make_reconciler(tmp_path)
-        with patch("ml.pnl_reconciler.PnLReconciler._collect_ledger_pnl", wraps=r._collect_ledger_pnl):
-            # Patch app_state to raise ImportError
-            with patch.dict("sys.modules", {"core.app_state": None}):
-                pnl, n = r._collect_ledger_pnl()
+        with patch.dict("sys.modules", {"execution.position_manager": None}):
+            pnl, n = r._collect_ledger_pnl()
         assert pnl == 0.0
         assert n == 0
 
-    def test_returns_zero_when_get_position_manager_raises(self, tmp_path):
+    def test_returns_zero_when_the_import_raises(self, tmp_path):
         r = _make_reconciler(tmp_path)
-        mock_app_state = MagicMock()
-        mock_app_state.get_position_manager.side_effect = RuntimeError("not init")
-        with patch.dict("sys.modules", {"core.app_state": mock_app_state}):
+        broken = MagicMock()
+        type(broken).position_manager = property(lambda _: (_ for _ in ()).throw(RuntimeError("not init")))
+        with patch.dict("sys.modules", {"execution.position_manager": broken}):
             pnl, n = r._collect_ledger_pnl()
         assert pnl == 0.0
         assert n == 0
 
     def test_returns_zero_when_position_manager_is_none(self, tmp_path):
         r = _make_reconciler(tmp_path)
-        mock_app_state = MagicMock()
-        mock_app_state.get_position_manager.return_value = None
-        with patch.dict("sys.modules", {"core.app_state": mock_app_state}):
+        with patch("execution.position_manager.position_manager", None):
             pnl, n = r._collect_ledger_pnl()
         assert pnl == 0.0
         assert n == 0
@@ -334,14 +343,26 @@ class TestCollectLedgerPnl:
         pm = MagicMock()
         pm._history = [close1, close2, close3]
 
-        mock_app_state = MagicMock()
-        mock_app_state.get_position_manager.return_value = pm
-
-        with patch.dict("sys.modules", {"core.app_state": mock_app_state}):
+        with patch("execution.position_manager.position_manager", pm):
             pnl, n = r._collect_ledger_pnl()
 
         assert pnl == pytest.approx(14.3)
         assert n == 3
+
+    def test_reads_the_real_singleton_not_an_invented_accessor(self, tmp_path):
+        """Regression: the source must import a name that exists.
+
+        Fails if _collect_ledger_pnl goes back to core.app_state — that module
+        has no position-manager accessor, so the import would raise and the
+        method would silently report zero realized P&L.
+        """
+        import inspect
+
+        from ml.pnl_reconciler import PnLReconciler
+
+        source = inspect.getsource(PnLReconciler._collect_ledger_pnl)
+        assert "execution.position_manager" in source
+        assert "get_position_manager" not in source
 
 
 # ── _collect_broker_pnl ───────────────────────────────────────────────────────

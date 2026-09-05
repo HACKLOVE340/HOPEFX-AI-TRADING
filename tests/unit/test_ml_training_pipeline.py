@@ -247,7 +247,80 @@ def test_advanced_training_report_feature_count(monkeypatch):
 # ── retrain_model.py --smoke ──────────────────────────────────────────────────
 
 
+# Artefacts the smoke retrain overwrites in place. They are committed and
+# checksum-verified in CI, so a test run must hand them back byte-identical.
+_SMOKE_OVERWRITES = (
+    "advanced_oos.pkl",
+    "advanced_oos_meta.json",
+    "advanced_training_report.json",
+    "feature_scaler.pkl",
+    "feature_stats.json",
+    "stacking_ensemble.pkl",
+)
+
+
+@pytest.fixture
+def _preserve_saved_models():
+    """Restore ml/saved_models/ after a test that retrains in place.
+
+    `retrain_model.py --smoke --advanced` shells out to ml/train_advanced.py,
+    whose MODEL_DIR is hardcoded to ml/saved_models — `--model-dir` is only
+    threaded through the non-advanced branch, and train_advanced does not read
+    ML_MODEL_DIR. So this test rewrites tracked model artefacts as a side
+    effect and leaves the working tree dirty.
+
+    Making train_advanced honour ML_MODEL_DIR would look like the tidier fix
+    and is not safe: that variable is already live — `.env.example` sets it to
+    `models` and deployment/helm_chart.py sets `/app/data/models` — while
+    ml/advanced_predictor.py reads models back from ml/saved_models. Honouring
+    it here would silently send a production retrain somewhere inference does
+    not look. So the test cleans up after itself instead.
+    """
+    saved = {}
+    for name in _SMOKE_OVERWRITES:
+        path = MODELS / name
+        saved[path] = path.read_bytes() if path.exists() else None
+    try:
+        yield
+    finally:
+        for path, original in saved.items():
+            if original is None:
+                path.unlink(missing_ok=True)
+            elif path.read_bytes() != original:
+                path.write_bytes(original)
+
+
+def test_preserve_saved_models_actually_restores(_preserve_saved_models):
+    """The guard above is only worth having if it really puts the bytes back.
+
+    Mutates a tracked artefact inside the fixture's scope; the fixture's
+    teardown must restore it. Without this, the fixture could rot into a no-op
+    and the pollution would come back unnoticed.
+    """
+    victim = MODELS / "feature_stats.json"
+    if not victim.exists():
+        pytest.skip("feature_stats.json not present in this checkout")
+
+    original = victim.read_bytes()
+    victim.write_bytes(original + b"\n// scribble\n")
+    assert victim.read_bytes() != original, "test setup failed to mutate the file"
+    # Teardown restores it; the assertion lives in the companion test below.
+
+
+def test_preserve_saved_models_left_no_scribble():
+    """Runs after the test above and sees the restored state."""
+    victim = MODELS / "feature_stats.json"
+    if not victim.exists():
+        pytest.skip("feature_stats.json not present in this checkout")
+
+    assert b"scribble" not in victim.read_bytes(), (
+        "_preserve_saved_models did not restore the artefact it was given — the "
+        "smoke retrain will start leaving the working tree dirty again"
+    )
+
+
 @pytest.mark.slow
+@pytest.mark.usefixtures("_preserve_saved_models")
 def test_retrain_model_smoke_exits_zero():
     """retrain_model.py --smoke --advanced completes without error."""
     result = subprocess.run(  # nosec B603 - test file

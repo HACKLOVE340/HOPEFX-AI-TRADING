@@ -1217,7 +1217,7 @@ def oos_eval_advanced(
     }
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Train advanced XAUUSD stacking ensemble",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1307,7 +1307,7 @@ def main():
             "Completes in ~30 s. For CI and quick sanity checks."
         ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # ── Smoke-test overrides ──────────────────────────────────────────────────
     if args.smoke:
@@ -1543,6 +1543,31 @@ def main():
     logger.info("=" * 65)
 
     return report
+
+
+def retrain_advanced_predictor(
+    years: int = 50,
+    oos_years: int = 4,
+    stacking: bool = True,
+) -> dict:
+    """Programmatic retrain entry point for the advanced_oos model.
+
+    ``TrainingManager._dispatch_training`` imported this name and it did not
+    exist, so every advanced_oos retrain job raised ImportError into the job
+    handler and was recorded as failed. The module only ever had the argparse
+    ``main()``.
+
+    Defaults mirror the production retrain documented in AGENTS.md
+    (``--years 50 --oos-years 4 --stacking``). Returns ``main()``'s report dict,
+    which is what the caller stores as the job's metrics.
+
+    This is a full retrain: expect 10-60 minutes depending on hardware. The
+    caller already runs it on a worker thread.
+    """
+    argv = ["--years", str(years), "--oos-years", str(oos_years)]
+    if stacking:
+        argv.append("--stacking")
+    return main(argv)
 
 
 if __name__ == "__main__":

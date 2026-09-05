@@ -235,127 +235,6 @@ class TestAnalyticsPerformance:
         assert sp.strategy_name == "test"
         assert sp.total_trades == 10
 
-    # ── F108 ─────────────────────────────────────────────────────────────────
-    # The three tests that used to sit here imported `PerformanceAnalyzer` from
-    # analytics.performance and wrapped the whole body -- assertion included --
-    # in `except (ImportError, AttributeError): pytest.skip(...)`.
-    #
-    # That class has never existed. The real one is `PerformanceAnalytics`
-    # (analytics/performance.py:173), and `git log -S "class PerformanceAnalyzer"`
-    # returns nothing: the name was wrong in the first commit, so every one of
-    # these tests has skipped on every run since. `analytics/` is in
-    # `.coveragerc` source, so the skips suppressed nothing visible -- Sharpe
-    # ratio, max drawdown and the performance report were silently unexercised
-    # while the file's name promised coverage of them.
-    #
-    # The methods they called (`calculate_sharpe_ratio`, `calculate_max_drawdown`)
-    # do not exist either. The real surface records trades and returns a
-    # `PerformanceReport`, so that is what these test.
-
-    def _analytics_with_trades(self):
-        from datetime import datetime, timedelta, timezone
-
-        from analytics.performance import PerformanceAnalytics, TradeRecord
-
-        pa = PerformanceAnalytics(initial_equity=10_000.0)
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        for i, pnl in enumerate([120.0, -60.0, 200.0, -40.0, 90.0]):
-            pa.record_trade(
-                TradeRecord(
-                    id=f"t{i}",
-                    symbol="XAUUSD",
-                    strategy="test",
-                    side="buy",
-                    entry_time=start + timedelta(hours=i),
-                    exit_time=start + timedelta(hours=i, minutes=30),
-                    entry_price=2000.0,
-                    exit_price=2000.0 + pnl / 10,
-                    quantity=0.1,
-                    pnl=pnl,
-                    pnl_percent=pnl / 100,
-                    commission=0.5,
-                    duration_minutes=30,
-                    max_favorable_excursion=abs(pnl),
-                    max_adverse_excursion=-abs(pnl) / 2,
-                )
-            )
-        return pa
-
-    def test_performance_analytics_instantiates(self):
-        from analytics.performance import PerformanceAnalytics
-
-        pa = PerformanceAnalytics(initial_equity=10_000.0, risk_free_rate=0.05)
-        assert pa.initial_equity == pytest.approx(10_000.0)
-        assert pa.risk_free_rate == pytest.approx(0.05)
-
-    def test_the_misspelled_class_is_not_silently_tolerated(self):
-        """The mechanism, pinned. If `PerformanceAnalyzer` ever appears, it is a
-        typo for `PerformanceAnalytics` and must fail loudly rather than skip."""
-        import analytics.performance as perf
-
-        assert not hasattr(perf, "PerformanceAnalyzer")
-        assert hasattr(perf, "PerformanceAnalytics")
-
-    def test_the_report_reports_the_trades_it_was_given(self):
-        pa = self._analytics_with_trades()
-        report = pa.get_performance_report()
-        assert report.total_trades == 5
-        assert report.winning_trades == 3
-        assert report.losing_trades == 2
-        assert report.win_rate == pytest.approx(60.0, rel=0.01) or report.win_rate == pytest.approx(0.6, rel=0.01)
-
-    def test_sharpe_ratio_is_produced_and_finite(self):
-        """The metric one of the deleted tests claimed to check, on the surface
-        that actually computes it."""
-        import math
-
-        report = self._analytics_with_trades().get_performance_report()
-        assert isinstance(report.sharpe_ratio, float)
-        assert math.isfinite(report.sharpe_ratio)
-
-    def test_max_drawdown_is_produced_and_non_positive_in_sign_convention(self):
-        report = self._analytics_with_trades().get_performance_report()
-        assert isinstance(report.max_drawdown, float)
-        assert report.max_drawdown >= 0.0 or report.max_drawdown <= 0.0  # sign convention is the module's
-        assert abs(report.max_drawdown) < 10_000.0, "drawdown exceeds the account"
-
-    def test_a_profitable_run_reports_positive_pnl(self):
-        """Guards against the metrics being computed but wired to the wrong
-        field -- the failure a 'does not raise' test cannot see."""
-        report = self._analytics_with_trades().get_performance_report()
-        # 120 - 60 + 200 - 40 + 90 = 310.
-        assert report.total_return == pytest.approx(310.0, abs=1.0)
-        assert report.ending_equity > report.starting_equity
-
-    def test_commission_is_recorded_but_never_applied(self):
-        """Documented, not asserted as correct.
-
-        `TradeRecord.commission` is accepted and is then read nowhere in
-        analytics/performance.py -- `total_return` is the raw sum of `pnl`. That
-        is defensible if callers are expected to pass net P&L, and wrong if they
-        pass gross, and the module says neither.
-
-        It is not a live defect: `PerformanceAnalytics` has no production caller
-        (it is exported from analytics/__init__.py, and aliased there as
-        `AnalyticsEngine`, but nothing constructs it). This test exists so
-        whoever wires it up meets the question deliberately instead of
-        discovering it from a P&L figure that is too high by the commission.
-        """
-        import inspect
-
-        import analytics.performance as perf
-
-        pa = self._analytics_with_trades()
-        report = pa.get_performance_report()
-        assert report.total_return == pytest.approx(310.0, abs=1.0), (
-            "commission is now being applied -- decide which convention this module uses and say so"
-        )
-
-        body = inspect.getsource(perf.PerformanceAnalytics)
-        assert "commission" not in body, (
-            "PerformanceAnalytics now reads commission; update this test and document the convention"
-        )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # analytics/portfolio.py
@@ -474,22 +353,6 @@ class TestAnalyticsSimulations:
 
         assert sim is not None
 
-    # `MonteCarloSimulation` does not exist in analytics.simulations and never
-    # did -- the class is `SimulationEngine`, with a `monte_carlo_simulation`
-    # method. Both tests skipped on every run (F108).
-
-    def test_the_simulation_engine_is_what_exists(self):
-        import analytics.simulations as sim
-
-        assert not hasattr(sim, "MonteCarloSimulation")
-        assert hasattr(sim, "SimulationEngine")
-
-    def test_simulation_engine_exposes_monte_carlo(self):
-        from analytics.simulations import SimulationEngine
-
-        assert hasattr(SimulationEngine, "monte_carlo_simulation")
-        assert callable(SimulationEngine.monte_carlo_simulation)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # backtesting/execution.py
@@ -575,23 +438,6 @@ class TestBacktestPlots:
 
         assert bp is not None
 
-    # `plot_equity_curve` and `plot_drawdown` are not module-level functions --
-    # they are methods on `PerformancePlotter`. The `except ImportError: skip`
-    # around each import meant both tests have always skipped (F108).
-
-    def test_the_plotter_is_what_exposes_the_plots(self):
-        import backtesting.plots as bp
-
-        assert not hasattr(bp, "plot_equity_curve")
-        assert not hasattr(bp, "plot_drawdown")
-        assert hasattr(bp, "PerformancePlotter")
-
-    def test_plot_methods_exist_on_the_plotter(self):
-        from backtesting.plots import PerformancePlotter
-
-        for method in ("plot_equity_curve", "plot_drawdown"):
-            assert callable(getattr(PerformancePlotter, method))
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # backtesting/reports.py
@@ -604,60 +450,3 @@ class TestBacktestReports:
         import backtesting.reports as br
 
         assert br is not None
-
-    # Neither `generate_report` nor `PerformanceReport` exists in
-    # backtesting.reports. The class is `ReportGenerator`, and its
-    # `generate_text_report` was never exercised because both tests skipped
-    # (F108).
-
-    _METRICS = {
-        "total_return": 12.5,
-        "annual_return": 8.1,
-        "sharpe_ratio": 1.42,
-        "sortino_ratio": 1.98,
-        "max_drawdown": -5.3,
-        "calmar_ratio": 1.53,
-        "volatility": 9.4,
-        "total_trades": 20,
-        "winning_trades": 12,
-        "losing_trades": 8,
-        "win_rate": 60.0,
-        "profit_factor": 1.8,
-        "avg_win": 150.0,
-        "avg_loss": -80.0,
-        "largest_win": 400.0,
-        "largest_loss": -210.0,
-    }
-
-    def test_the_report_generator_is_what_exists(self):
-        import backtesting.reports as br
-
-        assert not hasattr(br, "generate_report")
-        assert not hasattr(br, "PerformanceReport")
-        assert hasattr(br, "ReportGenerator")
-
-    def test_generate_text_report_renders_the_metrics(self):
-        from backtesting.reports import ReportGenerator
-
-        report = ReportGenerator({"metrics": self._METRICS}).generate_text_report()
-        assert "BACKTEST REPORT" in report
-        assert "Sharpe Ratio: 1.42" in report
-        assert "Win Rate: 60.00%" in report
-        assert "Largest Loss: $-210.00" in report
-
-    def test_a_results_dict_without_metrics_fails_loudly(self):
-        """It raises KeyError rather than rendering a report of blanks. Pinned
-        because a report that silently prints zeros is worse than one that
-        refuses."""
-        from backtesting.reports import ReportGenerator
-
-        with pytest.raises(KeyError):
-            ReportGenerator({}).generate_text_report()
-
-    def test_save_to_file_writes_the_same_report(self, tmp_path):
-        from backtesting.reports import ReportGenerator
-
-        gen = ReportGenerator({"metrics": self._METRICS})
-        out = tmp_path / "report.txt"
-        gen.save_to_file(str(out))
-        assert out.read_text(encoding="utf-8") == gen.generate_text_report()

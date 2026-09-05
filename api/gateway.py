@@ -288,12 +288,19 @@ class APIGateway:
             allowed, reason = await limiter.check_and_register(websocket, client_ip)
             if not allowed:
                 return
-            token = websocket.query_params.get("token")
+            # Preferred: the hopefx.auth.bearer subprotocol, which rides in a
+            # header rather than the URL. This endpoint had no message-based
+            # handshake to fall back on, so the query string was its only
+            # credential and every connection wrote a live token into the
+            # access log.
+            from api.ws_live import ws_accept_subprotocol, ws_auth_token
+
+            token = ws_auth_token(websocket)
             if not token or not self._verify_token(token, raise_exception=False):
                 await websocket.close(code=4001, reason="Unauthorized")
                 await limiter.release(client_ip)
                 return
-            await websocket.accept()
+            await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
             try:
                 while True:
                     data = {

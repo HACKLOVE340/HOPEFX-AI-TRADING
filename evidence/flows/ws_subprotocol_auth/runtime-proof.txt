@@ -1,0 +1,31 @@
+=== A: token in the subprotocol header (preferred) ===
+server saw: {"token_seen": "jwt-header-abc", "negotiated_subprotocol": ["hopefx.auth.bearer", "jwt-header-abc"]}
+-> the URL was /ws/probe with no query string; nothing to log
+
+=== B: token in the query string (deprecated, still works) ===
+WS auth token supplied in the query string by testclient — deprecated, it reaches access logs and Referer headers; use the 'hopefx.auth.bearer' subprotocol instead
+server saw: {"token_seen": "jwt-url-xyz", "negotiated_subprotocol": []}
+-> note the WARNING above naming the client
+
+=== C: both offered — the header must win ===
+server saw: {"token_seen": "jwt-header-abc", "negotiated_subprotocol": ["hopefx.auth.bearer", "jwt-header-abc"]}
+
+=== D: WS_ALLOW_QUERY_TOKEN=false closes the legacy path ===
+server saw: {"token_seen": null, "negotiated_subprotocol": []}
+subprotocol still accepted: {"token_seen": "jwt-header-abc", "negotiated_subprotocol": ["hopefx.auth.bearer", "jwt-header-abc"]}
+
+
+=== FOLLOW-UP: the two handlers the first pass missed ===
+community_chat and social_feed had their frontends moved to the
+subprotocol while their handlers still read only the query string,
+so every browser client was rejected 4001. Both now use ws_auth_token.
+
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+  subprotocol (what the SPA now sends)     token='jwt-abc'    echo='hopefx.auth.bearer'
+WS auth token supplied in the query string by 203.0.113.10 — deprecated, it reaches access logs and Referer headers; use the 'hopefx.auth.bearer' subprotocol instead
+  query string (existing scripts)          token='jwt-xyz'    echo=None
+  neither                                  token=None         echo=None
+
+  handlers now routed through the extractor:
+    api.community_chat     ws_auth_token=True  echoes_subprotocol=True
+    api.social_feed        ws_auth_token=True  echoes_subprotocol=True

@@ -7,13 +7,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase, extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
-import { PageHeader, RelatedPages } from '../components';
-import { EmptyState } from '../components/EmptyState';
-import {
-  Radio, ThumbsUp, ThumbsDown, MessageSquare, Zap, ChevronUp, ChevronDown,
-  Sparkles, Check, Lightbulb, Trophy, Users, BookOpen, LineChart,
-} from 'lucide-react';
+import { extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
+import { openAuthenticatedWebSocket } from '../lib/ws';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -79,10 +74,9 @@ const SocialFeed: React.FC = () => {
   const wsToken = useStore(s => s.token);
   useEffect(() => {
     if (!wsToken) return;
-    const wsUrl = `${getWsBase()}/ws/social-feed?token=${wsToken}`;
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(wsUrl);
+      ws = openAuthenticatedWebSocket('/ws/social-feed', wsToken);
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data as string) as { type?: string; signal?: FeedItem };
