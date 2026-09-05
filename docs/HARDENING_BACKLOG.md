@@ -7683,3 +7683,102 @@ contamination"), but `_gate_expected_value` does
 history of its own inherits every other symbol's EV. Defensible as a prior, but
 it is the opposite choice made two methods apart, and undocumented. Pinned in
 `test_but_the_ev_gate_does_fall_back_to_global_history`.
+
+---
+
+## Round 26 — the ML training inventory (S-82)
+
+### S-82 — `_static_model_status` reported every model as trained — **FIXED**
+
+`ml/training_manager.py::_static_model_status` is the model inventory returned
+by `list_jobs()` when the database has no `ml_training` history — the list an
+operator sees on a fresh deployment, surfaced through `/api/ml/training/jobs`
+and the superadmin ML page.
+
+**What it did.** For each of the six `_KNOWN_MODELS` it checked
+
+```python
+found = fpath.exists() or pt_path.exists() or zip_path.exists()
+```
+
+where `zip_path` was `ml/saved_models/rl/hopefx_ppo.zip` — the *RL agent's*
+artifact, recomputed identically inside every iteration. That file is committed
+to this repository (it is whitelisted in `.gitignore` and checksum-verified in
+CI), so the third clause was true for every model, and all six reported
+`completed`. Four of them also took their `started_at`/`finished_at` from the
+zip's mtime, because the loop that picked the timestamp fell through to the
+same shared file.
+
+Measured before the fix, in this working tree:
+
+| model | reported | artifact actually present |
+|---|---|---|
+| advanced_oos | completed | `advanced_oos.pkl` ✅ |
+| lstm_signal | completed | **none** |
+| rl_ppo | completed | `rl/hopefx_ppo.zip` ✅ |
+| hybrid_ensemble | completed | **none** (`hybrid_meta.pkl` is a different artifact) |
+| rf_macro | completed | `rf_macro.pkl` ✅ |
+| xgb_macro | completed | `xgb_macro.pkl` ✅ |
+
+`lstm_signal` is the sharp end: AGENTS.md's model table records it as
+"Architecture complete, not trained", and `_dispatch_training` raises a
+`RuntimeError` explaining that no trainer for it exists (Round 4 / task #4) —
+yet the inventory said it was trained, with a timestamp.
+
+**Second defect in the same function.** The directory was the hardcoded
+relative `Path("ml/saved_models")`. That ignores `ML_MODEL_DIR`, which
+production sets to a mounted volume (`/app/data/models` in
+`deployment/helm_chart.py`), and resolves against the process working
+directory, so a service started from anywhere but the repository root would
+report every model `not_trained`. This is exactly the class of bug Round 21
+consolidated into `ml/model_paths.py`; this call site was missed.
+
+**Fix.** Each model is now resolved to its own artifact through
+`ml.model_paths.find_model_file` — `ML_MODEL_DIR` first, packaged
+`ml/saved_models` as the fallback, the same order inference uses to choose the
+model it serves. The RL zip is named once, as `_RL_ARTIFACT`, and is consulted
+only for `rl_ppo`/`rl`.
+
+After the fix, same tree:
+
+```
+advanced_oos     completed     2026-08-17T12:39:23.338878+00:00
+lstm_signal      not_trained   None
+rl_ppo           completed     2026-08-17T12:39:23.420176+00:00
+hybrid_ensemble  not_trained   None
+rf_macro         completed     2026-08-17T12:39:23.354878+00:00
+xgb_macro        completed     2026-08-17T12:39:23.420176+00:00
+```
+
+**Proof.** `tests/unit/test_ml_training_manager.py::TestStaticModelStatus` —
+six tests, written failing first against the old implementation (each model
+judged by its own artifact, no timestamp for an untrained model, `.pt`
+checkpoints honoured, `ML_MODEL_DIR` honoured, packaged directory as fallback,
+one row per known model). This is a status/reporting fix: it changes no gate,
+no sizing, and no execution path.
+
+### S-83 — observations pinned, not changed
+
+Two behaviours in `ml/signal_scorer.py` are now covered by tests that record
+what the code does, deliberately without changing it. Both are strategy calls
+for the owner, not defects with an obvious right answer:
+
+- **The ADX vote is unconditional.** `_score_technical_consensus` appends a
+  literal `True` vote when ADX > 20, regardless of the signal's direction, so a
+  counter-trend signal in a strong trend scores 1/7 rather than 0/6 — a strong
+  trend slightly *raises* the score of a signal fighting it. ADX is
+  directionless by construction, so this is defensible, and the inline comment
+  says it is intended ("trending = good for trend signals"). Pinned by
+  `test_adx_vote_is_unconditional_when_the_trend_is_strong`.
+- **`NEUTRAL` is scored as a short.** `_score_ml_confidence` branches on
+  `direction.upper() in ("BUY", "LONG")`, so any other value — including the
+  `"NEUTRAL"` default `SignalScorer.score` supplies when a payload carries no
+  direction — takes the bearish branch. Scoring is advisory
+  (`core/signal_engine.py::_enrich_with_signal_score` swallows every failure and
+  the result gates nothing), and no NEUTRAL payload reaches it in practice.
+  Pinned by `test_unrecognised_direction_is_scored_as_bearish`.
+
+Also pinned: feeding every dimension exactly a grade threshold (0.75, 0.60)
+produces `0.7499999999999999` from the six-term weighted sum and grades one band
+low. Advisory, and arbitrary to a part in 1e16 — recorded so nobody reads the
+boundary off the docstring and concludes the grader is broken.
