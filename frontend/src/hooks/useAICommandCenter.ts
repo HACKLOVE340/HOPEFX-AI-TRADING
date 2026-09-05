@@ -36,15 +36,15 @@ export function useAICommandCenter(symbol = 'XAUUSD') {
 
   const [prices, brain, risk, mlHealth, dataHealth, symbols, teams, backtests, walkForward] = results;
   const sources = {
-    prices: resolve(prices.data?.data, 'trading.prices'),
-    brain: resolve(brain.data?.data, 'trading.brain-state'),
-    risk: resolve(risk.data?.data, 'trading.risk'),
-    mlHealth: resolve(mlHealth.data?.data, 'ml.health'),
-    dataHealth: resolve(dataHealth.data?.data, 'data-layer.health'),
-    symbols: resolve(symbols.data?.data, 'trading.symbols'),
-    teams: resolve(teams.data?.data, 'accounts.teams'),
-    backtests: resolve(backtests.data?.data, 'backtesting.list'),
-    walkForward: resolve(walkForward.data?.data, 'backtesting.walk-forward'),
+    prices: resolve(prices, 'trading.prices'),
+    brain: resolve(brain, 'trading.brain-state'),
+    risk: resolve(risk, 'trading.risk'),
+    mlHealth: resolve(mlHealth, 'ml.health'),
+    dataHealth: resolve(dataHealth, 'data-layer.health'),
+    symbols: resolve(symbols, 'trading.symbols'),
+    teams: resolve(teams, 'accounts.teams'),
+    backtests: resolve(backtests, 'backtesting.list'),
+    walkForward: resolve(walkForward, 'backtesting.walk-forward'),
   };
 
   return { sources, isRefreshing: results.some((query) => query.isFetching), hasDegradedSources: Object.values(sources).some((source) => source.status === 'degraded'), refresh: () => results.forEach((query) => void query.refetch()) };
