@@ -114,7 +114,7 @@ export const GlobalAttackMap: React.FC<GlobalAttackMapProps> = ({
         maxZoom: 18,
       }).addTo(map);
 
-      mapRef.current = map;
+      mapRef.current ??= map;
     })();
 
     return () => {
