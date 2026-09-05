@@ -17,7 +17,12 @@ UTC = timezone.utc
 from typing import Any
 
 from core.event_bus import DomainEvent, EventBus
+from core.ai_contracts import HumanApproval, ResearchCandidate
 from strategies.base import BaseStrategy, Signal
+from strategies.strategy_execution_boundary import (
+    ExecutionScope,
+    StrategyExecutionBoundary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +52,8 @@ class StrategyOrchestra:
         self.signal_buffer: dict[str, list[Signal]] = defaultdict(list)
         self._rebalancer: Any | None = None
         self._returns_buffer: dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
+        self._execution_boundary = StrategyExecutionBoundary()
+        self._ai_candidates: dict[str, ResearchCandidate] = {}
 
         self.event_bus.subscribe("POSITION_CLOSED", self._on_position_closed)
         self.event_bus.subscribe("REGIME_CHANGE", self._on_regime_change)
@@ -171,6 +178,39 @@ class StrategyOrchestra:
             "ranging": 0.5,
             "volatile": 0.5,
         }
+
+    def register_ai_candidate(
+        self,
+        strategy: BaseStrategy,
+        candidate: ResearchCandidate,
+        max_allocation: float = 0.20,
+    ) -> None:
+        """Register an AI candidate without changing existing strategy behavior."""
+        self.register_strategy(strategy, max_allocation=max_allocation)
+        self._ai_candidates[strategy.config.name] = candidate
+
+    def activate_ai_strategy(
+        self,
+        strategy_id: str,
+        scope: ExecutionScope = ExecutionScope.RESEARCH,
+        approval: HumanApproval | None = None,
+    ) -> bool:
+        """Activate an AI candidate only when its explicit boundary permits it."""
+        candidate = self._ai_candidates.get(strategy_id)
+        if candidate is None:
+            logger.warning("AI strategy activation denied: candidate not registered: %s", strategy_id)
+            return False
+        decision = self._execution_boundary.evaluate(candidate, scope, approval)
+        if not decision.allowed:
+            logger.warning(
+                "AI strategy activation denied: strategy=%s code=%s reason=%s",
+                strategy_id,
+                decision.reason_code,
+                decision.reason,
+            )
+            return False
+        self.activate_strategy(strategy_id)
+        return strategy_id in self.active_strategies
 
     def activate_strategy(self, strategy_id: str):
         if strategy_id in self.strategies:
