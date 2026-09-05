@@ -557,13 +557,27 @@ class MasterControlCore:
             logger.error("Kill switch: _async_close_all_via_mgr failed: %s", _exc)
 
     def _sync_close_positions(self, broker_mgr, positions) -> None:
-        """Sync helper: close each position via broker_mgr."""
+        """Sync helper: close each position, resolving async broker calls safely."""
+        import asyncio
+        import inspect
+
         for pos in positions:
             try:
                 symbol = getattr(pos, "symbol", None)
-                if symbol:
-                    broker_mgr.close_position(symbol)
-                    logger.info("Kill switch: closed position for %s", symbol)
+                if not symbol:
+                    continue
+                result = broker_mgr.close_position(symbol)
+                if inspect.isawaitable(result):
+                    try:
+                        asyncio.get_running_loop()
+                    except RuntimeError:
+                        asyncio.run(result)
+                    else:
+                        raise RuntimeError(
+                            "async close_position cannot run from the active event loop; "
+                            "use the async kill-switch path"
+                        )
+                logger.info("Kill switch: closed position for %s", symbol)
             except Exception as _pos_exc:  # pylint: disable=broad-exception-caught
                 logger.error(
                     "Kill switch: failed to close position for %s: %s",
