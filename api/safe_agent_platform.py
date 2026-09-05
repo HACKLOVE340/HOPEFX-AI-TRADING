@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, require_role
+from core.config_store import config_store
 
 router = APIRouter(prefix="/api/safe-platform", tags=["Safe Agent Platform"])
 
@@ -41,6 +42,27 @@ _INTEGRATIONS = [
 ]
 _PROPOSALS: list[dict[str, Any]] = []
 _APPROVALS: list[dict[str, Any]] = []
+_PROPOSALS_KEY = "safe_platform:proposals"
+_APPROVALS_KEY = "safe_platform:approvals"
+
+
+def _load_state() -> None:
+    """Hydrate governance state from the shared Redis/DB config store."""
+    stored_proposals = config_store.get(_PROPOSALS_KEY, default=[])
+    stored_approvals = config_store.get(_APPROVALS_KEY, default=[])
+    if isinstance(stored_proposals, list):
+        _PROPOSALS.extend(item for item in stored_proposals if isinstance(item, dict))
+    if isinstance(stored_approvals, list):
+        _APPROVALS.extend(item for item in stored_approvals if isinstance(item, dict))
+
+
+def _save_state(changed_by: str) -> None:
+    """Persist proposals and approvals without ever persisting secret values."""
+    config_store.set(_PROPOSALS_KEY, _PROPOSALS, changed_by=changed_by)
+    config_store.set(_APPROVALS_KEY, _APPROVALS, changed_by=changed_by)
+
+
+_load_state()
 
 
 def _admin(user: TokenPayload = Depends(require_role("admin"))) -> TokenPayload:
@@ -87,6 +109,7 @@ async def run_diagnostics(request: DiagnosticRequest, user: TokenPayload = Depen
 async def create_proposal(request: ProposalRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     proposal = {"id": _id("proposal", [user.sub, request.title, request.changes]), "title": request.title, "kind": request.kind, "scope": request.scope, "reason": request.reason, "changes": request.changes, "status": "pending", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(), "rollback": {"required": True, "checkpoint": "created-before-apply", "automatic": True}, "required_approvals": 2 if request.kind in {"repair", "upgrade"} else 1}
     _PROPOSALS.append(proposal)
+    _save_state(user.sub)
     return {"proposal": copy.deepcopy(proposal), "message": "Proposal created. No change has been applied."}
 
 
@@ -110,6 +133,7 @@ async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends
         approvals = [a for a in _APPROVALS if a["proposal_id"] == request.proposal_id and a["decision"] == "approve"]
         if len({a["approver"] for a in approvals}) >= proposal["required_approvals"]:
             proposal["status"] = "approved_pending_execution"
+    _save_state(user.sub)
     return {"proposal": copy.deepcopy(proposal), "decision": decision, "message": "Approval recorded. Execution remains separately gated."}
 
 
