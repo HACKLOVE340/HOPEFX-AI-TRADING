@@ -122,7 +122,14 @@ class PositionReconciler:
                 raw = self._broker.get_positions()
                 if asyncio.iscoroutine(raw):
                     raw = await raw
-                broker_positions = {p.get("symbol", p): p for p in (raw or [])}
+                broker_positions = {}
+                for position in raw or []:
+                    if isinstance(position, dict):
+                        symbol = position.get("symbol")
+                    else:
+                        symbol = getattr(position, "symbol", None)
+                    if symbol:
+                        broker_positions[str(symbol)] = position
                 broker_snapshot_available = True
             except Exception as exc:
                 logger.warning("Could not fetch broker positions: %s", exc)

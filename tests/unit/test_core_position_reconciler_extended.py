@@ -201,6 +201,22 @@ async def test_reconcile_once_no_mismatch_when_broker_matches():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_accepts_object_broker_positions():
+    pos = _make_db_position(symbol="EURUSD", side="buy", qty=10000.0, entry=1.08)
+    broker_pos = MagicMock(symbol="EURUSD", quantity=10000.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = [broker_pos]
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1.09):
+            await r._reconcile_once()
+
+    assert r._mismatches == 0
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_async_broker_positions():
     pos = _make_db_position(symbol="EURUSD", side="buy", qty=10000.0, entry=1.08)
     mock_broker = MagicMock()
