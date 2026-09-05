@@ -219,6 +219,7 @@ def register_routers(
     from api.calendar import router as calendar_router
     from api.chat import router as chat_router
     from api.professional_control_plane import router as control_plane_router
+    from api.safe_agent_platform import router as safe_agent_platform_router
     from api.explain import router as explain_router
     from api.health import router as health_router
 
@@ -323,6 +324,7 @@ def register_routers(
         brain_router,
         calendar_router,
         control_plane_router,
+        safe_agent_platform_router,
         profiles_router,
         social_feed_router,
         social_leaderboard_router,

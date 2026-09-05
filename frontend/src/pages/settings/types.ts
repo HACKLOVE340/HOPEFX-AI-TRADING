@@ -26,6 +26,12 @@ export type SettingsTab =
   | 'control-sandbox'
   | 'control-startup'
   | 'control-audit'
+  | 'safe-supervisor'
+  | 'safe-agents'
+  | 'safe-models'
+  | 'safe-integrations'
+  | 'safe-repairs'
+  | 'safe-chat'
   // SA — Overview
   | 'sa-overview'
   // SA — Users & Access

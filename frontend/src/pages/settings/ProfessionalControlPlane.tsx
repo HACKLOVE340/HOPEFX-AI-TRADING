@@ -4,6 +4,7 @@ import type { SettingsTab } from './types';
 
 type Readiness = { status: string; active_model: string; components: Record<string, string>; degraded_reasons: string[]; configuration_revision: number; paper_mode: boolean };
 type Props = { tab: SettingsTab };
+type SafeOverview = { paper_mode: boolean; human_approval_required: boolean; agents: Array<{ id: string; name: string; mission: string; risk: string; status: string }>; models: Array<{ id: string; role: string; health: string; route: string; secret_status: string }>; integrations: Array<{ id: string; name: string; category: string; status: string; scopes: string[]; token: string }>; pending_proposals: number; capabilities: Record<string, boolean | string> };
 
 const domains: Record<string, string> = {
   'control-brain': 'core_brain', 'control-models': 'models', 'control-agents': 'agents',
@@ -16,11 +17,14 @@ export default function ProfessionalControlPlane({ tab }: Props) {
   const [audit, setAudit] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [safe, setSafe] = useState<SafeOverview | null>(null);
 
+  const isSafeTab = tab.startsWith('safe-');
   const load = useCallback(async () => {
     setError('');
     try {
       const [ready, config] = await Promise.all([api.get<Readiness>('/control-plane/readiness'), api.get('/control-plane/configuration')]);
+      if (isSafeTab) setSafe((await api.get<SafeOverview>('/safe-platform/overview')).data);
       setReadiness(ready.data);
       setConfiguration(config.data.configuration);
       if (tab === 'control-audit') setAudit((await api.get('/control-plane/audit')).data.items ?? []);
@@ -33,6 +37,12 @@ export default function ProfessionalControlPlane({ tab }: Props) {
 
   if (error) return <div style={styles.alert}><strong>Control plane unavailable</strong><p>{error}</p><button style={styles.button} onClick={() => void load()}>Retry</button></div>;
   if (!readiness || !configuration) return <div style={styles.card}>Loading professional configuration…</div>;
+  if (isSafeTab && !safe) return <div style={styles.card}>Loading safe agent platform…</div>;
+
+  if (isSafeTab && safe) {
+    const title = tab === 'safe-integrations' ? 'External access and token center' : tab === 'safe-repairs' ? 'Repairs, upgrades, and approvals' : tab === 'safe-chat' ? 'Operator communication' : tab === 'safe-models' ? 'Model router' : tab === 'safe-agents' ? 'Specialist agents' : 'Supervisor control';
+    return <div style={styles.stack}><div style={styles.header}><div><div style={styles.eyebrow}>SAFE MULTI-AGENT PLATFORM</div><h2 style={styles.title}>{title}</h2><p style={styles.muted}>Read-only by default. Every consequential action requires attributable human approval.</p></div><span style={badge(safe.paper_mode ? 'paper' : 'blocked')}>{safe.paper_mode ? 'PAPER MODE' : 'LIVE BLOCKED'}</span></div><div style={styles.grid}><div style={styles.card}><div style={styles.row}><strong>Human approval</strong><span style={badge('ready')}>REQUIRED</span></div><p style={styles.muted}>No trade, production mutation, credential rotation, deployment, or self-modification is executed from this console without a reviewed proposal.</p></div><div style={styles.card}><div style={styles.row}><strong>Pending proposals</strong><span style={badge(safe.pending_proposals ? 'degraded' : 'ready')}>{safe.pending_proposals}</span></div><p style={styles.muted}>Review evidence, blast radius, test plan, expiry, and rollback before approval.</p></div></div>{tab === 'safe-agents' || tab === 'safe-supervisor' ? <div style={styles.grid}>{safe.agents.map(agent => <div key={agent.id} style={styles.card}><div style={styles.row}><strong>{agent.name}</strong><span style={badge(agent.status)}>{agent.status}</span></div><p style={styles.muted}>{agent.mission}</p><small style={styles.muted}>Risk class: {agent.risk}</small></div>)}</div> : tab === 'safe-models' ? <div style={styles.grid}>{safe.models.map(model => <div key={model.id} style={styles.card}><div style={styles.row}><strong>{model.id}</strong><span style={badge(model.health)}>{model.route}</span></div><p style={styles.muted}>Role: {model.role} · Credentials: {model.secret_status}</p></div>)}</div> : tab === 'safe-integrations' ? <div style={styles.grid}>{safe.integrations.map(item => <div key={item.id} style={styles.card}><div style={styles.row}><strong>{item.name}</strong><span style={badge(item.status)}>{item.status}</span></div><p style={styles.muted}>Scopes: {item.scopes.join(', ')}</p><small style={styles.muted}>Token values never appear in the browser. Provider: {item.token}</small></div>)}</div> : <div style={styles.card}><div style={styles.row}><strong>{tab === 'safe-chat' ? 'Chat and voice capabilities' : 'Safe evolution gate'}</strong><span style={badge('ready')}>AVAILABLE</span></div><p style={styles.muted}>{tab === 'safe-chat' ? 'Streaming, delegation, citations, tool traces, cancellation, and escalation are available when configured. External research requires an authorized connector.' : 'Diagnostics may run read-only. Repairs and upgrades produce reversible proposals with checkpoints and automatic rollback gates.'}</p></div>}</div>;
+  }
 
   const domain = domains[tab];
   const title = tab === 'control-overview' ? 'Operations readiness' : tab === 'control-audit' ? 'Configuration audit' : domain?.replace('_', ' ');

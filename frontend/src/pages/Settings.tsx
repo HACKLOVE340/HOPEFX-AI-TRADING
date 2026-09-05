@@ -129,6 +129,12 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'control-sandbox', label: 'Sandbox', icon: '□', adminOnly: true, keywords: 'sandbox sessions limits network' },
       { id: 'control-startup', label: 'Startup', icon: '↻', adminOnly: true, keywords: 'lifecycle boot restart' },
       { id: 'control-audit', label: 'Config Audit', icon: '≡', adminOnly: true, keywords: 'audit versions revision rollback' },
+      { id: 'safe-supervisor', label: 'Supervisor', icon: '◎', adminOnly: true, keywords: 'multi agent orchestration delegation' },
+      { id: 'safe-agents', label: 'Specialist Agents', icon: '◇', adminOnly: true, keywords: 'agents teams capabilities' },
+      { id: 'safe-models', label: 'Model Router', icon: '⌁', adminOnly: true, keywords: 'models fallback routing costs' },
+      { id: 'safe-integrations', label: 'External Access', icon: '↔', adminOnly: true, keywords: 'api tokens connectors vault scopes' },
+      { id: 'safe-repairs', label: 'Repairs & Upgrades', icon: '⚙', adminOnly: true, keywords: 'diagnostics repair upgrade rollback approval' },
+      { id: 'safe-chat', label: 'Operator Chat', icon: '◌', adminOnly: true, keywords: 'chat voice tools citations' },
     ],
   },
   {
@@ -303,6 +309,7 @@ const Settings: React.FC = () => {
       // Professional operations
       case 'control-overview': case 'control-brain': case 'control-models': case 'control-agents':
       case 'control-connectors': case 'control-sandbox': case 'control-startup': case 'control-audit':
+      case 'safe-supervisor': case 'safe-agents': case 'safe-models': case 'safe-integrations': case 'safe-repairs': case 'safe-chat':
         return admin ? <ProfessionalControlPlane tab={activeTab} /> : null;
       // Administration
       case 'system':            return admin      ? <SystemSection />          : null;
