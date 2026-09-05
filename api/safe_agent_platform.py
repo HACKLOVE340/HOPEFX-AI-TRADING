@@ -131,6 +131,12 @@ class ValidationRequest(BaseModel):
     environment: str = Field(default="sandbox", pattern="^(sandbox|paper|canary)$")
 
 
+class ProposalExecutionRequest(BaseModel):
+    proposal_id: str
+    confirmation: str = Field(min_length=8, max_length=120)
+    environment: str = Field(default="sandbox", pattern="^(sandbox|paper|canary)$")
+
+
 class IntegrationAction(BaseModel):
     integration_id: str
     action: str = Field(pattern="^(authorize|revoke|rotate|health_probe)$")
@@ -397,6 +403,27 @@ async def validate_proposal(request: ValidationRequest, user: TokenPayload = Dep
     proposal.setdefault("validations", []).append(validation)
     _save_state(user.sub)
     return {"validation": validation, "message": "Validation completed without applying the proposal."}
+
+
+@router.post("/proposals/execute")
+async def execute_proposal(request: ProposalExecutionRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    proposal = next((p for p in _PROPOSALS if p["id"] == request.proposal_id), None)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    if proposal["status"] != "approved_pending_execution":
+        raise HTTPException(status_code=409, detail="Proposal requires the required human approvals")
+    if request.confirmation != "EXECUTE APPROVED PROPOSAL":
+        raise HTTPException(status_code=400, detail="Explicit execution confirmation is required")
+    if not proposal.get("checkpoints"):
+        raise HTTPException(status_code=409, detail="Proposal requires a checkpoint before execution")
+    validations = [item for item in proposal.get("validations", []) if item["environment"] == request.environment and item["status"] == "passed"]
+    if not validations:
+        raise HTTPException(status_code=409, detail="Proposal requires a passed validation in the selected environment")
+    execution = {"id": _id("proposal-execution", [request.proposal_id, request.environment, datetime.now(UTC).isoformat()]), "proposal_id": request.proposal_id, "environment": request.environment, "status": "simulated_no_side_effect", "checkpoint": proposal["checkpoints"][-1]["id"], "rollback_ready": True, "live_mutation": False, "executed_by": user.sub, "executed_at": datetime.now(UTC).isoformat()}
+    proposal["status"] = "executed_reviewable_simulation"
+    proposal["last_execution"] = execution
+    _save_state(user.sub)
+    return {"proposal": copy.deepcopy(proposal), "execution": execution, "message": "Proposal simulation completed; no production, live trading, credentials, or security controls were mutated."}
 
 
 @router.post("/proposals/{proposal_id}/rollback")
