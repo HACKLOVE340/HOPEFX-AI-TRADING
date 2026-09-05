@@ -24,4 +24,3 @@ describe('AI command center safety logic', () => {
     expect(filterSignalsByDirection([signal('hold-1', 'hold')], 'SELL')).toEqual([]);
   });
 });
-

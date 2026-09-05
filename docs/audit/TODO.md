@@ -41,6 +41,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 21 | F216/F217 · `data/` ↔ `data_layer/` boundary | MEDIUM | **owner** |
 | 22 | `REMEDIATION_PLAN.md` is stale | MEDIUM | — |
 | 23 | Owner-blocked questions | — | **owner** |
+| 24 | F271 · the dependency scan reads the manifest that pins nothing | HIGH | — |
 
 **Read first if you read nothing else:** items 1, 4, 7b and 13–19.
 
@@ -445,6 +446,30 @@ one tracker. **Recommended:** delete it. Two trackers is how it drifted.
   history. It needs a value chosen deliberately.
 
 ---
+
+### 24. F271 — the dependency scan reads the manifest that pins nothing · HIGH
+
+`trivy fs .` reported `requirements.txt  pip  0` for as long as it has run.
+That zero means "no version I could resolve", not "no vulnerabilities":
+`requirements.txt` holds ranges (`chromadb>=0.4.0`), and the file with the real
+pins, `requirements.lock`, is not a name Trivy recognises as a lock format.
+
+The merge of `v0/hopefx-remediation` added a `uv.lock` that Trivy *does* read,
+and it immediately reported 6 findings (2 CRITICAL, 4 HIGH) — including
+chromadb 1.5.9 with two unfixed arbitrary-code-execution CVEs, which this
+platform installs today.
+
+All six are now accepted in `.trivyignore.yaml` with an exploit-path argument
+and a 2026-12-05 expiry (chromadb is embedded-client only, ecdsa and nltk are
+transitive and unreachable). **That closes the six, not the hole.**
+
+**Do:** make `requirements.lock` visible to the blocking scan — copy it to a
+Trivy-recognised name in the job, or scan it explicitly. Then measure what comes
+back; the number is currently unknown and could be large. Do **not** delete
+`uv.lock` to restore green: it is the only manifest the scanner can currently
+read, and removing it is the F221 defect.
+**Done when:** the scan resolves concrete versions for every production
+dependency, and its report is the pinned set rather than the range set.
 
 ## What was fixed this session
 

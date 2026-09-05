@@ -1,0 +1,58 @@
+# Trivy vulnerability acceptances.
+#
+# Every entry needs a statement of why the exploit path does not exist here and
+# an expiry date. An acceptance with no reason is indistinguishable from a
+# scanner that was switched off, which is the failure mode this repository's
+# audit exists to eliminate. On expiry the finding returns and must be
+# re-argued against the then-current facts.
+#
+# Re-check before extending any date: `pip index versions <pkg>`.
+
+vulnerabilities:
+  # ── chromadb 1.5.9 ────────────────────────────────────────────────────────
+  # 1.5.9 is the LATEST published chromadb (checked 2026-09-05, `pip index
+  # versions chromadb`); Trivy lists no fixed version for any of these. There
+  # is nothing to upgrade to.
+  #
+  # All four are ChromaDB *server* attack surfaces — "pre-authentication code
+  # injection" and "unauthorized cross-tenant actions" both presuppose a
+  # network listener handling untrusted requests. This platform uses the
+  # embedded client only: research/vector_store.py:242 constructs
+  # chromadb.PersistentClient(path=...) against a local directory, and no
+  # compose file or Dockerfile runs a chroma service. There is no port, no
+  # tenant boundary, and no pre-auth request path.
+  #
+  # This acceptance stops holding the moment anyone runs chroma as a server or
+  # points the client at a remote host. If you are here because you did that,
+  # the answer is not to extend the date.
+  - id: CVE-2026-45829
+    statement: "chromadb embedded PersistentClient only; no server, no listener, no pre-auth path. No fixed version exists (1.5.9 is latest)."
+    expired_at: 2026-12-05
+  - id: CVE-2026-45833
+    statement: "chromadb embedded PersistentClient only; no server, no listener, no pre-auth path. No fixed version exists (1.5.9 is latest)."
+    expired_at: 2026-12-05
+  - id: CVE-2026-45830
+    statement: "chromadb authorization-validation flaw; requires the server's auth layer, which is not deployed. Embedded client only."
+    expired_at: 2026-12-05
+  - id: CVE-2026-45831
+    statement: "chromadb cross-tenant flaw; requires multi-tenant server mode, which is not deployed. Embedded client only."
+    expired_at: 2026-12-05
+
+  # ── ecdsa 0.19.2 ──────────────────────────────────────────────────────────
+  # The Minerva side-channel. Upstream has stated it will not be fixed, so no
+  # fixed version will ever appear. ecdsa is a transitive dependency (it is not
+  # in requirements.txt) and is not used for any signing this platform performs
+  # — payments/crypto/ uses hdwallet, and JWT signing uses HS256 via python-jose.
+  # A timing side-channel also needs an attacker able to measure many signing
+  # operations with a key we control, which no reachable path offers.
+  - id: CVE-2024-23342
+    statement: "ecdsa Minerva side-channel; wontfix upstream. Transitive dependency, not on any signing path in this platform (hdwallet for keys, HS256 for JWT)."
+    expired_at: 2026-12-05
+
+  # ── nltk 3.10.x ───────────────────────────────────────────────────────────
+  # Path traversal in the model-artifact download APIs (nltk.download and
+  # friends). nltk is transitive — not in requirements.txt — and no module in
+  # this repository imports it, so the vulnerable download API is never called.
+  - id: CVE-2026-81726
+    statement: "nltk path traversal in model-artifact APIs; nltk is transitive and imported by no module in this repository, so the vulnerable API is unreachable."
+    expired_at: 2026-12-05

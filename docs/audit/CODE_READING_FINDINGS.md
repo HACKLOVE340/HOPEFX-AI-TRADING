@@ -8435,3 +8435,50 @@ integrity markers — including the pre-existing mismatch branch. The check neve
 refused anything in that container, so the change had no runtime effect on that
 run. Suspecting your own most recent change first is right; stopping there
 because it is plausible is not.
+
+---
+
+### F271 · The dependency scanner reports 0 vulnerabilities against a manifest that pins nothing · HIGH
+
+**Found because a merge made it visible, not because the scan started working.**
+
+`ci.yml`'s `dependency-scan` job runs `trivy fs . --severity CRITICAL,HIGH
+--exit-code 1`. Until 2026-09-05 its report read:
+
+```
+requirements.txt   pip   0 vulnerabilities
+```
+
+That zero is not a clean bill of health. `requirements.txt` declares ranges —
+`chromadb>=0.4.0` — and Trivy cannot resolve a range to a concrete version, so
+it has nothing to match against its database. The file that holds the actual
+pins is `requirements.lock` (`chromadb==1.5.9`, `ecdsa==0.19.2`,
+`nltk==3.10.0`), and Trivy never reads it, because `requirements.lock` is not a
+filename Trivy recognises as a lock format.
+
+So the scan has been reporting zero while the platform installs **chromadb
+1.5.9, which carries two unfixed CRITICAL arbitrary-code-execution CVEs.**
+
+It surfaced only because the `v0/hopefx-remediation` merge brought a `uv.lock`,
+which Trivy *does* recognise. That file pins the same versions and immediately
+reported 6 findings (2 CRITICAL, 4 HIGH). The vulnerable dependencies were
+already installed; `uv.lock` just gave the scanner something it could read.
+
+**The tempting fix — delete `uv.lock` and go green — is the F221 defect
+exactly:** restoring a number by shrinking what it describes. It would remove
+the only file that exposed a live critical vulnerability.
+
+**Disposition of the six, after checking each:** all are accepted in
+`.trivyignore.yaml` with a written exploit-path argument and a 2026-12-05
+expiry. chromadb 1.5.9 is the latest published version (no fix exists to
+upgrade to) and is used only as an embedded `PersistentClient` on local disk
+(`research/vector_store.py:242`) with no chroma server in any compose file, so
+the pre-authentication server CVEs have no reachable path. `ecdsa` is
+transitive, wontfix upstream, and on no signing path here. `nltk` is transitive
+and imported by no module in the repository.
+
+**What is still open, and is the actual finding:** the scan's coverage. Two
+manifests describe this project's dependencies and the blocking scanner reads
+the one that pins nothing. `requirements.lock` needs to be visible to Trivy —
+and the count that comes back when it is has not been measured. Recorded as
+TODO item 24.
