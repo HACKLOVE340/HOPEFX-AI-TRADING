@@ -86,3 +86,29 @@ def test_live_promotion_request_fails_closed_without_approval() -> None:
 
     with pytest.raises(ValueError, match="live approval"):
         request.validate()
+
+
+def test_promotion_request_requires_evidence_and_supported_target() -> None:
+    missing_evidence = PromotionRequest(
+        candidate_id="candidate-1",
+        target=StrategyLifecycle.PAPER_PENDING,
+        requested_by="operator-1",
+        evidence_hash="",
+    )
+    with pytest.raises(ValueError, match="requester and evidence"):
+        missing_evidence.validate()
+
+    unsupported = PromotionRequest(
+        candidate_id="candidate-1",
+        target=StrategyLifecycle.RESEARCH,
+        requested_by="operator-1",
+        evidence_hash="evidence-sha",
+    )
+    with pytest.raises(ValueError, match="not promotable"):
+        unsupported.validate()
+
+
+def test_lifecycle_cannot_skip_paper_validation_stage() -> None:
+    validated = candidate(passing_report()).transition(StrategyLifecycle.VALIDATED)
+    with pytest.raises(ValueError, match="invalid lifecycle transition"):
+        validated.transition(StrategyLifecycle.PAPER_ACTIVE)
