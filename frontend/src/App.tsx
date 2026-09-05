@@ -20,6 +20,7 @@ import {
   Navigate,
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import AuthGuard from './components/AuthGuard';
 import AppBackground from './components/AppBackground';
@@ -288,7 +289,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
   }
 }
 
-// ── No-live-feed banner ───────────────────────────────────────────────────────
+// ── No-live-feed banner ─────────────────────────────���─────────────────────────
 const NoLiveFeedBanner: React.FC = () => {
   const status       = useStore((s) => s.wsStatus);
   const noLiveFeed   = useStore((s) => s.noLiveFeed);
@@ -709,6 +710,7 @@ const App: React.FC = () => (
         </BrowserRouter>
       </ConfirmDialogProvider>
     </ToastProvider>
+    <SpeedInsights />
   </QueryClientProvider>
 );
 
