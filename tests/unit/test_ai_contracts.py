@@ -21,6 +21,7 @@ def candidate(validation: ValidationReport | None = None) -> ResearchCandidate:
         prompt_hash="prompt-hash",
         data_scope="research-fixture",
         validation=validation,
+        research_validation_hash="research-evidence-sha" if validation is not None else "",
     )
 
 

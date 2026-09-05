@@ -139,6 +139,7 @@ class ResearchCandidate:
     data_scope: str
     lifecycle: StrategyLifecycle = StrategyLifecycle.RESEARCH
     validation: ValidationReport | None = None
+    research_validation_hash: str = ""
     human_approval: HumanApproval | None = None
 
     def transition(self, target: StrategyLifecycle) -> ResearchCandidate:
@@ -149,6 +150,11 @@ class ResearchCandidate:
             StrategyLifecycle.LIVE_PENDING_APPROVAL,
         } and (self.validation is None or not self.validation.passed):
             raise ValueError("promotion requires a passing validation report")
+        if target in {
+            StrategyLifecycle.PAPER_PENDING,
+            StrategyLifecycle.LIVE_PENDING_APPROVAL,
+        } and not self.research_validation_hash.strip():
+            raise ValueError("promotion requires replay and research validation evidence")
         if target == StrategyLifecycle.LIVE_APPROVED and (
             self.human_approval is None or self.human_approval.scope != "live"
         ):
@@ -162,6 +168,7 @@ class ResearchCandidate:
             data_scope=self.data_scope,
             lifecycle=target,
             validation=self.validation,
+            research_validation_hash=self.research_validation_hash,
             human_approval=self.human_approval,
         )
 
