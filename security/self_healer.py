@@ -417,7 +417,7 @@ def _import_ok(path: Path) -> bool:
         return False
 
 
-# ── Patch applier ─────────────────────────────────────────────────────────────
+# ── Patch applier ───────���─────────────────────────────────────────────────────
 
 
 def _apply_patch(target_path: Path, new_code: str) -> tuple[bool, str]:
@@ -1685,6 +1685,38 @@ Return the complete fixed file:"""
     async def run_diagnostics_now(self) -> dict[str, Any]:
         """Trigger an immediate full diagnostics run and return the report."""
         return await self._run_diagnostics()
+
+    async def run_ai_recovery_assessment(self, observation_id: str) -> dict[str, Any]:
+        """Assess diagnostics through the AI recovery layer without applying repairs."""
+        from core.ai_operations import decide_recovery, observe_health
+
+        report = await self.run_diagnostics_now()
+        critical_results = [
+            result
+            for result in report.get("results", [])
+            if result.get("status") in {"critical", "error"}
+        ]
+        overall = "critical" if critical_results else "ok"
+        observation = observe_health(
+            {"overall": overall, "components": tuple(report.get("results", ()))},
+            observation_id,
+        )
+        decision = decide_recovery(observation)
+        return {
+            "observation": {
+                "observation_id": observation.observation_id,
+                "observation_hash": observation.observation_hash,
+                "overall": observation.overall,
+                "components": observation.components,
+            },
+            "decision": {
+                "status": decision.status,
+                "action": decision.action,
+                "reason_codes": decision.reason_codes,
+                "decision_hash": decision.decision_hash,
+            },
+            "repair_applied": False,
+        }
 
     def get_last_diagnostic_report(self) -> dict[str, Any]:
         """Return the most recent diagnostics report."""
