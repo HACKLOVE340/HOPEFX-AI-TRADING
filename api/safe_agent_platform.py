@@ -391,7 +391,9 @@ async def validate_proposal(request: ValidationRequest, user: TokenPayload = Dep
         proposal["status"] = "expired"
         _save_state(user.sub)
         raise HTTPException(status_code=409, detail="Proposal validation window has expired")
-    validation = {"id": _id("validation", [request.proposal_id, request.environment]), "proposal_id": request.proposal_id, "environment": request.environment, "status": "passed" if request.environment in {"sandbox", "paper"} else "blocked_until_paper_passes", "checks": {"secrets_redacted": True, "live_trading_disabled": True, "rollback_checkpoint_planned": True, "human_approval_present": proposal["status"] == "approved_pending_execution"}, "validated_by": user.sub, "validated_at": datetime.now(UTC).isoformat()}
+    if request.environment == "canary" and not proposal.get("checkpoints"):
+        raise HTTPException(status_code=409, detail="A last-known-good checkpoint is required before canary validation")
+    validation = {"id": _id("validation", [request.proposal_id, request.environment]), "proposal_id": request.proposal_id, "environment": request.environment, "status": "passed" if request.environment in {"sandbox", "paper"} else "blocked_until_paper_passes", "checks": {"secrets_redacted": True, "live_trading_disabled": True, "rollback_checkpoint_planned": True, "checkpoint_present": bool(proposal.get("checkpoints")), "human_approval_present": proposal["status"] == "approved_pending_execution"}, "validated_by": user.sub, "validated_at": datetime.now(UTC).isoformat()}
     proposal.setdefault("validations", []).append(validation)
     _save_state(user.sub)
     return {"validation": validation, "message": "Validation completed without applying the proposal."}
