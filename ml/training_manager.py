@@ -23,11 +23,18 @@ import logging
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+
+from ml.model_paths import find_model_file
 
 logger = logging.getLogger(__name__)
 
 UTC = timezone.utc
+
+# The RL agent is a stable-baselines3 zip under ``rl/`` rather than a pickle
+# named after the model — every other known model is ``<name>.pkl``/``.pt``.
+_RL_ARTIFACT = "rl/hopefx_ppo.zip"
 
 _KNOWN_MODELS = [
     "advanced_oos",
@@ -322,27 +329,33 @@ class TrainingManager:
             logger.warning("TrainingManager._persist_job failed, run not recorded: %s", exc)
 
     def _static_model_status(self) -> list[dict[str, Any]]:
-        """Return a static status list from saved model files when DB is unavailable."""
-        from pathlib import Path
+        """Return a status list read from saved model files when the DB is unavailable.
+
+        This is the model inventory a fresh deployment shows before any training
+        run is recorded, so a model may only be reported as ``completed`` when
+        that model's own artifact exists.
+
+        Two things were wrong here. The RL zip was checked for every model, so a
+        repository containing ``rl/hopefx_ppo.zip`` — which this one does, it is
+        committed — reported all six models trained, ``lstm_signal`` included,
+        the one AGENTS.md records as never trained and ``_dispatch_training``
+        refuses to train. Four of the six also carried the zip's mtime as their
+        training time. And the directory was the hardcoded relative
+        ``ml/saved_models``, which ignores ``ML_MODEL_DIR`` (production points it
+        at a mounted volume, see the Helm chart) and resolves against whatever
+        the process working directory happens to be.
+        """
         import os
 
         rows = []
-        model_dir = Path("ml/saved_models")
         for name in _KNOWN_MODELS:
-            fpath = model_dir / f"{name}.pkl"
-            pt_path = model_dir / f"{name}.pt"
-            zip_path = model_dir / "rl" / "hopefx_ppo.zip"
-            found = fpath.exists() or pt_path.exists() or zip_path.exists()
-            mtime = None
-            for p in (fpath, pt_path, zip_path):
-                if p.exists():
-                    mtime = datetime.fromtimestamp(os.path.getmtime(p), UTC).isoformat()
-                    break
+            found = self._model_artifact(name)
+            mtime = datetime.fromtimestamp(os.path.getmtime(found), UTC).isoformat() if found is not None else None
             rows.append(
                 {
                     "id": f"static_{name}",
                     "model": name,
-                    "status": "completed" if found else "not_trained",
+                    "status": "completed" if found is not None else "not_trained",
                     "started_at": mtime,
                     "finished_at": mtime,
                     "duration_s": 0,
@@ -351,6 +364,21 @@ class TrainingManager:
                 }
             )
         return rows
+
+    @staticmethod
+    def _model_artifact(name: str) -> Path | None:
+        """Locate the artifact belonging to *name*, or None when it is absent.
+
+        Resolution goes through ``ml.model_paths.find_model_file`` so that
+        ``ML_MODEL_DIR`` wins and the packaged ``ml/saved_models`` is the
+        fallback — the same order inference uses to pick the model it serves.
+        """
+        candidates = (_RL_ARTIFACT,) if name in ("rl_ppo", "rl") else (f"{name}.pkl", f"{name}.pt")
+        for candidate in candidates:
+            path = find_model_file(candidate)
+            if path is not None:
+                return path
+        return None
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
