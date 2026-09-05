@@ -12,7 +12,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase, fmtDateTime, extractApiError } from '../lib/utils';
+import { fmtDateTime, extractApiError } from '../lib/utils';
+import { openAuthenticatedWebSocket } from '../lib/ws';
 import { ActionBanner } from '../components/ActionBanner';
 import { useVoice } from '../hooks/useVoice';
 import { useVoiceAlerts } from '../lib/voicePrefs';
@@ -83,7 +84,7 @@ const NotificationsPage: React.FC = () => {
     if (!token) return;
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${getWsBase()}/ws/notifications?token=${token}`);
+      ws = openAuthenticatedWebSocket('/ws/notifications', token);
       wsRef.current = ws;
       ws.onmessage = (ev) => {
         try {

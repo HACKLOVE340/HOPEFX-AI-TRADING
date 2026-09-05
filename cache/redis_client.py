@@ -46,6 +46,36 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+def inject_redis_password(url: str, password: str | None) -> str:
+    """Return *url* with *password* injected, or *url* unchanged.
+
+    The one implementation. This logic was copy-pasted into six modules —
+    cache/redis_client.py, brokers/paper_trading.py, kill_switch.py,
+    core/config_store.py, core/event_bus.py and
+    scripts/adopt_legacy_positions.py — and every copy was wrong the same way::
+
+        if password and "@" not in url.split("://", 1)[-1]:
+            <scheme>, <rest> = url.split("://", 1)
+
+    ``"".split("://", 1)`` is ``[""]``, one element, so unpacking it into two
+    names raises ``ValueError: not enough values to unpack``. The same holds for
+    any schemeless URL such as ``localhost:6379``. In ``get_sync_redis`` the
+    unpack sat outside the ``try``, so a function documented to "fall back
+    gracefully to None" raised instead — and in ``kill_switch.py`` it did so on
+    the component whose entire job is working when things are going wrong.
+
+    A URL with no ``://`` is returned untouched: there is nowhere to put the
+    credential, and refusing to guess beats raising.
+    """
+    if not password or not url or "://" not in url:
+        return url
+    scheme, _, rest = url.partition("://")
+    if "@" in rest:
+        return url  # a credential is already embedded
+    return f"{scheme}://:{password}@{rest}"
+
+
 # Module-level singletons — one client per process
 _redis_instance: Any | None = None
 _sentinel_instance: Any | None = None
@@ -705,10 +735,14 @@ def get_sync_redis() -> Any | None:
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     password = os.getenv("REDIS_PASSWORD", "") or None
 
-    # Inject password when not already embedded in the URL.
-    if password and "@" not in redis_url.split("://", 1)[-1]:
-        scheme, rest = redis_url.split("://", 1)
-        redis_url = f"{scheme}://:{password}@{rest}"
+    if not redis_url.strip():
+        # An empty REDIS_URL is how a deployment says "no Redis", not an
+        # invitation to guess a default. Returning None is what every caller
+        # here already handles.
+        logger.debug("REDIS_URL is empty — treating this deployment as having no Redis")
+        return None
+
+    redis_url = inject_redis_password(redis_url, password)
 
     try:
         client = _redis_sync.Redis.from_url(

@@ -1,0 +1,23 @@
+k6 smoke, real server, authenticated, rate limiting ON — after the four script fixes
+(before: checks 75.97%, error_rate 70.37%, http_req_failed 86.95%)
+
+       ✗ market_data: not 502/503/504
+        ↳  0% — ✓ 0 / ✗ 4
+       ✗ rate limiter active (got 429 after rapid requests)
+        ↳  0% — ✓ 0 / ✗ 4
+     checks.........................: 95.55% 172 out of 180
+   ✗ error_rate.....................: 6.66%  4 out of 60
+     http_req_blocked...............: avg=8.57µs   min=1.77µs  med=5.34µs   max=207.66µs p(90)=8.35µs   p(95)=9.29µs
+     http_req_connecting............: avg=1.99µs   min=0s      med=0s       max=147.02µs p(90)=0s       p(95)=0s
+   ✓ http_req_duration..............: avg=158.02ms min=2.23ms  med=3.81ms   max=5.16s    p(90)=13.5ms   p(95)=109.93ms
+   ✗ http_req_failed................: 3.30%  4 out of 121
+     http_req_receiving.............: avg=162.39µs min=45.67µs med=107.06µs max=1.19ms   p(90)=293.31µs p(95)=411.7µs
+     http_req_sending...............: avg=26.53µs  min=8.19µs  med=28.09µs  max=74.67µs  p(90)=42.61µs  p(95)=45.02µs
+     http_req_tls_handshaking.......: avg=0s       min=0s      med=0s       max=0s       p(90)=0s       p(95)=0s
+     http_req_waiting...............: avg=157.84ms min=2.03ms  med=3.56ms   max=5.16s    p(90)=13.34ms  p(95)=109.82ms
+     http_reqs......................: 121    3.827603/s
+   ✓ macro_latency_ms...............: avg=7.62ms   min=6ms     med=7ms      max=10ms     p(90)=9.3ms    p(95)=9.64ms
+   ✓ ml_latency_ms..................: avg=3.25ms   min=3ms     med=3ms      max=4ms      p(90)=3.7ms    p(95)=3.84ms
+   ✓ order_latency_ms...............: avg=4.75ms   min=4ms     med=4.5ms    max=6ms      p(90)=5.7ms    p(95)=5.85ms
+   ✓ signal_latency_ms..............: avg=9.25ms   min=9ms     med=9ms      max=10ms     p(90)=9.69ms   p(95)=9.85ms
+time="2026-09-04T16:07:32Z" level=error msg="thresholds on metrics 'error_rate, http_req_failed' have been crossed"

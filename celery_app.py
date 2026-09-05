@@ -623,21 +623,18 @@ def database_backup(self=None):
     """
     Trigger a database backup snapshot.
 
-    Calls the DatabaseBackupManager to create a compressed snapshot and
-    upload it to the configured object store (S3 / GCS / local).
+    Calls database.backup.run_backup() to write a snapshot and returns its
+    path. run_backup is synchronous and raises RuntimeError on failure.
     """
-    import asyncio
-
     try:
         # Lock TTL must exceed time_limit (2100 s) so the lock does not expire
         # while the task is still running.  Use time_limit + 60 s buffer.
         with _redis_lock("database_backup", timeout=2160):
-            from database.backup import DatabaseBackupManager
+            from database.backup import run_backup
 
-            mgr = DatabaseBackupManager()
-            result = asyncio.run(mgr.create_backup())
+            result = run_backup()
             logger.info("database_backup: %s", result)
-            return {"status": "ok", "backup": result}
+            return {"status": "ok", "backup": str(result)}
     except RuntimeError as exc:
         if "already held" in str(exc):
             logger.info("database_backup skipped — lock already held by another task")

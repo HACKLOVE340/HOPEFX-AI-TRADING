@@ -1,0 +1,33 @@
+# nocode /validate runtime proof
+# captured: 2026-08-19T08:00:44Z
+# revision: afa7c86db7436fc7e88e2e56946c8e412e5743ce
+
+## VALID strategy
+{
+    "valid": true,
+    "errors": [],
+    "warnings": []
+}
+
+## INVALID: cycle + unknown type + missing param + dangling edge
+{
+    "valid": false,
+    "errors": [
+        "node 'a' (rsi) is missing required parameter 'period'",
+        "node 'b' has unknown type 'bogus_node'",
+        "edge[2] target 'ghost' does not match any node id",
+        "execution flow contains a cycle: a -> c -> a"
+    ],
+    "warnings": [
+        "strategy has no action node, so it can never open or close a position"
+    ]
+}
+
+## WARNING: indicators only, no action node
+{
+    "valid": true,
+    "errors": [],
+    "warnings": [
+        "strategy has no action node, so it can never open or close a position"
+    ]
+}

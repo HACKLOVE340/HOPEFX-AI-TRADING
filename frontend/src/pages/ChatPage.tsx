@@ -11,7 +11,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
-import { getWsBase } from '../lib/utils';
+import { openAuthenticatedWebSocket } from '../lib/ws';
 import { useToast } from '../components/Toast';
 
 interface ChatRoom {
@@ -112,7 +112,7 @@ const ChatPage: React.FC = () => {
     wsRef.current?.close();
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${getWsBase()}/ws/chat/${activeRoom.id}?token=${token}`);
+      ws = openAuthenticatedWebSocket(`/ws/chat/${activeRoom.id}`, token);
       wsRef.current = ws;
       ws.onmessage = (ev) => {
         try {

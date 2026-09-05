@@ -618,9 +618,13 @@ async def get_security_status(user: TokenPayload = Depends(require_role("admin")
     attack_count = len(_attack_log)
     pending_fixes = 0
     try:
-        from api.security.fixes import _fix_store
+        # The fix queue lives in Redis (list "fixes:queue"), not an in-process
+        # dict — api/security/fixes.py reads it with llen for the same count.
+        from api.security.fixes import _get_redis
 
-        pending_fixes = sum(1 for f in _fix_store.values() if f.get("status") == "pending")
+        _redis = await _get_redis()
+        if _redis:
+            pending_fixes = await _redis.llen("fixes:queue")
     except Exception:  # nosec B110  # noqa: S110
         pass
 

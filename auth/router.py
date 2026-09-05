@@ -919,22 +919,16 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     by the signature — no DB timestamp lookup required on redemption.
     """
     _check_ip_rate_limit(_get_client_ip(request))
-    _, msg, raw_reset_token = await asyncio.to_thread(functools.partial(_svc().request_password_reset, body.email))
-    if raw_reset_token:
-        signed_reset_token = _make_signed_token(
-            {"tok": raw_reset_token, "email": body.email},
-            salt=_SALT_PASSWORD_RESET,
-            max_age_seconds=_PASSWORD_RESET_TTL,
-        )
-        try:
-            from core.email_service import send_password_reset_email
+    # Minting, hashing, signing and sending all live in auth/password_reset.py
+    # so the admin-triggered reset cannot drift onto a different expiry, salt or
+    # hashing choice. A send failure stays non-fatal here: this response must
+    # look identical whether or not the address is registered.
+    try:
+        from auth.password_reset import send_password_reset_for_email
 
-            user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
-            username = user.username if user else body.email
-            send_password_reset_email(body.email, username, signed_reset_token)
-        except Exception as _e:
-            logger.warning("Password reset email failed: %s", _e)
-    else:
+        signed_reset_token = await asyncio.to_thread(send_password_reset_for_email, body.email)
+    except Exception as _e:
+        logger.warning("Password reset email failed: %s", _e)
         signed_reset_token = None
 
     # Return one fixed string rather than `msg`. The status code was already

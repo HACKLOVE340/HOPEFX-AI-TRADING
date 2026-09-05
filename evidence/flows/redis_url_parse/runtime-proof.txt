@@ -1,0 +1,26 @@
+=== 1. get_sync_redis() promised graceful degradation and raised ===
+
+  REDIS_URL=''                               -> None
+  REDIS_URL='   '                            -> None
+  REDIS_URL='localhost:6379'                 -> FakeRedis
+  REDIS_URL='redis://localhost:6379/0'       -> FakeRedis
+  REDIS_URL='redis://:embedded@h:6379/0'     -> FakeRedis
+
+  password injection, the one implementation:
+    'redis://h:6379/0'               -> 'redis://:hunter2@h:6379/0'
+    ''                               -> ''
+    'localhost:6379'                 -> 'localhost:6379'
+    'redis://:already@h:6379/0'      -> 'redis://:already@h:6379/0'
+    'rediss://h:6380/1'              -> 'rediss://:hunter2@h:6380/1'
+
+=== 2. the kill switch latch degrades instead of raising ===
+
+  _get_latch_redis() -> None
+
+=== 3. _SAVED is a seam again ===
+
+  default _SAVED                       -> saved_models/
+  redirected to an EMPTY tmp dir       -> True (stays in tmp, does not reach packaged)
+  redirected to a POPULATED tmp dir    -> True
+'registry.json' is not in the configured model directory /tmp/tmp0xe45xo6; using the packaged copy. Retrained artifacts there are not being served.
+  ML_MODEL_DIR set but EMPTY           -> falls back to saved_models/ (production property kept)
