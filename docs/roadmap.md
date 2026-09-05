@@ -4,15 +4,17 @@
 
 ---
 
-## Current Status: Platform Complete — Paper Run Active
+## Current Status: Paper Trading — Promotion and Operations Gated
 
-All platform components are built, wired, and tested. The system is running in
-paper trading mode on OANDA practice. The only remaining gate before live trading
-is completing the paper run and flipping three environment variables.
+The platform is actively maintained in paper-trading mode. Live trading is not
+considered ready solely because the paper run reaches 30 days: model promotion,
+broker reconciliation, restart recovery, execution safety, security scans, and
+operator approval must also pass. Do not enable live trading by only flipping
+environment variables.
 
 | Component | Status |
 |-----------|--------|
-| ML model (`advanced_oos.pkl`) | ✅ 66.4% OOS accuracy, p=0.0000, 176 features, N=1,260 bars |
+| ML model (`advanced_oos.pkl`) | ⚠️ Paper-trading candidate; promotion requires current OOS metadata and reviewed gates |
 | Stacking ensemble (XGB+LGB+RF+ET) | ✅ Production |
 | Fractal geometry features (Lyapunov, HFD, DFA, ApEn) | ✅ Production |
 | EWC online learning (SGD + daily regime loop) | ✅ Production — enable with `ML_HOURLY_ENABLED=true` |
@@ -48,7 +50,7 @@ is completing the paper run and flipping three environment variables.
 | Docker + Kubernetes + Helm + ArgoCD | ✅ Production |
 | Chaos engineering (7 fault injection scenarios) | ✅ Production |
 | CI/CD (15 GitHub Actions workflows, mypy, bandit, ruff) | ✅ Production |
-| Test suite (2,560+ tests, 70% coverage gate) | ✅ CI green |
+| Test suite (2,560+ tests, 70% coverage gate) | ⚠️ Must be verified by current CI; local environments may lack test dependencies |
 | Dual license (AGPL-3.0 + commercial) | ✅ LICENSE-COMMERCIAL.md + CLA.md |
 
 ---
