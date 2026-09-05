@@ -227,6 +227,75 @@ def _consume_research_budget(user: TokenPayload) -> None:
     _BUDGET_WINDOW[user.sub] = recent
 
 
+_DEFAULT_ROLLBACK_PLAN = "Restore the last known-good checkpoint and re-run health gates."
+
+# Substrings that mark a value as credential-shaped. Deliberately a denylist on
+# the KEY plus a shape test on the VALUE: a proposal's `changes` is free-form,
+# so there is no schema to validate against.
+_SECRET_KEY_MARKERS = (
+    "key",
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "credential",
+    "auth",
+    "private",
+)
+_SECRET_VALUE_PREFIXES = ("sk-", "pk-", "ghp_", "gho_", "xox", "AKIA", "-----BEGIN")
+
+
+def _looks_like_a_secret(key: str, value: Any) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    if value.startswith(_SECRET_VALUE_PREFIXES):
+        return True
+    lowered = key.lower()
+    if not any(marker in lowered for marker in _SECRET_KEY_MARKERS):
+        return False
+    # A key named like a credential carrying a long opaque value.
+    return len(value) >= 12 and " " not in value.strip()
+
+
+def _changes_are_redacted(changes: dict[str, Any]) -> bool:
+    """True when nothing in `changes` looks like a live credential.
+
+    This was the literal `True`. A proposal's changes are rendered to approvers
+    and persisted, so a credential pasted into one is disclosed twice over.
+    """
+    stack: list[tuple[str, Any]] = list(changes.items())
+    while stack:
+        key, value = stack.pop()
+        if isinstance(value, dict):
+            stack.extend(value.items())
+            continue
+        if isinstance(value, list | tuple):
+            stack.extend((key, item) for item in value)
+            continue
+        if _looks_like_a_secret(str(key), value):
+            return False
+    return True
+
+
+def _live_trading_is_disabled() -> bool:
+    """True when this deployment is not wired to a live venue.
+
+    This was the literal `True`, which asserted the one fact an operator most
+    needs to be true rather than reading it.
+    """
+    return os.getenv("BROKER_TYPE", "paper").strip().lower() == "paper"
+
+
+def _rollback_plan_is_real(proposal: dict[str, Any]) -> bool:
+    """True when someone actually wrote a rollback plan for this proposal.
+
+    `rollback_plan` has a default, so `bool(plan)` is always true and asserts a
+    plan nobody wrote. A plan that is still the boilerplate is not a plan.
+    """
+    plan = str(proposal.get("rollback_plan", "")).strip()
+    return bool(plan) and plan != _DEFAULT_ROLLBACK_PLAN
+
+
 class DiagnosticRequest(BaseModel):
     scope: str = Field(default="all", min_length=1, max_length=80)
     include_external: bool = False
@@ -768,6 +837,21 @@ async def create_proposal_checkpoint(proposal_id: str, user: TokenPayload = Depe
     return {"checkpoint": checkpoint, "message": "Checkpoint recorded before any restricted execution."}
 
 
+def _validation_status(checks: dict[str, bool], environment: str) -> str:
+    """The verdict follows the checks, never the environment name.
+
+    Canary still requires paper to have passed first -- that ordering was
+    correct and is kept -- but it is now an additional constraint on a real
+    result rather than the whole of it.
+    """
+    if not all(checks.values()):
+        failed = ", ".join(name for name, ok in checks.items() if not ok)
+        return f"failed:{failed}"
+    if environment == "canary":
+        return "blocked_until_paper_passes"
+    return "passed"
+
+
 @router.post("/proposals/validate")
 async def validate_proposal(request: ValidationRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     proposal = next((p for p in _PROPOSALS if p["id"] == request.proposal_id), None)
@@ -781,18 +865,23 @@ async def validate_proposal(request: ValidationRequest, user: TokenPayload = Dep
         raise HTTPException(status_code=409, detail="Proposal validation window has expired")
     if request.environment == "canary" and not proposal.get("checkpoints"):
         raise HTTPException(status_code=409, detail="A last-known-good checkpoint is required before canary validation")
+    # Every value here is an observation. Three of them used to be the literal
+    # True, and the verdict was an expression over the environment *name*, so
+    # this endpoint could not say no -- while execute_proposal required "a
+    # passed validation in the selected environment" from it.
+    checks = {
+        "secrets_redacted": _changes_are_redacted(proposal.get("changes", {}) or {}),
+        "live_trading_disabled": _live_trading_is_disabled(),
+        "rollback_checkpoint_planned": _rollback_plan_is_real(proposal),
+        "checkpoint_present": bool(proposal.get("checkpoints")),
+        "human_approval_present": proposal["status"] == "approved_pending_execution",
+    }
     validation = {
         "id": _id("validation", [request.proposal_id, request.environment]),
         "proposal_id": request.proposal_id,
         "environment": request.environment,
-        "status": "passed" if request.environment in {"sandbox", "paper"} else "blocked_until_paper_passes",
-        "checks": {
-            "secrets_redacted": True,
-            "live_trading_disabled": True,
-            "rollback_checkpoint_planned": True,
-            "checkpoint_present": bool(proposal.get("checkpoints")),
-            "human_approval_present": proposal["status"] == "approved_pending_execution",
-        },
+        "status": _validation_status(checks, request.environment),
+        "checks": checks,
         "validated_by": user.sub,
         "validated_at": datetime.now(UTC).isoformat(),
     }
