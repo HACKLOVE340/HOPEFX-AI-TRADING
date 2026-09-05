@@ -82,6 +82,21 @@ def _detect_llm_backend() -> tuple[str | None, str | None]:
 _NO_BACKEND_DETAIL = "No LLM backend configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL."
 
 
+def _configured_primary():
+    """The operator-configured primary leg, or None when unset/unreadable.
+
+    Never fatal: a config-store problem must degrade to the environment
+    defaults below, not take the LLM endpoints down.
+    """
+    try:
+        from ai.gateway.chain import resolve_chain
+
+        return resolve_chain("reasoning")[0]
+    except Exception as exc:  # a settings read must not break inference
+        logger.debug("brain: could not resolve the configured model chain: %s", exc)
+        return None
+
+
 def _detect_llm_runtime() -> tuple[str | None, str | None]:
     """Return (backend, model) for the raw-LLM endpoints below.
 
@@ -95,6 +110,17 @@ def _detect_llm_runtime() -> tuple[str | None, str | None]:
     key is set but OLLAMA_BASE_URL is configured.
     """
     backend, _api_key = _detect_llm_backend()
+
+    # The superadmin's configured primary wins when it names the backend we
+    # actually have credentials for. Before this, Platform Configuration's
+    # provider/model fields were written to the config store and read by
+    # nothing -- an operator could set them, save, and change nothing (D8).
+    # `_detect_llm_backend` stays as the credential-driven bootstrap: it decides
+    # which backend is *reachable*, and the chain decides which model on it.
+    configured = _configured_primary()
+    if configured is not None and configured.provider == backend:
+        return backend, configured.model
+
     if backend == "anthropic":
         return "anthropic", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     if backend == "openai":

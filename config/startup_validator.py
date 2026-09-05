@@ -355,19 +355,26 @@ def _validate_kill_switch_token(errors: list[str]) -> None:
 def _validate_llm_backend(errors: list[str]) -> None:
     """Validate LLM backend config; warn (not error) when API key is absent."""
     llm_backend = (_env("LLM_BACKEND") or "anthropic").lower()
-    valid_backends = {"anthropic", "openai"}
+    # google and ollama were absent, so no third vendor could be selected even
+    # by environment -- which made the fallback chain in ai/gateway/chain.py
+    # unreachable past its second leg. ollama is the optional local backend and
+    # is never a default (plan Part 1A.5).
+    valid_backends = {"anthropic", "openai", "google", "ollama"}
 
     if llm_backend not in valid_backends:
         errors.append(
             f"INVALID  LLM_BACKEND={llm_backend!r}: must be one of "
             f"{sorted(valid_backends)}. "
-            "Set LLM_BACKEND=anthropic (default) or LLM_BACKEND=openai."
+            "Set LLM_BACKEND=anthropic (default), openai, google, or ollama."
         )
         return
 
     key_map = {
         "anthropic": ("ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
         "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys"),
+        "google": ("GOOGLE_API_KEY", "https://aistudio.google.com/app/apikey"),
+        # Local inference authenticates by reachability, not by key.
+        "ollama": ("OLLAMA_BASE_URL", "https://ollama.com/download"),
     }
     env_name, url = key_map[llm_backend]
     api_key = _env(env_name)

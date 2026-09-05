@@ -116,7 +116,7 @@ _PLATFORM_CONFIG_DEFAULTS: dict = {
     "lstm_scheduler": "cosine",
     # ── AI Brain / strategy generator ─────────────────────────────────────────
     "brain_enabled": False,
-    "brain_model": "gpt-4o",
+    "brain_model": "claude-opus-5",
     "brain_temperature": 0.3,
     "brain_max_tokens": 4096,
     "brain_strategy_timeout_s": 120,
@@ -248,17 +248,23 @@ _PLATFORM_CONFIG_DEFAULTS: dict = {
     "feature_kyc_enabled": True,
     "feature_sub_accounts_enabled": True,
     # ── LLM / AI provider ────────────────────────────────────────────────────
-    "llm_provider": "openai",
-    "llm_model": "gpt-4o",
+    # Defaults mirror ai/gateway/chain.py DEFAULT_CHAINS["reasoning"]. These
+    # read gpt-4o and claude-3-5-sonnet-20241022 -- two 2024 models -- until
+    # September 2026, because nothing consumed them and so nothing noticed.
+    # docs/ai/MODEL_CATALOGUE.md carries the review date (TODO item, Task 15).
+    "llm_provider": "anthropic",
+    "llm_model": "claude-opus-5",
     "llm_api_key": "",
     "llm_base_url": "",
     "llm_temperature": 0.3,
     "llm_max_tokens": 4096,
     "llm_timeout_s": 60,
     "llm_max_retries": 3,
-    "llm_fallback_provider": "anthropic",
-    "llm_fallback_model": "claude-3-5-sonnet-20241022",
-    "llm_embedding_model": "text-embedding-3-small",
+    # A different vendor on purpose: a same-vendor fallback shares the
+    # primary's control plane and fails with it. See plan Part 1A.4.
+    "llm_fallback_provider": "openai",
+    "llm_fallback_model": "gpt-5.5",
+    "llm_embedding_model": "text-embedding-3-large",
     "llm_embedding_dimensions": 1536,
     # ── Drawdown controls ─────────────────────────────────────────────────────
     "drawdown_hard_stop_pct": 0.10,
