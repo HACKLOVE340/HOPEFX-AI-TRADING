@@ -347,6 +347,7 @@ async def execute_supervisor_task(request: TaskExecutionRequest, user: TokenPayl
 
 @router.post("/diagnostics/run")
 async def run_diagnostics(request: DiagnosticRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     external = {"status": "not_requested", "sources": []}
     if request.include_external:
         external = {"status": "blocked_until_connector_authorized", "sources": [], "reason": "No external connector was authorized for this diagnostic."}
@@ -375,6 +376,7 @@ async def create_proposal(request: ProposalRequest, user: TokenPayload = Depends
 
 @router.post("/upgrades/propose")
 async def propose_upgrade(request: UpgradeRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     proposal = {"id": _id("upgrade", [user.sub, request.component, request.target]), "title": f"Upgrade {request.component} to {request.target}", "kind": "upgrade", "scope": request.component, "reason": "Versioned upgrade requires compatibility and migration review", "changes": {"target": request.target, "compatibility_checks": request.compatibility_checks, "migration_plan": request.migration_plan}, "evidence_ids": [], "rollback_plan": "Restore previous version from checkpoint and rerun compatibility gates.", "status": "pending", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(), "required_approvals": 2, "rollback": {"required": True, "automatic_on_failed_health_gate": True}}
     _PROPOSALS.append(proposal)
     _save_state(user.sub)
@@ -388,6 +390,7 @@ async def proposals(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 @router.post("/approvals")
 async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     proposal = next((p for p in _PROPOSALS if p["id"] == request.proposal_id), None)
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
