@@ -84,20 +84,48 @@ class IdempotencyKeyReused(Exception):
     """The same key was presented with a different request body."""
 
 
-def _redis() -> Any:
-    try:
-        import redis as _redis_lib
+# Resolved once per process. This used to build a client and issue a blocking
+# ping() on *every* store operation — two or three per order, none of them
+# closed, all on the async order path — so each order opened several sockets the
+# garbage collector had to clean up and blocked the loop on round-trips it did
+# not need.
+_CLIENT: Any = None
+_CLIENT_RESOLVED = False
 
-        client = _redis_lib.from_url(
-            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-            decode_responses=True,
-            socket_timeout=1.0,
-        )
-        client.ping()
-        return client
+
+def _build_client() -> Any:
+    """Construct and verify a sync Redis client, or raise."""
+    from cache.redis_client import inject_redis_password
+
+    import redis as _redis_lib
+
+    url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    if not url.strip():
+        raise RuntimeError("REDIS_URL is empty")
+    url = inject_redis_password(url, os.getenv("REDIS_PASSWORD", "") or None)
+
+    client = _redis_lib.from_url(url, decode_responses=True, socket_timeout=1.0)
+    client.ping()
+    return client
+
+
+def _redis() -> Any:
+    """The process-wide idempotency client, or None for the in-process store.
+
+    Resolved once. A deployment without Redis falls back permanently rather
+    than re-probing on every order, which is what the per-call construction
+    amounted to.
+    """
+    global _CLIENT, _CLIENT_RESOLVED
+    if _CLIENT_RESOLVED:
+        return _CLIENT
+    try:
+        _CLIENT = _build_client()
     except Exception as exc:
         logger.debug("idempotency: Redis unavailable (%s) — using in-process store", exc)
-        return None
+        _CLIENT = None
+    _CLIENT_RESOLVED = True
+    return _CLIENT
 
 
 def _fingerprint(body: Any) -> str:

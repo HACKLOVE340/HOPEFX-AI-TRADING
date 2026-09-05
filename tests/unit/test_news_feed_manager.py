@@ -75,7 +75,15 @@ def _article(article_id: str, headline: str, minutes_ago: int = 0, **overrides):
 
 
 class _StubFeed:
-    """A feed adapter with the real NewsFeedBase surface."""
+    """A feed adapter with the real NewsFeedBase surface.
+
+    `is_configured` is a **property** on NewsFeedBase, not a method. This stub
+    originally declared it as a method, so every test here passed while the
+    manager's `checker()` call raised TypeError against every real adapter —
+    caught by a bare except, reported as "not configured", and
+    `/api/news-feed/*` stayed empty exactly as before the manager existed. A
+    double that diverges from the class it stands in for proves nothing.
+    """
 
     def __init__(self, articles, configured=True, raises=False):
         self._articles = articles
@@ -84,6 +92,7 @@ class _StubFeed:
         self.closed = False
         self.calls = 0
 
+    @property
     def is_configured(self) -> bool:
         return self._configured
 
@@ -250,3 +259,80 @@ class TestDefaultConstruction:
         from data_layer.feeds.news.manager import NewsFeedManager
 
         assert asyncio.run(NewsFeedManager().get_latest(limit=5)) is not None
+
+
+class TestTheStubMatchesTheRealAdapters:
+    """Guard the gap that let the manager ship broken.
+
+    Every assertion below is about the *real* classes, not the stub, so this
+    file cannot pass again while disagreeing with the code it tests.
+    """
+
+    def test_is_configured_is_a_property_on_the_base_class(self):
+        from data_layer.feeds.news.base import NewsFeedBase
+
+        assert isinstance(NewsFeedBase.__dict__.get("is_configured"), property), (
+            "the manager must read is_configured as an attribute, not call it"
+        )
+
+    def test_the_stub_declares_it_the_same_way(self):
+        assert isinstance(_StubFeed.__dict__.get("is_configured"), property)
+
+    @pytest.mark.parametrize(
+        "cls_name",
+        ["FinnhubFeed", "FMPFeed", "NewsDataFeed", "AlphaVantageNewsFeed", "NewsAPIFeed"],
+    )
+    def test_every_real_adapter_is_skipped_cleanly_when_unconfigured(self, cls_name):
+        """No API key is a deployment state; it must not raise."""
+        import data_layer.feeds.news as pkg
+        from data_layer.feeds.news.manager import NewsFeedManager
+
+        cls = getattr(pkg, cls_name)
+        assert NewsFeedManager._is_configured(cls()) is False
+
+    def test_a_configured_real_adapter_is_recognised(self, monkeypatch):
+        from data_layer.feeds.news.manager import NewsFeedManager
+        from data_layer.feeds.news import FinnhubFeed
+
+        monkeypatch.setenv("FINNHUB_API_KEY", "fixture-key-not-real")
+        feed = FinnhubFeed()
+
+        assert NewsFeedManager._is_configured(feed) is True, (
+            "a configured adapter was reported as unconfigured, so the manager "
+            "never queried it and the endpoint stayed empty"
+        )
+
+
+class TestMixedTimezonesDoNotCrashTheMerge:
+    """Adapters disagree about tzinfo, and sorted() will not compare across it.
+
+    FMP and NewsData produce naive datetimes; Finnhub, AlphaVantage and NewsAPI
+    produce aware ones. Sorting a merged list raises
+    `TypeError: can't compare offset-naive and offset-aware datetimes`, which
+    the endpoint reports as a fetch failure — an outage caused purely by which
+    two providers happen to be configured together.
+    """
+
+    def test_naive_and_aware_articles_sort_together(self):
+        from datetime import datetime as _dt
+
+        from data_layer.feeds.news.manager import NewsFeedManager
+
+        aware = _article("aware", "Aware story", minutes_ago=5)
+        naive = _article("naive", "Naive story")
+        naive.published_at = _dt.now().replace(tzinfo=None) - timedelta(minutes=60)
+
+        got = asyncio.run(NewsFeedManager(feeds=[_StubFeed([aware, naive])]).get_latest(limit=10))
+
+        assert [a["id"] for a in got] == ["aware", "naive"]
+
+    def test_an_article_with_no_timestamp_does_not_break_the_sort(self):
+        from data_layer.feeds.news.manager import NewsFeedManager
+
+        dated = _article("dated", "Has a date")
+        undated = _article("undated", "No date")
+        undated.published_at = None
+
+        got = asyncio.run(NewsFeedManager(feeds=[_StubFeed([dated, undated])]).get_latest(limit=10))
+
+        assert len(got) == 2

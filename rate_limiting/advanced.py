@@ -210,6 +210,12 @@ async def _get_redis():
         # Keep a non-None client so the cooldown branch above is reachable; it is
         # only ever returned once _redis_available flips back to True.
         _redis_client = _redis_client or object()
+        # Record the loop here too. Without it the next call sees
+        # `running_loop is not _redis_loop`, takes the rebuild branch and resets
+        # _redis_retry_after to 0 — so the cooldown just set above was never
+        # once reachable, and a Redis-less deployment reconnected and logged a
+        # WARNING on every request.
+        _redis_loop = running_loop
     return _redis_client if _redis_available else None
 
 

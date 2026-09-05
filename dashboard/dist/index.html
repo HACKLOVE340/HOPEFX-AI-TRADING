@@ -66,15 +66,10 @@
     </script>
 
 
-    <!-- Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW registered:', reg))
-            .catch(err => console.log('SW registration failed:', err));
-        });
-      }
-    </script>
+    <!-- The service worker is registered by vite-plugin-pwa, which injects a
+         correctly-scoped registerSW.js for the /godmode/ base. A hand-written
+         block here also called navigator.serviceWorker.register('/sw.js') — a
+         root path the SPA catch-all answers with HTML, so that registration
+         always failed while duplicating one that already works. -->
   </body>
 </html>
