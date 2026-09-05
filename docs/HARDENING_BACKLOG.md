@@ -7406,3 +7406,58 @@ The fallback still applies to the environment-configured directory — a pod who
 `ML_MODEL_DIR` is empty must not end up with no model — but not once `_SAVED`
 has been reassigned, which is an explicit instruction to read that directory and
 nowhere else.
+
+### Round 22d — nine findings from an independent review of the branch
+
+A `/code-review` pass over the whole branch found nine defects. Three were
+introduced by this work; six were pre-existing. All nine are fixed.
+
+* **S-67 (mine, severe).** `NewsFeedManager._is_configured` called
+  `feed.is_configured()`, but `NewsFeedBase.is_configured` is a `@property`.
+  `True()` raises `TypeError`, the bare `except` reported "not configured", and
+  **every adapter was skipped** — so `/api/news-feed/*` returned `[]` for every
+  request and S-49's fix never worked at all. The reason the tests passed is the
+  lesson: `_StubFeed` declared `is_configured` as a *method*, so the double
+  disagreed with the class it stood in for. The stub now uses a property and the
+  suite asserts against the five real adapters.
+* **S-68 (mine).** `_published_sort_key` compared naive datetimes (FMP,
+  NewsData) against aware ones (Finnhub, AlphaVantage, NewsAPI). `sorted` raises
+  the moment both kinds are merged, which the endpoint reports as a fetch
+  failure — an outage decided by which two providers happen to be configured.
+  Naive timestamps are now read as UTC.
+* **S-69 (mine).** `_resolve_intent` cleared a write-ahead record based on
+  `parsed`, which is only broker-reconciled when a broker was passed. Startup
+  passes `getattr(s, "broker", None)`, so a deployment with no broker wired
+  could clear an intent nothing had confirmed. Documented in the audit's
+  docstring; the clearing path now requires the reconciled set.
+* **S-70.** `BodySizeLimitMiddleware` drained `request.stream()` and reassigned
+  `request._receive` to replay the body. Under `BaseHTTPMiddleware` that
+  reassignment is ignored, so **every chunked request reached its handler with
+  zero bytes** — silent data loss, invisible because the size cap still worked.
+  Reproduced (`len: 0`), now a pure ASGI middleware that meters `receive`
+  without ever buffering the body.
+* **S-71.** `rate_limiting/advanced.py` never set `_redis_loop` on its failure
+  path, so `loop_changed` was True on the next call and wiped
+  `_redis_retry_after`. The 30-second cooldown was unreachable, and with the
+  per-request default rate-limit middleware that meant a reconnect attempt and a
+  WARNING on every request.
+* **S-72.** `core/idempotency.py::_redis` built a client and issued a blocking
+  `ping()` per store operation — two or three per order, never closed, on the
+  async order path. Resolved once per process now.
+* **S-73 / S-74 (authorization).** `research/__init__.py` and
+  `nocode/router.py` gated their *mutating* routes with the *read* predicate,
+  which exempts shared built-ins. Templates live in the shared `engine.notebooks`
+  / `builder.strategies` dicts, so any authenticated trader could delete a
+  built-in notebook for the entire deployment, or edit the strategy templates
+  `create_from_template` hands to the next caller. Reads keep the exemption;
+  mutations require real ownership, and a built-in has no owner.
+* **S-75.** `dashboard/index.html` hand-registered `/sw.js` while the bundle is
+  mounted at the `/godmode/` base and `vite-plugin-pwa` already injects a
+  correctly-scoped `registerSW.js`. The hand-written call requested a root path
+  the SPA catch-all answers with HTML, so it always failed.
+
+**A recurring self-inflicted trap, recorded so the next person avoids it.**
+Four separate times this session a source-text assertion was tripped by the
+comment written to explain the very thing it asserts. The durable fix, used in
+`test_redis_client_reuse_and_cooldown.py`, is to strip comments before matching
+rather than to reword prose around the test.

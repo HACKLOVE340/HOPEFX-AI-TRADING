@@ -40,7 +40,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any
+
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
@@ -160,14 +163,28 @@ class NewsFeedManager:
 
     @staticmethod
     def _is_configured(feed: Any) -> bool:
-        """An adapter with no API key is skipped, not called and failed."""
-        checker = getattr(feed, "is_configured", None)
-        if checker is None:
+        """An adapter with no API key is skipped, not called and failed.
+
+        ``NewsFeedBase.is_configured`` is a **property**, so reading it already
+        yields a bool. Calling it raised ``TypeError: 'bool' object is not
+        callable``, which the surrounding ``except`` reported as "not
+        configured" — so every adapter was skipped and ``get_latest`` returned
+        ``[]`` for every request, leaving ``/api/news-feed/*`` exactly as empty
+        as before this manager existed.
+
+        Both shapes are accepted: a subclass or a test double may legitimately
+        expose it as a method.
+        """
+        if not hasattr(feed, "is_configured"):
             return True
-        try:
-            return bool(checker())
-        except Exception:
-            return False
+        value = feed.is_configured
+        if callable(value):
+            try:
+                value = value()
+            except Exception as exc:
+                logger.debug("NewsFeedManager: %s.is_configured() failed: %s", type(feed).__name__, exc)
+                return False
+        return bool(value)
 
     @staticmethod
     async def _fetch_one(feed: Any, limit: int) -> list[Any]:
@@ -176,9 +193,24 @@ class NewsFeedManager:
 
     @staticmethod
     def _published_sort_key(article: Any):
+        """Order by publication time across adapters that disagree about tzinfo.
+
+        FMP and NewsData return naive datetimes; Finnhub, AlphaVantage and
+        NewsAPI return aware ones. ``sorted`` raises "can't compare
+        offset-naive and offset-aware datetimes" the moment both kinds are in
+        one merged list, which the endpoint reports as a fetch failure — an
+        outage decided purely by which two providers happen to be configured.
+
+        A naive timestamp is read as UTC, which is what every one of these
+        providers actually means. A feed that omits the field sorts last rather
+        than crashing the merge.
+        """
         published = getattr(article, "published_at", None)
-        # A feed that omits published_at sorts last rather than crashing the merge.
-        return (published is not None, published)
+        if published is None or not hasattr(published, "tzinfo"):
+            return (False, datetime.min.replace(tzinfo=UTC))
+        if published.tzinfo is None:
+            published = published.replace(tzinfo=UTC)
+        return (True, published)
 
     @staticmethod
     def _to_dict(article: Any, symbol: str | None) -> dict[str, Any]:
