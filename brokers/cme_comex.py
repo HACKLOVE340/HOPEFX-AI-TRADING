@@ -213,8 +213,9 @@ class CMEComexConnector(BrokerConnector):
             fix_password = _cfg.get("fix_password", _FIX_PASSWORD)
             fix_config_file = _cfg.get("fix_config_file", _FIX_CONFIG_FILE)
             cme_account = _cfg.get("cme_account", _CME_ACCOUNT)
-            ibkr_fallback = bool(_cfg.get("ibkr_fallback", _IBKR_FALLBACK))
-            paper_fallback = bool(_cfg.get("paper_fallback", _PAPER_FALLBACK))
+        ibkr_fallback = bool(_cfg.get("ibkr_fallback", ibkr_fallback))
+        paper_fallback = bool(_cfg.get("paper_fallback", paper_fallback))
+
 
         # Build a config dict for BrokerConnector.__init__ so self.config,
         # self.connected, self.name, and self.rate_limiter are all initialised.
