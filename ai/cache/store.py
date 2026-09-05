@@ -184,4 +184,33 @@ class ResponseCache:
             self._values.pop(oldest.key, None)
 
 
-__all__ = ["DEFAULT_MAX_ENTRIES", "DEFAULT_TTL_S", "CacheEntry", "ResponseCache"]
+# -- the process-wide instance --------------------------------------------------
+#
+# Absent by default, and reported as absent. A panel that showed "cache:
+# enabled" for a store nothing consults would be exactly the decorative control
+# this work exists to remove, so installation is explicit and `shared_cache()`
+# returns None until something installs one.
+
+_SHARED: ResponseCache | None = None
+
+
+def install_shared_cache(cache: ResponseCache | None) -> ResponseCache | None:
+    """Install (or, with None, remove) the process-wide response cache."""
+    global _SHARED
+    _SHARED = cache
+    return _SHARED
+
+
+def shared_cache() -> ResponseCache | None:
+    """The process-wide cache, or None when no deployment installed one."""
+    return _SHARED
+
+
+__all__ = [
+    "DEFAULT_MAX_ENTRIES",
+    "DEFAULT_TTL_S",
+    "CacheEntry",
+    "ResponseCache",
+    "install_shared_cache",
+    "shared_cache",
+]

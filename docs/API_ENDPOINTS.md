@@ -98,6 +98,13 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/advanced/ab-tests/{test_id}` | JWT |  | Advanced Trading |
 | `GET` | `/api/advanced/correlation` | JWT |  | Advanced Trading |
 | `GET` | `/api/advanced/cot-sentiment` | JWT |  | Advanced Trading |
+| `GET` | `/api/ai-core/budget` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/cache` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/calls` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/capabilities` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/chain` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/evals` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/summary` | JWT |  | AI Core |
 | `GET` | `/api/alerts/` | JWT |  | Alerts |
 | `POST` | `/api/alerts/` | JWT |  | Alerts |
 | `GET` | `/api/alerts/active` | JWT |  | Alerts |

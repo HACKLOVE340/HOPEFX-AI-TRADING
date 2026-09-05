@@ -1,0 +1,271 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+"""Read surface for the AI Core page (plan Task 13, item 18).
+
+Every panel on that page reads one of these endpoints. That is the whole point:
+the page the audit replaced rendered its state from constants, so a control
+plane that had degraded looked identical to one that had not. Nothing here
+computes a status from a literal — each field is read from the module that owns
+it at the moment of the request.
+
+Three rules shape the whole module:
+
+* **Read-only.** Nothing here mutates. Every consequential action already lives
+  in `api/safe_agent_platform.py` behind the Part 1B matrix and 2FA; a
+  reporting surface that could also act would be a second, weaker door to the
+  same room.
+* **Admin is gated below superadmin.** `require_role` is a minimum-rank check,
+  so an "admin" gate admits superadmins too — the reverse must not hold. An
+  admin sees their own spend and their own call history; the per-operator
+  breakdown and the platform total are superadmin-only, because knowing who is
+  spending what is reconnaissance for the overtake case D7 closed.
+* **No prompt and no credential ever leaves.** Call records carry the SHA-256
+  the gateway's audit already keeps, never the text. Provider reachability is a
+  boolean; the key that makes it true is never read into a response.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query
+
+from ai.cache.store import shared_cache
+from ai.gateway import audit, budget, providers
+from ai.gateway.chain import DEFAULT_CHAINS, LOCAL_PROVIDER, resolve_chain, resolve_embedding_model
+from ai.policy import roles as policy
+from api.auth import TokenPayload, require_role
+
+router = APIRouter(prefix="/api/ai-core", tags=["AI Core"])
+
+#: The page starts at admin. Below that the AI control plane is not visible at
+#: all — there is nothing on it a trader has a reason to read.
+_VIEWER_ROLE = "admin"
+
+#: How many call records a single request may return. The audit ring holds 500;
+#: returning all of them on every page render is a payload nobody reads.
+_DEFAULT_CALL_LIMIT = 50
+_MAX_CALL_LIMIT = 200
+
+
+def _viewer(user: TokenPayload = Depends(require_role(_VIEWER_ROLE))) -> TokenPayload:
+    return user
+
+
+def _is_superadmin(user: TokenPayload) -> bool:
+    """Exact match, not rank.
+
+    Everything superadmin-only in this module is a widening of scope — another
+    operator's spend, the platform total, every operator's call history — so it
+    is granted to the role that owns it and to nothing that merely outranks
+    admin. A rank comparison here would re-open D7 the moment a role is added
+    between the two.
+    """
+    return user.role == "superadmin"
+
+
+def _capability_rows(role: str) -> list[dict[str, Any]]:
+    """The Part 1B matrix, resolved for one role.
+
+    The UI gates its controls on `permitted`. A button the server would refuse
+    is a decorative control — the D6 defect — so the page is told what this
+    caller may actually do rather than guessing from the role name.
+    """
+    rank = {"starter": 0, "user": 1, "trader": 2, "admin": 3, "superadmin": 4}
+    caller = rank.get(role, -1)
+    rows: list[dict[str, Any]] = []
+    for name, capability in sorted(policy.CAPABILITIES.items()):
+        admitted = policy.ROLES_ADMITTED.get(capability.tier, frozenset())
+        rows.append(
+            {
+                "name": name,
+                "tier": capability.tier,
+                "min_role": capability.min_role,
+                "requires_2fa": capability.requires_2fa,
+                "quorum_needs_superadmin": capability.quorum_needs_superadmin,
+                # Both conditions, because they are not the same question:
+                # rank is what `require_role` enforces, and `ROLES_ADMITTED` is
+                # the exact set the tier is meant to admit.
+                "permitted": caller >= rank.get(capability.min_role, 99) and role in admitted,
+            }
+        )
+    return rows
+
+
+def _chain_rows() -> list[dict[str, Any]]:
+    reachable = providers.reachability()
+    rows: list[dict[str, Any]] = []
+    for role in DEFAULT_CHAINS:
+        legs = [
+            {
+                "position": index,
+                "provider": leg.provider,
+                "model": leg.model,
+                "reachable": reachable.get(leg.provider, False),
+                "local": leg.provider == LOCAL_PROVIDER,
+            }
+            for index, leg in enumerate(resolve_chain(role))
+        ]
+        usable = [leg for leg in legs if leg["reachable"]]
+        rows.append(
+            {
+                "role": role,
+                "legs": legs,
+                # A chain whose later legs have no credentials has a fallback on
+                # paper and one leg in practice. Reported as its own field so
+                # the page can say so instead of showing three rows and implying
+                # three attempts.
+                "usable_legs": len(usable),
+                "fallback_available": len(usable) > 1,
+                "primary_reachable": bool(legs) and legs[0]["reachable"],
+            }
+        )
+    return rows
+
+
+@router.get("/capabilities")
+async def ai_core_capabilities(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """What this caller may do, as the server would decide it."""
+    return {
+        "role": user.role,
+        "is_superadmin": _is_superadmin(user),
+        "capabilities": _capability_rows(user.role),
+        "tiers": {tier: sorted(admitted) for tier, admitted in policy.ROLES_ADMITTED.items()},
+        "quorum_needs_superadmin_kinds": sorted(policy.QUORUM_NEEDS_SUPERADMIN_KINDS),
+    }
+
+
+@router.get("/chain")
+async def ai_core_chain(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """The resolved chain per role, and which legs this deployment can reach."""
+    embedding = resolve_embedding_model()
+    return {
+        "roles": _chain_rows(),
+        "providers": providers.reachability(),
+        "embedding": {"provider": embedding.provider, "model": embedding.model},
+        "local_provider": LOCAL_PROVIDER,
+        # Optional by design and never a primary: capability drops sharply, and
+        # the page has to say so rather than presenting it as an equal choice.
+        "local_inference_enabled": providers.local_inference_enabled(),
+    }
+
+
+@router.get("/budget")
+async def ai_core_budget(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """Spend against the ceilings. Scope depends on the caller's role."""
+    per_operator, global_ceiling = budget.limits()
+    own = budget.spent(user.sub)
+    body: dict[str, Any] = {
+        "scope": "platform" if _is_superadmin(user) else "self",
+        "operator": user.sub,
+        "spent_usd": round(own, 6),
+        "per_operator_ceiling_usd": per_operator,
+        "headroom_usd": round(max(0.0, per_operator - own), 6),
+    }
+    if not _is_superadmin(user):
+        return body
+    body["operators"] = {operator: round(spent, 6) for operator, spent in budget._spend.items()}
+    body["global_spent_usd"] = round(budget.total_spent(), 6)
+    body["global_ceiling_usd"] = global_ceiling
+    body["global_headroom_usd"] = round(max(0.0, global_ceiling - budget.total_spent()), 6)
+    return body
+
+
+@router.get("/calls")
+async def ai_core_calls(
+    user: TokenPayload = Depends(_viewer),
+    limit: int = Query(_DEFAULT_CALL_LIMIT, ge=1, le=_MAX_CALL_LIMIT),
+) -> dict[str, Any]:
+    """Recent model calls, newest first. Prompts are digests, never text."""
+    records = audit.records()
+    if not _is_superadmin(user):
+        records = [record for record in records if record.get("operator") == user.sub]
+    recent = list(reversed(records))[:limit]
+    return {
+        "scope": "platform" if _is_superadmin(user) else "self",
+        "calls": recent,
+        "returned": len(recent),
+        "total_visible": len(records),
+        # Stated rather than implied: someone reading this page needs to know
+        # the window is bounded before concluding a call never happened.
+        "retention": "in-memory ring, newest 500 calls",
+    }
+
+
+@router.get("/cache")
+async def ai_core_cache(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """The response cache, or an honest zero when no deployment installed one."""
+    cache = shared_cache()
+    if cache is None:
+        return {
+            "enabled": False,
+            "entries": 0,
+            "hits": 0,
+            "misses": 0,
+            "hit_rate": 0.0,
+            "detail": "no shared response cache is installed; every call reaches a provider",
+        }
+    stats = cache.stats()
+    return {"enabled": True, **stats}
+
+
+@router.get("/evals")
+async def ai_core_evals(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """The latest eval report and what the promotion gate would do with it.
+
+    "No report" is a state the page must show. The gate refuses on None — fail
+    closed — and a UI that rendered that as a blank panel would hide the reason
+    a promotion is being refused.
+    """
+    from api.safe_agent_platform import _EVAL_REPORT, _eval_gate_allows
+
+    report = _EVAL_REPORT
+    allowed, detail = _eval_gate_allows("canary")
+    summary = None
+    if report is not None:
+        summary = {
+            "score": getattr(report, "score", None),
+            "total": getattr(report, "total", None),
+            "passed": getattr(report, "passed", None),
+            "failed_case_ids": list(getattr(report, "failed_case_ids", ()) or ()),
+            "ran_at": getattr(report, "ran_at", None),
+        }
+    return {
+        "report": summary,
+        "promotion_allowed": allowed,
+        "promotion_detail": detail,
+        "gate_target": "canary",
+    }
+
+
+@router.get("/summary")
+async def ai_core_summary(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """One request for the page header, so it does not need seven round trips."""
+    rows = _chain_rows()
+    reasoning = next((row for row in rows if row["role"] == "reasoning"), None)
+    reachable = providers.reachability()
+    records = audit.records()
+    visible = records if _is_superadmin(user) else [r for r in records if r.get("operator") == user.sub]
+    unserved = [record for record in visible if record.get("served_by") is None]
+    cache = shared_cache()
+    return {
+        "role": user.role,
+        "is_superadmin": _is_superadmin(user),
+        "reasoning_primary": (reasoning["legs"][0]["model"] if reasoning and reasoning["legs"] else None),
+        "reasoning_primary_reachable": bool(reasoning and reasoning["primary_reachable"]),
+        "fallback_available": bool(reasoning and reasoning["fallback_available"]),
+        "providers_reachable": sorted(name for name, ok in reachable.items() if ok),
+        "providers_unreachable": sorted(name for name, ok in reachable.items() if not ok),
+        "local_inference_enabled": providers.local_inference_enabled(),
+        "calls_recorded": len(visible),
+        # A call no leg served is the failure the gateway exists to make
+        # visible. Surfaced in the header because it is the one number that
+        # should never be quietly non-zero.
+        "calls_unserved": len(unserved),
+        "spent_usd": round(budget.spent(user.sub), 6),
+        "cache_enabled": cache is not None,
+    }
+
+
+__all__ = ["router"]

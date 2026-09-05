@@ -74,6 +74,20 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     "proposals": _VIEW,
     "integrations": _VIEW,
     "chat_capabilities": _VIEW,
+    # api/ai_core.py -- the AI Core page's read surface. Read-only by
+    # construction: every consequential action lives in safe_agent_platform
+    # behind the rows below, and a reporting surface that could also act would
+    # be a second, weaker door to the same room. `ai_core_budget` and
+    # `ai_core_calls` widen their scope for a superadmin inside the handler
+    # (per-operator spend, every operator's calls); the row is the floor, not
+    # the ceiling.
+    "ai_core_summary": _VIEW,
+    "ai_core_capabilities": _VIEW,
+    "ai_core_chain": _VIEW,
+    "ai_core_budget": _VIEW,
+    "ai_core_calls": _VIEW,
+    "ai_core_cache": _VIEW,
+    "ai_core_evals": _VIEW,
     # ── propose / plan: an admin may ask, and may not act ─────────────────────
     "create_supervisor_task": _PROPOSE,
     "cancel_supervisor_task": _PROPOSE,
