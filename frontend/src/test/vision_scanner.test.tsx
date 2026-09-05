@@ -24,7 +24,41 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VisionScanner } from '../components/intelligence/VisualIntelligenceWorkspaces';
 
-afterEach(cleanup);
+/**
+ * Globals this file replaces, restored after every test.
+ *
+ * `HTMLCanvasElement.prototype.getContext` in particular is shared across every
+ * test file that lands in the same vitest worker, and several components draw
+ * sparklines on a canvas. Leaving a stub that only implements `drawImage` in
+ * place made an unrelated watchlist test render an empty row in CI while
+ * passing locally, because file ordering across workers differs. A test that
+ * mutates a prototype has to put it back.
+ */
+const originals = {
+  mediaDevices: Object.getOwnPropertyDescriptor(globalThis.navigator, 'mediaDevices'),
+  play: Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'play'),
+  getContext: Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'getContext'),
+};
+
+afterEach(() => {
+  cleanup();
+  if (originals.mediaDevices) {
+    Object.defineProperty(globalThis.navigator, 'mediaDevices', originals.mediaDevices);
+  } else {
+    Reflect.deleteProperty(globalThis.navigator as object, 'mediaDevices');
+  }
+  if (originals.play) {
+    Object.defineProperty(HTMLMediaElement.prototype, 'play', originals.play);
+  } else {
+    Reflect.deleteProperty(HTMLMediaElement.prototype as object, 'play');
+  }
+  if (originals.getContext) {
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', originals.getContext);
+  } else {
+    Reflect.deleteProperty(HTMLCanvasElement.prototype as object, 'getContext');
+  }
+  vi.restoreAllMocks();
+});
 
 /** Put the component in the `captured` state without needing a real camera. */
 async function captureAFrame(user: ReturnType<typeof userEvent.setup>) {
