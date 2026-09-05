@@ -44,22 +44,31 @@ _PROPOSALS: list[dict[str, Any]] = []
 _APPROVALS: list[dict[str, Any]] = []
 _PROPOSALS_KEY = "safe_platform:proposals"
 _APPROVALS_KEY = "safe_platform:approvals"
+_INTEGRATIONS_KEY = "safe_platform:integrations"
 
 
 def _load_state() -> None:
     """Hydrate governance state from the shared Redis/DB config store."""
     stored_proposals = config_store.get(_PROPOSALS_KEY, default=[])
     stored_approvals = config_store.get(_APPROVALS_KEY, default=[])
+    stored_integrations = config_store.get(_INTEGRATIONS_KEY, default=[])
     if isinstance(stored_proposals, list):
         _PROPOSALS.extend(item for item in stored_proposals if isinstance(item, dict))
     if isinstance(stored_approvals, list):
         _APPROVALS.extend(item for item in stored_approvals if isinstance(item, dict))
+    if isinstance(stored_integrations, list):
+        for stored in stored_integrations:
+            if isinstance(stored, dict) and stored.get("id"):
+                current = next((entry for entry in _INTEGRATIONS if entry["id"] == stored["id"]), None)
+                if current:
+                    current.update({key: value for key, value in stored.items() if key not in {"secret", "token_value", "access_token", "refresh_token"}})
 
 
 def _save_state(changed_by: str) -> None:
     """Persist proposals and approvals without ever persisting secret values."""
     config_store.set(_PROPOSALS_KEY, _PROPOSALS, changed_by=changed_by)
     config_store.set(_APPROVALS_KEY, _APPROVALS, changed_by=changed_by)
+    config_store.set(_INTEGRATIONS_KEY, [{key: value for key, value in item.items() if key not in {"secret", "token_value", "access_token", "refresh_token"}} for item in _INTEGRATIONS], changed_by=changed_by)
 
 
 _load_state()
@@ -95,6 +104,13 @@ class ApprovalRequest(BaseModel):
 class ValidationRequest(BaseModel):
     proposal_id: str
     environment: str = Field(default="sandbox", pattern="^(sandbox|paper|canary)$")
+
+
+class IntegrationAction(BaseModel):
+    integration_id: str
+    action: str = Field(pattern="^(authorize|revoke|rotate|health_probe)$")
+    scopes: list[str] = Field(default_factory=list, max_length=12)
+    reason: str = Field(min_length=3, max_length=400)
 
 
 @router.get("/overview")
@@ -170,6 +186,28 @@ async def rollback_proposal(proposal_id: str, user: TokenPayload = Depends(_admi
 @router.get("/integrations")
 async def integrations(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"items": copy.deepcopy(_INTEGRATIONS), "secret_values": "never_returned", "external_access": "allowlisted_and_scope_limited"}
+
+
+@router.post("/integrations/action")
+async def integration_action(request: IntegrationAction, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    item = next((entry for entry in _INTEGRATIONS if entry["id"] == request.integration_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    if request.action == "authorize":
+        item["status"] = "authorization_required"
+        item["requested_scopes"] = sorted(set(request.scopes))
+        message = "Authorization must complete through the managed connector flow; no token was accepted from this request."
+    elif request.action == "revoke":
+        item["status"] = "revoked"
+        message = "Connector marked revoked. Server-side token access is denied until reauthorized."
+    elif request.action == "rotate":
+        item["status"] = "rotation_required"
+        message = "Rotation requested through the provider; secret values remain server-only."
+    else:
+        message = "Health probe recorded as pending provider verification."
+    item["last_action"] = {"action": request.action, "reason": request.reason, "actor": user.sub, "at": datetime.now(UTC).isoformat()}
+    _save_state(user.sub)
+    return {"integration": {key: value for key, value in copy.deepcopy(item).items() if key not in {"secret", "token_value", "access_token", "refresh_token"}}, "message": message}
 
 
 @router.get("/chat/capabilities")
