@@ -140,6 +140,12 @@ class TaskPlanRequest(BaseModel):
     requires_approval: bool = True
 
 
+class TaskExecutionRequest(BaseModel):
+    task_id: str
+    mode: str = Field(default="dry_run", pattern="^(dry_run|paper)$")
+    confirmation: str = Field(min_length=8, max_length=120)
+
+
 @router.get("/overview")
 async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"paper_mode": os.getenv("BROKER_TYPE", "paper") == "paper", "human_approval_required": True, "agents": copy.deepcopy(_AGENTS), "models": copy.deepcopy(_MODELS), "integrations": copy.deepcopy(_INTEGRATIONS), "pending_proposals": len([p for p in _PROPOSALS if p["status"] == "pending"]), "capabilities": {"external_read": True, "external_write": False, "live_trading": False, "self_modify": False, "credential_values_visible": False}}
@@ -196,6 +202,23 @@ async def approve_supervisor_task(task_id: str, user: TokenPayload = Depends(_ad
     task.setdefault("events", []).append({"type": "human_approval", "actor": user.sub})
     _save_state(user.sub)
     return {"task": copy.deepcopy(task), "message": "Human approval recorded. Execution remains restricted to approved tools and environments."}
+
+
+@router.post("/supervisor/tasks/execute")
+async def execute_supervisor_task(request: TaskExecutionRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    task = next((item for item in _TASKS if item["id"] == request.task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.get("status") != "approved_for_restricted_execution":
+        raise HTTPException(status_code=409, detail="Task requires a current human-approved plan")
+    if request.confirmation != "EXECUTE APPROVED PLAN":
+        raise HTTPException(status_code=400, detail="Explicit execution confirmation is required")
+    execution = {"id": _id("execution", [request.task_id, datetime.now(UTC).isoformat()]), "task_id": request.task_id, "mode": request.mode, "status": "completed_dry_run", "tool_calls": [{"tool": tool, "status": "simulated_no_side_effect"} for tool in task.get("plan", {}).get("tools", [])], "external_calls": "blocked_without_authorized_connector", "trading": "paper_only", "rollback_checkpoint": "not_needed_no_mutation", "executed_by": user.sub, "executed_at": datetime.now(UTC).isoformat()}
+    task["status"] = "completed_reviewable_run"
+    task.setdefault("events", []).append({"type": "restricted_execution", "actor": user.sub, "execution_id": execution["id"], "mode": request.mode})
+    task["last_execution"] = execution
+    _save_state(user.sub)
+    return {"task": copy.deepcopy(task), "execution": execution, "message": "Restricted execution completed without live mutation, credential access, or trade placement."}
 
 
 @router.post("/diagnostics/run")
