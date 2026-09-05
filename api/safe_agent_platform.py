@@ -198,6 +198,7 @@ async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 @router.post("/models/route")
 async def route_model(request: ModelRouteRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     if not request.model_id.startswith(("gateway/", "openai/", "anthropic/", "google/")):
         raise HTTPException(status_code=400, detail="Model must use an approved provider namespace")
     route = {"role": request.role, "model_id": request.model_id, "status": "pending_health_check", "reason": request.reason, "changed_by": user.sub, "changed_at": datetime.now(UTC).isoformat(), "side_effects": "none"}
@@ -345,6 +346,7 @@ async def diagnostics_graph(_: TokenPayload = Depends(_admin)) -> dict[str, Any]
 
 @router.post("/proposals")
 async def create_proposal(request: ProposalRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     proposal = {"id": _id("proposal", [user.sub, request.title, request.changes]), "title": request.title, "kind": request.kind, "scope": request.scope, "reason": request.reason, "changes": request.changes, "evidence_ids": request.evidence_ids, "rollback_plan": request.rollback_plan, "status": "pending", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(), "rollback": {"required": True, "checkpoint": "created-before-apply", "automatic": True}, "required_approvals": 2 if request.kind in {"repair", "upgrade"} else 1}
     _PROPOSALS.append(proposal)
     _save_state(user.sub)
@@ -469,6 +471,7 @@ async def integrations(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 @router.post("/integrations/action")
 async def integration_action(request: IntegrationAction, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    _enforce_rate_limit(user)
     item = next((entry for entry in _INTEGRATIONS if entry["id"] == request.integration_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="Integration not found")
