@@ -400,9 +400,15 @@ jobs:
             if [ -z "$CSRF" ]; then
               echo "FAIL: could not obtain a CSRF token from /api/auth/csrf-token"; FAIL=1
             fi
+            # `logout(body: LogoutRequest, ...)` takes the body as a required
+            # parameter. Both of its fields are optional, so `{}` satisfies it
+            # and the token to blacklist is read from the Authorization header —
+            # but sending no body at all is a 422 "Field required", which is
+            # what this test got once the CSRF 403 was out of the way.
             CODE=$(curl_retry "${BASE}/api/auth/logout" \
               -X POST -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-              -b /tmp/smoke_cookies -H "X-CSRF-Token: ${CSRF}")
+              -b /tmp/smoke_cookies -H "X-CSRF-Token: ${CSRF}" \
+              -H "Content-Type: application/json" -d '{}')
             BODY=$(cat /tmp/smoke_body)
             echo "HTTP $CODE  body: ${BODY:0:200}"
             if [ "$CODE" != "200" ]; then
