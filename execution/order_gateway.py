@@ -148,17 +148,17 @@ class OrderGateway:
         }
 
         try:
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError(
+                "OrderGateway.send_order() cannot run inside an active event loop; "
+                "await send_order_async() from async callers"
+            )
 
-            if loop is not None and loop.is_running():
-                # Running inside an async context — use thread-safe future.
-                future = asyncio.run_coroutine_threadsafe(self.executor.execute_signal(signal), loop)
-                result: ExecutionResult = future.result(timeout=30)
-            else:
-                result = asyncio.run(self.executor.execute_signal(signal))
+        try:
+            result = asyncio.run(self.executor.execute_signal(signal))
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "OrderGateway.send_order: TradeExecutor raised for order %s: %s",
