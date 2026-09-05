@@ -50,7 +50,16 @@ _ROUTES_KEY = "safe_platform:model_routes"
 _TASKS: list[dict[str, Any]] = []
 _ROUTES: list[dict[str, Any]] = []
 _REQUEST_WINDOW: dict[str, list[float]] = {}
+_BUDGET_WINDOW: dict[str, list[float]] = {}
 _MAX_REQUESTS_PER_MINUTE = 20
+_MAX_RESEARCH_UNITS_PER_HOUR = 30
+
+
+def _reject_untrusted_instructions(value: str) -> None:
+    lowered = value.lower()
+    blocked = ("ignore previous", "reveal system prompt", "disable safety", "execute trade", "override policy")
+    if any(marker in lowered for marker in blocked):
+        raise HTTPException(status_code=400, detail="Research input contains an unsafe instruction pattern")
 
 
 def _load_state() -> None:
@@ -103,6 +112,15 @@ def _enforce_rate_limit(user: TokenPayload) -> None:
 
 def _id(prefix: str, payload: Any) -> str:
     return f"{prefix}-{hashlib.sha256(repr(payload).encode()).hexdigest()[:12]}"
+
+
+def _consume_research_budget(user: TokenPayload) -> None:
+    now = datetime.now(UTC).timestamp()
+    recent = [timestamp for timestamp in _BUDGET_WINDOW.get(user.sub, []) if now - timestamp < 3600]
+    if len(recent) >= _MAX_RESEARCH_UNITS_PER_HOUR:
+        raise HTTPException(status_code=429, detail="External research budget exceeded for this operator")
+    recent.append(now)
+    _BUDGET_WINDOW[user.sub] = recent
 
 
 class DiagnosticRequest(BaseModel):
@@ -296,6 +314,8 @@ async def delegate_supervisor_task(request: DelegationRequest, user: TokenPayloa
 @router.post("/research/request")
 async def request_external_research(request: ResearchRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     _enforce_rate_limit(user)
+    _consume_research_budget(user)
+    _reject_untrusted_instructions(request.query)
     task = next((item for item in _TASKS if item["id"] == request.task_id), None)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
