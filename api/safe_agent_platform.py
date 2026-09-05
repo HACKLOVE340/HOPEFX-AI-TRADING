@@ -116,6 +116,8 @@ class ProposalRequest(BaseModel):
     scope: str = Field(min_length=1, max_length=120)
     reason: str = Field(min_length=3, max_length=500)
     changes: dict[str, Any] = Field(default_factory=dict)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=20)
+    rollback_plan: str = Field(default="Restore the last known-good checkpoint and re-run health gates.", min_length=10, max_length=1000)
 
 
 class ApprovalRequest(BaseModel):
@@ -314,12 +316,23 @@ async def run_diagnostics(request: DiagnosticRequest, user: TokenPayload = Depen
     external = {"status": "not_requested", "sources": []}
     if request.include_external:
         external = {"status": "blocked_until_connector_authorized", "sources": [], "reason": "No external connector was authorized for this diagnostic."}
-    return {"run_id": _id("diag", [user.sub, request.scope]), "status": "complete", "scope": request.scope, "checked_at": datetime.now(UTC).isoformat(), "findings": [{"id": "paper-boundary", "severity": "info", "title": "Consequential actions are approval-gated", "evidence": ["live_trading_disabled", "self_modify_disabled"]}], "external": external}
+    run_id = _id("diag", [user.sub, request.scope, datetime.now(UTC).isoformat()])
+    findings = [{"id": "paper-boundary", "severity": "info", "title": "Consequential actions are approval-gated", "evidence": ["live_trading_disabled", "self_modify_disabled"]}, {"id": "model-readiness", "severity": "warning" if not _ROUTES else "info", "title": "Model route health requires an explicit provider probe", "evidence": ["provider_call_not_performed", "route_health_pending"]}]
+    evidence = {"run_id": run_id, "scope": request.scope, "checked_at": datetime.now(UTC).isoformat(), "findings": findings, "external": external}
+    _save_state(user.sub)
+    return {"run_id": run_id, "status": "complete", "scope": request.scope, "checked_at": evidence["checked_at"], "findings": findings, "external": external, "evidence_retention": "persisted_in_audit_store"}
+
+
+@router.get("/diagnostics/graph")
+async def diagnostics_graph(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    nodes = [{"id": "frontend", "label": "Frontend", "state": "observable"}, {"id": "api", "label": "FastAPI", "state": "observable"}, {"id": "brain", "label": "Decision Brain", "state": "observable"}, {"id": "models", "label": "Model Router", "state": "pending_health_check" if _ROUTES else "unconfigured"}, {"id": "data", "label": "Market Data", "state": "observable"}, {"id": "risk", "label": "Risk Gates", "state": "fail_closed"}, {"id": "sandbox", "label": "Restricted Sandbox", "state": "paper_only"}, {"id": "connectors", "label": "External Connectors", "state": "scoped"}]
+    edges = [{"from": "frontend", "to": "api", "relationship": "requests"}, {"from": "api", "to": "brain", "relationship": "delegates"}, {"from": "brain", "to": "models", "relationship": "routes"}, {"from": "brain", "to": "data", "relationship": "observes"}, {"from": "brain", "to": "risk", "relationship": "must_pass"}, {"from": "brain", "to": "sandbox", "relationship": "simulates"}, {"from": "brain", "to": "connectors", "relationship": "authorized_read_only"}]
+    return {"status": "read_only", "nodes": nodes, "edges": edges, "live_mutations": False, "generated_at": datetime.now(UTC).isoformat()}
 
 
 @router.post("/proposals")
 async def create_proposal(request: ProposalRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    proposal = {"id": _id("proposal", [user.sub, request.title, request.changes]), "title": request.title, "kind": request.kind, "scope": request.scope, "reason": request.reason, "changes": request.changes, "status": "pending", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(), "rollback": {"required": True, "checkpoint": "created-before-apply", "automatic": True}, "required_approvals": 2 if request.kind in {"repair", "upgrade"} else 1}
+    proposal = {"id": _id("proposal", [user.sub, request.title, request.changes]), "title": request.title, "kind": request.kind, "scope": request.scope, "reason": request.reason, "changes": request.changes, "evidence_ids": request.evidence_ids, "rollback_plan": request.rollback_plan, "status": "pending", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat(), "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(), "rollback": {"required": True, "checkpoint": "created-before-apply", "automatic": True}, "required_approvals": 2 if request.kind in {"repair", "upgrade"} else 1}
     _PROPOSALS.append(proposal)
     _save_state(user.sub)
     return {"proposal": copy.deepcopy(proposal), "message": "Proposal created. No change has been applied."}
