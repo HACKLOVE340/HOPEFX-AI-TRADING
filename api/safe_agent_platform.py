@@ -159,6 +159,12 @@ class ResearchRequest(BaseModel):
     connector_id: str | None = None
 
 
+class DelegationRequest(BaseModel):
+    task_id: str
+    agent_ids: list[str] = Field(min_length=1, max_length=12)
+    rationale: str = Field(min_length=3, max_length=500)
+
+
 @router.get("/overview")
 async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     return {"paper_mode": os.getenv("BROKER_TYPE", "paper") == "paper", "human_approval_required": True, "agents": copy.deepcopy(_AGENTS), "models": copy.deepcopy(_MODELS), "integrations": copy.deepcopy(_INTEGRATIONS), "pending_proposals": len([p for p in _PROPOSALS if p["status"] == "pending"]), "capabilities": {"external_read": True, "external_write": False, "live_trading": False, "self_modify": False, "credential_values_visible": False}}
@@ -241,6 +247,22 @@ async def approve_supervisor_task(task_id: str, user: TokenPayload = Depends(_ad
     task.setdefault("events", []).append({"type": "human_approval", "actor": user.sub})
     _save_state(user.sub)
     return {"task": copy.deepcopy(task), "message": "Human approval recorded. Execution remains restricted to approved tools and environments."}
+
+
+@router.post("/supervisor/tasks/delegate")
+async def delegate_supervisor_task(request: DelegationRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    task = next((item for item in _TASKS if item["id"] == request.task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    available = {agent["id"]: agent for agent in _AGENTS}
+    selected = [available[agent_id] for agent_id in dict.fromkeys(request.agent_ids) if agent_id in available]
+    if not selected:
+        raise HTTPException(status_code=400, detail="No approved specialist agents were selected")
+    delegation = {"id": _id("delegation", [request.task_id, request.agent_ids]), "agents": [{"id": agent["id"], "mission": agent["mission"], "risk": agent["risk"], "status": agent["status"]} for agent in selected], "rationale": request.rationale, "status": "planned", "side_effects": "blocked", "created_by": user.sub, "created_at": datetime.now(UTC).isoformat()}
+    task["delegation"] = delegation
+    task.setdefault("events", []).append({"type": "delegation_planned", "actor": user.sub, "delegation_id": delegation["id"]})
+    _save_state(user.sub)
+    return {"task": copy.deepcopy(task), "delegation": delegation, "message": "Delegation plan recorded. Specialists cannot execute tools until the task plan is approved."}
 
 
 @router.post("/research/request")
