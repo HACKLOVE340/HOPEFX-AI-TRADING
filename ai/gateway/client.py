@@ -29,6 +29,8 @@ from typing import Any, Protocol
 
 from ai.gateway import audit, budget
 from ai.gateway.chain import ChainLeg, resolve_chain, should_fall_through
+from ai.guardrails.input import screen_input
+from ai.guardrails.output import validate_output
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,12 @@ class GatewayClient:
 
     def call_sync(self, request: ModelRequest, *, operator: str) -> ModelResponse:
         """Issue `request`, falling through the chain as the rules allow."""
+        # Input screening happens before anything is spent or sent. A guardrail
+        # violation is an ANSWER, not a transport failure: it is raised, never
+        # retried on a second vendor, because retrying it would defeat the
+        # guardrail. `chain.should_fall_through` encodes the same rule.
+        screen_input(request.prompt)
+
         allowed, reason = budget.check(operator, request.estimated_usd)
         if not allowed:
             # Audited before raising: a refused call is still a call someone
@@ -164,6 +172,25 @@ class GatewayClient:
         self._audit(request, operator, attempts, None, None, started, 0.0, 0, 0)
         tried = ", ".join(f"{a['provider']}={a['reason']}" for a in attempts) or "no legs"
         raise NoProviderAvailable(f"no model served role {request.role!r}: {tried}")
+
+    def call_structured(
+        self,
+        request: ModelRequest,
+        *,
+        operator: str,
+        required: dict[str, tuple[type, ...]] | None = None,
+        ranges: dict[str, tuple[float, float]] | None = None,
+    ) -> dict[str, Any]:
+        """Issue `request` and validate the response before any caller sees it.
+
+        Validation is not coercion: a response the model did not produce in the
+        requested shape raises GuardrailViolation, and the caller's fallback to
+        a deterministic answer is the safe result. The gateway does NOT retry a
+        validation failure on the next leg -- the model answered, it just did
+        not answer in the contract.
+        """
+        response = self.call_sync(request, operator=operator)
+        return validate_output(response.text, required=required, ranges=ranges)
 
     def _audit(
         self,
