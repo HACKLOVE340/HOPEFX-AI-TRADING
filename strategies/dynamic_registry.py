@@ -55,6 +55,7 @@ from enum import Enum
 from typing import Any
 
 from core.ai_contracts import HumanApproval, ResearchCandidate
+from security.ai_repair_sandbox import validate_repair_source
 from strategies.strategy_execution_boundary import ExecutionScope, StrategyExecutionBoundary
 
 UTC = timezone.utc
@@ -323,6 +324,16 @@ class DynamicStrategyRegistry:
             version.validation_errors = errors
             self._versions[version_id] = version
             raise ValueError(f"Strategy validation failed: {'; '.join(errors)}")
+
+        # Phase 1b: Disposable compile and static repair-sandbox validation.
+        sandbox_result = validate_repair_source(source_code)
+        if not sandbox_result.accepted:
+            version.state = StrategyState.FAILED
+            version.validation_errors = list(sandbox_result.reason_codes)
+            self._versions[version_id] = version
+            raise ValueError(
+                f"Strategy sandbox validation failed: {'; '.join(sandbox_result.reason_codes)}"
+            )
 
         # Phase 2: Compilation in isolated namespace
         try:
