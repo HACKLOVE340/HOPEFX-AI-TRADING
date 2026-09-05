@@ -72,7 +72,7 @@ def main():
             # form. The value comes from the developer's own command line, not
             # from a network or a file, so there is no untrusted input to
             # inject. Documented rather than silently suppressed.
-            process = subprocess.Popen(  # noqa: S602
+            process = subprocess.Popen(  # noqa: S602  # nosec B602
                 server['cmd'],
                 shell=True,
                 stdout=subprocess.PIPE,
