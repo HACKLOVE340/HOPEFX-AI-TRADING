@@ -9,6 +9,23 @@ import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
 import { openAuthenticatedWebSocket } from '../lib/ws';
+import { PageHeader, EmptyState, RelatedPages } from '../components';
+import {
+  Radio,
+  Check,
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  ChevronUp,
+  ChevronDown,
+  Zap,
+  Trophy,
+  Users,
+  Sparkles,
+  BookOpen,
+  LineChart,
+  Lightbulb,
+} from 'lucide-react';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;

@@ -318,3 +318,8 @@ frontend/.auth.json
 # run artifacts themselves are per-run and belong in the workflow's upload.
 k6/results/*
 !k6/results/.gitkeep
+
+# Runtime state written by the paper-trading gate and the regulatory DLQ during
+# a test run or a local session. Both are per-deployment state, not source.
+data/paper_gate_state.json
+data/reg_dlq/

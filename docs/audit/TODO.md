@@ -1,0 +1,397 @@
+# HOPEFX — Outstanding Work
+
+**Status date:** 2026-09-05 · **Branch:** `claude/add-new-skills-lys862` · **PR:** #315
+
+Companion documents:
+
+* `docs/audit/CODE_READING_FINDINGS.md` — the 277 findings, with evidence.
+* `docs/audit/FIX_PHASES.md` — what each phase did. **The maintained tracker.**
+* `docs/audit/AI_CORE_SPEC.md` — the AI Core specification.
+* `docs/audit/REMEDIATION_PLAN.md` — **stale.** Its checkboxes list 80 items as
+  open, including F80, F99, F105, F108, F139, F145, F159, F176 and F221, all of
+  which are fixed and verified. Do not plan from it. Item 22 below retires it.
+
+Phases A, B, C, D, E, G and H are complete and verified. Phase F is in progress.
+Everything below is what is left.
+
+## The list at a glance
+
+23 items. Ordered by what moves money or loses it, not by how many findings
+each contains — the same rule `FIX_PHASES.md` uses.
+
+| # | Item | Severity | Blocked on |
+|---|---|---|---|
+| 1 | CodeQL: 11 alerts, 1 critical | CRITICAL | — |
+| 2 | Vercel check belongs to another project | noise | owner |
+| 3 | F218 · 14 tables have no migration | MEDIUM | — |
+| 4 | 51 money columns typed `Float` | HIGH | — |
+| 5 | F222 · 8 critical modules with no test | HIGH | — |
+| 6 | Crypto currency read from a free-text field | MEDIUM | — |
+| 7 | OANDA adapter never run against the venue | HIGH | **owner** |
+| 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
+| 8 | Coverage headroom — resolved, rule stands | — | — |
+| 9 | Coverage measures 38.6% of the application | MEDIUM | — |
+| 10 | `execution/` omissions, with measured debt | MEDIUM | — |
+| 11 | F223 · 75 metric-named files, 1,125 assertion-free tests | HIGH | — |
+| 12 | F104 · a "gate" that cannot fail | HIGH | — |
+| 13–19 | **The AI Core — not built** | — | — |
+| 20 | `static/` build artifact in CI | fixed; decision open | owner |
+| 21 | F216/F217 · `data/` ↔ `data_layer/` boundary | MEDIUM | **owner** |
+| 22 | `REMEDIATION_PLAN.md` is stale | MEDIUM | — |
+| 23 | Owner-blocked questions | — | **owner** |
+
+**Read first if you read nothing else:** items 1, 4, 7b and 13–19.
+
+Two things are true at once and both belong in your head: the platform's safety
+controls are in better shape than when this audit started — every phase but F is
+closed, with each fix carrying a test that fails on the pre-fix tree — and the
+AI Core, which is the thing you asked for, has not been started. Items 13–19 are
+not repairs. They are the build.
+
+## Global constraints
+
+Every item inherits these. They are not negotiable and not restated per item.
+
+* Develop and push only on `claude/add-new-skills-lys862`.
+* `ruff check .` clean; `pre-commit run --all-files` clean. Never `--no-verify`.
+* Full gate before claiming done:
+  `pytest tests/ -m "not slow and not e2e" --cov --cov-config=.coveragerc --cov-fail-under=70 --asyncio-mode=auto --timeout=120 -q`
+* Never weaken a risk gate, kill switch, or staleness/drift check.
+* Never commit secrets. `prop_firm_mode.json` and `.env.example` hold placeholders only.
+* New code goes in `backtesting/`, `strategies/`, `data_layer/` — never the legacy shims.
+* Never recreate a top-level `websocket/` package.
+* Python 3.12 is the production target.
+* **Every fix ships with a test that fails on the pre-fix tree.** Run it against
+  the old code and watch it fail. A test that has never failed proves nothing.
+
+---
+
+## P0 — Blocking the current PR
+
+### 1. CodeQL: 11 new alerts, 1 critical · OPEN
+
+`CodeQL` fails on PR #315 head. Its own summary says *"Alerts not introduced by
+this pull request might have been detected because the code changes were too
+large"* — the diff is 430 files, so attribution is unreliable.
+
+I could not enumerate these from this session: no code-scanning tool is exposed
+here, and the alerts live only in the Security tab.
+
+**Do:** open
+`https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/security/code-scanning?query=pr%3A315+tool%3ACodeQL+is%3Aopen`,
+triage the critical one first, and for each decide: introduced by this branch
+(fix here) or pre-existing on `main` (fix separately, note it here).
+**Done when:** the critical alert is resolved or explicitly accepted with a reason.
+
+### 2. Vercel deployment failure · NOT OURS — confirm and dismiss
+
+The failing Vercel status belongs to project `v0-new-project-8ud36nesln3`, a v0
+scratch project. It builds no code in this repository.
+**Do:** confirm with the repo owner, then disconnect the integration or mark the
+check non-required. **Done when:** it no longer reports on this repo's PRs.
+
+---
+
+## P1 — Money and correctness
+
+### 3. F218 — 14 tables exist only via `create_all()` · MEDIUM
+
+```
+aml_alerts  api_keys  broker_connections  chargebacks  config_store
+crypto_payments  email_suppressions  gdpr_requests  outbox_events
+reconciliation_records  sessions  tax_reports  watchlists  whitelabel_tenants
+```
+
+41 tables are declared by models; 27 are touched by a migration. `create_all()`
+creates a missing table and **never alters an existing one**, so a column added
+to any of these 14 appears on every fresh database and on no existing one — with
+no migration to close the gap and no error. The oldest deployment fails at query
+time, which is the worst place to find out.
+
+**Do:** one Alembic migration per table using `_create_table_if_missing`, so it
+is a no-op where `create_all()` already made the table. Then a test asserting
+every `__tablename__` is covered by a migration, so number 15 cannot appear.
+**Verify:** `alembic upgrade head` on an empty DB **and** on a DB built by
+`create_all()`. **Done when:** the coverage test passes and CI's Gate I is green.
+
+### 4. Money columns are `Float` · HIGH
+
+Measured in `database/`: **51** money-ish columns typed `Float` against **8**
+`Numeric`. The 8 are the creator-ledger tables added in Phase B — the only exact
+columns in the schema. `Float` cannot represent 0.07 exactly; balances that are
+summed repeatedly drift, and a drift in a balance column is money.
+
+**Do:** do **not** convert all 51 at once. Order by exposure: wallet balances →
+payments → P&L → analytics. Each conversion is `Numeric(18, 2)` plus a migration
+plus a test asserting a repeated-addition case that `Float` fails.
+**Read first:** the `hopefx-money-precision` skill. **Done when:** every column
+on a path that pays or holds user money is `Numeric`, with the remainder listed
+here and a reason for each.
+
+### 5. F222 — 8 critical modules with no test · HIGH
+
+Never named in any test file:
+
+| LOC | Module |
+|---:|---|
+| 628 | `monetization/payment_processor.py` |
+| 585 | `portfolio/strategy_allocator.py` |
+| 427 | `payments/transaction_manager.py` |
+| 354 | `monetization/marketplace_submission.py` |
+| 318 | `payments/fintech/paystack.py` |
+| 282 | `monetization/access_codes.py` |
+| 228 | `database/repositories/tick_data_repository.py` |
+| 208 | `payments/payment_gateway.py` |
+
+I triaged all eight for a second F267 (a fabricated value on a money path).
+**None fabricates.** `access_codes` uses SHA-256 as a typo checksum with
+`secrets.choice` for the randomness, which is correct; `payment_processor` had
+one broken log line, fixed under F268. So this is a coverage gap, not a live
+loss — but `payment_processor.py` and `transaction_manager.py` move money with
+nothing watching them.
+
+**Order:** `payment_processor` → `transaction_manager` → `payment_gateway` →
+`paystack` → `access_codes` → `marketplace_submission` → `strategy_allocator` →
+`tick_data_repository`.
+**Done when:** each is named by a test that exercises its real behaviour, not
+its import.
+
+### 6. `payment_gateway._process_crypto` reads the currency from a free-text field · MEDIUM
+
+```python
+currency = (payment.description or "BTC").strip().upper()
+```
+
+`payment.description` is a description. A blank one silently becomes **BTC**, so
+a user paying in ETH could be handed a Bitcoin address. Since F267 the generator
+raises on an unknown currency rather than inventing one, which contains the
+blast radius — but the BTC default is still a guess about which chain a user's
+money is on.
+**Do:** carry the currency in its own field; refuse when it is absent.
+**Done when:** a payment with no explicit currency is rejected, not defaulted.
+
+### 7. OANDA adapter is not venue-verified · HIGH — owner-blocked
+
+`brokers/oanda*.py` is excluded from coverage and has never been run against
+OANDA's sandbox from this session. Live OANDA is the next milestone, and F267
+is exactly what "looks right, never executed against the real venue" produces.
+**Do (owner):** provide practice-account credentials, or run the adapter against
+the sandbox and share the transcript.
+**Done when:** an order round-trips against OANDA practice and the fill is
+reconciled.
+
+### 7b. `get_order` is missing on OANDA, and the gap is charged to the broker · HIGH
+
+**Found while writing this list, by checking F107 rather than trusting its
+status.** F107's headline defect *is* fixed: `place_market_order` now exists on
+the OANDA connector, is `async`, returns `MarketOrderResult`, and its signature
+accepts exactly the keywords `execution/trade_executor.py:409` passes. When the
+audit probed it, `hasattr(..., "place_market_order")` was `False`.
+
+What survives is narrower and still live. `AsyncOANDAConnector` is
+`brokers.oanda.OANDABroker`, which is **not** a `BrokerConnector` subclass — so
+Python never enforces the ABC — and it does not implement `get_order`, one of
+that ABC's eight abstract methods. The path is reachable:
+
+```
+api/advanced_orders.py:294  manager.get_order(order_id, user_id=...)
+brokers/manager.py:410        return broker.get_order(order_id)   # AttributeError on OANDA
+brokers/manager.py:412        self._record_failure(exc); raise
+brokers/manager.py:687        _consecutive_failures[name] += 1
+brokers/manager.py:707        -> resilience.service_circuit_breakers.broker_breaker
+```
+
+So a **missing client-side method is reported as broker unhealth**. Repeated
+order-status lookups can trip the broker circuit breaker against an OANDA
+account that is entirely healthy, and tripping that breaker stops trading.
+
+**Do, in two parts, and keep them separate:**
+
+1. **Now, and verifiable here:** `manager.get_order` must tell "this broker does
+   not implement the call" apart from "the broker call failed". Only the second
+   is a health signal. A `NotImplementedError`/`AttributeError` from the
+   connector should raise a capability error that does **not** touch
+   `_record_failure` or the breaker. Test it by configuring a connector without
+   `get_order` and asserting the breaker's counter is unchanged.
+2. **Owner-blocked, with item 7:** implement `get_order` on the OANDA connector
+   against `GET /v3/accounts/{id}/orders/{orderID}`. **Do not write this from
+   the API docs and call it done** — that is precisely the F267 shape: code that
+   looks right and has never been executed against the venue. It needs a
+   practice-account round-trip.
+
+**Also:** make `OANDABroker` inherit `BrokerConnector`. The ABC would have caught
+this at import. Check the other connectors for the same gap before assuming it is
+only OANDA.
+
+---
+
+## P2 — Measurement integrity (rest of Phase F)
+
+### 8. Coverage headroom · RESOLVED by the merge, keep the rule
+
+Was 0.54 points (71.06% against a 70% floor) on this branch alone. Merging
+`main` brought well-tested code and it is now **73.62%** — 3.62 points of
+headroom, which is comfortable.
+
+The rule this item existed for still stands: when a commit tips coverage under
+the floor, the fix is to test the package that dropped it — **not** to remove a
+package from `[run] source` or lower the floor. Both restore the number by
+shrinking what it describes, which is the F221 defect returning.
+
+### 9. Coverage still measures 38.6% of the application · MEDIUM
+
+Outside `[run] source`: `api/` (42,233 statements), `scripts/` (15,106),
+`data_layer/` (11,040), root (10,302), `analysis/` (6,690), `security/` (6,632),
+`research/` (5,521), `data/` (3,803), `nuclear/`, `brain/`, `charting/`,
+`data_feed/`. `api/` is the largest unmeasured package in the repository and it
+is the whole public surface.
+**Do:** add packages one at a time, each with the tests to keep the floor.
+`security/` first — it is the smallest of the high-risk ones at 6,632.
+**Done when:** measured share is above 60%, printed by
+`scripts/coverage_scope_report.py` in CI.
+
+### 10. `execution/` files still omitted, with measured debt · MEDIUM
+
+Recorded in `.coveragerc`, not hidden: `execution/engine.py` 76.11%,
+`core/decision/HOPEFXDecisionEngine.py` 64.71%, `execution/hopefx_engine.py`
+63.05%, `execution/fix_adapter.py` 35.00%, `execution/execution.py` 17.75%.
+`engine.py` is 4 points from the gate.
+**Do:** test `engine.py` to 80% and delete its omit line first.
+**Done when:** each file is either measured or carries a current number.
+
+### 11. F223 — 75 test files named after the metric · HIGH
+
+`test_coverage_boost_execution.py`, `test_brokers_low_coverage.py`,
+`test_execution_coverage4.py`… and 1,125 test functions carry no assertion of
+any kind (6.9% of the suite), concentrated in exactly those files.
+
+These are not empty — they are "does not raise" smoke tests, which is a weak but
+legitimate pattern. **The real defect is that the name claims more than the test
+checks**: `test_write_k8s_configmap_skips_outside_pod` asserts nothing about
+skipping, so if that method began making a live Kubernetes call outside a pod,
+the test would still pass.
+**Do:** on kill-switch, risk and execution files, give each assertion-free test a
+real assertion or a name that admits what it does. Do not delete them wholesale.
+**Done when:** no assertion-free test remains in `risk/`, `execution/` or
+`kill_switch` coverage files.
+
+### 12. F104 — the job named "Coverage gate (>=70%)" cannot fail · HIGH
+
+`tests.yml:500-595`. Four steps: checkout, download artifact, extract
+percentage, post PR comment. No `exit 1`, no `core.setFailed`. It renders a FAIL
+badge into a PR comment and exits 0. Worse, `tests.yml:525-534`:
+
+```python
+try:   ... parse coverage.xml ... print(f'{combined:.1f}')
+except Exception:  print('0.0')
+```
+
+A missing or corrupt `coverage.xml` renders "0.0%" — displayed as failing — and
+still passes. The threshold that does block is `--cov-fail-under=70`
+(`ci.yml:373`, `tests.yml:124`), so coverage is genuinely gated; this *second*
+job is decoration that reads as a gate.
+**Do:** make it fail on a real threshold, or rename it so it does not claim to
+be a gate. **Done when:** its name and its exit code agree.
+
+**F103 is fixed** — not by me. Main's commit `4aa7ec6` wired `brain/` and
+`news/` into `.coveragerc`, turning "No data to report" into real numbers
+(brain 50.52% → above 70%, news 45.95% → above 70%). Merged into this branch.
+
+---
+
+## P3 — The AI Core
+
+`docs/audit/AI_CORE_SPEC.md` is written. **The AI Core is not built.** Of the
+nine concepts in §3, four exist as prerequisites and five have no implementation.
+There is no AI Core page (71 pages, zero matches for "AI Core", "orbital" or
+"department"), no local model service — `api/brain.py` calls ollama per request —
+and no sandbox.
+
+To answer the questions asked directly: **no**, the agent and the LLM do not
+start with the app today, because there is nothing to start; the API keys reach
+external models on demand only.
+
+### 13. AI Gateway · NOT BUILT
+One entry point for every model call: routing, timeouts, retries, budget
+ceilings, and a per-call audit record. Everything below depends on it.
+
+### 14. MCP tool bus · NOT BUILT
+The typed tool surface the agent acts through. Every tool call must pass
+`enforce_agent_action` — which exists (F260) and is wired to seven predicates,
+so this is the piece that gives that gate something to gate.
+
+### 15. Response cache · NOT BUILT
+Keyed on prompt plus model plus tool state, with explicit invalidation.
+
+### 16. Evals gate · NOT BUILT
+A scored suite that must pass before sandbox → live. Spec §12 makes this the
+promotion gate.
+
+### 17. Guardrails · NOT BUILT
+Output validation between the model and any action. `news/geopolitical_llm.py`
+(F261) is the pattern to follow: fenced untrusted input, strict parsing, a
+severity ceiling for uncorroborated claims.
+
+### 18. AI Core page · NOT BUILT
+The operator surface: what the agent did, what it proposed, what was refused and
+why. **Read `.claude/skills/ui-ux-pro-max/SKILL.md` first** — it is installed and
+the other 71 pages follow it.
+
+### 19. Sandbox · NOT BUILT
+Where an agent runs without touching a real venue. Prerequisite for item 16.
+
+**Recommended order:** 13 → 17 → 14 → 19 → 16 → 15 → 18. The gateway first
+because everything routes through it; guardrails before the tool bus so the bus
+is never briefly unguarded.
+
+---
+
+## P4 — Hygiene and documentation
+
+### 20. `static/` is a gitignored build artifact that tests need · FIXED, note the cause
+Fixed this session in `conftest.py`: three tests could only pass on a machine
+that had once run the frontend build, so they failed in CI on **every branch**.
+The remaining question is whether CI should build the frontend instead of using
+a placeholder shell. **Do:** decide, and if yes add the build step to `ci.yml`.
+
+### 21. F216 / F217 — the `data/` ↔ `data_layer/` boundary is undefined · MEDIUM
+`CLAUDE.md` now says plainly that no document defines it, rather than inventing
+one. Until it is agreed, extend the package a module already lives in and say
+which you chose in the PR. **Do (owner + engineer):** agree the boundary, then
+write it down once. **Done when:** one document defines it and CLAUDE.md points
+at that document.
+
+### 22. `REMEDIATION_PLAN.md` is stale · MEDIUM
+80 items marked open, many fixed and verified. A tracker that misreports state is
+the documentation form of this audit's whole subject.
+**Do:** reconcile against `FIX_PHASES.md` and this file, or delete it and leave
+one tracker. **Recommended:** delete it. Two trackers is how it drifted.
+**Done when:** exactly one document claims to track remaining work.
+
+### 23. Owner-blocked · NEEDS YOU
+* **Where the credential exposure was seen.** I scanned this repository's history
+  with 13 patterns and found nothing. If it was seen elsewhere, that system needs
+  the same scan — I cannot find what I cannot see.
+* **VPS capability report on the real box.** `scripts/vps_capability_report.py`
+  has only ever run here. Its output from this container says nothing about
+  production.
+* **Hive chat: superadmin vs user.** Behaviour still unspecified.
+* **Refund policy.** Settable at Superadmin → Financial → Refund Policy; the
+  applied policy is stamped on each refund, so changing it never rewrites
+  history. It needs a value chosen deliberately.
+
+---
+
+## What was fixed this session
+
+For continuity, not for action.
+
+| Finding | Summary |
+|---|---|
+| **F267 · CRITICAL** | Crypto deposit addresses nobody held the key to. `0x` + `sha256(...)` for ETH/USDT-ERC20 is valid Ethereum syntax with no private key; BTC returned the literal string `hopefx_btc_<uid>`. Ported to hdwallet v3, checked against published BIP44/BIP84 vectors. |
+| **F99** | The placeholder-secret test skipped when the validator did not know a variable — the one case it existed to catch. 8 of 14 published placeholders were skipping, including `DB_ENCRYPTION_KEY` (silently disabled field-level encryption) and `BOOTSTRAP_SUPERADMIN_PASSWORD`. |
+| **F105** | `risk/manager.py` was excluded from the `risk/ ≥ 80%` gate as "covered by integration tests". It measures 89.65% on the **unit** suite. `risk/` now reports 92.43% including the risk core. |
+| **F108** | 14 tests skipping since their first commit against API names that never existed. Now 46 tests, 0 skipped. |
+| **F221** | Coverage gate measured 26.9% of the application. Now 38.6%, printed in CI. |
+| **F268** | 33 log calls that raise instead of logging, all on exception paths — including `brain/brain.py`'s CATASTROPHIC LOSS alert, which had never emitted. |
+| **PR #315 CI** | Wordmap ambiguity guard orphaned by the merge; a test asserting the F145 defect; three SPA tests needing a gitignored build; 37 lint errors; `SocialFeed.tsx` lost its imports. |

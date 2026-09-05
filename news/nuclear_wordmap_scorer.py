@@ -37,7 +37,7 @@ import logging
 import re
 from pathlib import Path
 
-from news.keyword_match import count_keyword
+from news.keyword_match import keyword_spans
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +316,32 @@ class NuclearWordMapScorer:
             spans.extend(m.span() for m in phrase_pattern.finditer(text))
         return spans
 
+    @classmethod
+    def _count_market_sense(cls, term: str, text: str) -> int:
+        """Occurrences of *term* that are not inside a non-market phrase.
+
+        This is where `_excluded_spans` is actually consumed. It briefly was
+        not: this scorer's own matching loop was replaced by the shared
+        `news.keyword_match` matcher -- rightly, it handles inflections and
+        punctuation-anchored keywords that this module did not -- and the
+        ambiguity guard was left defined, documented and called by nothing.
+        "Tropical depression forms off the Florida coast" scored severity 8 and
+        returned action hedge_mode again, exactly as before the guard was
+        written (F80, and the dead-control shape the audit is about).
+
+        Counting is delegated to the shared matcher; only the decision about
+        which of its matches count is made here.
+        """
+        spans = keyword_spans(text, term)
+        if not spans:
+            return 0
+        excluded = cls._excluded_spans(term, text)
+        if not excluded:
+            return len(spans)
+        return sum(
+            1 for start, end in spans if not any(start >= ex_start and end <= ex_end for ex_start, ex_end in excluded)
+        )
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     def score_event(
@@ -351,7 +377,7 @@ class NuclearWordMapScorer:
         for category, terms in self._keywords.items():
             cat_score = 0.0
             for term, weight in terms.items():
-                hits = count_keyword(text_lower, term)
+                hits = self._count_market_sense(term, text_lower)
                 if hits:
                     # Count occurrences (capped at 3 to avoid spam amplification)
                     count = min(hits, 3)

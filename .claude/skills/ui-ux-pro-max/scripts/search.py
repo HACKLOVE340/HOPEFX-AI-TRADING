@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 UI/UX Pro Max Search - BM25 search engine for UI/UX style guides
 Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-results 3]
@@ -18,7 +17,7 @@ import argparse
 import sys
 import io
 from core import CSV_CONFIG, AVAILABLE_STACKS, MAX_RESULTS, search, search_stack
-from design_system import generate_design_system, persist_design_system
+from design_system import generate_design_system
 
 # Force UTF-8 for stdout/stderr to handle emojis on Windows (cp1252 default)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -27,6 +26,10 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 
+# Longest field value rendered before truncation, so one verbose row cannot
+# push the rest of a result set out of view.
+_MAX_FIELD_CHARS = 300
+
 def format_output(result):
     """Format results for Claude consumption (token-optimized)"""
     if "error" in result:
@@ -34,10 +37,10 @@ def format_output(result):
 
     output = []
     if result.get("stack"):
-        output.append(f"## UI Pro Max Stack Guidelines")
+        output.append("## UI Pro Max Stack Guidelines")
         output.append(f"**Stack:** {result['stack']} | **Query:** {result['query']}")
     else:
-        output.append(f"## UI Pro Max Search Results")
+        output.append("## UI Pro Max Search Results")
         output.append(f"**Domain:** {result['domain']} | **Query:** {result['query']}")
     output.append(f"**Source:** {result['file']} | **Found:** {result['count']} results\n")
 
@@ -45,8 +48,8 @@ def format_output(result):
         output.append(f"### Result {i}")
         for key, value in row.items():
             value_str = str(value)
-            if len(value_str) > 300:
-                value_str = value_str[:300] + "..."
+            if len(value_str) > _MAX_FIELD_CHARS:
+                value_str = value_str[:_MAX_FIELD_CHARS] + "..."
             output.append(f"- **{key}:** {value_str}")
         output.append("")
 
@@ -94,7 +97,7 @@ if __name__ == "__main__":
                 print(f"   📄 design-system/{project_slug}/pages/{page_filename}.md (Page Overrides)")
             print("")
             print(f"📖 Usage: When building a page, check design-system/{project_slug}/pages/[page].md first.")
-            print(f"   If exists, its rules override MASTER.md. Otherwise, use MASTER.md.")
+            print("   If exists, its rules override MASTER.md. Otherwise, use MASTER.md.")
             print("=" * 60)
     # Stack search
     elif args.stack:

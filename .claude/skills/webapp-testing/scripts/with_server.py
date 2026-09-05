@@ -27,7 +27,7 @@ def is_server_ready(port, timeout=30):
         try:
             with socket.create_connection(('localhost', port), timeout=1):
                 return True
-        except (socket.error, ConnectionRefusedError):
+        except (OSError, ConnectionRefusedError):
             time.sleep(0.5)
     return False
 
@@ -55,7 +55,9 @@ def main():
         sys.exit(1)
 
     servers = []
-    for cmd, port in zip(args.servers, args.ports):
+    # strict=: a --servers/--ports length mismatch is a user error that must
+    # surface, not silently drop the extra entries.
+    for cmd, port in zip(args.servers, args.ports, strict=True):
         servers.append({'cmd': cmd, 'port': port})
 
     server_processes = []
@@ -65,8 +67,12 @@ def main():
         for i, server in enumerate(servers):
             print(f"Starting server {i+1}/{len(servers)}: {server['cmd']}")
 
-            # Use shell=True to support commands with cd and &&
-            process = subprocess.Popen(
+            # shell=True is deliberate and required: --servers takes a shell
+            # command line ("cd frontend && npm run dev"), which has no argv
+            # form. The value comes from the developer's own command line, not
+            # from a network or a file, so there is no untrusted input to
+            # inject. Documented rather than silently suppressed.
+            process = subprocess.Popen(  # noqa: S602
                 server['cmd'],
                 shell=True,
                 stdout=subprocess.PIPE,
@@ -85,7 +91,9 @@ def main():
 
         # Run the command
         print(f"Running: {' '.join(args.command)}\n")
-        result = subprocess.run(args.command)
+        # check=False: this wrapper forwards the command's exit code below
+        # rather than raising, so a non-zero status is an expected outcome.
+        result = subprocess.run(args.command, check=False)
         sys.exit(result.returncode)
 
     finally:

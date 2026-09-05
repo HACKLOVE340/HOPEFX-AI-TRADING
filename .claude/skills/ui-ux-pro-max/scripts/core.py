@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 UI/UX Pro Max Core - BM25 search engine for UI/UX style guides
 """
@@ -89,6 +88,9 @@ AVAILABLE_STACKS = list(STACK_CONFIG.keys())
 
 
 # ============ BM25 IMPLEMENTATION ============
+# Tokens of 1-2 characters ('a', 'ui', 'of') carry no retrieval signal here.
+_MIN_TOKEN_LENGTH = 2
+
 class BM25:
     """BM25 ranking algorithm for text search"""
 
@@ -105,7 +107,7 @@ class BM25:
     def tokenize(self, text):
         """Lowercase, split, remove punctuation, filter short words"""
         text = re.sub(r'[^\w\s]', ' ', str(text).lower())
-        return [w for w in text.split() if len(w) > 2]
+        return [w for w in text.split() if len(w) > _MIN_TOKEN_LENGTH]
 
     def fit(self, documents):
         """Build BM25 index from documents"""
@@ -154,7 +156,7 @@ class BM25:
 # ============ SEARCH FUNCTIONS ============
 def _load_csv(filepath):
     """Load CSV and return list of dicts"""
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding='utf-8') as f:
         return list(csv.DictReader(f))
 
 

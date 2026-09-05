@@ -129,3 +129,56 @@ def _disable_pydantic_env_file_for_tests() -> None:
 
 
 _disable_pydantic_env_file_for_tests()
+
+
+def _ensure_spa_index_for_tests() -> None:
+    """Provide a minimal ``static/index.html`` when the real build is absent.
+
+    Three tests assert that a non-API path is served the SPA shell rather than
+    JSON, and that an unmatched ``/api/...`` path returns a 404 whose body names
+    the route. Both behaviours live in the catch-all route that
+    ``core/page_routes.py`` registers, and that route is only mounted when
+    ``static/index.html`` exists.
+
+    ``static/`` is a Vite build output and is gitignored (``.gitignore:28``); no
+    workflow builds it before pytest runs. So the tests passed on any machine
+    that had once run the frontend build and failed everywhere else -- CI
+    included, on every branch, not only this one. That is the same shape as the
+    rest of this audit: a check whose result depends on something other than the
+    thing it claims to test.
+
+    A four-line placeholder is enough to exercise the routing, which is what the
+    tests are actually about. If a real build is present it is left completely
+    alone, and anything created here is removed at the end of the session so a
+    developer's tree is not left with a stub that a later build would have to
+    overwrite.
+    """
+    import atexit
+
+    index = Path(__file__).parent / "static" / "index.html"
+    if index.exists():
+        return  # a real build is present; never touch it
+
+    created_dir = not index.parent.exists()
+    try:
+        index.parent.mkdir(parents=True, exist_ok=True)
+        index.write_text(
+            "<!doctype html><title>HOPEFX test SPA shell</title>"
+            "<div id=root></div><!-- placeholder written by conftest; not a build artifact -->",
+            encoding="utf-8",
+        )
+    except OSError as exc:  # pragma: no cover - reported, never hidden
+        print(f"conftest: could not create the SPA test shell ({exc})", file=sys.stderr)
+        return
+
+    @atexit.register
+    def _cleanup() -> None:
+        try:
+            index.unlink(missing_ok=True)
+            if created_dir:
+                index.parent.rmdir()
+        except OSError:
+            pass
+
+
+_ensure_spa_index_for_tests()
