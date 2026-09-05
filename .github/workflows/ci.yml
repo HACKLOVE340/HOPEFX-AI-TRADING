@@ -117,7 +117,22 @@ jobs:
           tar -xzf trivy.tgz trivy
           sudo install -m 0755 trivy /usr/local/bin/trivy
           trivy version
-          trivy fs . --severity CRITICAL,HIGH --exit-code 1 --format table
+          # --ignorefile is required: Trivy does NOT auto-load
+          # .trivyignore.yaml (only the plain .trivyignore), so without this
+          # flag every acceptance in that file is silently ignored and the
+          # scan fails on findings that have a written, expiring exemption.
+          #
+          # Deliberately NOT --ignore-unfixed, which security-scan.yml uses.
+          # That flag drops every CVE with no upstream fix, permanently and
+          # with no record — which is how all six of the chromadb/ecdsa/nltk
+          # findings disappear from that job. Keeping this scan strict means an
+          # unfixed CVE has to be argued for in .trivyignore.yaml and re-argued
+          # when the entry expires.
+          trivy fs . \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignorefile .trivyignore.yaml \
+            --format table
 
   typecheck:
     runs-on: ubuntu-latest

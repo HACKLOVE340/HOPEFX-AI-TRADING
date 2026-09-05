@@ -484,6 +484,13 @@ All six are now accepted in `.trivyignore.yaml` with an exploit-path argument
 and a 2026-12-05 expiry (chromadb is embedded-client only, ecdsa and nltk are
 transitive and unreachable). **That closes the six, not the hole.**
 
+**Also:** `security-scan.yml:139` passes `--ignore-unfixed`, which drops every
+CVE with no upstream fix, permanently and with no record. All six of these have
+no fix, so all six vanish there — that job reported success on the same commit
+where `ci.yml` reported two criticals. A green "Trivy" check means "no CVE
+somebody else has already fixed", not "no CVE". Decide whether that job should
+stay lenient; if it does, its name should say so.
+
 **Do:** make `requirements.lock` visible to the blocking scan — copy it to a
 Trivy-recognised name in the job, or scan it explicitly. Then measure what comes
 back; the number is currently unknown and could be large. Do **not** delete

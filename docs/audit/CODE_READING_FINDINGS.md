@@ -8477,6 +8477,28 @@ the pre-authentication server CVEs have no reachable path. `ecdsa` is
 transitive, wontfix upstream, and on no signing path here. `nltk` is transitive
 and imported by no module in the repository.
 
+**Second blind spot, found while fixing the first.** There are two Trivy
+invocations with different strictness, and the lenient one is the one whose
+check is named "Trivy":
+
+```
+security-scan.yml:139   trivy fs . --severity CRITICAL,HIGH --exit-code 1 --ignore-unfixed --format sarif
+ci.yml:120              trivy fs . --severity CRITICAL,HIGH --exit-code 1 --format table
+```
+
+`--ignore-unfixed` drops every finding with no upstream fix — permanently, and
+with no record anywhere. All six of these CVEs have an empty Fixed Version, so
+all six vanish from that job. It reported success on the same commit where
+`ci.yml` reported two criticals. A green "Trivy" check has therefore never meant
+what a reader would take it to mean: it means "no CVE that someone has already
+fixed for us".
+
+`ci.yml` stays strict, and its exemptions live in `.trivyignore.yaml` where each
+one carries an argument and an expiry. Note Trivy does **not** auto-load
+`.trivyignore.yaml` — only the plain `.trivyignore` — so `--ignorefile` must be
+passed explicitly or every acceptance is silently ignored. That was the second
+failure of this job.
+
 **What is still open, and is the actual finding:** the scan's coverage. Two
 manifests describe this project's dependencies and the blocking scanner reads
 the one that pins nothing. `requirements.lock` needs to be visible to Trivy —
