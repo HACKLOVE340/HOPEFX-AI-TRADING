@@ -34,6 +34,10 @@ vi.mock('../hooks/useApi', () => ({
   },
   aiCoreApi: {
     chain: () => chainMock(),
+    // The editor now also asks which models each vendor serves. Stubbed empty
+    // here: these tests are about the chain's SHAPE and order, and the
+    // suggestions are covered in model_discovery_populates_the_picker.test.tsx.
+    models: () => Promise.resolve({ data: { providers: [], configured_count: 0, total_models: 0 } }),
   },
 }));
 

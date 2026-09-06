@@ -482,6 +482,9 @@ export const aiCoreApi = {
   cache:        ()               => api.get('/ai-core/cache'),
   /** The latest eval report and what the promotion gate would do with it. */
   evals:        ()               => api.get('/ai-core/evals'),
+  /** Which models each vendor currently serves. `provider` narrows it to one. */
+  models:       (provider?: string) =>
+    api.get('/ai-core/models', provider ? { params: { provider } } : undefined),
 };
 
 // ── Accounts / Teams ──────────────────────────────────────────────────────────

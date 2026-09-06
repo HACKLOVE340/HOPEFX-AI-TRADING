@@ -1,7 +1,7 @@
 // settings/PlatformConfiguration.tsx
 // Super Admin only — every platform setting, parameter, threshold, and flag
 // sourced from the Python codebase. Uses only ui.tsx primitives.
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { aiCoreApi, superadminApi } from '../../hooks/useApi';
 import {
   Card, SectionHeader, Field, Input, Select, Toggle, Button,
@@ -1856,6 +1856,20 @@ const CHAIN_ROLES: { role: string; title: string; note: string }[] = [
   { role: 'embedding', title: 'Embedding', note: 'Changing this invalidates every stored vector — embeddings from two models are not comparable. Re-index before switching, never after.' },
 ];
 
+/** One row of GET /api/ai-core/models. `configured` is a boolean — the
+ *  credential itself never crosses to the browser. */
+interface VendorModels {
+  provider: string;
+  label: string;
+  configured: boolean;
+  models: string[];
+  error: string | null;
+}
+
+/** The committed fallback, used only when discovery is unavailable. The server
+ *  knows about more vendors than this — Moonshot (Kimi), Qwen, DeepSeek, Groq,
+ *  xAI, OpenRouter and Together — and that list is what normally fills the
+ *  dropdown. */
 const PROVIDERS = ['anthropic', 'openai', 'google', 'mistral', 'ollama'];
 
 const ChainLegRow: React.FC<{
@@ -1864,10 +1878,13 @@ const ChainLegRow: React.FC<{
   total: number;
   leg: { provider: string; model: string };
   reachable?: boolean;
+  providerOptions: { value: string; label: string }[];
+  modelOptions: string[];
+  modelListId: string;
   onChange: (leg: { provider: string; model: string }) => void;
   onMove: (delta: number) => void;
   onRemove: () => void;
-}> = ({ roleTitle, index, total, leg, reachable, onChange, onMove, onRemove }) => (
+}> = ({ roleTitle, index, total, leg, reachable, providerOptions, modelOptions, modelListId, onChange, onMove, onRemove }) => (
   <div style={{
     display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap',
     padding: '10px 0', borderTop: index === 0 ? 'none' : '1px solid #1e293b',
@@ -1884,7 +1901,7 @@ const ChainLegRow: React.FC<{
       <Select
         aria-label={`${roleTitle} leg ${index + 1} provider`}
         value={leg.provider}
-        options={PROVIDERS.map((v) => ({ value: v, label: v }))}
+        options={providerOptions}
         onChange={(e) => onChange({ ...leg, provider: e.target.value })}
       />
     </div>
@@ -1892,9 +1909,17 @@ const ChainLegRow: React.FC<{
       <Input
         aria-label={`${roleTitle} leg ${index + 1} model`}
         value={leg.model}
-        placeholder="model identifier"
+        placeholder={modelOptions.length ? 'choose or type a model' : 'model identifier'}
+        list={modelListId}
         onChange={(e) => onChange({ ...leg, model: e.target.value })}
       />
+      {/* Free text with suggestions, not a closed select. A vendor's listing
+          routinely omits preview models, fine-tunes and regional identifiers,
+          and an operator who cannot type one of those is worse off than one
+          who had no listing at all. */}
+      <datalist id={modelListId}>
+        {modelOptions.map((m) => <option key={m} value={m} />)}
+      </datalist>
     </div>
     <div style={{ display: 'flex', gap: 6 }}>
       <Button size="sm" variant="secondary" aria-label={`Move ${roleTitle} leg ${index + 1} up`}
@@ -1914,6 +1939,43 @@ const ModelChainEditor: React.FC<{
   const [reach, setReach] = useState<Record<string, boolean> | null>(null);
   const [defaults, setDefaults] = useState<Record<string, { provider: string; model: string }[]>>({});
   const [probeFailed, setProbeFailed] = useState(false);
+  // Which models each vendor currently serves. Discovered, not committed: a
+  // vendor shipping a model used to be invisible here until somebody edited
+  // this file, and a retired one stayed on offer until it failed at call time.
+  const [vendors, setVendors] = useState<VendorModels[] | null>(null);
+  const [discoveryFailed, setDiscoveryFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Promise.resolve() so a synchronous throw lands in the same catch as a
+    // rejection. Model discovery is the least important thing on this page and
+    // must never be the reason it fails to render.
+    Promise.resolve()
+      .then(() => aiCoreApi.models())
+      .then((r) => {
+        if (cancelled) return;
+        setVendors(r.data?.providers ?? []);
+        setDiscoveryFailed(false);
+      })
+      .catch(() => { if (!cancelled) { setDiscoveryFailed(true); setVendors(null); } });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Every provider the server knows about, labelled. Falls back to the
+  // committed list so the editor keeps working when discovery is unavailable —
+  // it must never offer FEWER providers than before.
+  const providerOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const v of vendors ?? []) seen.set(v.provider, v.label || v.provider);
+    for (const p of PROVIDERS) if (!seen.has(p)) seen.set(p, p);
+    return [...seen.entries()].map(([value, label]) => ({ value, label }));
+  }, [vendors]);
+
+  const modelsByProvider = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const v of vendors ?? []) map[v.provider] = v.models ?? [];
+    return map;
+  }, [vendors]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1957,6 +2019,11 @@ const ModelChainEditor: React.FC<{
           message="Could not read live provider reachability. The chain below is still editable and still saves — only the credential column is unknown." />
       )}
 
+      {discoveryFailed && (
+        <ErrorBanner level="info"
+          message="Could not list the vendors' models. Every provider is still selectable and the model field still accepts any identifier — only the suggestions are missing." />
+      )}
+
       {CHAIN_ROLES.map(({ role, title, note }) => {
         const legs = legsFor(role);
         return (
@@ -1980,6 +2047,9 @@ const ModelChainEditor: React.FC<{
                 total={legs.length}
                 leg={leg}
                 reachable={reach ? Boolean(reach[leg.provider]) : undefined}
+                providerOptions={providerOptions}
+                modelOptions={modelsByProvider[leg.provider] ?? []}
+                modelListId={`models-${role}-${index}`}
                 onChange={(next) => update(role, legs.map((l, i) => (i === index ? next : l)))}
                 onMove={(delta) => {
                   const target = index + delta;
