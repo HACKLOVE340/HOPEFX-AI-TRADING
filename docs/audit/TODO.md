@@ -260,7 +260,7 @@ Never named in any test file:
 | 354 | ~~`monetization/marketplace_submission.py`~~ — done; the code audit auto-approved escapes |
 | 318 | ~~`payments/fintech/paystack.py`~~ — done; found a stale hard-coded FX rate |
 | 282 | ~~`monetization/access_codes.py`~~ — done; no defect found, coverage only |
-| 228 | `database/repositories/tick_data_repository.py` |
+| 228 | `database/repositories/tick_data_repository.py` — **not done**; finding recorded below, needs a `TickQuality.UNKNOWN` decision |
 | 208 | ~~`payments/payment_gateway.py`~~ — done, `tests/unit/test_payment_currency_is_explicit.py` |
 
 I triaged all eight for a second F267 (a fabricated value on a money path).
@@ -427,6 +427,43 @@ pre-fix tree). It decides what fraction of the book each strategy gets.
    capital. Measured, the padding turned a true correlation of 1.0 into 0.0578.
    It uses the overlapping window now, and reports identity ("unknown") when
    the overlap is too short to measure.
+
+**`database/repositories/tick_data_repository.py` — NOT done, and it needs a
+decision rather than a drive-by fix.**
+
+The finding, measured: every tick written through this repository defaults to
+`quality="good", confidence=1.0`.
+
+```python
+async def insert_tick(..., quality: str = "good", confidence: float = 1.0, ...)
+#                            database/models.py:709,711 default the same way
+```
+
+That is a maximum-confidence claim nobody made, and it bypasses
+`data_layer/quality/engine.py::DataQualityEngine`, which exists to compute
+exactly these two fields. Same shape as the other findings above: a default that
+asserts a measurement.
+
+**Why it is not fixed here.** The obvious fix — default to "unknown" — needs
+`TickQuality` to *have* an UNKNOWN member, and it does not
+(`data_layer/types.py:62`: GOOD, STALE, SUSPECT, REJECTED). Adding one is a
+domain change that ripples through `data_layer/types.py`'s own
+`quality: TickQuality = TickQuality.GOOD` default, `orchestrator.py:720,1225`
+(`TickQuality(cached.get("quality", "good"))`), the gold manager and the
+normalisation pipeline — and it needs an answer to a question this session
+should not settle alone: **is a tick of unknown quality usable for trading?**
+
+Note that every downstream filter tests `quality != TickQuality.REJECTED`, so
+"good" and "unknown" behave *identically* today. The change is therefore safe
+behaviourally and purely about honesty of the record — which is why it is worth
+doing, and why doing it in one place while `types.py` and the orchestrator keep
+defaulting to "good" would leave three contradicting defaults and be worse than
+the current state.
+
+**Do:** add `TickQuality.UNKNOWN`, decide whether it is tradeable, change all
+four default sites together, and cover the repository's real behaviour
+(insert/bulk-insert/range queries/retention delete) — which is item 5's actual
+done-condition for this module.
 
 **Note for whoever takes the next module.** `monetization/__init__.py` and
 `payments/crypto/__init__.py` re-export each singleton under its own module's
