@@ -35,7 +35,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 9 | Coverage measures 38.6% of the application | MEDIUM | — |
 | 10 | `execution/` omissions, with measured debt | MEDIUM | — |
 | 11 | F223 · 75 metric-named files, 1,125 assertion-free tests | HIGH | — |
-| 12 | F104 · a "gate" that cannot fail | HIGH | — |
+| 12 | F104 · a "gate" that cannot fail | HIGH | fixed; it was also reporting the wrong number |
 | 13–19 | **The AI Core — BUILT** (gateway, tool bus, guardrails, evals, cache, sandbox, AI Core page) | — | done |
 | 20 | `static/` build artifact in CI | fixed; decision open | owner |
 | 21 | F216/F217 · `data/` ↔ `data_layer/` boundary | MEDIUM | **owner** |
@@ -425,6 +425,34 @@ still passes. The threshold that does block is `--cov-fail-under=70`
 job is decoration that reads as a gate.
 **Do:** make it fail on a real threshold, or rename it so it does not claim to
 be a gate. **Done when:** its name and its exit code agree.
+
+**Status: fixed — it fails now, and it was also reporting the wrong number.**
+
+An `Enforce the coverage gate` step exits 1 below 70%, placed after the PR
+comment (with `if: always()`) so a failing gate still leaves the author the
+figure rather than a bare red check.
+
+The `except Exception: print('0.0')` path is gone: a missing or corrupt
+`coverage.xml` now fails the step. "I could not measure" is not "you scored
+zero", and it certainly is not "you passed".
+
+**A second defect this surfaced.** `(line_rate + branch_rate) / 2` is not the
+figure the threshold checks. coverage.py reports covered over valid across lines
+*and* branches together; averaging two rates computed over different
+denominators gives a different number. Measured on a real report:
+
+| Formula | Result |
+|---|---|
+| `(line_rate + branch_rate) / 2` (old) | 83.55% |
+| `(lines_covered + branches_covered) / (lines_valid + branches_valid)` (new) | **85.25%** |
+| what `pytest --cov` printed | **85.25%** |
+
+So the badge on every PR showed a figure biased low and compared it against the
+same 70. Both scripts were extracted from the YAML and run against a real
+report, a corrupt one, a missing one, and at/above/below the threshold.
+
+Locked in by `tests/unit/test_coverage_gate_can_fail.py` (4 of 6 fail on the
+pre-fix tree).
 
 **F103 is fixed** — not by me. Main's commit `4aa7ec6` wired `brain/` and
 `news/` into `.coveragerc`, turning "No data to report" into real numbers

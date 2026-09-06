@@ -524,24 +524,54 @@ jobs:
 
       - name: Extract coverage percentage
         id: coverage
+        # Two defects lived in this step, both of the shape this repository's
+        # audit exists to remove (F104).
+        #
+        # 1. `except Exception: print('0.0')` turned a missing or corrupt
+        #    coverage.xml into the number 0.0, which the comment below then
+        #    rendered as "FAILED" — while the job exited 0. A value nobody
+        #    measured, presented as a measurement, on a control surface.
+        #    "I could not measure" is not "you scored zero", and neither is
+        #    "you passed". It now fails loudly.
+        #
+        # 2. `(line_rate + branch_rate) / 2` is not the number the gate checks.
+        #    coverage.py reports (covered_lines + covered_branches) over
+        #    (valid_lines + valid_branches) — a weighted total, not the mean of
+        #    two rates over different denominators. On a real report the mean
+        #    read 83.55% where coverage.py said 85.25%, so the badge showed a
+        #    figure biased low and compared it against the same 70. The weighted
+        #    formula below reproduces pytest-cov's own total exactly, verified
+        #    against a generated report.
         run: |
-          TOTAL=$(python3 -c "
+          set -euo pipefail
+          TOTAL=$(python3 - <<'PY'
+          import sys
           import xml.etree.ElementTree as ET
+
           try:
-              tree = ET.parse('coverage.xml')
-              root = tree.getroot()
-              line_rate = float(root.attrib.get('line-rate', 0))
-              branch_rate = float(root.attrib.get('branch-rate', 0))
-              combined = (line_rate + branch_rate) / 2 * 100
-              print(f'{combined:.1f}')
-          except Exception:
-              print('0.0')
-          ")
+              root = ET.parse("coverage.xml").getroot()
+              covered = int(root.attrib["lines-covered"]) + int(root.attrib["branches-covered"])
+              valid = int(root.attrib["lines-valid"]) + int(root.attrib["branches-valid"])
+          except (OSError, ET.ParseError, KeyError, ValueError) as exc:
+              print(f"coverage.xml is missing or unreadable: {exc}", file=sys.stderr)
+              print("This job cannot report a coverage figure it did not measure.", file=sys.stderr)
+              raise SystemExit(1) from None
+
+          if valid == 0:
+              print("coverage.xml reports zero measurable lines and branches.", file=sys.stderr)
+              raise SystemExit(1)
+
+          print(f"{covered / valid * 100:.2f}")
+          PY
+          )
           echo "total=$TOTAL" >> $GITHUB_OUTPUT
           echo "Coverage: $TOTAL%"
 
       - name: Post coverage comment on PR
-        if: github.event_name == 'pull_request'
+        # always(): the comment explaining WHY the gate failed is most needed
+        # when it fails. Without this the enforce step below would leave a PR
+        # author with a red check and no number.
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           COVERAGE_TOTAL: ${{ steps.coverage.outputs.total }}
@@ -603,6 +633,30 @@ jobs:
   # These run on every push to claude/**, copilot/**, develop, and main.
   # Each gate is a fast (< 30s) static check — no services needed.
 
+      - name: Enforce the coverage gate
+        # The job is called "Coverage gate (>=70%)" and had no `exit 1` in it:
+        # four steps that rendered a FAIL badge into a PR comment and exited 0.
+        # Coverage was genuinely gated elsewhere (`--cov-fail-under=70`), so
+        # this job was decoration that read as a gate — which is worse than no
+        # job, because a reviewer scanning the checklist sees a green gate.
+        #
+        # Its name and its exit code agree now.
+        env:
+          COVERAGE_TOTAL: ${{ steps.coverage.outputs.total }}
+        run: |
+          set -euo pipefail
+          GATE=70
+          python3 - <<'PY'
+          import os
+          import sys
+
+          total = float(os.environ["COVERAGE_TOTAL"])
+          gate = 70.0
+          if total < gate:
+              print(f"Coverage gate FAILED: {total:.2f}% is below {gate:.0f}%", file=sys.stderr)
+              sys.exit(1)
+          print(f"Coverage gate passed: {total:.2f}% >= {gate:.0f}%")
+          PY
   gate-a-auth-coverage:
     name: Gate A — auth coverage (all mutating routes)
     runs-on: ubuntu-latest
