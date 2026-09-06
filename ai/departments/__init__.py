@@ -34,7 +34,7 @@ from typing import Any, Final
 
 from core.ai_tool_permissions import ToolPermission, ToolPermissionRegistry, ToolRisk
 
-from . import research, risk_compliance
+from . import platform_engineering, research, risk_compliance
 
 #: Bumped whenever the action set or a risk tier changes. An unversioned
 #: permission set cannot be audited after the fact.
@@ -215,16 +215,28 @@ DEPARTMENTS: Final[dict[str, Department]] = {
         agents=("Code Auditor", "Deploy Sentinel"),
         actions=(
             _action(
-                "platform_engineering", "scan_secrets", ToolRisk.READ_ONLY, "Scan the tree for committed credentials."
+                "platform_engineering",
+                "scan_secrets",
+                ToolRisk.READ_ONLY,
+                "Scan the tree for committed credentials.",
+                platform_engineering.scan_secrets,
             ),
             _action(
-                "platform_engineering", "run_tests", ToolRisk.READ_ONLY, "Run the test suite and report the result."
+                "platform_engineering",
+                "run_tests",
+                ToolRisk.READ_ONLY,
+                "Run a bounded selection of the test suite.",
+                platform_engineering.run_tests,
             ),
             _action(
                 "platform_engineering", "propose_fix", ToolRisk.PAPER_TRADING, "Propose a code change for human review."
             ),
             _action(
-                "platform_engineering", "check_broken_imports", ToolRisk.READ_ONLY, "Find imports that do not resolve."
+                "platform_engineering",
+                "check_broken_imports",
+                ToolRisk.READ_ONLY,
+                "Find imports that do not resolve.",
+                platform_engineering.check_broken_imports,
             ),
         ),
         memory=("audit history", "bug registry", "dead execution paths"),

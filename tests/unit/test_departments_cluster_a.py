@@ -162,9 +162,14 @@ def test_an_unimplemented_action_refuses_rather_than_no_opping():
             # A READ_ONLY action, so the permission tier lets it through and the
             # refusal can only come from the missing handler. Picking a gated
             # action here would pass for the wrong reason.
-            "platform_engineering.scan_secrets",
+            # A READ_ONLY action with no handler, so the permission tier lets
+            # it through and the refusal can only come from the missing
+            # handler. This has now been platform_engineering.scan_secrets and
+            # risk_compliance.check_drawdown in turn — each went stale as its
+            # department landed, which is the build working as intended.
+            "markets_execution.sync_positions",
             operator="tester",
-            allowed_actions={"platform_engineering.scan_secrets"},
+            allowed_actions={"markets_execution.sync_positions"},
         )
     assert "tool_not_implemented" in excinfo.value.reason_codes
 
