@@ -485,6 +485,15 @@ export const aiCoreApi = {
   /** Which models each vendor currently serves. `provider` narrows it to one. */
   models:       (provider?: string) =>
     api.get('/ai-core/models', provider ? { params: { provider } } : undefined),
+
+  // ── concurrent generation ───────────────────────────────────────────────────
+  // Submit returns immediately with a job id; the screen polls `jobs` for every
+  // panel at once. That is what lets several generations run side by side
+  // instead of each one blocking the page.
+  generate:       (payload: { prompt: string; role?: string; label?: string }) =>
+    api.post('/safe-platform/generate', payload),
+  generateJobs:   ()               => api.get('/safe-platform/generate/jobs'),
+  cancelGenerate: (jobId: string)  => api.post(`/safe-platform/generate/${jobId}/cancel`, {}),
 };
 
 // ── Accounts / Teams ──────────────────────────────────────────────────────────

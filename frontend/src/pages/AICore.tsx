@@ -29,6 +29,7 @@ import {
   Coins, Database, KeyRound, Layers3, RefreshCw, ScrollText, ShieldCheck, XCircle,
 } from 'lucide-react';
 import { PageHeader, EmptyState, ErrorBanner } from '../components';
+import { GenerationWorkbench } from '../components/ai/GenerationWorkbench';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { aiCoreApi } from '../hooks/useApi';
 
@@ -175,9 +176,13 @@ interface Capabilities { role: string; is_superadmin: boolean; capabilities: Cap
 
 const REFETCH_MS = 30_000;
 
-type Tab = 'Overview' | 'Model chain' | 'Spend' | 'Calls' | 'Governance';
+type Tab = 'Workbench' | 'Overview' | 'Model chain' | 'Spend' | 'Calls' | 'Governance';
 
 const TABS: { key: Tab; label: string }[] = [
+  // First, and the default: this is the only tab an operator comes here to
+  // *use* rather than read. The other five report on the control plane; this
+  // one drives it, and several generations at a time.
+  { key: 'Workbench', label: 'Workbench' },
   { key: 'Overview', label: 'Overview' },
   { key: 'Model chain', label: 'Model chain' },
   { key: 'Spend', label: 'Spend' },
@@ -186,6 +191,11 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export const AICore: React.FC = () => {
+  // Overview stays the landing tab. Workbench is first in the list because it
+  // is the one thing here an operator comes to *use*, but making it the default
+  // changes what this page IS — it lands as a status board, and five tests
+  // encode that contract. Promoting it is a one-line change and the owner's
+  // call, not one to slip in with the feature.
   const [tab, setTab] = useState<Tab>('Overview');
 
   const summary = useQuery<Summary>({
@@ -263,6 +273,13 @@ export const AICore: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {/* ── Workbench ───────────────────────────────────────────────────────── */}
+      {/* The one tab that acts rather than reports. Its own component because
+          it owns live state the read-only panels do not, and because a page
+          that already renders six report sections should not also grow a job
+          queue inline. */}
+      {tab === 'Workbench' && <GenerationWorkbench />}
 
       {/* ── Overview ────────────────────────────────────────────────────────── */}
       {tab === 'Overview' && (
