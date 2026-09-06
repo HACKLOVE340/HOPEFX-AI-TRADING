@@ -167,6 +167,13 @@ class _HttpAdapter:
 
     provider: str = ""
 
+    #: Whether this vendor can be handed an image. Defaults to False so a new
+    #: adapter is skipped for vision rather than silently handed a prompt about
+    #: a picture it cannot see — the same fail-closed default the tool bus uses
+    #: for an unregistered tool. Opting in is one line; opting out by omission
+    #: would be a confident answer about nothing.
+    supports_images: bool = False
+
     def _post(self, url: str, *, headers: dict[str, str], json: dict, timeout_s: float, model: str) -> Any:
         try:
             response = httpx.post(url, headers=headers, json=json, timeout=timeout_s)
@@ -228,11 +235,35 @@ class AnthropicAdapter(_HttpAdapter):
     provider = "anthropic"
     url = "https://api.anthropic.com/v1/messages"
     probe_url = "https://api.anthropic.com/v1/models"
+    supports_images = True
 
     def probe_headers(self) -> dict[str, str]:
         return {"x-api-key": os.getenv("ANTHROPIC_API_KEY", ""), "anthropic-version": "2023-06-01"}
 
-    def complete(self, *, model: str, prompt: str, timeout_s: float) -> AdapterResult:
+    @staticmethod
+    def _content_blocks(prompt: str, images: tuple[Any, ...]) -> Any:
+        """Anthropic's message content: a bare string, or a block array.
+
+        The image block goes BEFORE the text block — that is the order the API
+        expects, and the order that reads correctly to the model ("here is an
+        image; now here is what I want you to do with it").
+
+        With no images this returns the plain string the text path has always
+        sent, so nothing about non-vision calls changes.
+        """
+        if not images:
+            return prompt
+        blocks: list[dict[str, Any]] = [
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": img.media_type, "data": img.data_b64},
+            }
+            for img in images
+        ]
+        blocks.append({"type": "text", "text": prompt})
+        return blocks
+
+    def complete(self, *, model: str, prompt: str, timeout_s: float, images: tuple[Any, ...] = ()) -> AdapterResult:
         response = self._post(
             self.url,
             headers={
@@ -243,7 +274,7 @@ class AnthropicAdapter(_HttpAdapter):
             json={
                 "model": model,
                 "max_tokens": DEFAULT_MAX_TOKENS,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [{"role": "user", "content": self._content_blocks(prompt, images)}],
             },
             timeout_s=timeout_s,
             model=model,
@@ -265,11 +296,34 @@ class OpenAIAdapter(_HttpAdapter):
     provider = "openai"
     url = "https://api.openai.com/v1/chat/completions"
     probe_url = "https://api.openai.com/v1/models"
+    supports_images = True
 
     def probe_headers(self) -> dict[str, str]:
         return {"authorization": f"Bearer {os.getenv('OPENAI_API_KEY', '')}"}
 
-    def complete(self, *, model: str, prompt: str, timeout_s: float) -> AdapterResult:
+    @staticmethod
+    def _content_blocks(prompt: str, images: tuple[Any, ...]) -> Any:
+        """OpenAI's content array, which is NOT Anthropic's.
+
+        The two differ in a way that is easy to get wrong by copying: OpenAI
+        takes `{"type": "image_url", "image_url": {"url": "data:<mime>;base64,<b64>"}}`,
+        a data URI in a nested object, where Anthropic takes a `source` object
+        with the media type and raw base64 as separate fields. Sending either
+        vendor the other's shape is a rejected request at cost.
+        """
+        if not images:
+            return prompt
+        blocks: list[dict[str, Any]] = [
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:{img.media_type};base64,{img.data_b64}"},
+            }
+            for img in images
+        ]
+        blocks.append({"type": "text", "text": prompt})
+        return blocks
+
+    def complete(self, *, model: str, prompt: str, timeout_s: float, images: tuple[Any, ...] = ()) -> AdapterResult:
         response = self._post(
             self.url,
             headers={
@@ -279,7 +333,7 @@ class OpenAIAdapter(_HttpAdapter):
             json={
                 "model": model,
                 "max_tokens": DEFAULT_MAX_TOKENS,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [{"role": "user", "content": self._content_blocks(prompt, images)}],
             },
             timeout_s=timeout_s,
             model=model,
@@ -323,16 +377,31 @@ class OpenAIAdapter(_HttpAdapter):
 class GoogleAdapter(_HttpAdapter):
     provider = "google"
     probe_url = "https://generativelanguage.googleapis.com/v1beta/models"
+    supports_images = True
 
     def probe_headers(self) -> dict[str, str]:
         return {"x-goog-api-key": os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")}
 
-    def complete(self, *, model: str, prompt: str, timeout_s: float) -> AdapterResult:
+    @staticmethod
+    def _parts(prompt: str, images: tuple[Any, ...]) -> list[dict[str, Any]]:
+        """Gemini's `parts` array — a third distinct shape.
+
+        `inline_data` with `mime_type` and `data`, where Anthropic uses
+        `source`/`media_type` and OpenAI uses a data URI. Image first, for the
+        same reason as the others.
+        """
+        parts: list[dict[str, Any]] = [
+            {"inline_data": {"mime_type": img.media_type, "data": img.data_b64}} for img in images
+        ]
+        parts.append({"text": prompt})
+        return parts
+
+    def complete(self, *, model: str, prompt: str, timeout_s: float, images: tuple[Any, ...] = ()) -> AdapterResult:
         key = os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
         response = self._post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
             headers={"x-goog-api-key": key, "content-type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
+            json={"contents": [{"parts": self._parts(prompt, images)}]},
             timeout_s=timeout_s,
             model=model,
         )

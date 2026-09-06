@@ -22,6 +22,7 @@ Two rules are worth stating because they are easy to get backwards:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from dataclasses import dataclass, field, replace
@@ -36,6 +37,52 @@ from ai.guardrails.output import scan_output, validate_output
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_S = 60.0
+
+#: Decoded ceiling for one image, before base64 expansion.
+#:
+#: A phone camera hands back a 4K frame. Reading a chart off one costs several
+#: times the tokens of a downscaled copy and returns no more detail than the
+#: model can use, so the frame is downscaled at the edge and this refuses
+#: anything that arrives past the limit anyway. Refused BEFORE dispatch, for the
+#: same reason the budget is checked before the request is issued: a ceiling
+#: enforced after the money is spent is a report.
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+#: What the vision chain's models actually accept. An unlisted type is refused
+#: rather than forwarded and rejected by the vendor at cost.
+SUPPORTED_IMAGE_TYPES: frozenset[str] = frozenset(
+    {"image/png", "image/jpeg", "image/webp", "image/gif"},
+)
+
+
+@dataclass(frozen=True)
+class ImageRef:
+    """One image, base64-encoded, on its way to a vision model.
+
+    Base64 rather than a path or a URL on purpose: a camera frame never touches
+    disk (the UI promises exactly that), and a URL would have the vendor fetch
+    something this platform has not seen.
+    """
+
+    media_type: str
+    data_b64: str
+
+    def __post_init__(self) -> None:
+        if self.media_type not in SUPPORTED_IMAGE_TYPES:
+            raise ValueError(
+                f"unsupported image type {self.media_type!r}; expected one of {sorted(SUPPORTED_IMAGE_TYPES)}"
+            )
+        if not self.data_b64:
+            raise ValueError("an image needs data")
+        # base64 is 4 characters per 3 bytes; compare decoded size so the limit
+        # means what it says.
+        approx_bytes = (len(self.data_b64) * 3) // 4
+        if approx_bytes > MAX_IMAGE_BYTES:
+            raise ValueError(f"image is {approx_bytes} bytes, over the {MAX_IMAGE_BYTES} limit; downscale it first")
+
+    def digest(self) -> str:
+        """Content hash, for the cache key. Never the bytes themselves."""
+        return hashlib.sha256(self.data_b64.encode("ascii", "ignore")).hexdigest()
 
 
 class GatewayError(RuntimeError):
@@ -69,10 +116,27 @@ class ModelRequest:
     #: asked under different state is a different question, and an answer
     #: computed under old state must never be served against new state.
     tool_state: str = ""
+    #: Images for the `vision` role. Empty for every text call, so the text path
+    #: is byte-for-byte what it was.
+    images: tuple[ImageRef, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.prompt.strip():
             raise ValueError("a model request needs a prompt")
+
+    def image_fingerprint(self) -> str:
+        """A stable digest of the attached images, or "" when there are none.
+
+        Part of the cache key. Without it the key is prompt + model +
+        tool_state, so two different camera frames asked "what is this?" hash
+        identically and the second is served the FIRST frame's reading — a
+        confident answer about an image nobody looked at. That is the same
+        class of defect as serving an hour-old market view against new
+        positions, which is why `tool_state` exists.
+        """
+        if not self.images:
+            return ""
+        return hashlib.sha256("|".join(i.digest() for i in self.images).encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -179,8 +243,24 @@ class GatewayClient:
             if provider is None:
                 attempts.append({"provider": leg.provider, "reason": "no_credentials", "skipped": True})
                 continue
+            # A leg that cannot see is SKIPPED, never handed a blind prompt.
+            # Dropping the image and asking a text model "what is this?" gets a
+            # confident answer about nothing at all, which is far worse than
+            # falling through to a leg that can actually look. Mirrors how
+            # `embed_sync` treats a vendor with no embeddings API.
+            if request.images and not getattr(provider, "supports_images", False):
+                attempts.append({"provider": leg.provider, "model": leg.model, "reason": "provider_unavailable"})
+                logger.info("ai.gateway: %s cannot accept images; trying the next leg", leg.provider)
+                continue
             try:
-                result = provider.complete(model=leg.model, prompt=request.prompt, timeout_s=request.timeout_s)
+                kwargs: dict[str, Any] = {
+                    "model": leg.model,
+                    "prompt": request.prompt,
+                    "timeout_s": request.timeout_s,
+                }
+                if request.images:
+                    kwargs["images"] = request.images
+                result = provider.complete(**kwargs)
             except ProviderError as exc:
                 attempts.append({"provider": leg.provider, "model": leg.model, "reason": exc.reason})
                 if should_fall_through(exc.reason):
@@ -353,11 +433,35 @@ class GatewayClient:
                 return leg.model
         return ""
 
+    @staticmethod
+    def _cache_state(request: ModelRequest) -> str:
+        """The state an answer is bound to: declared tool state PLUS the images.
+
+        The cache's own rule is that a request declaring no `tool_state` is not
+        cached at all -- silence means do not cache. That rule is preserved
+        exactly: an image request that declares no tool state still returns ""
+        here and is still not cached. What this adds is that when a request IS
+        cacheable, two different images can never share a key.
+        """
+        fingerprint = request.image_fingerprint()
+        if not fingerprint:
+            return request.tool_state
+        if not request.tool_state:
+            # Still uncacheable, by the module's existing policy. Returning the
+            # fingerprint alone here would quietly start caching image calls
+            # that never opted in.
+            return ""
+        return f"{request.tool_state}|img:{fingerprint}"
+
     def _cache_lookup(self, request: ModelRequest, cache_model: str) -> ModelResponse | None:
         if self._cache is None or not cache_model:
             return None
         try:
-            hit = self._cache.get(prompt=request.prompt, model=cache_model, tool_state=request.tool_state)
+            hit = self._cache.get(
+                prompt=request.prompt,
+                model=cache_model,
+                tool_state=self._cache_state(request),
+            )
         except Exception:  # a cache fault must never fail a call
             logger.exception("ai.gateway: cache lookup failed; treating as a miss")
             return None
@@ -380,7 +484,7 @@ class GatewayClient:
             self._cache.put(
                 prompt=request.prompt,
                 model=response.model,
-                tool_state=request.tool_state,
+                tool_state=self._cache_state(request),
                 value=response,
             )
         except Exception:  # a cache fault must never fail a call
@@ -431,7 +535,10 @@ __all__ = [
     "DEFAULT_TIMEOUT_S",
     "BudgetExceeded",
     "GatewayClient",
+    "MAX_IMAGE_BYTES",
+    "SUPPORTED_IMAGE_TYPES",
     "GatewayError",
+    "ImageRef",
     "ModelRequest",
     "ModelResponse",
     "NoProviderAvailable",
