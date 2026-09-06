@@ -390,6 +390,30 @@ def _eval_gate_allows(environment: str) -> tuple[bool, str]:
     return True, "eval_gate_passed"
 
 
+def queue_observation_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
+    """Put a department's observation into the same queue a human's goes into.
+
+    Spec §2's core principle: every department can recommend, and nothing acts
+    without passing the superadmin approval queue. An awareness watcher noticing
+    a breached drawdown limit produces exactly what an admin proposing a change
+    produces — a `pending` row somebody has to decide on.
+
+    Deliberately one queue rather than a separate "alerts" list. A second
+    surface would be a second place to look, and the thing an operator most
+    needs to see is everything waiting on them in one place.
+
+    Not an endpoint: nothing outside the process may inject a proposal
+    attributed to a department. `ai/awareness` calls it in-process through the
+    startup factory, which is the only caller.
+    """
+    _PROPOSALS.append(proposal)
+    try:
+        _save_state(proposal.get("created_by", "awareness"))
+    except Exception:
+        logger.exception("could not persist an awareness proposal; it is queued in this process only")
+    return proposal
+
+
 @router.post("/vision/interpret")
 async def vision_interpret(
     body: VisionInterpretRequest,

@@ -652,6 +652,56 @@ async def init_ai_response_cache(s: Any) -> Any:
     return cache
 
 
+async def init_ai_awareness(s: Any) -> Any:
+    """Start the department watchers. Spec §2's `awareness/`.
+
+    The last of the four anatomy parts. Until this, every department was purely
+    reactive — it could answer a question an operator asked and could not tell
+    anyone that something had changed.
+
+    **A watcher raises a proposal and never acts.** `ai/awareness` does not
+    import the tool bus, so the unsafe thing is not expressible rather than
+    merely discouraged. What lands here is a `pending` entry in the same
+    approval queue a human proposal lands in.
+
+    Runs on a background task like `init_hourly_trainer`, so a slow watcher
+    never delays the trading engine. The interval is deliberately not tight: a
+    watcher exists to notice a condition within a minute or two, not to poll.
+    """
+    from ai.awareness import watchers
+    from api.admin import log_activity
+
+    interval_s = float(os.getenv("AI_AWARENESS_INTERVAL_S", "") or 120.0)
+    watchers.install_default_watchers()
+
+    def _queue(proposal: dict[str, Any]) -> None:
+        # Imported here rather than at module scope: the API package pulls in
+        # most of the app, and a startup factory must not widen the import graph
+        # for every consumer of this module.
+        from api.safe_agent_platform import queue_observation_proposal
+
+        queue_observation_proposal(proposal)
+
+    watchers.set_proposal_sink(_queue)
+
+    async def _loop() -> None:
+        while True:
+            try:
+                await asyncio.to_thread(watchers.run_all)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # The loop itself must survive anything a watcher does; run_all
+                # already isolates each watcher individually.
+                logger.exception("AI awareness pass failed; the loop continues")
+            await asyncio.sleep(interval_s)
+
+    task = asyncio.create_task(_loop())
+    s.background_tasks.append(task)
+    log_activity(f"AI awareness watchers started — {len(watchers.registered())} watchers, every {interval_s:.0f}s")
+    return task
+
+
 async def init_ai_memory(s: Any) -> Any:
     """Give department memory a store that outlives the process.
 
@@ -3053,6 +3103,15 @@ def build_component_registry(app, feature_flags):
             F.init_ai_memory,
             required=False,
             deps=["database"],
+        )
+        # Spec §2 awareness/. After memory, because every observation is
+        # recorded there, and after departments, whose read handlers it
+        # observes through.
+        .register(
+            "ai_awareness",
+            F.init_ai_awareness,
+            required=False,
+            deps=["ai_memory", "ai_departments"],
         )
         .register(
             "online_learner_store",
