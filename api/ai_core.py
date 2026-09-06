@@ -344,6 +344,36 @@ async def ai_core_models(
     }
 
 
+@router.get("/departments")
+async def ai_core_departments(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """The Cluster A department directory, and what is actually wired.
+
+    `implemented` per action is the honest field. A department whose actions are
+    declared but unhandled looks identical to a working one in every listing
+    that omits it — and the tool bus refuses those with `tool_not_implemented`
+    rather than a successful no-op, so the page should say which is which.
+    """
+    try:
+        from ai.departments import PERMISSIONS_VERSION, all_actions, directory, implemented_actions
+
+        rows = directory()
+        return {
+            "departments": rows,
+            "permissions_version": PERMISSIONS_VERSION,
+            "actions_declared": len(all_actions()),
+            "actions_implemented": len(implemented_actions()),
+        }
+    except Exception as exc:  # reporting must never take the page down
+        logger.warning("ai_core: department directory unavailable (%s)", exc)
+        return {
+            "departments": [],
+            "permissions_version": "",
+            "actions_declared": 0,
+            "actions_implemented": 0,
+            "error": "directory_unavailable",
+        }
+
+
 @router.get("/summary")
 async def ai_core_summary(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
     """One request for the page header, so it does not need seven round trips."""

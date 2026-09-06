@@ -625,6 +625,32 @@ async def init_data_scheduler(s: Any) -> Any:
     return ds
 
 
+async def init_ai_departments(s: Any) -> Any:
+    """Build the Cluster A tool bus and hang it on app state.
+
+    Spec §4. This is the factory that gives `ToolBus.invoke` and
+    `invariants.enforcement.enforce_agent_action` their first production
+    callers: both were built, tested and documented, and invoked by nothing.
+
+    `live_mode` is False unless LIVE_TRADING_ENABLED says otherwise. A
+    LIVE_TRADING tool is refused without it, so defaulting it on would remove
+    one of the two refusals standing in front of `place_order` — the other
+    being the explicit human approval the registry also demands.
+    """
+    from ai.departments import build_tool_bus, implemented_actions
+    from api.admin import log_activity
+
+    live_mode = (os.getenv("LIVE_TRADING_ENABLED", "") or "").strip().lower() in {"1", "true", "yes", "on"}
+    bus = build_tool_bus(live_mode=live_mode)
+    s.ai_tool_bus = bus
+
+    log_activity(
+        f"AI departments ready — {len(implemented_actions())} actions registered on the tool bus, "
+        f"live_mode={live_mode}",
+    )
+    return bus
+
+
 async def init_local_model_runtime(s: Any) -> Any:
     """Start the on-hardware inference server and warm its models.
 
@@ -2855,6 +2881,14 @@ def build_component_registry(app, feature_flags):
         .register(
             "local_model_runtime",
             F.init_local_model_runtime,
+            required=False,
+            deps=["config"],
+        )
+        # Spec §4 Cluster A. required=False: an AI department failing to build
+        # must never stop the trading platform from starting.
+        .register(
+            "ai_departments",
+            F.init_ai_departments,
             required=False,
             deps=["config"],
         )

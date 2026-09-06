@@ -92,6 +92,10 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     # a model is `route_model`, which is superadmin + 2FA below. Admin may see
     # WHICH vendors are configured -- a boolean, never a credential.
     "ai_core_models": _VIEW,
+    # The §4 department directory: which departments exist, what each may do,
+    # at what risk tier, and which actions are actually implemented. Reporting
+    # only — invoking an action is the tool bus, behind its own two gates.
+    "ai_core_departments": _VIEW,
     # ── propose / plan: an admin may ask, and may not act ─────────────────────
     "create_supervisor_task": _PROPOSE,
     "cancel_supervisor_task": _PROPOSE,
