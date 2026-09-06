@@ -77,6 +77,24 @@ export interface UseVoice {
   /** Speak `text` aloud (cancels any in-progress utterance). */
   speak: (text: string) => void;
   cancelSpeak: () => void;
+  /** The text of the utterance currently being spoken, or '' when silent. */
+  spokenText: string;
+  /**
+   * How far through that utterance synthesis has actually got, 0-1 — or **null**
+   * when nothing has measured it.
+   *
+   * Measured, never estimated. Cloud TTS plays through an `<audio>` element and
+   * reports `currentTime / duration`; Web Speech emits `boundary` events
+   * carrying a character index. Neither is available while muted, before the
+   * first event fires, or on an engine that does not emit them, and in those
+   * cases this stays null.
+   *
+   * Null must not be read as zero. A caller that stepped a highlight from a
+   * word-count timer would drift within two sentences and point at the wrong
+   * panel while the AI described another — precise and wrong, which is worse
+   * than imprecise and right.
+   */
+  speechProgress: number | null;
 }
 
 export function useVoice(lang = 'en-US'): UseVoice {
@@ -85,6 +103,8 @@ export function useVoice(lang = 'en-US'): UseVoice {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [spokenText, setSpokenText] = useState('');
+  const [speechProgress, setSpeechProgress] = useState<number | null>(null);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const onFinalRef = useRef<((t: string) => void) | undefined>(undefined);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -134,6 +154,10 @@ export function useVoice(lang = 'en-US'): UseVoice {
     stopCloudAudio();
     if (ttsAvailable()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
     setSpeaking(false);
+    // Cleared together. A stale utterance with a live progress figure would
+    // leave a highlight burning on a panel nobody is talking about.
+    setSpokenText('');
+    setSpeechProgress(null);
   }, [stopCloudAudio]);
 
   const speakWebSpeech = useCallback((t: string) => {
@@ -142,12 +166,25 @@ export function useVoice(lang = 'en-US'): UseVoice {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(t);
       u.lang = lang;
-      u.onend = () => setSpeaking(false);
-      u.onerror = () => setSpeaking(false);
+      // A real measurement from the engine, not a timer. Not every browser
+      // emits it (Firefox historically did not), and where it does not,
+      // progress stays null and the caller falls back to a whole-utterance
+      // highlight rather than a drifting one.
+      u.onboundary = (e: SpeechSynthesisEvent) => {
+        if (t.length > 0 && typeof e.charIndex === 'number') {
+          setSpeechProgress(Math.max(0, Math.min(1, e.charIndex / t.length)));
+        }
+      };
+      u.onend = () => { setSpeaking(false); setSpokenText(''); setSpeechProgress(null); };
+      u.onerror = () => { setSpeaking(false); setSpokenText(''); setSpeechProgress(null); };
       window.speechSynthesis.speak(u);
       setSpeaking(true);
+      setSpokenText(t);
+      setSpeechProgress(null);
     } catch {
       setSpeaking(false);
+      setSpokenText('');
+      setSpeechProgress(null);
     }
   }, [lang]);
 
@@ -166,9 +203,24 @@ export function useVoice(lang = 'en-US'): UseVoice {
             const url = URL.createObjectURL(res.data as Blob);
             const audio = new Audio(url);
             audioRef.current = audio;
-            audio.onended = () => { setSpeaking(false); try { URL.revokeObjectURL(url); } catch { /* ignore */ } };
+            audio.ontimeupdate = () => {
+              // `duration` is NaN until metadata loads, and Infinity for a
+              // stream. Both are "not measured", not zero.
+              const d = audio.duration;
+              if (Number.isFinite(d) && d > 0) {
+                setSpeechProgress(Math.max(0, Math.min(1, audio.currentTime / d)));
+              }
+            };
+            audio.onended = () => {
+              setSpeaking(false);
+              setSpokenText('');
+              setSpeechProgress(null);
+              try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+            };
             audio.onerror = () => { setSpeaking(false); speakWebSpeech(t); };
             setSpeaking(true);
+            setSpokenText(t);
+            setSpeechProgress(null);
             void audio.play().catch(() => { setSpeaking(false); speakWebSpeech(t); });
           } catch {
             speakWebSpeech(t);
@@ -197,6 +249,8 @@ export function useVoice(lang = 'en-US'): UseVoice {
     stopListening,
     speak,
     cancelSpeak,
+    spokenText,
+    speechProgress,
   };
 }
 

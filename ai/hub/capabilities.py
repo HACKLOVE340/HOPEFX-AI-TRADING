@@ -359,11 +359,31 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "Scene.resolve turns 'the gold chart' into a panel.",
     ),
     _c("spatial.viewport_awareness", "9", "D", "Coordinate and viewport awareness"),
-    _c("spatial.target_highlight", "9", "D", "Target highlighting"),
+    _c(
+        "spatial.target_highlight",
+        "9",
+        "D",
+        "Target highlighting",
+        "live",
+        "frontend/src/hub/reference.ts:referencesIn",
+        "The panel the AI is describing takes a distinct border, an "
+        'aria-current and the words "speaking about" \u2014 colour is never the '
+        "only indicator. Whole-word matching only.",
+    ),
     _c("spatial.focus_transitions", "9", "D", "Animated focus transitions"),
     _c("spatial.zoom_regions", "9", "D", "Zoom into data regions"),
     _c("spatial.layer_navigation", "9", "D", "Layer navigation and breadcrumbs"),
-    _c("spatial.speech_sync", "9", "A", "Speech references synchronised with visual focus"),
+    _c(
+        "spatial.speech_sync",
+        "9",
+        "A",
+        "Speech references synchronised with visual focus",
+        "live",
+        "frontend/src/hub/reference.ts:spokenFocus",
+        "Driven by a measurement \u2014 an audio element's playback position or a "
+        "Web Speech boundary charIndex. Unmeasured is null, and null highlights "
+        "the whole utterance rather than stepping from a timer that would drift.",
+    ),
     # §10 — Multi-display and cognitive load
     _c(
         "load.dominant_placement",
@@ -374,7 +394,16 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/hub/workspace.ts",
         "Critical spans 12 of 12; background spans 3.",
     ),
-    _c("load.explained_focus", "10", "D", "What is being explained receives visual focus"),
+    _c(
+        "load.explained_focus",
+        "10",
+        "D",
+        "What is being explained receives visual focus",
+        "live",
+        "frontend/src/hub/reference.ts:spokenFocus",
+        "AI attention is a separate signal from operator focus; merging them "
+        "would make the AI mentioning a panel read as the operator selecting it.",
+    ),
     _c("load.background_collapse", "10", "D", "Background information collapses into stacks or summaries"),
     _c("load.cross_surface_summary", "10", "B", "Summarise across surfaces and name relationships"),
     _c(

@@ -30,6 +30,7 @@ import { Workspace, type Surface } from '../../hub/workspace';
 import { readIntent } from '../../hub/intent';
 import { readLayout, suggestLayout, type LayoutName } from '../../hub/layout';
 import { SnapshotStore, capacityFor, readHistoryIntent } from '../../hub/history';
+import { spokenFocus } from '../../hub/reference';
 import { useViewportWidth } from '../../hub/useViewportWidth';
 import { useStore, selectAiJobs } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
@@ -356,6 +357,20 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
     [turn, workspace, syncWorkspace, onHistory],
   );
 
+  /**
+   * §9/§10: what the AI is talking about lights up while it says it.
+   *
+   * Driven by a real measurement — `speechProgress` is a character index from
+   * the synthesis engine or a playback position from the audio element, and it
+   * is null when neither exists. On null the highlight covers everything the
+   * whole utterance refers to instead of stepping from a timer, which would
+   * drift within two sentences and point at the wrong panel.
+   */
+  const focus = useMemo(
+    () => spokenFocus({ utterance: voice.spokenText, surfaces, progress: voice.speechProgress }),
+    [voice.spokenText, voice.speechProgress, surfaces],
+  );
+
   return (
     <PresenceStage
       presence={presence}
@@ -366,6 +381,7 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       sttSupported={voice.sttSupported}
       transcript={transcript}
       layout={layout}
+      spokenAbout={focus.ids}
       onCommand={onCommand}
       onTalk={onTalk}
       onStop={onStop}

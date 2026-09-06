@@ -25,6 +25,8 @@ const C = {
   quiet: '#70809a',
   core: '#73a7ff',
   ok: '#42d392',
+  /** The AI is describing this one. Distinct from operator focus (`core`). */
+  speak: '#42d392',
   warn: '#f5b84b',
   bad: '#f36d78',
 } as const;
@@ -99,11 +101,15 @@ export interface SurfaceViewProps {
    */
   span?: number;
   focused: boolean;
+  /** The AI is talking about this surface right now (§9, §10). */
+  spokenAbout?: boolean;
   onClose: () => void;
   onPin: () => void;
 }
 
-export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, span, focused, onClose, onPin }) => {
+export const SurfaceView: React.FC<SurfaceViewProps> = ({
+  surface, span, focused, spokenAbout = false, onClose, onPin,
+}) => {
   const Renderer = RENDERERS[surface.kind];
   // Resolved here rather than inside each renderer, so "there is nothing to
   // show" is decided in ONE place and cannot be answered differently by a
@@ -113,6 +119,11 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, span, focused
   return (
     <section
       aria-label={surface.meaning}
+      // Announced, not only drawn. A highlight that exists solely as a border
+      // colour tells a screen-reader user nothing about which panel the AI is
+      // describing — §27, and colour is never the only indicator here.
+      aria-current={spokenAbout ? 'true' : undefined}
+      data-spoken-about={spokenAbout ? 'true' : undefined}
       style={{
         gridColumn: `span ${span ?? surface.span}`,
         display: 'grid',
@@ -121,8 +132,15 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, span, focused
         padding: 12,
         borderRadius: 11,
         background: C.hull,
-        border: `1px solid ${focused ? C.core : C.edge}`,
-        boxShadow: focused ? '0 0 0 1px rgba(115,167,255,.25)' : 'none',
+        border: `1px solid ${spokenAbout ? C.speak : focused ? C.core : C.edge}`,
+        boxShadow: spokenAbout
+          ? `0 0 0 1px ${C.speak}, 0 0 22px rgba(66,211,146,.22)`
+          : focused
+            ? '0 0 0 1px rgba(115,167,255,.25)'
+            : 'none',
+        // 150-300ms: fast enough to track a sentence, slow enough not to flicker
+        // through a list of short ones.
+        transition: 'border-color 200ms ease, box-shadow 200ms ease',
         minWidth: 0,
         minHeight: 128,
         boxSizing: 'border-box',
@@ -130,7 +148,9 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, span, focused
     >
       <header style={{ display: 'flex', alignItems: 'flex-start', gap: 8, justifyContent: 'space-between' }}>
         <div style={{ minWidth: 0 }}>
-          <div style={label}>{surface.kind.replace('_', ' ')}</div>
+          <div style={{ ...label, color: spokenAbout ? C.speak : C.quiet }}>
+            {spokenAbout ? 'speaking about' : surface.kind.replace('_', ' ')}
+          </div>
           <h3
             style={{
               margin: '3px 0 0',

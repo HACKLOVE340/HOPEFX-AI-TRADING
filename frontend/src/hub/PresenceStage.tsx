@@ -84,6 +84,16 @@ export interface PresenceStageProps {
    * decision is not made in two places with two different answers.
    */
   layout: LayoutName;
+  /**
+   * Surface ids the AI is talking about right now (§9 target highlighting,
+   * §10 "what is being explained receives visual focus").
+   *
+   * Separate from `focusedId`, which is what the OPERATOR selected. Merging
+   * them would make the AI mentioning a panel look like the operator having
+   * chosen it, and closing the "focused" panel would then behave differently
+   * depending on who was speaking.
+   */
+  spokenAbout?: readonly string[];
   onCommand: (phrase: string) => void;
   onTalk: () => void;
   onStop: () => void;
@@ -94,7 +104,7 @@ export interface PresenceStageProps {
 }
 
 export const PresenceStage: React.FC<PresenceStageProps> = ({
-  presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout,
+  presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout, spokenAbout = [],
   onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onExit,
 }) => {
   const [typed, setTyped] = useState('');
@@ -248,6 +258,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
                 surface={surface}
                 span={span}
                 focused={focusedId === surface.id}
+                spokenAbout={spokenAbout.includes(surface.id)}
                 onClose={() => onCloseSurface(surface.id)}
                 onPin={() => onPinSurface(surface.id)}
               />
