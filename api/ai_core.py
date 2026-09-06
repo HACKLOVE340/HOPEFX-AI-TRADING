@@ -29,13 +29,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+import logging
+import time
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ai.cache.store import shared_cache
 from ai.gateway import audit, budget, providers
 from ai.gateway.chain import DEFAULT_CHAINS, LOCAL_PROVIDER, resolve_chain, resolve_embedding_model
 from ai.policy import roles as policy
 from api.auth import TokenPayload, require_role
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai-core", tags=["AI Core"])
 
@@ -136,6 +141,23 @@ async def ai_core_capabilities(user: TokenPayload = Depends(_viewer)) -> dict[st
     }
 
 
+def _local_runtime_status() -> dict[str, Any]:
+    """What the on-hardware runtime reported, or why there is nothing to report.
+
+    Deliberately reads the recorded status rather than probing: this is a
+    page-load endpoint, and a live probe would put a network timeout in front of
+    every render of the AI Core page.
+    """
+    try:
+        from ai.local_model import autostart_enabled, get_local_model_runtime
+
+        status = get_local_model_runtime().status()
+        return {"autostart_enabled": autostart_enabled(), **status.as_dict()}
+    except Exception as exc:  # reporting must never take the page down
+        logger.warning("ai_core: local runtime status unavailable (%s)", exc)
+        return {"autostart_enabled": False, "started": False, "refusal": "status_unavailable"}
+
+
 @router.get("/chain")
 async def ai_core_chain(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
     """The resolved chain per role, and which legs this deployment can reach."""
@@ -157,6 +179,13 @@ async def ai_core_chain(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
         # whether prompts are still leaving the building.
         "local_in_chain": routed_local,
         "local_only": bool(rows) and all(all(leg["local"] for leg in row["legs"]) for row in rows if row["legs"]),
+        # A FOURTH fact, and the one the other three cannot supply:
+        # `local_inference_enabled` above is true because OLLAMA_BASE_URL is
+        # SET, which is not evidence that anything is listening on the other end
+        # of it. This is what the runtime actually measured at startup, so an
+        # operator can tell "configured" from "running" -- the difference
+        # between a leg that is offered and a leg that can answer.
+        "local_runtime": _local_runtime_status(),
     }
 
 
@@ -245,6 +274,73 @@ async def ai_core_evals(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
         "promotion_allowed": allowed,
         "promotion_detail": detail,
         "gate_target": "canary",
+    }
+
+
+_DISCOVERY_TTL_S = 60.0
+_discovery_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def _discover(provider: str | None = None) -> dict[str, Any]:
+    """Ask the vendors, concurrently, and cache the answer briefly.
+
+    Concurrent because eight vendors at a ten-second timeout is eighty seconds
+    served one after another, and a settings page that blocks for eighty seconds
+    is a page nobody opens. One slow vendor should cost its own timeout, not
+    everyone else's.
+
+    Cached for a minute because this is a page-load endpoint and the answer
+    changes when a vendor ships a model, not when an operator refreshes. Without
+    it, opening settings sends eight outbound requests every time.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ai.gateway import discovery, vendors
+
+    names = [provider] if provider else [*vendors.OPENAI_COMPATIBLE, discovery.LOCAL_PROVIDER]
+    now = time.monotonic()
+    fresh = {
+        name: cached
+        for name in names
+        if (entry := _discovery_cache.get(name)) and now - entry[0] < _DISCOVERY_TTL_S
+        for cached in (entry[1],)
+    }
+    stale = [name for name in names if name not in fresh]
+
+    if stale:
+        with ThreadPoolExecutor(max_workers=min(8, len(stale))) as pool:
+            for name, result in zip(stale, pool.map(discovery.list_models, stale), strict=True):
+                fresh[name] = result
+                _discovery_cache[name] = (now, result)
+    return fresh
+
+
+@router.get("/models")
+async def ai_core_models(
+    provider: str | None = Query(default=None, description="Ask one vendor instead of all"),
+    _: TokenPayload = Depends(_viewer),
+) -> dict[str, Any]:
+    """Which models each vendor currently serves.
+
+    The model chain editor offers what exists rather than what was committed
+    months ago: a vendor shipping a model used to mean a code change, and a
+    vendor retiring one meant a chain leg that failed at call time.
+
+    `configured` is a boolean. The credential that makes a vendor reachable
+    never crosses this boundary -- an operator needs to know a key is set, not
+    what it is.
+    """
+    try:
+        results = _discover(provider)
+    except KeyError:
+        # An unknown provider name is a bad request, not an empty vendor list.
+        raise HTTPException(status_code=404, detail=f"unknown provider: {provider}") from None
+
+    rows = [row.as_dict() if hasattr(row, "as_dict") else row for _name, row in sorted(results.items())]
+    return {
+        "providers": rows,
+        "configured_count": sum(1 for row in rows if row.get("configured")),
+        "total_models": sum(len(row.get("models") or []) for row in rows),
     }
 
 

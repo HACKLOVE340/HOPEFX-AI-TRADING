@@ -88,6 +88,10 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     "ai_core_calls": _VIEW,
     "ai_core_cache": _VIEW,
     "ai_core_evals": _VIEW,
+    # Which models each vendor currently serves. Reporting, not acting: choosing
+    # a model is `route_model`, which is superadmin + 2FA below. Admin may see
+    # WHICH vendors are configured -- a boolean, never a credential.
+    "ai_core_models": _VIEW,
     # ── propose / plan: an admin may ask, and may not act ─────────────────────
     "create_supervisor_task": _PROPOSE,
     "cancel_supervisor_task": _PROPOSE,
