@@ -86,7 +86,10 @@ def test_the_refusal_names_what_to_set(client: PaystackClient) -> None:
 
 
 def test_a_configured_rate_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import UTC, datetime
+
     monkeypatch.setenv("PAYSTACK_NGN_PER_USD", "1600.00")
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD_AS_OF", datetime.now(UTC).date().isoformat())
     client = PaystackClient(secret_key="sk_test_paystack")  # pragma: allowlist secret
     post = _stub_initialize(client)
 
@@ -97,10 +100,13 @@ def test_a_configured_rate_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_a_rate_passed_to_the_constructor_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import UTC, datetime
+
     monkeypatch.setenv("PAYSTACK_NGN_PER_USD", "1600.00")
     client = PaystackClient(
         secret_key="sk_test_paystack",  # pragma: allowlist secret
         ngn_per_usd=Decimal("1500.00"),
+        rate_as_of=datetime.now(UTC).date(),
     )
     post = _stub_initialize(client)
 
@@ -224,3 +230,113 @@ def test_a_payout_is_rounded_not_truncated(client: PaystackClient) -> None:
 
     transfer = next(payload for path, payload in posts if "transfer" in path and "amount" in payload)
     assert transfer["amount"] == 120_000, "the recipient was short-paid by truncation"
+
+
+# ── the rate must also be FRESH, not merely configured ───────────────────────
+#
+# Configuration alone decays into exactly the defect it replaced. `775.00` was
+# once a reasonable number too; what made it dangerous was that nothing ever
+# asked how old it was. The model catalogue solved the same problem with a
+# `reviewed_on` date that expires in CI (TODO item 24 / docs/ai/MODEL_CATALOGUE.md),
+# and the same shape applies here: a rate that decides what a customer is
+# charged carries the date it was set, and goes stale on a schedule.
+
+
+def test_a_rate_with_no_as_of_date_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD", "1600.00")
+    monkeypatch.delenv("PAYSTACK_NGN_PER_USD_AS_OF", raising=False)
+    client = PaystackClient(secret_key="sk_test_paystack")  # pragma: allowlist secret
+    _stub_initialize(client)
+
+    with pytest.raises(PaystackError, match="PAYSTACK_NGN_PER_USD_AS_OF"):
+        client.initialize_payment(user_id="u-1", amount=Decimal("10.00"), currency="USD")
+
+
+def test_a_fresh_rate_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import UTC, datetime
+
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD", "1600.00")
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD_AS_OF", datetime.now(UTC).date().isoformat())
+    client = PaystackClient(secret_key="sk_test_paystack")  # pragma: allowlist secret
+    post = _stub_initialize(client)
+
+    client.initialize_payment(user_id="u-1", amount=Decimal("10.00"), currency="USD")
+
+    assert post.call_args[0][1]["amount"] == 1_600_000
+
+
+def test_a_stale_rate_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The whole point: this is what 775.00 became."""
+    from datetime import UTC, datetime, timedelta
+
+    stale = (datetime.now(UTC).date() - timedelta(days=PaystackClient.RATE_MAX_AGE_DAYS + 1)).isoformat()
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD", "1600.00")
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD_AS_OF", stale)
+    client = PaystackClient(secret_key="sk_test_paystack")  # pragma: allowlist secret
+    _stub_initialize(client)
+
+    with pytest.raises(PaystackError, match="stale"):
+        client.initialize_payment(user_id="u-1", amount=Decimal("10.00"), currency="USD")
+
+
+def test_a_rate_dated_in_the_future_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A future date would hold a rate fresh forever."""
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD", "1600.00")
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD_AS_OF", (datetime.now(UTC).date() + timedelta(days=2)).isoformat())
+    client = PaystackClient(secret_key="sk_test_paystack")  # pragma: allowlist secret
+    _stub_initialize(client)
+
+    with pytest.raises(PaystackError, match="future"):
+        client.initialize_payment(user_id="u-1", amount=Decimal("10.00"), currency="USD")
+
+
+def test_an_unparseable_as_of_date_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD", "1600.00")
+    monkeypatch.setenv("PAYSTACK_NGN_PER_USD_AS_OF", "last tuesday")
+    client = PaystackClient(secret_key="sk_test_paystack")  # pragma: allowlist secret
+    _stub_initialize(client)
+
+    with pytest.raises(PaystackError):
+        client.initialize_payment(user_id="u-1", amount=Decimal("10.00"), currency="USD")
+
+
+def test_a_constructor_rate_still_needs_a_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The freshness rule is about the rate, not about where it came from."""
+    monkeypatch.delenv("PAYSTACK_NGN_PER_USD_AS_OF", raising=False)
+    client = PaystackClient(
+        secret_key="sk_test_paystack",  # pragma: allowlist secret
+        ngn_per_usd=Decimal("1500.00"),
+    )
+    _stub_initialize(client)
+
+    with pytest.raises(PaystackError, match="as_of"):
+        client.initialize_payment(user_id="u-1", amount=Decimal("10.00"), currency="USD")
+
+
+def test_a_constructor_rate_with_a_date_is_used() -> None:
+    from datetime import UTC, datetime
+
+    client = PaystackClient(
+        secret_key="sk_test_paystack",  # pragma: allowlist secret
+        ngn_per_usd=Decimal("1500.00"),
+        rate_as_of=datetime.now(UTC).date(),
+    )
+    post = _stub_initialize(client)
+
+    client.initialize_payment(user_id="u-1", amount=Decimal("10.00"), currency="USD")
+
+    assert post.call_args[0][1]["amount"] == 1_500_000
+
+
+def test_naira_charges_never_need_a_rate_or_a_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The freshness rule must not break the currency that needs no conversion."""
+    monkeypatch.delenv("PAYSTACK_NGN_PER_USD", raising=False)
+    monkeypatch.delenv("PAYSTACK_NGN_PER_USD_AS_OF", raising=False)
+    client = PaystackClient(secret_key="sk_test_paystack")  # pragma: allowlist secret
+    post = _stub_initialize(client)
+
+    client.initialize_payment(user_id="u-1", amount=Decimal("5000.00"), currency="NGN")
+
+    assert post.call_args[0][1]["amount"] == 500_000

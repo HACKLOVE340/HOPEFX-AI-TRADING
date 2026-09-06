@@ -17,7 +17,7 @@ import hashlib
 import hmac
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
@@ -68,11 +68,30 @@ class PaystackClient:
     #: guessed — the same rule as the crypto currency field (audit TODO item 6).
     NGN_PER_USD_ENV = "PAYSTACK_NGN_PER_USD"
 
-    def __init__(self, secret_key: str | None = None, ngn_per_usd: Decimal | None = None) -> None:
+    #: When that rate was set. **A configured rate still goes stale**, which is
+    #: what `775.00` was: once a reasonable number, dangerous only because
+    #: nothing ever asked how old it was. Moving the value into configuration
+    #: without a freshness rule would recreate the same defect one deploy later.
+    #:
+    #: Same shape as `docs/ai/MODEL_CATALOGUE.md`'s `reviewed_on`, which expires
+    #: in CI for the same reason.
+    NGN_PER_USD_AS_OF_ENV = "PAYSTACK_NGN_PER_USD_AS_OF"
+
+    #: How long a rate stays usable. The naira has moved far enough inside a
+    #: month to matter on an invoice, so this is deliberately short.
+    RATE_MAX_AGE_DAYS = 30
+
+    def __init__(
+        self,
+        secret_key: str | None = None,
+        ngn_per_usd: Decimal | None = None,
+        rate_as_of: date | None = None,
+    ) -> None:
         if not secret_key:
             raise ValueError("PaystackClient requires a secret key. Set the PAYSTACK_SECRET_KEY environment variable.")
         self._secret_key = secret_key
         self._ngn_per_usd = ngn_per_usd
+        self._rate_as_of = rate_as_of
         self._session = requests.Session()
         self._session.headers.update(
             {
@@ -110,7 +129,47 @@ class PaystackClient:
                 f"{self.NGN_PER_USD_ENV} must be greater than zero; got {configured}. "
                 "A zero or negative rate would charge nothing, or a negative amount."
             )
+
+        self._require_fresh_rate()
         return configured
+
+    def _require_fresh_rate(self) -> None:
+        """Refuse a rate whose age nobody has checked.
+
+        A rate in configuration is still a number somebody typed once. Without
+        this, moving `775.00` out of the source and into an env var would buy
+        one deploy of correctness and then decay into the identical defect.
+        """
+        as_of = self._rate_as_of
+        if as_of is None:
+            raw = os.getenv(self.NGN_PER_USD_AS_OF_ENV, "").strip()
+            if not raw:
+                raise PaystackError(
+                    f"A USD->NGN rate is configured but its date is not. Set "
+                    f"{self.NGN_PER_USD_AS_OF_ENV} to the date the rate was taken (YYYY-MM-DD), "
+                    "or pass rate_as_of=. A rate with no date cannot be checked for staleness, "
+                    "which is exactly how the previous hard-coded rate went unnoticed."
+                )
+            try:
+                as_of = date.fromisoformat(raw)
+            except ValueError as exc:
+                raise PaystackError(f"{self.NGN_PER_USD_AS_OF_ENV}={raw!r} is not a YYYY-MM-DD date.") from exc
+
+        today = datetime.now(UTC).date()
+        if as_of > today:
+            raise PaystackError(
+                f"{self.NGN_PER_USD_AS_OF_ENV}={as_of.isoformat()} is in the future, "
+                "which would hold the rate fresh indefinitely."
+            )
+
+        age_days = (today - as_of).days
+        if age_days > self.RATE_MAX_AGE_DAYS:
+            raise PaystackError(
+                f"The USD->NGN rate is stale: taken {age_days} days ago "
+                f"({as_of.isoformat()}), limit {self.RATE_MAX_AGE_DAYS} days. "
+                f"Update {self.NGN_PER_USD_ENV} and {self.NGN_PER_USD_AS_OF_ENV} together, "
+                "or bill in NGN. Charging at an unchecked rate is what this replaced."
+            )
 
     @staticmethod
     def _to_kobo(naira: Decimal) -> int:

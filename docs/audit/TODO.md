@@ -27,7 +27,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | 7 of 8 done; five found live defects |
+| 5 | F222 · 8 critical modules with no test | HIGH | **8 of 8 done**; five found live defects |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
@@ -260,7 +260,7 @@ Never named in any test file:
 | 354 | ~~`monetization/marketplace_submission.py`~~ — done; the code audit auto-approved escapes |
 | 318 | ~~`payments/fintech/paystack.py`~~ — done; found a stale hard-coded FX rate |
 | 282 | ~~`monetization/access_codes.py`~~ — done; no defect found, coverage only |
-| 228 | `database/repositories/tick_data_repository.py` — **not done**; finding recorded below, needs a `TickQuality.UNKNOWN` decision |
+| 228 | ~~`database/repositories/tick_data_repository.py`~~ — done; `TickQuality.UNKNOWN` added, all 7 defaults moved |
 | 208 | ~~`payments/payment_gateway.py`~~ — done, `tests/unit/test_payment_currency_is_explicit.py` |
 
 I triaged all eight for a second F267 (a fabricated value on a money path).
@@ -464,6 +464,27 @@ the current state.
 four default sites together, and cover the repository's real behaviour
 (insert/bulk-insert/range queries/retention delete) — which is item 5's actual
 done-condition for this module.
+
+**Status: done.** `TickQuality.UNKNOWN` exists and **all seven** default sites
+moved together (there were seven, not four): `data_layer/types.py::GoldTick`,
+the orchestrator's two cache reads, `data_layer/tick_store.py`, the repository's
+`quality`/`confidence` signature defaults, its bulk-insert path, and the ORM
+column (migration `u1v2w3x4y5z6`, run up and down). `confidence` now defaults to
+`None` rather than `1.0` — full confidence in a tick nobody assessed was the
+same claim in a second field.
+
+`DataQualityEngine` still assigns `GOOD` after running its checks; that is the
+one place "good" is a conclusion, and a test asserts it was not changed along
+with the defaults.
+
+**Behaviour today is unchanged, and asserted.** Every downstream filter tests
+`!= REJECTED`, so `"unknown"` passes exactly where `"good"` did. Existing rows
+are not relabelled: some were genuinely assessed and the migration cannot tell
+which, so rewriting them would destroy real measurements to fix a default.
+
+**Still for the owner, and now expressible:** whether an unknown-quality tick
+may reach the trading path. That question could not be asked while the field
+could only say "good".
 
 **Note for whoever takes the next module.** `monetization/__init__.py` and
 `payments/crypto/__init__.py` re-export each singleton under its own module's

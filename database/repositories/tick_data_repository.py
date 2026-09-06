@@ -46,8 +46,11 @@ class TickDataRepository(AsyncRepository[TickData]):
         last_price: float | None = None,
         volume: float = 0.0,
         source: str | None = None,
-        quality: str = "good",
-        confidence: float = 1.0,
+        # "unknown" and None, not "good" and 1.0. A tick inserted without an
+        # assessment must not claim a maximum-confidence grade nobody computed —
+        # `data_layer.quality.engine.DataQualityEngine` is what produces one.
+        quality: str = "unknown",
+        confidence: float | None = None,
         lineage_id: str | None = None,
     ) -> TickData:
         """Insert a single tick row."""
@@ -106,8 +109,8 @@ class TickDataRepository(AsyncRepository[TickData]):
                     volume=t.get("volume", 0.0),
                     timestamp=datetime.fromtimestamp(ts_ns / 1e9, tz=UTC),
                     source=t.get("source"),
-                    quality=t.get("quality", "good"),
-                    confidence=t.get("confidence", 1.0),
+                    quality=t.get("quality", "unknown"),
+                    confidence=t.get("confidence"),
                     lineage_id=t.get("lineage_id"),
                 )
             )

@@ -706,7 +706,9 @@ class TickData(Base):
     timestamp = Column(DateTime(timezone=True), default=_utcnow, nullable=False, index=True)
     source = Column(String(50), nullable=True, index=True)
     # Quality flag: good | stale | suspect | rejected
-    quality = Column(String(20), nullable=True, default="good")
+    # "unknown", not "good": a row inserted without an assessment must not
+    # claim one. DataQualityEngine is what turns this into a grade.
+    quality = Column(String(20), nullable=True, default="unknown")
     # Confidence score from multi-source consensus (0.0–1.0)
     confidence = Column(Float, nullable=True, default=1.0)
     # Lineage ID links back to DataLineageStore record

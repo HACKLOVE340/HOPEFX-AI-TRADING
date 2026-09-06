@@ -916,7 +916,7 @@ def _patch_timescale_batch_insert() -> None:
                     float(t.get("spread", t.get("ask", 0.0) - t.get("bid", 0.0))),
                     float(t.get("volume", 0.0)),
                     str(t.get("source", "")),
-                    str(t.get("quality", "good")),
+                    str(t.get("quality", "unknown")),  # TickQuality.UNKNOWN — not imported here
                     float(t.get("confidence", 1.0)),
                     str(t.get("lineage_id", "")),
                 )
