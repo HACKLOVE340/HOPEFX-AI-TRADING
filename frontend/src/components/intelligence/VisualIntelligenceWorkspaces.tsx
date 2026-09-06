@@ -40,10 +40,60 @@ export const HologramPanel: React.FC<{ degraded?: boolean }> = ({ degraded = fal
 
 export const VisionScanner: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null); const streamRef = useRef<MediaStream | null>(null); const [status, setStatus] = useState<'idle' | 'requesting' | 'ready' | 'captured' | 'processing' | 'denied'>('idle'); const [result, setResult] = useState('');
-  const stop = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (videoRef.current) videoRef.current.srcObject = null; setStatus('idle'); };
+  // The captured frame as base64 JPEG. A ref rather than state: it is not
+  // rendered, and putting a megabyte of image data in state would re-render the
+  // panel for no reason. Cleared on stop so a frame from a previous session can
+  // never be sent against a later scan.
+  const frameRef = useRef<string>('');
+  const stop = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (videoRef.current) videoRef.current.srcObject = null; frameRef.current = ''; setStatus('idle'); };
   useEffect(() => () => stop(), []);
   const start = async () => { if (!navigator.mediaDevices?.getUserMedia) { setStatus('denied'); return; } setStatus('requesting'); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); streamRef.current = stream; if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); } setStatus('ready'); } catch { setStatus('denied'); } };
-  const capture = () => { if (!videoRef.current) return; const canvas = document.createElement('canvas'); canvas.width = videoRef.current.videoWidth || 640; canvas.height = videoRef.current.videoHeight || 360; canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height); setStatus('captured'); setResult('Frame captured in memory only. Nothing has been uploaded or persisted.'); };
+  // The longest edge we send. A phone hands back a 4K frame; reading a chart
+  // off one costs several times the tokens of a downscaled copy and gives the
+  // model no detail it can use. Downscaled here, at the edge, so the bytes are
+  // never carried across the wire in the first place.
+  const MAX_EDGE = 1280;
+
+  /**
+   * Capture the frame AND keep it.
+   *
+   * This previously drew to a `const canvas` that nothing ever read, so the
+   * frame was discarded the instant it was taken and `scan()` posted
+   * `{ source: 'camera_frame' }` with no image at all. Re-encoding as JPEG
+   * rather than PNG also drops the EXIF block a camera would otherwise attach,
+   * which carries GPS.
+   */
+  const capture = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const srcW = video.videoWidth || 640;
+    const srcH = video.videoHeight || 360;
+    const scale = Math.min(1, MAX_EDGE / Math.max(srcW, srcH));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(srcW * scale));
+    canvas.height = Math.max(1, Math.round(srcH * scale));
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // `toDataURL` returns `data:image/jpeg;base64,<payload>`. The API wants the
+    // payload only — sending the prefix would corrupt the base64 the vendor
+    // decodes.
+    //
+    // It can also throw: a canvas the browser considers tainted refuses to be
+    // read back. That must leave the panel usable and honest rather than stuck,
+    // so the capture still completes and `scan()` reports that there is no
+    // frame — the same shape as every other "we could not do it" path here.
+    try {
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      frameRef.current = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : '';
+    } catch {
+      frameRef.current = '';
+    }
+    setStatus('captured');
+    setResult(
+      frameRef.current
+        ? 'Frame captured in memory only. Nothing has been uploaded or persisted.'
+        : 'The frame could not be read back from the camera. Nothing has been captured.',
+    );
+  };
   // Two defects lived here (audit D6). The result string was fabricated: the
   // function slept 650ms and declared an interpretation ready, having analysed
   // nothing. And it never ran -- `status` was captured by the closure at render
@@ -54,9 +104,21 @@ export const VisionScanner: React.FC = () => {
   // There is no vision analysis backend yet (AI Core plan, Task 13/18). The
   // honest behaviour is to say so rather than to describe a reading nobody took.
   const scan = async () => {
+    // Nothing to interpret: don't spend a paid model call to be told so. The
+    // server answers `no_frame_supplied` for this case anyway, but the round
+    // trip is pure waste and the operator gets the same sentence sooner.
+    if (!frameRef.current) {
+      setResult('There is no captured frame to scan. Take one first.');
+      setStatus('captured');
+      return;
+    }
     setStatus('processing');
     try {
-      const response = await api.post('/safe-platform/vision/interpret', { source: 'camera_frame' });
+      const response = await api.post('/safe-platform/vision/interpret', {
+        source: 'camera_frame',
+        image_b64: frameRef.current,
+        media_type: 'image/jpeg',
+      });
       const interpretation = response.data?.interpretation;
       setResult(
         interpretation
