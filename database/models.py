@@ -256,6 +256,20 @@ class Order(Base):
     cancelled_at = Column(DateTime, nullable=True)
 
     # Status
+    # The COLUMN has existed since migration o1p2q3r4s5t6, which added it with
+    # server_default="pending" and indexed it as idx_orders_status — but this
+    # model never declared it, so nothing could ever read or set it and every
+    # row in every migrated database carries "pending" forever. Same shape as
+    # the user_id drift documented above: the schema was right, the model was
+    # blind to it. Declared here rather than dropped from the schema, because
+    # dropping a column on a production database is irreversible.
+    #
+    # server_default matches what the database already has, so rows written by
+    # code that does not set it keep the value they have always had.
+    #
+    # index=True is deliberately absent: idx_orders_status already exists, and
+    # both would produce two indexes on one column.
+    status = Column(String(20), nullable=False, server_default="pending")
     is_filled = Column(Boolean, default=False)
     is_cancelled = Column(Boolean, default=False)
     rejection_reason = Column(Text, nullable=True)
@@ -709,8 +723,13 @@ class TickData(Base):
     # "unknown", not "good": a row inserted without an assessment must not
     # claim one. DataQualityEngine is what turns this into a grade.
     quality = Column(String(20), nullable=True, default="unknown")
-    # Confidence score from multi-source consensus (0.0–1.0)
-    confidence = Column(Float, nullable=True, default=1.0)
+    # Confidence score from multi-source consensus (0.0–1.0).
+    # None, not 1.0, for the same reason `quality` is "unknown": a row inserted
+    # without a consensus computation must not claim perfect confidence in a
+    # second field after the first one stopped claiming it. The repository
+    # signature moved with u1v2w3x4y5z6; this column did not, and the two
+    # disagreeing is worse than either default alone.
+    confidence = Column(Float, nullable=True, default=None)
     # Lineage ID links back to DataLineageStore record
     lineage_id = Column(String(36), nullable=True, index=True)
 

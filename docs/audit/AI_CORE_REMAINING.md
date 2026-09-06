@@ -88,16 +88,15 @@ would rewrite.
 
 | # | Item | Severity |
 |---|---|---|
-| 3 | F218 — 14 tables exist only via `create_all()`, no migration | MEDIUM |
-| 5 | F222 — 1 of 8 modules left: `tick_data_repository` (needs a `TickQuality.UNKNOWN` decision) | HIGH |
+| 3 | F218 — re-measured: tables covered; 8 *columns* were not | ~~HIGH~~ **fixed** |
 | 9 | Coverage measures 38.6% of the application | MEDIUM |
 | 10 | `execution/` omissions, with measured debt | MEDIUM |
 | 11 | F223 — 75 metric-named files, 1,125 assertion-free tests | HIGH |
 | 21 | F216/F217 — the `data/` ↔ `data_layer/` boundary is undocumented | MEDIUM |
 | 22 | `REMEDIATION_PLAN.md` is stale | MEDIUM |
 
-Closed today: 4 (money columns), 6 (crypto currency), 12 (coverage gate),
-24 (dependency scan), and 7 of item 5's 8 modules.
+Closed: 3 (schema drift), 4 (money columns), 5 (**8 of 8** modules),
+6 (crypto currency), 12 (coverage gate), 24 (dependency scan).
 
 ---
 

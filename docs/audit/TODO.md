@@ -25,7 +25,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 1b | **Two committed models fail integrity and do not load** | CRITICAL | **owner** |
 | 1c | F270 · async pool listened for non-existent events → readiness 503 forever | CRITICAL | fixed |
 | 2 | Vercel check belongs to another project | noise | owner |
-| 3 | F218 · 14 tables have no migration | MEDIUM | — |
+| 3 | F218 · re-measured: tables covered, **8 columns are not** | HIGH | fixed |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
 | 5 | F222 · 8 critical modules with no test | HIGH | **8 of 8 done**; five found live defects |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
@@ -180,25 +180,55 @@ check non-required. **Done when:** it no longer reports on this repo's PRs.
 
 ## P1 — Money and correctness
 
-### 3. F218 — 14 tables exist only via `create_all()` · MEDIUM
+### 3. F218 — re-measured, and the count was in the wrong unit · HIGH · **fixed**
+
+The finding said "14 tables have no migration." Re-measured by execution —
+`alembic upgrade head` against an empty database, then a diff against
+`Base.metadata` — **that count is closed: all 44 model tables are created by
+migrations today.**
+
+The defect is one level down, and nobody had measured it. A table can be
+covered while its columns are not:
 
 ```
-aml_alerts  api_keys  broker_connections  chargebacks  config_store
-crypto_payments  email_suppressions  gdpr_requests  outbox_events
-reconciliation_records  sessions  tax_reports  watchlists  whitelabel_tenants
+sqlite3.OperationalError: no such column: tick_data.quality
+sqlite3.OperationalError: no such column: accounts.account_name
+sqlite3.OperationalError: no such column: orders.account_id
 ```
 
-41 tables are declared by models; 27 are touched by a migration. `create_all()`
-creates a missing table and **never alters an existing one**, so a column added
-to any of these 14 appears on every fresh database and on no existing one — with
-no migration to close the gap and no error. The oldest deployment fails at query
-time, which is the worst place to find out.
+Eight columns across three tables were declared by a model and created by no
+migration. The consequential one is `tick_data.ts_ns`:
+`database/repositories/tick_data_repository.py` writes it on every insert and
+orders every range query by it, so on a migrated database that repository could
+not write or read a single row. `quality`, `confidence` and `lineage_id` are the
+columns migration `u1v2w3x4y5z6` was written to adjust — it correctly no-oped
+because they were absent, which is how this was found.
 
-**Do:** one Alembic migration per table using `_create_table_if_missing`, so it
-is a no-op where `create_all()` already made the table. Then a test asserting
-every `__tablename__` is covered by a migration, so number 15 cannot appear.
-**Verify:** `alembic upgrade head` on an empty DB **and** on a DB built by
-`create_all()`. **Done when:** the coverage test passes and CI's Gate I is green.
+`orders.status` is the same drift pointing the other way: the column exists in
+the schema (added and indexed by `o1p2q3r4s5t6`) and the model never declared
+it, so nothing reads it and every row carries its server default forever. The
+model gained it rather than the schema losing it — dropping a column on a
+production database is irreversible.
+
+**Fixed** by migration `v1w2x3y4z5a6` (verified up, down and up again on both an
+empty database and a `create_all()` one; the `ts_ns` backfill from the legacy
+`timestamp` column verified on a seeded row).
+`tests/unit/test_migrated_schema_matches_models.py` compares the migrated schema
+to the models column by column in both directions — 8 of its 9 cases fail on the
+pre-fix tree.
+
+**Two corrections this produced.** Commit `90e72bbe` claimed `confidence` "is
+None now"; only the repository signature had changed and the ORM column still
+defaulted to 1.0 — completed here. And `u1v2w3x4y5z6`'s docstring said
+`tick_data` "exists only via `create_all()`", which is false: it is created by
+`1b0666c43575` in an older eight-column shape. Its guard was right for the
+wrong reason.
+
+**Still open, found while verifying and deliberately not fixed here:**
+`alembic upgrade head` over a database built by `create_all()` fails in a
+*pre-existing* migration — `n1o2p3q4r5s6` raises `table trade_journal already
+exists`. It is reached long before this migration runs, so it is a separate
+finding with its own blast radius.
 
 ### 4. Money columns are `Float` · HIGH
 
