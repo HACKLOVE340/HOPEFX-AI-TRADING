@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { PageHeader, EmptyState, ErrorBanner } from '../components';
 import { GenerationWorkbench } from '../components/ai/GenerationWorkbench';
+import { PresencePanel } from '../components/ai/PresencePanel';
+import { hubEnabled } from '../hub/flag';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { aiCoreApi } from '../hooks/useApi';
 
@@ -185,12 +187,13 @@ interface Capabilities { role: string; is_superadmin: boolean; capabilities: Cap
 
 const REFETCH_MS = 30_000;
 
-type Tab = 'Workbench' | 'Overview' | 'Model chain' | 'Spend' | 'Calls' | 'Governance';
+type Tab = 'Presence' | 'Workbench' | 'Overview' | 'Model chain' | 'Spend' | 'Calls' | 'Governance';
 
 const TABS: { key: Tab; label: string }[] = [
-  // First, and the default: this is the only tab an operator comes here to
-  // *use* rather than read. The other five report on the control plane; this
-  // one drives it, and several generations at a time.
+  // First, and the default when the flag is on: §4 asks that the AI Core BE the
+  // primary interface rather than a permanent dashboard. Nothing below it moved
+  // or was removed — what changed is which one opens.
+  { key: 'Presence', label: 'Presence' },
   { key: 'Workbench', label: 'Workbench' },
   { key: 'Overview', label: 'Overview' },
   { key: 'Model chain', label: 'Model chain' },
@@ -200,12 +203,17 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export const AICore: React.FC = () => {
-  // Overview stays the landing tab. Workbench is first in the list because it
-  // is the one thing here an operator comes to *use*, but making it the default
-  // changes what this page IS — it lands as a status board, and five tests
-  // encode that contract. Promoting it is a one-line change and the owner's
-  // call, not one to slip in with the feature.
-  const [tab, setTab] = useState<Tab>('Overview');
+  // What this page opens on.
+  //
+  // It used to land on Overview, and a comment here said that promoting another
+  // tab "changes what this page IS" and was the owner's call rather than one to
+  // slip in with a feature. The owner has since made that call: the AI Core is
+  // the AI, not a status board about it. So with the flag on it opens on the
+  // presence, and with the flag off it opens exactly where it always did.
+  //
+  // Every other tab is untouched and one click away, which is what makes this
+  // reading of §4 cost nothing.
+  const [tab, setTab] = useState<Tab>(hubEnabled() ? 'Presence' : 'Overview');
 
   const summary = useQuery<Summary>({
     queryKey: ['ai-core', 'summary'],
@@ -288,6 +296,8 @@ export const AICore: React.FC = () => {
           it owns live state the read-only panels do not, and because a page
           that already renders six report sections should not also grow a job
           queue inline. */}
+      {tab === 'Presence' && <PresencePanel providersReachable={s?.providers_reachable?.length} ready={!summary.isLoading} />}
+
       {tab === 'Workbench' && <GenerationWorkbench />}
 
       {/* ── Overview ────────────────────────────────────────────────────────── */}

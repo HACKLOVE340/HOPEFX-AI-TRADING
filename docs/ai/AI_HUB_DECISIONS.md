@@ -40,7 +40,31 @@ note recording the discrepancy, so they cannot be silently dropped:
 
 ## D2 — Where the Hub lives
 
-**Decided: a new route the login lands on. The 85 existing routes stay.**
+**Revised. Superseded the same day, by the owner, before anything shipped.**
+
+The first reading of §4 built a separate `/hub` route that login landed on. The
+owner's correction: *"Did you build a new one? Let's use the existing page."*
+That is right, and the first attempt was wrong in a way worth recording — it
+produced a second AI screen beside the AI screen, which satisfies §4 on paper
+and defeats it in practice.
+
+**Decided: the presence is the AI Core page's first tab.** Not a new route.
+
+* `AICore` opens on `Presence` when `VITE_HUB_ENABLED=true`.
+* Its six existing tabs — Workbench, Overview, Model chain, Spend, Calls,
+  Governance — are untouched and one click away.
+* With the flag off it opens on Overview, exactly as it always did.
+* No route was added, moved or removed. `pages/Hub.tsx` and the `/hub` route
+  were deleted before they shipped.
+
+A comment in `AICore.tsx` used to say that promoting a different tab "changes
+what this page IS" and was the owner's call rather than one to slip in with a
+feature. It was, and it has been made.
+
+### Superseded: a new route the login lands on
+
+The original entry read: *"a new route the login lands on. The 85 existing
+routes stay."*
 
 §4 forbids a permanent dashboard as the primary interface. The minimum change
 that satisfies it without deleting anything is to move the front door, not to
