@@ -44,6 +44,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 24 | F271 · the dependency scan reads the manifest that pins nothing | HIGH | fixed; 1 critical + 4 high were hidden |
 | 25 | **The brain placed orders with no risk gate** | **CRITICAL** | fixed |
 | 26 | **The kill switch did not stop the brain trading** | **CRITICAL** | fixed |
+| 27 | AI budget was a monthly total with no rate limit | HIGH | fixed |
 
 **Read first if you read nothing else:** items 1, 4, 7b and 13–19.
 
@@ -327,6 +328,36 @@ to "trade". Closing a position still works, for the reason given in item 25.
 7 cases in `tests/unit/test_kill_switch_stops_the_ai.py`, 4 failing on the
 pre-fix tree, including the end-to-end path through the brain. 679 tests pass
 across the pre-trade gate, risk manager and kill-switch suites.
+
+### 27. The AI budget was a monthly total with no rate limit · HIGH · **fixed**
+
+`ai/gateway/budget.py` enforced a per-operator and a global ceiling, both
+monthly, and nothing else. A runaway agent loop — the ordinary failure mode of
+an agent that can call itself — spends the entire monthly global in minutes, and
+the ceiling is the only thing that ever stops it. By then the month's budget is
+gone and the AI is off until the period rolls.
+
+**Fixed** with two limits over one rolling hour, both inside `check()` and
+`charge()`, which the gateway already calls on every request and every served
+response — no new registration to forget.
+
+* **Spend velocity**, expressed as a fraction of the configured monthly ceiling
+  (default 20%) rather than as a second set of dollar figures, so it tracks
+  whatever a superadmin sets and there is no second number to keep in step.
+* **Call rate** (default 600/hour), and this one is not optional. Local
+  inference costs nothing — `FREE_PROVIDERS` is `{"ollama"}` and
+  `OllamaAdapter` returns `cost_usd=0.0` — so a spend-based limit is
+  **structurally blind** to a local runaway loop: it can spin at full speed
+  forever without moving a dollar figure. The call count is the only thing that
+  sees it.
+
+The window uses `time.monotonic()`, so a clock correction cannot empty it or
+freeze it full. An exhausted monthly ceiling still reports itself as exhausted
+rather than as "too fast" — they are different problems and an operator needs to
+know which one they have.
+
+10 cases, 7 failing on the pre-fix tree. 556 tests pass across budget, gateway,
+cache and ai_core.
 
 ### 4. Money columns are `Float` · HIGH
 
