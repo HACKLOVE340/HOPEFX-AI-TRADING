@@ -107,6 +107,13 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     "propose_upgrade": _PROPOSE,
     "create_proposal_checkpoint": _PROPOSE,
     "validate_proposal": _PROPOSE,
+    # Running the eval suite is how evidence for a promotion is produced, so an
+    # admin may ask for it — the same tier as run_diagnostics and
+    # request_external_research, which also spend. Promotion itself remains
+    # superadmin + 2FA below; producing evidence and acting on it are separate
+    # privileges. The spend is bounded by the budget ceiling and the velocity
+    # brake like any other model call.
+    "run_evals": _PROPOSE,
     # ── approval: an admin may contribute one; a repair needs a superadmin ────
     "approve_supervisor_task": Capability(APPROVE, "admin"),
     "decide_approval": Capability(APPROVE, "admin", quorum_needs_superadmin=True),

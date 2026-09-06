@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 """Additive, fail-closed supervisor and safe-evolution control surface.
 
 This module intentionally proposes and gates consequential work; it does not execute
@@ -19,6 +21,8 @@ from api.auth import TokenPayload, require_role
 from ai.policy.roles import QUORUM_NEEDS_SUPERADMIN_KINDS
 from api.superadmin._shared import require_superadmin_2fa
 from core.config_store import config_store
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/safe-platform", tags=["Safe Agent Platform"])
 
@@ -366,12 +370,61 @@ def _eval_gate_allows(environment: str) -> tuple[bool, str]:
         return True, "not_applicable"
     from ai.evals.gate import PromotionGate, PromotionRefused
 
-    gate = PromotionGate(minimum_score={"canary": 0.9, "live": 0.95})
+    # required_case_ids is not optional here, though the dataclass makes it
+    # look it. Without it a model that FAILS a risk-arithmetic case is promoted
+    # whenever the aggregate clears the bar — measured: a 0.95 report whose one
+    # failure was "is a 15% drawdown above a 10% limit" was permitted. The
+    # `required` flag on EvalCase existed, PromotionGate supported it, and
+    # nothing passed it through: a control that exists and is never wired.
+    from ai.evals.cases import REQUIRED_CASE_IDS
+
+    gate = PromotionGate(
+        minimum_score={"canary": 0.9, "live": 0.95},
+        required_case_ids=REQUIRED_CASE_IDS,
+    )
     try:
         gate.check(_EVAL_REPORT, target="canary")
     except PromotionRefused as refused:
         return False, ", ".join(refused.reason_codes)
     return True, "eval_gate_passed"
+
+
+@router.post("/evals/run")
+async def run_evals(user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    """Run the eval suite and file the report the promotion gate reads.
+
+    This is the seam that had no filler: `set_eval_report` had zero callers, so
+    `_EVAL_REPORT` was always None and the gate always refused `no_eval_report`
+    — canary promotion was not gated, it was impossible.
+
+    Every case is a paid model call through the gateway, which is why this is
+    triggered rather than automatic, and why it is rate-limited here on top of
+    the budget ceiling and velocity brake.
+
+    A failing report is filed too. Withholding a bad score would leave the gate
+    reading a stale passing one, which is fail-open wearing fail-closed's
+    clothes.
+    """
+    _enforce_rate_limit(user)
+    from ai.evals.runner import run_and_publish
+
+    try:
+        report = run_and_publish()
+    except Exception as exc:
+        logger.error("run_evals: suite could not run (%s)", exc)
+        raise HTTPException(status_code=503, detail=f"eval suite could not run: {exc}") from None
+
+    allowed, reason = _eval_gate_allows("canary")
+    return {
+        "score": report.score,
+        "total": report.total,
+        "passed": report.passed,
+        "failed_case_ids": list(report.failed_case_ids),
+        "ran_at": report.ran_at,
+        # What the gate would now do with it — the reason an operator ran this.
+        "canary_promotion_allowed": allowed,
+        "gate_reason": reason,
+    }
 
 
 class DiagnosticRequest(BaseModel):
