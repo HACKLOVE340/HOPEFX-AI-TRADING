@@ -105,7 +105,10 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 }
 ```
 
-**Reference:** See `assets/api-dashboard.json`
+**Reference:** This repo's live dashboards are the worked examples — upstream's
+`assets/` pack was not vendored. See `grafana/dashboards/trading_performance.json`
+and `grafana/dashboards/broker_connectivity.json`, provisioned via
+`grafana/provisioning/`.
 
 ## Panel Types
 
@@ -308,7 +311,7 @@ providers:
 - Pod count by namespace
 - Node status
 
-**Reference:** See `assets/infrastructure-dashboard.json`
+**Reference:** See `grafana/dashboards/system_health.json` in this repo.
 
 ### Database Dashboard
 
@@ -322,7 +325,10 @@ providers:
 - Replication lag
 - Slow queries
 
-**Reference:** See `assets/database-dashboard.json`
+**Reference:** No database dashboard exists in this repo yet — the five under
+`grafana/dashboards/` and `monitoring/grafana/` cover trading, ML, broker
+connectivity, system health, and invariants. Build this one from the panel list
+above rather than looking for a file to copy.
 
 ### Application Dashboard
 

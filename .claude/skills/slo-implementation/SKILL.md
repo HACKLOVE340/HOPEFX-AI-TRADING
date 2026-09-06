@@ -61,7 +61,7 @@ sum(storage_writes_successful_total)
 sum(storage_writes_total)
 ```
 
-**Reference:** See `references/slo-definitions.md`
+**Reference:** See `references/details.md`
 
 ## Setting SLO Targets
 
@@ -134,7 +134,7 @@ error_budget_policy:
     action: Feature freeze, focus on reliability
 ```
 
-**Reference:** See `references/error-budget.md`
+**Reference:** See `references/details.md` — multi-window burn-rate alerts and the weekly/monthly/quarterly review process.
 
 ## SLO Implementation
 
