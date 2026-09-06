@@ -652,6 +652,44 @@ async def init_ai_response_cache(s: Any) -> Any:
     return cache
 
 
+async def init_ai_audit_sink(s: Any) -> Any:
+    """Point the gateway audit trail at the durable, tamper-evident chain.
+
+    `ai/gateway/audit.py` retained 500 records in a Python list and its comment
+    claimed "the durable sink is the config store via the control plane". No
+    code wrote there. So every model call -- who made it, which vendor served
+    it, what it cost -- was erased by a restart, while spec §6 promised an
+    immutable, exportable, regulatory-grade trail.
+
+    The sink is `ComplianceManager.log_ai_call`, which is already the writer for
+    the `audit_log` table's hash chain. Reusing it keeps ONE sequence and ONE
+    chain; a second independent writer would make `verify_integrity` report a
+    violation on a log nobody had tampered with.
+
+    required=False, because an audit sink failing to install must not stop the
+    trading platform from starting -- but unlike the other optional factories,
+    the failure is reported at ERROR rather than debug. A deployment running
+    without a durable trail is a deployment whose compliance posture differs
+    from what its documentation says, and that must not be quiet.
+    `audit.durable_sink_installed()` is what the health surface reads back.
+    """
+    from ai.gateway import audit
+    from api.admin import log_activity
+
+    manager = getattr(s, "compliance_manager", None)
+    if manager is None or not hasattr(manager, "log_ai_call"):
+        logger.error(
+            "AI audit sink NOT installed — no compliance manager on app state. "
+            "The gateway audit trail will not survive a restart, and spec §6 "
+            "export is unavailable until this is resolved.",
+        )
+        return None
+
+    audit.set_durable_sink(manager.log_ai_call)
+    log_activity("AI gateway audit trail bound to the durable compliance chain")
+    return manager
+
+
 async def init_ai_departments(s: Any) -> Any:
     """Build the Cluster A tool bus and hang it on app state.
 
@@ -2924,6 +2962,14 @@ def build_component_registry(app, feature_flags):
             F.init_ai_response_cache,
             required=False,
             deps=["config"],
+        )
+        # Spec §6 — the model-call trail has to outlive the process. Depends on
+        # compliance_manager because that owns the hash chain it writes into.
+        .register(
+            "ai_audit_sink",
+            F.init_ai_audit_sink,
+            required=False,
+            deps=["compliance_manager"],
         )
         .register(
             "online_learner_store",
