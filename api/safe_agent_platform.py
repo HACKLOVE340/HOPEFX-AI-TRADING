@@ -390,6 +390,83 @@ def _eval_gate_allows(environment: str) -> tuple[bool, str]:
     return True, "eval_gate_passed"
 
 
+@router.post("/generate")
+async def submit_generation(
+    body: GenerateRequest,
+    user: TokenPayload = Depends(_admin),
+) -> dict[str, Any]:
+    """Start one generation and return immediately with its job id.
+
+    The screen calls this once per panel. Nothing blocks: the job runs on the
+    AI pool and the panel polls `/generate/jobs` for state and output, so four
+    panels genuinely work at once rather than queueing behind each other.
+
+    Every job still passes everything a single call passes — the budget ceiling
+    and velocity brake, the audit trail, the guardrails, the output secret
+    scanner, the circuit breakers. Concurrency is not a way around any of them,
+    and the ceiling binding across four panels at once is the point.
+    """
+    _enforce_rate_limit(user)
+    from ai.jobs.runner import QueueFull, get_runner
+
+    runner = get_runner()
+
+    def work(report: Any) -> dict[str, Any]:
+        # Imports live here so a failure to reach a vendor is this job's error
+        # rather than an import-time problem for the whole endpoint.
+        from ai.gateway.adapters import build_providers
+        from ai.gateway.client import GatewayClient, ModelRequest
+
+        report("resolving the model chain")
+        providers = build_providers()
+        if not providers:
+            raise RuntimeError("no model vendor is configured")
+
+        report("contacting the model")
+        response = GatewayClient(providers).call_sync(
+            ModelRequest(role=body.role, prompt=body.prompt),
+            operator=user.sub,
+        )
+        report(f"answered by {response.provider}")
+        return {
+            "text": response.text,
+            "provider": response.provider,
+            "model": response.model,
+            "cost_usd": response.cost_usd,
+            "cached": response.cached,
+            "latency_ms": round(response.latency_ms, 1),
+        }
+
+    try:
+        job_id = runner.submit(prompt=body.prompt, work=work, operator=user.sub)
+    except QueueFull as exc:
+        # 429, not 500: the caller should slow down, and the request was
+        # well-formed. Telling a panel "server error" for backpressure would
+        # have an operator chasing an outage that is not happening.
+        raise HTTPException(status_code=429, detail=str(exc)) from None
+
+    return {"job_id": job_id, "label": body.label, "state": "queued"}
+
+
+@router.get("/generate/jobs")
+async def list_generations(user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    """Every job's live state, for the screen to render all panels at once."""
+    from ai.jobs.runner import get_runner
+
+    return get_runner().snapshot()
+
+
+@router.post("/generate/{job_id}/cancel")
+async def cancel_generation(job_id: str, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
+    """Stop one panel without touching the others."""
+    from ai.jobs.runner import get_runner
+
+    cancelled = get_runner().cancel(job_id)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="No such job, or it has already finished.")
+    return {"job_id": job_id, "cancelled": True}
+
+
 def queue_observation_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
     """Put a department's observation into the same queue a human's goes into.
 
@@ -588,6 +665,14 @@ class SupervisorTaskRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=4000)
     requested_agents: list[str] = Field(default_factory=list, max_length=12)
     allow_external_read: bool = False
+
+
+class GenerateRequest(BaseModel):
+    """One generation, to run alongside others."""
+
+    prompt: str = Field(min_length=1, max_length=20_000)
+    role: str = Field(default="reasoning", pattern="^(reasoning|fast|vision)$")
+    label: str = Field(default="", max_length=80)
 
 
 class VisionInterpretRequest(BaseModel):

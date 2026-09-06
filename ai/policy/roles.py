@@ -119,6 +119,12 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     # returns a description and the contract in `ai/vision/detect.py` forbids
     # recommending or placing anything, so it never reaches the execute tier.
     "vision_interpret": _PROPOSE,
+    # Concurrent generation. Each job is a paid model call, so it sits at the
+    # same tier as the other paid, operator-triggered actions. Reading job state
+    # and cancelling a job you started are strictly weaker than starting one.
+    "submit_generation": _PROPOSE,
+    "list_generations": _VIEW,
+    "cancel_generation": _PROPOSE,
     # ── approval: an admin may contribute one; a repair needs a superadmin ────
     "approve_supervisor_task": Capability(APPROVE, "admin"),
     "decide_approval": Capability(APPROVE, "admin", quorum_needs_superadmin=True),
