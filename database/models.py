@@ -758,8 +758,8 @@ class WalletTransaction(Base):
     transaction_id = Column(String(50), unique=True, nullable=False, index=True)
     user_id = Column(String(50), nullable=False, index=True)
     transaction_type = Column(String(30), nullable=False)  # deposit, withdrawal, fee, commission
-    amount = Column(Float, nullable=False)
-    balance_after = Column(Float, nullable=False)
+    amount = Column(Numeric(18, 2), nullable=False)
+    balance_after = Column(Numeric(18, 2), nullable=False)
     currency = Column(String(10), default="USD")
     reference = Column(String(100), nullable=True)  # external payment ref
     status = Column(String(20), default="completed")  # pending, completed, failed
@@ -1070,9 +1070,9 @@ if SQLALCHEMY_AVAILABLE:
         currency = Column(String(10), nullable=False)  # BTC | ETH | USDT
         network = Column(String(20), nullable=False)  # BTC | ERC20 | TRC20 | BEP20
         address = Column(String(200), nullable=False)
-        amount_usd = Column(Float, nullable=False)
-        amount_crypto = Column(Float, nullable=False)
-        rate_usd = Column(Float, nullable=False)  # USD price per coin at creation
+        amount_usd = Column(Numeric(18, 2), nullable=False)
+        amount_crypto = Column(Numeric(28, 8), nullable=False)
+        rate_usd = Column(Numeric(28, 8), nullable=False)  # USD price per coin at creation
         status = Column(
             String(20), nullable=False, default="pending", index=True
         )  # pending | confirming | complete | expired | failed
@@ -1327,7 +1327,7 @@ if SQLALCHEMY_AVAILABLE:
         payment_id = Column(String(100), nullable=False, index=True)
         user_id = Column(String(128), nullable=False, index=True)
         username = Column(String(255), nullable=True)
-        amount = Column(Float, nullable=False)
+        amount = Column(Numeric(18, 2), nullable=False)
         currency = Column(String(10), nullable=False, default="USD")
         reason = Column(String(255), nullable=False)
         # open | won | lost | pending_evidence
@@ -1376,10 +1376,11 @@ if SQLALCHEMY_AVAILABLE:
         report_id = Column(String(100), unique=True, nullable=False, index=True)
         period = Column(String(20), nullable=False)  # e.g. "2025-Q1" or "2025-01"
         jurisdiction = Column(String(100), nullable=False)  # e.g. "US-CA", "GB", "NG"
-        total_revenue = Column(Float, nullable=False, default=0.0)
-        taxable_amount = Column(Float, nullable=False, default=0.0)
-        tax_rate_pct = Column(Float, nullable=False, default=0.0)
-        tax_owed = Column(Float, nullable=False, default=0.0)
+        total_revenue = Column(Numeric(18, 2), nullable=False, default=0)
+        taxable_amount = Column(Numeric(18, 2), nullable=False, default=0)
+        # A rate, not an amount -- but it multiplies one, so it is exact too.
+        tax_rate_pct = Column(Numeric(9, 6), nullable=False, default=0)
+        tax_owed = Column(Numeric(18, 2), nullable=False, default=0)
         currency = Column(String(10), nullable=False, default="USD")
         # draft | filed | paid | overdue
         status = Column(String(20), nullable=False, default="draft", index=True)
@@ -1428,9 +1429,9 @@ if SQLALCHEMY_AVAILABLE:
         recon_id = Column(String(100), unique=True, nullable=False, index=True)
         period = Column(String(20), nullable=False)  # e.g. "2025-01"
         provider = Column(String(50), nullable=False)  # stripe | flutterwave | crypto
-        expected_amount = Column(Float, nullable=False, default=0.0)
-        actual_amount = Column(Float, nullable=False, default=0.0)
-        discrepancy = Column(Float, nullable=False, default=0.0)
+        expected_amount = Column(Numeric(18, 2), nullable=False, default=0)
+        actual_amount = Column(Numeric(18, 2), nullable=False, default=0)
+        discrepancy = Column(Numeric(18, 2), nullable=False, default=0)
         currency = Column(String(10), nullable=False, default="USD")
         transaction_count = Column(Integer, nullable=False, default=0)
         # matched | discrepancy | pending | resolved
@@ -1543,7 +1544,7 @@ if SQLALCHEMY_AVAILABLE:
         username = Column(String(100), nullable=True)
         alert_type = Column(String(50), nullable=False)
         severity = Column(String(20), nullable=False, default="medium")  # low/medium/high/critical
-        amount = Column(Float, nullable=False, default=0.0)
+        amount = Column(Numeric(18, 2), nullable=False, default=0)
         currency = Column(String(10), nullable=False, default="USD")
         description = Column(Text, nullable=True)
         status = Column(String(20), nullable=False, default="pending")  # pending/reviewed/escalated/dismissed
@@ -1651,7 +1652,7 @@ if SQLALCHEMY_AVAILABLE:
         # Hashed API key (shown once at creation, stored as SHA-256 hex)
         api_key_hash = Column(String(64), nullable=True)
         # Revenue tracking
-        revenue_usd = Column(Float, nullable=False, default=0.0)
+        revenue_usd = Column(Numeric(18, 2), nullable=False, default=0)
         user_count = Column(Integer, nullable=False, default=0)
         # Lifecycle
         trial_ends_at = Column(DateTime(timezone=True), nullable=True)
@@ -1857,10 +1858,10 @@ if SQLALCHEMY_AVAILABLE:
         # account_type: "personal" | "prop_firm" | "team" | "managed"
         account_type = Column(String(30), nullable=False, default="personal")
         currency = Column(String(10), nullable=False, default="USD")
-        initial_balance = Column(Float, nullable=True)
-        current_balance = Column(Float, nullable=True)
+        initial_balance = Column(Numeric(18, 2), nullable=True)
+        current_balance = Column(Numeric(18, 2), nullable=True)
         max_drawdown_pct = Column(Float, nullable=True)
-        daily_loss_limit = Column(Float, nullable=True)
+        daily_loss_limit = Column(Numeric(18, 2), nullable=True)
         is_active = Column(Boolean, nullable=False, default=True)
         broker = Column(String(50), nullable=True)
         broker_account_id = Column(String(100), nullable=True)
@@ -1958,7 +1959,7 @@ if SQLALCHEMY_AVAILABLE:
         # event_type: "payment_succeeded" | "payment_failed" | "subscription_created"
         #             | "subscription_cancelled" | "refund" | "chargeback"
         event_type = Column(String(50), nullable=False)
-        amount = Column(Float, nullable=True)
+        amount = Column(Numeric(18, 2), nullable=True)
         currency = Column(String(10), nullable=True, default="USD")
         plan = Column(String(30), nullable=True)
         # status: "pending" | "succeeded" | "failed" | "refunded"

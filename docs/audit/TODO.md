@@ -26,7 +26,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 1c | F270 · async pool listened for non-existent events → readiness 503 forever | CRITICAL | fixed |
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
-| 4 | 51 money columns typed `Float` | HIGH | — |
+| 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
 | 5 | F222 · 8 critical modules with no test | HIGH | — |
 | 6 | Crypto currency read from a free-text field | MEDIUM | — |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
@@ -213,6 +213,40 @@ plus a test asserting a repeated-addition case that `Float` fails.
 **Read first:** the `hopefx-money-precision` skill. **Done when:** every column
 on a path that pays or holds user money is `Numeric`, with the remainder listed
 here and a reason for each.
+
+**Status: the paying path is done.** Migration `t1u2v3w4x5y6`, tests in
+`tests/unit/test_money_columns_are_exact.py` (12 of 13 fail on the pre-fix tree).
+19 columns across 9 tables converted, ordered by exposure exactly as above:
+
+| Table | Columns | Why |
+|---|---|---|
+| `wallet_transactions` | amount, balance_after | the ledger |
+| `crypto_payments` | amount_usd, amount_crypto `(28,8)`, rate_usd `(28,8)` | a satoshi is 1e-8 |
+| `chargebacks` | amount | money going back out |
+| `billing_history` | amount | what a customer was charged |
+| `reconciliation_records` | expected_amount, actual_amount, discrepancy | the check that detects drift was drifting itself |
+| `tax_reports` | total_revenue, taxable_amount, tax_rate_pct `(9,6)`, tax_owed | a filing figure that drifts is a filing error |
+| `aml_alerts` | amount | compared against a regulatory threshold |
+| `whitelabel_tenants` | revenue_usd | what a tenant is owed |
+| `sub_accounts` | initial_balance, current_balance, daily_loss_limit | held money, and a risk-gate threshold |
+
+`api/payments.py` gained `_exact()`, so the three crypto amounts convert through
+`Decimal(str(x))` at that edge — handing a float to a NUMERIC column would put
+the drift straight back into a column made exact to remove it.
+
+**Remainder, with the reason.** `trades`, `orders`, `positions`, `accounts`,
+`account_snapshots`, `signals`, `ai_signals`, `predictions`, `tick_data`,
+`order_book_snapshots`, `performance_metrics`, `performance_metric_samples` stay
+`Float`, because their runtime does: `execution/position_tracker.py` holds every
+live position as `float` across 35 importers. Converting the columns without the
+runtime yields `Decimal` in the schema and `float` arithmetic above it — the
+boundary bug the money-precision skill is about, not a fix for it. The list is
+asserted in the test, so a new money column cannot land in neither list.
+
+This migration stops the drift; it does not retroactively correct one. A balance
+already stored drifted keeps its value. Correcting it is a reconciliation against
+the append-only `wallet_transactions`, and belongs in its own change with its own
+evidence.
 
 ### 5. F222 — 8 critical modules with no test · HIGH
 

@@ -24,6 +24,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 UTC = timezone.utc
 
@@ -133,6 +134,18 @@ def _get_db_session():
     return None
 
 
+def _exact(value: float | str | Decimal | None) -> Decimal | None:
+    """Convert to Decimal without inheriting a float's binary error.
+
+    `crypto_payments.amount_usd/amount_crypto/rate_usd` are NUMERIC. Handing a
+    float straight to a NUMERIC column re-introduces the drift the column type
+    exists to remove, so the conversion happens here, once, through `str`.
+    """
+    if value is None:
+        return None
+    return value if isinstance(value, Decimal) else Decimal(str(value))
+
+
 def _save_payment(payment: dict) -> None:
     """Persist a new payment record to the database."""
     session = _get_db_session()
@@ -149,9 +162,14 @@ def _save_payment(payment: dict) -> None:
             currency=payment["currency"],
             network=payment["network"],
             address=payment["address"],
-            amount_usd=payment["amount_usd"],
-            amount_crypto=payment["amount_crypto"],
-            rate_usd=payment["rate_usd"],
+            # `Decimal(str(x))`, never `Decimal(x)`: the latter inherits the
+            # float's binary error verbatim, which would put the drift straight
+            # back into a column that was made exact to remove it. These three
+            # arrive as floats from the quote, so this is the named edge where
+            # the representation changes.
+            amount_usd=_exact(payment["amount_usd"]),
+            amount_crypto=_exact(payment["amount_crypto"]),
+            rate_usd=_exact(payment["rate_usd"]),
             status=payment["status"],
             confirmations=payment["confirmations"],
             confirmations_required=payment["confirmations_required"],
