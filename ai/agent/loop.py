@@ -67,10 +67,21 @@ class LoopBudget:
 
 @dataclass(frozen=True)
 class Plan:
-    """What the planner decided to do next. `action=None` means it is done."""
+    """What the planner decided to do next. `action=None` means it is done.
+
+    `params` is what makes the loop useful for anything but zero-argument tools
+    — `shadow_place_order` needs a symbol, a side and a quantity, and without
+    this the loop could only call tools that take nothing.
+
+    Adding it is also what surfaced the merge-order defect in `ToolBus.invoke`:
+    caller context used to be able to overwrite the gate's own `approved_by`.
+    The bus now refuses reserved keys outright, so a planner cannot smuggle
+    authority through a parameter name.
+    """
 
     action: str | None
     rationale: str = ""
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -179,6 +190,7 @@ def run_loop(
                 plan.action,
                 operator=operator,
                 allowed_actions={plan.action},
+                **plan.params,
             )
         except Exception as exc:
             # A refusal is an ANSWER. Retrying it would hammer a closed gate,

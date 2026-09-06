@@ -34,13 +34,15 @@ from typing import Any, Final
 
 from core.ai_tool_permissions import ToolPermission, ToolPermissionRegistry, ToolRisk
 
+from ai import execution_shadow
+
 from . import markets_execution, platform_engineering, research, risk_compliance
 
 #: Bumped whenever the action set or a risk tier changes. An unversioned
 #: permission set cannot be audited after the fact.
 #: Bumped when the per-department `recall_memory` actions landed — spec §2's
 #: `memory/`, which had been a tuple of strings.
-PERMISSIONS_VERSION: Final = "departments-cluster-a-memory-2026-09-06"
+PERMISSIONS_VERSION: Final = "departments-cluster-a-memory-shadow-2026-09-06"
 ACTION_VERSION: Final = "1.0.0"
 
 
@@ -132,6 +134,27 @@ DEPARTMENTS: Final[dict[str, Department]] = {
                 ToolRisk.READ_ONLY,
                 "Broker connection and heartbeat state.",
                 markets_execution.query_broker_status,
+            ),
+            # Shadow mode. READ_ONLY because it genuinely is: `ai/execution_shadow`
+            # imports no broker and no OMS, so there is nothing for it to touch.
+            #
+            # Separate actions rather than a `dry_run` flag on the two above. A
+            # flag is one changed default or one forgotten argument away from a
+            # live order; two different tools with two different handlers cannot
+            # be confused for each other by a config edit.
+            _action(
+                "markets_execution",
+                "shadow_place_order",
+                ToolRisk.READ_ONLY,
+                "What placing this order WOULD do, with the risk gate's verdict. Sends nothing.",
+                execution_shadow.shadow_place_order,
+            ),
+            _action(
+                "markets_execution",
+                "shadow_cancel_order",
+                ToolRisk.READ_ONLY,
+                "What cancelling this order WOULD do. Sends nothing.",
+                execution_shadow.shadow_cancel_order,
             ),
         ),
         memory=("execution/fill history", "slippage per symbol", "last broker heartbeat"),

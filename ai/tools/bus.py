@@ -92,6 +92,13 @@ class _Registered:
     allowed_actions: frozenset[str]
 
 
+#: Keys the permission gate computes for itself. A caller may not supply them
+#: as tool parameters — see the note in `invoke`.
+_RESERVED_CONTEXT_KEYS: frozenset[str] = frozenset(
+    {"action", "allowed_actions", "tool", "allowed_tools", "approved_by"}
+)
+
+
 class ToolBus:
     """Dispatches tool calls through the permission registry and the invariants."""
 
@@ -137,13 +144,36 @@ class ToolBus:
         # Gate 2 -- is this agent acting inside the scope it was granted?
         from invariants.enforcement import enforce_agent_action
 
+        # The gate's own fields are spread LAST, so nothing a caller passes can
+        # displace them.
+        #
+        # They used to come first with `**context` after, which meant a tool
+        # parameter named `approved_by` overwrote the authoritative value this
+        # method had just computed — forging approval to the invariant gate.
+        # `action`, `tool` and `allowed_tools` were overridable the same way.
+        #
+        # It was not exploitable when found: no production caller passed
+        # arbitrary context, and the other refusals masked it. It became
+        # exploitable the moment the agentic loop learned to pass tool
+        # parameters, which is the change that surfaced it. A gate whose inputs
+        # the caller can rewrite is not a gate.
+        if reserved := _RESERVED_CONTEXT_KEYS & set(context):
+            # Refused loudly rather than stripped. Silently dropping the key
+            # would hide a caller attempting exactly this, and a tool that
+            # genuinely needs a parameter by one of these names needs renaming,
+            # not accommodating.
+            raise ValueError(
+                f"{tool}: {sorted(reserved)} are reserved by the permission gate and "
+                f"may not be passed as tool parameters"
+            )
+
         request = {
+            **context,
             "action": tool,
             "allowed_actions": set(allowed_actions or ()),
             "tool": tool,
             "allowed_tools": set(registered.allowed_actions),
             "approved_by": operator if approved else None,
-            **context,
         }
         result = enforce_agent_action(request)
         # `result.allowed` is False only in ENFORCE mode, and the global default

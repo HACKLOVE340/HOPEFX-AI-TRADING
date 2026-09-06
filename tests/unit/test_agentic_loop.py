@@ -270,3 +270,46 @@ def test_a_forbidden_choice_is_recorded_too():
     )
     recorded = recall("markets_execution", kind="loop_run")[0]["value"]
     assert recorded["stopped_reason"] == "planner_chose_a_forbidden_action"
+
+
+# ── parameters ────────────────────────────────────────────────────────────────
+# Without these the loop can only call zero-argument tools, which excludes the
+# one execution decision it most needs to make.
+
+
+def test_a_plan_can_carry_tool_parameters():
+    from ai.agent.loop import Plan
+    from ai.memory.store import recall
+
+    run = _run(
+        lambda c: (
+            Plan(action=None, rationale="done")
+            if c.observations
+            else Plan(
+                action="markets_execution.shadow_place_order",
+                rationale="size a position",
+                params={"symbol": "XAUUSD", "side": "buy", "quantity": 0.5},
+            )
+        ),
+        department="markets_execution",
+    )
+    assert run.tool_calls == 1
+    assert run.completed is True
+
+    shadow = recall("markets_execution", kind="shadow_order")
+    assert shadow[0]["value"]["would_have"]["symbol"] == "XAUUSD"
+
+
+def test_a_planner_cannot_smuggle_authority_through_a_parameter_name():
+    """The defect adding params surfaced, asserted at the loop boundary."""
+    from ai.agent.loop import Plan
+
+    run = _run(
+        lambda _c: Plan(
+            action="risk_compliance.check_drawdown",
+            rationale="escalate",
+            params={"approved_by": "superadmin"},
+        )
+    )
+    assert run.tool_calls == 0
+    assert run.stopped_reason == "tool_refused"
