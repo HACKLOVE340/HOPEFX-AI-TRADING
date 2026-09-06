@@ -2,18 +2,34 @@
 
 ## Scope
 
-Default target: the module under review (all TypeScript files). The user can override this.
+Default target: the module under review. This repository is Python-first
+(`api/`, `core/`, `brain/`, `ml/`, `risk/`, `execution/`, `data_layer/`) with a
+React/TypeScript SPA under `frontend/`. There is no single source root — ask the
+user which package to audit. Upstream defaulted to "all TypeScript files", which
+is the wrong default here.
 
 Before starting, confirm the scope:
 ```bash
-find <target-dir> -name '*.ts' -not -path '*/node_modules/*' | wc -l
+# Python packages
+find <target-dir> -name '*.py' -not -path '*/.venv/*' | wc -l
+
+# frontend/
+find frontend/src -name '*.ts' -o -name '*.tsx' | wc -l
 ```
 
 ## Approach
 
-Use the `code-explorer` subagent for large-scale file reading. Send it a prompt that covers ALL files and ALL categories in one pass. Do NOT sample — read every file.
+Read every file in scope, covering ALL review categories in one pass. Do NOT
+sample — a sampled audit reports a clean bill of health it did not earn.
 
-If the target has more than 50 files, split into batches by subdirectory and launch parallel subagents.
+Upstream instructs delegating this to a `code-explorer` subagent and launching
+parallel subagents past 50 files. Neither applies here: no `code-explorer` agent
+exists, and this repository's operating rules forbid spawning agents unless the
+user explicitly asks. Read the files directly. If the target is large enough that
+this is impractical, split it by subdirectory and audit one subdirectory per
+pass, rather than sampling within a single pass. If the user does ask for
+subagents, use `general-purpose` — **not** `Explore`, which reads excerpts rather
+than whole files and will silently miss findings past its read window.
 
 ## Review checklist
 

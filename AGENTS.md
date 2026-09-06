@@ -449,14 +449,34 @@ want to override. See `ARCHITECTURE.md` — WORDMAP.json section for details.
 
 ## Agent Skills
 
-Two skills are installed in `.claude/skills/` and version-locked together at
-`2.0.1`. Both must stay present — the orchestrator cannot complete its UI/UX
-approval gate without its sibling.
+**61 skills are installed** in `.claude/skills/`. CLAUDE.md carries the full
+list grouped by when to reach for each; `.claude/skills/README.md` carries the
+provenance, licences, and local patches. This section previously said "two
+skills are installed", naming only the two below — that was wrong in the way
+that matters: a skill nobody can see is a skill nobody loads, and the other 59
+include every Python-craft, observability, threat-modelling, and incident skill
+in the set.
+
+**The owner's standing instruction (2026-09-06) is to use the relevant skills on
+every task, always** — not when it seems worth it. Start with `flow-by-flow`.
+
+These two are version-locked together at `2.0.1` and must both stay present —
+the orchestrator cannot complete its UI/UX approval gate without its sibling:
 
 | Skill | Use for |
 |-------|---------|
 | `flow-by-flow` | Any development task: features, bugs, refactors, audits, micro changes. Start here. |
 | `flow-prototype` | Throwaway, read-only interactive model of a UI flow, required before any major UI/UX change reaches production code. |
+
+Four of the 61 are **custom to this repository** — `hopefx-money-precision`,
+`hopefx-invariants`, `hopefx-dead-controls`, `hopefx-fix-bridge`. Each encodes a
+defect class already made here, and every mechanically checkable claim in them is
+verified against the codebase by `scripts/verify_skill_claims.py`, which runs in
+CI. Re-run it after any refactor that moves a cited line:
+
+```bash
+python scripts/verify_skill_claims.py
+```
 
 `flow-by-flow` reads `references/orchestration.md` on every task, then loads only
 the route that applies (`foundation`, `audit`, `build`, `delivery`, `review`,

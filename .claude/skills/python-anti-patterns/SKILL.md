@@ -15,7 +15,7 @@ A reference checklist of common mistakes and anti-patterns in Python code. Revie
 - Establishing team coding standards
 - Refactoring legacy code
 
-**Note:** This skill focuses on what to avoid. For guidance on positive patterns and architecture, see the `python-design-patterns` skill.
+**Note:** This skill focuses on what to avoid. For the positive counterpart, reach for the installed sibling that matches the symptom: `python-error-handling` (validation, exception hierarchies), `python-resilience` (retries, backoff, timeouts), `python-resource-management` (context managers, cleanup), `async-python-patterns` (asyncio and concurrency), or `python-type-safety` (hints, generics, protocols). Upstream points here at a `python-design-patterns` skill that was not vendored into this repository — do not wait on it.
 
 ## Infrastructure Anti-Patterns
 

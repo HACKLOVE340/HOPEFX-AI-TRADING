@@ -30,7 +30,7 @@ Use this skill when you need to:
 ### Phase 1 — Review
 
 1. Read `references/review-strategy.md` for the review scope and checklist.
-2. Use the `code-explorer` subagent to read ALL source files in the target directory (default: ask the user; there is no single source root).
+2. Read ALL source files in the target directory (default: ask the user; there is no single source root). Upstream names a `code-explorer` subagent here; no such agent exists in this repository. This repo's operating rules also forbid spawning agents unless the user explicitly asks, so read the files directly by default. If the user does ask for a subagent, use `general-purpose` — **not** `Explore`, which reads excerpts rather than whole files and will silently miss findings past its read window.
 3. For each file, systematically check against the review checklist:
    - **Security**: path traversal, injection, unvalidated input, hardcoded secrets, improper error exposure
    - **Error handling**: missing try-catch, swallowed errors, error messages leaking internals

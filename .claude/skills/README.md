@@ -40,8 +40,9 @@ verbatim under `licenses/`.
 
 ## Second wave: production-discipline and domain skills
 
-58 skills total. The first wave (below) covered repo workflow; this wave was
-selected against a measured profile of the codebase rather than by guesswork.
+61 skills total (`licenses/` and this README are not skills). The first wave
+(below) covered repo workflow; this wave was selected against a measured profile
+of the codebase rather than by guesswork.
 
 ### What the repo profile said
 
@@ -71,7 +72,7 @@ selected against a measured profile of the codebase rather than by guesswork.
 | `hopefx-fix-bridge` | Session state lifetime — `IBKR_FIX_STORE_PATH` defaults under `$TMPDIR`, so changing `reset_on_logon` without moving it to a persistent volume is a live outage; port 4001/7496 vs 4002/7497 is the only thing separating live from paper; `latency_threshold_ms` is a risk limit, not a metric |
 
 Every mechanically checkable claim in these four is verified against the
-codebase by **`scripts/verify_skill_claims.py`** — 51 checks: predicate and
+codebase by **`scripts/verify_skill_claims.py`** — 53 checks: predicate and
 module counts, the resolved `HOPEFX_INVARIANT_MODE` default, FIX ports and
 store path, the reconciliation tolerance, every cited file path, and whether
 each control `hopefx-dead-controls` describes is still wired. It runs in CI.
