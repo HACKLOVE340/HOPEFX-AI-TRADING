@@ -2403,6 +2403,57 @@ class RiskManager:
             if self._dd_tracker is not None:
                 self._dd_tracker.update(equity=self._state.account_equity)
 
+    def _resolve_kill_switch(self):
+        """The global kill switch object, or None when there is none.
+
+        Looks at the app first because `_halt_trading` fires that one, so the
+        two directions agree on which switch they mean; falls back to the module
+        singleton for a process that never built the FastAPI app.
+        """
+        try:
+            import app as _app  # late import to avoid a circular dependency
+
+            switch = getattr(_app, "kill_switch", None)
+            if switch is not None:
+                return switch
+        except Exception as exc:
+            # Expected in a bare process (engine, CLI, tests) where the FastAPI
+            # app was never built. Not a failure: the module singleton below is
+            # the answer. The genuine failure — neither source resolving — logs
+            # at ERROR, and _kill_switch_refusal treats it as engaged.
+            logger.debug("RiskManager: app kill switch unavailable (%s); using the module singleton", exc)
+        try:
+            from kill_switch import kill_switch as switch
+
+            return switch
+        except Exception as exc:
+            logger.error("RiskManager: kill switch unresolvable (%s)", exc)
+            return None
+
+    def _kill_switch_refusal(self) -> str | None:
+        """A reason to refuse, or None when the switch is clear.
+
+        A **read at decision time**, deliberately, rather than a callback that
+        halts the manager when the switch fires. `KillSwitch.register_callback`
+        already exists for that and has zero production registrants — a
+        subscription nobody made is the failure mode this repository keeps
+        producing. A read cannot be forgotten.
+
+        Unreadable counts as engaged. "I cannot tell whether trading is halted"
+        must never resolve to "trade".
+        """
+        switch = self._resolve_kill_switch()
+        if switch is None:
+            return "kill_switch:unresolvable"
+        try:
+            if switch.is_active():
+                reason = getattr(switch, "reason", "") or "active"
+                return f"kill_switch:{reason}"
+        except Exception as exc:
+            logger.error("RiskManager: could not read the kill switch (%s); refusing the trade", exc)
+            return f"kill_switch:unreadable:{exc}"
+        return None
+
     def validate_trade(
         self,
         symbol: str,
@@ -2421,6 +2472,16 @@ class RiskManager:
         size limit, and daily loss limit.
         """
         qty = size if size is not None else quantity
+
+        # The GLOBAL switch first. _halt below is this manager's own halt, and
+        # the two are not the same thing: _halt_trading fires the global switch,
+        # but a switch engaged by an operator, by the Redis latch, by the K8s
+        # configmap or by a broker's cancel-on-disconnect never set _halt. That
+        # direction had no wiring at all, so validate_trade answered "approved"
+        # with the kill switch active — measured, not inferred.
+        kill_switch_reason = self._kill_switch_refusal()
+        if kill_switch_reason:
+            return False, kill_switch_reason
 
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"

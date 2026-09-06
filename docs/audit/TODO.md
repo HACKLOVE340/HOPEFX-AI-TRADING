@@ -43,6 +43,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 23 | Owner-blocked questions | — | **owner** |
 | 24 | F271 · the dependency scan reads the manifest that pins nothing | HIGH | fixed; 1 critical + 4 high were hidden |
 | 25 | **The brain placed orders with no risk gate** | **CRITICAL** | fixed |
+| 26 | **The kill switch did not stop the brain trading** | **CRITICAL** | fixed |
 
 **Read first if you read nothing else:** items 1, 4, 7b and 13–19.
 
@@ -282,6 +283,50 @@ the account holding exactly the positions the halt was called over.
 9 cases in `tests/unit/test_brain_orders_pass_the_risk_gate.py`, 6 failing on
 the pre-fix tree, including one asserting a permitted trade still reaches the
 broker: a gate that blocks everything is an outage, not a fix.
+
+### 26. The kill switch did not stop the brain from trading · CRITICAL · **fixed**
+
+Found by asking whether the fix for item 25 was worth anything: it routed the
+brain through `RiskManager.validate_trade`, so the next question is what that
+gate actually refuses. Measured, with the global kill switch **active**:
+
+```
+kill switch active: True
+validate_trade    : (True, 'approved')
+```
+
+The wiring was one-directional. `RiskManager._halt_trading` fires the app-level
+kill switch, with the comment "so all subsystems see the halt" — but the reverse
+never existed. A switch engaged by an operator, by the Redis latch, by the K8s
+configmap or by a broker's cancel-on-disconnect left `validate_trade` answering
+"approved".
+
+Three things had to be true at once, and all three were:
+
+* **`KillSwitch.register_callback` has zero production registrants.** The
+  subscription mechanism exists; nobody ever subscribed. `_halt_trading` is
+  called only for drawdown limits.
+* **`RiskManager.kill_switch_active` reads `self._halt`** — the manager's own
+  halt, not the global switch. The property that appears to answer this question
+  answers a different one.
+* **The broker layer does not cover it.** `BrokerManager._check_kill_switch`
+  guards `place_order`; the brain calls `place_market_order`, which
+  `BrokerManager` does not define at all. `brokers/oanda.py`,
+  `brokers/paper_trading.py` and `brokers/base.py` contain no reference to the
+  kill switch whatsoever.
+
+So an operator engaging the kill switch believed everything stopped, and the
+brain kept placing market orders.
+
+**Fixed** by a read at decision time in `validate_trade`, deliberately not a
+registered callback: a callback has to be wired, and the one that already
+existed here was never wired by anybody. A read cannot be forgotten. Unreadable
+counts as engaged — "I cannot tell whether trading is halted" must never resolve
+to "trade". Closing a position still works, for the reason given in item 25.
+
+7 cases in `tests/unit/test_kill_switch_stops_the_ai.py`, 4 failing on the
+pre-fix tree, including the end-to-end path through the brain. 679 tests pass
+across the pre-trade gate, risk manager and kill-switch suites.
 
 ### 4. Money columns are `Float` · HIGH
 
