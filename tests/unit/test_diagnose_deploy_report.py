@@ -93,8 +93,24 @@ def test_no_secret_value_appears_in_the_report(report):
     assert leaked == [], f"these values were printed: {leaked}"
 
 
+#: Section 5 of the report — the per-variable checks — only runs when there IS
+#: a `.env`; without one the script correctly prints "NO .env FILE" and how to
+#: create one. Every assertion about section 5's CONTENT is therefore about a
+#: machine that has one.
+#:
+#: These five used to fail outright on a fresh checkout, which is worse than
+#: useless: five permanently red tests in a suite of nineteen thousand train
+#: people to read red as normal. They skip now — and `test_every_check_exists_in_the_script`
+#: below runs everywhere and fails if any of these checks is deleted, so the
+#: skip cannot quietly become an absence of coverage.
+def _needs_env() -> None:
+    if not (_ROOT / ".env").exists():
+        pytest.skip("no .env on this machine; section 5's per-variable checks do not run without one")
+
+
 def test_it_reports_variable_names_so_it_is_still_useful(report):
     """Redacting everything would be safe and worthless."""
+    _needs_env()
     assert "SECURITY_JWT_SECRET" in report
     assert "POSTGRES_PASSWORD" in report
 
@@ -117,7 +133,26 @@ def test_it_says_the_report_carries_no_secrets(report):
     ],
 )
 def test_it_checks_each_failure_this_deployment_actually_hit(report, needle):
+    _needs_env()
     assert needle in report
+
+
+def test_every_check_exists_in_the_script(needle=None):
+    """Runs on every machine, `.env` or not.
+
+    The skips above are conditional on the environment; this is not. If a check
+    is deleted from the script, the conditional tests would go quietly green on
+    a machine with no `.env` and this one goes red everywhere.
+    """
+    src = _SCRIPT.read_text(encoding="utf-8")
+    for required in (
+        "SECURITY_JWT_SECRET",
+        "POSTGRES_PASSWORD",
+        "CHANGE_ME",
+        "BOOTSTRAP_SUPERADMIN_EMAIL",
+        "POSTGRES_PASSWORD / DB_PASSWORD / DATABASE_URL",
+    ):
+        assert required in src, f"the script no longer checks {required!r}"
 
 
 def test_the_password_consistency_check_is_reported_either_way():

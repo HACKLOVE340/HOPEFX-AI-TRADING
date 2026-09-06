@@ -103,7 +103,9 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-core/calls` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/capabilities` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/chain` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/departments` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/evals` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/models` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/summary` | JWT |  | AI Core |
 | `GET` | `/api/alerts/` | JWT |  | Alerts |
 | `POST` | `/api/alerts/` | JWT |  | Alerts |
@@ -639,6 +641,10 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/safe-platform/diagnostics/graph` | JWT |  | Safe Agent Platform |
 | `POST` | `/api/safe-platform/diagnostics/run` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/safe-platform/diagnostics/runs/{run_id}` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/evals/run` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/generate` | JWT |  | Safe Agent Platform |
+| `GET` | `/api/safe-platform/generate/jobs` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/generate/{job_id}/cancel` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/safe-platform/integrations` | JWT |  | Safe Agent Platform |
 | `POST` | `/api/safe-platform/integrations/action` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/safe-platform/models/health` | JWT |  | Safe Agent Platform |
@@ -660,6 +666,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `POST` | `/api/safe-platform/supervisor/tasks/{task_id}/approve` | JWT |  | Safe Agent Platform |
 | `POST` | `/api/safe-platform/supervisor/tasks/{task_id}/cancel` | JWT |  | Safe Agent Platform |
 | `POST` | `/api/safe-platform/upgrades/propose` | JWT |  | Safe Agent Platform |
+| `POST` | `/api/safe-platform/vision/interpret` | JWT |  | Safe Agent Platform |
 | `GET` | `/api/scanner/criteria` | JWT |  | Market Scanner |
 | `POST` | `/api/scanner/criteria` | JWT |  | Market Scanner |
 | `DELETE` | `/api/scanner/criteria` | JWT |  | Market Scanner |

@@ -262,6 +262,21 @@ async def _redis_is_allowed(key: str, limit: int, window_seconds: int) -> bool:
         return await _fallback_limiter.is_allowed(key, limit, window_seconds)
 
 
+async def is_allowed(key: str, limit: int, window_seconds: int) -> bool:
+    """Whether `key` may act again inside its window. Redis-backed when reachable.
+
+    The public name for `_redis_is_allowed`, which despite the underscore is the
+    real Redis-or-fallback path every caller wants. A second module reaching for
+    a private helper is how that helper becomes an interface nobody may change;
+    naming it here says which surface is supported.
+
+    Callers pass their own key namespace (`"ai:req:<operator>"`), so two limits
+    on the same subject do not share a counter — a request allowance consumed by
+    research calls would refuse ordinary work for a reason nobody could see.
+    """
+    return await _redis_is_allowed(key, limit, window_seconds)
+
+
 # ── FastAPI dependency factory ────────────────────────────────────────────────
 
 

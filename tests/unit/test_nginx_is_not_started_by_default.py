@@ -51,10 +51,31 @@ def test_nginx_is_behind_a_profile(compose):
     )
 
 
-def test_no_other_service_is_accidentally_gated(compose):
-    """A profile on `app` or `postgres` would silently stop the stack starting."""
+#: Services the stack cannot start without. A profile on any of these means
+#: `docker compose up -d` silently brings up an incomplete deployment.
+_ESSENTIAL = ("app", "postgres", "redis")
+
+
+def test_no_essential_service_is_accidentally_gated(compose):
+    """A profile on `app` or `postgres` would silently stop the stack starting.
+
+    This asserted an exact set — `gated == {"nginx": [_PROFILE]}` — which is a
+    snapshot of the file on the day it was written rather than the property the
+    docstring describes. Adding `ollama` behind a `local-ai` profile broke it,
+    and the way it broke pointed at the wrong fix: the failure reads as "ollama
+    should not have a profile", and removing it would start a local-inference
+    container with a model volume on every deployment that runs `up -d`.
+
+    Optional services SHOULD be profile-gated. Essential ones must not be, and
+    that is what is checked here.
+    """
     gated = {name: svc.get("profiles") for name, svc in compose["services"].items() if svc.get("profiles")}
-    assert gated == {"nginx": [_PROFILE]}, f"unexpected profile-gated services: {gated}"
+    essential_gated = {name: gated[name] for name in _ESSENTIAL if name in gated}
+    assert not essential_gated, (
+        f"a service the stack cannot start without is behind a profile: {essential_gated}. "
+        "`docker compose up -d` would bring up an incomplete deployment."
+    )
+    assert gated.get("nginx") == [_PROFILE], "nginx lost its profile; see the module docstring"
 
 
 def test_nginx_is_the_only_service_claiming_ports_80_and_443(compose):

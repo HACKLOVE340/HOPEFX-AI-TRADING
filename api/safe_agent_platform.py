@@ -147,8 +147,17 @@ _EVIDENCE_LIMIT = 200
 _TASKS: list[dict[str, Any]] = []
 _ROUTES: list[dict[str, Any]] = []
 _EVIDENCE: list[dict[str, Any]] = []
-_REQUEST_WINDOW: dict[str, list[float]] = {}
-_BUDGET_WINDOW: dict[str, list[float]] = {}
+#: Both limits go through `rate_limiting/advanced.py`, which is Redis-backed
+#: with an in-process fallback, rebinds its client when the event loop changes,
+#: and re-probes after a Redis failure instead of disabling itself permanently.
+#:
+#: This module used to keep two module dicts instead. That made the limit
+#: per-process — with `API_WORKERS>1` each worker enforced its own full
+#: allowance, so 20/minute was 20 per worker and reset on every restart, the
+#: same defect `ai/gateway/budget_store.py` records for the spend ceiling — and
+#: it was a SECOND mechanism for a job this repository already does properly in
+#: one place. Two mechanisms are two places for the same bug, and only one of
+#: them gets the next fix.
 _MAX_REQUESTS_PER_MINUTE = 20
 _MAX_RESEARCH_UNITS_PER_HOUR = 30
 
@@ -256,26 +265,35 @@ def _admin(user: TokenPayload = Depends(require_role("admin"))) -> TokenPayload:
     return user
 
 
-def _enforce_rate_limit(user: TokenPayload) -> None:
-    now = datetime.now(UTC).timestamp()
-    recent = [timestamp for timestamp in _REQUEST_WINDOW.get(user.sub, []) if now - timestamp < 60]
-    if len(recent) >= _MAX_REQUESTS_PER_MINUTE:
+async def _enforce_rate_limit(user: TokenPayload) -> None:
+    """Refuse an operator making requests faster than the platform allows.
+
+    Async because the shared limiter is. Every call site must `await` it: an
+    unawaited call builds a coroutine, never runs it, and the limit silently
+    stops existing — which `test_ai_rate_limit_is_shared_across_workers.py`
+    checks by walking this module's AST rather than trusting the edits.
+    """
+    from rate_limiting.advanced import is_allowed
+
+    if not await is_allowed(f"ai:req:{user.sub}", _MAX_REQUESTS_PER_MINUTE, 60):
         raise HTTPException(status_code=429, detail="Safe platform request rate limit exceeded")
-    recent.append(now)
-    _REQUEST_WINDOW[user.sub] = recent
 
 
 def _id(prefix: str, payload: Any) -> str:
     return f"{prefix}-{hashlib.sha256(repr(payload).encode()).hexdigest()[:12]}"
 
 
-def _consume_research_budget(user: TokenPayload) -> None:
-    now = datetime.now(UTC).timestamp()
-    recent = [timestamp for timestamp in _BUDGET_WINDOW.get(user.sub, []) if now - timestamp < 3600]
-    if len(recent) >= _MAX_RESEARCH_UNITS_PER_HOUR:
+async def _consume_research_budget(user: TokenPayload) -> None:
+    """Refuse external research beyond this operator's hourly allowance.
+
+    A separate key namespace from the request limit on purpose: sharing a
+    counter would let research calls exhaust the ordinary request allowance and
+    refuse unrelated work for a reason nobody could see from either number.
+    """
+    from rate_limiting.advanced import is_allowed
+
+    if not await is_allowed(f"ai:research:{user.sub}", _MAX_RESEARCH_UNITS_PER_HOUR, 3600):
         raise HTTPException(status_code=429, detail="External research budget exceeded for this operator")
-    recent.append(now)
-    _BUDGET_WINDOW[user.sub] = recent
 
 
 _DEFAULT_ROLLBACK_PLAN = "Restore the last known-good checkpoint and re-run health gates."
@@ -440,7 +458,7 @@ async def submit_generation(
     scanner, the circuit breakers. Concurrency is not a way around any of them,
     and the ceiling binding across four panels at once is the point.
     """
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     from ai.jobs.runner import QueueFull, get_runner
 
     runner = get_runner()
@@ -585,7 +603,7 @@ async def vision_interpret(
     structured reading is returned, which is what makes the UI's "frames stay
     in memory" line true rather than aspirational.
     """
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
 
     if not body.image_b64:
         # The shape the frontend currently sends. Answering plainly beats a 422.
@@ -662,7 +680,7 @@ async def run_evals(user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     reading a stale passing one, which is fail-open wearing fail-closed's
     clothes.
     """
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     from ai.evals.runner import run_and_publish
 
     try:
@@ -817,7 +835,7 @@ async def overview(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 @router.post("/models/route")
 async def route_model(request: ModelRouteRequest, user: TokenPayload = Depends(_superadmin_2fa)) -> dict[str, Any]:
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     if not request.model_id.startswith(("gateway/", "openai/", "anthropic/", "google/")):
         raise HTTPException(status_code=400, detail="Model must use an approved provider namespace")
     route = {
@@ -847,7 +865,7 @@ async def model_routes(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 async def create_supervisor_task(
     request: SupervisorTaskRequest, user: TokenPayload = Depends(_admin)
 ) -> dict[str, Any]:
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     allowed_ids = {agent["id"] for agent in _AGENTS}
     requested = sorted(set(request.requested_agents) & allowed_ids)
     task = {
@@ -982,8 +1000,8 @@ async def delegate_supervisor_task(request: DelegationRequest, user: TokenPayloa
 
 @router.post("/research/request")
 async def request_external_research(request: ResearchRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    _enforce_rate_limit(user)
-    _consume_research_budget(user)
+    await _enforce_rate_limit(user)
+    await _consume_research_budget(user)
     _reject_untrusted_instructions(request.query)
     task = next((item for item in _TASKS if item["id"] == request.task_id), None)
     if not task:
@@ -1060,7 +1078,7 @@ async def execute_supervisor_task(
 
 @router.post("/diagnostics/run")
 async def run_diagnostics(request: DiagnosticRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     external = {"status": "not_requested", "sources": []}
     if request.include_external:
         external = {
@@ -1161,7 +1179,7 @@ async def diagnostics_graph(_: TokenPayload = Depends(_admin)) -> dict[str, Any]
 
 @router.post("/proposals")
 async def create_proposal(request: ProposalRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     proposal = {
         "id": _id("proposal", [user.sub, request.title, request.changes]),
         "title": request.title,
@@ -1185,7 +1203,7 @@ async def create_proposal(request: ProposalRequest, user: TokenPayload = Depends
 
 @router.post("/upgrades/propose")
 async def propose_upgrade(request: UpgradeRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     proposal = {
         "id": _id("upgrade", [user.sub, request.component, request.target]),
         "title": f"Upgrade {request.component} to {request.target}",
@@ -1221,7 +1239,7 @@ async def proposals(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 
 @router.post("/approvals")
 async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     proposal = next((p for p in _PROPOSALS if p["id"] == request.proposal_id), None)
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -1423,7 +1441,7 @@ async def integrations(_: TokenPayload = Depends(_admin)) -> dict[str, Any]:
 async def integration_action(
     request: IntegrationAction, user: TokenPayload = Depends(_superadmin_2fa)
 ) -> dict[str, Any]:
-    _enforce_rate_limit(user)
+    await _enforce_rate_limit(user)
     item = next((entry for entry in _INTEGRATIONS if entry["id"] == request.integration_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="Integration not found")
