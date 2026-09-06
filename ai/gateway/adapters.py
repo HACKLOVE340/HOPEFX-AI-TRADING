@@ -31,8 +31,10 @@ status and our reason code, never the key that authenticated the request.
 
 from __future__ import annotations
 
+import json as _json
 import logging
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Final
@@ -79,6 +81,22 @@ class EmbeddingResult:
     tokens_in: int = 0
     cost_usd: float = 0.0
     dimensions: int = 0
+
+
+@dataclass(frozen=True)
+class StreamChunk:
+    """One piece of an answer that is still arriving.
+
+    Text and usage travel together because the vendors interleave them: OpenAI
+    sends usage in a final frame with no content, Anthropic sends input tokens
+    first and output tokens last. Summing both fields across the stream gives
+    the same numbers `AdapterResult` carries, which is what the budget charges
+    and the audit records — a streamed call must cost what a buffered one costs.
+    """
+
+    text: str = ""
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 @dataclass(frozen=True)
@@ -151,6 +169,75 @@ def _raise_for_status(response: Any, *, provider: str, model: str) -> None:
         raise ProviderError(reason_for_status(status), provider=provider, model=model)
 
 
+def _sse_payloads(lines: Iterator[str]) -> Iterator[dict]:
+    """Decode `data:` frames from an SSE body, skipping what is not one.
+
+    Keep-alive comments (`: ping`), blank separators, `event:` names and the
+    OpenAI `[DONE]` sentinel are all normal traffic. A truncated or malformed
+    frame is skipped rather than raised on: losing one delta is a worse answer,
+    losing the whole answer to a stray byte is an outage.
+    """
+    for raw in lines:
+        line = (raw or "").strip()
+        if not line.startswith("data:"):
+            continue
+        body = line[5:].strip()
+        if not body or body == "[DONE]":
+            if body == "[DONE]":
+                return
+            continue
+        try:
+            payload = _json.loads(body)
+        except ValueError:
+            logger.debug("ai.gateway.adapters: skipped a malformed stream frame")
+            continue
+        if isinstance(payload, dict):
+            yield payload
+
+
+def _openai_stream_body(model: str, prompt: str) -> dict:
+    """The streaming request body every OpenAI-format vendor takes.
+
+    `stream_options.include_usage` is the only way usage arrives at all on this
+    format — without it the final frame has no token counts and a streamed call
+    would be charged zero, which is a spend ceiling that stops seeing spend.
+    """
+    return {
+        "model": model,
+        "max_tokens": DEFAULT_MAX_TOKENS,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+
+
+def _openai_stream_chunks(payloads: Iterator[dict]) -> Iterator[StreamChunk]:
+    """Decode OpenAI-format deltas. Shared by OpenAI and every compatible vendor."""
+    for payload in payloads:
+        choices = payload.get("choices") or []
+        if choices:
+            text = str((choices[0].get("delta", {}) or {}).get("content") or "")
+            if text:
+                yield StreamChunk(text=text)
+        usage = payload.get("usage") or {}
+        if usage:
+            yield StreamChunk(
+                tokens_in=int(usage.get("prompt_tokens", 0) or 0),
+                tokens_out=int(usage.get("completion_tokens", 0) or 0),
+            )
+
+
+def _require_streamed(saw_text: bool, *, provider: str, model: str) -> None:
+    """A stream that yielded no text is the streaming form of an empty answer.
+
+    `_require_text` guards the buffered path for the same reason: an empty
+    completion would be scanned clean, cached, charged for and shown to an
+    operator as though the model had answered.
+    """
+    if not saw_text:
+        raise ProviderError("empty_completion", provider=provider, model=model)
+
+
 def _require_text(text: str, *, provider: str, model: str) -> str:
     if not text.strip():
         # An empty completion would be cached, charged for, and acted on as if
@@ -173,6 +260,43 @@ class _HttpAdapter:
     #: for an unregistered tool. Opting in is one line; opting out by omission
     #: would be a confident answer about nothing.
     supports_images: bool = False
+
+    #: Whether this vendor can hand its answer back in pieces. False by default
+    #: for the same reason `supports_images` is: a vendor that has not been
+    #: taught the wire format should be left on the buffered path, where it
+    #: works, rather than handed a streaming request and asked to cope. The
+    #: gateway degrades to `complete()` for these rather than skipping the leg.
+    supports_streaming: bool = False
+
+    def _stream_lines(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict,
+        timeout_s: float,
+        model: str,
+    ) -> Iterator[str]:
+        """Yield response lines, mapping failures the way `_post` does.
+
+        A stream can fail in two places rather than one: on the status, like any
+        request, and part-way through the body, after the status said 200. The
+        second is the interesting case — without this it surfaces as a SHORT
+        ANSWER rather than as an error, and a short answer gets scanned, cached,
+        charged for and rendered as though the model had finished speaking.
+        """
+        try:
+            with httpx.stream("POST", url, headers=headers, json=json, timeout=timeout_s) as response:
+                _raise_for_status(response, provider=self.provider, model=model)
+                yield from response.iter_lines()
+        except ProviderError:
+            raise
+        except Exception as exc:
+            reason = reason_for_exception(exc)
+            # Not chained with `from exc`: the vendor exception's string can
+            # contain the request headers, and those carry the key.
+            logger.warning("ai.gateway.adapters: %s stream failed (%s)", self.provider, reason)
+            raise ProviderError(reason, provider=self.provider, model=model) from None
 
     def _post(self, url: str, *, headers: dict[str, str], json: dict, timeout_s: float, model: str) -> Any:
         try:
@@ -236,6 +360,7 @@ class AnthropicAdapter(_HttpAdapter):
     url = "https://api.anthropic.com/v1/messages"
     probe_url = "https://api.anthropic.com/v1/models"
     supports_images = True
+    supports_streaming = True
 
     def probe_headers(self) -> dict[str, str]:
         return {"x-api-key": os.getenv("ANTHROPIC_API_KEY", ""), "anthropic-version": "2023-06-01"}
@@ -291,12 +416,50 @@ class AnthropicAdapter(_HttpAdapter):
             cost_usd=estimate_cost(model, tokens_in=tokens_in, tokens_out=tokens_out, provider=self.provider),
         )
 
+    def stream(
+        self, *, model: str, prompt: str, timeout_s: float, images: tuple[Any, ...] = ()
+    ) -> Iterator[StreamChunk]:
+        """Anthropic SSE: `message_start` carries input tokens, `content_block_delta`
+        carries text, `message_delta` carries output tokens at the end."""
+        lines = self._stream_lines(
+            self.url,
+            headers={
+                "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": DEFAULT_MAX_TOKENS,
+                "messages": [{"role": "user", "content": self._content_blocks(prompt, images)}],
+                "stream": True,
+            },
+            timeout_s=timeout_s,
+            model=model,
+        )
+        saw_text = False
+        for payload in _sse_payloads(lines):
+            kind = payload.get("type")
+            if kind == "message_start":
+                usage = (payload.get("message", {}) or {}).get("usage", {}) or {}
+                yield StreamChunk(tokens_in=int(usage.get("input_tokens", 0) or 0))
+            elif kind == "content_block_delta":
+                text = str((payload.get("delta", {}) or {}).get("text", "") or "")
+                if text:
+                    saw_text = True
+                    yield StreamChunk(text=text)
+            elif kind == "message_delta":
+                usage = payload.get("usage", {}) or {}
+                yield StreamChunk(tokens_out=int(usage.get("output_tokens", 0) or 0))
+        _require_streamed(saw_text, provider=self.provider, model=model)
+
 
 class OpenAIAdapter(_HttpAdapter):
     provider = "openai"
     url = "https://api.openai.com/v1/chat/completions"
     probe_url = "https://api.openai.com/v1/models"
     supports_images = True
+    supports_streaming = True
 
     def probe_headers(self) -> dict[str, str]:
         return {"authorization": f"Bearer {os.getenv('OPENAI_API_KEY', '')}"}
@@ -351,6 +514,28 @@ class OpenAIAdapter(_HttpAdapter):
             cost_usd=estimate_cost(model, tokens_in=tokens_in, tokens_out=tokens_out, provider=self.provider),
         )
 
+    def stream(
+        self, *, model: str, prompt: str, timeout_s: float, images: tuple[Any, ...] = ()
+    ) -> Iterator[StreamChunk]:
+        body = _openai_stream_body(model, prompt)
+        if images:
+            body["messages"] = [{"role": "user", "content": self._content_blocks(prompt, images)}]
+        lines = self._stream_lines(
+            self.url,
+            headers={
+                "authorization": f"Bearer {os.getenv('OPENAI_API_KEY', '')}",
+                "content-type": "application/json",
+            },
+            json=body,
+            timeout_s=timeout_s,
+            model=model,
+        )
+        saw_text = False
+        for chunk in _openai_stream_chunks(_sse_payloads(lines)):
+            saw_text = saw_text or bool(chunk.text)
+            yield chunk
+        _require_streamed(saw_text, provider=self.provider, model=model)
+
     def embed(self, *, model: str, texts: list[str], timeout_s: float) -> EmbeddingResult:
         response = self._post(
             "https://api.openai.com/v1/embeddings",
@@ -378,6 +563,7 @@ class GoogleAdapter(_HttpAdapter):
     provider = "google"
     probe_url = "https://generativelanguage.googleapis.com/v1beta/models"
     supports_images = True
+    supports_streaming = True
 
     def probe_headers(self) -> dict[str, str]:
         return {"x-goog-api-key": os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")}
@@ -419,6 +605,36 @@ class GoogleAdapter(_HttpAdapter):
             cost_usd=estimate_cost(model, tokens_in=tokens_in, tokens_out=tokens_out, provider=self.provider),
         )
 
+    def stream(
+        self, *, model: str, prompt: str, timeout_s: float, images: tuple[Any, ...] = ()
+    ) -> Iterator[StreamChunk]:
+        """Gemini SSE. A different endpoint and `alt=sse`, otherwise the same
+        candidates/parts shape the buffered path reads."""
+        key = os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
+        lines = self._stream_lines(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse",
+            headers={"x-goog-api-key": key, "content-type": "application/json"},
+            json={"contents": [{"parts": self._parts(prompt, images)}]},
+            timeout_s=timeout_s,
+            model=model,
+        )
+        saw_text = False
+        for payload in _sse_payloads(lines):
+            candidates = payload.get("candidates") or []
+            if candidates:
+                parts = (candidates[0].get("content", {}) or {}).get("parts") or []
+                text = "".join(str(part.get("text", "") or "") for part in parts)
+                if text:
+                    saw_text = True
+                    yield StreamChunk(text=text)
+            usage = payload.get("usageMetadata") or {}
+            if usage:
+                yield StreamChunk(
+                    tokens_in=int(usage.get("promptTokenCount", 0) or 0),
+                    tokens_out=int(usage.get("candidatesTokenCount", 0) or 0),
+                )
+        _require_streamed(saw_text, provider=self.provider, model=model)
+
 
 class OllamaAdapter(_HttpAdapter):
     provider = "ollama"
@@ -426,6 +642,41 @@ class OllamaAdapter(_HttpAdapter):
     @property
     def probe_url(self) -> str:  # type: ignore[override]
         return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/") + "/api/tags"
+
+    supports_streaming = True
+
+    def stream(self, *, model: str, prompt: str, timeout_s: float) -> Iterator[StreamChunk]:
+        """Ollama speaks newline-delimited JSON rather than SSE — one object per
+        line, each with a `response` fragment, the last one carrying `done`."""
+        base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        lines = self._stream_lines(
+            f"{base}/api/generate",
+            headers={"content-type": "application/json"},
+            json={"model": model, "prompt": prompt, "stream": True},
+            timeout_s=timeout_s,
+            model=model,
+        )
+        saw_text = False
+        for raw in lines:
+            line = (raw or "").strip()
+            if not line:
+                continue
+            try:
+                payload = _json.loads(line)
+            except ValueError:
+                logger.debug("ai.gateway.adapters: skipped a malformed ollama stream line")
+                continue
+            text = str(payload.get("response", "") or "")
+            if text:
+                saw_text = True
+            # Local inference has no vendor bill, so token counts are reported
+            # for the audit and cost stays zero — the same rule `complete` uses.
+            yield StreamChunk(
+                text=text,
+                tokens_in=int(payload.get("prompt_eval_count", 0) or 0),
+                tokens_out=int(payload.get("eval_count", 0) or 0),
+            )
+        _require_streamed(saw_text, provider=self.provider, model=model)
 
     def complete(self, *, model: str, prompt: str, timeout_s: float) -> AdapterResult:
         base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
@@ -477,6 +728,28 @@ class OpenAICompatibleAdapter(_HttpAdapter):
     """
 
     provider = ""
+
+    #: Every vendor in this table serves the OpenAI streaming format, so they
+    #: inherit it rather than each re-implementing it — the same reason they
+    #: share `complete`.
+    supports_streaming = True
+
+    def stream(self, *, model: str, prompt: str, timeout_s: float) -> Iterator[StreamChunk]:
+        lines = self._stream_lines(
+            f"{self._base}/chat/completions",
+            headers={
+                "authorization": f"Bearer {self._key()}",
+                "content-type": "application/json",
+            },
+            json=_openai_stream_body(model, prompt),
+            timeout_s=timeout_s,
+            model=model,
+        )
+        saw_text = False
+        for chunk in _openai_stream_chunks(_sse_payloads(lines)):
+            saw_text = saw_text or bool(chunk.text)
+            yield chunk
+        _require_streamed(saw_text, provider=self.provider, model=model)
 
     @property
     def _base(self) -> str:
@@ -574,6 +847,7 @@ __all__ = [
     "PRICING",
     "AdapterResult",
     "EmbeddingResult",
+    "StreamChunk",
     "AnthropicAdapter",
     "GoogleAdapter",
     "OllamaAdapter",

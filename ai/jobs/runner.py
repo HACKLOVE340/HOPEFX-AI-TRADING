@@ -66,6 +66,18 @@ DEFAULT_MAX_QUEUED = 16
 
 DEFAULT_JOB_TIMEOUT_S = 120.0
 
+#: How often a streaming job may push a frame while text is arriving.
+#:
+#: One notification per delta is one WebSocket frame per delta. A fast model
+#: emits hundreds a second, per panel, across four panels — a push channel that
+#: becomes its own outage. 120ms is about eight updates a second, which reads as
+#: continuous to a person and is two orders of magnitude below the raw rate.
+#:
+#: This throttles OUTPUT only. State transitions and status notes are rare and
+#: always pushed, and the terminal state always flushes, so the last words of an
+#: answer are never the ones dropped.
+OUTPUT_FRAME_INTERVAL_S = 0.12
+
 #: queued -> running -> one of the three terminal states.
 TERMINAL_STATES = frozenset({"succeeded", "failed", "cancelled", "timed_out"})
 
@@ -96,6 +108,10 @@ class Job:
     #: frame from a new one. Without it a job that already succeeded flickers
     #: back to `running` when a delayed push lands after a poll.
     rev: int = 0
+    #: The answer as it arrives. Separate from `progress`, which is a list of
+    #: status notes — appending every delta there would turn a status log into
+    #: a transcript rendered as bullet points.
+    partial: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         """What the screen renders. The prompt is included; the result is not
@@ -112,6 +128,7 @@ class Job:
             "finished_at": self.finished_at,
             "elapsed_s": round(self.elapsed_s, 3),
             "rev": self.rev,
+            "partial": self.partial,
         }
 
 
@@ -191,7 +208,26 @@ class JobRunner:
         job.deadline = started + timeout_s
         self._notify(job, on_change)
 
-        def report(note: str) -> None:
+        last_output_frame = [0.0]
+
+        def report(note: str, *, kind: str = "note") -> None:
+            """Say what the job is doing, or hand back a piece of the answer.
+
+            `kind="output"` accumulates into `job.partial` and is throttled;
+            everything else is a status note and is pushed immediately, because
+            notes are rare and each one is a real change of what the job is
+            doing.
+            """
+            if kind == "output":
+                job.partial += str(note)
+                now = time.monotonic()
+                if now - last_output_frame[0] < OUTPUT_FRAME_INTERVAL_S:
+                    # Coalesced. `_finish` always notifies, so the text held
+                    # back here reaches the screen with the terminal state.
+                    return
+                last_output_frame[0] = now
+                self._notify(job, on_change)
+                return
             job.progress.append(str(note))
             self._notify(job, on_change)
 

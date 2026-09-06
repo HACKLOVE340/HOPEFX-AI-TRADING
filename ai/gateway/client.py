@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
@@ -32,7 +33,7 @@ from ai.cache.store import ResponseCache
 from ai.gateway import audit, breakers, budget
 from ai.gateway.chain import ChainLeg, resolve_chain, should_fall_through
 from ai.guardrails.input import screen_input
-from ai.guardrails.output import scan_output, validate_output
+from ai.guardrails.output import GuardrailViolation, StreamScanner, scan_output, validate_output
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +326,268 @@ class GatewayClient:
         tried = ", ".join(f"{a['provider']}={a['reason']}" for a in attempts) or "no legs"
         raise NoProviderAvailable(f"no model served role {request.role!r}: {tried}")
 
+    def stream_sync(
+        self,
+        request: ModelRequest,
+        *,
+        operator: str,
+        on_complete: Callable[[ModelResponse], None] | None = None,
+    ) -> Iterator[str]:
+        """Issue `request` and yield the answer as it arrives.
+
+        A generator, not a coroutine. The AI job runner already gives this a
+        dedicated worker thread and `ai/jobs/progress.py` already bridges that
+        thread to the event loop, so streaming needs an iterator rather than an
+        async rewrite of the path that budgets, screens and audits every model
+        call. `ai/jobs/runner.py` states the same reasoning from the other side.
+
+        **Every control on `call_sync` runs here too.** A second entry point is
+        exactly how a control comes to run for half the traffic, so this shares
+        the same helpers rather than reimplementing the sequence: `screen_input`,
+        the cache, `budget.check`, the breaker and image-capability skips,
+        `StreamScanner` (the streaming form of `scan_output`),
+        `breakers.record_outcome`, `budget.charge`, `_audit`, `_cache_store`.
+
+        Three rules exist only here:
+
+        * **A vendor that cannot stream degrades to `complete()`** rather than
+          being skipped. Losing a leg because it lacks a nicety would make the
+          chain shorter for streamed calls than for buffered ones.
+        * **A failure after the first token does not fall through.** The
+          operator has already read part of one vendor's answer; continuing it
+          with another splices two opinions into one.
+        * **Cancellation still charges and still audits.** The tokens were
+          generated whether or not anyone read them, so `finally` — not the
+          success path — owns both. A cancel that costs nothing is a way to
+          spend money the ceiling cannot see.
+
+        `on_complete` receives the finished `ModelResponse` — which vendor
+        served, what it cost, how long it took. A generator can only yield text,
+        and the caller needs the rest to report the job's result; a callback is
+        explicit about that where reaching into the client afterwards would be
+        guesswork that silently returns nothing when it is wrong.
+        """
+        screen_input(request.prompt)
+
+        cache_model = self._cache_model(request.role)
+        hit = self._cache_lookup(request, cache_model)
+        if hit is not None:
+            self._audit_cache_hit(request, operator, cache_model)
+            # One piece. A cached answer has no arrival to follow, and pretending
+            # otherwise by re-chunking it would be theatre.
+            if on_complete is not None:
+                on_complete(hit)
+            yield hit.text
+            return
+
+        allowed, reason = budget.check(operator, request.estimated_usd)
+        if not allowed:
+            audit.record_call(
+                operator=operator,
+                role=request.role,
+                prompt=request.prompt,
+                attempts=[{"provider": None, "reason": "budget_exceeded", "detail": reason}],
+                served_by=None,
+                model=None,
+                latency_ms=0.0,
+                cost_usd=0.0,
+                tokens_in=0,
+                tokens_out=0,
+            )
+            raise BudgetExceeded(reason)
+
+        attempts: list[dict[str, Any]] = []
+        started = time.perf_counter()
+
+        for leg in resolve_chain(request.role):
+            provider = self._providers.get(leg.provider)
+            if provider is None:
+                attempts.append({"provider": leg.provider, "reason": "no_credentials", "skipped": True})
+                continue
+            if breakers.is_open(leg.provider):
+                attempts.append({"provider": leg.provider, "model": leg.model, "reason": "circuit_open"})
+                continue
+            if request.images and not getattr(provider, "supports_images", False):
+                attempts.append({"provider": leg.provider, "model": leg.model, "reason": "provider_unavailable"})
+                logger.info("ai.gateway: %s cannot accept images; trying the next leg", leg.provider)
+                continue
+
+            served, fell_through = yield from self._stream_one_leg(
+                request, operator, provider, leg, attempts, started, on_complete
+            )
+            if served:
+                return
+            if not fell_through:
+                # The leg failed in a way that must not be retried elsewhere —
+                # it had already spoken, or it refused. `_stream_one_leg` has
+                # raised in those cases, so reaching here means a hard stop.
+                return
+
+        self._audit(request, operator, attempts, None, None, started, 0.0, 0, 0)
+        tried = ", ".join(f"{a['provider']}={a['reason']}" for a in attempts) or "no legs"
+        raise NoProviderAvailable(f"no model served role {request.role!r}: {tried}")
+
+    def _stream_one_leg(
+        self,
+        request: ModelRequest,
+        operator: str,
+        provider: Any,
+        leg: ChainLeg,
+        attempts: list[dict[str, Any]],
+        started: float,
+        on_complete: Callable[[ModelResponse], None] | None = None,
+    ) -> Any:
+        """Run one leg. Yields text; returns (served, may_fall_through).
+
+        Split out so `stream_sync` reads as the control sequence it is, and so
+        the `finally` that charges and audits a cancelled stream has a single
+        home rather than being repeated per exit.
+        """
+        scanner = StreamScanner()
+        tokens_in = tokens_out = 0
+        spoke = False
+        completed = False
+        charged = False
+        # The buffered path's adapter already priced the call; the streaming
+        # path has only token counts, so the cost is computed from the same
+        # table rather than a second one.
+        known_cost: float | None = None
+        final_text = ""
+
+        def _settle(reason: str) -> None:
+            """Record what happened, once, whatever the exit was.
+
+            Called from `finally`, so a stream abandoned by its consumer — a
+            closed panel, a cancelled job — is charged and audited exactly like
+            one that ran to the end. `GeneratorExit` does not reach the success
+            path, which is why this cannot live there.
+
+            **An abandoned stream usually has no reported usage.** Every wire
+            format here sends token counts in a final frame, so a stream cut off
+            part-way reports zero — while the vendor generated and billed for
+            real tokens. Charging that zero would make cancellation a way to
+            spend money the ceiling cannot see, so an unmeasured partial is
+            charged at the request's own estimate instead. That follows the rule
+            `estimate_cost` already states for an unpriced model: under-counting
+            spend is the failure mode that matters, over-counting only refuses a
+            later call early.
+
+            **This is per LEG, where `call_sync` audits per request.** That is
+            deliberate rather than incidental: a leg only reaches here if it
+            produced billable tokens, so a leg that failed before saying
+            anything still adds no record. A leg that streamed half an answer
+            and then died did real, billed work, and a request that falls
+            through after that has genuinely paid two vendors — one record each
+            is what makes that legible.
+            """
+            nonlocal charged
+            if charged:
+                return
+            charged = True
+            cost = known_cost if known_cost is not None else self._stream_cost(leg, tokens_in, tokens_out)
+            if cost <= 0.0 and reason == "partial":
+                cost = float(request.estimated_usd or 0.0)
+            attempts.append({"provider": leg.provider, "model": leg.model, "reason": reason})
+            budget.charge(operator, cost)
+            self._audit(request, operator, attempts, leg, leg.model, started, cost, tokens_in, tokens_out)
+
+        try:
+            if getattr(provider, "supports_streaming", False):
+                kwargs: dict[str, Any] = {
+                    "model": leg.model,
+                    "prompt": request.prompt,
+                    "timeout_s": request.timeout_s,
+                }
+                if request.images:
+                    kwargs["images"] = request.images
+                for chunk in provider.stream(**kwargs):
+                    tokens_in += int(getattr(chunk, "tokens_in", 0) or 0)
+                    tokens_out += int(getattr(chunk, "tokens_out", 0) or 0)
+                    text = str(getattr(chunk, "text", "") or "")
+                    if not text:
+                        continue
+                    # Raises GuardrailViolation, which is an ANSWER: it
+                    # propagates rather than falling through to another vendor.
+                    released = scanner.feed(text)
+                    if released:
+                        spoke = True
+                        yield released
+                tail = scanner.finish()
+                if tail:
+                    spoke = True
+                    yield tail
+                final_text = scanner.text
+            else:
+                # Degrade, do not skip. The whole answer in one piece is still
+                # an answer, and it keeps the chain the same length for both.
+                result = provider.complete(model=leg.model, prompt=request.prompt, timeout_s=request.timeout_s)
+                text = str(getattr(result, "text", ""))
+                scan_output(text)
+                tokens_in = int(getattr(result, "tokens_in", 0) or 0)
+                tokens_out = int(getattr(result, "tokens_out", 0) or 0)
+                known_cost = float(getattr(result, "cost_usd", 0.0) or 0.0)
+                final_text = text
+                spoke = bool(text)
+                yield text
+            completed = True
+        except ProviderError as exc:
+            breakers.record_outcome(leg.provider, reason=exc.reason)
+            if spoke:
+                # Already partway through this vendor's answer. Continuing it
+                # with a different model would splice two opinions and present
+                # them as one, which is worse than an error.
+                attempts.append({"provider": leg.provider, "model": leg.model, "reason": exc.reason})
+                logger.warning(
+                    "ai.gateway: %s failed %d characters into a stream; not falling through",
+                    leg.provider,
+                    len(scanner.text),
+                )
+                raise
+            attempts.append({"provider": leg.provider, "model": leg.model, "reason": exc.reason})
+            if should_fall_through(exc.reason):
+                logger.info("ai.gateway: %s failed (%s); trying the next leg", leg.provider, exc.reason)
+                return False, True
+            raise
+        except GuardrailViolation:
+            # Never retried on a second vendor: asking another model the same
+            # question is not a fix for the first one having leaked.
+            attempts.append({"provider": leg.provider, "model": leg.model, "reason": "guardrail_rejected"})
+            raise
+        except Exception as exc:  # an adapter bug must not look like a refusal
+            breakers.record_outcome(leg.provider, reason="adapter_error")
+            attempts.append({"provider": leg.provider, "model": leg.model, "reason": "adapter_error"})
+            logger.exception("ai.gateway: adapter raised while streaming from %s: %s", leg.provider, exc)
+            if spoke:
+                raise
+            return False, True
+        finally:
+            if completed:
+                breakers.record_outcome(leg.provider, reason=None)
+                _settle("served")
+            elif spoke or tokens_out:
+                # Abandoned, or failed after generating tokens. Either way the
+                # vendor did work somebody has to pay for and compliance has to
+                # be able to see.
+                _settle("partial")
+
+        if completed:
+            # Only a whole answer is cached. A partial one would be served
+            # complete to the next identical prompt.
+            response = ModelResponse(
+                text=final_text,
+                provider=leg.provider,
+                model=leg.model,
+                latency_ms=(time.perf_counter() - started) * 1000,
+                cost_usd=(known_cost if known_cost is not None else self._stream_cost(leg, tokens_in, tokens_out)),
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                attempts=tuple(attempts),
+            )
+            self._cache_store(request, response)
+            if on_complete is not None:
+                on_complete(response)
+        return completed, False
+
     def embed_sync(self, texts: list[str], *, operator: str, timeout_s: float = DEFAULT_TIMEOUT_S) -> Any:
         """Embed `texts` along the `embedding` chain, under the same controls.
 
@@ -430,6 +693,20 @@ class GatewayClient:
         return validate_output(response.text, required=required, ranges=ranges)
 
     # -- cache -----------------------------------------------------------------
+
+    @staticmethod
+    def _stream_cost(leg: ChainLeg, tokens_in: int, tokens_out: int) -> float:
+        """Price a streamed call from the same table the adapters use.
+
+        A stream reports usage and not a price, so the cost has to be computed
+        here. Imported lazily because `ai.gateway.adapters` imports this module
+        — and deliberately reused rather than reimplemented: a second pricing
+        table is a second place for a streamed call to be charged differently
+        from a buffered one.
+        """
+        from ai.gateway.adapters import estimate_cost
+
+        return estimate_cost(leg.model, tokens_in=tokens_in, tokens_out=tokens_out, provider=leg.provider)
 
     def _cache_model(self, role: str) -> str:
         """The model a lookup is keyed on: the first leg this deployment can reach.

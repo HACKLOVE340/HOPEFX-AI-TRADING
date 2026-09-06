@@ -423,18 +423,38 @@ async def submit_generation(
             raise RuntimeError("no model vendor is configured")
 
         report("contacting the model")
-        response = GatewayClient(providers).call_sync(
-            ModelRequest(role=body.role, prompt=body.prompt),
-            operator=user.sub,
-        )
-        report(f"answered by {response.provider}")
+        client = GatewayClient(providers)
+        request = ModelRequest(role=body.role, prompt=body.prompt)
+
+        # Streamed, so the panel fills in as the model speaks rather than
+        # staying blank until it stops. `kind="output"` is what keeps the answer
+        # out of the status-note list; the runner coalesces these into a frame
+        # every 120ms so a fast model does not become a flood of WebSocket
+        # frames. Every control on the buffered path still runs — the guardrails
+        # screen the released text, the ceiling is charged, the audit is written.
+        # `on_complete` carries what a generator cannot: which vendor served,
+        # what it cost, whether the cache answered. Explicit, rather than
+        # reaching into the client afterwards and hoping.
+        finished: dict[str, Any] = {}
+        answer = ""
+        for piece in client.stream_sync(request, operator=user.sub, on_complete=lambda r: finished.update(vars(r))):
+            if not piece:
+                continue
+            answer += piece
+            report(piece, kind="output")
+
+        # The finished result is still returned whole. A panel that reloads, or
+        # an operator who opens the page after the job finished, reads this and
+        # not the partial — the stream is how the answer arrives, not where it
+        # lives.
+        report(f"answered by {finished.get('provider', 'the model')}")
         return {
-            "text": response.text,
-            "provider": response.provider,
-            "model": response.model,
-            "cost_usd": response.cost_usd,
-            "cached": response.cached,
-            "latency_ms": round(response.latency_ms, 1),
+            "text": answer,
+            "provider": str(finished.get("provider", "") or ""),
+            "model": str(finished.get("model", "") or ""),
+            "cost_usd": float(finished.get("cost_usd", 0.0) or 0.0),
+            "cached": bool(finished.get("cached", False)),
+            "latency_ms": round(float(finished.get("latency_ms", 0.0) or 0.0), 1),
         }
 
     try:

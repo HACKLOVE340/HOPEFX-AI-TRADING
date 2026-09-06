@@ -67,6 +67,10 @@ export interface GenerationJob {
   error: string;
   progress: string[];
   elapsed_s: number;
+  /** The answer so far, while it is still arriving. Separate from `progress`,
+   *  which is a list of status notes — an answer rendered there reads as a
+   *  sequence of bullet points. Optional so an older server still renders. */
+  partial?: string;
   /** Rises on every change the server observed. The same job reaches this
    *  screen twice — pushed over `ai_jobs` and polled over REST — and this is
    *  how the two are ordered. Optional so an older server still renders. */
@@ -151,6 +155,36 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
         <p role="alert" style={{ margin: 0, color: COLOR.bad, fontSize: 11, lineHeight: 1.5 }}>
           {job.error}
         </p>
+      )}
+
+      {/* The answer as it arrives.
+          Shown while running, and kept on a failure: a vendor that dies
+          mid-stream cannot be continued by another (the gateway refuses to
+          splice two opinions), so the half-answer already read is all there
+          is — hiding it would leave an operator with an error and no idea what
+          the model had said.
+          `aria-busy` rather than `aria-live`: announcing every token would make
+          the panel unusable with a screen reader, and the state chip already
+          says what is happening. */}
+      {job.state !== 'succeeded' && !!job.partial && (
+        <div
+          aria-label="Answer so far"
+          aria-busy={live}
+          style={{
+            background: '#0b1220', border: '1px solid #1e2d44', borderRadius: 8,
+            padding: 10, color: COLOR.text, fontSize: 12, lineHeight: 1.6,
+            maxHeight: 260, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            boxSizing: 'border-box',
+          }}
+        >
+          {job.partial}
+          {live && (
+            /* A caret, not an animation. `index.css` is not guaranteed to carry
+               a keyframe here, and a blinking one would need a reduced-motion
+               alternative to earn its place. */
+            <span aria-hidden style={{ color: COLOR.info, fontWeight: 700 }}>▌</span>
+          )}
+        </div>
       )}
 
       {job.state === 'succeeded' && job.result && (

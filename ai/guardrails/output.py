@@ -135,6 +135,108 @@ def scan_output(raw: str) -> None:
             _refuse(label)
 
 
+#: Characters held back from release while a stream is still arriving.
+#:
+#: Sized against the SHORTEST complete credential the shapes above can match —
+#: an AWS access key id at 20 characters — so that no shape can have a usable
+#: prefix released before the buffer scan sees the whole of it. 64 also covers
+#: the one multi-word shape, `-----BEGIN ENCRYPTED PRIVATE KEY-----` (37).
+#:
+#: It is a FLOOR, not the whole rule: `register_known_secret` accepts a value of
+#: any length, so `StreamScanner` widens the holdback to cover the longest
+#: registered value. A fixed constant alone would release all but the last 64
+#: characters of a registered system prompt, one chunk at a time, and refuse
+#: only once the last character arrived — by which point it is on the screen.
+_STREAM_HOLDBACK = 64
+
+
+class StreamScanner:
+    """Screen model output that arrives in pieces, releasing what is safe.
+
+    `scan_output` works because the whole answer is in hand when it runs.
+    Streaming breaks that: text reaches the screen as it arrives, so a
+    credential that is only complete at the end has already been rendered, and
+    there is no taking it back. A streaming path that skipped this would be the
+    output guardrail existing and not running — which is the defect shape this
+    repository has the most of.
+
+    Two rules, and the first is the one that makes it sound:
+
+    1. **Only a prefix of a buffer that scanned clean is ever released.** The
+       whole buffer is re-scanned on every chunk. `re.search` finds substrings,
+       so a prefix of a string with no match has no match: releasing prefixes
+       of clean buffers cannot release a *complete* credential. This holds for
+       shapes of unbounded length, which is why the buffer is rescanned whole
+       rather than through a sliding window — a window is faster and only
+       catches credentials shorter than itself.
+
+    2. **A tail is held back**, so a *partial* credential is not released
+       either. Half an API key is still a leak.
+
+    Rescanning the whole buffer is O(n²) in the number of chunks. Measured at
+    roughly 18KB of answer it is milliseconds; a security control is the wrong
+    place to trade correctness for a constant factor at this scale.
+
+    Usage — `feed` returns the text safe to show, `finish` releases the tail:
+
+        scanner = StreamScanner()
+        for chunk in transport:
+            emit(scanner.feed(chunk))     # raises GuardrailViolation
+        emit(scanner.finish())
+        cache(scanner.text)               # the whole answer, for cache/audit
+    """
+
+    def __init__(self) -> None:
+        self._buf = ""
+        self._released = 0
+        self._finished = False
+
+    @property
+    def text(self) -> str:
+        """Everything received so far. What the cache and the audit record —
+        neither wants the answer in the pieces it happened to arrive in."""
+        return self._buf
+
+    def _holdback(self) -> int:
+        # Recomputed per chunk: a registered value can be added at any time, and
+        # reading `_KNOWN` here is cheaper than being wrong about it.
+        longest_known = max((len(v) for v in _KNOWN.values()), default=0)
+        return max(_STREAM_HOLDBACK, longest_known)
+
+    def feed(self, chunk: str) -> str:
+        """Add `chunk`; return the text now safe to show. May raise.
+
+        Raises `GuardrailViolation` exactly as `scan_output` does, and for the
+        same reason: a rejection is an ANSWER, not a transport failure, so the
+        caller must not retry it on another vendor.
+        """
+        if not chunk:
+            return ""
+        self._buf += chunk
+        scan_output(self._buf)
+        cut = max(0, len(self._buf) - self._holdback())
+        if cut <= self._released:
+            return ""
+        out = self._buf[self._released : cut]
+        self._released = cut
+        return out
+
+    def finish(self) -> str:
+        """Release the held tail once the stream has genuinely ended.
+
+        Scans once more so a short answer — one that never exceeded the
+        holdback and so was never released — is still screened. Idempotent:
+        a second call returns nothing rather than repeating the tail.
+        """
+        if self._finished:
+            return ""
+        self._finished = True
+        scan_output(self._buf)
+        out = self._buf[self._released :]
+        self._released = len(self._buf)
+        return out
+
+
 def validate_output(
     raw: str,
     *,
@@ -200,6 +302,7 @@ def bounded_severity(*, model_value: float, corroborated_value: float, ceiling: 
 
 __all__ = [
     "GuardrailViolation",
+    "StreamScanner",
     "bounded_severity",
     "known_secret_count",
     "register_known_secret",
