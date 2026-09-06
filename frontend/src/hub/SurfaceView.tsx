@@ -15,6 +15,7 @@
 import React from 'react';
 import { Pin, X } from 'lucide-react';
 import type { Surface } from './workspace';
+import { surfaceData, type SurfaceData } from './surfaceData';
 
 const C = {
   hull: 'linear-gradient(155deg, rgba(16,26,44,.92), rgba(11,19,34,.92))',
@@ -57,16 +58,16 @@ const iconBtn: React.CSSProperties = {
  * the title and the controls belong to `SurfaceView`, so every surface has the
  * same edges and the same way to close it.
  */
-const RENDERERS: Record<string, React.FC<{ surface: Surface }>> = {
-  chart: ({ surface }) => <Sparkline points={(surface.data.points as number[]) ?? DEMO_POINTS} />,
-  table: ({ surface }) => <Rows rows={(surface.data.rows as [string, string][]) ?? DEMO_ROWS} />,
-  news: ({ surface }) => <Headlines items={(surface.data.items as string[]) ?? DEMO_NEWS} />,
-  text: ({ surface }) => (
+const RENDERERS: Record<string, React.FC<{ surface: Surface; data: SurfaceData }>> = {
+  chart: ({ data }) => <Sparkline points={data.points ?? []} />,
+  table: ({ data }) => <Rows rows={data.rows ?? []} />,
+  news: ({ data }) => <Headlines items={data.items ?? []} />,
+  text: ({ surface, data }) => (
     <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: C.dim }}>
-      {String(surface.data.body ?? surface.meaning)}
+      {data.body ?? surface.meaning}
     </p>
   ),
-  terminal: ({ surface }) => (
+  terminal: ({ data }) => (
     <pre
       style={{
         margin: 0,
@@ -78,11 +79,11 @@ const RENDERERS: Record<string, React.FC<{ surface: Surface }>> = {
         overflowX: 'auto',
       }}
     >
-      {String(surface.data.body ?? 'No output yet.')}
+      {data.body ?? ''}
     </pre>
   ),
-  distribution: ({ surface }) => <Bars values={(surface.data.values as number[]) ?? DEMO_BARS} />,
-  agent_activity: ({ surface }) => <Rows rows={(surface.data.rows as [string, string][]) ?? DEMO_AGENTS} />,
+  distribution: ({ data }) => <Bars values={data.values ?? []} />,
+  agent_activity: ({ data }) => <Rows rows={data.rows ?? []} />,
 };
 
 export interface SurfaceViewProps {
@@ -94,6 +95,10 @@ export interface SurfaceViewProps {
 
 export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, focused, onClose, onPin }) => {
   const Renderer = RENDERERS[surface.kind];
+  // Resolved here rather than inside each renderer, so "there is nothing to
+  // show" is decided in ONE place and cannot be answered differently by a
+  // sparkline and a table looking at the same absent feed.
+  const data = surfaceData({ kind: surface.kind, key: surface.key });
 
   return (
     <section
@@ -147,15 +152,20 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, focused, onCl
       </header>
 
       <div style={{ minWidth: 0, overflow: 'hidden' }}>
-        {Renderer ? (
-          <Renderer surface={surface} />
-        ) : (
+        {!Renderer ? (
           // Stated, not blank. A missing renderer that draws nothing is
           // indistinguishable from data that has not arrived.
           <p style={{ margin: 0, fontSize: 12, color: C.warn, lineHeight: 1.6 }}>
             This deployment cannot draw a <strong>{surface.kind}</strong> yet. The surface is registered and
             the request was understood — only the renderer is missing.
           </p>
+        ) : data.empty ? (
+          // Why it is empty, which is a different fact from being empty. A flat
+          // book and a dead feed both render as nothing unless somebody says
+          // which one this is.
+          <p style={{ margin: 0, fontSize: 12, color: C.quiet, lineHeight: 1.6 }}>{data.note}</p>
+        ) : (
+          <Renderer surface={surface} data={data} />
         )}
       </div>
     </section>
@@ -222,19 +232,3 @@ const Headlines: React.FC<{ items: string[] }> = ({ items }) =>
 const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p style={{ margin: 0, fontSize: 12, color: C.quiet }}>{children}</p>
 );
-
-// Placeholder content, used only when a surface opens before its data source is
-// wired. Every one of these is replaced by a real feed as its phase lands, and
-// they are visibly generic rather than plausible — a fake number that looks real
-// is the thing §22 forbids.
-const DEMO_POINTS = [12, 14, 13, 16, 15, 18, 17, 19, 18, 21, 20, 22];
-const DEMO_ROWS: [string, string][] = [
-  ['Awaiting a data source', '—'],
-  ['Wired in a later phase', '—'],
-];
-const DEMO_NEWS = ['No news source is connected to this surface yet.'];
-const DEMO_BARS = [2, 5, 9, 14, 18, 14, 9, 5, 2];
-const DEMO_AGENTS: [string, string][] = [
-  ['Agent bus', 'not built yet — Phase 3'],
-  ['Departments', '4 of 12'],
-];
