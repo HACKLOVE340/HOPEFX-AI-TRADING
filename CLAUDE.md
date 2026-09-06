@@ -127,22 +127,129 @@ every task, always.** Not "when it seems worth it" — every time. They exist
 because this codebase has cost real money to get wrong, and each one encodes a
 class of mistake already made here.
 
-`.claude/skills/` holds 60 of them. The ones that earn their keep most often:
+`.claude/skills/` holds **61** skills (`licenses/` is not one). All of them are
+listed below. An earlier version of this file listed only thirteen "the ones
+that earn their keep most often" — that was wrong in a way that mattered: a
+skill nobody can see is a skill nobody loads, and the omitted 48 included every
+Python-craft, observability, threat-modelling and incident skill in the set.
 
-| When you are… | Load |
+### Always, on every task
+
+| Skill | When |
 |---|---|
-| starting **any** development task | `flow-by-flow` (then `flow-prototype` for a UI surface) |
-| touching prices, balances, P&L, fees, lot sizes | `hopefx-money-precision` |
-| touching a gate, limit, kill switch or invariant | `hopefx-invariants`, `hopefx-dead-controls` |
-| writing any fix | `test-driven-development`, `verification-before-completion` |
-| chasing a bug | `systematic-debugging` |
-| touching Stripe, billing, webhooks, refunds | `stripe-integration` |
-| touching any UI | `ui-ux-pro-max` (and its pre-delivery checklist) |
-| touching retries, timeouts, circuit breakers | `python-resilience` |
-| reasoning about an attack surface | `stride-analysis-patterns`, `attack-tree-construction` |
-| planning work bigger than one file | `writing-plans`, then `executing-plans` |
-| touching tick/feed quality or freshness | `data-quality-frameworks` |
-| touching the ML pipeline | `ml-pipeline-workflow`, `backtesting-frameworks` |
+| `flow-by-flow` | **Start every development task here.** Picks mode, depth and risk floor, and names the affected flows. |
+| `brainstorming` | Before any *creative* work — a new feature, component, or behaviour change. Explores intent before implementation. |
+| `test-driven-development` | Before writing implementation code, for every feature and every bugfix. |
+| `verification-before-completion` | Before claiming anything is done, fixed, or passing. Evidence before assertions. |
+| `systematic-debugging` | The moment anything surprises you — a bug, a failing test, an unexpected result. |
+
+### HOPEFX-specific — these encode defects already made here
+
+| Skill | When |
+|---|---|
+| `hopefx-money-precision` | Prices, quantities, lot sizes, notional, P&L, balances, equity, fees, commissions; any Decimal↔float boundary; any reconciliation tolerance; any `==` on a monetary value. |
+| `hopefx-invariants` | `verify_*` / `catastrophic_*` predicates, `enforce_*` call sites, `HOPEFX_INVARIANT_MODE`, fail-closed behaviour, or a refused pre-trade check. |
+| `hopefx-dead-controls` | Any gate, guard, kill switch, health probe, alert, or "is it safe" check — **especially** when it looks correct but you have not traced that it runs. |
+| `hopefx-fix-bridge` | `brokers/ibkr_fix_bridge.py`, `execution/fix_adapter.py`, FIX 4.4 sessions, sequence numbers, logon/heartbeat/reconnect, XAUUSD symbol mapping. |
+
+### Planning and execution
+
+| Skill | When |
+|---|---|
+| `writing-plans` | A spec or multi-step task, before touching code. |
+| `executing-plans` | A written plan to execute with review checkpoints. |
+| `planning-workflows` | Spec and no-spec planning workflows (requirements → design → tasks). |
+| `using-git-worktrees` | Feature work needing isolation from the current workspace. |
+
+### Review
+
+| Skill | When |
+|---|---|
+| `requesting-code-review` | Completing a task or major feature, before merging. |
+| `receiving-code-review` | Acting on review feedback — verification, not performative agreement. |
+| `code-review-excellence` | Reviewing PRs, setting review standards. |
+| `pr-review-fix` | Triaging CI failures and review comments across open PRs in batch. |
+| `codebase-audit` | Full codebase review, severity triage, issues, worktree fixes. |
+| `review-automation-orchestrator` | Scheduling periodic review cycles and routing findings. |
+| `doc-freshness-review` | Documentation drift — `docs/`, `CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md`, `README.md`, `DEPLOYMENT.md`. |
+
+### Python craft — reach for these by symptom
+
+| Skill | When |
+|---|---|
+| `python-resilience` | Retries, exponential backoff, timeouts, fault tolerance, transient failures. |
+| `python-error-handling` | Input validation, exception hierarchies, partial/batch failure. |
+| `python-resource-management` | Context managers, cleanup, connections, file handles, streaming. |
+| `python-background-jobs` | Task queues, workers, event-driven work, long-running operations. |
+| `async-python-patterns` | asyncio, concurrency, async/await, I/O-bound systems. |
+| `python-type-safety` | Type hints, generics, protocols, mypy/pyright configuration. |
+| `python-testing-patterns` | pytest, fixtures, mocking, test suite structure. |
+| `python-anti-patterns` | Checklist before finalising an implementation or when debugging a smell. |
+| `python-performance-optimization` | Profiling with cProfile/memory profilers; slow code, bottlenecks. |
+| `python-observability` | Structured logging, metrics, tracing, debugging production. |
+
+### Trading, ML and data
+
+| Skill | When |
+|---|---|
+| `backtesting-frameworks` | Look-ahead bias, survivorship bias, transaction costs, strategy validation. |
+| `risk-metrics-calculation` | VaR, CVaR, Sharpe, Sortino, drawdown, risk limits. |
+| `ml-pipeline-workflow` | End-to-end MLOps: data prep → training → validation → deployment. |
+| `data-quality-frameworks` | Validation rules, data contracts, tick/feed quality and freshness. |
+| `lightweight-charts` | TradingView lightweight-charts — series, scales, realtime data, plugins. |
+
+### API, data storage and services
+
+| Skill | When |
+|---|---|
+| `api-design-principles` | Designing or reviewing REST/GraphQL APIs and API standards. |
+| `fastapi-templates` | New FastAPI apps, async patterns, dependency injection. |
+| `postgresql-table-design` | PostgreSQL schema design or review — types, indexes, constraints. |
+
+### Security and compliance
+
+| Skill | When |
+|---|---|
+| `stride-analysis-patterns` | Threat modelling a system or feature. |
+| `attack-tree-construction` | Mapping threat paths and defence gaps. |
+| `threat-mitigation-mapping` | Mapping threats to controls; remediation plans. |
+| `security-requirement-extraction` | Turning threats into requirements and security test cases. |
+| `sast-configuration` | Static analysis / DevSecOps scanning setup. |
+| `k8s-security-policies` | NetworkPolicy, PodSecurity, RBAC. |
+| `pci-compliance` | Handling payment card data. |
+| `stripe-integration` | Stripe checkout, subscriptions, webhooks, refunds. |
+
+### Operations, observability and incidents
+
+| Skill | When |
+|---|---|
+| `prometheus-configuration` | Metric collection, storage, alerting rules. |
+| `grafana-dashboards` | Operational dashboards and metric visualisation. |
+| `distributed-tracing` | Jaeger/Tempo, request flows across services. |
+| `slo-implementation` | SLIs, SLOs, error budgets. |
+| `incident-runbook-templates` | Step-by-step runbooks, escalation paths, recovery. |
+| `on-call-handoff-patterns` | Shift handoffs, mid-incident transfer, on-call onboarding. |
+| `postmortem-writing` | Blameless postmortems, root cause, action items. |
+
+### UI, UX and frontend
+
+| Skill | When |
+|---|---|
+| `ui-ux-pro-max` | **Any UI work** — styles, palettes, typography, charts, accessibility. Has a pre-delivery checklist; run it. |
+| `flow-prototype` | Prototyping a complete interactive flow across screens and states **before** production UI. Owns the approval surface. |
+| `frontend-design` | Visual direction — typography and aesthetics that do not read as templated defaults. |
+| `e2e-testing-patterns` | Playwright/Cypress suites, flaky-test debugging. |
+| `webapp-testing` | Driving a local web app with Playwright; screenshots, browser logs. |
+
+### Skill maintenance
+
+| Skill | When |
+|---|---|
+| `skill-authoring` | Creating, rewriting, auditing or evaluating skills. |
+| `writing-skills` | Creating/editing skills and verifying them before deployment. |
+| `manage-local-skills` | Standardising and syncing local skills into agent directories. |
+
+---
 
 Two rules that come from those skills and are worth repeating here, because
 they are the ones most often skipped under time pressure:
@@ -153,8 +260,6 @@ they are the ones most often skipped under time pressure:
 2. **Prove by execution, not by reading.** Reproduce the defect by running it
    before you fix it, and re-run the same reproduction after. Nine of the
    defects found in this repository read as correct.
-
----
 
 ## Gotchas
 
