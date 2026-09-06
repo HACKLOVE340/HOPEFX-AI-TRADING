@@ -42,6 +42,12 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── Forbidden imports that disqualify a strategy ─────────────────────────────
+#: Modules a marketplace strategy has no business importing.
+#:
+#: `"exec"` and `"eval"` used to be in here. They are builtins, not modules —
+#: `import exec` is a syntax error — so listing them caught nothing while making
+#: the gate look as though it covered them. They are handled properly below, as
+#: calls.
 _FORBIDDEN_MODULES = frozenset(
     {
         "os",
@@ -52,8 +58,51 @@ _FORBIDDEN_MODULES = frozenset(
         "multiprocessing",
         "threading",
         "importlib",
-        "exec",
+        "builtins",
+        "pickle",
+        "marshal",
+        "pty",
+    }
+)
+
+#: Builtins that turn "some source code" into "arbitrary code or file access".
+#: The old check walked import statements only, so every one of these was
+#: auto-approved: `__import__('os').system(...)`, `eval(x)`, `exec(payload)`.
+_FORBIDDEN_CALLS = frozenset(
+    {
+        "__import__",
         "eval",
+        "exec",
+        "compile",
+        "open",
+        "input",
+        "breakpoint",
+        "globals",
+        "vars",
+    }
+)
+
+#: Attribute and string names that exist to reach out of an object graph.
+#: `().__class__.__bases__[0].__subclasses__()` is the classic route from a
+#: literal to every loaded class, and `f.__globals__` reaches the module's
+#: namespace. Defining `__init__` or `__repr__` is not on this list: writing a
+#: class is not an escape.
+_ESCAPE_ATTRIBUTES = frozenset(
+    {
+        "__subclasses__",
+        "__globals__",
+        "__builtins__",
+        "__code__",
+        "__mro__",
+        "__bases__",
+        "__reduce__",
+        "__reduce_ex__",
+        "__getattribute__",
+        "__import__",
+        "__dict__",
+        "__closure__",
+        "__func__",
+        "__self__",
     }
 )
 
@@ -188,28 +237,58 @@ class StrategyAuditor:
             return AuditCheck("syntax_check", False, f"Syntax error: {e}", "error")
 
     def _check_forbidden_imports(self, code: str) -> AuditCheck:
+        """Refuse the obvious routes from submitted source to arbitrary execution.
+
+        **A filter, not containment.** A static check on adversarial source can
+        always be worked around; what it buys is that the obvious attempts do
+        not sail through an *automatic* approval, which is what this gate grants
+        with no human in the path. Real containment is `ai/sandbox/`, which runs
+        code under rlimits with no network and a scrubbed environment. The two
+        are complementary and neither replaces the other.
+
+        It used to walk import statements only, so `__import__('os').system()`,
+        `eval(x)` and `exec(payload)` were all approved for sale.
+        """
         try:
             tree = ast.parse(code)
         except SyntaxError:
             return AuditCheck("security_check", False, "Cannot parse code", "error")
 
-        found = []
+        found: set[str] = set()
         for node in ast.walk(tree):
+            # 1. Imports — what this check used to look at, and only this.
             if isinstance(node, ast.Import | ast.ImportFrom):
                 names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]
                 for name in names:
                     root = name.split(".")[0]
                     if root in _FORBIDDEN_MODULES:
-                        found.append(root)
+                        found.add(f"import {root}")
+
+            # 2. Calls to builtins that execute code or touch the filesystem.
+            #    `__import__('os')` is not an import node, which is how it
+            #    reached APPROVED.
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                if node.func.id in _FORBIDDEN_CALLS:
+                    found.add(f"{node.func.id}()")
+
+            # 3. Attribute routes out of the object graph.
+            elif isinstance(node, ast.Attribute) and node.attr in _ESCAPE_ATTRIBUTES:
+                found.add(f".{node.attr}")
+
+            # 4. The same names reached as strings, e.g.
+            #    `getattr(builtins, "__import__")`.
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if node.value in _ESCAPE_ATTRIBUTES or node.value in _FORBIDDEN_CALLS:
+                    found.add(f"{node.value!r}")
 
         if found:
             return AuditCheck(
                 "security_check",
                 False,
-                f"Forbidden imports detected: {', '.join(found)}",
+                f"Forbidden constructs detected: {', '.join(sorted(found))}",
                 "error",
             )
-        return AuditCheck("security_check", True, "No forbidden imports found")
+        return AuditCheck("security_check", True, "No forbidden imports or code-execution constructs found")
 
     def _check_sharpe(self, bt: dict) -> AuditCheck:
         sharpe = float(bt.get("sharpe_ratio", 0))

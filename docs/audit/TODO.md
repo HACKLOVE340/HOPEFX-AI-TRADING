@@ -27,7 +27,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | 5 of 8 done; three found live money defects |
+| 5 | F222 · 8 critical modules with no test | HIGH | 6 of 8 done; four found live defects |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
@@ -257,7 +257,7 @@ Never named in any test file:
 | 628 | ~~`monetization/payment_processor.py`~~ — done; found 2 defects, see below |
 | 585 | `portfolio/strategy_allocator.py` |
 | 427 | ~~`payments/transaction_manager.py`~~ — done; found a double-refund path |
-| 354 | `monetization/marketplace_submission.py` |
+| 354 | ~~`monetization/marketplace_submission.py`~~ — done; the code audit auto-approved escapes |
 | 318 | ~~`payments/fintech/paystack.py`~~ — done; found a stale hard-coded FX rate |
 | 282 | ~~`monetization/access_codes.py`~~ — done; no defect found, coverage only |
 | 228 | `database/repositories/tick_data_repository.py` |
@@ -366,6 +366,42 @@ can compute it; the secret is the random part, which is looked up rather than
 compared. A `compare_digest` there would be security theatre. What does matter —
 that passing the checksum is not the same as having been issued — is asserted by
 forging a code that validates and confirming it cannot be redeemed.
+
+**`monetization/marketplace_submission.py` — done, and its code audit
+auto-approved sandbox escapes · HIGH**
+(`tests/unit/test_marketplace_audit_catches_escapes.py`, 11 of 19 fail on the
+pre-fix tree).
+
+This is a code-review gate with **no human in the path**: it takes strategy code
+from a creator, audits it, and on a pass sets the submission to APPROVED for
+sale. Its security check walked the AST for `import` statements only. Measured:
+
+| Submitted code | Before |
+|---|---|
+| `import os` | rejected |
+| `__import__('os').system('id')` | **APPROVED** |
+| `def run(x): return eval(x)` | **APPROVED** |
+| `def run(p): exec(p)` | **APPROVED** |
+| `getattr(builtins, '__import__')('os')` | **APPROVED** |
+| `().__class__.__bases__[0].__subclasses__()` | **APPROVED** |
+| `open('/etc/passwd').read()` | **APPROVED** |
+
+The blocklist itself was the tell: it contained the strings `"exec"` and
+`"eval"`, which can never appear as a module name — `import exec` is a syntax
+error — so listing them caught nothing while making the gate look as though it
+covered them. Exactly the audit's signature shape: a control that reads as
+wider than it is.
+
+The check now also refuses code-executing builtin calls, object-graph escape
+attributes, and those same names reached as string literals. Ordinary strategy
+code (pandas, numpy, a class with `__init__` and `__repr__`) still passes —
+asserted, because a gate that refuses everything is not a fix.
+
+**Stated in the code, not implied: this is a filter, not containment.** A static
+check on adversarial source can always be worked around; what it buys is that
+the obvious attempts do not sail through an automatic approval. Real containment
+is `ai/sandbox/` (item 19), which runs code under rlimits with no network and a
+scrubbed environment. The two are complementary and neither replaces the other.
 
 **Note for whoever takes the next module.** `monetization/__init__.py` and
 `payments/crypto/__init__.py` re-export each singleton under its own module's
