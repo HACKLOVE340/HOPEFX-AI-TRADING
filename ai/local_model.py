@@ -56,11 +56,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import platform
 import shutil
 import subprocess  # nosec B404 - fixed argv, no shell; see _default_launch/_default_pull
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 logger = logging.getLogger(__name__)
@@ -73,6 +75,13 @@ logger = logging.getLogger(__name__)
 AUTOSTART_ENV: Final = "LOCAL_MODEL_AUTOSTART"
 TIER_ENV: Final = "LOCAL_MODEL_TIER"
 MODELS_ENV: Final = "LOCAL_MODEL_NAMES"
+#: Whether the runtime may INSTALL Ollama when it is missing.
+#:
+#: Off by default, and that is a decision rather than an oversight: installing
+#: software is not something an application does to a trading box on its own.
+#: `scripts/install.sh` and `scripts/install.ps1` install it at deploy time,
+#: which is where a person is present to see it happen.
+AUTO_INSTALL_ENV: Final = "LOCAL_MODEL_AUTO_INSTALL"
 
 DEFAULT_LOCAL_MODEL: Final = "llama3"
 DEFAULT_TIER: Final = "1B-4B"
@@ -97,6 +106,7 @@ READINESS_TIMEOUT_S: Final = 90.0
 READINESS_POLL_S: Final = 1.0
 PROBE_TIMEOUT_S: Final = 3.0
 PULL_TIMEOUT_S: Final = 1800.0
+INSTALL_TIMEOUT_S: Final = 900.0
 
 
 def _truthy(value: str | None) -> bool:
@@ -151,6 +161,79 @@ def best_tier(ram_gib: float, vram_gib: float) -> str | None:
         if tier_fits(name, ram_gib=ram_gib, vram_gib=vram_gib):
             return name
     return None
+
+
+#: Where the per-platform installers live. One script per platform, so the
+#: platform specifics stay somewhere a person can read them, and this module
+#: only has to choose between them — which is the part worth unit-testing.
+_SCRIPTS_DIR: Final = Path(__file__).resolve().parent.parent / "scripts"
+
+
+def auto_install_enabled() -> bool:
+    return _truthy(os.getenv(AUTO_INSTALL_ENV))
+
+
+def ollama_present() -> bool:
+    """Whether the binary is on PATH. The only honest test of "installed"."""
+    return shutil.which("ollama") is not None
+
+
+def install_command(system: str | None = None) -> list[str] | None:
+    """How to install Ollama here, or None when this platform is not covered.
+
+    None rather than a best guess: inventing an install command for an unknown
+    operating system means running an unknown command as whatever user the
+    deploy runs as.
+    """
+    name = (system or platform.system()).strip().lower()
+    if name == "windows":
+        return [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(_SCRIPTS_DIR / "install_ollama.ps1"),
+        ]
+    if name in {"linux", "darwin"}:
+        return ["bash", str(_SCRIPTS_DIR / "install_ollama.sh")]
+    logger.error("local model: no Ollama installer for platform %r", name)
+    return None
+
+
+def _default_install_run(command: list[str]) -> None:
+    subprocess.run(command, check=True, timeout=INSTALL_TIMEOUT_S)  # nosec B603 - argv from install_command, no shell
+
+
+def ensure_installed(
+    *,
+    present: Callable[[], bool] = ollama_present,
+    run: Callable[[list[str]], None] = _default_install_run,
+) -> tuple[bool, str]:
+    """Install Ollama if it is missing. (succeeded, detail).
+
+    The install is proved by looking again, never by the installer exiting
+    zero. An installer that returns 0 and installs nothing is precisely the
+    "success reported for work that did not happen" shape this codebase has
+    produced repeatedly, and it is a shape a package manager can genuinely
+    produce — a winget source that resolves nothing still exits clean.
+    """
+    if present():
+        return True, "already_installed"
+
+    command = install_command()
+    if command is None:
+        return False, f"unsupported_platform: {platform.system()}"
+
+    logger.info("local model: installing Ollama via %s", " ".join(command))
+    try:
+        run(command)
+    except Exception as exc:
+        logger.error("local model: Ollama install failed (%s)", exc)
+        return False, f"install_failed: {exc}"
+
+    if not present():
+        return False, "still_absent: the installer finished but ollama is not on PATH"
+    return True, "installed"
 
 
 # ── measuring the machine ────────────────────────────────────────────────────
@@ -307,6 +390,8 @@ class LocalModelRuntime:
         probe: Callable[[], bool] = _default_probe,
         launch: Callable[[], None] = _default_launch,
         pull: Callable[[str], None] = _default_pull,
+        present: Callable[[], bool] = ollama_present,
+        install_run: Callable[[list[str]], None] = _default_install_run,
         readiness_timeout_s: float = READINESS_TIMEOUT_S,
         poll_interval_s: float = READINESS_POLL_S,
     ) -> None:
@@ -316,6 +401,8 @@ class LocalModelRuntime:
         self._probe = probe
         self._launch = launch
         self._pull = pull
+        self._present = present
+        self._install_run = install_run
         self._readiness_timeout_s = readiness_timeout_s
         self._poll_interval_s = poll_interval_s
         self._status = LocalModelStatus()
@@ -384,6 +471,38 @@ class LocalModelRuntime:
 
         already_running = self.is_ready()
         if not already_running:
+            if not self._present():
+                if auto_install_enabled():
+                    installed, detail = await asyncio.to_thread(
+                        ensure_installed, present=self._present, run=self._install_run
+                    )
+                    if not installed:
+                        logger.error(
+                            "local model: Ollama is not installed and the automatic install "
+                            "failed (%s). Run scripts/install_ollama.sh (Linux/macOS) or "
+                            "scripts/install_ollama.ps1 (Windows).",
+                            detail,
+                        )
+                        return LocalModelStatus(
+                            refusal=f"install_ollama: {detail}", tier=tier, ram_gib=ram, vram_gib=vram
+                        )
+                else:
+                    # A refusal an operator can act on. "not installed" is a dead
+                    # end; naming the script is a next step. Installing without
+                    # being asked is not the answer — LOCAL_MODEL_AUTO_INSTALL is
+                    # how a deployment opts into that.
+                    logger.error(
+                        "local model: Ollama is not installed. Run scripts/install_ollama.sh "
+                        "(Linux/macOS) or scripts/install_ollama.ps1 (Windows), or set %s=true "
+                        "to let the runtime install it.",
+                        AUTO_INSTALL_ENV,
+                    )
+                    return LocalModelStatus(
+                        refusal="install_ollama: not installed and auto-install is off",
+                        tier=tier,
+                        ram_gib=ram,
+                        vram_gib=vram,
+                    )
             try:
                 await asyncio.to_thread(self._launch)
             except Exception as exc:
@@ -455,6 +574,7 @@ def reset_local_model_runtime() -> None:
 
 __all__ = [
     "AUTOSTART_ENV",
+    "AUTO_INSTALL_ENV",
     "DEFAULT_LOCAL_MODEL",
     "DEFAULT_TIER",
     "MODELS_ENV",
@@ -462,7 +582,11 @@ __all__ = [
     "TIER_ENV",
     "LocalModelRuntime",
     "LocalModelStatus",
+    "auto_install_enabled",
     "autostart_enabled",
+    "ensure_installed",
+    "install_command",
+    "ollama_present",
     "best_tier",
     "configured_models",
     "configured_tier",

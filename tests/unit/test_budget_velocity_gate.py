@@ -78,8 +78,11 @@ def test_a_normal_call_is_allowed():
 
 def test_spending_fast_is_refused_before_the_monthly_ceiling_is_reached():
     budget.set_limits(per_operator_usd=100.0, global_usd=1000.0)
-    # 20% of 100 = 20 USD/hour for alice. Well under her 100 USD month.
-    for _ in range(21):
+    # Derived from the constant, never from the number it happens to hold: the
+    # first version of this test hardcoded 20% and broke the moment the default
+    # was tuned, which is a test measuring the wrong thing.
+    over_the_hourly_cap = int(100.0 * budget.DEFAULT_VELOCITY_FRACTION) + 1
+    for _ in range(over_the_hourly_cap):
         budget.charge("alice", 1.0)
 
     allowed, reason = budget.check("alice", 0.10)
@@ -91,8 +94,9 @@ def test_spending_fast_is_refused_before_the_monthly_ceiling_is_reached():
 def test_the_global_velocity_ceiling_catches_many_operators_at_once():
     """A loop spread across operators must not slip past a per-operator limit."""
     budget.set_limits(per_operator_usd=100.0, global_usd=200.0)
-    for i in range(41):
-        budget.charge(f"agent-{i}", 1.0)  # 41 USD > 20% of 200
+    over_the_global_cap = int(200.0 * budget.DEFAULT_VELOCITY_FRACTION) + 1
+    for i in range(over_the_global_cap):
+        budget.charge(f"agent-{i}", 1.0)  # one operator each, so only the global cap binds
 
     allowed, reason = budget.check("agent-new", 0.10)
     assert allowed is False
@@ -135,7 +139,7 @@ def test_the_window_rolls_so_a_refusal_is_not_permanent(monkeypatch):
     clock = {"now": 1000.0}
     monkeypatch.setattr(budget, "_monotonic", lambda: clock["now"])
 
-    for _ in range(21):
+    for _ in range(int(100.0 * budget.DEFAULT_VELOCITY_FRACTION) + 1):
         budget.charge("alice", 1.0)
     assert budget.check("alice", 0.10)[0] is False
 

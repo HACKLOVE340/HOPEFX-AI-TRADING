@@ -21,8 +21,25 @@ from datetime import UTC, datetime
 logger = logging.getLogger(__name__)
 
 #: Conservative defaults. An unset budget must not read as an infinite one.
-DEFAULT_PER_OPERATOR_USD = 25.0
-DEFAULT_GLOBAL_USD = 250.0
+#:
+#: Derived from this repository's own PRICING table rather than picked, so they
+#: can be re-derived when prices change. The `reasoning` chain's primary is
+#: claude-opus-5 at $15/M in and $75/M out, and DEFAULT_MAX_TOKENS caps output
+#: at 2048, so one reasoning call costs roughly:
+#:
+#:     2,000 in  -> 2000/1e6 * 15  = $0.030
+#:     1,000 out -> 1000/1e6 * 75  = $0.075
+#:                                  ~$0.105, worst case ~$0.27
+#:
+#: The `fast` chain (claude-sonnet-5, $3/$15) is about a tenth of that at
+#: ~$0.02 — route routine work there rather than at `reasoning`.
+#:
+#: $10 per operator is therefore ~100 reasoning calls or ~475 fast ones a
+#: month, which is generous for interactive use; $60 global covers several
+#: operators with headroom. Raise both when the department agents land, since
+#: they will call far more often than a person does.
+DEFAULT_PER_OPERATOR_USD = 10.0
+DEFAULT_GLOBAL_USD = 60.0
 
 #: The velocity window, and the two limits over it.
 #:
@@ -35,7 +52,7 @@ VELOCITY_WINDOW_S = 3600.0
 #: Spend velocity as a FRACTION of the configured monthly ceiling, rather than
 #: as a second set of dollar figures. It then tracks whatever a superadmin sets,
 #: and there is no second number to keep in step with the first.
-DEFAULT_VELOCITY_FRACTION = 0.20
+DEFAULT_VELOCITY_FRACTION = 0.25
 
 #: Calls per window, and this one is not optional.
 #:
@@ -45,9 +62,17 @@ DEFAULT_VELOCITY_FRACTION = 0.20
 #: it can spin at full speed forever without moving a dollar figure. The call
 #: count is the only thing that sees it.
 #:
-#: 600/hour is a sustained rate, not a burst allowance: generous for legitimate
-#: agent work, and far below what a loop produces.
-DEFAULT_MAX_CALLS_PER_WINDOW = 600
+#: 120/hour is a sustained rate, not a burst allowance. The separation it draws
+#: is the point: a person working hard peaks around one call a minute, while a
+#: loop does thousands an hour. 120 sits above the first and far below the
+#: second, so it catches a runaway within a minute or two without ever being
+#: reached by real use.
+#:
+#: The two limits do different jobs and it is worth being explicit about which:
+#: the spend ceilings are COST control, and this is the RUNAWAY catch — and the
+#: only one of the two that can see a local loop at all, since local calls
+#: move no money.
+DEFAULT_MAX_CALLS_PER_WINDOW = 120
 
 _per_operator_usd: float | None = None
 _global_usd: float | None = None
