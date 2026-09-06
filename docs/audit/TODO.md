@@ -41,7 +41,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 21 | F216/F217 · `data/` ↔ `data_layer/` boundary | MEDIUM | **owner** |
 | 22 | `REMEDIATION_PLAN.md` is stale | MEDIUM | — |
 | 23 | Owner-blocked questions | — | **owner** |
-| 24 | F271 · the dependency scan reads the manifest that pins nothing | HIGH | — |
+| 24 | F271 · the dependency scan reads the manifest that pins nothing | HIGH | fixed; 1 critical + 4 high were hidden |
 
 **Read first if you read nothing else:** items 1, 4, 7b and 13–19.
 
@@ -566,6 +566,46 @@ back; the number is currently unknown and could be large. Do **not** delete
 read, and removing it is the F221 defect.
 **Done when:** the scan resolves concrete versions for every production
 dependency, and its report is the pinned set rather than the range set.
+
+**Status: fixed, and it was hiding real CVEs.** `ci.yml` now builds a
+Trivy-readable manifest from `requirements.lock` and scans it with
+`--exit-code 1` and the same `.trivyignore.yaml`. Measured 2026-09-06:
+
+| Manifest | Findings |
+|---|---|
+| `requirements.txt` (ranges) | 0 — "no version I could resolve" |
+| `uv.lock` | 6 (2 CRITICAL, 4 HIGH), all accepted |
+| **`requirements.lock` (297 pins)** | **11 (3 CRITICAL, 8 HIGH)** |
+
+The five extra findings all **had upstream fixes** and were therefore invisible
+rather than accepted — a worse failure than seeing a CVE and arguing for it:
+
+* `cryptography` 49.0.0 → **50.0.0** — CVE-2026-69247, PKCS#7 EnvelopedData
+  decryption exposes a Bleichenbacher oracle through distinguishable errors.
+  This platform uses `cryptography` for token and secret encryption.
+* `nltk` 3.10.0 → **3.10.3** — CVE-2026-79675 (CRITICAL, JVM argument
+  injection), CVE-2026-71513 (RCE via `AllowlistUnpickler` dotted-name bypass),
+  CVE-2026-72818, CVE-2026-78680.
+
+Both floors are raised in `requirements.txt` and `requirements-ci.txt` as well
+as pinned in the lock, so a regenerated lock cannot drop back below the fix. The
+running environment was already on both fixed versions — the lock was behind
+what CI installs — and all 1,478 crypto/auth/NLP tests pass on them.
+
+After the upgrade the pinned scan reports **0 un-accepted findings**, with
+exactly the six pre-existing acceptances suppressed (verified with
+`--show-suppressed`).
+
+**`--ignore-unfixed` is gone from `security-scan.yml`.** That job's output is
+the SARIF that populates the Security tab, which is precisely where an unfixed
+CVE belongs — it cannot be resolved by a bump and needs a human decision.
+Suppression now goes through `.trivyignore.yaml` for both jobs, so there is one
+list of accepted risks with one set of expiry dates.
+
+Locked in by `tests/unit/test_dependency_scan_reads_the_pins.py` (9 of 10 fail
+on the pre-fix tree), which asserts the lock is scanned, the scan can fail,
+neither workflow drops unfixed CVEs, both read the same acceptance file, and
+both floors hold.
 
 ## What was fixed this session
 

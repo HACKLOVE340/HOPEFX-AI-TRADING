@@ -323,3 +323,6 @@ k6/results/*
 # a test run or a local session. Both are per-deployment state, not source.
 data/paper_gate_state.json
 data/reg_dlq/
+
+# Built by the CI Trivy step from requirements.lock; never committed.
+.trivy-pinned/
