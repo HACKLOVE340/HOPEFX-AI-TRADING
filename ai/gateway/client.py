@@ -29,7 +29,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 from ai.cache.store import ResponseCache
-from ai.gateway import audit, budget
+from ai.gateway import audit, breakers, budget
 from ai.gateway.chain import ChainLeg, resolve_chain, should_fall_through
 from ai.guardrails.input import screen_input
 from ai.guardrails.output import scan_output, validate_output
@@ -243,6 +243,13 @@ class GatewayClient:
             if provider is None:
                 attempts.append({"provider": leg.provider, "reason": "no_credentials", "skipped": True})
                 continue
+            # A vendor the breaker has taken out of rotation is skipped without
+            # being dialled. Without this a comprehensively dead primary was
+            # contacted on every single call and every call paid its timeout
+            # before reaching a leg that works.
+            if breakers.is_open(leg.provider):
+                attempts.append({"provider": leg.provider, "model": leg.model, "reason": "circuit_open"})
+                continue
             # A leg that cannot see is SKIPPED, never handed a blind prompt.
             # Dropping the image and asking a text model "what is this?" gets a
             # confident answer about nothing at all, which is far worse than
@@ -263,6 +270,10 @@ class GatewayClient:
                 result = provider.complete(**kwargs)
             except ProviderError as exc:
                 attempts.append({"provider": leg.provider, "model": leg.model, "reason": exc.reason})
+                # Only a transport failure counts against the vendor. A refusal
+                # or a 400 means it answered, and marking a working vendor down
+                # for a malformed prompt would remove a leg the chain needs.
+                breakers.record_outcome(leg.provider, reason=exc.reason)
                 if should_fall_through(exc.reason):
                     logger.info("ai.gateway: %s failed (%s); trying the next leg", leg.provider, exc.reason)
                     continue
@@ -270,6 +281,7 @@ class GatewayClient:
                 raise
             except Exception as exc:  # an adapter bug must not look like a refusal
                 attempts.append({"provider": leg.provider, "model": leg.model, "reason": "adapter_error"})
+                breakers.record_outcome(leg.provider, reason="adapter_error")
                 logger.exception("ai.gateway: adapter raised for %s: %s", leg.provider, exc)
                 continue
 
@@ -293,6 +305,7 @@ class GatewayClient:
             tokens_in = int(getattr(result, "tokens_in", 0) or 0)
             tokens_out = int(getattr(result, "tokens_out", 0) or 0)
             attempts.append({"provider": leg.provider, "model": leg.model, "reason": "served"})
+            breakers.record_outcome(leg.provider, reason=None)
             budget.charge(operator, cost)
             self._audit(request, operator, attempts, leg, leg.model, started, cost, tokens_in, tokens_out)
             served = ModelResponse(
