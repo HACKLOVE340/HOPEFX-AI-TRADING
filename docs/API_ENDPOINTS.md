@@ -102,6 +102,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-core/cache` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/calls` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/capabilities` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/capabilities/registry` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/chain` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/departments` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/evals` | JWT |  | AI Core |

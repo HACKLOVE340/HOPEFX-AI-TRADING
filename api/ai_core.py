@@ -380,6 +380,28 @@ async def ai_core_departments(_: TokenPayload = Depends(_viewer)) -> dict[str, A
         }
 
 
+@router.get("/capabilities/registry")
+async def ai_core_capability_registry(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """What the AI Hub specification asks for, and how much of it is real.
+
+    §30 requires that a capability which cannot be built immediately still
+    exists in the system as a registry entry and roadmap point, "rather than
+    being silently omitted". This is where that becomes visible: 200-odd
+    capabilities, each traced to the specification section that asks for it.
+
+    **`verified` is reported apart from `live` deliberately.** One is what the
+    registry was told; the other is what `verify()` measured by resolving each
+    claim's evidence. `scripts/invariant_coverage.py` collapsed that distinction
+    (F176) and could not print anything but full coverage while three of the
+    components it certified were unprotected. `discrepancies` is the other half
+    of the same rule: a claim whose module or symbol has since disappeared is
+    reported here, never quietly dropped from the count.
+    """
+    from ai.hub.capabilities import coverage
+
+    return coverage()
+
+
 @router.get("/summary")
 async def ai_core_summary(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
     """One request for the page header, so it does not need seven round trips."""

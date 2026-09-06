@@ -88,6 +88,11 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     "ai_core_calls": _VIEW,
     "ai_core_cache": _VIEW,
     "ai_core_evals": _VIEW,
+    # The AI Hub specification's capability registry: what the spec asks for and
+    # how much is real. Reporting only, and it reports about the SYSTEM rather
+    # than about any operator's data — but it stays behind _VIEW like every other
+    # row here, because "which controls are not built yet" is a map of the gaps.
+    "ai_core_capability_registry": _VIEW,
     # Which models each vendor currently serves. Reporting, not acting: choosing
     # a model is `route_model`, which is superadmin + 2FA below. Admin may see
     # WHICH vendors are configured -- a boolean, never a credential.
