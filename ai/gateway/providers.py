@@ -22,6 +22,8 @@ import os
 from typing import Final
 
 #: Provider name -> the env vars any one of which credentials it. Ollama is
+from ai.gateway.vendors import OPENAI_COMPATIBLE as _VENDORS
+
 #: credentialed by a base URL rather than a key: local inference has no vendor
 #: account, which is precisely why it is optional and never a primary leg.
 CREDENTIAL_ENV: Final[dict[str, tuple[str, ...]]] = {
@@ -29,6 +31,11 @@ CREDENTIAL_ENV: Final[dict[str, tuple[str, ...]]] = {
     "openai": ("OPENAI_API_KEY",),
     "google": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
     "ollama": ("OLLAMA_BASE_URL",),
+    # The OpenAI-compatible vendors (Moonshot/Kimi, Qwen, DeepSeek, Mistral,
+    # Groq, xAI, OpenRouter, Together) are generated from the one table that
+    # also drives their adapters, so a vendor cannot be credentialable without
+    # being callable — or callable without being credentialable.
+    **{name: (vendor.key_env,) for name, vendor in _VENDORS.items()},
 }
 
 

@@ -394,11 +394,96 @@ class OllamaAdapter(_HttpAdapter):
         )
 
 
+class OpenAICompatibleAdapter(_HttpAdapter):
+    """Every vendor that speaks the OpenAI wire format, from one table.
+
+    Moonshot (Kimi), Qwen, DeepSeek, Mistral, Groq, xAI, OpenRouter and Together
+    all serve `POST {base}/chat/completions` and `GET {base}/models` with a
+    bearer key, so they differ only in host and credential. Writing eight
+    near-identical adapters would be eight places for the same bug.
+
+    Subclasses set `provider`; the base URL and key come from
+    `ai/gateway/vendors.py`, which lets a deployment point a vendor at its
+    regional host without a code change.
+    """
+
+    provider = ""
+
+    @property
+    def _base(self) -> str:
+        from ai.gateway.vendors import resolve_base_url
+
+        return resolve_base_url(self.provider)
+
+    def _key(self) -> str:
+        from ai.gateway.vendors import api_key
+
+        return api_key(self.provider)
+
+    @property
+    def probe_url(self) -> str:  # type: ignore[override]
+        return f"{self._base}/models"
+
+    def probe_headers(self) -> dict[str, str]:
+        return {"authorization": f"Bearer {self._key()}"}
+
+    def complete(self, *, model: str, prompt: str, timeout_s: float) -> AdapterResult:
+        response = self._post(
+            f"{self._base}/chat/completions",
+            headers={
+                "authorization": f"Bearer {self._key()}",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": DEFAULT_MAX_TOKENS,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout_s=timeout_s,
+            model=model,
+        )
+        data = response.json()
+        choices = data.get("choices") or []
+        text = (choices[0].get("message", {}) or {}).get("content", "") if choices else ""
+        usage = data.get("usage", {}) or {}
+        tokens_in = int(usage.get("prompt_tokens", 0) or 0)
+        tokens_out = int(usage.get("completion_tokens", 0) or 0)
+        return AdapterResult(
+            text=_require_text(text or "", provider=self.provider, model=model),
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            # An unpriced model is charged at the highest known rate, never
+            # free. Adding a vendor must not be a way to spend money the
+            # budget cannot see.
+            cost_usd=estimate_cost(model, tokens_in=tokens_in, tokens_out=tokens_out, provider=self.provider),
+        )
+
+
+def _openai_compatible_adapters() -> dict[str, type[_HttpAdapter]]:
+    """One adapter class per row of the vendor table, built from the table.
+
+    Generated rather than hand-written so `OPENAI_COMPATIBLE`, `CREDENTIAL_ENV`
+    and `_ADAPTERS` cannot disagree about which vendors exist — a disagreement
+    that would show up as a chain leg that is configurable and uncallable.
+    """
+    from ai.gateway.vendors import OPENAI_COMPATIBLE
+
+    return {
+        name: type(
+            f"{name.capitalize()}Adapter",
+            (OpenAICompatibleAdapter,),
+            {"provider": name},
+        )
+        for name in OPENAI_COMPATIBLE
+    }
+
+
 _ADAPTERS: Final[dict[str, type[_HttpAdapter]]] = {
     "anthropic": AnthropicAdapter,
     "openai": OpenAIAdapter,
     "google": GoogleAdapter,
     "ollama": OllamaAdapter,
+    **_openai_compatible_adapters(),
 }
 
 
@@ -423,6 +508,7 @@ __all__ = [
     "AnthropicAdapter",
     "GoogleAdapter",
     "OllamaAdapter",
+    "OpenAICompatibleAdapter",
     "OpenAIAdapter",
     "build_providers",
     "estimate_cost",

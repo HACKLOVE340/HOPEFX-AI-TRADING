@@ -359,7 +359,22 @@ def _validate_llm_backend(errors: list[str]) -> None:
     # by environment -- which made the fallback chain in ai/gateway/chain.py
     # unreachable past its second leg. ollama is the optional local backend and
     # is never a default (plan Part 1A.5).
-    valid_backends = {"anthropic", "openai", "google", "ollama"}
+    #
+    # The OpenAI-compatible vendors (Moonshot/Kimi, Qwen, DeepSeek, Mistral,
+    # Groq, xAI, OpenRouter, Together) come from the same table that drives
+    # their adapters and credentials. Listing them again here is how a vendor
+    # ends up callable by the gateway and rejected by startup validation.
+    from ai.gateway.vendors import OPENAI_COMPATIBLE
+
+    key_map = {
+        "anthropic": ("ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
+        "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys"),
+        "google": ("GOOGLE_API_KEY", "https://aistudio.google.com/app/apikey"),
+        # Local inference authenticates by reachability, not by key.
+        "ollama": ("OLLAMA_BASE_URL", "https://ollama.com/download"),
+        **{name: (v.key_env, v.console_url) for name, v in OPENAI_COMPATIBLE.items()},
+    }
+    valid_backends = set(key_map)
 
     if llm_backend not in valid_backends:
         errors.append(
@@ -369,13 +384,6 @@ def _validate_llm_backend(errors: list[str]) -> None:
         )
         return
 
-    key_map = {
-        "anthropic": ("ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
-        "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys"),
-        "google": ("GOOGLE_API_KEY", "https://aistudio.google.com/app/apikey"),
-        # Local inference authenticates by reachability, not by key.
-        "ollama": ("OLLAMA_BASE_URL", "https://ollama.com/download"),
-    }
     env_name, url = key_map[llm_backend]
     api_key = _env(env_name)
 
