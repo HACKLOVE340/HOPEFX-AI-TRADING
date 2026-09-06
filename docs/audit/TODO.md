@@ -27,8 +27,8 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | — |
-| 6 | Crypto currency read from a free-text field | MEDIUM | — |
+| 5 | F222 · 8 critical modules with no test | HIGH | 1 of 8 done |
+| 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
 | 8 | Coverage headroom — resolved, rule stands | — | — |
@@ -261,7 +261,7 @@ Never named in any test file:
 | 318 | `payments/fintech/paystack.py` |
 | 282 | `monetization/access_codes.py` |
 | 228 | `database/repositories/tick_data_repository.py` |
-| 208 | `payments/payment_gateway.py` |
+| 208 | ~~`payments/payment_gateway.py`~~ — done, `tests/unit/test_payment_currency_is_explicit.py` |
 
 I triaged all eight for a second F267 (a fabricated value on a money path).
 **None fabricates.** `access_codes` uses SHA-256 as a typo checksum with
@@ -289,6 +289,19 @@ blast radius — but the BTC default is still a guess about which chain a user's
 money is on.
 **Do:** carry the currency in its own field; refuse when it is absent.
 **Done when:** a payment with no explicit currency is rejected, not defaulted.
+
+**Status: fixed.** `Payment.currency` is its own field, and `_process_crypto`
+raises when it is blank rather than defaulting. The address generator's own
+check does not cover this and never did: `"BTC"` is a *known* currency, so a
+defaulted guess passes validation and produces a perfectly valid address on the
+wrong chain. Tests: `tests/unit/test_payment_currency_is_explicit.py` — 8 of 9
+fail on the pre-fix tree.
+
+This is also `payments/payment_gateway.py`'s first test, so it comes off item 5's
+list of eight untested modules. `_process_bank` still reads
+`"bank_code:account_number"` out of `description`, which is the same overloaded
+field — but it *refuses* when the value is absent rather than defaulting, so it
+is a readability problem, not this defect.
 
 ### 7. OANDA adapter is not venue-verified · HIGH — owner-blocked
 

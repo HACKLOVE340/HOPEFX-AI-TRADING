@@ -45,12 +45,24 @@ class PaymentStatus(Enum):
 class Payment:
     """Payment transaction"""
 
-    def __init__(self, amount: float, method: PaymentMethod, user_id: str, description: str = ""):
+    def __init__(
+        self,
+        amount: float,
+        method: PaymentMethod,
+        user_id: str,
+        description: str = "",
+        currency: str | None = None,
+    ):
         self.id = str(uuid.uuid4())
         self.amount = amount
         self.method = method
         self.user_id = user_id
         self.description = description
+        # Its own field, because it decides which chain a user's money goes to.
+        # It used to be read out of `description`, where a blank value silently
+        # became "BTC" -- so a user paying in ETH could be handed a Bitcoin
+        # address, and coins sent to the wrong chain are generally gone.
+        self.currency = currency
         self.status = PaymentStatus.PENDING
         self.created_at = datetime.now(UTC)
         self.completed_at = None
@@ -63,9 +75,21 @@ class PaymentGateway:
     def __init__(self):
         self.payments: dict[str, Payment] = {}
 
-    def create_payment(self, amount: float, method: PaymentMethod, user_id: str, description: str = "") -> Payment:
-        """Create new payment"""
-        payment = Payment(amount, method, user_id, description)
+    def create_payment(
+        self,
+        amount: float,
+        method: PaymentMethod,
+        user_id: str,
+        description: str = "",
+        currency: str | None = None,
+    ) -> Payment:
+        """Create new payment.
+
+        `currency` is required for CRYPTO payments and is validated at
+        processing time rather than here, so a caller can build a payment and
+        decide the chain afterwards -- but never process one without it.
+        """
+        payment = Payment(amount, method, user_id, description, currency)
         self.payments[payment.id] = payment
         logger.info("Payment created: %s", payment.id)
 
@@ -137,13 +161,25 @@ class PaymentGateway:
     def _process_crypto(self, payment: Payment) -> None:
         """Process crypto payment via payments.crypto.address_generator.
 
-        Assigns a unique deposit address for the user.  The currency is read
-        from payment.description (e.g. "BTC", "ETH", "USDT_ERC20").
-        Defaults to "BTC" when description is blank.
+        Assigns a unique deposit address for the user, on the chain named by
+        `payment.currency` (e.g. "BTC", "ETH", "USDT_ERC20").
+
+        **An absent currency is refused, never defaulted.** This read the
+        currency from `payment.description` and fell back to "BTC" when that was
+        blank, so a user paying in ETH could be handed a Bitcoin address. The
+        address generator's own check does not catch it: "BTC" is a *known*
+        currency, so a defaulted guess passes validation and produces a
+        perfectly valid address on the wrong chain.
         """
         from payments.crypto.address_generator import address_generator
 
-        currency = (payment.description or "BTC").strip().upper()
+        currency = (payment.currency or "").strip().upper()
+        if not currency:
+            raise ValueError(
+                f"Crypto payment {payment.id} has no currency. Set `currency` on the payment "
+                "(e.g. 'BTC', 'ETH', 'USDT_ERC20') -- it decides which chain the deposit "
+                "address belongs to and must not be guessed."
+            )
         deposit_address = address_generator.generate_address(
             user_id=payment.user_id,
             currency=currency,
