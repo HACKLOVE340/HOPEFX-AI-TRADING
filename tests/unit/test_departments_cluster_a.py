@@ -153,25 +153,27 @@ def test_only_non_money_actions_are_implemented_so_far():
 
 
 def test_an_unimplemented_action_refuses_rather_than_no_opping():
-    """A permitted-but-absent tool must never read as a successful no-op."""
+    """A permitted-but-absent tool must never read as a successful no-op.
+
+    The example is CHOSEN, not hard-coded. Three earlier versions named a
+    specific action and each went stale the moment its department landed —
+    which is the build working, but a test that needs editing every time is a
+    test measuring the schedule rather than the property. This picks any
+    declared action whose permission tier admits it and which has no handler,
+    so the refusal can only come from the missing implementation.
+    """
     from ai.tools.bus import ToolDenied
 
+    registry = departments.permission_registry()
+    candidates = [a for a in departments.all_actions() if a.handler is None and registry.review(a.name).allowed]
+    if not candidates:
+        pytest.skip("every permitted action now has a handler — nothing left to refuse this way")
+
     bus = departments.build_tool_bus()
+    action = candidates[0]
     with pytest.raises(ToolDenied) as excinfo:
-        bus.invoke(
-            # A READ_ONLY action, so the permission tier lets it through and the
-            # refusal can only come from the missing handler. Picking a gated
-            # action here would pass for the wrong reason.
-            # A READ_ONLY action with no handler, so the permission tier lets
-            # it through and the refusal can only come from the missing
-            # handler. This has now been platform_engineering.scan_secrets and
-            # risk_compliance.check_drawdown in turn — each went stale as its
-            # department landed, which is the build working as intended.
-            "markets_execution.sync_positions",
-            operator="tester",
-            allowed_actions={"markets_execution.sync_positions"},
-        )
-    assert "tool_not_implemented" in excinfo.value.reason_codes
+        bus.invoke(action.name, operator="tester", allowed_actions={action.name})
+    assert "tool_not_implemented" in excinfo.value.reason_codes, action.name
 
 
 def test_an_order_action_is_refused_without_approval():

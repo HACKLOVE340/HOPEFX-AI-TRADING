@@ -34,7 +34,7 @@ from typing import Any, Final
 
 from core.ai_tool_permissions import ToolPermission, ToolPermissionRegistry, ToolRisk
 
-from . import platform_engineering, research, risk_compliance
+from . import markets_execution, platform_engineering, research, risk_compliance
 
 #: Bumped whenever the action set or a risk tier changes. An unversioned
 #: permission set cannot be audited after the fact.
@@ -121,10 +121,15 @@ DEPARTMENTS: Final[dict[str, Department]] = {
                 "markets_execution",
                 "sync_positions",
                 ToolRisk.READ_ONLY,
-                "Reconcile local positions against the broker's.",
+                "Report how local positions differ from the broker's. Reports only; corrects nothing.",
+                markets_execution.sync_positions,
             ),
             _action(
-                "markets_execution", "query_broker_status", ToolRisk.READ_ONLY, "Broker connection and heartbeat state."
+                "markets_execution",
+                "query_broker_status",
+                ToolRisk.READ_ONLY,
+                "Broker connection and heartbeat state.",
+                markets_execution.query_broker_status,
             ),
         ),
         memory=("execution/fill history", "slippage per symbol", "last broker heartbeat"),
