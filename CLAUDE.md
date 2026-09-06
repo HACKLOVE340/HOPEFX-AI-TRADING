@@ -120,6 +120,42 @@ Test markers: `unit`, `integration`, `e2e`, `slow`, `requires_redis`, `asyncio`.
 
 ---
 
+## Skills — use them, every time
+
+**Standing instruction from the owner (2026-09-06): use the relevant skills on
+every task, always.** Not "when it seems worth it" — every time. They exist
+because this codebase has cost real money to get wrong, and each one encodes a
+class of mistake already made here.
+
+`.claude/skills/` holds 60 of them. The ones that earn their keep most often:
+
+| When you are… | Load |
+|---|---|
+| starting **any** development task | `flow-by-flow` (then `flow-prototype` for a UI surface) |
+| touching prices, balances, P&L, fees, lot sizes | `hopefx-money-precision` |
+| touching a gate, limit, kill switch or invariant | `hopefx-invariants`, `hopefx-dead-controls` |
+| writing any fix | `test-driven-development`, `verification-before-completion` |
+| chasing a bug | `systematic-debugging` |
+| touching Stripe, billing, webhooks, refunds | `stripe-integration` |
+| touching any UI | `ui-ux-pro-max` (and its pre-delivery checklist) |
+| touching retries, timeouts, circuit breakers | `python-resilience` |
+| reasoning about an attack surface | `stride-analysis-patterns`, `attack-tree-construction` |
+| planning work bigger than one file | `writing-plans`, then `executing-plans` |
+| touching tick/feed quality or freshness | `data-quality-frameworks` |
+| touching the ML pipeline | `ml-pipeline-workflow`, `backtesting-frameworks` |
+
+Two rules that come from those skills and are worth repeating here, because
+they are the ones most often skipped under time pressure:
+
+1. **Every fix ships with a test that fails on the pre-fix tree.** Run it
+   against the old code — `git stash`, run, `git stash pop` — and watch it
+   fail. A test that has never failed proves nothing.
+2. **Prove by execution, not by reading.** Reproduce the defect by running it
+   before you fix it, and re-run the same reproduction after. Nine of the
+   defects found in this repository read as correct.
+
+---
+
 ## Gotchas
 
 - **Python 3.12** is the production target — it is what `Dockerfile` runs
