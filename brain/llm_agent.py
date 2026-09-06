@@ -52,8 +52,6 @@ try:
 except ImportError:
     _resource_mod = None  # type: ignore[assignment]
     _RESOURCE_AVAILABLE = False
-import subprocess  # nosec B404 — used only for sandboxed LLM code execution with fixed args
-import sys
 import tempfile
 import textwrap
 import traceback
@@ -488,11 +486,25 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
         os.close(fd)
         raise
 
-    # Inline runner script: executed inside the subprocess.
-    # Imports the strategy, instantiates it, and writes a JSON result to stdout.
+    # Smoke-test through the SHARED sandbox (ai/sandbox), not a second one.
+    #
+    # This used to spawn its own subprocess with rlimits and a stripped
+    # environment — careful work, and it had no socket block. Generated code
+    # could open a connection while being smoke-tested, with PYTHONPATH
+    # forwarded so it could import repo modules and read files first. rlimits
+    # stop it burning CPU, forking or exhausting memory; they do not stop it
+    # talking.
+    #
+    # ai/sandbox blocks sockets when net=False, and it had zero production
+    # callers. Two sandbox implementations is a hazard by itself: a fix to one
+    # does not reach the other, and the weaker one was the one running
+    # model-produced code.
+    #
+    # prefilter=False because the source already passed _ast_sandbox_check
+    # above; what this needs from the sandbox is the containment.
     runner_script = textwrap.dedent(
         f"""
-        import importlib.util, json, sys, traceback
+        import importlib.util, json
 
         result = {{"ok": False, "error": None, "class_found": False}}
         try:
@@ -507,79 +519,55 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
                 result["ok"] = True
                 result["class_found"] = True
         except Exception as exc:
-            result["error"] = f"{{type(exc).__name__}}: {{exc}}\\n{{traceback.format_exc()}}"
+            result["error"] = f"{{type(exc).__name__}}: {{exc}}"
         print(json.dumps(result))
         """
     )
 
-    runner_fd, runner_path = tempfile.mkstemp(suffix="_runner.py", dir=tempfile.gettempdir())
     try:
-        with os.fdopen(runner_fd, "w", encoding="utf-8") as f:
-            f.write(runner_script)
-    except Exception:
-        os.close(runner_fd)
-        raise
+        try:
+            from ai.sandbox import runner as _sandbox
+        except Exception as exc:
+            # No containment means no smoke test. "We could not contain this"
+            # must never become "compiled".
+            return None, f"Sandbox unavailable ({exc}); refusing to compile generated code"
 
-    def _apply_resource_limits() -> None:
-        """Called in the child process before exec — sets hard resource limits.
-        No-op on Windows where the resource module is unavailable."""
-        if not _RESOURCE_AVAILABLE or _resource_mod is None:
-            return
-        # CPU time: 30 seconds (soft) / 35 seconds (hard)
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_CPU, (30, 35))
-        # Virtual address space: 512 MiB
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
-        # Open file descriptors: 64
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_NOFILE, (64, 64))
-        # Max child processes: 0 (no fork/spawn from sandbox)
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_NPROC, (0, 0))
+        try:
+            outcome = _sandbox.run(runner_script, timeout_s=30.0, net=False, prefilter=False)
+        except Exception as exc:
+            return None, f"Sandbox failed to run ({exc})"
 
-    # Stripped environment: no secrets, no broker credentials, no API keys.
-    # Only PATH and PYTHONPATH are forwarded so imports resolve correctly.
-    sandbox_env = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
-        "HOME": tempfile.gettempdir(),
-    }
+        if not outcome.ok:
+            codes = ", ".join(outcome.reason_codes or ()) or "refused"
+            detail = (outcome.stderr or "").strip()[-500:]
+            return None, f"Sandbox refused the generated strategy ({codes}): {detail}"
 
-    try:
-        proc = subprocess.run(  # nosec B603
-            [sys.executable, runner_path],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=sandbox_env,
-            preexec_fn=_apply_resource_limits,
-            check=False,  # nosec B603
-        )
-        stdout = proc.stdout.strip()
+        stdout = (outcome.stdout or "").strip()
         if not stdout:
-            stderr_snippet = proc.stderr[-500:] if proc.stderr else "(no stderr)"
-            return None, f"Sandbox subprocess produced no output. stderr: {stderr_snippet}"
+            return None, "Sandbox produced no output for the generated strategy"
 
-        result = json.loads(stdout)
-        if result.get("ok"):
-            # Re-import in the parent process — AST check already passed,
-            # and the subprocess confirmed the class instantiates cleanly.
-            spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)  # nosec B302
-            cls = module.GeneratedStrategy
-            instance = cls()  # pylint: disable=not-callable
-            return instance, None
-        return None, result.get("error", "Unknown sandbox error")
+        try:
+            result = json.loads(stdout.splitlines()[-1])
+        except json.JSONDecodeError as exc:
+            return None, f"Sandbox output parse error: {exc}"
 
-    except subprocess.TimeoutExpired:
-        return None, "Sandbox timeout: strategy code exceeded 30-second execution limit"
-    except json.JSONDecodeError as exc:
-        return None, f"Sandbox output parse error: {exc}"
+        if not result.get("ok"):
+            return None, result.get("error", "Unknown sandbox error")
+
+        # Re-import in the parent process. The AST screen passed and the
+        # sandbox confirmed the class instantiates — and this is still an exec
+        # of model-produced Python, which is why the caller gates it.
+        spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)  # nosec B302
+        cls = module.GeneratedStrategy
+        return cls(), None
+
     except (ImportError, AttributeError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
     finally:
         with contextlib.suppress(OSError):
             Path(tmp_path).unlink()
-        with contextlib.suppress(OSError):
-            Path(runner_path).unlink()
 
 
 # ── quick backtest ────────────────────────────────────────────────────────────
