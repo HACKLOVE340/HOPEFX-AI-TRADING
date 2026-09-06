@@ -54,6 +54,37 @@ class ToolResult:
     value: Any = None
     reason_codes: tuple[str, ...] = field(default_factory=tuple)
 
+    def as_prompt_data(self) -> str:
+        """This result, rendered for inclusion in a prompt as UNTRUSTED DATA.
+
+        A tool result is not the agent's own reasoning. `fetch_market_news`
+        returns text somebody else published; `scan_secrets` returns file
+        contents; a camera frame can show a screen saying anything at all. Fed
+        back raw, any of them can carry an instruction the agent then follows.
+
+        `ai.guardrails.input.fence` already handles this correctly, including
+        neutralising a closing tag hidden inside the payload -- without which a
+        crafted result ends the quarantine early and everything after it reads
+        as prompt. This delegates to it rather than keeping a second copy that
+        would drift.
+
+        Provided as a method so the safe form is the easy one: a caller building
+        a prompt reaches for this instead of `str(result.value)`, and cannot
+        forget the step.
+        """
+        from ai.guardrails.input import fence
+
+        if not self.allowed:
+            # A refusal must never render as an empty successful reading -- the
+            # same reason `invoke` raises `tool_not_implemented` rather than
+            # returning a no-op.
+            codes = ", ".join(self.reason_codes) or "no reason given"
+            body = f"The tool {self.tool} was REFUSED and produced no result. Reason: {codes}"
+        else:
+            body = f"Result of {self.tool}:\n{self.value!r}"
+
+        return fence(body, kind="tool_result")
+
 
 @dataclass
 class _Registered:

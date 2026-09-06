@@ -31,7 +31,7 @@ from ai.cache.store import ResponseCache
 from ai.gateway import audit, budget
 from ai.gateway.chain import ChainLeg, resolve_chain, should_fall_through
 from ai.guardrails.input import screen_input
-from ai.guardrails.output import validate_output
+from ai.guardrails.output import scan_output, validate_output
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +192,21 @@ class GatewayClient:
                 attempts.append({"provider": leg.provider, "model": leg.model, "reason": "adapter_error"})
                 logger.exception("ai.gateway: adapter raised for %s: %s", leg.provider, exc)
                 continue
+
+            # Screen what came back before anything else happens to it.
+            #
+            # Placed here, after the leg served and before the answer is cached,
+            # audited as served, or returned: a credential must not be stored in
+            # the response cache, where a later identical prompt would be handed
+            # it again without a provider ever being called.
+            #
+            # A rejection is an ANSWER, not a transport failure -- the same rule
+            # the input guardrail follows. `should_fall_through` does not list
+            # `guardrail_rejected`, so this correctly does not retry on a second
+            # vendor: asking another model the same question is not a fix for
+            # the first one having leaked, and would just spend money to leak
+            # twice.
+            scan_output(str(getattr(result, "text", "")))
 
             latency_ms = (time.perf_counter() - started) * 1000
             cost = float(getattr(result, "cost_usd", 0.0) or 0.0)
