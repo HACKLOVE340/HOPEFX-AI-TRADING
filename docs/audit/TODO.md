@@ -42,6 +42,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 22 | `REMEDIATION_PLAN.md` is stale | MEDIUM | — |
 | 23 | Owner-blocked questions | — | **owner** |
 | 24 | F271 · the dependency scan reads the manifest that pins nothing | HIGH | fixed; 1 critical + 4 high were hidden |
+| 25 | **The brain placed orders with no risk gate** | **CRITICAL** | fixed |
 
 **Read first if you read nothing else:** items 1, 4, 7b and 13–19.
 
@@ -229,6 +230,58 @@ wrong reason.
 *pre-existing* migration — `n1o2p3q4r5s6` raises `table trade_journal already
 exists`. It is reached long before this migration runs, so it is a separate
 finding with its own blast radius.
+
+### 25. The brain placed market orders with no risk gate · CRITICAL · **fixed**
+
+Found while asserting the property I had listed as unasserted: "no AI-originated
+order reaches a broker except through `risk/manager`". It was not merely
+unasserted. It was false.
+
+`brain/brain.py:858`, before the fix:
+
+```python
+if self.risk_manager and hasattr(self.risk_manager, "filter_signals"):
+    signals = await self.risk_manager.filter_signals(signals, self.state)
+```
+
+**`filter_signals` is defined nowhere in this repository.** `RiskManager`
+exposes `validate_trade`, `check_risk_limits`, `check_kill_switch`,
+`check_drawdown`, `check_position_size`, `check_concentration`,
+`check_correlation_risk`, `check_cvar_pre_trade`, `check_price_tolerance`,
+`check_modify_order` and `_check_circuit_breakers` — never that one. So
+`hasattr` was always False, the branch could never execute, and every generated
+signal fell through to `_execute_signal`, which called
+`broker.place_market_order()` after checking only that the fields were present
+and the size was above zero.
+
+Proved by execution, not by reading:
+
+```
+RiskManager has filter_signals : False
+```
+
+**The path is live and carries no feature flag.** `core/startup_factories.py:1794`
+(`init_hopefx_brain`) constructs `brain.brain.HOPEFXBrain`, injects the real
+broker and the real risk manager, calls `start()` and launches `dominate()`. It
+is registered as `brain` with `deps=["price_engine", "risk_manager", "broker", …]`.
+`enforce_pre_trade` has exactly one production caller — `risk/manager.py:886`,
+inside `size_order` — and this path never reached it.
+
+This is the "guard that can never open" sub-shape from
+`.claude/skills/hopefx-dead-controls`, on the money path, inside the AI
+subsystem. The list-filtering approach was also the wrong shape: the thing that
+must be refused is the order, so the refusal now lives where the order is
+placed.
+
+**Fixed** by `_risk_permits()`, which fails closed on all three readings that
+used to be approvals: no risk manager, a gate that raises, and a reply that is
+not a `(allowed, reason)` decision. Closing a position deliberately bypasses it
+— a halt that also prevents closing turns a risk control into a trap, freezing
+the account holding exactly the positions the halt was called over.
+
+9 cases in `tests/unit/test_brain_orders_pass_the_risk_gate.py`, 6 failing on
+the pre-fix tree, including one asserting a permitted trade still reaches the
+broker: a gate that blocks everything is an outage, not a fix.
 
 ### 4. Money columns are `Float` · HIGH
 

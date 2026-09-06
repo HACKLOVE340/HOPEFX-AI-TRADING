@@ -854,9 +854,17 @@ class HOPEFXBrain:
                 timeout=10.0,
             )
 
-            # Filter signals through risk manager (only if it supports filter_signals)
-            if self.risk_manager and hasattr(self.risk_manager, "filter_signals"):
-                signals = await asyncio.wait_for(self.risk_manager.filter_signals(signals, self.state), timeout=5.0)
+            # The risk gate is applied per order in _execute_signal, not here.
+            #
+            # What used to stand here was:
+            #     if self.risk_manager and hasattr(self.risk_manager, "filter_signals"):
+            # and `filter_signals` is defined nowhere in this repository —
+            # RiskManager exposes validate_trade, check_risk_limits,
+            # check_kill_switch and ten more, but never that one. So the branch
+            # could not execute, and every signal reached the broker with no
+            # risk check at all. Filtering a list was also the wrong place: the
+            # thing that must be refused is the order, so the refusal belongs
+            # where the order is placed.
 
             # Publish signals to RealTimeSignalService so /api/signals/active
             # reflects live brain activity.
@@ -937,6 +945,45 @@ class HOPEFXBrain:
         except Exception as exc:
             logger.debug("Signal service publish failed (non-fatal): %s", exc)
 
+    def _risk_permits(self, symbol: str, size: float, action: str) -> tuple[bool, str]:
+        """Whether the risk manager permits this order. Fail closed.
+
+        Three refusals, and each one used to be an approval:
+
+        **No risk manager.** The old code read an absent risk manager as
+        "nothing to filter with, carry on" — the most dangerous reading
+        available, because the deployment least able to measure risk was the one
+        allowed to trade unchecked.
+
+        **A gate that raises.** An exception from the risk subsystem is not
+        evidence that the trade is safe. It is evidence that nothing checked.
+
+        **A reply that is not a decision.** A risk manager returning something
+        other than (allowed, reason) has not answered the question, and reading
+        a truthy object as approval is how a stub becomes a permission.
+
+        Closing a position is deliberately NOT routed through here — see
+        _execute_signal. Reducing exposure must never be blocked by the control
+        that stops increasing it.
+        """
+        if self.risk_manager is None:
+            return False, "no_risk_manager"
+
+        try:
+            verdict = self.risk_manager.validate_trade(
+                symbol=symbol,
+                quantity=float(size),
+                direction=action,
+            )
+        except Exception as exc:
+            return False, f"risk_check_failed: {exc}"
+
+        if not (isinstance(verdict, tuple) and len(verdict) == 2):
+            return False, f"risk_check_returned_{type(verdict).__name__}"
+
+        allowed, reason = verdict
+        return bool(allowed), str(reason or ("" if allowed else "refused"))
+
     async def _execute_signal(self, signal: dict):
         """Execute a trading signal - SAFE VERSION"""
         async with self._decision_lock:
@@ -963,6 +1010,17 @@ class HOPEFXBrain:
 
                 # Execute
                 if action in ("buy", "sell"):
+                    permitted, reason = self._risk_permits(symbol, size, action)
+                    if not permitted:
+                        logger.error(
+                            "Brain: risk gate refused %s %s %s — %s. No order placed.",
+                            action.upper(),
+                            size,
+                            symbol,
+                            reason,
+                        )
+                        return
+
                     order = await asyncio.wait_for(
                         self.broker.place_market_order(symbol=symbol, side=action, quantity=size),
                         timeout=10.0,
