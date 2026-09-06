@@ -8,6 +8,7 @@ This module intentionally proposes and gates consequential work; it does not exe
 trades, mutate production code, or expose credentials without an explicit approval.
 """
 
+import asyncio
 import copy
 import hashlib
 import os
@@ -389,6 +390,90 @@ def _eval_gate_allows(environment: str) -> tuple[bool, str]:
     return True, "eval_gate_passed"
 
 
+@router.post("/vision/interpret")
+async def vision_interpret(
+    body: VisionInterpretRequest,
+    user: TokenPayload = Depends(_admin),
+) -> dict[str, Any]:
+    """Read one camera frame and return a typed detection.
+
+    The frontend has called this path since audit D6 and it has never existed,
+    so every scan 404s. D6 had already removed the two defects that mattered —
+    a fabricated interpretation produced by sleeping 650 ms, and a stale-closure
+    bug that jammed the panel — leaving an honest "no vision service is
+    connected". This connects one.
+
+    Reading, never acting. The prompt in `ai/vision/detect.py` says so, the
+    contract has no field that could express an order, and the capability row
+    is PROPOSE rather than EXECUTE. The panel's stated boundary — a scan can
+    explain a visual state but cannot place, modify or approve a trade — is
+    enforced in three places rather than promised in one.
+
+    The frame is not persisted. It is decoded, sent, and dropped; only the
+    structured reading is returned, which is what makes the UI's "frames stay
+    in memory" line true rather than aspirational.
+    """
+    _enforce_rate_limit(user)
+
+    if not body.image_b64:
+        # The shape the frontend currently sends. Answering plainly beats a 422.
+        return {
+            "interpretation": None,
+            "detection": None,
+            "reason": "no_frame_supplied",
+            "detail": "No image was included in the request, so nothing was interpreted.",
+        }
+
+    from ai.gateway.client import ImageRef
+    from ai.guardrails.output import GuardrailViolation
+    from ai.vision.detect import interpret
+
+    try:
+        image = ImageRef(media_type=body.media_type, data_b64=body.image_b64)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+    try:
+        detection = await asyncio.to_thread(interpret, (image,), operator=user.sub, hint=body.hint)
+    except GuardrailViolation as exc:
+        # The model answered, just not in the contract. A refused reading is a
+        # correct outcome, not an outage — and never retried on another vendor.
+        raise HTTPException(status_code=422, detail=f"the frame could not be read reliably: {exc}") from None
+    except Exception as exc:
+        logger.error("vision_interpret: %s", exc)
+        raise HTTPException(status_code=503, detail=f"vision service unavailable: {exc}") from None
+
+    return {
+        "interpretation": _describe(detection),
+        "detection": detection,
+        "reason": "ok",
+    }
+
+
+def _describe(detection: dict[str, Any]) -> str:
+    """One human sentence for the panel, built from the typed fields.
+
+    Composed here rather than asked of the model: a sentence the model wrote is
+    a second, unvalidated answer that can disagree with the structured one.
+    """
+    surface = detection.get("surface_type", "unknown")
+    confidence = detection.get("confidence", 0.0)
+    if surface == "unknown":
+        return f"Could not identify the surface in this frame (confidence {confidence:.0%})."
+
+    bits = [f"Reads as a {surface} (confidence {confidence:.0%})"]
+    if detection.get("instrument"):
+        bits.append(f"instrument {detection['instrument']}")
+    if detection.get("timeframe"):
+        bits.append(f"timeframe {detection['timeframe']}")
+    if detection.get("trend"):
+        bits.append(f"trend {detection['trend']}")
+    sentence = ", ".join(bits) + "."
+    if detection.get("requires_corroboration"):
+        sentence += " Numeric readings are from a photograph and are NOT corroborated against the live feed."
+    return sentence
+
+
 @router.post("/evals/run")
 async def run_evals(user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
     """Run the eval suite and file the report the promotion gate reads.
@@ -479,6 +564,22 @@ class SupervisorTaskRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=4000)
     requested_agents: list[str] = Field(default_factory=list, max_length=12)
     allow_external_read: bool = False
+
+
+class VisionInterpretRequest(BaseModel):
+    """One camera frame, on its way to the vision chain.
+
+    `image_b64` is optional so the endpoint keeps answering the shape the
+    frontend has been sending since D6 — `{"source": "camera_frame"}` with no
+    image. That request gets an explicit "no frame was supplied", which is the
+    honest answer and matches what the panel already displays, rather than a
+    422 that would read to an operator as a broken feature.
+    """
+
+    source: str = Field(default="camera_frame", max_length=64)
+    image_b64: str | None = Field(default=None, max_length=8_000_000)
+    media_type: str = Field(default="image/png", max_length=64)
+    hint: str = Field(default="", max_length=500)
 
 
 class ModelRouteRequest(BaseModel):

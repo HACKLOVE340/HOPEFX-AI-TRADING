@@ -114,6 +114,11 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     # privileges. The spend is bounded by the budget ceiling and the velocity
     # brake like any other model call.
     "run_evals": _PROPOSE,
+    # Reading a camera frame is a paid model call, so it sits where the other
+    # paid, operator-triggered actions do. It is READING only: the handler
+    # returns a description and the contract in `ai/vision/detect.py` forbids
+    # recommending or placing anything, so it never reaches the execute tier.
+    "vision_interpret": _PROPOSE,
     # ── approval: an admin may contribute one; a repair needs a superadmin ────
     "approve_supervisor_task": Capability(APPROVE, "admin"),
     "decide_approval": Capability(APPROVE, "admin", quorum_needs_superadmin=True),
