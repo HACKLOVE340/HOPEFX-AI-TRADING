@@ -652,6 +652,31 @@ async def init_ai_response_cache(s: Any) -> Any:
     return cache
 
 
+async def init_ai_job_progress(s: Any) -> Any:
+    """Push AI job state to the operator's screen instead of making it poll.
+
+    The workbench polls every 900ms while anything is live. Pushing each change
+    over the WebSocket already carrying prices removes both the latency floor
+    and the load on a page nobody is watching.
+
+    Polling stays the fallback: if this does not install, panels still update,
+    just a little later. That is why it is required=False and why a failure here
+    is a warning rather than an error.
+    """
+    from ai.jobs import progress
+    from api.admin import log_activity
+    from api.ws_live import get_live_manager
+
+    # `get_live_manager()` — not a module-level `manager`, which does not exist.
+    # The first draft of this factory imported that name; it registered fine and
+    # would have raised ImportError on the first startup, because a factory that
+    # is registered is not a factory that has run. The test below it now calls it.
+    manager = get_live_manager()
+    progress.install(send_to_user=manager.send_to_user, loop=asyncio.get_running_loop())
+    log_activity("AI job progress streaming to operators over the ai_jobs channel")
+    return manager
+
+
 async def init_ai_awareness(s: Any) -> Any:
     """Start the department watchers. Spec §2's `awareness/`.
 
@@ -3107,6 +3132,14 @@ def build_component_registry(app, feature_flags):
         # Spec §2 awareness/. After memory, because every observation is
         # recorded there, and after departments, whose read handlers it
         # observes through.
+        # Push job state to the screen. After ai_departments only so the
+        # WebSocket manager exists; polling is the fallback if it does not.
+        .register(
+            "ai_job_progress",
+            F.init_ai_job_progress,
+            required=False,
+            deps=["config"],
+        )
         .register(
             "ai_awareness",
             F.init_ai_awareness,

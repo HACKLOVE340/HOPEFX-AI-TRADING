@@ -28,6 +28,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Clock, Loader2, Play, Send, XCircle, CheckCircle2, AlarmClock } from 'lucide-react';
 
 import { aiCoreApi } from '../../hooks/useApi';
+import { useStore, selectAiJobs } from '../../store';
 
 const COLOR = {
   ok: '#42d392',
@@ -66,6 +67,10 @@ export interface GenerationJob {
   error: string;
   progress: string[];
   elapsed_s: number;
+  /** Rises on every change the server observed. The same job reaches this
+   *  screen twice — pushed over `ai_jobs` and polled over REST — and this is
+   *  how the two are ordered. Optional so an older server still renders. */
+  rev?: number;
 }
 
 interface Snapshot {
@@ -188,6 +193,10 @@ export const GenerationWorkbench: React.FC = () => {
   const [role, setRole] = useState('reasoning');
   const [notice, setNotice] = useState('');
   const queryClient = useQueryClient();
+  // Live frames from the private `ai_jobs` channel. Empty on a dev box with no
+  // WebSocket, or before the first change — in which case the poll below is
+  // the whole mechanism and everything still works, just a little later.
+  const pushedJobs = useStore(selectAiJobs);
 
   const snapshot = useQuery<Snapshot>({
     queryKey: ['ai-core', 'generate-jobs'],
@@ -228,14 +237,24 @@ export const GenerationWorkbench: React.FC = () => {
   const onCancel = useCallback((id: string) => cancel.mutate(id), [cancel]);
 
   const jobs = useMemo(() => {
-    const all = snapshot.data?.jobs ?? [];
+    // Poll is the base; pushed frames overlay it, but only where they are
+    // NEWER. Taking the push unconditionally would let a frame delayed behind
+    // a poll revert a finished job to `running` — and `_reap` promotes a job
+    // to `timed_out` on a read path, which never pushes at all, so the poll is
+    // sometimes the only source of the truth.
+    const all = (snapshot.data?.jobs ?? []).map((job) => {
+      const pushed = pushedJobs[job.id];
+      return pushed && (pushed.rev ?? 0) > (job.rev ?? 0)
+        ? ({ ...job, ...pushed } as GenerationJob)
+        : job;
+    });
     // Live work first, then most recent. An operator looking at this page cares
     // about what is happening now before what already happened.
     const rank: Record<GenerationJob['state'], number> = {
       running: 0, queued: 1, succeeded: 2, failed: 2, timed_out: 2, cancelled: 3,
     };
     return [...all].sort((a, b) => rank[a.state] - rank[b.state]);
-  }, [snapshot.data]);
+  }, [snapshot.data, pushedJobs]);
 
   const running = snapshot.data?.running ?? 0;
   const queued = snapshot.data?.queued ?? 0;

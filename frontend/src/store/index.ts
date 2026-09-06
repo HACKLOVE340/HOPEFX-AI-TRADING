@@ -222,6 +222,31 @@ interface SystemEventSlice {
   clearSystemAlert: () => void;
 }
 
+// ─── AI job slice ─────────────────────────────────────────────────────────────
+// State pushed over the private `ai_jobs` WebSocket channel while a generation
+// runs. The workbench still polls; this only makes it react sooner.
+//
+// NOT persisted. A job carries the operator's prompt and the model's answer, so
+// writing it to localStorage would leave one person's questions on a shared
+// machine after they log out. `partialize` is an allowlist, which is why this
+// needs no exclusion — but it is the reason not to add one.
+
+export interface AiJobUpdate {
+  id:        string;
+  state:     string;
+  prompt?:   string;
+  progress?: string[];
+  /** Monotonic per job. The workbench prefers the higher of push and poll, so
+   *  a frame delayed behind a poll cannot revert a finished job to `running`. */
+  rev?:      number;
+  [key: string]: unknown;
+}
+
+interface AiJobSlice {
+  aiJobs:      Record<string, AiJobUpdate>;
+  upsertAiJob: (job: AiJobUpdate) => void;
+}
+
 // ─── UI preferences slice ─────────────────────────────────────────────────────
 // Persisted sidebar personalisation: pinned (favorite) nav items, collapsed
 // group state, and a short MRU list of recently-visited paths. All three are
@@ -248,6 +273,7 @@ export type AppStore =
   AlertsSlice &
   WsSlice &
   SystemEventSlice &
+  AiJobSlice &
   UiSlice;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -461,6 +487,23 @@ export const useStore = create<AppStore>()(
         clearSystemAlert: () =>
           set({ systemAlert: null }, false, 'system/clear'),
 
+        // ── AI jobs ────────────────────────────────────────────────────────────
+        aiJobs: {},
+
+        upsertAiJob: (job) =>
+          set(
+            (state) => {
+              const prev = state.aiJobs[job.id];
+              // Drop a frame that is older than what we already hold. Frames
+              // can arrive out of order after a reconnect, and applying a stale
+              // one would show a finished job as still running.
+              if (prev && (prev.rev ?? 0) > (job.rev ?? 0)) return state;
+              return { aiJobs: { ...state.aiJobs, [job.id]: job } };
+            },
+            false,
+            'ai/upsertJob',
+          ),
+
         // ── UI preferences ──────────────────────────────────────────────────────
         favorites:       [],
         collapsedGroups: [],
@@ -619,6 +662,7 @@ export const selectPlan               = (s: AppStore) => s.plan;
 export const selectTrial              = (s: AppStore) => s.trial;
 export const selectTrialDaysRemaining = (s: AppStore) => s.trialDaysRemaining;
 export const selectSystemAlert        = (s: AppStore) => s.systemAlert;
+export const selectAiJobs             = (s: AppStore) => s.aiJobs;
 export const selectFavorites          = (s: AppStore) => s.favorites;
 export const selectCollapsedGroups    = (s: AppStore) => s.collapsedGroups;
 export const selectRecentPaths        = (s: AppStore) => s.recentPaths;

@@ -254,7 +254,11 @@ class LiveConnectionManager:
     # freshly-connected client would otherwise passively receive private
     # balance/PnL/risk data without ever opting in. They require an explicit
     # subscribe, and account/equity/risk should be pushed via send_to_user.
-    _PRIVATE_CHANNELS: frozenset[str] = frozenset({"account", "equity", "risk", "positions", "alerts"})
+    # `ai_jobs` carries the operator's prompt and the model's answer, so it is
+    # private for the same reason `account` is: without this, a connection with
+    # an EMPTY subscription receives it, and one operator's prompt lands on
+    # another's screen. That is S8-02's exact shape — right user, wrong channel.
+    _PRIVATE_CHANNELS: frozenset[str] = frozenset({"account", "equity", "risk", "positions", "alerts", "ai_jobs"})
 
     def __init__(self) -> None:
         self._connections: dict[str, WebSocket] = {}

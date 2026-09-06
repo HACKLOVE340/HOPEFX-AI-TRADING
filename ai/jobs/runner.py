@@ -91,6 +91,11 @@ class Job:
     #: starts running; `_reap` promotes it to `timed_out` once passed.
     deadline: float = 0.0
     timeout_s: float = DEFAULT_JOB_TIMEOUT_S
+    #: Bumped on every observable change. The screen receives this job twice —
+    #: pushed over `ai_jobs` and polled over REST — and needs to tell a late
+    #: frame from a new one. Without it a job that already succeeded flickers
+    #: back to `running` when a delayed push lands after a poll.
+    rev: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         """What the screen renders. The prompt is included; the result is not
@@ -106,6 +111,7 @@ class Job:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "elapsed_s": round(self.elapsed_s, 3),
+            "rev": self.rev,
         }
 
 
@@ -230,6 +236,11 @@ class JobRunner:
 
     @staticmethod
     def _notify(job: Job, on_change: Callable[[Job], None] | None) -> None:
+        # Bump BEFORE the listener check: `rev` orders what the screen sees, and
+        # the poll sees every change whether or not a publisher is installed.
+        # Each job is mutated by exactly one worker thread, so a plain increment
+        # is sound here; `_reap` is the one other writer and it bumps too.
+        job.rev += 1
         if on_change is None:
             return
         try:
@@ -260,6 +271,11 @@ class JobRunner:
                 job.error = f"exceeded its {job.timeout_s:.0f}s deadline"
                 job.finished_at = datetime.now(UTC).isoformat()
                 job.elapsed_s = job.timeout_s
+                # This transition happens on a READ path and notifies nobody, so
+                # the poll is the only way it reaches the screen. It has to
+                # outrank the last pushed frame or a panel shows `running`
+                # forever.
+                job.rev += 1
                 logger.warning(
                     "ai.jobs: job %s passed its %.0fs deadline; the worker thread cannot be "
                     "killed, so its result will be discarded when it returns",

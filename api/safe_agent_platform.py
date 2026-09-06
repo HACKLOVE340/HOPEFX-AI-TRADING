@@ -438,7 +438,12 @@ async def submit_generation(
         }
 
     try:
-        job_id = runner.submit(prompt=body.prompt, work=work, operator=user.sub)
+        # on_change pushes each state transition to this operator's screen over
+        # the private ai_jobs channel. A publish failure never fails the job,
+        # and the panel's poll remains the fallback.
+        from ai.jobs.progress import publish
+
+        job_id = runner.submit(prompt=body.prompt, work=work, operator=user.sub, on_change=publish)
     except QueueFull as exc:
         # 429, not 500: the caller should slow down, and the request was
         # well-formed. Telling a panel "server error" for backpressure would

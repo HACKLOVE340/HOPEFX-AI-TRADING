@@ -12,7 +12,7 @@ import { useStore } from '../store';
 import { tradingApi } from './useApi';
 import { getWsBase } from '../lib/utils';
 import type { PriceTick, Position, Signal, AccountMetrics, MicrostructureSnapshot } from '../types';
-import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAlert } from '../store';
+import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAlert, AiJobUpdate } from '../store';
 
 // Module-level map: symbol → last known mid price, used to compute change_pct
 // when the server sends 0 or omits the field.
@@ -91,7 +91,9 @@ interface WsMessage {
     | 'news_item'
     // System events (nuclear halt, circuit breaker)
     | 'system_event'
-    | 'nuclear_halt';
+    | 'nuclear_halt'
+    // AI generations, pushed while they run (private `ai_jobs` channel)
+    | 'ai_job_update';
   data?:          unknown;
   auth_required?: boolean;
   code?:          string;
@@ -130,7 +132,7 @@ export function useWebSocket(enabled = true) {
       upsertPosition, removePosition, addSignal, setAccount,
       setMicrostructure, setVolumeDelta, setSentiment,
       setRiskSnapshot, setEquitySnapshot, addNewsItem, setSystemAlert,
-      setNoLiveFeed, markDataReceived,
+      setNoLiveFeed, markDataReceived, upsertAiJob,
     } = getState();
 
     // Any parsed server message is evidence the feed is alive. Recorded before
@@ -177,7 +179,12 @@ export function useWebSocket(enabled = true) {
           wsRef.current?.send(JSON.stringify({
             type: 'subscribe',
             channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                       'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
+                       'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system',
+                       // `ai_jobs` is a PRIVATE channel: the server refuses to
+                       // deliver it on the implicit "no subscription = all
+                       // channels" path, so it has to be asked for by name here
+                       // or nothing arrives and the workbench polls forever.
+                       'ai_jobs'],
           }));
         }
         break;
@@ -193,7 +200,9 @@ export function useWebSocket(enabled = true) {
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
           channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
+                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system',
+                     // Private channel — see the note on the other subscribe.
+                     'ai_jobs'],
         }));
         break;
 
@@ -286,6 +295,16 @@ export function useWebSocket(enabled = true) {
       case 'nuclear_halt': {
         const alert = msg.data as SystemAlert;
         setSystemAlert(alert);
+        break;
+      }
+
+      case 'ai_job_update': {
+        // A generation said something while it was running. The workbench also
+        // polls, so this is an improvement in latency rather than the only way
+        // the panel ever learns anything — which is why a malformed frame is
+        // dropped silently instead of surfaced.
+        const job = msg.data as AiJobUpdate | undefined;
+        if (job && typeof job.id === 'string') upsertAiJob(job);
         break;
       }
 
