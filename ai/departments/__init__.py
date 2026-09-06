@@ -107,14 +107,25 @@ DEPARTMENTS: Final[dict[str, Department]] = {
             # means the registry refuses them without an explicit human
             # approval AND without live mode — two separate refusals, so
             # neither one alone is what stands between an agent and an order.
-            _action("markets_execution", "place_order", ToolRisk.LIVE_TRADING,
-                    "Place an order with the broker.", approval=True),
-            _action("markets_execution", "cancel_order", ToolRisk.LIVE_TRADING,
-                    "Cancel a working order.", approval=True),
-            _action("markets_execution", "sync_positions", ToolRisk.READ_ONLY,
-                    "Reconcile local positions against the broker's."),
-            _action("markets_execution", "query_broker_status", ToolRisk.READ_ONLY,
-                    "Broker connection and heartbeat state."),
+            _action(
+                "markets_execution",
+                "place_order",
+                ToolRisk.LIVE_TRADING,
+                "Place an order with the broker.",
+                approval=True,
+            ),
+            _action(
+                "markets_execution", "cancel_order", ToolRisk.LIVE_TRADING, "Cancel a working order.", approval=True
+            ),
+            _action(
+                "markets_execution",
+                "sync_positions",
+                ToolRisk.READ_ONLY,
+                "Reconcile local positions against the broker's.",
+            ),
+            _action(
+                "markets_execution", "query_broker_status", ToolRisk.READ_ONLY, "Broker connection and heartbeat state."
+            ),
         ),
         memory=("execution/fill history", "slippage per symbol", "last broker heartbeat"),
         awareness=("broker disconnect detection", "orphaned-order flagging"),
@@ -125,17 +136,34 @@ DEPARTMENTS: Final[dict[str, Department]] = {
         status="active",
         agents=("Compliance Guard", "Risk Monitor"),
         actions=(
-            _action("risk_compliance", "check_drawdown", ToolRisk.READ_ONLY,
-                    "Current drawdown against the configured limits."),
-            _action("risk_compliance", "validate_position_size", ToolRisk.READ_ONLY,
-                    "Whether a proposed size passes the risk gate."),
+            _action(
+                "risk_compliance",
+                "check_drawdown",
+                ToolRisk.READ_ONLY,
+                "Current drawdown against the configured limits.",
+            ),
+            _action(
+                "risk_compliance",
+                "validate_position_size",
+                ToolRisk.READ_ONLY,
+                "Whether a proposed size passes the risk gate.",
+            ),
             # Proposing is not acting. block_deploy stops a rollout rather than
             # touching a position, and propose_derisk writes a proposal a human
             # approves — the approval is the money step, not this.
-            _action("risk_compliance", "block_deploy", ToolRisk.IRREVERSIBLE,
-                    "Block a deployment that would breach a rule.", approval=True),
-            _action("risk_compliance", "propose_derisk", ToolRisk.PAPER_TRADING,
-                    "Propose a de-risking action for human approval."),
+            _action(
+                "risk_compliance",
+                "block_deploy",
+                ToolRisk.IRREVERSIBLE,
+                "Block a deployment that would breach a rule.",
+                approval=True,
+            ),
+            _action(
+                "risk_compliance",
+                "propose_derisk",
+                ToolRisk.PAPER_TRADING,
+                "Propose a de-risking action for human approval.",
+            ),
         ),
         memory=("rule-set per prop firm", "drawdown curve", "past violations"),
         awareness=("live exposure vs rules", "volatility-regime shift"),
@@ -146,14 +174,34 @@ DEPARTMENTS: Final[dict[str, Department]] = {
         status="active",
         agents=("Model Analyst", "Research Scout"),
         actions=(
-            _action("research_intelligence", "run_backtest", ToolRisk.READ_ONLY,
-                    "Backtest a strategy over historical data.", research.run_backtest),
-            _action("research_intelligence", "fetch_market_news", ToolRisk.READ_ONLY,
-                    "Upcoming economic events.", research.fetch_market_news),
-            _action("research_intelligence", "score_regime", ToolRisk.READ_ONLY,
-                    "The current market regime for a symbol.", research.score_regime),
-            _action("research_intelligence", "walk_forward_validate", ToolRisk.READ_ONLY,
-                    "Out-of-sample walk-forward validation.", research.walk_forward_validate),
+            _action(
+                "research_intelligence",
+                "run_backtest",
+                ToolRisk.READ_ONLY,
+                "Backtest a strategy over historical data.",
+                research.run_backtest,
+            ),
+            _action(
+                "research_intelligence",
+                "fetch_market_news",
+                ToolRisk.READ_ONLY,
+                "Upcoming economic events.",
+                research.fetch_market_news,
+            ),
+            _action(
+                "research_intelligence",
+                "score_regime",
+                ToolRisk.READ_ONLY,
+                "The current market regime for a symbol.",
+                research.score_regime,
+            ),
+            _action(
+                "research_intelligence",
+                "walk_forward_validate",
+                ToolRisk.READ_ONLY,
+                "Out-of-sample walk-forward validation.",
+                research.walk_forward_validate,
+            ),
         ),
         memory=("model version history", "OOS accuracy log", "regime history"),
         awareness=("strategy drift vs trained regime", "confidence calibration"),
@@ -164,14 +212,18 @@ DEPARTMENTS: Final[dict[str, Department]] = {
         status="reviewing: credential rotation pending",
         agents=("Code Auditor", "Deploy Sentinel"),
         actions=(
-            _action("platform_engineering", "scan_secrets", ToolRisk.READ_ONLY,
-                    "Scan the tree for committed credentials."),
-            _action("platform_engineering", "run_tests", ToolRisk.READ_ONLY,
-                    "Run the test suite and report the result."),
-            _action("platform_engineering", "propose_fix", ToolRisk.PAPER_TRADING,
-                    "Propose a code change for human review."),
-            _action("platform_engineering", "check_broken_imports", ToolRisk.READ_ONLY,
-                    "Find imports that do not resolve."),
+            _action(
+                "platform_engineering", "scan_secrets", ToolRisk.READ_ONLY, "Scan the tree for committed credentials."
+            ),
+            _action(
+                "platform_engineering", "run_tests", ToolRisk.READ_ONLY, "Run the test suite and report the result."
+            ),
+            _action(
+                "platform_engineering", "propose_fix", ToolRisk.PAPER_TRADING, "Propose a code change for human review."
+            ),
+            _action(
+                "platform_engineering", "check_broken_imports", ToolRisk.READ_ONLY, "Find imports that do not resolve."
+            ),
         ),
         memory=("audit history", "bug registry", "dead execution paths"),
         awareness=("commits touching security-sensitive files", "CI failure patterns"),
