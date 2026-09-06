@@ -625,6 +625,43 @@ async def init_data_scheduler(s: Any) -> Any:
     return ds
 
 
+async def init_local_model_runtime(s: Any) -> Any:
+    """Start the on-hardware inference server and warm its models.
+
+    Owner requirement, 2026-09-06 (plan §1A.5.1): the local LLM and any other
+    local models must come up with the application, so they are running on the
+    VPS without anyone starting them by hand.
+
+    Enabled only when LOCAL_MODEL_AUTOSTART=true, and even then the runtime
+    refuses a tier the machine cannot hold — an oversized model does not
+    degrade, it swaps the box to a standstill, and this box also executes
+    orders.
+
+    Best-effort and non-blocking, the same shape as init_hourly_trainer: the
+    work runs on a background task so a model download never delays the trading
+    engine, and a failure leaves the hosted model chain untouched.
+    """
+    from ai.local_model import autostart_enabled, get_local_model_runtime
+    from api.admin import log_activity
+
+    runtime = get_local_model_runtime()
+    s.local_model_runtime = runtime
+
+    if not autostart_enabled():
+        log_activity(
+            "Local model autostart disabled (LOCAL_MODEL_AUTOSTART not set). "
+            "Set LOCAL_MODEL_AUTOSTART=true to run models on this machine.",
+        )
+        return runtime
+
+    t = asyncio.create_task(runtime.start())
+    s.background_tasks.append(t)
+    log_activity(
+        f"Local model runtime starting — tier={runtime.tier} models={list(runtime.models)}",
+    )
+    return runtime
+
+
 async def init_hourly_trainer(s: Any) -> Any:
     """
     Start the hourly ML model training loop.
@@ -2811,6 +2848,15 @@ def build_component_registry(app, feature_flags):
             F.init_hourly_trainer,
             required=False,
             deps=["data_scheduler"],
+        )
+        # On-hardware inference (plan §1A.5.1). required=False and gated on
+        # LOCAL_MODEL_AUTOSTART, so a deployment that does not want it is
+        # unaffected and one that does gets it without a manual step.
+        .register(
+            "local_model_runtime",
+            F.init_local_model_runtime,
+            required=False,
+            deps=["config"],
         )
         .register(
             "online_learner_store",

@@ -34,76 +34,21 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import sys
+from pathlib import Path
 
-# (tier name, min RAM GiB, min VRAM GiB — VRAM 0 means CPU inference is viable)
-TIERS: tuple[tuple[str, float, float], ...] = (
-    ("70B+", 0, 80),
-    ("30B+", 0, 48),
-    ("13B-14B", 0, 24),
-    ("7B-8B", 16, 8),
-    ("1B-4B", 8, 0),
+# The tier table and the probes live in `ai/local_model.py`, which is also what
+# the running application uses to decide whether a tier may start. They were
+# duplicated here; two copies of a number that gates a model load drift, and the
+# drift is invisible until a model fails to load on a live box.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from ai.local_model import (  # after the sys.path bootstrap above
+    TIER_ENV,
+    best_tier,
+    total_ram_gib,
+    total_vram_gib,
 )
-
-
-def total_ram_gib() -> float:
-    """Total RAM in GiB, from /proc/meminfo with a sysconf fallback.
-
-    Both failures are reported rather than swallowed: this number decides which
-    model tier gets deployed, so silently returning 0.0 would recommend the
-    smallest tier on a machine that could run more — a wrong answer dressed as a
-    measurement.
-    """
-    try:
-        with open("/proc/meminfo", encoding="utf-8") as fh:
-            for line in fh:
-                if line.startswith("MemTotal:"):
-                    return int(line.split()[1]) / (1024 * 1024)
-    except OSError as exc:
-        print(f"  note: /proc/meminfo unreadable ({exc}); trying sysconf", file=sys.stderr)
-
-    try:
-        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024**3)
-    except (ValueError, OSError, AttributeError) as exc:
-        print(f"  note: sysconf could not report memory ({exc}); reporting 0", file=sys.stderr)
-        return 0.0
-
-
-def total_vram_gib() -> float:
-    """Sum of GPU memory, via nvidia-smi. Absent GPU tooling means 0, not unknown:
-    the spec's CPU tier is the honest fallback."""
-    if not shutil.which("nvidia-smi"):
-        return 0.0
-    try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        ).stdout
-    except (OSError, subprocess.SubprocessError) as exc:
-        print(f"  note: nvidia-smi failed ({exc}); reporting 0 VRAM", file=sys.stderr)
-        return 0.0
-    total = 0.0
-    for line in out.splitlines():
-        try:
-            total += float(line.strip()) / 1024
-        except ValueError:
-            continue
-    return total
-
-
-def best_tier(ram: float, vram: float) -> str | None:
-    for name, min_ram, min_vram in TIERS:
-        if min_vram and vram >= min_vram:
-            return name
-        if not min_vram and ram >= min_ram:
-            return name
-        if min_vram and min_ram and ram >= min_ram and vram >= min_vram:
-            return name
-    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         print("  The local tier is not viable here. Use the external API tier only.")
         return 1
     print(f"  Largest viable tier: {tier}")
-    print(f"\n  Set this on the target machine:  LOCAL_MODEL_TIER={tier}")
+    print(f"\n  Set this on the target machine:  {TIER_ENV}={tier}")
     if vram == 0:
         print("  CPU inference: expect seconds per response, not milliseconds.")
     print("\n  This measures the machine it runs on. Run it on the VPS, not a laptop.")
