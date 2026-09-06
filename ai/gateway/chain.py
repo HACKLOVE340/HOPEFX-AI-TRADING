@@ -140,30 +140,102 @@ def _stored_config() -> dict:
         return {}
 
 
+DEFAULT_LOCAL_MODEL: Final = "llama3"
+
+
+def _configured_legs(config: dict, role: str) -> list[ChainLeg] | None:
+    """The ordered chain a superadmin saved for `role`, or None.
+
+    Returns None -- not an empty list -- for anything malformed, so the caller
+    degrades to the committed default rather than to no model at all. An editor
+    that can produce a chain with no legs is an editor that can take the AI
+    offline through a typo.
+    """
+    raw = config.get("llm_chain")
+    if not isinstance(raw, dict):
+        if raw not in (None, "", {}):
+            logger.warning("model chain: llm_chain is not a mapping (%r); ignoring it", type(raw).__name__)
+        return None
+
+    entries = raw.get(role)
+    if entries is None:
+        return None
+    if not isinstance(entries, list) or not entries:
+        logger.warning("model chain: llm_chain[%r] is empty or not a list; using the default chain", role)
+        return None
+
+    legs: list[ChainLeg] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            logger.warning("model chain: llm_chain[%r] holds a non-object leg; using the default chain", role)
+            return None
+        try:
+            legs.append(ChainLeg(str(entry.get("provider", "")), str(entry.get("model", ""))))
+        except ValueError as exc:
+            logger.warning("model chain: llm_chain[%r] has an invalid leg (%s); using the default chain", role, exc)
+            return None
+    return legs
+
+
+def _local_leg(config: dict) -> ChainLeg:
+    """The optional on-hardware leg. Its identifier is configurable; its position is not."""
+    model = str(config.get("llm_local_model", "") or "").strip() or DEFAULT_LOCAL_MODEL
+    return ChainLeg(LOCAL_PROVIDER, model)
+
+
+def _truthy(value: object) -> bool:
+    """Config arrives from JSON, a form, or an env var; "false" is not True."""
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 def resolve_chain(role: str) -> tuple[ChainLeg, ...]:
     """The ordered chain for `role`, honouring stored settings.
 
     An unknown role raises rather than silently resolving to something: picking
     a model for a caller who asked for a role nobody defined is exactly the kind
     of quiet default this module exists to remove.
+
+    Precedence, most specific first:
+
+    1. `llm_local_only` -- the privacy mode. A ceiling, not a preference: it
+       overrides an explicitly configured hosted chain, because a deployment
+       that must not egress prompts must not egress them by way of a setting
+       somebody else edited.
+    2. `llm_chain[role]` -- the ordered per-role editor (plan Task 14).
+    3. `llm_provider`/`llm_model` and `llm_fallback_*` -- the original two
+       fields, which apply to `reasoning` only. Kept working because they are
+       what D8's fix bound, and a superadmin's saved settings must not stop
+       taking effect because a newer field exists.
+    4. The committed defaults.
+
+    `llm_local_enabled` then appends the local leg LAST, never first.
     """
     if role not in DEFAULT_CHAINS:
         raise ValueError(f"unknown model role: {role!r}; expected one of {sorted(DEFAULT_CHAINS)}")
 
-    legs = list(DEFAULT_CHAINS[role])
-    if role != "reasoning":
-        # Only the reasoning role is operator-configurable today; the settings
-        # form exposes exactly one primary and one fallback.
-        return tuple(legs)
-
     config = _stored_config()
-    primary = _leg_from(config, "llm_provider", "llm_model")
-    fallback = _leg_from(config, "llm_fallback_provider", "llm_fallback_model")
 
-    if primary is not None:
-        legs = [primary] + [leg for leg in legs if leg != primary]
-    if fallback is not None:
-        legs = [legs[0]] + [fallback] + [leg for leg in legs[1:] if leg != fallback]
+    if _truthy(config.get("llm_local_only")):
+        # No hosted leg at all -- not even as a fallback, which would egress
+        # exactly when the operator is least watching.
+        return (_local_leg(config),)
+
+    legs = _configured_legs(config, role)
+    if legs is None:
+        legs = list(DEFAULT_CHAINS[role])
+        if role == "reasoning":
+            primary = _leg_from(config, "llm_provider", "llm_model")
+            fallback = _leg_from(config, "llm_fallback_provider", "llm_fallback_model")
+            if primary is not None:
+                legs = [primary] + [leg for leg in legs if leg != primary]
+            if fallback is not None:
+                legs = [legs[0]] + [fallback] + [leg for leg in legs[1:] if leg != fallback]
+
+    if _truthy(config.get("llm_local_enabled")) and not any(leg.provider == LOCAL_PROVIDER for leg in legs):
+        legs = [*legs, _local_leg(config)]
+
     return tuple(legs)
 
 
@@ -185,6 +257,7 @@ def resolve_embedding_model() -> ChainLeg:
 
 __all__ = [
     "DEFAULT_CHAINS",
+    "DEFAULT_LOCAL_MODEL",
     "LOCAL_PROVIDER",
     "ChainLeg",
     "resolve_chain",

@@ -467,6 +467,16 @@ class PlatformConfigBody(BaseModel):
     llm_fallback_model: str | None = None
     llm_embedding_model: str | None = None
     llm_embedding_dimensions: int | None = None
+    # Ordered per-role chain (plan Task 14). Shape: {role: [{provider, model}]}.
+    # The two flat fields above stay supported for `reasoning`; this one is the
+    # more specific of the two and wins where both are set.
+    llm_chain: dict[str, list[dict[str, str]]] | None = None
+    # Local inference: optional, OFF by default, and never a primary leg.
+    # `llm_local_only` is the privacy mode for a deployment that must not
+    # egress prompts -- it overrides a configured hosted chain.
+    llm_local_enabled: bool | None = None
+    llm_local_model: str | None = None
+    llm_local_only: bool | None = None
     # Drawdown controls
     drawdown_hard_stop_pct: float | None = None
     drawdown_soft_warn_pct: float | None = None

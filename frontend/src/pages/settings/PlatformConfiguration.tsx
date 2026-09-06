@@ -2,13 +2,14 @@
 // Super Admin only — every platform setting, parameter, threshold, and flag
 // sourced from the Python codebase. Uses only ui.tsx primitives.
 import React, { useState, useEffect, useCallback } from 'react';
-import { superadminApi } from '../../hooks/useApi';
+import { aiCoreApi, superadminApi } from '../../hooks/useApi';
 import {
   Card, SectionHeader, Field, Input, Select, Toggle, Button,
   StatusBadge, Divider, SaveBar,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -441,6 +442,13 @@ interface PlatformConfig {
   llm_fallback_model: string;
   llm_embedding_model: string;
   llm_embedding_dimensions: number;
+  // Ordered per-role chain (plan Task 14). The two flat fields above stay
+  // supported for `reasoning`; this one is the more specific of the two and
+  // wins where both are set.
+  llm_chain: Record<string, { provider: string; model: string }[]>;
+  llm_local_enabled: boolean;
+  llm_local_model: string;
+  llm_local_only: boolean;
   // Drawdown controls
   drawdown_hard_stop_pct: number;
   drawdown_soft_warn_pct: number;
@@ -703,6 +711,9 @@ const DEFAULT_PLATFORM: PlatformConfig = {
   llm_temperature: 0.3, llm_max_tokens: 4096, llm_timeout_s: 60, llm_max_retries: 3,
   llm_fallback_provider: 'anthropic', llm_fallback_model: 'claude-3-5-sonnet-20241022',
   llm_embedding_model: 'text-embedding-3-small', llm_embedding_dimensions: 1536,
+  // Empty: no role is overridden until a superadmin says so, and the committed
+  // chain in ai/gateway/chain.py stays in force. Local is off by default.
+  llm_chain: {}, llm_local_enabled: false, llm_local_model: 'llama3', llm_local_only: false,
   // Drawdown controls
   drawdown_hard_stop_pct: 0.10, drawdown_soft_warn_pct: 0.07, drawdown_trailing_enabled: true,
   drawdown_trailing_lookback_bars: 100, drawdown_recovery_mode: 'reduce_size',
@@ -1819,10 +1830,221 @@ const FeatureFlagsConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<Pl
 
 // ── LLM tab ───────────────────────────────────────────────────────────────────
 
+/**
+ * The ordered model chain, per role (plan Task 14).
+ *
+ * D8 inverted. The two flat fields below this editor were declared, stored, and
+ * read by nothing for two years — a superadmin could set the primary and
+ * fallback model, save, and change nothing at all. What this editor writes is
+ * read by `ai/gateway/chain.py::resolve_chain`, and an end-to-end test asserts
+ * that changing a leg here changes the model the gateway actually calls.
+ *
+ * Two things it deliberately will not let you do:
+ *
+ *  * **Save a role with no legs.** An empty chain is no model at all. Removing
+ *    the last leg is spelled "Use platform default", which drops the override
+ *    and puts the committed chain back — a different thing from an outage.
+ *  * **Put local inference first.** The server appends it last whatever this
+ *    form says (Part 1A.5), so offering it as a primary would be a control
+ *    that lies about what it does.
+ */
+
+const CHAIN_ROLES: { role: string; title: string; note: string }[] = [
+  { role: 'reasoning', title: 'Reasoning', note: 'Decides trades. The strongest tier — a cheaper model that is wrong more often is not cheaper.' },
+  { role: 'fast',      title: 'Fast',      note: 'High volume: classification, extraction, summarisation. Latency matters more than depth.' },
+  { role: 'vision',    title: 'Vision',    note: 'Chart and screenshot reading.' },
+  { role: 'embedding', title: 'Embedding', note: 'Changing this invalidates every stored vector — embeddings from two models are not comparable. Re-index before switching, never after.' },
+];
+
+const PROVIDERS = ['anthropic', 'openai', 'google', 'mistral', 'ollama'];
+
+const ChainLegRow: React.FC<{
+  roleTitle: string;
+  index: number;
+  total: number;
+  leg: { provider: string; model: string };
+  reachable?: boolean;
+  onChange: (leg: { provider: string; model: string }) => void;
+  onMove: (delta: number) => void;
+  onRemove: () => void;
+}> = ({ roleTitle, index, total, leg, reachable, onChange, onMove, onRemove }) => (
+  <div style={{
+    display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap',
+    padding: '10px 0', borderTop: index === 0 ? 'none' : '1px solid #1e293b',
+  }}>
+    <div style={{ minWidth: 82 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {index === 0 ? 'Primary' : `Fallback ${index}`}
+      </div>
+      <div style={{ fontSize: 11, color: reachable === undefined ? '#475569' : reachable ? '#22c55e' : '#f87171', marginTop: 2 }}>
+        {reachable === undefined ? 'unknown' : reachable ? 'credential present' : 'no credential'}
+      </div>
+    </div>
+    <div style={{ flex: '0 0 150px' }}>
+      <Select
+        aria-label={`${roleTitle} leg ${index + 1} provider`}
+        value={leg.provider}
+        options={PROVIDERS.map((v) => ({ value: v, label: v }))}
+        onChange={(e) => onChange({ ...leg, provider: e.target.value })}
+      />
+    </div>
+    <div style={{ flex: '1 1 200px', minWidth: 160 }}>
+      <Input
+        aria-label={`${roleTitle} leg ${index + 1} model`}
+        value={leg.model}
+        placeholder="model identifier"
+        onChange={(e) => onChange({ ...leg, model: e.target.value })}
+      />
+    </div>
+    <div style={{ display: 'flex', gap: 6 }}>
+      <Button size="sm" variant="secondary" aria-label={`Move ${roleTitle} leg ${index + 1} up`}
+        disabled={index === 0} onClick={() => onMove(-1)}>↑</Button>
+      <Button size="sm" variant="secondary" aria-label={`Move ${roleTitle} leg ${index + 1} down`}
+        disabled={index === total - 1} onClick={() => onMove(1)}>↓</Button>
+      <Button size="sm" variant="danger" aria-label={`Remove ${roleTitle} leg ${index + 1}`}
+        disabled={total <= 1} onClick={onRemove}>Remove</Button>
+    </div>
+  </div>
+);
+
+const ModelChainEditor: React.FC<{
+  cfg: PlatformConfig;
+  set: (p: Partial<PlatformConfig>) => void;
+}> = ({ cfg, set }) => {
+  const [reach, setReach] = useState<Record<string, boolean> | null>(null);
+  const [defaults, setDefaults] = useState<Record<string, { provider: string; model: string }[]>>({});
+  const [probeFailed, setProbeFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    aiCoreApi.chain()
+      .then((r) => {
+        if (cancelled) return;
+        setReach(r.data?.providers ?? {});
+        const resolved: Record<string, { provider: string; model: string }[]> = {};
+        for (const row of r.data?.roles ?? []) {
+          resolved[row.role] = (row.legs ?? []).map((l: { provider: string; model: string }) => ({ provider: l.provider, model: l.model }));
+        }
+        setDefaults(resolved);
+        setProbeFailed(false);
+      })
+      .catch(() => { if (!cancelled) { setProbeFailed(true); setReach(null); } });
+    return () => { cancelled = true; };
+  }, []);
+
+  const chain = cfg.llm_chain ?? {};
+  const writeChain = (next: Record<string, { provider: string; model: string }[]>) => set({ llm_chain: next });
+
+  const legsFor = (role: string) => chain[role] ?? defaults[role] ?? [];
+  const isOverridden = (role: string) => Array.isArray(chain[role]);
+
+  const update = (role: string, legs: { provider: string; model: string }[]) =>
+    writeChain({ ...chain, [role]: legs });
+
+  const resetToDefault = (role: string) => {
+    const next = { ...chain };
+    delete next[role];
+    writeChain(next);
+  };
+
+  return (
+    <Card>
+      <SectionHeader icon="🔗" title="Model chain (ordered, per role)"
+        desc="Primary first. Each leg is tried in order when the one before it cannot answer. What you save here is what the gateway calls." />
+
+      {probeFailed && (
+        <ErrorBanner level="warning"
+          message="Could not read live provider reachability. The chain below is still editable and still saves — only the credential column is unknown." />
+      )}
+
+      {CHAIN_ROLES.map(({ role, title, note }) => {
+        const legs = legsFor(role);
+        return (
+          <div key={role} style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <strong style={{ color: '#e2e8f0', fontSize: 14 }}>{title}</strong>
+              <StatusBadge status={isOverridden(role) ? 'info' : 'ok'}
+                label={isOverridden(role) ? 'custom' : 'platform default'} />
+            </div>
+            <p style={{ color: '#64748b', fontSize: 11, margin: '4px 0 6px', lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>
+
+            {legs.length === 0 ? (
+              <p style={{ color: '#f87171', fontSize: 12, margin: '6px 0' }}>
+                No legs configured for this role. Add one, or the committed default applies.
+              </p>
+            ) : legs.map((leg, index) => (
+              <ChainLegRow
+                key={`${role}-${index}`}
+                roleTitle={title}
+                index={index}
+                total={legs.length}
+                leg={leg}
+                reachable={reach ? Boolean(reach[leg.provider]) : undefined}
+                onChange={(next) => update(role, legs.map((l, i) => (i === index ? next : l)))}
+                onMove={(delta) => {
+                  const target = index + delta;
+                  if (target < 0 || target >= legs.length) return;
+                  const next = [...legs];
+                  const [moved] = next.splice(index, 1);
+                  next.splice(target, 0, moved!);
+                  update(role, next);
+                }}
+                onRemove={() => update(role, legs.filter((_, i) => i !== index))}
+              />
+            ))}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <Button size="sm" variant="secondary"
+                aria-label={`Add a leg to the ${title} chain`}
+                onClick={() => update(role, [...legs, { provider: 'anthropic', model: '' }])}>
+                Add leg
+              </Button>
+              <Button size="sm" variant="ghost" disabled={!isOverridden(role)}
+                aria-label={`Use the platform default chain for ${title}`}
+                onClick={() => resetToDefault(role)}>
+                Use platform default
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </Card>
+  );
+};
+
+const LocalInferenceCard: React.FC<{
+  cfg: PlatformConfig;
+  set: (p: Partial<PlatformConfig>) => void;
+}> = ({ cfg, set }) => (
+  <Card>
+    <SectionHeader icon="🖥️" title="Local inference (optional)"
+      desc="Off by default. Never a primary leg — the server appends it last whatever is configured." />
+    <ErrorBanner
+      level={cfg.llm_local_only ? 'warning' : 'info'}
+      message={cfg.llm_local_only
+        ? 'Local-only is a privacy mode, not a preference: no prompt leaves this deployment, and no hosted model answers — not even as a fallback. Capability drops sharply against every hosted model, and it overrides the chain above.'
+        : 'Local inference runs on your own hardware, so prompts do not leave the deployment. Capability drops sharply against a hosted model, which is why it joins last and never answers first.'}
+    />
+    <Tog id="llm-local-enabled" label="Enable local inference as a last resort"
+      desc="LLM_LOCAL_ENABLED — appends the local leg to the end of every chain."
+      checked={cfg.llm_local_enabled} onChange={(v) => set({ llm_local_enabled: v })} />
+    <Txt label="Local Model" desc="LLM_LOCAL_MODEL — the identifier your local runtime serves"
+      value={cfg.llm_local_model} placeholder="llama3" onChange={(v) => set({ llm_local_model: v })} />
+    <Divider />
+    <Tog id="llm-local-only" label="Local only — never send a prompt to a hosted model"
+      desc="LLM_LOCAL_ONLY — overrides the chain above for every role."
+      checked={cfg.llm_local_only} onChange={(v) => set({ llm_local_only: v })} />
+  </Card>
+);
+
+
 const LlmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
+    <ModelChainEditor cfg={cfg} set={set} />
+    <LocalInferenceCard cfg={cfg} set={set} />
     <Card>
-      <SectionHeader icon="🤖" title="LLM / AI Provider" desc="Primary LLM provider for AI features. LLM_*" />
+      <SectionHeader icon="🤖" title="LLM / AI Provider"
+        desc="Primary LLM provider for AI features. LLM_* — these two fields still drive the reasoning chain; the editor above is more specific and wins where both are set." />
       <Sel label="Provider" desc="LLM_PROVIDER" value={cfg.llm_provider}
         options={['openai','anthropic','google','mistral','local'].map((v) => ({ value: v, label: v }))}
         onChange={(v) => set({ llm_provider: v })} />

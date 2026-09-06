@@ -270,3 +270,19 @@ def test_the_page_reads_no_endpoint_that_can_mutate() -> None:
 
     methods = {method for route in ai_core_router.routes for method in getattr(route, "methods", set())}
     assert methods <= {"GET", "HEAD"}, f"the AI Core read surface exposes {sorted(methods - {'GET', 'HEAD'})}"
+
+
+def test_the_chain_panel_separates_local_credential_from_local_routing(monkeypatch) -> None:
+    """ "Local enabled" does not answer "are prompts still leaving the building"."""
+    from ai.gateway import chain as gateway_chain
+
+    monkeypatch.setattr(gateway_chain, "_stored_config", lambda: {"llm_local_enabled": True})
+    body = _client("admin").get("/api/ai-core/chain").json()
+    assert body["local_in_chain"] is True
+    assert body["local_only"] is False, "an appended local leg is not a privacy mode"
+
+    monkeypatch.setattr(gateway_chain, "_stored_config", lambda: {"llm_local_only": True})
+    body = _client("admin").get("/api/ai-core/chain").json()
+    assert body["local_only"] is True
+    reasoning = next(role for role in body["roles"] if role["role"] == "reasoning")
+    assert [leg["provider"] for leg in reasoning["legs"]] == ["ollama"]

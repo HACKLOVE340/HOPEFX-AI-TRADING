@@ -140,14 +140,23 @@ async def ai_core_capabilities(user: TokenPayload = Depends(_viewer)) -> dict[st
 async def ai_core_chain(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
     """The resolved chain per role, and which legs this deployment can reach."""
     embedding = resolve_embedding_model()
+    rows = _chain_rows()
+    routed_local = any(leg["local"] for row in rows for leg in row["legs"])
     return {
-        "roles": _chain_rows(),
+        "roles": rows,
         "providers": providers.reachability(),
         "embedding": {"provider": embedding.provider, "model": embedding.model},
         "local_provider": LOCAL_PROVIDER,
         # Optional by design and never a primary: capability drops sharply, and
         # the page has to say so rather than presenting it as an equal choice.
         "local_inference_enabled": providers.local_inference_enabled(),
+        # Three separate facts, deliberately not collapsed into one flag:
+        # whether a credential exists (above), whether a resolved chain actually
+        # routes to it, and whether the privacy mode has made it the only leg.
+        # An operator who sees "local: enabled" cannot tell from that alone
+        # whether prompts are still leaving the building.
+        "local_in_chain": routed_local,
+        "local_only": bool(rows) and all(all(leg["local"] for leg in row["legs"]) for row in rows if row["legs"]),
     }
 
 

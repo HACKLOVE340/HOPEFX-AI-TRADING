@@ -13,9 +13,24 @@ interface ToggleProps {
   disabled?: boolean;
 }
 
+/**
+ * The switch had no accessible name.
+ *
+ * `<label htmlFor={id}>` pointed at a `<div role="switch">`, and a `<label>`
+ * only labels a *labellable* element — a form control. A div is not one, so the
+ * association was silently dropped: assistive technology announced "switch,
+ * checked" with no indication of WHICH setting, on every toggle across every
+ * settings page, including the ones that enable live trading. It is also
+ * invalid HTML, which is how the defect stayed invisible — nothing errors.
+ *
+ * `aria-labelledby` is the association that works on a non-labellable element.
+ * The wrapper keeps the whole row clickable (a 24px switch alone is under the
+ * 44px target rule), and the click handler now lives ONLY on the wrapper: with
+ * one on each, a click on the switch fired twice and toggled back.
+ */
 export const Toggle: React.FC<ToggleProps> = ({ id, label, description, checked, onChange, disabled }) => (
-  <label
-    htmlFor={id}
+  <div
+    onClick={() => !disabled && onChange(!checked)}
     style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       padding: '10px 0', cursor: disabled ? 'not-allowed' : 'pointer',
@@ -23,16 +38,26 @@ export const Toggle: React.FC<ToggleProps> = ({ id, label, description, checked,
     }}
   >
     <div>
-      <div style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 500 }}>{label}</div>
-      {description && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{description}</div>}
+      <div id={`${id}-label`} style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 500 }}>{label}</div>
+      {description && (
+        <div id={`${id}-desc`} style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{description}</div>
+      )}
     </div>
     <div
       id={id}
       role="switch"
       aria-checked={checked}
+      aria-labelledby={`${id}-label`}
+      aria-describedby={description ? `${id}-desc` : undefined}
+      aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : 0}
-      onClick={() => !disabled && onChange(!checked)}
-      onKeyDown={(e) => !disabled && (e.key === 'Enter' || e.key === ' ') && onChange(!checked)}
+      onKeyDown={(e) => {
+        if (disabled || (e.key !== 'Enter' && e.key !== ' ')) return;
+        // Space scrolls the page by default; a switch that also jumps the view
+        // is a switch a keyboard user loses track of.
+        e.preventDefault();
+        onChange(!checked);
+      }}
       // The switch is keyboard-operable but had no visible focus indicator,
       // so a keyboard user could not see which toggle they were on
       // (rubric: focus-states, HIGH).
@@ -52,7 +77,7 @@ export const Toggle: React.FC<ToggleProps> = ({ id, label, description, checked,
         boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
       }} />
     </div>
-  </label>
+  </div>
 );
 
 // ── Field ─────────────────────────────────────────────────────────────────────

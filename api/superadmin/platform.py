@@ -266,6 +266,12 @@ _PLATFORM_CONFIG_DEFAULTS: dict = {
     "llm_fallback_model": "gpt-5.5",
     "llm_embedding_model": "text-embedding-3-large",
     "llm_embedding_dimensions": 1536,
+    # Empty by default: no role is overridden until a superadmin says so, and
+    # the committed chain in ai/gateway/chain.py stays in force.
+    "llm_chain": {},
+    "llm_local_enabled": False,
+    "llm_local_model": "llama3",
+    "llm_local_only": False,
     # ── Drawdown controls ─────────────────────────────────────────────────────
     "drawdown_hard_stop_pct": 0.10,
     "drawdown_soft_warn_pct": 0.07,
