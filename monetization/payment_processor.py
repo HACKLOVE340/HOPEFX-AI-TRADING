@@ -41,7 +41,7 @@ except ImportError:
 
 
 UTC = timezone.utc
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from .access_codes import access_code_generator
 from .invoices import invoice_generator
@@ -65,6 +65,29 @@ except ImportError:
 # Dunning schedule: retry at 24h, 72h, 168h (7 days) then suspend
 _DUNNING_DELAYS_HOURS = [24, 72, 168]
 _MAX_RETRIES = len(_DUNNING_DELAYS_HOURS)
+
+
+class PaymentNotCharged(RuntimeError):
+    """The provider did not take the money.
+
+    Raised rather than returned so it cannot be ignored by a caller that only
+    checks a truthy intent id -- which is exactly how a declined card became a
+    succeeded payment.
+    """
+
+
+def to_cents(amount: Decimal) -> int:
+    """Convert a money amount to Stripe's smallest currency unit.
+
+    Rounds HALF-UP to the cent. This was `int(amount * 100)`, which truncates:
+    Decimal("10.999") became 1099. On a charge that under-bills; on a refund it
+    keeps the remainder, which favours the platform against the customer. Money
+    rounds, and it rounds half-up rather than to even -- `round()` would give
+    banker's rounding, which is not what an invoice means (see the
+    hopefx-money-precision skill).
+    """
+    quantised = (Decimal(amount) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return int(quantised)
 
 
 class PaymentStatus(StrEnum):
@@ -244,7 +267,7 @@ class PaymentProcessor:
             )
 
         _stripe.api_key = self._stripe_api_key
-        amount_cents = int(amount * 100)  # Stripe uses smallest currency unit
+        amount_cents = to_cents(amount)  # Stripe uses smallest currency unit
 
         create_kwargs: dict = {
             "amount": amount_cents,
@@ -292,8 +315,16 @@ class PaymentProcessor:
                 currency=payment.currency.lower(),
                 idempotency_key=payment_id,  # prevents duplicate charges on retry
             )
-            if intent_id:
-                payment.stripe_payment_intent_id = intent_id
+            # `create_stripe_payment_intent` returns None on any StripeError --
+            # a declined card, a rate limit, an outage. None of those moved
+            # money. This was `if intent_id: payment.stripe_payment_intent_id =
+            # intent_id`, and execution then fell through to mark_succeeded(),
+            # mark_invoice_paid() and SubscriptionStatus.ACTIVE: a declined card
+            # produced a succeeded payment, a paid invoice and an active
+            # subscription, and returned True. No PaymentIntent means no charge.
+            if not intent_id:
+                raise PaymentNotCharged("Stripe did not return a PaymentIntent; the charge did not go through")
+            payment.stripe_payment_intent_id = intent_id
 
             # Attach Stripe customer ID from subscription record
             sub = subscription_manager.get_subscription(payment.subscription_id)
@@ -370,7 +401,7 @@ class PaymentProcessor:
                 "reason": reason,
             }
             if amount is not None:
-                refund_kwargs["amount"] = int(amount * 100)
+                refund_kwargs["amount"] = to_cents(amount)
             try:
                 refund = _stripe.Refund.create(**refund_kwargs)
                 logger.info(

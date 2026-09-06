@@ -27,7 +27,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | 1 of 8 done |
+| 5 | F222 · 8 critical modules with no test | HIGH | 2 of 8 done; the first found a live money defect |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
@@ -254,7 +254,7 @@ Never named in any test file:
 
 | LOC | Module |
 |---:|---|
-| 628 | `monetization/payment_processor.py` |
+| 628 | ~~`monetization/payment_processor.py`~~ — done; found 2 defects, see below |
 | 585 | `portfolio/strategy_allocator.py` |
 | 427 | `payments/transaction_manager.py` |
 | 354 | `monetization/marketplace_submission.py` |
@@ -275,6 +275,38 @@ nothing watching them.
 `tick_data_repository`.
 **Done when:** each is named by a test that exercises its real behaviour, not
 its import.
+
+**`payments/payment_gateway.py` — done** (`tests/unit/test_payment_currency_is_explicit.py`,
+with item 6's fix).
+
+**`monetization/payment_processor.py` — done, and writing the test found two
+defects, both reproduced by execution before being fixed**
+(`tests/unit/test_payment_processor_reports_reality.py`, 10 of 15 fail on the
+pre-fix tree):
+
+1. **A payment that was never charged was reported as succeeded · HIGH.**
+   `create_stripe_payment_intent` returns `None` on any `StripeError` — a
+   declined card, a rate limit, an outage. `process_payment` guarded only the
+   id assignment (`if intent_id:`) and fell through to `mark_succeeded()`,
+   `mark_invoice_paid()` and `SubscriptionStatus.ACTIVE`, returning `True`.
+   Measured: no PaymentIntent, no money, status `succeeded`, subscription
+   active. The signature defect of this audit — success reported for work that
+   did not happen — sitting on the path that collects revenue, and reachable
+   any time Stripe declines a card. It now raises `PaymentNotCharged`, which
+   the existing handler turns into a failed payment with an unpaid invoice.
+2. **Sub-cent amounts were truncated, not rounded · MEDIUM.**
+   `int(amount * 100)` made `Decimal("10.999")` into 1099 cents. On a charge
+   that under-bills; on a refund it keeps the remainder, which favours the
+   platform against the customer. `to_cents()` quantizes HALF_UP per the
+   `hopefx-money-precision` skill — `round()` would give banker's rounding,
+   which is not what an invoice means.
+
+**Note for whoever takes the next module.** `monetization/__init__.py` and
+`payments/crypto/__init__.py` re-export each singleton under its own module's
+name, so `import monetization.payment_processor as m` binds the *instance* and
+every `monkeypatch.setattr(m, ...)` silently lands on the object rather than the
+module. Reach for `sys.modules["..."]` instead. This cost time on two of the
+three modules tested so far.
 
 ### 6. `payment_gateway._process_crypto` reads the currency from a free-text field · MEDIUM
 
