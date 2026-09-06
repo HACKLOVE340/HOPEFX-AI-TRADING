@@ -794,6 +794,83 @@ async def init_ai_budget_store(s: Any) -> Any:
     return store
 
 
+async def init_ai_eval_store(s: Any) -> Any:
+    """Give the promotion gate evidence that outlives this process.
+
+    The gate read `_EVAL_REPORT`, a module global in `api/safe_agent_platform`.
+    After any restart it was None and canary promotion refused `no_eval_report`
+    until somebody remembered to run the suite by hand; with `API_WORKERS>1` a
+    second worker never saw the first worker's report at all. Because the gate
+    is fail-closed this reads as an availability problem — which is exactly how
+    it ends up "fixed" by raising the 24h staleness bound to a month.
+
+    Not fatal when absent, for the same reason the budget store is not: a
+    deployment with no Redis keeps the previous behaviour. Reported at WARNING,
+    because "the gate forgets on restart" is a fact an operator needs, and
+    `store.store_is_shared()` reads it back for the health surface.
+    """
+    from ai.evals import store
+    from api.admin import log_activity
+
+    shared = store.build_from_env()
+    if shared is None:
+        logger.warning(
+            "AI eval report store not installed — no REDIS_URL, or Redis unreachable. "
+            "The promotion gate's evidence is per-process: it is lost on restart, and "
+            "with API_WORKERS>1 a worker that did not run the suite will refuse promotion.",
+        )
+        return None
+
+    store.set_store(shared)
+    restored = store.load()
+    if restored is not None:
+        log_activity(
+            f"AI promotion gate restored an eval report scoring {restored.score:.2f} "
+            "(the gate's own age bound still applies to it)"
+        )
+    else:
+        log_activity("AI eval report store bound to Redis (survives restart, shared across workers)")
+    return shared
+
+
+async def init_ai_eval_schedule(s: Any) -> Any:
+    """Run the eval suite on an interval, when a deployment has asked for one.
+
+    OFF unless `AI_EVAL_SCHEDULE_HOURS` is set to a positive number, and it
+    stays off for a zero, a negative or anything unparseable. Every case is a
+    paid model call, and `ai/evals/runner.py` is right that a startup which
+    quietly spends money is hard to notice and harder to stop — so an
+    unconfigured deployment starts nothing, and a typo is never read as "run
+    continuously".
+
+    The loop sleeps before its first run, so a restart is not a purchase and a
+    crash-looping deployment is not a bill.
+    """
+    from ai.evals import schedule
+    from api.admin import log_activity
+
+    interval = schedule.interval_s()
+    if interval is None:
+        # Not a warning: off is the default and a perfectly good choice. The
+        # consequence is worth stating once, though, because it is not obvious
+        # that it lands on the promotion gate.
+        # Read from the gate rather than restated here: two numbers that must
+        # agree are one number that will not.
+        from ai.evals.gate import DEFAULT_MAX_AGE_S
+
+        logger.info(
+            "AI eval schedule is off (AI_EVAL_SCHEDULE_HOURS unset). Eval reports age out after "
+            "%.0fh, after which canary promotion refuses until the suite is run by hand.",
+            DEFAULT_MAX_AGE_S / 3600,
+        )
+        return None
+
+    task = asyncio.create_task(schedule.run_forever(interval))
+    s.background_tasks.append(task)
+    log_activity(f"AI eval suite scheduled every {interval / 3600:.1f}h (each run is a paid model call)")
+    return task
+
+
 async def init_ai_audit_sink(s: Any) -> Any:
     """Point the gateway audit trail at the durable, tamper-evident chain.
 
@@ -3119,6 +3196,23 @@ def build_component_registry(app, feature_flags):
         .register(
             "ai_budget_store",
             F.init_ai_budget_store,
+            required=False,
+            deps=["config"],
+        )
+        # The promotion gate's evidence, so it is not lost on restart and is
+        # not per-worker. Before the schedule, which files into it.
+        .register(
+            "ai_eval_store",
+            F.init_ai_eval_store,
+            required=False,
+            deps=["config"],
+        )
+        # Off unless AI_EVAL_SCHEDULE_HOURS is set: every case is a paid model
+        # call. After the budget store so the ceiling it consults is the shared
+        # one rather than this worker's private copy.
+        .register(
+            "ai_eval_schedule",
+            F.init_ai_eval_schedule,
             required=False,
             deps=["config"],
         )

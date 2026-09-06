@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 from .cases import DEFAULT_CASES, REQUIRED_CASE_IDS
 from .suite import EvalCase, SuiteReport, run_suite
@@ -33,12 +34,44 @@ EVAL_ROLE = "fast"
 EVAL_OPERATOR = "eval-runner"
 
 
-def _gateway_ask(case: EvalCase) -> str:
-    """Ask the model chain, through the gateway like every other model call."""
-    from ai.gateway.client import GatewayClient, ModelRequest
+def _build_client() -> Any:
+    """One gateway client, wired to whatever vendors this deployment can reach.
 
-    client = GatewayClient()
-    response = client.complete(ModelRequest(prompt=case.prompt, role=EVAL_ROLE, operator=EVAL_OPERATOR))
+    `GatewayClient()` with no arguments has an EMPTY provider map — it does not
+    discover anything — so it can reach no vendor at all. The endpoint that
+    submits a generation builds providers explicitly, and so must this.
+    """
+    from ai.gateway.adapters import build_providers
+    from ai.gateway.client import GatewayClient
+
+    return GatewayClient(build_providers())
+
+
+def _gateway_ask(case: EvalCase, *, client: Any = None) -> str:
+    """Ask the model chain, through the gateway like every other model call.
+
+    This function had never been executed. Every test in `test_eval_runner.py`
+    injects `ask=`, so the production path was covered by nothing, and it did
+    not work: it called `GatewayClient.complete`, which does not exist — the
+    class exposes `call_sync` — and passed `operator=` to `ModelRequest`, which
+    has no such field. `run_suite` marks a raising case FAILED rather than
+    aborting, which is right, and which meant six exceptions presented
+    themselves as a 0.00 score about the MODEL. The promotion gate then refused
+    `score_below_bar` for a reason that had nothing to do with any model.
+
+    A budget refusal or an unreachable vendor still raises here, and is still
+    scored as a failed case. That is deliberate: a model this deployment cannot
+    afford to ask is not a model it can promote on.
+    """
+    from ai.gateway.client import ModelRequest
+
+    gateway = client if client is not None else _build_client()
+    response = gateway.call_sync(
+        ModelRequest(prompt=case.prompt, role=EVAL_ROLE),
+        # Eval spend is a system cost with its own line in the audit trail, not
+        # a charge against whichever operator happened to click Run.
+        operator=EVAL_OPERATOR,
+    )
     return str(getattr(response, "text", "") or "")
 
 
@@ -48,7 +81,16 @@ def _normalise(answer: str) -> str:
 
 def run_default_suite(*, ask: Callable[[EvalCase], str] | None = None) -> SuiteReport:
     """Run the committed suite. Returns the report; files nothing."""
-    asker = ask or _gateway_ask
+    if ask is not None:
+        asker = ask
+    else:
+        # One client for the whole suite rather than one per case: building it
+        # reads the environment for every vendor, and six identical rebuilds
+        # per run is work for nothing.
+        gateway = _build_client()
+
+        def asker(case: EvalCase) -> str:
+            return _gateway_ask(case, client=gateway)
 
     def runner(case: EvalCase) -> str:
         # Normalise both sides here rather than in the suite: `run_suite`

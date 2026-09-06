@@ -35,6 +35,8 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ai.cache.store import shared_cache
+from ai.evals import schedule as eval_schedule
+from ai.evals import store as eval_store
 from ai.gateway import audit, budget, providers
 from ai.gateway.chain import DEFAULT_CHAINS, LOCAL_PROVIDER, resolve_chain, resolve_embedding_model
 from ai.policy import roles as policy
@@ -256,9 +258,13 @@ async def ai_core_evals(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
     closed — and a UI that rendered that as a blank panel would hide the reason
     a promotion is being refused.
     """
-    from api.safe_agent_platform import _EVAL_REPORT, _eval_gate_allows
+    from api.safe_agent_platform import _eval_gate_allows, get_eval_report
 
-    report = _EVAL_REPORT
+    # The accessor the GATE uses, not the private module global. Reading
+    # `_EVAL_REPORT` directly meant the page said "no report" while the gate
+    # promoted happily from a report another worker had filed in Redis — the
+    # page and the gate disagreeing about the same decision.
+    report = get_eval_report()
     allowed, detail = _eval_gate_allows("canary")
     summary = None
     if report is not None:
@@ -400,6 +406,24 @@ async def ai_core_summary(user: TokenPayload = Depends(_viewer)) -> dict[str, An
         "calls_unserved": len(unserved),
         "spent_usd": round(budget.spent(user.sub), 6),
         "cache_enabled": cache is not None,
+        # Which of the AI's durable stores are actually installed.
+        #
+        # Every one of these fails in the same silent direction: a per-process
+        # spend ceiling still refuses calls, an in-memory audit trail still
+        # records them, a per-process eval report still gates promotions. They
+        # just do it with a fraction of the state they appear to have, and
+        # nothing said so — `budget.store_is_shared`, `audit.durable_sink_installed`
+        # and `evals.store.store_is_shared` were each described in
+        # `core/startup_factories.py` as what "the health surface reads back",
+        # and no health surface read any of them.
+        "durability": {
+            "budget_shared": budget.store_is_shared(),
+            "audit_durable": audit.durable_sink_installed(),
+            "eval_report_shared": eval_store.store_is_shared(),
+            # None means the schedule is off, which is the default and a
+            # legitimate choice — every eval case is a paid model call.
+            "eval_schedule_hours": (None if (interval := eval_schedule.interval_s()) is None else interval / 3600.0),
+        },
     }
 
 

@@ -355,9 +355,43 @@ _EVAL_REPORT: Any = None
 
 
 def set_eval_report(report: Any) -> None:
-    """Record the latest eval suite report for the promotion gate."""
+    """Record the latest eval suite report for the promotion gate.
+
+    Kept in this process AND written to the shared store when one is installed.
+    Both, not either: a store outage must not discard six paid model calls, and
+    the local copy is what this worker falls back to when Redis is unreachable.
+    """
     global _EVAL_REPORT
     _EVAL_REPORT = report
+    if report is not None:
+        from ai.evals import store
+
+        store.save(report)
+
+
+def get_eval_report() -> Any:
+    """The report the gate should judge, from wherever the freshest one is.
+
+    Reads the shared store first, because another worker — or this one before
+    the last restart — may have run the suite. Falls back to this process's own
+    copy when there is no store or the store cannot be read: refusing to promote
+    because Redis blipped, while this worker holds a perfectly good report, is a
+    gate refusing on the wrong evidence.
+
+    Freshness, not preference: whichever report was measured most recently wins,
+    so a suite just run here is not shadowed by an older one in Redis. The gate's
+    24h bound still applies to whatever comes back — storing evidence durably
+    does not make it newer.
+    """
+    from ai.evals import store
+
+    stored = store.load()
+    local = _EVAL_REPORT
+    if stored is None:
+        return local
+    if local is None:
+        return stored
+    return stored if float(stored.ran_at) >= float(local.ran_at) else local
 
 
 def _eval_gate_allows(environment: str) -> tuple[bool, str]:
@@ -384,7 +418,7 @@ def _eval_gate_allows(environment: str) -> tuple[bool, str]:
         required_case_ids=REQUIRED_CASE_IDS,
     )
     try:
-        gate.check(_EVAL_REPORT, target="canary")
+        gate.check(get_eval_report(), target="canary")
     except PromotionRefused as refused:
         return False, ", ".join(refused.reason_codes)
     return True, "eval_gate_passed"

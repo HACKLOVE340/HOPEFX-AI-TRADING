@@ -142,6 +142,15 @@ interface Summary {
   providers_reachable: string[]; providers_unreachable: string[];
   local_inference_enabled: boolean;
   calls_recorded: number; calls_unserved: number; spent_usd: number; cache_enabled: boolean;
+  /** Which of the AI's durable stores are installed. Optional so an older
+   *  server, or a partial response, still renders the rest of the header. */
+  durability?: {
+    budget_shared: boolean;
+    audit_durable: boolean;
+    eval_report_shared: boolean;
+    /** null when the eval schedule is off, which is the default. */
+    eval_schedule_hours: number | null;
+  };
 }
 interface ChainLeg { position: number; provider: string; model: string; reachable: boolean; local: boolean }
 interface ChainRole { role: string; legs: ChainLeg[]; usable_legs: number; fallback_available: boolean; primary_reachable: boolean }
@@ -321,6 +330,42 @@ export const AICore: React.FC = () => {
                     <strong style={{ color: COLOR.text }}>Unreachable: </strong>
                     {s.providers_unreachable.length ? s.providers_unreachable.join(', ') : 'none'}
                   </div>
+                  {s.durability && (
+                    <div>
+                      <strong style={{ color: COLOR.text }}>State on restart: </strong>
+                      {(() => {
+                        const d = s.durability;
+                        // Named by consequence, not by setting. "budget_shared:
+                        // false" tells an operator nothing they can act on; "the
+                        // ceiling resets on restart" tells them the number in
+                        // the settings form is not the number that binds.
+                        const perProcess = [
+                          !d.budget_shared && 'the spend ceiling resets on restart and each worker holds its own full allowance',
+                          !d.audit_durable && 'the call audit trail is in memory and is lost on restart',
+                          !d.eval_report_shared && 'the promotion gate forgets its eval report on restart, and a worker that did not run the suite refuses promotion',
+                        ].filter(Boolean) as string[];
+                        return perProcess.length === 0 ? (
+                          <span style={{ color: COLOR.ok }}>
+                            spend, audit trail and eval report all survive a restart and are shared across workers
+                          </span>
+                        ) : (
+                          <span style={{ color: COLOR.warn }}>{perProcess.join('; ')}</span>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {s.durability && (
+                    <div>
+                      <strong style={{ color: COLOR.text }}>Eval schedule: </strong>
+                      {/* Off is the default and a legitimate choice — every eval
+                          case is a paid model call — so this is never styled as
+                          a fault. Rendering it in red would push an operator to
+                          switch on a recurring bill to clear a warning. */}
+                      {s.durability.eval_schedule_hours == null
+                        ? 'off — the suite is run by hand, and its report ages out after 24h'
+                        : `every ${s.durability.eval_schedule_hours}h (each run is a paid model call)`}
+                    </div>
+                  )}
                   <div>
                     <strong style={{ color: COLOR.text }}>Local inference: </strong>
                     {s.local_inference_enabled
