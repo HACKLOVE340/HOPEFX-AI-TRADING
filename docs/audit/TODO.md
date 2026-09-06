@@ -27,7 +27,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | 6 of 8 done; four found live defects |
+| 5 | F222 · 8 critical modules with no test | HIGH | 7 of 8 done; five found live defects |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
@@ -255,7 +255,7 @@ Never named in any test file:
 | LOC | Module |
 |---:|---|
 | 628 | ~~`monetization/payment_processor.py`~~ — done; found 2 defects, see below |
-| 585 | `portfolio/strategy_allocator.py` |
+| 585 | ~~`portfolio/strategy_allocator.py`~~ — done; a 40% cap was awarding 80% |
 | 427 | ~~`payments/transaction_manager.py`~~ — done; found a double-refund path |
 | 354 | ~~`monetization/marketplace_submission.py`~~ — done; the code audit auto-approved escapes |
 | 318 | ~~`payments/fintech/paystack.py`~~ — done; found a stale hard-coded FX rate |
@@ -402,6 +402,31 @@ check on adversarial source can always be worked around; what it buys is that
 the obvious attempts do not sail through an automatic approval. Real containment
 is `ai/sandbox/` (item 19), which runs code under rlimits with no network and a
 scrubbed environment. The two are complementary and neither replaces the other.
+
+**`portfolio/strategy_allocator.py` — done, three defects · HIGH**
+(`tests/unit/test_strategy_allocator_limits_hold.py`, 10 of 18 fail on the
+pre-fix tree). It decides what fraction of the book each strategy gets.
+
+1. **The per-pod concentration cap was violated by the code enforcing it.**
+   `_sharpe_proportional` clipped to `MAX_WEIGHT_PER_POD` and then divided by
+   the reduced sum, which scales the clipped weight straight back over the cap.
+   Measured: `sharpes [9.0, 0.5, 0.5]` → `[0.8, 0.1, 0.1]` against a cap of
+   **0.4**. A risk limit that does not limit — and `CLAUDE.md` forbids weakening
+   a risk gate, so this one arrived weakened. Replaced with water-filling: cap
+   whoever is over, redistribute the excess to those still under, repeat. When
+   every pod is at the cap the total is `n × cap`, and that remainder now stays
+   **unallocated** rather than being scaled away — scaling it away is the bug.
+2. **Strategies that all lose money received the whole book.** Every Sharpe
+   negative → the clamped total is 0 → the fallback returned `ones(n) / n`, an
+   equal split of 100% of capital across strategies that were all losing.
+   Allocates nothing now.
+3. **Correlations were computed over invented returns.** Shorter histories were
+   zero-padded to the longest, so a pod with 3 days against one with 200
+   contributed 197 fabricated 0.00% days. Zero is not "no data", it is "flat
+   that day" — a measurement nobody made, feeding the optimiser that allocates
+   capital. Measured, the padding turned a true correlation of 1.0 into 0.0578.
+   It uses the overlapping window now, and reports identity ("unknown") when
+   the overlap is too short to measure.
 
 **Note for whoever takes the next module.** `monetization/__init__.py` and
 `payments/crypto/__init__.py` re-export each singleton under its own module's

@@ -215,6 +215,42 @@ class ValidatedEdgeRegistry:
 # ── Correlation tracker ───────────────────────────────────────────────────────
 
 
+#: Days of shared history below which a correlation cannot be measured.
+_MIN_OVERLAP_FOR_CORRELATION = 2
+
+
+def _cap_weights(weights: np.ndarray, max_weight: float = MAX_WEIGHT_PER_POD) -> np.ndarray:
+    """Enforce the per-pod cap, redistributing the excess to uncapped pods.
+
+    `np.clip(w, 0, cap); w /= w.sum()` does NOT do this: dividing by the reduced
+    sum scales the capped weight back above the cap. Measured, a pod capped at
+    0.4 came out at 0.8.
+
+    Water-filling instead: cap whoever is over, hand their excess to those still
+    under, repeat. When every pod is at the cap the total is `n * cap`, which
+    may be less than 1.0 -- and that remainder stays unallocated rather than
+    being scaled away, because scaling it away is the bug.
+    """
+    weights = np.asarray(weights, dtype=float).copy()
+    if weights.size == 0:
+        return weights
+
+    for _ in range(weights.size + 1):
+        over = weights > max_weight + 1e-12
+        if not over.any():
+            break
+        excess = float((weights[over] - max_weight).sum())
+        weights[over] = max_weight
+        under = ~over & (weights > 0)
+        if not under.any() or excess <= 0:
+            break
+        # Proportional to what each uncapped pod already holds, so the relative
+        # ordering the Sharpes expressed survives the redistribution.
+        weights[under] += excess * (weights[under] / weights[under].sum())
+
+    return np.clip(weights, 0.0, max_weight)
+
+
 class CorrelationMatrix:
     """Compute pairwise return correlations between pods."""
 
@@ -225,16 +261,25 @@ class CorrelationMatrix:
         if n == 1:
             return np.eye(1)
 
-        # Build return matrix — pad shorter histories with zeros
-        max_len = max(len(p.return_history) for p in pods)
-        if max_len < 2:
+        # The OVERLAPPING window only — the most recent `overlap` days that every
+        # pod actually has.
+        #
+        # This used to pad shorter histories with zeros up to the longest one.
+        # A pod with 3 days against one with 200 contributed 197 fabricated
+        # 0.00% days, and zero is not "no data" — it is "flat that day", a
+        # measurement nobody made. Measured, the padding turned a correlation of
+        # 1.0 into 0.0578, and that number fed the optimiser that allocates
+        # capital.
+        overlap = min(len(p.return_history) for p in pods)
+        if overlap < _MIN_OVERLAP_FOR_CORRELATION:
+            # Not enough shared history to measure a correlation. Identity says
+            # "unknown", which the optimiser's penalty treats as no penalty --
+            # the same answer as before, arrived at honestly.
             return np.eye(n)
 
-        matrix = np.zeros((max_len, n))
+        matrix = np.zeros((overlap, n))
         for i, pod in enumerate(pods):
-            h = pod.return_history
-            if h:
-                matrix[-len(h) :, i] = h
+            matrix[:, i] = pod.return_history[-overlap:]
 
         # Pearson correlation
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -294,9 +339,9 @@ class MeanVarianceOptimiser:
                 options={"maxiter": 500, "ftol": 1e-9},
             )
             if result.success:
-                w = np.clip(result.x, 0, max_weight)
-                w /= w.sum()
-                return w
+                # Through the same capper: `clip` then `/= sum()` is exactly the
+                # step that let a capped weight climb back over its cap.
+                return _cap_weights(np.maximum(result.x, 0.0), max_weight=max_weight)
         except ImportError:
             ...  # nosec B110
 
@@ -305,14 +350,27 @@ class MeanVarianceOptimiser:
 
     @staticmethod
     def _sharpe_proportional(sharpes: np.ndarray) -> np.ndarray:
-        pos = np.maximum(sharpes, 0)
+        """Sharpe-proportional weights, capped per pod.
+
+        Two defects lived here, both measured before being fixed.
+
+        **The cap did not cap.** It clipped to `MAX_WEIGHT_PER_POD` and then
+        divided by the new sum, which pushes the clipped weight straight back
+        over the cap: `[9.0, 0.5, 0.5]` produced `[0.8, 0.1, 0.1]` against a cap
+        of 0.4. A risk limit that does not limit.
+
+        **Losing strategies got the whole book.** With every Sharpe negative the
+        clamped total was 0 and this returned `ones(n) / n` -- an equal split of
+        100% of capital across strategies that were all losing. "Everything is
+        losing" allocates nothing.
+        """
+        pos = np.maximum(sharpes, 0.0)
         total = pos.sum()
-        if total == 0:
-            return np.ones(len(sharpes)) / len(sharpes)
-        w = pos / total
-        w = np.clip(w, 0, MAX_WEIGHT_PER_POD)
-        w /= w.sum()
-        return w
+        if total <= 0:
+            # No measured edge anywhere. Nothing is not the same as everything
+            # split evenly.
+            return np.zeros(len(sharpes))
+        return _cap_weights(pos / total)
 
 
 # ── Strategy Allocator ────────────────────────────────────────────────────────
