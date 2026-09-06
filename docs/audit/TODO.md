@@ -36,7 +36,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 10 | `execution/` omissions, with measured debt | MEDIUM | — |
 | 11 | F223 · 75 metric-named files, 1,125 assertion-free tests | HIGH | — |
 | 12 | F104 · a "gate" that cannot fail | HIGH | — |
-| 13–19 | **The AI Core — not built** | — | — |
+| 13–19 | **The AI Core — BUILT** (gateway, tool bus, guardrails, evals, cache, sandbox, AI Core page) | — | done |
 | 20 | `static/` build artifact in CI | fixed; decision open | owner |
 | 21 | F216/F217 · `data/` ↔ `data_layer/` boundary | MEDIUM | **owner** |
 | 22 | `REMEDIATION_PLAN.md` is stale | MEDIUM | — |
@@ -386,6 +386,27 @@ be a gate. **Done when:** its name and its exit code agree.
 ---
 
 ## P3 — The AI Core
+
+**Status: items 13–19 are built, tested and pushed.** Plan and per-task status:
+`docs/audit/plans/2026-09-05-ai-core.md`. The sections below are kept as written
+so the original findings stay legible next to what was done about them.
+
+| Item | Delivered | Where |
+|---|---|---|
+| 13 · Gateway | chain, budget, audit, guardrail binding, real vendor adapters, real health probe | `ai/gateway/` |
+| 14 · Tool bus | dual gate: `ToolPermissionRegistry.review` **and** `enforce_agent_action` — the latter's first production caller | `ai/tools/bus.py` |
+| 15 · Response cache | keyed on prompt + model + tool state; a failure is never cached; a hit is not charged | `ai/cache/` |
+| 16 · Evals gate | fails closed on no report, unknown target, stale report, failed required case, score below bar | `ai/evals/` |
+| 17 · Guardrails | input screening, fencing, output validation without coercion, corroborated severity ceiling | `ai/guardrails/` |
+| 18 · AI Core page | seven read endpoints, five workspaces, every panel on live state | `api/ai_core.py`, `frontend/src/pages/AICore.tsx` |
+| 19 · Sandbox | rlimits, env allowlist, no-network preamble; containment proven with the static pre-filter disabled | `ai/sandbox/` |
+
+Two things were added beyond the original items, both because the work exposed
+them: an ordered per-role **chain editor** whose output the gateway actually
+reads (`docs/audit/plans/...` Task 14), and a **model catalogue** whose review
+dates expire in CI, so the defaults cannot go stale unnoticed a second time
+(Task 15).
+
 
 `docs/audit/AI_CORE_SPEC.md` is written. **The AI Core is not built.** Of the
 nine concepts in §3, four exist as prerequisites and five have no implementation.
