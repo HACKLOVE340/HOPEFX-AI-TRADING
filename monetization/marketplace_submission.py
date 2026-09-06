@@ -219,6 +219,7 @@ class StrategyAuditor:
 
         report.checks.append(self._check_syntax(submission.strategy_code))
         report.checks.append(self._check_forbidden_imports(submission.strategy_code))
+        report.checks.append(self._check_containment(submission.strategy_code))
         report.checks.append(self._check_sharpe(submission.backtest_results))
         report.checks.append(self._check_drawdown(submission.backtest_results))
         report.checks.append(self._check_trade_count(submission.backtest_results))
@@ -289,6 +290,62 @@ class StrategyAuditor:
                 "error",
             )
         return AuditCheck("security_check", True, "No forbidden imports or code-execution constructs found")
+
+    #: A submission is executed under containment for no longer than this. A
+    #: strategy that cannot import and define itself in a few seconds is not a
+    #: strategy this audit can vouch for.
+    CONTAINMENT_TIMEOUT_S = 15.0
+
+    def _check_containment(self, code: str) -> AuditCheck:
+        """Run the submission under real containment before approving it.
+
+        `ai/sandbox/` had zero production callers. Until this, the only thing
+        in front of strategy source submitted by a stranger was the static
+        screen above — which says in its own docstring that it is "a filter,
+        not containment", and names this sandbox as the containment it needs.
+        The code identified the gap and nothing routed to it.
+
+        The screen is NOT replaced. `sandbox.run()` calls it as a pre-filter so
+        an obvious payload is refused before a process is spawned, and the
+        containment guarantees are tested with the screen off so neither layer
+        is load-bearing alone.
+
+        **An unavailable sandbox FAILS the submission.** No `resource` module,
+        a platform that cannot fork, any error at all — "we could not contain
+        this" must never resolve to "approved for sale". This gate grants
+        automatic approval with no human in the path, so the safe direction is
+        the only defensible one.
+        """
+        try:
+            from ai.sandbox import runner
+        except Exception as exc:
+            return AuditCheck(
+                "containment_check",
+                False,
+                f"Sandbox unavailable ({exc}); refusing to approve uncontained code",
+                "error",
+            )
+
+        try:
+            result = runner.run(code, timeout_s=self.CONTAINMENT_TIMEOUT_S, net=False)
+        except Exception as exc:
+            logger.warning("marketplace: containment run failed (%s)", exc)
+            return AuditCheck(
+                "containment_check",
+                False,
+                f"Could not run the submission under containment ({exc})",
+                "error",
+            )
+
+        if not getattr(result, "ok", False):
+            codes = ", ".join(getattr(result, "reason_codes", ()) or ()) or "refused"
+            return AuditCheck(
+                "containment_check",
+                False,
+                f"Submission refused by the sandbox: {codes}",
+                "error",
+            )
+        return AuditCheck("containment_check", True, "Submission ran under containment without incident")
 
     def _check_sharpe(self, bt: dict) -> AuditCheck:
         sharpe = float(bt.get("sharpe_ratio", 0))
