@@ -29,6 +29,8 @@ import { ConversationTurn, type TranscriptLine } from '../../hub/conversation';
 import { Workspace, type Surface } from '../../hub/workspace';
 import { readIntent } from '../../hub/intent';
 import { readLayout, suggestLayout, type LayoutName } from '../../hub/layout';
+import { SnapshotStore, capacityFor, readHistoryIntent } from '../../hub/history';
+import { useViewportWidth } from '../../hub/useViewportWidth';
 import { useStore, selectAiJobs } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
 
@@ -190,6 +192,44 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
   const [namedLayout, setNamedLayout] = useState<LayoutName | null>(null);
   const layout = namedLayout ?? suggestLayout(surfaces, focusedId);
 
+  // History (§8: "bring back yesterday's workspace"). One store for the life of
+  // the panel; it reads and writes localStorage and fails soft when that is
+  // unavailable, which is every server render and Safari's private mode.
+  const historyRef = useRef<SnapshotStore | null>(null);
+  if (historyRef.current === null) historyRef.current = new SnapshotStore();
+  const history = historyRef.current;
+
+  /**
+   * §8's "subject to device capacity", and the degrade-rather-than-fail half.
+   *
+   * Applied on every width change rather than only at mount: rotating a phone
+   * to portrait with twelve surfaces open must reduce them now, not leave a
+   * twelve-screen scroll standing until somebody asks for a thirteenth.
+   */
+  const viewportWidth = useViewportWidth();
+  useEffect(() => {
+    workspace.setCapacity(capacityFor(viewportWidth));
+    setSurfaces([...workspace.surfaces]);
+    setFocusedId(workspace.focused);
+  }, [viewportWidth, workspace]);
+
+  /**
+   * Keep an automatic snapshot of the plane, at most once a minute.
+   *
+   * Without this, "bring back yesterday's workspace" only ever finds
+   * arrangements somebody thought to name, which is almost none of them — the
+   * command would work perfectly and answer "there is nothing from yesterday"
+   * forever.
+   */
+  const lastAuto = useRef(0);
+  useEffect(() => {
+    if (surfaces.length === 0) return;
+    const now = Date.now();
+    if (now - lastAuto.current < 60_000) return;
+    lastAuto.current = now;
+    history.save(workspace.snapshot(), { auto: true, layout: namedLayout });
+  }, [surfaces, history, workspace, namedLayout]);
+
   const syncWorkspace = useCallback(() => {
     setSurfaces([...workspace.surfaces]);
     setFocusedId(workspace.focused);
@@ -203,9 +243,79 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
    * dropped — a workspace that ignores a sentence it cannot parse teaches
    * people to stop talking to it.
    */
+  /**
+   * Restore, save or list an arrangement. Returns true when it handled the
+   * phrase, so the ordinary surface commands are not also run against it.
+   *
+   * Checked BEFORE `readIntent`, because "bring back yesterday's workspace"
+   * names no subject and would otherwise fall through as unhandled — the
+   * specification's own example, answered with a refusal.
+   */
+  const onHistory = useCallback(
+    (phrase: string): boolean => {
+      const intent = readHistoryIntent(phrase);
+      if (!intent) return false;
+
+      const restore = (snapshot: ReturnType<SnapshotStore['latest']>, missing: string) => {
+        if (!snapshot) {
+          // Not "here is something else". An operator who cannot tell that the
+          // plane they got is not the plane they asked for is worse off than
+          // one who was told there is nothing.
+          turn.say(missing);
+          return;
+        }
+        const { restored, skipped } = workspace.restore(snapshot.surfaces);
+        setNamedLayout(snapshot.layout);
+        syncWorkspace();
+        turn.say(
+          skipped.length > 0
+            ? `Restored ${snapshot.name} — ${restored} of ${restored + skipped.length} surfaces. ` +
+                `${skipped.length} could not be rebuilt: this version no longer draws ${skipped.join(', ')}.`
+            : `Restored ${snapshot.name}, ${restored} ${restored === 1 ? 'surface' : 'surfaces'}.`,
+        );
+      };
+
+      switch (intent.kind) {
+        case 'restore_yesterday':
+          restore(history.yesterday(), 'There is no workspace saved from yesterday.');
+          break;
+        case 'restore_previous':
+          restore(history.previous(), 'There is no earlier workspace saved.');
+          break;
+        case 'restore_named':
+          restore(history.byName(intent.name), `I have no workspace called \u201c${intent.name}\u201d.`);
+          break;
+        case 'save': {
+          const saved = history.save(workspace.snapshot(), { name: intent.name, layout: namedLayout });
+          turn.say(
+            saved
+              ? `Saved as \u201c${saved.name}\u201d.`
+              : workspace.snapshot().length === 0
+                ? 'There is nothing on the plane to save.'
+                : 'I could not keep that — this browser is refusing to store it.',
+          );
+          break;
+        }
+        case 'list': {
+          const all = history.list();
+          turn.say(
+            all.length === 0
+              ? 'No workspaces are saved yet.'
+              : `${all.length} saved: ${all.slice(0, 6).map((s) => s.name).join(', ')}.`,
+          );
+          break;
+        }
+      }
+      setTranscript([...turn.transcript]);
+      return true;
+    },
+    [history, turn, workspace, syncWorkspace, namedLayout],
+  );
+
   const onCommand = useCallback(
     (phrase: string) => {
       turn.userStoppedSpeaking(phrase);
+      if (onHistory(phrase)) return;
       const intent = readIntent(phrase);
 
       if (intent.clear) {
@@ -243,7 +353,7 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       }
       setTranscript([...turn.transcript]);
     },
-    [turn, workspace, syncWorkspace],
+    [turn, workspace, syncWorkspace, onHistory],
   );
 
   return (

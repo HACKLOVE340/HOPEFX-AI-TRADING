@@ -23,13 +23,21 @@
  * a span looks like.
  */
 
-import { SURFACE_KINDS, type SurfaceRequest } from './contracts.shared';
+import { SURFACE_KINDS, type SurfaceKind, type SurfaceRequest } from './contracts.shared';
 
 export type SurfacePriority = 'critical' | 'primary' | 'secondary' | 'background' | 'on_demand';
 
 export interface Surface {
   id: string;
-  kind: string;
+  /**
+   * Narrowed to the registry's union rather than left as `string`.
+   *
+   * A surface only exists if its kind passed `SURFACE_KINDS.includes` in
+   * `open()`, so the wider type was never true — and it meant `snapshot()`
+   * could not return `SurfaceRequest[]` without a cast, which is the sort of
+   * cast that later turns out to be hiding something.
+   */
+  kind: SurfaceKind;
   /** What it MEANS, in words the AI would use aloud. §9 resolves against this. */
   meaning: string;
   priority: SurfacePriority;
@@ -104,11 +112,11 @@ export class Workspace {
   private items: Surface[] = [];
   private focusedId: string | null = null;
   private seq = 0;
-  private readonly max: number;
+  private capacity: number;
   private readonly now: () => number;
 
   constructor(options: WorkspaceOptions = {}) {
-    this.max = options.maxSurfaces ?? DEFAULT_MAX;
+    this.capacity = options.maxSurfaces ?? DEFAULT_MAX;
     this.now = options.now ?? Date.now;
   }
 
@@ -212,6 +220,65 @@ export class Workspace {
   }
 
   /**
+   * What is on the plane, as the requests that would rebuild it.
+   *
+   * Requests rather than surfaces, deliberately: a `Surface` carries ids,
+   * timestamps and a span that a later version of the layout engine will
+   * compute differently. Storing those would make a restored workspace a
+   * fossil of the engine that saved it. A request is what was *asked for*, and
+   * that is the thing worth keeping.
+   */
+  snapshot(): SurfaceRequest[] {
+    return this.surfaces.map((surface) => ({
+      kind: surface.kind,
+      intent: surface.meaning,
+      priority: surface.priority,
+      key: surface.key,
+      data: surface.data,
+    }));
+  }
+
+  /**
+   * Rebuild the plane from a snapshot. Returns what could not be restored.
+   *
+   * A kind that no longer exists is skipped rather than thrown, and named in
+   * the return value. Throwing would lose the entire arrangement because one
+   * panel type was renamed six months ago — the restore would fail exactly when
+   * it is most valuable, on the oldest snapshot.
+   */
+  restore(requests: readonly SurfaceRequest[]): { restored: number; skipped: string[] } {
+    this.items = this.items.filter((s) => s.pinned);
+    this.focusedId = null;
+    const skipped: string[] = [];
+    let restored = 0;
+    for (const request of requests) {
+      if (!SURFACE_KINDS.includes(request.kind)) {
+        skipped.push(request.kind);
+        continue;
+      }
+      this.open(request);
+      restored += 1;
+    }
+    return { restored, skipped };
+  }
+
+  /**
+   * Change the concurrent ceiling — §8's "subject to device capacity".
+   *
+   * Evicting immediately rather than at the next open is the point: rotating a
+   * phone to portrait with twelve surfaces open must reduce them now, not leave
+   * a twelve-screen scroll standing until somebody asks for a thirteenth.
+   */
+  setCapacity(max: number): void {
+    this.capacity = Math.max(1, Math.floor(max));
+    this.evict();
+  }
+
+  get capacityLimit(): number {
+    return this.capacity;
+  }
+
+  /**
    * Honour the ceiling by dropping the least important thing.
    *
    * Never the newest — that is what the operator just asked for, and dropping it
@@ -219,7 +286,7 @@ export class Workspace {
    * operator saying this matters more than the engine's opinion.
    */
   private evict(): void {
-    while (this.items.length > this.max) {
+    while (this.items.length > this.capacity) {
       const candidates = this.items.filter((s) => !s.pinned);
       if (candidates.length === 0) return;
       const newest = this.items.reduce((a, b) => (a.order >= b.order ? a : b));

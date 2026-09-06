@@ -319,8 +319,26 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/hub/intent.ts",
         "Local, instant, deterministic; unrecognised falls through.",
     ),
-    _c("workspace.history_snapshots", "8", "D", "Workspace history and named snapshots"),
-    _c("workspace.graceful_degrade", "8", "D", "Degrade on small devices rather than failing"),
+    _c(
+        "workspace.history_snapshots",
+        "8",
+        "D",
+        "Workspace history and named snapshots",
+        "live",
+        "frontend/src/hub/history.ts:SnapshotStore",
+        '§8\'s own example command. "Yesterday" resolves to a snapshot taken '
+        "yesterday, or nothing — never the newest one instead. Automatic "
+        "capture once a minute so the command has something to find.",
+    ),
+    _c(
+        "workspace.graceful_degrade",
+        "8",
+        "D",
+        "Degrade on small devices rather than failing",
+        "live",
+        "frontend/src/hub/history.ts:capacityFor",
+        "Four surfaces below 640px, eight below 1024px, twelve above. Applied on rotation, not only at mount.",
+    ),
     # §9 — Spatial AI interaction
     _c(
         "spatial.scene_model",
