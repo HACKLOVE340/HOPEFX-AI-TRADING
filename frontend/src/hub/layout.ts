@@ -59,6 +59,16 @@ export interface Placement {
   /** Grid columns out of 12. */
   span: number;
   /**
+   * True when this surface is folded into the background stack (§10:
+   * "background information collapses into stacks or summaries").
+   *
+   * Distinct from `visible: false`. A collapsed surface is still on the plane
+   * and still listed; it is drawn as a line in a stack rather than as a panel.
+   * A hidden one is not drawn at all. Conflating them would mean the operator
+   * could not get a collapsed panel back without knowing it was there.
+   */
+  collapsed: boolean;
+  /**
    * False when this layout deliberately takes the surface off screen —
    * presentation mode shows one thing at a time.
    *
@@ -78,7 +88,28 @@ export interface LayoutInput {
   layout?: LayoutName;
   focusedId?: string | null;
   viewport?: Viewport;
+  /**
+   * Fold low-priority surfaces into a stack once the plane is crowded (§10).
+   *
+   * Off by default so that every existing caller and every layout test keeps
+   * the behaviour it had. A collapse that arrived silently would change what a
+   * dozen assertions were measuring without any of them failing.
+   */
+  collapseBackground?: boolean;
 }
+
+/**
+ * How many surfaces can be on the plane before the quiet ones fold away.
+ *
+ * §10's rule is about cognitive load, not about a hard limit: four panels do
+ * not need collapsing however unimportant two of them are. Past this, the
+ * background tier is what goes first, because that is what "supporting context
+ * remains visible but quieter" means when there is no room left to be quiet in.
+ */
+const COLLAPSE_ABOVE = 5;
+
+/** Tiers eligible to be folded away. Nothing critical or primary ever is. */
+const COLLAPSIBLE: ReadonlySet<SurfacePriority> = new Set<SurfacePriority>(['background', 'on_demand']);
 
 /** Below this a second column is unreadable, whatever the layout wanted. */
 const NARROW = 640;
@@ -178,6 +209,8 @@ export function place(surfaces: readonly Surface[], input: LayoutInput = {}): Pl
       ? (surfaces.find((s) => s.id === focusedId) ?? surfaces[0])?.id
       : null;
 
+  const crowded = (input.collapseBackground ?? false) && total > COLLAPSE_ABOVE;
+
   return surfaces.map((surface, index) => {
     const visible = layout !== 'presentation' || surface.id === shown;
     let span = rawSpan(surface, index, total, layout, focusedId);
@@ -188,7 +221,18 @@ export function place(surfaces: readonly Surface[], input: LayoutInput = {}): Pl
     if (width < NARROW) span = FULL;
     else if (width < MEDIUM) span = Math.max(span, 6);
 
-    return { surface, span: Math.min(FULL, Math.max(1, span)), visible };
+    // Never the focused surface, never a pinned one, never anything the
+    // operator ranked above background. Pinning is the operator overruling the
+    // engine's opinion about importance, and folding a pinned panel away would
+    // be the engine overruling them back.
+    const collapsed =
+      crowded &&
+      COLLAPSIBLE.has(surface.priority) &&
+      !surface.pinned &&
+      surface.id !== focusedId &&
+      layout !== 'presentation';
+
+    return { surface, span: Math.min(FULL, Math.max(1, span)), visible, collapsed };
   });
 }
 

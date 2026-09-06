@@ -137,12 +137,14 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   // phone: it renders, it passes a screenshot test, and nobody can read it.
   const width = useViewportWidth();
   const placements = useMemo(
-    () => place(surfaces, { layout, focusedId, viewport: { width } }),
+    () => place(surfaces, { layout, focusedId, viewport: { width }, collapseBackground: true }),
     [surfaces, layout, focusedId, width],
   );
-  const shown = placements.filter((p) => p.visible);
-  const hidden = placements.length - shown.length;
-  const hasSurfaces = shown.length > 0;
+  const visible = placements.filter((p) => p.visible);
+  const shown = visible.filter((p) => !p.collapsed);
+  const stacked = visible.filter((p) => p.collapsed);
+  const hidden = placements.length - visible.length;
+  const hasSurfaces = visible.length > 0;
 
   return (
     <div
@@ -252,6 +254,47 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
               paddingRight: 4,
             }}
           >
+            {stacked.length > 0 && (
+              // §10: "background information collapses into stacks or
+              // summaries." Still listed, still closable — a collapsed surface
+              // the operator cannot see the name of is one they cannot get back.
+              <div
+                aria-label="Collapsed background surfaces"
+                style={{
+                  gridColumn: 'span 12',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                  alignItems: 'center',
+                  padding: '8px 10px',
+                  borderRadius: 9,
+                  border: `1px dashed ${C.edge}`,
+                  background: 'rgba(12,20,35,.55)',
+                }}
+              >
+                <span style={label}>background · {stacked.length}</span>
+                {stacked.map(({ surface }) => (
+                  <button
+                    key={surface.id}
+                    type="button"
+                    onClick={() => onPinSurface(surface.id)}
+                    title="Pin to bring it back out of the stack"
+                    style={{
+                      minHeight: 28,
+                      padding: '0 9px',
+                      borderRadius: 7,
+                      border: `1px solid ${C.edge}`,
+                      background: 'rgba(10,17,30,.85)',
+                      color: C.dim,
+                      fontSize: 11.5,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {surface.meaning}
+                  </button>
+                ))}
+              </div>
+            )}
             {shown.map(({ surface, span }) => (
               <SurfaceView
                 key={surface.id}

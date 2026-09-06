@@ -404,8 +404,28 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "AI attention is a separate signal from operator focus; merging them "
         "would make the AI mentioning a panel read as the operator selecting it.",
     ),
-    _c("load.background_collapse", "10", "D", "Background information collapses into stacks or summaries"),
-    _c("load.cross_surface_summary", "10", "B", "Summarise across surfaces and name relationships"),
+    _c(
+        "load.background_collapse",
+        "10",
+        "D",
+        "Background information collapses into stacks or summaries",
+        "live",
+        "frontend/src/hub/layout.ts:COLLAPSE_ABOVE",
+        "Past five surfaces the background tier folds into a named, clickable "
+        "stack. Collapsed is not hidden \u2014 a panel whose name you cannot see "
+        "is one you cannot get back. Never a pinned or focused surface.",
+    ),
+    _c(
+        "load.cross_surface_summary",
+        "10",
+        "B",
+        "Summarise across surfaces and name relationships",
+        "live",
+        "frontend/src/hub/summary.ts:RELATIONS",
+        "Relationships are declared and tested, not inferred: an unlisted pair "
+        "produces silence rather than a plausible sentence. Describes the "
+        "screen, never the account \u2014 asserted by a forbidden-phrase test.",
+    ),
     _c(
         "load.user_override",
         "10",

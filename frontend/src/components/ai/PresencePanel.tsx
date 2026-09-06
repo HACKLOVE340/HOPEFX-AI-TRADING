@@ -31,6 +31,7 @@ import { readIntent } from '../../hub/intent';
 import { readLayout, suggestLayout, type LayoutName } from '../../hub/layout';
 import { SnapshotStore, capacityFor, readHistoryIntent } from '../../hub/history';
 import { spokenFocus } from '../../hub/reference';
+import { asksForSummary, summarise } from '../../hub/summary';
 import { useViewportWidth } from '../../hub/useViewportWidth';
 import { useStore, selectAiJobs } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
@@ -317,6 +318,17 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
     (phrase: string) => {
       turn.userStoppedSpeaking(phrase);
       if (onHistory(phrase)) return;
+
+      // §10: "summarise across surfaces and name relationships." Checked before
+      // the surface reader for the same reason history is — "what am I looking
+      // at" names no subject and would otherwise open nothing and be refused.
+      if (asksForSummary(phrase)) {
+        const summary = summarise(surfaces);
+        turn.say(summary.text || 'The plane is empty — there is nothing to summarise yet.');
+        setTranscript([...turn.transcript]);
+        return;
+      }
+
       const intent = readIntent(phrase);
 
       if (intent.clear) {
@@ -354,7 +366,7 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       }
       setTranscript([...turn.transcript]);
     },
-    [turn, workspace, syncWorkspace, onHistory],
+    [turn, workspace, syncWorkspace, onHistory, surfaces],
   );
 
   /**
