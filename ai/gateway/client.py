@@ -110,6 +110,14 @@ class GatewayClient:
         # Optional by construction: a deployment that wants every call to reach
         # a live model passes no cache, and nothing about routing, budget or
         # audit changes. Caching is an economy, never a correctness dependency.
+        # Falls back to the process-wide cache rather than requiring every
+        # construction site to pass one. There are five in production, and a
+        # per-site wiring step is a step somebody forgets — which is exactly how
+        # install_shared_cache came to have zero callers.
+        if cache is None:
+            from ai.cache.store import shared_cache
+
+            cache = shared_cache()
         self._cache = cache
 
     @property

@@ -34,12 +34,34 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TTL_S = 300.0
 DEFAULT_MAX_ENTRIES = 512
+
+
+#: An explicit claim that an answer depends on nothing but its prompt.
+#:
+#: `tool_state` is the fingerprint of the state a question was asked against,
+#: and this module's contract is that an answer computed under old state must
+#: never be served against new state. When this guard was written, NOT ONE
+#: production caller set it — api/brain.py, brain/llm_agent.py,
+#: security/llm_wrapper.py and ai/evals/runner.py all left it empty. Caching on
+#: an empty state would have served an hour-old market view, computed under
+#: different positions and a different regime, as though it were current.
+#:
+#: So a blank tool_state means "the caller did not say what this depends on",
+#: and nothing is cached. Silence is not a claim. A caller whose answer really
+#: depends on nothing says STATELESS — a statement someone makes on purpose
+#: rather than one they fall into by omitting an argument.
+STATELESS: Final = "stateless"
+
+
+def _is_cacheable(tool_state: str) -> bool:
+    """Whether the caller declared what this answer depends on."""
+    return bool((tool_state or "").strip())
 
 
 def _digest(*parts: str) -> str:
@@ -88,6 +110,9 @@ class ResponseCache:
 
     def get(self, *, prompt: str, model: str, tool_state: str = "") -> Any | None:
         """The cached value, or None on a miss or an expired entry."""
+        if not _is_cacheable(tool_state):
+            # Not counted as a miss: nothing was ever eligible to be stored.
+            return None
         key = self.key_for(prompt=prompt, model=model, tool_state=tool_state)
         now = time.monotonic()
         with self._lock:
@@ -129,6 +154,12 @@ class ResponseCache:
         """Store `value`. Refuses a null value: a failure is never cached."""
         if value is None:
             raise ValueError("refusing to cache a failure: a null value is not an answer")
+        if not _is_cacheable(tool_state):
+            # Returns "" rather than a key, so a caller cannot read the return
+            # as proof something was stored. Reporting a key for an entry that
+            # does not exist is the "success for work that did not happen"
+            # shape this codebase keeps producing.
+            return ""
         key = self.key_for(prompt=prompt, model=model, tool_state=tool_state)
         now = time.monotonic()
         entry = CacheEntry(
@@ -208,6 +239,7 @@ def shared_cache() -> ResponseCache | None:
 
 __all__ = [
     "DEFAULT_MAX_ENTRIES",
+    "STATELESS",
     "DEFAULT_TTL_S",
     "CacheEntry",
     "ResponseCache",

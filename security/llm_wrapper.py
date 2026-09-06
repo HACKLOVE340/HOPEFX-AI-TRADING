@@ -67,6 +67,7 @@ async def call_llm(prompt: str) -> str:
             RuntimeError for both.
     """
     from ai.gateway.adapters import build_providers
+    from ai.cache.store import STATELESS
     from ai.gateway.client import (
         BudgetExceeded,
         GatewayClient,
@@ -82,7 +83,11 @@ async def call_llm(prompt: str) -> str:
         )
 
     client = GatewayClient(providers)
-    request = ModelRequest(role=ROLE, prompt=prompt)
+    # STATELESS: this wrapper's answer depends on its prompt and nothing else —
+    # no positions, no regime, no config. It is the only caller opted in.
+    # api/brain.py and brain/llm_agent.py reason about live market state and
+    # stay uncached until they declare what theirs depends on.
+    request = ModelRequest(role=ROLE, prompt=prompt, tool_state=STATELESS)
     try:
         response = await asyncio.to_thread(client.call_sync, request, operator=OPERATOR)
     except BudgetExceeded as exc:

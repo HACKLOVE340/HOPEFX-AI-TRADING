@@ -625,6 +625,33 @@ async def init_data_scheduler(s: Any) -> Any:
     return ds
 
 
+async def init_ai_response_cache(s: Any) -> Any:
+    """Install the process-wide model response cache.
+
+    `install_shared_cache()` had zero production callers, so no deployment had
+    one and every model call reached a provider.
+
+    Installing it is safe only because of the policy in `ai/cache/store.py`: a
+    request that does not declare `tool_state` is not cached at all. Not one
+    production caller declared it when this was written, so a naive install
+    would have served an hour-old market view — computed under different
+    positions and a different regime — as though it were current. Silence means
+    do not cache.
+    """
+    from ai.cache.store import ResponseCache, install_shared_cache
+    from api.admin import log_activity
+
+    ttl_s = float(os.getenv("AI_CACHE_TTL_S", "") or 300.0)
+    max_entries = int(os.getenv("AI_CACHE_MAX_ENTRIES", "") or 512)
+    cache = install_shared_cache(ResponseCache(ttl_s=ttl_s, max_entries=max_entries))
+    s.ai_response_cache = cache
+    log_activity(
+        f"AI response cache installed — ttl={ttl_s:.0f}s max_entries={max_entries}; "
+        "only requests declaring tool_state are cached",
+    )
+    return cache
+
+
 async def init_ai_departments(s: Any) -> Any:
     """Build the Cluster A tool bus and hang it on app state.
 
@@ -2889,6 +2916,12 @@ def build_component_registry(app, feature_flags):
         .register(
             "ai_departments",
             F.init_ai_departments,
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "ai_response_cache",
+            F.init_ai_response_cache,
             required=False,
             deps=["config"],
         )

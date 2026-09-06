@@ -86,6 +86,17 @@ def test_a_failure_is_never_cached(cache: ResponseCache) -> None:
 # ── in front of the gateway ───────────────────────────────────────────────────
 
 
+# NOTE (2026-09-06): these cases declare `tool_state` where they previously did
+# not. `ai/cache/store.py` now refuses to cache a request whose caller did not
+# say what the answer depends on — silence is not a claim — because installing
+# the shared cache while every production caller left tool_state empty would
+# have served an hour-old market view as current. The assertions are unchanged:
+# a repeated query still must not reach the paid tier, a hit still must not
+# charge the budget, and a hit still must report itself as cached and free.
+# They now exercise that through the declared-state path.
+#
+# The prompt below is "what is the regime?" — a state-dependent question, and a
+# fair illustration of why caching it under an empty key was the hazard.
 def test_a_repeated_query_does_not_reach_the_provider() -> None:
     from ai.gateway.client import GatewayClient, ModelRequest
 
@@ -97,7 +108,7 @@ def test_a_repeated_query_does_not_reach_the_provider() -> None:
             return type("R", (), {"text": "ranging", "tokens_in": 1, "tokens_out": 1, "cost_usd": 0.02})()
 
     client = GatewayClient(providers={"anthropic": _Counting()}, cache=ResponseCache(ttl_s=60.0))
-    request = ModelRequest(role="reasoning", prompt="what is the regime?")
+    request = ModelRequest(role="reasoning", prompt="what is the regime?", tool_state="regime=ranging")
     first = client.call_sync(request, operator="op-1")
     second = client.call_sync(request, operator="op-1")
     assert first.text == second.text == "ranging"
@@ -116,7 +127,7 @@ def test_a_cache_hit_does_not_charge_the_budget() -> None:
             return type("R", (), {"text": "ranging", "tokens_in": 1, "tokens_out": 1, "cost_usd": 0.02})()
 
     client = GatewayClient(providers={"anthropic": _Provider()}, cache=ResponseCache(ttl_s=60.0))
-    request = ModelRequest(role="reasoning", prompt="what is the regime?")
+    request = ModelRequest(role="reasoning", prompt="what is the regime?", tool_state="regime=ranging")
     client.call_sync(request, operator="op-1")
     after_first = budget.spent("op-1")
     client.call_sync(request, operator="op-1")
@@ -149,7 +160,7 @@ def test_a_cached_answer_reports_itself_as_cached_and_free() -> None:
             return type("R", (), {"text": "ranging", "tokens_in": 1, "tokens_out": 1, "cost_usd": 0.02})()
 
     client = GatewayClient(providers={"anthropic": _Provider()}, cache=ResponseCache(ttl_s=60.0))
-    request = ModelRequest(role="reasoning", prompt="what is the regime?")
+    request = ModelRequest(role="reasoning", prompt="what is the regime?", tool_state="regime=ranging")
     first = client.call_sync(request, operator="op-3")
     second = client.call_sync(request, operator="op-3")
     assert first.cached is False and first.cost_usd == pytest.approx(0.02)
@@ -170,7 +181,7 @@ def test_no_cache_is_the_default_and_every_call_reaches_the_provider() -> None:
 
     client = GatewayClient(providers={"anthropic": _Counting()})
     assert client.cache is None
-    request = ModelRequest(role="reasoning", prompt="what is the regime?")
+    request = ModelRequest(role="reasoning", prompt="what is the regime?", tool_state="regime=ranging")
     client.call_sync(request, operator="op-4")
     client.call_sync(request, operator="op-4")
     assert _Counting.calls == 2
@@ -187,7 +198,7 @@ def test_a_failed_call_leaves_nothing_cached() -> None:
     store = ResponseCache(ttl_s=60.0)
     client = GatewayClient(providers={"anthropic": _Down()}, cache=store)
     with pytest.raises(NoProviderAvailable):
-        client.call_sync(ModelRequest(role="reasoning", prompt="regime?"), operator="op-5")
+        client.call_sync(ModelRequest(role="reasoning", prompt="regime?", tool_state="regime=ranging"), operator="op-5")
     assert store.entries() == ()
 
 
@@ -207,7 +218,9 @@ def test_a_broken_cache_is_a_miss_not_a_failed_call() -> None:
             raise RuntimeError("backing store unreachable")
 
     client = GatewayClient(providers={"anthropic": _Provider()}, cache=_Broken(ttl_s=60.0))
-    response = client.call_sync(ModelRequest(role="reasoning", prompt="regime?"), operator="op-6")
+    response = client.call_sync(
+        ModelRequest(role="reasoning", prompt="regime?", tool_state="regime=ranging"), operator="op-6"
+    )
     assert response.text == "ranging"
 
 
