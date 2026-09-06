@@ -66,6 +66,17 @@ DEFAULT_MAX_QUEUED = 16
 
 DEFAULT_JOB_TIMEOUT_S = 120.0
 
+#: Finished jobs kept before the oldest are dropped.
+#:
+#: `_jobs` never shrank, which is two problems wearing one coat: memory that
+#: grows for the life of the process, and every operator prompt plus every model
+#: answer retained indefinitely in it. A leak needs something to leak.
+#:
+#: 64 is comfortably more than a screen shows and more than a session's history
+#: is worth scrolling. Only TERMINAL jobs are candidates — evicting live work
+#: would lose an answer somebody is waiting for and has paid for.
+MAX_RETAINED_JOBS = 64
+
 #: How often a streaming job may push a frame while text is arriving.
 #:
 #: One notification per delta is one WebSocket frame per delta. A fast model
@@ -319,20 +330,37 @@ class JobRunner:
                     job.timeout_s,
                 )
 
-    def get(self, job_id: str) -> Job:
+    def get(self, job_id: str, *, operator: str | None = None) -> Job:
+        """One job. With `operator`, only if it is theirs.
+
+        A missing job and another operator's job raise the same `KeyError` on
+        purpose: distinguishing them turns this into an oracle for guessing
+        which job ids exist.
+        """
         with self._lock:
             self._reap()
-            return self._jobs[job_id]
+            job = self._jobs[job_id]
+            if operator is not None and job.operator != operator:
+                raise KeyError(job_id)
+            return job
 
-    def cancel(self, job_id: str) -> bool:
-        """Ask a job to stop. True if it was known.
+    def cancel(self, job_id: str, *, operator: str | None = None) -> bool:
+        """Ask a job to stop. True if it was known and this caller owns it.
 
         A queued job never starts. A running one is marked and its result
         discarded when it returns — see the note in `_run` about threads.
+
+        **`operator` is what stops one admin stopping another's work.** Without
+        it, any caller holding a job id could cancel any job in the process:
+        measured, `bob` cancelled `alice`'s running generation. A refusal
+        returns exactly what a missing job returns, so this cannot be used to
+        discover which ids exist.
         """
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
+                return False
+            if operator is not None and job.operator != operator:
                 return False
             if job.state in TERMINAL_STATES:
                 return False
@@ -360,13 +388,45 @@ class JobRunner:
             await asyncio.sleep(0.01)
         raise TimeoutError(f"jobs still running after {timeout}s: {pending}")
 
-    def snapshot(self) -> dict[str, Any]:
-        """Everything the screen needs to render every panel."""
+    def _evict(self) -> None:
+        """Drop the oldest terminal jobs past the retention ceiling.
+
+        Called under the lock from the same read paths as `_reap`, for the same
+        reason: a reader is the only thing that cares, and a background thread
+        per runner would cost more than the problem is worth.
+
+        Insertion order is submission order — `dict` preserves it — so the
+        oldest candidates come first without needing a sort.
+        """
+        finished = [jid for jid, job in self._jobs.items() if job.state in TERMINAL_STATES]
+        excess = len(self._jobs) - MAX_RETAINED_JOBS
+        for job_id in finished[: max(0, excess)]:
+            self._jobs.pop(job_id, None)
+            self._futures.pop(job_id, None)
+            self._cancelled.discard(job_id)
+
+    def snapshot(self, *, operator: str | None = None) -> dict[str, Any]:
+        """What the screen renders. Scoped to `operator` unless asked otherwise.
+
+        **Scoped by default.** This returned every job in the process, so on a
+        two-admin deployment one admin's AI Core screen showed the other's
+        prompts and the model's answers. Authentication is not authorisation,
+        and a screen renders whatever the API hands it.
+
+        `operator=None` is the unscoped platform view — a superadmin overview,
+        the health surface. It has to be asked for, never defaulted to.
+
+        The counts describe what the caller can see. A queue depth that included
+        other people's work would make "why is mine waiting" unanswerable, and
+        would leak how busy somebody else is.
+        """
         with self._lock:
             self._reap()
-            jobs = [j.as_dict() for j in self._jobs.values()]
-            running = sum(1 for j in self._jobs.values() if j.state == "running")
-            queued = sum(1 for j in self._jobs.values() if j.state == "queued")
+            self._evict()
+            mine = [j for j in self._jobs.values() if operator is None or j.operator == operator]
+            jobs = [j.as_dict() for j in mine]
+            running = sum(1 for j in mine if j.state == "running")
+            queued = sum(1 for j in mine if j.state == "queued")
         return {
             "jobs": jobs,
             "running": running,

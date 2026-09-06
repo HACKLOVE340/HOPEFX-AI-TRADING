@@ -509,18 +509,30 @@ async def submit_generation(
 
 @router.get("/generate/jobs")
 async def list_generations(user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    """Every job's live state, for the screen to render all panels at once."""
+    """This operator's jobs, for the screen to render all their panels at once.
+
+    Scoped to `user.sub`. It was not: the endpoint took `user` and returned
+    every job in the process, so on a deployment with two admins one admin's AI
+    Core screen showed the other's prompts and the model's answers. Being an
+    admin is not being every admin.
+    """
     from ai.jobs.runner import get_runner
 
-    return get_runner().snapshot()
+    return get_runner().snapshot(operator=user.sub)
 
 
 @router.post("/generate/{job_id}/cancel")
 async def cancel_generation(job_id: str, user: TokenPayload = Depends(_admin)) -> dict[str, Any]:
-    """Stop one panel without touching the others."""
+    """Stop one of this operator's panels without touching the others.
+
+    Scoped to `user.sub`. It was not, and a job id was all it took for one admin
+    to stop another's running generation. A job that belongs to somebody else
+    answers exactly as a job that does not exist, so this cannot be used to
+    discover which ids are live.
+    """
     from ai.jobs.runner import get_runner
 
-    cancelled = get_runner().cancel(job_id)
+    cancelled = get_runner().cancel(job_id, operator=user.sub)
     if not cancelled:
         raise HTTPException(status_code=404, detail="No such job, or it has already finished.")
     return {"job_id": job_id, "cancelled": True}
