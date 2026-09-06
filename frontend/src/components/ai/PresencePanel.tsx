@@ -22,11 +22,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Mic, Square, Volume2, VolumeX } from 'lucide-react';
 
-import { PresenceCore } from '../../hub/PresenceCore';
+import { PresenceStage } from '../../hub/PresenceStage';
 import { derivePresence, type PresenceInputs } from '../../hub/presence';
 import { ConversationTurn, type TranscriptLine } from '../../hub/conversation';
+import { Workspace, type Surface } from '../../hub/workspace';
+import { readIntent } from '../../hub/intent';
 import { useStore, selectAiJobs } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
 
@@ -70,9 +71,11 @@ export interface PresencePanelProps {
    * the test that would have found it first.
    */
   ready?: boolean;
+  /** Leave the immersive stage and go back to the page's tabs. */
+  onExit?: () => void;
 }
 
-export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable, ready = true }) => {
+export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable, ready = true, onExit }) => {
   const wsStatus = useStore((s) => s.wsStatus);
   const feedStale = useStore((s) => s.feedStale);
   const jobs = useStore(selectAiJobs);
@@ -165,76 +168,80 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
     setTranscript([...turn.transcript]);
   }, [turn]);
 
+  // The plane. One engine for the life of the panel — rebuilding it would wipe
+  // whatever the operator had summoned on every render.
+  const workspaceRef = useRef<Workspace | null>(null);
+  if (workspaceRef.current === null) workspaceRef.current = new Workspace();
+  const workspace = workspaceRef.current;
+
+  const [surfaces, setSurfaces] = useState<readonly Surface[]>([]);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+
+  const syncWorkspace = useCallback(() => {
+    setSurfaces([...workspace.surfaces]);
+    setFocusedId(workspace.focused);
+  }, [workspace]);
+
+  /**
+   * What happens when someone asks for something.
+   *
+   * The local reader handles the obvious commands instantly and for free. What
+   * it does not recognise is answered by the AI in words rather than silently
+   * dropped — a workspace that ignores a sentence it cannot parse teaches
+   * people to stop talking to it.
+   */
+  const onCommand = useCallback(
+    (phrase: string) => {
+      turn.userStoppedSpeaking(phrase);
+      const intent = readIntent(phrase);
+
+      if (intent.clear) workspace.clear();
+      for (const request of intent.open) workspace.open(request);
+      if (intent.focus) {
+        const target = workspace.resolve(intent.focus);
+        workspace.focus(target);
+      }
+      syncWorkspace();
+
+      if (intent.unhandled) {
+        turn.say(
+          "I can put things on the plane — try \u201cshow me everything affecting gold\u201d, \u201cfocus on risk\u201d or \u201csimplify this\u201d. " +
+            'Answering that question needs a model, and none is reachable from here yet.',
+        );
+      } else if (intent.clear && intent.open.length === 0) {
+        turn.say('Cleared.');
+      } else if (intent.open.length > 0) {
+        const what = intent.open.map((r) => r.intent).join(', ');
+        turn.say(`Showing ${what}.`);
+      }
+      setTranscript([...turn.transcript]);
+    },
+    [turn, workspace, syncWorkspace],
+  );
+
   return (
-    <section style={{ display: 'grid', gap: 20, justifyItems: 'center', padding: '18px 0 6px' }}>
-      <PresenceCore presence={presence} />
-
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button
-          type="button"
-          onClick={onTalk}
-          disabled={!voice.sttSupported}
-          style={{
-            ...button,
-            borderColor: voice.listening ? COLOR.bad : COLOR.edge2,
-            opacity: voice.sttSupported ? 1 : 0.5,
-          }}
-        >
-          <Mic size={14} aria-hidden /> {voice.listening ? 'Stop listening' : 'Talk to it'}
-        </button>
-        <button type="button" onClick={onStop} style={button}>
-          <Square size={13} aria-hidden /> Stop
-        </button>
-        <button type="button" onClick={() => setMuted((m) => !m)} aria-pressed={muted} style={button}>
-          {muted ? <VolumeX size={14} aria-hidden /> : <Volume2 size={14} aria-hidden />}
-          {muted ? 'Muted' : 'Speaking aloud'}
-        </button>
-      </div>
-
-      {!voice.sttSupported && (
-        <p style={{ margin: 0, fontSize: 11.5, color: COLOR.quiet, textAlign: 'center', maxWidth: '52ch' }}>
-          This browser has no speech recognition — that is Chromium-only today. Everything else works, and it
-          will still speak to you.
-        </p>
-      )}
-
-      {/* The transcript. Captions are not a lesser channel (§27): this is the
-          same text that was spoken, in the same order, whether or not audio was
-          ever switched on. */}
-      {transcript.length > 0 && (
-        <ol
-          aria-label="Conversation transcript"
-          style={{
-            margin: 0,
-            padding: '12px 14px',
-            listStyle: 'none',
-            display: 'grid',
-            gap: 6,
-            width: '100%',
-            maxWidth: 720,
-            maxHeight: 160,
-            overflowY: 'auto',
-            fontSize: 12.5,
-            color: COLOR.dim,
-            border: `1px solid ${COLOR.edge}`,
-            borderRadius: 10,
-            background: 'rgba(12,20,36,.6)',
-            boxSizing: 'border-box',
-          }}
-        >
-          {transcript.map((line, i) => (
-            <li key={`${line.at}-${i}`}>
-              <span style={{ color: line.who === 'ai' ? COLOR.core : COLOR.quiet, fontWeight: 700 }}>
-                {line.who === 'ai' ? 'HOPEFX' : 'You'}:{' '}
-              </span>
-              {line.text}
-              {line.interrupted && (
-                <span style={{ color: COLOR.quiet, fontStyle: 'italic' }}> — interrupted</span>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
+    <PresenceStage
+      presence={presence}
+      surfaces={surfaces}
+      focusedId={focusedId}
+      listening={voice.listening}
+      muted={muted}
+      sttSupported={voice.sttSupported}
+      transcript={transcript}
+      onCommand={onCommand}
+      onTalk={onTalk}
+      onStop={onStop}
+      onToggleMute={() => setMuted((m) => !m)}
+      onCloseSurface={(id) => {
+        workspace.close(id);
+        syncWorkspace();
+      }}
+      onPinSurface={(id) => {
+        const current = surfaces.find((x) => x.id === id);
+        workspace.pin(id, !current?.pinned);
+        syncWorkspace();
+      }}
+      onExit={() => onExit?.()}
+    />
   );
 };

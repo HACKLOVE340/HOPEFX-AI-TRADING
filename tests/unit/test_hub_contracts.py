@@ -324,3 +324,33 @@ def test_the_contracts_are_recorded_in_the_capability_registry():
     for cap_id in ("bus.message_envelope", "spatial.scene_model", "ui.schema_driven_panels"):
         assert by_id[cap_id].state in {"staged", "live"}, f"{cap_id} is still 'planned' but its contract now exists"
         assert by_id[cap_id].evidence, f"{cap_id} claims progress with no evidence"
+
+
+def test_a_phrase_that_means_nothing_resolves_to_nothing():
+    """Found while building the browser-side twin of this resolver.
+
+    `resolve("nothing like this")` matched a panel whose meaning was "gold price
+    THIS session" — one accidental common word, and the AI would have gone on to
+    describe a panel the operator never referred to. Returning None is only
+    useful if the score that beats it is real evidence.
+    """
+    from ai.hub.contracts import Scene, ScenePanel
+
+    scene = Scene(
+        panels=(
+            ScenePanel(id="p1", kind="chart", meaning="gold price this session", x=0, y=0, width=6, height=4),
+            ScenePanel(id="p2", kind="table", meaning="the open positions", x=6, y=0, width=6, height=4),
+        )
+    )
+    assert scene.resolve("nothing like this") is None
+    assert scene.resolve("show me the gold chart") is not None
+    assert scene.resolve("what about that") is None
+
+
+def test_stopwords_do_not_stop_a_real_reference():
+    """The fix must not make resolution useless: a phrase that is mostly filler
+    with one real noun still has to land."""
+    from ai.hub.contracts import Scene, ScenePanel
+
+    scene = Scene(panels=(ScenePanel(id="p1", kind="chart", meaning="gold price", x=0, y=0, width=6, height=4),))
+    assert scene.resolve("can you show me that gold one please") == scene.panels[0]

@@ -296,7 +296,7 @@ export const AICore: React.FC = () => {
           it owns live state the read-only panels do not, and because a page
           that already renders six report sections should not also grow a job
           queue inline. */}
-      {tab === 'Presence' && <PresencePanel providersReachable={s?.providers_reachable?.length} ready={!summary.isLoading} />}
+      {tab === 'Presence' && <PresencePanel providersReachable={s?.providers_reachable?.length} ready={!summary.isLoading} onExit={() => setTab('Overview')} />}
 
       {tab === 'Workbench' && <GenerationWorkbench />}
 

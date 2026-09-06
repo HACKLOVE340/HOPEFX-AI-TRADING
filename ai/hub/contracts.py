@@ -82,6 +82,65 @@ MESSAGE_STATUSES: Final[tuple[str, ...]] = (
 #: "my", "on" match everything and would make every panel score equally.
 _MIN_MATCH_WORD = 3
 
+#: Words long enough to survive the length filter and still meaningless here.
+#:
+#: Found by building the browser-side twin of this resolver:
+#: `resolve("nothing like this")` matched a panel meaning "gold price THIS
+#: session". One accidental common word, and the AI would have gone on to
+#: describe a panel the operator never referred to. Returning None is only
+#: useful if the score that beats it is real evidence.
+_STOPWORDS = frozenset(
+    {
+        "the",
+        "this",
+        "that",
+        "these",
+        "those",
+        "and",
+        "for",
+        "with",
+        "about",
+        "show",
+        "give",
+        "need",
+        "want",
+        "please",
+        "from",
+        "into",
+        "onto",
+        "what",
+        "whats",
+        "have",
+        "has",
+        "are",
+        "was",
+        "were",
+        "can",
+        "you",
+        "your",
+        "his",
+        "her",
+        "its",
+        "our",
+        "their",
+        "not",
+        "but",
+        "all",
+        "any",
+        "now",
+        "then",
+        "one",
+        "some",
+        "here",
+        "there",
+        "them",
+        "they",
+        "who",
+        "how",
+        "why",
+    }
+)
+
 Priority = Literal["critical", "primary", "secondary", "background", "on_demand"]
 Status = Literal["queued", "running", "partial", "succeeded", "failed", "cancelled", "timed_out"]
 
@@ -285,7 +344,7 @@ class Scene:
         Returns None rather than guessing. Pointing at the wrong panel while
         confidently describing another is worse than saying "which one?".
         """
-        wanted = {w for w in phrase.lower().split() if len(w) >= _MIN_MATCH_WORD}
+        wanted = {w for w in phrase.lower().split() if len(w) >= _MIN_MATCH_WORD and w not in _STOPWORDS}
         if not wanted:
             return None
         best: tuple[int, ScenePanel] | None = None
