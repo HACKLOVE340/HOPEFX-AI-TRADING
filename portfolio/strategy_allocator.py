@@ -235,18 +235,36 @@ def _cap_weights(weights: np.ndarray, max_weight: float = MAX_WEIGHT_PER_POD) ->
     if weights.size == 0:
         return weights
 
+    # Every comparison against NaN is False, so the loop below would leave a NaN
+    # weight untouched and hand it back as an allocation. A NaN weight times the
+    # book is a NaN position size, and whatever consumes it decides what that
+    # means. Refuse instead — the same answer as "no measured edge".
+    if not np.isfinite(weights).all():
+        logger.error(
+            "Allocator: refusing to allocate on non-finite weights %s — allocating nothing",
+            weights,
+        )
+        return np.zeros_like(weights)
+
     for _ in range(weights.size + 1):
         over = weights > max_weight + 1e-12
         if not over.any():
             break
-        excess = float((weights[over] - max_weight).sum())
+        # healer: ignore[nan_leak] — `weights` is guaranteed finite by the np.isfinite
+        # guard at the top of this function, which returns zeros rather than
+        # letting a NaN reach here. The detector matches `.sum()` and cannot see
+        # a guard eight lines up.
+        excess = float((weights[over] - max_weight).sum())  # healer: ignore
         weights[over] = max_weight
         under = ~over & (weights > 0)
         if not under.any() or excess <= 0:
             break
         # Proportional to what each uncapped pod already holds, so the relative
         # ordering the Sharpes expressed survives the redistribution.
-        weights[under] += excess * (weights[under] / weights[under].sum())
+        # healer: ignore[nan_leak] — same guarantee as above; `weights` cannot contain a
+        # NaN at this point, and `weights[under]` is non-empty and positive by
+        # the `under.any()` check immediately above.
+        weights[under] += excess * (weights[under] / weights[under].sum())  # healer: ignore
 
     return np.clip(weights, 0.0, max_weight)
 
@@ -364,6 +382,17 @@ class MeanVarianceOptimiser:
         100% of capital across strategies that were all losing. "Everything is
         losing" allocates nothing.
         """
+        sharpes = np.asarray(sharpes, dtype=float)
+        # `total <= 0` is False when total is NaN, so this guard used to let a
+        # NaN Sharpe through and every weight came out NaN. Checked before the
+        # arithmetic, not after.
+        if sharpes.size and not np.isfinite(sharpes).all():
+            logger.error(
+                "Allocator: non-finite Sharpe in %s — allocating nothing rather than a NaN weight",
+                sharpes,
+            )
+            return np.zeros(len(sharpes))
+
         pos = np.maximum(sharpes, 0.0)
         total = pos.sum()
         if total <= 0:

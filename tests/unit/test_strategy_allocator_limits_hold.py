@@ -181,3 +181,57 @@ def test_a_pod_with_too_few_trades_is_not_validated() -> None:
 def test_a_pod_with_too_wide_a_standard_error_is_not_validated() -> None:
     """A high Sharpe with a huge standard error is noise, not an edge."""
     assert StrategyPod(name="p", oos_sharpe=3.0, oos_n=500, oos_se=99.0).gate_passed is False
+
+
+# ── 4 · a non-finite Sharpe does not become a non-finite allocation ──────────
+
+
+def test_a_nan_sharpe_allocates_nothing(optimiser) -> None:
+    """Found by the repo's own code analyzer (nan_leak), and it was real.
+
+    `total <= 0` is False when `total` is NaN, so the guard for "no measured
+    edge" let NaN straight through and every weight came out NaN. Measured:
+    `[2.0, nan, 1.0]` produced `[nan, nan, nan]`.
+
+    Refusing is the safe direction for capital: a NaN weight multiplied by the
+    book is a NaN position size, and whatever consumes it downstream decides
+    what that means.
+    """
+    weights = optimiser._sharpe_proportional(np.array([2.0, float("nan"), 1.0]))
+
+    assert not np.isnan(weights).any()
+    assert weights.sum() == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
+def test_any_non_finite_sharpe_allocates_nothing(optimiser, bad: float) -> None:
+    weights = optimiser._sharpe_proportional(np.array([2.0, bad]))
+
+    assert np.isfinite(weights).all()
+    assert weights.sum() == pytest.approx(0.0)
+
+
+def test_a_nan_weight_never_leaves_the_capper() -> None:
+    """The cap loop compares against NaN, and every comparison is False."""
+    from portfolio.strategy_allocator import _cap_weights
+
+    capped = _cap_weights(np.array([0.5, float("nan"), 0.2]))
+
+    assert np.isfinite(capped).all()
+    assert capped.sum() == pytest.approx(0.0)
+
+
+def test_finite_sharpes_are_unaffected(optimiser) -> None:
+    """The guard must not refuse a perfectly good allocation.
+
+    Three pods, not two: with the cap at 0.4 a two-pod book tops out at 0.8 by
+    design (see `test_a_cap_that_cannot_reach_full_allocation_leaves_the_rest_unallocated`),
+    so two pods cannot show that a full allocation still happens.
+    """
+    weights = optimiser._sharpe_proportional(np.array([3.0, 2.0, 1.0]))
+
+    assert np.isfinite(weights).all()
+    assert weights.sum() == pytest.approx(1.0)
+    assert weights.max() <= MAX_WEIGHT_PER_POD + 1e-9
+    # The weakest pod stays the smallest; the two ahead of it are both at the cap.
+    assert weights[2] < weights[1]
