@@ -17,6 +17,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from datetime import UTC, datetime
+from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +80,76 @@ _global_usd: float | None = None
 _spend: dict[str, float] = defaultdict(float)
 _period: str = ""
 
+#: The shared, durable counter, when a deployment installs one.
+#:
+#: Without it `_spend` and `_recent` are process-local module globals, which
+#: broke the ceiling two ways: a restart reset the month to $0, and every
+#: additional `API_WORKERS` process got its own full allowance, so the real cap
+#: was N times the configured one with nothing to indicate it.
+#:
+#: `_spend` stays in use even with a store installed -- as the local view during
+#: an outage, added on top of `_floor` below.
+_STORE: Any | None = None
+
+#: The last per-operator spend read successfully from the shared store.
+#:
+#: During an outage the local `_spend` starts from whatever this process has
+#: charged since, which is close to zero -- so falling back to it alone would
+#: hand out a fresh budget for the duration of the incident. Degrading to the
+#: most accurate answer still available beats degrading to the most permissive.
+_floor: dict[str, float] = defaultdict(float)
+
 #: (timestamp, operator, cost) for the rolling window. Monotonic, so a clock
 #: correction cannot empty the window or freeze it full.
 _recent: deque[tuple[float, str, float]] = deque()
+
+
+@runtime_checkable
+class BudgetStore(Protocol):
+    """A counter that outlives one process and is shared between workers.
+
+    Every method may raise. The caller treats a raise as an outage and falls
+    back locally -- loudly. It never lets a store fault refuse a call, because
+    a cost control taking the platform offline is a worse outcome than a cost
+    control briefly under-counting.
+    """
+
+    #: Reported by `store_is_shared()`. A store that is durable but per-process
+    #: would fix the restart case and not the worker case; the flag keeps the
+    #: two claims separate.
+    shared: bool
+
+    def get_spend(self, period: str) -> dict[str, float]: ...
+    def add_spend(self, period: str, operator: str, cost: float) -> None: ...
+    def record_event(self, ts: float, operator: str, cost: float) -> None: ...
+    def window_events(self, since_ts: float) -> list[tuple[float, str, float]]: ...
+
+
+def set_store(store: Any | None) -> None:
+    """Install (or remove) the shared counter."""
+    global _STORE
+    _STORE = store
+
+
+def store_is_shared() -> bool:
+    """Whether the ceiling actually binds across restarts and workers."""
+    return bool(getattr(_STORE, "shared", False)) if _STORE is not None else False
+
+
+def _store_failed(op: str, exc: Exception) -> None:
+    """One place, so an outage can never be reported quietly.
+
+    ERROR rather than warning: while this is firing the monthly ceiling is
+    being enforced against one worker's partial view, so the effective cap is
+    looser than the configured one. That is a change in what the platform is
+    willing to spend, and it belongs where somebody sees it.
+    """
+    logger.error(
+        "ai.gateway.budget: shared store unavailable during %s (%s) — falling back to "
+        "this worker's local view; the ceiling is under-counting until it returns",
+        op,
+        exc,
+    )
 
 
 def _monotonic() -> float:
@@ -120,16 +188,31 @@ def max_calls_per_window() -> int:
         return DEFAULT_MAX_CALLS_PER_WINDOW
 
 
+def _window() -> list[tuple[float, str, float]]:
+    """Events inside the velocity window, shared across workers when possible.
+
+    A rate limit that only sees one worker's calls is not a rate limit: with
+    four workers a 120-call ceiling permitted 480. The shared store is
+    authoritative; the local deque is the fallback.
+    """
+    _expire_window()
+    if _STORE is None:
+        return list(_recent)
+    try:
+        return [tuple(e) for e in _STORE.window_events(_monotonic() - VELOCITY_WINDOW_S)]  # type: ignore[misc]
+    except Exception as exc:
+        _store_failed("window_events", exc)
+        return list(_recent)
+
+
 def recent_spend(operator: str | None = None) -> float:
     """USD spent within the window, for one operator or everyone."""
-    _expire_window()
-    return sum(cost for _ts, who, cost in _recent if operator is None or who == operator)
+    return sum(cost for _ts, who, cost in _window() if operator is None or who == operator)
 
 
 def recent_calls(operator: str | None = None) -> int:
     """Calls made within the window, for one operator or everyone."""
-    _expire_window()
-    return sum(1 for _ts, who, _cost in _recent if operator is None or who == operator)
+    return sum(1 for _ts, who, _cost in _window() if operator is None or who == operator)
 
 
 def _velocity_refusal(operator: str, estimated_usd: float) -> str | None:
@@ -193,13 +276,40 @@ def _roll_period() -> None:
         _period = now
 
 
+def _shared_spend() -> dict[str, float] | None:
+    """The month's spend from the shared store, or None if it cannot be read."""
+    if _STORE is None:
+        return None
+    try:
+        snapshot = dict(_STORE.get_spend(_current_period()))
+    except Exception as exc:
+        _store_failed("get_spend", exc)
+        return None
+    # Remember it: during a later outage this is the floor the local view is
+    # added to, rather than restarting the month's count from zero.
+    for who, amount in snapshot.items():
+        _floor[who] = max(_floor[who], float(amount))
+    return snapshot
+
+
 def spent(operator: str) -> float:
     _roll_period()
-    return _spend[operator]
+    snapshot = _shared_spend()
+    if snapshot is not None:
+        return float(snapshot.get(operator, 0.0))
+    # Outage (or no store): last known shared value, plus whatever this worker
+    # has charged since. Never less than what the store last reported.
+    return max(_floor[operator], 0.0) + _spend[operator] if _STORE is not None else _spend[operator]
 
 
 def total_spent() -> float:
     _roll_period()
+    snapshot = _shared_spend()
+    if snapshot is not None:
+        return sum(float(v) for v in snapshot.values())
+    if _STORE is not None:
+        operators = set(_floor) | set(_spend)
+        return sum(max(_floor[o], 0.0) + _spend[o] for o in operators)
     return sum(_spend.values())
 
 
@@ -212,9 +322,13 @@ def check(operator: str, estimated_usd: float = 0.0) -> tuple[bool, str]:
     # estimate IS 0.00 by default, because a call's cost is not known until the
     # provider answers. A ceiling of zero has to mean no spend permitted, so the
     # test is whether any headroom remains at all.
-    operator_headroom = per_operator - _spend[operator]
+    # `spent()`, not `_spend[operator]`: the latter is this worker's local
+    # counter and reads 0.00 in a freshly restarted process, which is precisely
+    # how a restart used to hand the operator their whole ceiling back.
+    operator_spend = spent(operator)
+    operator_headroom = per_operator - operator_spend
     if operator_headroom <= 0 or estimated_usd > operator_headroom:
-        return False, (f"operator budget exhausted: {_spend[operator]:.2f} of {per_operator:.2f} USD this month")
+        return False, (f"operator budget exhausted: {operator_spend:.2f} of {per_operator:.2f} USD this month")
     global_headroom = global_ceiling - total_spent()
     if global_headroom <= 0 or estimated_usd > global_headroom:
         return False, (f"global budget exhausted: {total_spent():.2f} of {global_ceiling:.2f} USD this month")
@@ -233,23 +347,53 @@ def check(operator: str, estimated_usd: float = 0.0) -> tuple[bool, str]:
 def charge(operator: str, cost_usd: float) -> None:
     _roll_period()
     cost = max(0.0, cost_usd)
-    _spend[operator] += cost
+    now = _monotonic()
+
+    charged_remotely = False
+    if _STORE is not None:
+        try:
+            _STORE.add_spend(_current_period(), operator, cost)
+            _floor[operator] += cost
+            charged_remotely = True
+        except Exception as exc:
+            _store_failed("add_spend", exc)
+
+    # The local counter is kept in BOTH cases. With the store healthy it is
+    # redundant and harmless; during an outage it is the only record this
+    # worker has, and it is what gets added to `_floor` in `spent()`.
+    if not charged_remotely:
+        _spend[operator] += cost
+
     # Recorded even when the cost is zero: a free local call still consumes the
     # call-rate allowance, and that is the only limit a local runaway loop can
     # ever trip.
     _expire_window()
-    _recent.append((_monotonic(), operator, cost))
+    _recent.append((now, operator, cost))
+    if _STORE is not None:
+        try:
+            _STORE.record_event(now, operator, cost)
+        except Exception as exc:
+            _store_failed("record_event", exc)
 
 
 def reset_for_testing() -> None:
+    """Reset every process-local counter, including the installed store.
+
+    Also stands in for "this worker restarted" in the tests: what survives a
+    call to this is exactly what a real restart would leave behind, which is
+    the shared store and nothing else.
+    """
     global _per_operator_usd, _global_usd, _period
     _per_operator_usd = _global_usd = None
     _spend.clear()
     _recent.clear()
+    _floor.clear()
     _period = ""
+    set_store(None)
 
 
 __all__ = [
+    "BudgetStore",
     "DEFAULT_GLOBAL_USD",
     "DEFAULT_MAX_CALLS_PER_WINDOW",
     "DEFAULT_PER_OPERATOR_USD",
@@ -263,6 +407,8 @@ __all__ = [
     "recent_spend",
     "reset_for_testing",
     "set_limits",
+    "set_store",
+    "store_is_shared",
     "spent",
     "total_spent",
     "velocity_limits",

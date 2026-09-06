@@ -652,6 +652,38 @@ async def init_ai_response_cache(s: Any) -> Any:
     return cache
 
 
+async def init_ai_budget_store(s: Any) -> Any:
+    """Give the AI spend ceiling a counter that outlives the process.
+
+    `ai/gateway/budget.py` kept the month's spend in a module global, so a
+    restart reset it to $0 and each extra `API_WORKERS` process got its own full
+    allowance. The configured ceiling therefore meant something different from
+    what the settings form said, with nothing to indicate it.
+
+    Installing the store is deliberately not fatal: a deployment with no Redis
+    keeps the previous in-memory behaviour rather than losing the AI entirely.
+    But it is reported at WARNING when absent, because "the ceiling is
+    per-process" is a fact an operator needs, and `budget.store_is_shared()`
+    reads it back for the health surface.
+    """
+    from ai.gateway import budget
+    from ai.gateway.budget_store import build_from_env
+    from api.admin import log_activity
+
+    store = build_from_env()
+    if store is None:
+        logger.warning(
+            "AI budget store not installed — no REDIS_URL, or Redis unreachable. "
+            "The monthly ceiling is per-process: it resets on restart, and with "
+            "API_WORKERS>1 each worker gets its own full allowance.",
+        )
+        return None
+
+    budget.set_store(store)
+    log_activity("AI budget ceiling bound to the shared Redis counter (survives restart, shared across workers)")
+    return store
+
+
 async def init_ai_audit_sink(s: Any) -> Any:
     """Point the gateway audit trail at the durable, tamper-evident chain.
 
@@ -2970,6 +3002,15 @@ def build_component_registry(app, feature_flags):
             F.init_ai_audit_sink,
             required=False,
             deps=["compliance_manager"],
+        )
+        # The spend ceiling has to outlive the process too, and be shared
+        # between workers. deps=["config"] only: it reads REDIS_URL directly
+        # and must install before the first model call, not after the cache.
+        .register(
+            "ai_budget_store",
+            F.init_ai_budget_store,
+            required=False,
+            deps=["config"],
         )
         .register(
             "online_learner_store",
