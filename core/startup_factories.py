@@ -652,6 +652,41 @@ async def init_ai_response_cache(s: Any) -> Any:
     return cache
 
 
+async def init_ai_memory(s: Any) -> Any:
+    """Give department memory a store that outlives the process.
+
+    Spec §2's `memory/`. Without this, everything a department observes lives in
+    a process-local deque and evaporates on restart — the same defect the
+    gateway audit trail had, in the layer the awareness watchers and the agentic
+    loop are built on. A department that forgets every deploy cannot notice that
+    a violation has happened before.
+
+    required=False and non-fatal: a deployment with no database keeps the
+    in-process memory rather than losing the departments entirely.
+    `store.backend_is_durable()` reports which of the two happened.
+    """
+    from ai.memory import store
+    from ai.memory.sql_backend import SqlMemoryBackend
+    from api.admin import log_activity
+
+    session_factory = getattr(s, "session_factory", None) or getattr(s, "db_session_factory", None)
+    if session_factory is None:
+        from database.connection import SessionLocal
+
+        session_factory = SessionLocal
+
+    if session_factory is None:
+        logger.warning(
+            "AI department memory is process-local — no database session factory. "
+            "Everything a department observes will be lost on restart.",
+        )
+        return None
+
+    store.set_backend(SqlMemoryBackend(session_factory))
+    log_activity("AI department memory bound to ai_department_memory (survives restart)")
+    return session_factory
+
+
 async def init_ai_budget_store(s: Any) -> Any:
     """Give the AI spend ceiling a counter that outlives the process.
 
@@ -3011,6 +3046,13 @@ def build_component_registry(app, feature_flags):
             F.init_ai_budget_store,
             required=False,
             deps=["config"],
+        )
+        # Spec §2 memory/. Depends on database because that is where it writes.
+        .register(
+            "ai_memory",
+            F.init_ai_memory,
+            required=False,
+            deps=["database"],
         )
         .register(
             "online_learner_store",

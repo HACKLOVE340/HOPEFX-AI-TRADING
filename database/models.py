@@ -816,6 +816,34 @@ class AuditLogEntry(Base):
     ip_address = Column(String(45), nullable=True)
 
 
+class DepartmentMemoryEntry(Base):
+    """Spec §2's `memory/` — what an AI department has observed.
+
+    Departments declared a memory as `tuple[str, ...]`: labels with nothing
+    behind them. This is the store. Working memory rather than an archive — the
+    permanent record of what happened is `audit_log`, which has its own
+    retention and its own hash chain.
+
+    Scoped by department on purpose. Risk & Compliance must not read Platform
+    Engineering's audit history just because both rows live in one table, so
+    every read filters on `department` and the bus grants one recall action per
+    department rather than one parameterised tool.
+    """
+
+    __tablename__ = "ai_department_memory"
+
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
+    department = Column(String(64), nullable=False, index=True)
+    kind = Column(String(64), nullable=False, index=True)
+    # JSON text rather than a JSON column: this has to work identically on
+    # SQLite (tests, dev) and PostgreSQL (production), and the reads here are
+    # "most recent N of this kind", never "query inside the value".
+    value_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
+
+    __table_args__ = (Index("ix_ai_dept_memory_scope", "department", "kind", "created_at"),)
+
+
 class KYCRecord(Base):
     """Persistent KYC records — replaces in-memory dict."""
 

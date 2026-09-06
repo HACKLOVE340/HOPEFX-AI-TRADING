@@ -117,8 +117,16 @@ def test_no_action_is_silently_untiered():
 
 
 def test_the_permission_registry_holds_exactly_the_declared_actions():
+    """Through `all_actions()`, not by reaching into DEPARTMENTS.
+
+    This walked `DEPARTMENTS.values()` directly, which stopped being the whole
+    picture when the per-department `recall_memory` actions arrived — they are
+    generated rather than written into the table, and the test could not see
+    them. Asking the public accessor is what the registry and the bus both do,
+    so the three now agree by construction.
+    """
     registry = departments.permission_registry()
-    declared = {a.name for d in departments.DEPARTMENTS.values() for a in d.actions}
+    declared = {a.name for a in departments.all_actions()}
     assert set(registry._permissions) == declared
 
 
@@ -132,7 +140,7 @@ def test_the_registry_is_versioned():
 
 def test_the_bus_registers_every_implemented_action():
     bus = departments.build_tool_bus()
-    implemented = {a.name for d in departments.DEPARTMENTS.values() for a in d.actions if a.handler is not None}
+    implemented = {a.name for a in departments.implemented_actions()}
     assert implemented, "no action has a handler — the bus would still have zero tools"
     assert set(bus._tools) == implemented
 
@@ -145,7 +153,7 @@ def test_only_non_money_actions_are_implemented_so_far():
     invariant that actually matters is not which department is next — it is
     that nothing implemented so far can move money.
     """
-    implemented = {a for d in departments.DEPARTMENTS.values() for a in d.actions if a.handler is not None}
+    implemented = set(departments.implemented_actions())
     assert implemented, "no handlers at all means the bus has no tools"
     for action in implemented:
         assert action.risk is ToolRisk.READ_ONLY, f"{action.name} is implemented and not read-only"

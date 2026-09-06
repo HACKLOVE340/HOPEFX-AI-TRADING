@@ -38,7 +38,9 @@ from . import markets_execution, platform_engineering, research, risk_compliance
 
 #: Bumped whenever the action set or a risk tier changes. An unversioned
 #: permission set cannot be audited after the fact.
-PERMISSIONS_VERSION: Final = "departments-cluster-a-2026-09-06"
+#: Bumped when the per-department `recall_memory` actions landed — spec §2's
+#: `memory/`, which had been a tuple of strings.
+PERMISSIONS_VERSION: Final = "departments-cluster-a-memory-2026-09-06"
 ACTION_VERSION: Final = "1.0.0"
 
 
@@ -250,8 +252,46 @@ DEPARTMENTS: Final[dict[str, Department]] = {
 }
 
 
+def _recall_handler(department: str) -> Callable[..., Any]:
+    """A bound reader for one department's memory.
+
+    Bound rather than parameterised: a single `recall_memory(department=...)`
+    tool would let an agent granted Research's scope read Risk's violations by
+    passing a different argument. One action per department means the
+    permission registry and `enforce_agent_action` are deciding about the
+    department, not trusting a parameter.
+    """
+
+    def handler(*, kind: str | None = None, limit: int = 50) -> dict[str, Any]:
+        from ai.memory.store import recall
+
+        entries = recall(department, kind=kind, limit=min(int(limit), 200))
+        return {"available": True, "department": department, "count": len(entries), "entries": entries}
+
+    handler.__name__ = f"recall_{department}_memory"
+    return handler
+
+
+#: Spec §2's `memory/`, reachable the way every other capability is.
+#:
+#: Registered here rather than exposed as a plain function so recall passes the
+#: same two gates as anything else an agent can do. A module-level reader
+#: callable from anywhere would be a second door into the same room.
+_MEMORY_ACTIONS: Final[dict[str, DepartmentAction]] = {
+    key: _action(
+        key,
+        "recall_memory",
+        ToolRisk.READ_ONLY,
+        f"What {dept.title} has observed, newest first. Reads only; records nothing.",
+        _recall_handler(key),
+    )
+    for key, dept in DEPARTMENTS.items()
+}
+
+
 def all_actions() -> tuple[DepartmentAction, ...]:
-    return tuple(a for d in DEPARTMENTS.values() for a in d.actions)
+    declared = tuple(a for d in DEPARTMENTS.values() for a in d.actions)
+    return declared + tuple(_MEMORY_ACTIONS[k] for k in DEPARTMENTS)
 
 
 def action_by_name(name: str) -> DepartmentAction:
