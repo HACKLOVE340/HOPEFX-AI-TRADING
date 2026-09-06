@@ -588,42 +588,20 @@ async def brain_health(
     available = backend is not None
     detail: str | None = None
 
-    if backend == "anthropic":
-        try:
-            import httpx
+    # A real request, through the gateway's adapters -- this used to build the
+    # probe inline per vendor, which is the same duplication that let
+    # api/brain.py drift away from the chain the settings configure. An adapter
+    # for a vendor with no credential is simply absent, so "not configured" and
+    # "configured but unreachable" stay distinguishable.
+    if backend:
+        from ai.gateway.adapters import build_providers
 
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                r = await client.get(
-                    "https://api.anthropic.com/v1/models",
-                    headers={
-                        "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
-                        "anthropic-version": "2023-06-01",
-                    },
-                )
-            available = r.status_code == 200
-            if not available:
-                detail = f"Anthropic API returned HTTP {r.status_code}."
-        except Exception:
-            available = False
-            detail = "Anthropic API unreachable."
-    elif backend == "openai":
-        try:
-            import openai
-
-            await asyncio.to_thread(openai.models.list)  # lightweight probe
-        except Exception:
-            available = False
-            detail = "OpenAI API unreachable."
-    elif backend == "ollama":
-        try:
-            import httpx
-
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                r = await client.get(f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/tags")
-            available = r.status_code == 200
-        except Exception:
-            available = False
-            detail = "Ollama server unreachable."
+        adapter = build_providers().get(backend)
+        if adapter is None:
+            available, detail = False, f"{backend} has no credential configured."
+        else:
+            available, probe_detail = await asyncio.to_thread(adapter.probe)
+            detail = probe_detail or None
     else:
         detail = _NO_BACKEND_DETAIL
 
@@ -655,91 +633,50 @@ async def brain_complete(
     body: CompleteRequest,
     user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> CompleteResponse:
-    """Send a raw prompt to the configured LLM backend and return the completion."""
-    backend, model = _detect_llm_runtime()
+    """Send a raw prompt through the gateway and return the completion.
 
-    if backend == "anthropic":
-        try:
-            import httpx
+    Every branch of this endpoint used to build a vendor request inline --
+    posting to api.anthropic.com, calling the `openai` SDK, posting to Ollama's
+    /api/generate -- which meant the platform's only model endpoint bypassed the
+    spend ceiling, the fall-through chain, the guardrails and the audit record
+    that `ai/gateway` exists to provide. One provider failure became a 502 with
+    no second leg tried and no trace of the attempt.
+    """
+    from ai.gateway.adapters import build_providers
+    from ai.gateway.client import (
+        BudgetExceeded,
+        GatewayClient,
+        ModelRequest,
+        NoProviderAvailable,
+    )
+    from ai.guardrails.output import GuardrailViolation
 
-            payload: dict = {
-                "model": model,
-                "max_tokens": body.max_tokens,
-                "temperature": body.temperature,
-                "messages": [{"role": "user", "content": body.prompt}],
-            }
-            if body.system:
-                payload["system"] = body.system
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                r = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json=payload,
-                )
-            r.raise_for_status()
-            data = r.json()
-            text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-            usage = data.get("usage", {})
-            return CompleteResponse(
-                text=text,
-                backend="anthropic",
-                model=model,
-                prompt_tokens=usage.get("input_tokens"),
-                completion_tokens=usage.get("output_tokens"),
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
+    providers = build_providers()
+    if not providers:
+        raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
 
-    if backend == "openai":
-        try:
-            import openai
+    client = GatewayClient(providers)
+    prompt = f"{body.system}\n\n{body.prompt}" if body.system else body.prompt
+    request = ModelRequest(role="reasoning", prompt=prompt, timeout_s=120.0)
 
-            messages = []
-            if body.system:
-                messages.append({"role": "system", "content": body.system})
-            messages.append({"role": "user", "content": body.prompt})
-            resp = await asyncio.to_thread(
-                openai.chat.completions.create,
-                model=model or "gpt-4o-mini",
-                messages=messages,
-                max_tokens=body.max_tokens,
-                temperature=body.temperature,
-            )
-            return CompleteResponse(
-                text=resp.choices[0].message.content or "",
-                backend="openai",
-                model=model,
-                prompt_tokens=resp.usage.prompt_tokens if resp.usage else None,
-                completion_tokens=resp.usage.completion_tokens if resp.usage else None,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
+    try:
+        response = await asyncio.to_thread(client.call_sync, request, operator=user.sub)
+    except GuardrailViolation as exc:
+        # A guardrail rejection is an ANSWER, not an outage: 400, and never
+        # retried on a second vendor.
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except BudgetExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from None
+    except NoProviderAvailable:
+        raise HTTPException(status_code=502, detail="LLM backend error.") from None
 
-    if backend == "ollama":
-        try:
-            import httpx
-
-            base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            payload = {"model": model, "prompt": body.prompt, "stream": False}
-            if body.system:
-                payload["system"] = body.system
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                r = await client.post(f"{base}/api/generate", json=payload)
-            r.raise_for_status()
-            data = r.json()
-            return CompleteResponse(
-                text=data.get("response", ""),
-                backend="ollama",
-                model=model,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
-
-    raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
+    return CompleteResponse(
+        text=response.text,
+        backend=response.provider,
+        model=response.model,
+        prompt_tokens=response.tokens_in or None,
+        completion_tokens=response.tokens_out or None,
+    )
 
 
 class EmbedRequest(BaseModel):
@@ -758,68 +695,59 @@ async def brain_embed(
     body: EmbedRequest,
     user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> EmbedResponse:
-    """Generate embeddings for one or more texts using the configured LLM backend.
+    """Generate embeddings for one or more texts, through the gateway.
 
-    Anthropic has no embeddings API, so when it is the primary backend the
-    request falls through to OpenAI (if OPENAI_API_KEY is also set) or Ollama.
+    This used to select a backend inline and hand-roll the fall-through:
+    "Anthropic has no embeddings API, so if OPENAI_API_KEY is set use OpenAI,
+    else if OLLAMA_BASE_URL is set use Ollama". That is a chain, written once
+    here and nowhere else, with no ceiling and no record of what it cost. The
+    gateway's `embedding` chain does the same thing as configuration -- a vendor
+    with no embeddings API reports a leg that cannot serve, and the next leg
+    answers.
     """
+    from ai.gateway.adapters import build_providers
+    from ai.gateway.client import BudgetExceeded, GatewayClient, NoProviderAvailable
+    from ai.gateway.chain import resolve_chain
+    from ai.guardrails.output import GuardrailViolation
+
     texts = [body.input] if isinstance(body.input, str) else body.input
-    backend, model = _detect_llm_runtime()
+    if not texts:
+        raise HTTPException(status_code=400, detail="Embedding needs at least one text.")
 
-    if backend == "anthropic":
-        if os.getenv("OPENAI_API_KEY"):
-            backend = "openai"
-        elif os.getenv("OLLAMA_BASE_URL"):
-            backend, model = "ollama", os.getenv("OLLAMA_MODEL", "llama3")
-        else:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Anthropic has no embeddings API — set OPENAI_API_KEY or OLLAMA_BASE_URL to enable embeddings."
-                ),
-            )
+    providers = build_providers()
+    if not providers:
+        raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
 
-    if backend == "openai":
-        try:
-            import openai
+    # A specific 503 beats a generic one here: "Anthropic is configured but has
+    # no embeddings API" is a different problem from "nothing is configured",
+    # and only one of them is fixed by setting ANTHROPIC_API_KEY. The old code
+    # said this with a hand-written if; the chain knows it.
+    if not any(leg.provider in providers for leg in resolve_chain("embedding")):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No configured provider offers an embeddings API — Anthropic has no embeddings API. "
+                "Set OPENAI_API_KEY, GOOGLE_API_KEY or OLLAMA_BASE_URL to enable embeddings."
+            ),
+        )
 
-            embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-            resp = await asyncio.to_thread(openai.embeddings.create, model=embed_model, input=texts)
-            vectors = [item.embedding for item in resp.data]
-            return EmbedResponse(
-                embeddings=vectors,
-                backend="openai",
-                model=embed_model,
-                dimensions=len(vectors[0]) if vectors else 0,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM embed error.") from exc
+    client = GatewayClient(providers)
+    try:
+        result = await asyncio.to_thread(client.embed_sync, texts, operator=user.sub)
+    except GuardrailViolation as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except BudgetExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from None
+    except NoProviderAvailable:
+        raise HTTPException(status_code=502, detail="LLM embed error.") from None
 
-    if backend == "ollama":
-        try:
-            import httpx
-
-            base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            embed_model = os.getenv("OLLAMA_EMBED_MODEL", model or "nomic-embed-text")
-            vectors = []
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                for text in texts:
-                    r = await client.post(
-                        f"{base}/api/embeddings",
-                        json={"model": embed_model, "prompt": text},
-                    )
-                    r.raise_for_status()
-                    vectors.append(r.json().get("embedding", []))
-            return EmbedResponse(
-                embeddings=vectors,
-                backend="ollama",
-                model=embed_model,
-                dimensions=len(vectors[0]) if vectors else 0,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM embed error.") from exc
-
-    raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
+    served = next((leg for leg in resolve_chain("embedding") if leg.provider in providers), None)
+    return EmbedResponse(
+        embeddings=result.vectors,
+        backend=served.provider if served else None,
+        model=served.model if served else None,
+        dimensions=result.dimensions,
+    )
 
 
 # ── Market Analysis & Insights ────────────────────────────────────────────────

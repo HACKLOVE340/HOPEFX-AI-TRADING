@@ -1400,17 +1400,23 @@ class SelfHealer:
     @staticmethod
     def _call_claude_for_fix(source: str, issue: dict[str, Any], api_key: str) -> str:
         """
-        Call the Anthropic Claude API to generate a production-ready fix.
+        Ask a model for a production-ready fix, through the gateway.
 
         Returns the complete fixed file content, or empty string on failure.
         This is a synchronous function run in an executor.
-        """
-        try:
-            import anthropic
-        except ImportError:
-            logger.warning("SelfHealer: anthropic package not installed — pip install anthropic")
-            return ""
 
+        It used to construct `anthropic.Anthropic(api_key=...)` here and call the
+        SDK directly, with `security.llm_wrapper` only as a fallback. That put
+        the loop that rewrites this repository's own source outside every model
+        control: no spend ceiling on a healer that runs one fix every five
+        seconds, no record of what was asked or what it cost, and no second
+        vendor when the first was down. The fallback path was already the right
+        one; it is now the only one.
+
+        `api_key` is kept in the signature for callers and is deliberately
+        unused: credentials belong to the gateway's adapters, not to a caller
+        passing one around.
+        """
         category = issue.get("category", "unknown")
         description = issue.get("description", "")
         line = issue.get("line", 0)
@@ -1501,51 +1507,29 @@ Rules:
 
 Return the complete fixed file:"""
 
+        # asyncio.run() rather than a hand-built loop: it creates, runs and
+        # cleans up atomically, and is safe from a thread-pool executor thread
+        # (which has no running loop of its own).
         try:
-            # Prefer the env-configured model; fall back to claude-opus-4-5
-            model = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-5")
-            client = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
-                model=model,
-                max_tokens=16384,
-                system=(
-                    "You are an expert Python engineer specialising in production-grade "
-                    "financial trading systems. You write clean, robust, fully-implemented "
-                    "code with no stubs, no TODO comments, no mock data, and no pass-only "
-                    "function bodies. Every fix you produce must be immediately deployable."
-                ),
-                messages=[{"role": "user", "content": prompt}],
-            )
-            fixed = response.content[0].text.strip()
-            # Strip markdown code fences if Claude wrapped the response
-            for fence in ("```python\n", "```py\n", "```\n"):
-                if fixed.startswith(fence):
-                    fixed = fixed[len(fence) :]
-                    break
-            if fixed.endswith("```"):
-                fixed = fixed[:-3]
-            return fixed.strip()
-        except Exception as exc:
-            logger.warning("SelfHealer: Claude API error: %s — trying llm_wrapper fallback", exc)
-            # Fallback: try the shared llm_wrapper (may use OpenAI if configured).
-            # Use asyncio.run() rather than manually creating a loop — it handles
-            # loop creation, running, and cleanup atomically and is safe to call
-            # from a thread-pool executor thread (which has no running loop).
-            try:
-                import asyncio as _asyncio
-                from security.llm_wrapper import call_llm as _call_llm
+            import asyncio as _asyncio
 
-                fixed = _asyncio.run(_call_llm(prompt))
-                for fence in ("```python\n", "```py\n", "```\n"):
-                    if fixed.startswith(fence):
-                        fixed = fixed[len(fence) :]
-                        break
-                if fixed.endswith("```"):
-                    fixed = fixed[:-3]
-                return fixed.strip()
-            except Exception as fallback_exc:
-                logger.warning("SelfHealer: llm_wrapper fallback also failed: %s", fallback_exc)
-                return ""
+            from security.llm_wrapper import call_llm as _call_llm
+
+            fixed = _asyncio.run(_call_llm(prompt))
+        except Exception as exc:
+            # An empty string means "no fix", which every caller already treats
+            # as "do nothing". A healer that guesses on a failed call would be
+            # rewriting source from no answer at all.
+            logger.warning("SelfHealer: model call failed, no fix produced: %s", exc)
+            return ""
+
+        for fence in ("```python\n", "```py\n", "```\n"):
+            if fixed.startswith(fence):
+                fixed = fixed[len(fence) :]
+                break
+        if fixed.endswith("```"):
+            fixed = fixed[:-3]
+        return fixed.strip()
 
     # ── Advanced diagnostics loop ─────────────────────────────────────────────
 

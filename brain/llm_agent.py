@@ -709,6 +709,13 @@ class LLMAgent:
     ):
         self._backend: str = (backend or _LLM_BACKEND).lower()
 
+        # The key check stays: a missing credential is worth failing on at
+        # construction, where the message can name the variable, rather than on
+        # the first generation attempt. What no longer happens here is building
+        # a vendor SDK client -- the request itself goes through `ai.gateway`,
+        # which owns the chain, the ceiling, the guardrails and the audit
+        # record. `self.model` remains the agent's declared preference and is
+        # reported in its results; the chain decides what actually answers.
         if self._backend == "anthropic":
             key = api_key or _ANTHROPIC_API_KEY or ""
             if not key:
@@ -716,19 +723,19 @@ class LLMAgent:
                     "Anthropic API key required — set ANTHROPIC_API_KEY env var or pass api_key= to LLMAgent()"
                 )
             self._anthropic_key = key
-            self._openai_client = None
             self.model = model or _ANTHROPIC_MODEL
         elif self._backend == "openai":
-            import openai as _openai
-
             key = api_key or _OPENAI_API_KEY or ""
             if not key:
                 raise ValueError("OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()")
             self._anthropic_key = None
-            self._openai_client = _openai.AsyncOpenAI(api_key=key)
             self.model = model or _OPENAI_MODEL
         else:
             raise ValueError(f"Unknown LLM backend '{self._backend}' — use 'anthropic' or 'openai'")
+
+        # Machine-initiated generation is billed and audited under its own
+        # identity: a strategy-search loop must not exhaust a person's ceiling.
+        self.operator = "strategy-agent"
 
         self.max_iterations = max_iterations
         self.target_sharpe = target_sharpe
@@ -1006,142 +1013,91 @@ class LLMAgent:
         return content
 
     async def _call_llm_with_messages(self, messages: list[dict[str, str]]) -> tuple[str, str | None]:
-        """Call the configured LLM backend with an explicit message list (used for RAG injection)."""
-        if self._backend == "anthropic":
-            return await self._call_anthropic(messages, update_history=False)
-        return await self._call_openai(messages, update_history=False)
+        """Call the model with an explicit message list (used for RAG injection)."""
+        return await self._call_gateway(messages, update_history=False)
 
     async def _call_llm(self) -> tuple[str, str | None]:
-        """Call the configured LLM backend using the current conversation history."""
-        if self._backend == "anthropic":
-            return await self._call_anthropic(self._history, update_history=True)
-        return await self._call_openai(self._history, update_history=True)
+        """Call the model using the current conversation history."""
+        return await self._call_gateway(self._history, update_history=True)
 
-    async def _call_anthropic(
+    @staticmethod
+    def _flatten(messages: list[dict[str, str]]) -> str:
+        """One prompt from a message list.
+
+        The gateway speaks in prompts because that is the one shape every vendor
+        agrees on; each adapter re-wraps it in its own message envelope. Roles
+        are preserved as labels rather than dropped, so a system instruction
+        stays distinguishable from what the user asked.
+        """
+        parts: list[str] = []
+        for message in messages:
+            role = (message.get("role") or "user").strip()
+            content = (message.get("content") or "").strip()
+            if not content:
+                continue
+            parts.append(content if role == "user" else f"[{role}]\n{content}")
+        return "\n\n".join(parts)
+
+    async def _call_gateway(
         self,
         messages: list[dict[str, str]],
         *,
         update_history: bool,
     ) -> tuple[str, str | None]:
-        """Call Anthropic Messages API with exponential backoff retry."""
-        import asyncio
+        """Call the model through `ai.gateway`, preserving this agent's contract.
 
-        import httpx
+        This replaced `_call_anthropic` and `_call_openai`, which posted to
+        api.anthropic.com and called the `openai` SDK inline, each with its own
+        retry loop. Those loops retried the SAME vendor with backoff -- the one
+        thing that does not help when that vendor is what is down -- and neither
+        had a spend ceiling, an audit record, or an input guardrail. The agent
+        generates trading strategies from operator text, so it is precisely the
+        caller those controls exist for.
 
-        # Anthropic requires the system prompt to be a top-level field, not a message.
-        system_content: str = ""
-        user_messages: list[dict[str, str]] = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_content = (system_content + "\n\n" + msg["content"]).strip()
-            else:
-                user_messages.append({"role": msg["role"], "content": msg["content"]})
-
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": _LLM_MAX_TOKENS,
-            "temperature": 0.3,
-            "messages": user_messages,
-        }
-        if system_content:
-            payload["system"] = system_content
-
-        headers = {
-            "x-api-key": self._anthropic_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-
-        last_error: str = ""
-        for attempt in range(1, _LLM_MAX_RETRIES + 1):
-            try:
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    resp = await client.post(
-                        "https://api.anthropic.com/v1/messages",
-                        headers=headers,
-                        json=payload,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    content = self._strip_fences(data["content"][0]["text"].strip())
-                    if update_history:
-                        self._history.append({"role": "assistant", "content": content})
-                    return content, None
-            except httpx.HTTPStatusError as exc:
-                status = exc.response.status_code
-                if status == 401:
-                    return "", "Invalid Anthropic API key"
-                # Retry on transient overload / rate-limit responses
-                if status in (429, 503, 529):
-                    last_error = f"Anthropic transient error {status}"
-                    delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                    logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                    await asyncio.sleep(delay)
-                    continue
-                return "", f"Anthropic API error {status}: {exc.response.text[:200]}"
-            except httpx.ConnectError as exc:
-                last_error = f"Anthropic connection error: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except (OSError, ValueError, RuntimeError, KeyError) as exc:
-                return "", f"LLM call failed: {exc}"
-
-        return "", f"Anthropic call failed after {_LLM_MAX_RETRIES} retries: {last_error}"
-
-    async def _call_openai(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        update_history: bool,
-    ) -> tuple[str, str | None]:
-        """Call OpenAI Chat Completions API with exponential backoff retry.
-
-        Reasoning models (o-series) require ``max_completion_tokens`` instead of
-        ``max_tokens`` and do not accept a ``temperature`` parameter.
+        The return contract is unchanged: `(content, None)` on success and
+        `("", reason)` on failure, so every caller and the strategy-generation
+        flow above it work exactly as before.
         """
         import asyncio
 
-        import openai as _openai
+        from ai.gateway.adapters import build_providers
+        from ai.gateway.client import (
+            BudgetExceeded,
+            GatewayClient,
+            ModelRequest,
+            NoProviderAvailable,
+            ProviderError,
+        )
+        from ai.guardrails.output import GuardrailViolation
 
-        is_reasoning = self.model in _OPENAI_REASONING_MODELS
-        create_kwargs: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "max_completion_tokens" if is_reasoning else "max_tokens": _LLM_MAX_TOKENS,
-        }
-        if not is_reasoning:
-            create_kwargs["temperature"] = 0.3
+        prompt = self._flatten(messages)
+        if not prompt.strip():
+            return "", "LLM call failed: no prompt content"
 
-        last_error: str = ""
-        for attempt in range(1, _LLM_MAX_RETRIES + 1):
-            try:
-                response = await self._openai_client.chat.completions.create(**create_kwargs)
-                content = self._strip_fences(response.choices[0].message.content.strip())
-                if update_history:
-                    self._history.append({"role": "assistant", "content": content})
-                return content, None
-            except _openai.AuthenticationError:
-                return "", "Invalid OpenAI API key"
-            except _openai.RateLimitError as exc:
-                last_error = f"OpenAI rate limit: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except _openai.InternalServerError as exc:
-                last_error = f"OpenAI server error: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except _openai.APIConnectionError as exc:
-                last_error = f"OpenAI connection error: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except (OSError, ValueError, RuntimeError) as exc:
-                return "", f"LLM call failed: {exc}"
+        providers = build_providers()
+        if not providers:
+            return "", "No LLM vendor is configured"
 
-        return "", f"OpenAI call failed after {_LLM_MAX_RETRIES} retries: {last_error}"
+        client = GatewayClient(providers)
+        request = ModelRequest(role="reasoning", prompt=prompt, timeout_s=120.0)
+        try:
+            response = await asyncio.to_thread(client.call_sync, request, operator=self.operator)
+        except GuardrailViolation as exc:
+            # An answer, not an outage: never retried on a second vendor.
+            return "", f"Guardrail refused the prompt: {exc}"
+        except BudgetExceeded as exc:
+            return "", f"Model budget exhausted: {exc}"
+        except ProviderError as exc:
+            return "", f"LLM call failed: {exc.reason}"
+        except NoProviderAvailable as exc:
+            return "", f"No LLM vendor answered: {exc}"
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            return "", f"LLM call failed: {exc}"
+
+        content = self._strip_fences(response.text.strip())
+        if update_history:
+            self._history.append({"role": "assistant", "content": content})
+        return content, None
 
 
 # ── convenience factory ───────────────────────────────────────────────────────

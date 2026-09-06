@@ -90,6 +90,13 @@ _TRANSPORT_FAILURES: Final[frozenset[str]] = frozenset(
         "server_error",
         "overloaded",
         "provider_unavailable",
+        # An adapter bug, not a vendor's answer. Listed explicitly rather than
+        # left unknown because `GatewayClient` already advances to the next leg
+        # when an adapter raises an unexpected exception -- without this row the
+        # same bug halted the chain when it arrived as a ProviderError and
+        # continued it when it arrived raw, which is two behaviours for one
+        # fault.
+        "adapter_error",
     }
 )
 

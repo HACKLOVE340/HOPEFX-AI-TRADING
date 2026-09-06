@@ -209,6 +209,91 @@ class GatewayClient:
         tried = ", ".join(f"{a['provider']}={a['reason']}" for a in attempts) or "no legs"
         raise NoProviderAvailable(f"no model served role {request.role!r}: {tried}")
 
+    def embed_sync(self, texts: list[str], *, operator: str, timeout_s: float = DEFAULT_TIMEOUT_S) -> Any:
+        """Embed `texts` along the `embedding` chain, under the same controls.
+
+        Embeddings were the one model call with no ceiling and no record:
+        `api/brain.py` picked a backend inline, fell back to OpenAI or Ollama
+        with a hand-written `if`, and left no trace of what it cost. They are a
+        model call, so they go through the same door.
+
+        A vendor with no embeddings API raises `provider_unavailable`, which
+        falls through -- the chain reaches one that can embed instead of failing
+        the request, which is what that inline `if` was approximating.
+        """
+        if not texts:
+            raise ValueError("embedding needs at least one text")
+
+        # Screened for the same reason a completion is: these texts are stored,
+        # and an injected instruction in a stored vector is a delayed prompt.
+        for text in texts:
+            screen_input(text)
+
+        allowed, reason = budget.check(operator, 0.0)
+        if not allowed:
+            raise BudgetExceeded(reason)
+
+        attempts: list[dict[str, Any]] = []
+        started = time.perf_counter()
+        fingerprint = "\n".join(texts)
+
+        for leg in resolve_chain("embedding"):
+            provider = self._providers.get(leg.provider)
+            if provider is None:
+                attempts.append({"provider": leg.provider, "reason": "no_credentials", "skipped": True})
+                continue
+            embed = getattr(provider, "embed", None)
+            if embed is None:
+                attempts.append({"provider": leg.provider, "reason": "provider_unavailable"})
+                continue
+            try:
+                result = embed(model=leg.model, texts=texts, timeout_s=timeout_s)
+            except ProviderError as exc:
+                attempts.append({"provider": leg.provider, "model": leg.model, "reason": exc.reason})
+                if should_fall_through(exc.reason):
+                    continue
+                self._audit_embedding(fingerprint, operator, attempts, None, None, started, 0.0, 0)
+                raise
+            except Exception as exc:
+                attempts.append({"provider": leg.provider, "model": leg.model, "reason": "adapter_error"})
+                logger.exception("ai.gateway: embedding adapter raised for %s: %s", leg.provider, exc)
+                continue
+
+            cost = float(getattr(result, "cost_usd", 0.0) or 0.0)
+            tokens_in = int(getattr(result, "tokens_in", 0) or 0)
+            attempts.append({"provider": leg.provider, "model": leg.model, "reason": "served"})
+            budget.charge(operator, cost)
+            self._audit_embedding(fingerprint, operator, attempts, leg, leg.model, started, cost, tokens_in)
+            return result
+
+        self._audit_embedding(fingerprint, operator, attempts, None, None, started, 0.0, 0)
+        tried = ", ".join(f"{a['provider']}={a['reason']}" for a in attempts) or "no legs"
+        raise NoProviderAvailable(f"no model served role 'embedding': {tried}")
+
+    def _audit_embedding(
+        self,
+        fingerprint: str,
+        operator: str,
+        attempts: list[dict[str, Any]],
+        leg: ChainLeg | None,
+        model: str | None,
+        started: float,
+        cost: float,
+        tokens_in: int,
+    ) -> None:
+        audit.record_call(
+            operator=operator,
+            role="embedding",
+            prompt=fingerprint,
+            attempts=attempts,
+            served_by=leg.provider if leg else None,
+            model=model,
+            latency_ms=(time.perf_counter() - started) * 1000,
+            cost_usd=cost,
+            tokens_in=tokens_in,
+            tokens_out=0,
+        )
+
     def call_structured(
         self,
         request: ModelRequest,

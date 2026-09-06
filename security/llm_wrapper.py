@@ -4,15 +4,27 @@
 """
 security/llm_wrapper.py
 =======================
-Async LLM API wrapper used by HOPEFXBrain for intent analysis and
-auto-generated code fixes.
+Async LLM call used by HOPEFXBrain for intent analysis and auto-generated code
+fixes. **A thin adapter onto `ai.gateway` — it no longer talks to a vendor.**
 
-Supports two backends (selected via LLM_BACKEND env var):
-  - "anthropic"  → Claude 3.5 Sonnet (default; strong reasoning for security analysis and code generation)
-  - "openai"     → GPT-4o-mini
+What it used to be: 173 lines that selected a backend from `LLM_BACKEND`, built
+the Anthropic and OpenAI request bodies inline, posted to
+api.anthropic.com/v1/messages and api.openai.com/v1/chat/completions, and
+retried transient errors with exponential backoff.
 
-Raises RuntimeError when called without a configured API key.
-Set ANTHROPIC_API_KEY or OPENAI_API_KEY before use.
+Every one of those concerns now lives in the gateway, and three that this module
+never had come with it:
+
+* **A spend ceiling**, checked before the request. This module could be called
+  in a loop by the self-healer with no limit at all.
+* **An audit record** of the model, latency, tokens and cost — with the prompt
+  hashed, never stored. The prompts here carry source code from this repository.
+* **A second vendor.** The old retry loop retried the SAME backend three times
+  with backoff, which is the one thing that does not help when that vendor is
+  the thing that is down. The gateway's chain moves to a different vendor.
+
+The public signature is unchanged, so `security/global_fortress.py` and
+`security/self_healer.py` did not have to change with it.
 """
 
 from __future__ import annotations
@@ -23,151 +35,61 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# ── Backend selection ─────────────────────────────────────────────────────────
+#: Kept for callers and tests that read them. They no longer select a backend —
+#: `ai.gateway.chain` does, from platform config, which is what makes the
+#: setting a superadmin edits actually take effect (audit D8).
 LLM_BACKEND: str = os.getenv("LLM_BACKEND", "anthropic").lower()
 ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 
-# Model identifiers
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "o4-mini")
-
-# OpenAI reasoning models require max_completion_tokens and no temperature param.
-_OPENAI_REASONING_MODELS: frozenset[str] = frozenset({"o1", "o1-mini", "o3", "o3-mini", "o4-mini"})
-
-# Security analysis responses are short — keep token limit low for cost/latency.
-# Use LLM_SECURITY_MAX_TOKENS to override; falls back to LLM_MAX_TOKENS for
-# deployments that share a single token-limit setting.
+#: Security analysis responses are short. The gateway caps output centrally;
+#: this stays because deployments set it.
 MAX_TOKENS = int(os.getenv("LLM_SECURITY_MAX_TOKENS", os.getenv("LLM_MAX_TOKENS", "1024")))
 
-# Retry configuration for transient upstream errors (429, 529, 503)
-_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
-_RETRY_BASE_DELAY: float = float(os.getenv("LLM_RETRY_BASE_DELAY", "1.0"))  # seconds
+#: Which operator these calls are billed and audited against. Security analysis
+#: is machine-initiated, so it gets its own identity rather than borrowing a
+#: person's — a self-healer loop must not exhaust an operator's ceiling.
+OPERATOR = "security-analysis"
+
+#: Security analysis wants the reasoning tier: it reads code and decides whether
+#: something is an attack. A cheaper model that is wrong more often is not
+#: cheaper here either.
+ROLE = "reasoning"
 
 
 async def call_llm(prompt: str) -> str:
-    """
-    Send *prompt* to the configured LLM backend and return the text response.
+    """Send *prompt* through the gateway and return the text response.
 
     Raises:
-        RuntimeError: When no API key is configured for the selected backend.
-        httpx.HTTPStatusError / openai.APIError: On upstream API failures.
+        RuntimeError: when no vendor in the chain is reachable, or a ceiling
+            refused the call. The message names which, so an operator can tell
+            "not configured" from "out of budget" — the old code raised the same
+            RuntimeError for both.
     """
-    if LLM_BACKEND == "anthropic" and ANTHROPIC_API_KEY:
-        return await _call_anthropic(prompt)
-    if LLM_BACKEND == "openai" and OPENAI_API_KEY:
-        return await _call_openai(prompt)
-    raise RuntimeError(
-        f"LLM backend '{LLM_BACKEND}' is not configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in your environment."
+    from ai.gateway.adapters import build_providers
+    from ai.gateway.client import (
+        BudgetExceeded,
+        GatewayClient,
+        ModelRequest,
+        NoProviderAvailable,
     )
 
+    providers = build_providers()
+    if not providers:
+        raise RuntimeError(
+            "No LLM vendor is configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, "
+            "GOOGLE_API_KEY or OLLAMA_BASE_URL in your environment."
+        )
 
-# ── Anthropic backend ─────────────────────────────────────────────────────────
-
-
-async def _call_anthropic(prompt: str) -> str:
-    """Call Anthropic Messages API with exponential backoff retry."""
-    import httpx
-
-    headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
-    payload = {
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": MAX_TOKENS,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    last_exc: Exception | None = None
-    for attempt in range(1, _MAX_RETRIES + 1):
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers=headers,
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                return data["content"][0]["text"].strip()
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code
-            if status in (429, 503, 529):
-                last_exc = exc
-                delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning(
-                    "Anthropic transient error %d — retry %d/%d in %.1fs", status, attempt, _MAX_RETRIES, delay
-                )
-                await asyncio.sleep(delay)
-                continue
-            raise
-        except httpx.ConnectError as exc:
-            last_exc = exc
-            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-            logger.warning("Anthropic connection error — retry %d/%d in %.1fs: %s", attempt, _MAX_RETRIES, delay, exc)
-            await asyncio.sleep(delay)
-
-    raise RuntimeError(f"Anthropic call failed after {_MAX_RETRIES} retries") from last_exc
+    client = GatewayClient(providers)
+    request = ModelRequest(role=ROLE, prompt=prompt)
+    try:
+        response = await asyncio.to_thread(client.call_sync, request, operator=OPERATOR)
+    except BudgetExceeded as exc:
+        raise RuntimeError(f"Security analysis is over its model budget: {exc}") from None
+    except NoProviderAvailable as exc:
+        raise RuntimeError(f"No LLM vendor answered: {exc}") from None
+    return response.text.strip()
 
 
-# ── OpenAI backend ────────────────────────────────────────────────────────────
-
-
-async def _call_openai(prompt: str) -> str:
-    """Call OpenAI Chat Completions API with exponential backoff retry.
-
-    Reasoning models (o-series) require ``max_completion_tokens`` instead of
-    ``max_tokens`` and do not accept a ``temperature`` parameter.
-    """
-    import httpx
-
-    is_reasoning = OPENAI_MODEL in _OPENAI_REASONING_MODELS
-    payload: dict = {
-        "model": OPENAI_MODEL,
-        "max_completion_tokens" if is_reasoning else "max_tokens": MAX_TOKENS,
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a cybersecurity analyst for a trading platform. Be concise and technical.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-    }
-    if not is_reasoning:
-        payload["temperature"] = 0.2
-
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    last_exc: Exception | None = None
-    for attempt in range(1, _MAX_RETRIES + 1):
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                return data["choices"][0]["message"]["content"].strip()
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code
-            if status in (429, 500, 503):
-                last_exc = exc
-                delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("OpenAI transient error %d — retry %d/%d in %.1fs", status, attempt, _MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-                continue
-            raise
-        except httpx.ConnectError as exc:
-            last_exc = exc
-            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-            logger.warning("OpenAI connection error — retry %d/%d in %.1fs: %s", attempt, _MAX_RETRIES, delay, exc)
-            await asyncio.sleep(delay)
-
-    raise RuntimeError(f"OpenAI call failed after {_MAX_RETRIES} retries") from last_exc
+__all__ = ["ANTHROPIC_API_KEY", "LLM_BACKEND", "MAX_TOKENS", "OPENAI_API_KEY", "OPERATOR", "ROLE", "call_llm"]
