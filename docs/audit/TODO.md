@@ -27,7 +27,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | 4 of 8 done; three found live money defects |
+| 5 | F222 · 8 critical modules with no test | HIGH | 5 of 8 done; three found live money defects |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
@@ -259,7 +259,7 @@ Never named in any test file:
 | 427 | ~~`payments/transaction_manager.py`~~ — done; found a double-refund path |
 | 354 | `monetization/marketplace_submission.py` |
 | 318 | ~~`payments/fintech/paystack.py`~~ — done; found a stale hard-coded FX rate |
-| 282 | `monetization/access_codes.py` |
+| 282 | ~~`monetization/access_codes.py`~~ — done; no defect found, coverage only |
 | 228 | `database/repositories/tick_data_repository.py` |
 | 208 | ~~`payments/payment_gateway.py`~~ — done, `tests/unit/test_payment_currency_is_explicit.py` |
 
@@ -351,6 +351,21 @@ matters most.
 charges through Paystack will now refuse until one is configured, which is the
 intended behaviour — but if USD-via-Paystack is a live flow, it needs a rate, and
 ideally a feed rather than a variable.
+
+**`monetization/access_codes.py` — done, and it was sound**
+(`tests/unit/test_access_codes_cannot_be_reused.py`, 18 cases). Unlike the three
+above, this found **no defect**: the earlier triage was right. A code cannot be
+redeemed twice, a revoked or expired one is refused, the entropy is
+`secrets.choice` over 36^8, and redemption records who and when. So these tests
+pass on the pre-fix tree too — they are a guard against regression, not evidence
+of a fix, and that distinction is worth keeping honest.
+
+One assertion deliberately **not** made: that the checksum is compared in
+constant time. It is derived from the two public halves of the code, so anyone
+can compute it; the secret is the random part, which is looked up rather than
+compared. A `compare_digest` there would be security theatre. What does matter —
+that passing the checksum is not the same as having been issued — is asserted by
+forging a code that validates and confirming it cannot be redeemed.
 
 **Note for whoever takes the next module.** `monetization/__init__.py` and
 `payments/crypto/__init__.py` re-export each singleton under its own module's
