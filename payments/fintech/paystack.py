@@ -18,7 +18,7 @@ import hmac
 import logging
 import os
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 import requests
@@ -53,12 +53,26 @@ class PaystackClient:
 
     FEE_PERCENT = Decimal("0.015")  # 1.5%
     FEE_CAP_NGN = Decimal("100.00")  # NGN 100 cap
-    _NGN_PER_USD = Decimal("775.00")  # approximate; update via FX feed in production
 
-    def __init__(self, secret_key: str | None = None) -> None:
+    #: The environment variable that supplies the USD -> NGN rate.
+    #:
+    #: This was `_NGN_PER_USD = Decimal("775.00")  # approximate; update via FX
+    #: feed in production` — a constant that decided what a customer was
+    #: actually charged, with a comment conceding it was approximate, and
+    #: nothing that ever updated it. The naira has moved a long way from 775: at
+    #: a true rate near 1,600 the platform billed a USD price and collected
+    #: roughly half of it, silently, on every transaction.
+    #:
+    #: Writing a newer number here would be the same defect with a later date.
+    #: The rate is configuration now, and an absent one is refused rather than
+    #: guessed — the same rule as the crypto currency field (audit TODO item 6).
+    NGN_PER_USD_ENV = "PAYSTACK_NGN_PER_USD"
+
+    def __init__(self, secret_key: str | None = None, ngn_per_usd: Decimal | None = None) -> None:
         if not secret_key:
             raise ValueError("PaystackClient requires a secret key. Set the PAYSTACK_SECRET_KEY environment variable.")
         self._secret_key = secret_key
+        self._ngn_per_usd = ngn_per_usd
         self._session = requests.Session()
         self._session.headers.update(
             {
@@ -70,6 +84,44 @@ class PaystackClient:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    def _rate_ngn_per_usd(self) -> Decimal:
+        """The configured USD -> NGN rate, or a refusal.
+
+        Read at call time rather than construction so a deployment can update
+        the rate without a restart — a stale rate is the thing this replaced.
+        """
+        configured = self._ngn_per_usd
+        if configured is None:
+            raw = os.getenv(self.NGN_PER_USD_ENV, "").strip()
+            if not raw:
+                raise PaystackError(
+                    f"No USD->NGN rate is configured, so a USD amount cannot be converted to naira. "
+                    f"Set {self.NGN_PER_USD_ENV} to the current rate, or bill in NGN directly. "
+                    "This is refused rather than defaulted because a wrong rate silently "
+                    "charges the customer the wrong amount."
+                )
+            try:
+                configured = Decimal(raw)
+            except InvalidOperation as exc:
+                raise PaystackError(f"{self.NGN_PER_USD_ENV}={raw!r} is not a number.") from exc
+
+        if configured <= 0:
+            raise PaystackError(
+                f"{self.NGN_PER_USD_ENV} must be greater than zero; got {configured}. "
+                "A zero or negative rate would charge nothing, or a negative amount."
+            )
+        return configured
+
+    @staticmethod
+    def _to_kobo(naira: Decimal) -> int:
+        """Naira to kobo, rounding HALF-UP.
+
+        This was `int(ngn_amount * 100)`, which truncates: 1,199.999 NGN became
+        119,999 kobo instead of 120,000. Money rounds to its minor unit, and it
+        rounds half-up rather than to even — `round()` would give banker's
+        rounding, which is not what a charge means.
+        """
+        return int((Decimal(naira) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
     def initialize_payment(
         self,
@@ -96,12 +148,18 @@ class PaystackClient:
         -------
         dict with keys: reference, authorization_url, access_code, fee, status
         """
-        # Paystack amounts are in kobo (NGN x 100)
-        ngn_amount = amount * self._NGN_PER_USD if currency == "USD" else amount
-        kobo_amount = int(ngn_amount * 100)
+        # Paystack amounts are in kobo (NGN x 100). A USD amount needs a rate,
+        # and an absent rate is refused rather than guessed.
+        if currency == "USD":
+            rate = self._rate_ngn_per_usd()
+            ngn_amount = amount * rate
+        else:
+            rate = None
+            ngn_amount = amount
+        kobo_amount = self._to_kobo(ngn_amount)
 
         fee_ngn = min(ngn_amount * self.FEE_PERCENT, self.FEE_CAP_NGN)
-        fee_usd = fee_ngn / self._NGN_PER_USD if currency == "USD" else fee_ngn
+        fee_usd = fee_ngn / rate if rate is not None else fee_ngn
 
         customer_email = email or f"user_{user_id}@hopefx.internal"
 
@@ -197,8 +255,10 @@ class PaystackClient:
         recipient_data = self._post_dict("/transferrecipient", recipient_payload)
         recipient_code = recipient_data["recipient_code"]
 
-        # Step 2 — initiate transfer (amount in kobo)
-        kobo_amount = int(amount * 100)
+        # Step 2 — initiate transfer (amount in kobo). Rounded, not truncated:
+        # on a PAYOUT truncation under-pays the recipient and the platform keeps
+        # the remainder, which is the direction that matters most.
+        kobo_amount = self._to_kobo(amount)
         transfer_payload = {
             "source": "balance",
             "amount": kobo_amount,

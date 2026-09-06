@@ -27,7 +27,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | 3 of 8 done; two found live money defects |
+| 5 | F222 · 8 critical modules with no test | HIGH | 4 of 8 done; three found live money defects |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
@@ -258,7 +258,7 @@ Never named in any test file:
 | 585 | `portfolio/strategy_allocator.py` |
 | 427 | ~~`payments/transaction_manager.py`~~ — done; found a double-refund path |
 | 354 | `monetization/marketplace_submission.py` |
-| 318 | `payments/fintech/paystack.py` |
+| 318 | ~~`payments/fintech/paystack.py`~~ — done; found a stale hard-coded FX rate |
 | 282 | `monetization/access_codes.py` |
 | 228 | `database/repositories/tick_data_repository.py` |
 | 208 | ~~`payments/payment_gateway.py`~~ — done, `tests/unit/test_payment_currency_is_explicit.py` |
@@ -320,6 +320,37 @@ CANCELLED are terminal; re-asserting the same status stays a no-op so an
 idempotent webhook retry does not read as tampering. `reverse_transaction` now
 goes through the same door rather than assigning the status directly, because a
 second way to change a status is how the first one got missed.
+
+**`payments/fintech/paystack.py` — done, and a hard-coded FX rate was deciding
+what customers pay · HIGH** (`tests/unit/test_paystack_client_charges_correctly.py`,
+11 of 22 fail on the pre-fix tree).
+
+```python
+_NGN_PER_USD = Decimal("775.00")  # approximate; update via FX feed in production
+```
+
+A USD price was multiplied by that constant to get the naira amount actually
+charged. The comment concedes it is approximate; nothing ever updated it. The
+naira has moved a long way from 775 — at a true rate near 1,600 the platform
+billed a USD price and collected roughly half of it, silently, on every
+transaction. A constant standing in for a measurement, with a comment admitting
+the fact, is this audit's signature defect.
+
+**Writing a newer number would be the same defect with a later date.** The rate
+is configuration now (`PAYSTACK_NGN_PER_USD`, or a constructor argument), read
+at call time so it can change without a restart, and an absent, zero, negative
+or unparseable rate is **refused** — the same rule as item 6's currency field.
+NGN charges need no rate and are unaffected.
+
+Also fixed: `int(amount * 100)` truncated kobo in both `initialize_payment` and
+`initiate_transfer`. On a charge that under-bills; on a **payout** it under-pays
+the recipient and the platform keeps the remainder, which is the direction that
+matters most.
+
+**Open for the owner:** `PAYSTACK_NGN_PER_USD` has no value set anywhere. USD
+charges through Paystack will now refuse until one is configured, which is the
+intended behaviour — but if USD-via-Paystack is a live flow, it needs a rate, and
+ideally a feed rather than a variable.
 
 **Note for whoever takes the next module.** `monetization/__init__.py` and
 `payments/crypto/__init__.py` re-export each singleton under its own module's
