@@ -34,7 +34,7 @@ from typing import Any, Final
 
 from core.ai_tool_permissions import ToolPermission, ToolPermissionRegistry, ToolRisk
 
-from . import research
+from . import research, risk_compliance
 
 #: Bumped whenever the action set or a risk tier changes. An unversioned
 #: permission set cannot be audited after the fact.
@@ -141,12 +141,14 @@ DEPARTMENTS: Final[dict[str, Department]] = {
                 "check_drawdown",
                 ToolRisk.READ_ONLY,
                 "Current drawdown against the configured limits.",
+                risk_compliance.check_drawdown,
             ),
             _action(
                 "risk_compliance",
                 "validate_position_size",
                 ToolRisk.READ_ONLY,
                 "Whether a proposed size passes the risk gate.",
+                risk_compliance.validate_position_size,
             ),
             # Proposing is not acting. block_deploy stops a rollout rather than
             # touching a position, and propose_derisk writes a proposal a human

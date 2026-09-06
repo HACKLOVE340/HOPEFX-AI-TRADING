@@ -137,9 +137,19 @@ def test_the_bus_registers_every_implemented_action():
     assert set(bus._tools) == implemented
 
 
-def test_research_is_the_implemented_department():
-    implemented = {a.name for d in departments.DEPARTMENTS.values() for a in d.actions if a.handler is not None}
-    assert implemented == {a.name for a in departments.DEPARTMENTS["research_intelligence"].actions}
+def test_only_non_money_actions_are_implemented_so_far():
+    """The build order, asserted rather than trusted.
+
+    This began as "research is the only implemented department" and was
+    correct until Risk & Compliance's two READ-ONLY actions landed. The
+    invariant that actually matters is not which department is next — it is
+    that nothing implemented so far can move money.
+    """
+    implemented = {a for d in departments.DEPARTMENTS.values() for a in d.actions if a.handler is not None}
+    assert implemented, "no handlers at all means the bus has no tools"
+    for action in implemented:
+        assert action.risk is ToolRisk.READ_ONLY, f"{action.name} is implemented and not read-only"
+        assert action.requires_approval is False, action.name
 
 
 def test_an_unimplemented_action_refuses_rather_than_no_opping():
@@ -149,9 +159,12 @@ def test_an_unimplemented_action_refuses_rather_than_no_opping():
     bus = departments.build_tool_bus()
     with pytest.raises(ToolDenied) as excinfo:
         bus.invoke(
-            "risk_compliance.check_drawdown",
+            # A READ_ONLY action, so the permission tier lets it through and the
+            # refusal can only come from the missing handler. Picking a gated
+            # action here would pass for the wrong reason.
+            "platform_engineering.scan_secrets",
             operator="tester",
-            allowed_actions={"risk_compliance.check_drawdown"},
+            allowed_actions={"platform_engineering.scan_secrets"},
         )
     assert "tool_not_implemented" in excinfo.value.reason_codes
 
