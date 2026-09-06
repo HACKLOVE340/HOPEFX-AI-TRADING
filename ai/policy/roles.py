@@ -93,6 +93,10 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     # than about any operator's data — but it stays behind _VIEW like every other
     # row here, because "which controls are not built yet" is a map of the gaps.
     "ai_core_capability_registry": _VIEW,
+    # What the platform can do, derived from its own route table. Reporting
+    # only, and _VIEW like every other row: a map of the system's surface is
+    # exactly the kind of reconnaissance that should need a login.
+    "ai_core_app_surface": _VIEW,
     # Which models each vendor currently serves. Reporting, not acting: choosing
     # a model is `route_model`, which is superadmin + 2FA below. Admin may see
     # WHICH vendors are configured -- a boolean, never a credential.

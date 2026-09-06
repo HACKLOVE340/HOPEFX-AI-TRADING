@@ -30,7 +30,9 @@ import { Mic, Minimize2, Send, Square, Volume2, VolumeX, X } from 'lucide-react'
 import { PresenceCore } from './PresenceCore';
 import type { Presence } from './presence';
 import type { Surface } from './workspace';
+import { place, type LayoutName } from './layout';
 import { SurfaceView } from './SurfaceView';
+import { useViewportWidth } from './useViewportWidth';
 
 const C = {
   void: '#070c16',
@@ -76,6 +78,12 @@ export interface PresenceStageProps {
   muted: boolean;
   sttSupported: boolean;
   transcript: readonly { who: 'ai' | 'user'; text: string; at: number; interrupted?: boolean }[];
+  /**
+   * How the plane is arranged (§8). The stage does not choose it — the panel
+   * does, from what was said or from what is on the plane — so that the same
+   * decision is not made in two places with two different answers.
+   */
+  layout: LayoutName;
   onCommand: (phrase: string) => void;
   onTalk: () => void;
   onStop: () => void;
@@ -86,7 +94,7 @@ export interface PresenceStageProps {
 }
 
 export const PresenceStage: React.FC<PresenceStageProps> = ({
-  presence, surfaces, focusedId, listening, muted, sttSupported, transcript,
+  presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout,
   onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onExit,
 }) => {
   const [typed, setTyped] = useState('');
@@ -114,7 +122,17 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   );
 
   const lastFew = useMemo(() => transcript.slice(-3), [transcript]);
-  const hasSurfaces = surfaces.length > 0;
+
+  // Measured, not assumed. A three-of-twelve panel is ninety pixels wide on a
+  // phone: it renders, it passes a screenshot test, and nobody can read it.
+  const width = useViewportWidth();
+  const placements = useMemo(
+    () => place(surfaces, { layout, focusedId, viewport: { width } }),
+    [surfaces, layout, focusedId, width],
+  );
+  const shown = placements.filter((p) => p.visible);
+  const hidden = placements.length - shown.length;
+  const hasSurfaces = shown.length > 0;
 
   return (
     <div
@@ -163,7 +181,10 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
       >
         <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: '.15em' }}>HOPEFX</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={label}>{surfaces.length ? `${surfaces.length} on the plane` : 'clear'}</span>
+          <span style={label}>
+            {surfaces.length ? `${layout.replace('_', ' ')} · ${surfaces.length} on the plane` : 'clear'}
+            {hidden > 0 && ` · ${hidden} hidden`}
+          </span>
           <button
             type="button"
             onClick={onExit}
@@ -221,10 +242,11 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
               paddingRight: 4,
             }}
           >
-            {surfaces.map((surface) => (
+            {shown.map(({ surface, span }) => (
               <SurfaceView
                 key={surface.id}
                 surface={surface}
+                span={span}
                 focused={focusedId === surface.id}
                 onClose={() => onCloseSurface(surface.id)}
                 onPin={() => onPinSurface(surface.id)}

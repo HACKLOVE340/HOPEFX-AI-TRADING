@@ -113,3 +113,91 @@ code path is already written. Neither blocks Phase 0, and both land in Phase 1.
 Open: whether the VPS can run a neural TTS model at acceptable latency.
 `scripts/vps_capability_report.py` answers that and has not been run against the
 production host.
+
+---
+
+## D4 — Sync or async: the AI into the app, or the app into the AI?
+
+**Decided: both, asymmetrically. Reading is total and synchronous.
+Writing is narrow and asynchronous.**
+
+The question was posed as a choice between two directions. It is not one — the
+two directions have different risk profiles, and giving them the same design is
+what produces either a blind assistant or a dangerous one.
+
+### App → AI (what the AI can see): total, synchronous, derived
+
+The AI sees the platform **whole**, and sees it by construction rather than by
+what somebody remembered to wire. `ai/hub/app_surface.py` derives the catalogue
+from the live route table on every call:
+
+| Measured | |
+|---|---:|
+| Capabilities visible | **2,234** |
+| Product areas | **88** |
+| Reads / writes | 1,266 / 968 |
+| Invokable from the AI | **0** |
+| Tools registered on the bus | 17 |
+
+A hand-maintained list of those would be wrong within a day, and wrong in the
+direction nobody notices: nothing fails, the AI is simply ignorant of a feature
+that shipped last week. Adding a router tomorrow makes it visible with nobody
+editing anything.
+
+This is synchronous because it is a read of an in-process data structure —
+22 ms, no I/O, no vendor. Making it async would add a failure mode to something
+that cannot fail.
+
+**One detail is load-bearing.** The walk uses
+`core.router_registry.iter_api_routes`, never `app.routes`. Starlette no longer
+flattens an included router's routes onto `app.routes` at `include_router()`
+time, so the naive read finds 1,105 routes where the real table has 2,249 —
+**half the platform, missing silently**. A catalogue that reported half the
+product and said nothing would be worse than none.
+
+### AI → App (what the AI can do): narrow, asynchronous, gated
+
+Everything the AI can actually *do* stays behind `ai/tools/bus.py` — 17 tools,
+each with a fail-closed permission gate, shadow mode for writes, and a live-mode
+switch that is off by default.
+
+**Discovery is not capability.** Knowing that `POST /api/orders/advanced/oco`
+exists must not mean the AI can submit one. So `summary()` reports `visible` and
+`invokable` as two separate numbers and never one: merging them is exactly how a
+map becomes a menu. Today every one of the 968 writes is visible and
+unreachable, and that is the correct state, not a gap.
+
+The `invokable` flag is decided by **object identity** — a route is reachable
+only when its endpoint function *is* a registered bus handler. Name-matching
+would be a guess ( `place_order` the route vs. `markets_execution.shadow_place_order`
+the action are unrelated objects sharing a word), and a guess in this direction
+marks a write callable that is not.
+
+### Why the catalogue reaches the planner and not just an endpoint
+
+Derived correctly, exposed on `GET /api/ai-core/capabilities/app`, and read by
+nothing that makes a decision — that is a control nobody runs, which is defect
+class F176 in this repository. So `LoopContext.platform_context` carries what
+the platform can do *about the current goal* into `ai/agent/loop.py`.
+
+It is a **separate field from `permitted`**, deliberately. `permitted` is what
+the planner may choose; `platform_context` is what exists. A planner that treats
+a line it saw as callable is refused by the allowlist before anything reaches
+the bus — asserted in `test_seeing_a_route_is_not_permission_to_call_it`.
+
+It is also **bounded to 12 rows**, because 2,234 do not fit in a prompt and a
+truncated prefix would hide whole areas silently. The search that picks those 12
+drops stopwords: scoring every word of three letters or more made "check the
+current drawdown against risk limits" match **850 of 2,234 routes**, since
+"current" appears in a third of the docstrings here. A result set that large is
+the same as no result set. This repository shipped that exact defect once
+already, in `Scene.resolve`, where "nothing like this" matched a panel titled
+"gold price **this** session".
+
+### What this costs
+
+The catalogue carries path, method, mode, area, auth and the first line of the
+docstring — no request bodies, no parameter schemas, no examples. A catalogue
+that quoted request models would eventually quote one with a credential field
+name and a sample value. The defence is structural: `AppCapability` has exactly
+eight fields, and a test fails if a ninth appears.

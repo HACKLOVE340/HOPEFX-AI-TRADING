@@ -28,6 +28,7 @@ import { derivePresence, type PresenceInputs } from '../../hub/presence';
 import { ConversationTurn, type TranscriptLine } from '../../hub/conversation';
 import { Workspace, type Surface } from '../../hub/workspace';
 import { readIntent } from '../../hub/intent';
+import { readLayout, suggestLayout, type LayoutName } from '../../hub/layout';
 import { useStore, selectAiJobs } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
 
@@ -177,6 +178,18 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
   const [surfaces, setSurfaces] = useState<readonly Surface[]>([]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
+  /**
+   * The layout the operator NAMED, or null for "you decide".
+   *
+   * Kept as two states rather than one so that asking for a war room stays a
+   * war room after the next surface opens. If the named choice were folded into
+   * a single resolved value, every command would re-derive it from the object
+   * count and quietly overrule what was asked for — the plane rearranging
+   * itself under someone who told it not to.
+   */
+  const [namedLayout, setNamedLayout] = useState<LayoutName | null>(null);
+  const layout = namedLayout ?? suggestLayout(surfaces, focusedId);
+
   const syncWorkspace = useCallback(() => {
     setSurfaces([...workspace.surfaces]);
     setFocusedId(workspace.focused);
@@ -195,15 +208,29 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       turn.userStoppedSpeaking(phrase);
       const intent = readIntent(phrase);
 
-      if (intent.clear) workspace.clear();
+      if (intent.clear) {
+        workspace.clear();
+        // "Simplify this" resets the arrangement too. Leaving a war room
+        // standing over two surfaces answers half the request.
+        setNamedLayout(null);
+      }
       for (const request of intent.open) workspace.open(request);
       if (intent.focus) {
         const target = workspace.resolve(intent.focus);
         workspace.focus(target);
       }
+
+      // §8's layout commands. Read locally and instantly for the same reason
+      // the rest of `intent.ts` is: rearranging the plane should not cost a
+      // model call or stop working when a vendor is unreachable.
+      const named = readLayout(phrase);
+      if (named) setNamedLayout(named === 'auto' ? null : named);
+
       syncWorkspace();
 
-      if (intent.unhandled) {
+      if (named) {
+        turn.say(named === 'auto' ? 'Back to the default arrangement.' : `${named.replace('_', ' ')} layout.`);
+      } else if (intent.unhandled) {
         turn.say(
           "I can put things on the plane — try \u201cshow me everything affecting gold\u201d, \u201cfocus on risk\u201d or \u201csimplify this\u201d. " +
             'Answering that question needs a model, and none is reachable from here yet.',
@@ -228,6 +255,7 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       muted={muted}
       sttSupported={voice.sttSupported}
       transcript={transcript}
+      layout={layout}
       onCommand={onCommand}
       onTalk={onTalk}
       onStop={onStop}

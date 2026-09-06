@@ -402,6 +402,26 @@ async def ai_core_capability_registry(_: TokenPayload = Depends(_viewer)) -> dic
     return coverage()
 
 
+@router.get("/capabilities/app")
+async def ai_core_app_surface(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """What the PLATFORM can do, derived from the running route table.
+
+    The AI Hub specification asks (§4, §31) for the application to be a set of
+    capabilities the AI can see, rather than the AI being a component that only
+    knows the endpoints somebody remembered to wire. Sixty-five routers are
+    mounted; a hand-maintained list would be wrong within a day, and wrong in
+    the direction nobody notices.
+
+    **Discovery is not capability.** `visible` and `invokable` are reported
+    separately and deliberately: knowing that order placement exists must not
+    imply the AI can place one. Execution stays behind `ai/tools/bus.py`, and
+    every write here is unreachable unless a tool was registered for it.
+    """
+    from ai.hub.app_surface import describe_app
+
+    return describe_app().summary()
+
+
 @router.get("/summary")
 async def ai_core_summary(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
     """One request for the page header, so it does not need seven round trips."""

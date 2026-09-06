@@ -261,3 +261,67 @@ def test_the_registry_is_registered_in_the_route_table():
 
     src = inspect.getsource(core)
     assert "/capabilities/registry" in src
+
+
+# ── evidence in TypeScript is checked as strictly as evidence in Python ───────
+
+
+def test_a_typescript_locator_can_name_a_symbol_and_the_symbol_is_checked():
+    """`path/to/file:Symbol` had no handler: the verifier read the whole string
+    as a filename and reported "file does not exist". Half the platform is
+    TypeScript, so half the registry had no equivalent of the attribute check —
+    a file whose export was renamed would have verified green."""
+    from ai.hub.capabilities import Capability, verify_one
+
+    def cap(evidence: str) -> Capability:
+        return Capability(id="probe", section="8", layer="D", title="probe", state="live", evidence=evidence, note="")
+
+    assert verify_one(cap("frontend/src/hub/layout.ts:LAYOUTS")) is None
+
+    missing = verify_one(cap("frontend/src/hub/layout.ts:NOT_AN_EXPORT"))
+    assert missing is not None
+    assert "does not name" in missing.detail
+
+    gone = verify_one(cap("frontend/src/hub/does_not_exist.ts:LAYOUTS"))
+    assert gone is not None
+    assert "file does not exist" in gone.detail
+
+
+def test_a_symbol_match_is_word_bounded():
+    """Otherwise `LAYOUT` verifies against a file that only mentions
+    `DEFAULT_LAYOUTS_LEGACY`, which is the substring problem this repository
+    has already been bitten by twice in search code."""
+    from ai.hub.capabilities import Capability, verify_one
+
+    partial = verify_one(
+        Capability(
+            id="probe",
+            section="8",
+            layer="D",
+            title="probe",
+            state="live",
+            evidence="frontend/src/hub/layout.ts:LAYOUT",
+            note="",
+        )
+    )
+    assert partial is not None, "`LAYOUT` matched the file that exports `LAYOUTS`"
+
+
+def test_a_directory_locator_cannot_claim_a_symbol():
+    """Some evidence is a whole directory. Grepping one for a name would make
+    the strictest locator shape the loosest, so it is refused instead."""
+    from ai.hub.capabilities import Capability, verify_one
+
+    result = verify_one(
+        Capability(
+            id="probe",
+            section="21",
+            layer="D",
+            title="probe",
+            state="live",
+            evidence="frontend/src/features/chart-bot:Something",
+            note="",
+        )
+    )
+    assert result is not None
+    assert "directory" in result.detail

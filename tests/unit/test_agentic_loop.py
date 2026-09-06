@@ -313,3 +313,80 @@ def test_a_planner_cannot_smuggle_authority_through_a_parameter_name():
     )
     assert run.tool_calls == 0
     assert run.stopped_reason == "tool_refused"
+
+
+# ── the planner can see the platform, and still cannot call it ────────────────
+
+
+def test_the_planner_is_told_what_the_platform_can_do():
+    """`ai/hub/app_surface.py` derives 2,200 capabilities from the live route
+    table. Exposed on an endpoint and nowhere else, it would be a control nobody
+    runs — the shape of F176 in this repository. This asserts it reaches the one
+    place a decision is made."""
+    from ai.agent.loop import Plan
+
+    seen: list[str] = []
+
+    def planner(context):
+        seen.append(context.platform_context)
+        return Plan(action=None, rationale="done")
+
+    _run(planner, goal="check the current drawdown against risk limits")
+
+    assert seen, "the planner was never called"
+    assert seen[0], "the planner was given no platform context at all"
+    assert "/api/risk" in seen[0], f"the risk area is not in what the planner saw: {seen[0][:200]}"
+
+
+def test_the_platform_context_is_bounded_not_the_whole_catalogue():
+    """Two thousand routes do not fit in a prompt, and a truncated prefix of
+    them would hide whole areas silently."""
+    from ai.agent.loop import Plan
+
+    seen: list[str] = []
+
+    def planner(context):
+        seen.append(context.platform_context)
+        return Plan(action=None)
+
+    _run(planner, goal="risk drawdown limits positions orders")
+
+    lines = [ln for ln in seen[0].splitlines() if ln.startswith(("GET ", "POST ", "PUT ", "PATCH ", "DELETE "))]
+    assert 0 < len(lines) <= 12, f"{len(lines)} capability lines reached the planner"
+
+
+def test_seeing_a_route_is_not_permission_to_call_it():
+    """The single rule the whole catalogue is arranged around. `permitted` and
+    `platform_context` are separate fields precisely so a planner that confuses
+    them is refused rather than obeyed."""
+    from ai.agent.loop import Plan
+
+    def planner(context):
+        # A real route, visible in the context, and not a permitted action.
+        assert "/api/" in context.platform_context
+        return Plan(action="POST /api/orders/advanced/oco", rationale="I saw it listed")
+
+    run = _run(planner, goal="submit an order")
+    assert run.tool_calls == 0
+    assert run.stopped_reason == "planner_chose_a_forbidden_action"
+
+
+def test_a_broken_catalogue_does_not_stop_a_run():
+    """Context, not a gate. An agent that is less informed is a degraded agent;
+    one that crashes because it could not describe the platform is a worse
+    outcome, and this is the direction that must fail soft."""
+    import ai.hub.app_surface as surface
+    from ai.agent.loop import Plan
+
+    def explode(*_a, **_k):
+        raise RuntimeError("route table unreadable")
+
+    original = surface.describe_app
+    surface.describe_app = explode
+    try:
+        run = _run(lambda _c: Plan(action=None, rationale="done"))
+    finally:
+        surface.describe_app = original
+
+    assert run.completed is True
+    assert run.stopped_reason == "planner_finished"

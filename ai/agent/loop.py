@@ -99,6 +99,13 @@ class LoopContext:
     goal: str
     observations: list[dict[str, Any]] = field(default_factory=list)
     permitted: tuple[str, ...] = ()
+    #: What the PLATFORM can do that relates to this goal, derived from the live
+    #: route table (`ai/hub/app_surface.py`). Reference only — it is deliberately
+    #: a different field from `permitted`, and the two must never be merged.
+    #: `permitted` is what the planner may choose; this is what exists. A planner
+    #: that treats a line here as callable gets the allowlist refusal below,
+    #: which is the correct outcome and is asserted in the loop's tests.
+    platform_context: str = ""
 
 
 @dataclass
@@ -136,6 +143,27 @@ def permitted_actions(department: str) -> tuple[str, ...]:
     )
 
 
+def _platform_context(goal: str, limit: int = 12) -> str:
+    """What the platform can do about this goal, for the planner to read.
+
+    Without this the catalogue in `ai/hub/app_surface.py` is a control nobody
+    runs: derived correctly, exposed on an endpoint, and never reaching the one
+    place a decision is made. That is the shape of defect F176 in this
+    repository — a check that exists, reads correctly, and never executes.
+
+    Failure here is not allowed to stop a run. An agent that cannot describe the
+    platform is less informed; an agent that crashes because it could not is
+    worse, and this is context, not a gate.
+    """
+    try:
+        from ai.hub.app_surface import describe_app
+
+        return describe_app().as_prompt(goal, limit=limit)
+    except Exception:
+        logger.warning("ai.agent: platform context unavailable for this run", exc_info=True)
+        return ""
+
+
 def run_loop(
     *,
     department: str,
@@ -149,7 +177,12 @@ def run_loop(
     budget = budget or LoopBudget()
     permitted = permitted_actions(department)
     run = LoopRun(department=department, goal=goal)
-    context = LoopContext(department=department, goal=goal, permitted=permitted)
+    context = LoopContext(
+        department=department,
+        goal=goal,
+        permitted=permitted,
+        platform_context=_platform_context(goal),
+    )
     started = time.monotonic()
 
     for _ in range(budget.max_steps):

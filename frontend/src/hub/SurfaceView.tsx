@@ -88,12 +88,22 @@ const RENDERERS: Record<string, React.FC<{ surface: Surface; data: SurfaceData }
 
 export interface SurfaceViewProps {
   surface: Surface;
+  /**
+   * Grid columns out of 12, decided by `hub/layout.ts`.
+   *
+   * Not read from `surface.span` any more. The surface's own span is its
+   * TIER's opinion — a statement about importance — and a layout is a statement
+   * about what the operator is doing. The two disagree constantly: two things
+   * being compared must be the same size even when one outranks the other.
+   * Defaults to the tier so a caller that has no layout still renders sensibly.
+   */
+  span?: number;
   focused: boolean;
   onClose: () => void;
   onPin: () => void;
 }
 
-export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, focused, onClose, onPin }) => {
+export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, span, focused, onClose, onPin }) => {
   const Renderer = RENDERERS[surface.kind];
   // Resolved here rather than inside each renderer, so "there is nothing to
   // show" is decided in ONE place and cannot be answered differently by a
@@ -104,7 +114,7 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({ surface, focused, onCl
     <section
       aria-label={surface.meaning}
       style={{
-        gridColumn: `span ${surface.span}`,
+        gridColumn: `span ${span ?? surface.span}`,
         display: 'grid',
         gridTemplateRows: 'auto 1fr',
         gap: 9,

@@ -42,6 +42,7 @@ TOLD, which is the distinction F176 lost.
 from __future__ import annotations
 
 import importlib
+import re
 import pathlib
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal
@@ -119,6 +120,36 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "Four of twelve agents exist as departments.",
     ),
     _c("arch.layer_d.environment", "4", "D", "Environment layer — the dynamic workspace"),
+    _c(
+        "arch.app_is_visible_to_the_ai",
+        "4",
+        "B",
+        "The application describes itself to the AI, derived from the live route table",
+        "live",
+        "ai.hub.app_surface:describe_app",
+        "2,234 capabilities across 88 areas, walked with iter_api_routes. A hand-kept "
+        "list would be wrong within a day and wrong in the direction nobody notices.",
+    ),
+    _c(
+        "arch.discovery_is_not_capability",
+        "4",
+        "B",
+        "Seeing an endpoint does not make it callable — visible and invokable are two numbers",
+        "live",
+        "ai.hub.app_surface:AppSurface",
+        "All 968 writes are visible and unreachable; the bus carries 17 tools, none of "
+        "them an HTTP route. Merging the two counts is how a map becomes a menu.",
+    ),
+    _c(
+        "arch.platform_context_reaches_the_planner",
+        "4",
+        "B",
+        "The catalogue reaches the place a decision is made, not only an endpoint",
+        "live",
+        "ai.agent.loop:_platform_context",
+        "LoopContext.platform_context, bounded to 12 rows and kept a separate field "
+        "from `permitted` so a planner that confuses them is refused.",
+    ),
     # §5 — AI Core and personality
     _c("core.context_across_tasks", "5", "B", "Maintain conversation context across active tasks"),
     _c(
@@ -255,9 +286,10 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "8",
         "D",
         "Choose layout from task, viewport, object count and attention",
-        "staged",
-        "frontend/src/hub/workspace.ts",
-        "Span from priority; viewport-aware layout is not built.",
+        "live",
+        "frontend/src/hub/layout.ts",
+        "suggestLayout reads focus and object count; place() collapses to one "
+        "column below 640px and floors spans at half width below 1024px.",
     ),
     _c(
         "workspace.pinning",
@@ -268,7 +300,16 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/hub/workspace.ts",
         "Pinned surfaces survive clear and are never evicted.",
     ),
-    _c("workspace.layouts", "8", "D", "Focus, compare, split, timeline, war-room, presentation layouts"),
+    _c(
+        "workspace.layouts",
+        "8",
+        "D",
+        "Focus, compare, split, timeline, war-room, presentation layouts",
+        "live",
+        "frontend/src/hub/layout.ts:LAYOUTS",
+        "All six plus auto. Named by voice or text through readLayout; the "
+        "rendered grid column is asserted, not just the placement function.",
+    ),
     _c(
         "workspace.nl_commands",
         "8",
@@ -966,6 +1007,12 @@ def verify_one(cap: Capability) -> Discrepancy | None:
       Checking only the module would pass a file whose contents were deleted.
     * `package.module` — the module must import.
     * `path/to/file` — the file must exist, for evidence that is not Python.
+    * `path/to/file:Symbol` — the file must exist AND name the symbol. The
+      TypeScript half of this platform had no equivalent of the attribute check
+      until a capability tried to cite `hub/layout.ts:LAYOUTS` and the verifier
+      read the whole locator as a filename. Silently accepting a file whose
+      export was renamed is exactly the kind of green this registry exists to
+      refuse.
     """
     if cap.state == "planned":
         return Discrepancy(cap.id, "planned capabilities carry no evidence") if cap.evidence else None
@@ -973,9 +1020,22 @@ def verify_one(cap: Capability) -> Discrepancy | None:
         return Discrepancy(cap.id, f"state is {cap.state!r} with no evidence to check")
 
     locator = cap.evidence
-    if "/" in locator or locator.endswith((".ts", ".tsx", ".css", ".py", ".json")):
-        if not (_ROOT / locator).exists():
-            return Discrepancy(cap.id, f"file does not exist: {locator}")
+    head, _, tail = locator.partition(":")
+    if "/" in head or head.endswith((".ts", ".tsx", ".css", ".py", ".json")):
+        target = _ROOT / head
+        if not target.exists():
+            return Discrepancy(cap.id, f"file does not exist: {head}")
+        if not tail:
+            return None
+        if target.is_dir():
+            return Discrepancy(cap.id, f"{head} is a directory; a symbol cannot be checked against it")
+        try:
+            body = target.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return Discrepancy(cap.id, f"cannot read {head}: {exc}")
+        # Word-boundary, so `LAYOUTS` does not match `DEFAULT_LAYOUTS_LEGACY`.
+        if not re.search(rf"\b{re.escape(tail)}\b", body):
+            return Discrepancy(cap.id, f"{head} does not name {tail}")
         return None
 
     module_name, _, attribute = locator.partition(":")
