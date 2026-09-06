@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 try:
     from enum import StrEnum
@@ -170,6 +170,24 @@ class StripeSubscription:
 
 
 # ── Integration class ─────────────────────────────────────────────────────────
+
+
+#: Events we receive, understand, and do not act on. Stripe needs a 200 so it
+#: stops retrying; naming this set explicitly is what stops "we do nothing here"
+#: from being written as "access_granted".
+#:
+#: The subscription lifecycle is driven by checkout.session.completed,
+#: customer.subscription.deleted and invoice.payment_failed. The rest are
+#: notifications about state those three already produced.
+_ACKNOWLEDGED_EVENTS: frozenset[str] = frozenset(
+    {
+        "payment_intent.succeeded",
+        "customer.subscription.created",
+        "customer.subscription.updated",
+        "invoice.paid",
+        "invoice.payment_succeeded",
+    }
+)
 
 
 class StripeIntegration:
@@ -533,54 +551,142 @@ class StripeIntegration:
             return False
 
     def handle_webhook(self, event_type: str, event_data: dict[str, Any]) -> dict[str, Any]:
-        """Dispatch a verified Stripe webhook event to the appropriate handler."""
+        """Dispatch a verified Stripe webhook event to the appropriate handler.
+
+        **Every handler here used to log one line and return a success claim.**
+        `customer.subscription.deleted` returned `{"status": "success",
+        "action": "access_revoked"}` and revoked nothing, so a customer who
+        cancelled kept paid access indefinitely; `checkout.session.completed`
+        claimed `subscription_activated` and activated nothing. The endpoint
+        then returned 200, Stripe marked the delivery successful, and never
+        retried — so the failure left no trace anywhere.
+
+        A correct implementation already existed in
+        `monetization/subscription.py::handle_stripe_webhook` (activate, cancel,
+        suspend, all real). Two handlers for the same events, one decorative,
+        was the root of it. These delegate to that one now, so there is a single
+        implementation of each lifecycle transition.
+
+        Events with no implementation return `acknowledged` rather than a named
+        action. Stripe needs a 200 so it stops retrying; what it must not be
+        given is the name of something no code performed.
+        """
         handlers = {
-            StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value: self._handle_payment_success,
             StripeWebhookEvent.PAYMENT_INTENT_FAILED.value: self._handle_payment_failed,
             StripeWebhookEvent.CHECKOUT_SESSION_COMPLETED.value: self._handle_checkout_completed,
-            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_CREATED.value: self._handle_subscription_created,
-            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_UPDATED.value: self._handle_subscription_updated,
             StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_DELETED.value: self._handle_subscription_deleted,
-            StripeWebhookEvent.INVOICE_PAID.value: self._handle_invoice_paid,
             StripeWebhookEvent.INVOICE_PAYMENT_FAILED.value: self._handle_invoice_failed,
         }
         handler = handlers.get(event_type)
         if handler:
             return handler(event_data)
+
+        if event_type in _ACKNOWLEDGED_EVENTS:
+            # Received and understood; no lifecycle transition is driven by it.
+            # Named explicitly so the list of what we do NOT act on is visible.
+            logger.info("stripe.webhook.acknowledged type=%s id=%s", event_type, event_data.get("id"))
+            return {"status": "acknowledged", "event_type": event_type}
+
         logger.info("Unhandled webhook event type: %s", event_type)
         return {"status": "ignored", "event_type": event_type}
 
-    def _handle_payment_success(self, data: dict[str, Any]) -> dict[str, Any]:
-        logger.info("Payment succeeded: %s", data.get("id"))
-        return {"status": "success", "action": "payment_confirmed"}
+    @staticmethod
+    def _subscription_status():
+        """The SubscriptionStatus enum, resolved through the module.
+
+        Imported at call time for the same reason as the manager: the import
+        direction stays one-way, so subscription.py never has to know this
+        module exists.
+        """
+        from monetization import subscription as _subscription_module
+
+        return _subscription_module.SubscriptionStatus
+
+    @staticmethod
+    def _subscriptions():
+        """The live SubscriptionManager.
+
+        Resolved at call time through the module rather than imported at the top:
+        it keeps the import direction one-way (subscription.py does not know
+        about this module) and lets a test substitute the manager.
+        """
+        from monetization import subscription as _subscription_module
+
+        return _subscription_module.subscription_manager
 
     def _handle_payment_failed(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.warning("Payment failed: %s", data.get("id"))
         return {"status": "failed", "action": "payment_retry_needed"}
 
     def _handle_checkout_completed(self, data: dict[str, Any]) -> dict[str, Any]:
-        logger.info("Checkout completed: %s", data.get("id"))
-        return {"status": "success", "action": "subscription_activated"}
+        """Activate the subscription the checkout paid for."""
+        from monetization.pricing import SubscriptionTier
 
-    def _handle_subscription_created(self, data: dict[str, Any]) -> dict[str, Any]:
-        logger.info("Subscription created: %s", data.get("id"))
-        return {"status": "success", "action": "access_granted"}
+        metadata = data.get("metadata") or {}
+        user_id = str(metadata.get("user_id") or "").strip()
+        if not user_id:
+            # Activating a subscription for nobody is worse than refusing: it
+            # creates a paid record no user can be billed for or supported on.
+            logger.error("stripe.webhook.checkout_completed has no user_id in metadata: %s", data.get("id"))
+            return {"status": "failed", "reason": "no_user_id_in_metadata", "event_type": "checkout.session.completed"}
 
-    def _handle_subscription_updated(self, data: dict[str, Any]) -> dict[str, Any]:
-        logger.info("Subscription updated: %s", data.get("id"))
-        return {"status": "success", "action": "access_updated"}
+        try:
+            tier = SubscriptionTier(str(metadata.get("tier", "free")))
+        except ValueError:
+            logger.error("stripe.webhook.checkout_completed unknown tier %r", metadata.get("tier"))
+            return {"status": "failed", "reason": "unknown_tier", "event_type": "checkout.session.completed"}
+
+        manager = self._subscriptions()
+        stripe_sub_id = data.get("subscription")
+        stripe_cust_id = data.get("customer")
+
+        existing = manager.get_user_subscription(user_id)
+        if existing is not None:
+            # Idempotent: Stripe retries, and a replay must update the record
+            # rather than create a second subscription for the same user.
+            existing.tier = tier
+            existing.stripe_subscription_id = stripe_sub_id
+            existing.stripe_customer_id = stripe_cust_id
+            existing.status = self._subscription_status().ACTIVE
+            existing.end_date = datetime.now(UTC) + timedelta(days=30)
+            existing.updated_at = datetime.now(UTC)
+        else:
+            created = manager.create_subscription(
+                user_id=user_id,
+                tier=tier,
+                stripe_subscription_id=stripe_sub_id,
+                stripe_customer_id=stripe_cust_id,
+            )
+            created.status = self._subscription_status().ACTIVE
+
+        logger.info("stripe.webhook.checkout_completed user=%s tier=%s", user_id, tier.value)
+        return {"status": "success", "action": "subscription_activated", "user_id": user_id}
 
     def _handle_subscription_deleted(self, data: dict[str, Any]) -> dict[str, Any]:
-        logger.info("Subscription deleted: %s", data.get("id"))
-        return {"status": "success", "action": "access_revoked"}
+        """Revoke access for the cancelled subscription."""
+        stripe_sub_id = data.get("id")
+        for sub in self._subscriptions()._subscriptions.values():
+            if sub.stripe_subscription_id == stripe_sub_id:
+                sub.cancel()
+                logger.info("stripe.webhook.subscription_deleted sub=%s", stripe_sub_id)
+                return {"status": "success", "action": "access_revoked", "subscription": stripe_sub_id}
 
-    def _handle_invoice_paid(self, data: dict[str, Any]) -> dict[str, Any]:
-        logger.info("Invoice paid: %s", data.get("id"))
-        return {"status": "success", "action": "invoice_confirmed"}
+        # Nothing was revoked. Saying "success" here is exactly how the original
+        # defect stayed invisible.
+        logger.error("stripe.webhook.subscription_deleted: no_matching_subscription for %s", stripe_sub_id)
+        return {"status": "failed", "reason": "no_matching_subscription", "subscription": stripe_sub_id}
 
     def _handle_invoice_failed(self, data: dict[str, Any]) -> dict[str, Any]:
-        logger.warning("Invoice payment failed: %s", data.get("id"))
-        return {"status": "failed", "action": "payment_retry_needed"}
+        """Suspend the subscription whose invoice failed."""
+        stripe_cust_id = data.get("customer")
+        for sub in self._subscriptions()._subscriptions.values():
+            if sub.stripe_customer_id == stripe_cust_id:
+                sub.suspend()
+                logger.warning("stripe.webhook.payment_failed customer=%s", stripe_cust_id)
+                return {"status": "success", "action": "access_suspended", "customer": stripe_cust_id}
+
+        logger.error("stripe.webhook.payment_failed: no_matching_subscription for customer %s", stripe_cust_id)
+        return {"status": "failed", "reason": "no_matching_subscription", "customer": stripe_cust_id}
 
 
 # Global instance — configured from environment variables at import time.
