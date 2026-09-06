@@ -27,7 +27,7 @@ each contains — the same rule `FIX_PHASES.md` uses.
 | 2 | Vercel check belongs to another project | noise | owner |
 | 3 | F218 · 14 tables have no migration | MEDIUM | — |
 | 4 | 51 money columns typed `Float` | HIGH | paying path done; trading side listed with reasons |
-| 5 | F222 · 8 critical modules with no test | HIGH | 2 of 8 done; the first found a live money defect |
+| 5 | F222 · 8 critical modules with no test | HIGH | 3 of 8 done; two found live money defects |
 | 6 | Crypto currency read from a free-text field | MEDIUM | fixed |
 | 7 | OANDA adapter never run against the venue | HIGH | **owner** |
 | 7b | `get_order` missing on OANDA, charged to the breaker | HIGH | part 1 no, part 2 owner |
@@ -256,7 +256,7 @@ Never named in any test file:
 |---:|---|
 | 628 | ~~`monetization/payment_processor.py`~~ — done; found 2 defects, see below |
 | 585 | `portfolio/strategy_allocator.py` |
-| 427 | `payments/transaction_manager.py` |
+| 427 | ~~`payments/transaction_manager.py`~~ — done; found a double-refund path |
 | 354 | `monetization/marketplace_submission.py` |
 | 318 | `payments/fintech/paystack.py` |
 | 282 | `monetization/access_codes.py` |
@@ -300,6 +300,26 @@ pre-fix tree):
    platform against the customer. `to_cents()` quantizes HALF_UP per the
    `hopefx-money-precision` skill — `round()` would give banker's rounding,
    which is not what an invoice means.
+
+**`payments/transaction_manager.py` — done, and it had a double refund ·
+HIGH** (`tests/unit/test_transaction_state_machine.py`, 8 of 24 fail on the
+pre-fix tree).
+
+`update_transaction_status` assigned any status over any status. `cancel` and
+`reverse` each guarded their own entry condition; `complete` and `fail` did not.
+So a REVERSED transaction could be completed again, and then reversed again.
+Measured through the module's own public API, with no tampering and no race:
+
+    deposit 100.00 → complete → reverse → complete → reverse
+    = 200.00 of reversals from one 100.00 deposit
+
+Fixed with an `_ALLOWED_TRANSITIONS` table modelled on
+`core/ai_contracts.py`'s — the pattern this audit already identified as right
+for this problem. COMPLETED's only exit is REVERSED; REVERSED, FAILED and
+CANCELLED are terminal; re-asserting the same status stays a no-op so an
+idempotent webhook retry does not read as tampering. `reverse_transaction` now
+goes through the same door rather than assigning the status directly, because a
+second way to change a status is how the first one got missed.
 
 **Note for whoever takes the next module.** `monetization/__init__.py` and
 `payments/crypto/__init__.py` re-export each singleton under its own module's
