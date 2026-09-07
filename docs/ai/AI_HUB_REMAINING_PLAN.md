@@ -6,24 +6,24 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **228 capabilities · 189 live · 23 staged · 16 planned ·
-212/212 evidence resolved · 0 discrepancies · 83% built.**
+At the time of writing: **230 capabilities · 207 live · 17 staged · 6 planned ·
+224/224 evidence resolved · 0 discrepancies · 90% built.**
 
-Sections finished (nothing planned or staged): §5, §6, §12, §13, §15, §16, §19,
-§22, §23, and both owner tracks — P and S.
+Sections finished (nothing planned or staged): §5, §6, §7, §12, §13, §15, §16,
+§17, §19, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**39 rows remain**, across fifteen sections:
+**23 rows remain**, across twelve sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 27 accessibility | 7 | 21 visualisation | 2 | 10 multi-display | 1 |
-| 17 conversation | 6 | 4 roll-ups | 2 | 14 long-running | 1 |
-| 18 ambient awareness | 5 | 7 idle movement | 1 | 20 war room | 1 |
-| 26 performance | 4 | 8 surface types | 2 | 24 agent runtime | 1 |
-| 11 agents | 3 | 9 scene model | 2 | 25 privacy | 1 |
+| 26 performance | 4 | 27 accessibility | 2 | 10 multi-display | 1 |
+| 11 agents | 3 | 4 roll-ups | 2 | 14 long-running | 1 |
+| 18 ambient awareness | 2 | 8 surface types | 2 | 20 war room | 1 |
+| 21 visualisation | 2 | 9 scene model | 2 | 24 agent runtime | 1 |
 
-Four phases (E through H) cover all of them. §4's two rows are roll-ups and
-land last by construction.
+Phase H covers all of them. §4's two rows are roll-ups and land last by
+construction: they become live when the layers beneath them are, so claiming
+either early would be claiming work that has not happened.
 
 ---
 
@@ -562,25 +562,112 @@ at `Listening` with the method named in the note.
 
 ---
 
-## Phase G — §27 accessibility
+## Phase G — §27 accessibility  ✅ DONE
 
-| Row | State |
+All seven rows, plus two the specification does not name.
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| Keyboard navigation | staged | **live** | `hub/useRovingFocus.ts:useRovingFocus` |
+| Screen-reader semantics | staged | **live** | `hub/a11yLiveRegion.ts:LiveRegionRegistry` |
+| Reduced motion mode | staged | **live** | `hub/a11yMotion.ts:motionFor` |
+| Responsive layouts | staged | **live** | `hub/a11yBreakpoints.ts:breakpointFor` |
+| Clear focus states | staged | **live** | `hub/a11yFocus.ts:FOCUS_RING` |
+| High contrast option | planned | **staged** | `hub/a11yContrast.ts:prefersHighContrast` |
+| Touch and mouse support | planned | **staged** | `hub/a11yPointer.ts:affordanceVisibility` |
+| *Contrast computed, never asserted* | — | **live** | `hub/a11yContrast.ts:contrastRatio` |
+| *The contract is enforced across the directory* | — | **live** | `test/hub_a11y_guard.test.ts` |
+
+### The design premise: fixed once is not unrepeatable
+
+Four accessibility defects were found in this session's own work, all of them by
+reading a diff after the code was written: no focus ring on the presence
+overlay, a 22px dismiss control, `text-slate-500` on a surface where it does not
+clear 4.5:1, and a second polite live region competing with `PresenceCore`'s.
+
+Each was fixed at its site. That fixes nothing about the *next* button, the next
+muted grey, or the next component that wants to announce something — and reading
+a diff is not a mechanism. So this phase is a contract plus a scanner:
+
+* `a11yFocus.ts` holds the ring and the two hit-area floors, declared once;
+* `a11yContrast.ts` computes ratios from the WCAG definition and re-measures the
+  whole palette on every test run;
+* `a11yLiveRegion.ts` grants each politeness level to one named owner;
+* `a11yBreakpoints.ts` is the single definition of every viewport step;
+* `a11yPointer.ts` and `a11yMotion.ts` hold the two policies that decide by
+  input rather than by device;
+* `hub_a11y_guard.test.ts` reads the whole directory and fails the five shapes.
+
+### Every guard rule was verified by reintroducing its defect
+
+Not by reading it. Each was put back into the tree and watched to fail:
+
+| Defect reintroduced | Rule that caught it |
 |---|---|
-| High contrast option | planned |
-| Touch and mouse support | planned |
-| Keyboard navigation | staged |
-| Screen-reader semantics | staged |
-| Reduced motion mode | staged |
-| Responsive layouts | staged |
-| Clear focus states | staged |
+| a classed button with no ring and no hit area | *every classed button carries both* |
+| a second `aria-live="polite"` | *one polite live region in the whole hub* |
+| `const NARROW = 640` back in `layoutStrategy.ts` | *no other module holds a viewport literal* |
+| `text-slate-500` on the overlay | *the refused colours stay refused* |
+| a 22px shared icon-button style | *every pixel dimension a button receives clears the floor* |
+| `focus()` removed from `useRovingFocus` | *moves the caret, not only the tab index* |
 
-**Rule:** run the `ui-ux-pro-max` pre-delivery checklist against the whole hub,
-not the new parts. Two defects it already found in this session (a removed focus
-ring, muted text at 4.36:1) were in code that had passed review.
+The hit-target rule is the one worth recording. Its first version read only the
+`<button>` opening tag, passed, and was wrong: `SurfaceView`'s icon buttons take
+their size from a `const iconBtn` at the top of the file, and every dimension in
+the hub that could plausibly be too small is written that way. A rule that sees
+only the inline case reports clean on exactly the files most likely to be at
+fault — `hopefx-dead-controls`, in a test rather than in production. It now
+follows the spread to the declaration.
+
+### Two numbers, not one, for hit targets
+
+`MIN_HIT_AREA_PX = 44` is WCAG 2.5.5 (AAA) and both platform HIGs; every control
+in the presence chrome is held to it. `MIN_TARGET_PX = 24` is WCAG 2.5.8 (AA)
+and is what the directory-wide rule enforces.
+
+Two, because one 44px rule applied to every button in `hub/` would be a redesign
+of the dense panel chrome — a 26px icon in a 34px panel header cannot become
+44px without the header growing — and a rule that cannot be followed gets
+suppressed rather than obeyed. 24 is what the standard requires at AA, and it is
+the number that mattered: the dismiss control that shipped failed even this.
+
+### Two rows are staged, and the notes say why
+
+`high_contrast` has a palette where every token clears 7:1 on all three
+composited surfaces, re-measured each run, and reads `prefers-contrast: more`
+and `forced-colors: active`. **Nothing renders it.** `touch_and_mouse` has a
+tested policy — an unreadable pointer is treated as unable to hover, so an
+affordance stays visible rather than vanishing on a tablet — and **no component
+calls it**, because the hub has no hover-only affordance today. Adding one to
+justify the row would be backwards.
+
+Both are contracts. Calling them live would be the F176 defect: a claim whose
+evidence resolves and whose behaviour never runs.
+
+### The default that is deliberately inverted
+
+`motionFor` treats an *unread* reduced-motion preference as "reduce", not as
+"no preference" — the opposite of §22's "an unmeasured metric is absent, never
+zero". Same inversion as the consent gate and the kill switches: where being
+wrong harms somebody, unreadable means refuse. `prefersHighContrast` defaults
+the other way and says so, because the standard palette already clears AA and
+nobody is harmed by not being upgraded.
+
+### One duplication removed rather than documented
+
+`640` was declared privately in `layout.ts`, `layoutStrategy.ts` and
+`presenceDock.ts`. They agreed by copy-paste. Changing one would have produced a
+viewport width at which the panel grid collapsed to a single column while the
+presence overlay still floated above it instead of docking to the edge bar — a
+layout nobody designed, reachable only on a device nobody tested.
 
 ---
 
 ## Phase H — the remainder
+
+Twenty-three rows, twelve sections. Regenerated from the registry rather than
+carried forward: the earlier version of this table still listed §7 and §25 rows
+that Phases E and F made live, which is the shape of stale plan a reader trusts.
 
 | § | Row | State |
 |---|---|---|
@@ -588,16 +675,38 @@ ring, muted text at 4.36:1) were in code that had passed review.
 | 26 | Pause or reduce animation under load | planned |
 | 26 | Graceful offline and degraded states | staged |
 | 26 | Prevent runaway recursive delegation | staged |
-| 24 | Isolated agent workers with task contracts | staged |
 | 11 | System agent — infrastructure, services, resources, failures | planned |
+| 11 | Vision agent | staged |
+| 11 | Memory agent — retrieval, consolidation, governance | staged |
+| 18 | Gesture recognition | staged |
+| 18 | Pointing and object reference | staged |
+| 21 | 3D and scientific models where they aid understanding | staged |
+| 21 | Choose the representation that suits the information | staged |
+| 27 | High contrast option | staged |
+| 27 | Touch and mouse support | staged |
+| 8 | Charts, images, video, documents, tables, maps, terminals, code, camera, news, research, simulations | staged |
+| 8 | Critical, primary, secondary, background, on-demand tiers | staged |
+| 9 | Scene model — identity, position, size, z-order, content, meaning | staged |
+| 9 | Semantic panel registry | staged |
+| 10 | Multi-display console | staged |
+| 14 | Long-running research jobs | staged |
 | 20 | Market war room generated on demand | planned |
-| 4 | Presence layer / Environment layer | planned |
-| 7 | Natural idle movement and attention states | staged |
+| 24 | Isolated agent workers with task contracts | staged |
+| 4 | Presence layer — identity, voice, animation, spatial state | planned |
+| 4 | Environment layer — the dynamic workspace | planned |
+
+**Two of these are blocked on things this repository does not have**, and the
+plan should say so rather than scheduling them:
+
+* §26's two performance rows want the `virtualization.ts` and `frameBudget.ts`
+  built in Phase D1 wired into a component that actually renders a large
+  workspace. That is real work, not a wiring pass.
+* §18's gesture rows have no landmark source. Building a recogniser nothing
+  feeds is `hopefx-dead-controls` wearing a camera, which is why they were
+  staged rather than skipped.
 
 §4's two rows are roll-ups: they become live when the layers beneath them are,
 and are deliberately last so they cannot be claimed early.
-
----
 
 ---
 

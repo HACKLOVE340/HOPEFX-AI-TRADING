@@ -28,6 +28,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Mic, Minimize2, Send, Square, Volume2, VolumeX, X } from 'lucide-react';
 
 import { PresenceCore } from './PresenceCore';
+import { useRovingFocus } from './useRovingFocus';
 import type { Presence } from './presence';
 import type { Surface } from './workspace';
 import { place, type LayoutName } from './layout';
@@ -190,6 +191,14 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   const stacked = visible.filter((p) => p.collapsed);
   const hidden = placements.length - visible.length;
   const hasSurfaces = visible.length > 0;
+
+  // The collapsed stack is a horizontal toolbar: one tab stop, arrows within.
+  // Declaring the axis matters here — the plane scrolls vertically behind it,
+  // and swallowing ArrowUp would stop that scroll from a focused chip.
+  const stackKeys = useRovingFocus(
+    stacked.map(({ surface }) => surface.id),
+    { orientation: 'horizontal' },
+  );
 
   /**
    * Measure where the panels ended up.
@@ -396,8 +405,15 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
               // §10: "background information collapses into stacks or
               // summaries." Still listed, still closable — a collapsed surface
               // the operator cannot see the name of is one they cannot get back.
+              //
+              // §27: one tab stop, arrows inside. A war-room workspace collapses
+              // most of its surfaces here, so a tab stop each would put a dozen
+              // presses between the operator and the composer below.
               <div
+                role="toolbar"
+                aria-orientation="horizontal"
                 aria-label="Collapsed background surfaces"
+                onKeyDown={stackKeys.onKeyDown}
                 style={{
                   gridColumn: 'span 12',
                   display: 'flex',
@@ -414,6 +430,8 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
                 {stacked.map(({ surface }) => (
                   <button
                     key={surface.id}
+                    ref={stackKeys.register(surface.id)}
+                    tabIndex={stackKeys.tabIndexFor(surface.id)}
                     type="button"
                     onClick={() => onPinSurface(surface.id)}
                     title="Pin to bring it back out of the stack"

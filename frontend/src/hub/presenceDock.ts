@@ -37,6 +37,7 @@
  * some people the setting is medical rather than aesthetic.
  */
 
+import { BREAKPOINTS } from './a11yBreakpoints';
 import type { Rect } from './spatial';
 
 export type DockCorner = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
@@ -46,7 +47,7 @@ export type DockState = 'active' | 'dismissed';
 export const DISMISSED: DockState = 'dismissed';
 
 /** Below this a floating orb covers content whatever corner it picks. */
-const NARROW_VIEWPORT = 640;
+const NARROW_VIEWPORT = BREAKPOINTS.narrow;
 
 const ORB = { width: 96, height: 96 };
 const MARGIN = 24;

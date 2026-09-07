@@ -36,6 +36,7 @@ import React, { useEffect, useRef } from 'react';
 import type { Presence, PresenceState, PresenceTone } from './presence';
 import { gazeToward, headOffset, mouthFor, particleField, type Gaze } from './head';
 import type { Representation } from './projection';
+import { liveRegions } from './a11yLiveRegion';
 
 /** Colour per tone, from the platform's own palette (COLOR in AICore.tsx). */
 const TONE: Record<PresenceTone, string> = {
@@ -198,6 +199,16 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
   // without the frame loop being a dependency of a re-render.
   const latest = useRef(presence);
   latest.current = presence;
+
+  // Take the app's polite live region, and give it back on unmount. Claiming
+  // by name is what lets a second claimant be refused with the incumbent's
+  // name in the message, instead of quietly rendering a competing region.
+  useEffect(() => {
+    liveRegions.claim('polite', 'PresenceCore');
+    return () => {
+      liveRegions.release('polite', 'PresenceCore');
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -431,7 +442,15 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
         </div>
       </div>
 
-      {/* The caption. Same sentence the AI speaks, so the two cannot drift. */}
+      {/*
+        The caption. Same sentence the AI speaks, so the two cannot drift.
+
+        This is the app's only polite live region, and it is held under that
+        name in `a11yLiveRegion.ts`. The presence overlay added a second one in
+        Phase P; two polite regions interleave, and the operator hears half of
+        each sentence. The claim below is what makes a third one refused rather
+        than merely noticed in review.
+      */}
       <div
         role="status"
         aria-live="polite"

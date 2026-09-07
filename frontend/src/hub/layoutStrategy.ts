@@ -23,11 +23,13 @@
  * success, and the caller would never find out their strategy name was wrong.
  */
 
+import { BREAKPOINTS } from './a11yBreakpoints';
+
 export const STRATEGIES = ['grid', 'stack'] as const;
 export type Strategy = (typeof STRATEGIES)[number];
 
 /** Below this a twelve-column grid is columns of about thirty pixels. */
-const NARROW = 640;
+const NARROW = BREAKPOINTS.narrow;
 
 const FULL = 12;
 

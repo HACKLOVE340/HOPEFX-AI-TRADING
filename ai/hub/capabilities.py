@@ -1999,18 +1999,22 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "27",
         "D",
         "Keyboard navigation",
-        "staged",
-        "frontend/src/hub/PresenceStage.tsx",
-        "Escape exits; full roving focus is not done.",
+        "live",
+        "frontend/src/hub/useRovingFocus.ts:useRovingFocus",
+        "Escape exits the stage; the collapsed-surface stack is one tab stop with arrows inside. "
+        "hub_a11y_reaches_the_plane.test.tsx asserts document.activeElement moves, not just tabIndex: "
+        "a roving group that updates indices and never calls focus() is the ARIA pattern as decoration.",
     ),
     _c(
         "a11y.screen_reader",
         "27",
         "D",
         "Screen-reader semantics",
-        "staged",
-        "frontend/src/hub/PresenceCore.tsx",
-        "Polite live region and aria-hidden canvas on the presence.",
+        "live",
+        "frontend/src/hub/a11yLiveRegion.ts:LiveRegionRegistry",
+        "One polite region for the whole hub, claimed by name and enforced by hub_a11y_guard. "
+        "The overlay built in Phase P added a second; two polite regions interleave and the "
+        "operator hears half of each sentence.",
     ),
     _c(
         "a11y.captions",
@@ -2021,11 +2025,85 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/hub/PresenceCore.tsx",
         "The caption is the same sentence that is spoken.",
     ),
-    _c("a11y.reduced_motion", "27", "A", "Reduced motion mode", "staged", "frontend/src/index.css", ""),
-    _c("a11y.high_contrast", "27", "D", "High contrast option"),
-    _c("a11y.responsive", "27", "D", "Responsive layouts", "staged", "frontend/src/index.css", ""),
-    _c("a11y.touch_and_mouse", "27", "D", "Touch and mouse support"),
-    _c("a11y.focus_states", "27", "D", "Clear focus states", "staged", "frontend/src/hub/PresenceStage.tsx", ""),
+    _c(
+        "a11y.reduced_motion",
+        "27",
+        "A",
+        "Reduced motion mode",
+        "live",
+        "frontend/src/hub/a11yMotion.ts:motionFor",
+        "index.css carries the media query; usePrefersReducedMotion feeds PresenceCore and VizMarks. "
+        "motionFor is the one place the preference and the §23 frame budget are reconciled, and it "
+        "keeps the hook's asymmetry: an unread preference means no motion, not full.",
+    ),
+    _c(
+        "a11y.high_contrast",
+        "27",
+        "D",
+        "High contrast option",
+        "staged",
+        "frontend/src/hub/a11yContrast.ts:prefersHighContrast",
+        "The AAA palette is measured (every token clears 7:1 on all three surfaces, re-measured each "
+        "test run) and the media query is read. NOTHING RENDERS IT YET — no component asks for the "
+        "high palette, so this is a contract, not a mode an operator can turn on.",
+    ),
+    _c(
+        "a11y.responsive",
+        "27",
+        "D",
+        "Responsive layouts",
+        "live",
+        "frontend/src/hub/a11yBreakpoints.ts:breakpointFor",
+        "One definition of every breakpoint. layout.ts, layoutStrategy.ts and presenceDock.ts each held "
+        "their own 640; they agreed by copy-paste, so moving one would have produced a width where the "
+        "grid collapsed and the presence overlay did not.",
+    ),
+    _c(
+        "a11y.touch_and_mouse",
+        "27",
+        "D",
+        "Touch and mouse support",
+        "staged",
+        "frontend/src/hub/a11yPointer.ts:affordanceVisibility",
+        "The policy exists and is tested — an unreadable pointer is treated as unable to hover, so an "
+        "affordance stays visible rather than vanishing on a tablet. NO COMPONENT CALLS IT YET; the hub "
+        "has no hover-only affordance today, and adding one to justify the row would be backwards.",
+    ),
+    _c(
+        "a11y.focus_states",
+        "27",
+        "D",
+        "Clear focus states",
+        "live",
+        "frontend/src/hub/a11yFocus.ts:FOCUS_RING",
+        "Declared once and enforced: hub_a11y_guard fails a second declaration, a classed button without "
+        "it, and any outline-none without a replacement ring.",
+    ),
+    # Not named by §27. Both are the mechanism that keeps the rows above true, and
+    # a mechanism absent from this registry is one nobody can see has stopped working.
+    _c(
+        "a11y.contrast_measured",
+        "27",
+        "D",
+        "Text contrast computed, never asserted",
+        "live",
+        "frontend/src/hub/a11yContrast.ts:contrastRatio",
+        "Every palette token is re-measured against every composited surface on each test run, and each "
+        "refused colour must still measure what its stated reason says. text-slate-500 shipped on the "
+        "overlay because its ratio existed only in the head of whoever chose it.",
+    ),
+    _c(
+        "a11y.contract_enforced",
+        "27",
+        "D",
+        "The accessibility contract is enforced across the directory",
+        "live",
+        "frontend/src/test/hub_a11y_guard.test.ts",
+        "Source-scans hub/ for the five defect shapes found in this session's own work. Each rule was "
+        "verified by reintroducing the defect and watching it fail; the hit-target rule follows a style "
+        "object spread into a button, because its first version read only the tag and reported clean on "
+        "exactly the files where sizes live in a shared const.",
+    ),
     _c(
         "a11y.not_colour_alone",
         "27",

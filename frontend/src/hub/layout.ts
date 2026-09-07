@@ -32,6 +32,7 @@
  * not.
  */
 
+import { BREAKPOINTS } from './a11yBreakpoints';
 import type { Surface, SurfacePriority } from './workspace';
 
 export type LayoutName =
@@ -111,10 +112,17 @@ const COLLAPSE_ABOVE = 5;
 /** Tiers eligible to be folded away. Nothing critical or primary ever is. */
 const COLLAPSIBLE: ReadonlySet<SurfacePriority> = new Set<SurfacePriority>(['background', 'on_demand']);
 
-/** Below this a second column is unreadable, whatever the layout wanted. */
-const NARROW = 640;
-/** Below this, nothing narrower than half width. */
-const MEDIUM = 1024;
+/**
+ * Below `narrow` a second column is unreadable; below `medium` nothing is
+ * narrower than half width.
+ *
+ * Both come from `a11yBreakpoints.ts`. They were literals here, and the same
+ * two literals were repeated in `layoutStrategy.ts` and `presenceDock.ts` —
+ * three copies that agreed by coincidence, so moving one would have produced a
+ * width at which the grid collapsed and the presence overlay did not.
+ */
+const NARROW = BREAKPOINTS.narrow;
+const MEDIUM = BREAKPOINTS.medium;
 
 const FULL = 12;
 

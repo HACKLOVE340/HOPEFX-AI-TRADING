@@ -50,30 +50,21 @@ import type { Presence } from './presence';
 import { describePage, type Landmark, type NavLike } from './pageContext';
 import { pageCapabilities, type SurfaceEntry } from './pageCapabilities';
 import { DISMISSED, dockFor } from './presenceDock';
+import { FOCUS_RING, HIT_AREA } from './a11yFocus';
+import { liveRegions } from './a11yLiveRegion';
 import type { Rect } from './spatial';
 
 /** One key, so a stuck dismissal can be found and cleared. */
 export const DISMISS_KEY = 'hopefx.presence.dismissed';
 
 /**
- * Every control here carries this.
+ * The ring and the hit area come from `a11yFocus.ts`, not from here.
  *
- * The browser default ring is close to invisible on a near-black panel, and
- * this session already hit the opposite defect once — `outline: none` removing
- * the ring entirely. Named once so a new button cannot be added without it.
+ * They were declared in this file first, after both defects were found in it:
+ * no focus ring at all, and a 22px dismiss control. Two files holding their own
+ * copy is how the next component gets a third, so the definition moved to one
+ * place and `hub_a11y_guard.test.ts` fails a second declaration of either.
  */
-const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 ' +
-  'focus-visible:ring-offset-slate-950';
-
-/**
- * Minimum hit area, in Tailwind's scale: 44x44 CSS pixels.
- *
- * The dismiss control was a 14px icon in `p-1` — about 22px square, half the
- * minimum, on the control an operator reaches for when the assistant is in
- * their way.
- */
-const HIT_AREA = 'min-h-11 min-w-11 inline-flex items-center justify-center';
 
 /** The plane that is already a presence. */
 const OWNS_ITS_OWN_PRESENCE = '/ai-core';
@@ -139,6 +130,18 @@ export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactEleme
       }),
     [viewport, props.avoid, dismissed, alerting, props.reducedMotion],
   );
+
+  // The overlay owns the ASSERTIVE region only. Its `role="alert"` is what
+  // §19's critical floor needs — a kill switch interrupts — and it is a
+  // different level from the polite one `PresenceCore` holds, so the two do
+  // not interleave. An earlier version of this component rendered a second
+  // POLITE region beside PresenceCore's; the claim is what refuses that now.
+  useEffect(() => {
+    liveRegions.claim('assertive', 'PresenceAnywhere');
+    return () => {
+      liveRegions.release('assertive', 'PresenceAnywhere');
+    };
+  }, []);
 
   const close = useCallback(() => setOpen(false), []);
   useEffect(() => {
