@@ -82,3 +82,27 @@ def validate_repair_source(source: str, *, timeout_seconds: float = 5.0) -> Sand
 
 
 __all__ = ["SandboxValidation", "validate_repair_source"]
+
+
+def validate_repair_for_target(
+    source: str,
+    *,
+    target_path: str,
+    timeout_seconds: float = 5.0,
+) -> SandboxValidation:
+    """Validate a repair against the file it would replace.
+
+    The path is decided FIRST, by `ai.vault.protected`, and a protected target
+    is refused without the source being parsed, written to a temporary
+    directory, or executed. Content cannot argue its way past a path rule it is
+    never read against.
+
+    `validate_repair_source` remains the content-only check for callers that
+    have already established a target.
+    """
+    from ai.vault import protected as _vault
+
+    verdict = _vault.review(target_path, source=source)
+    if not verdict.allowed:
+        return SandboxValidation(accepted=False, reason_codes=("protected_path",), stderr=verdict.reason)
+    return validate_repair_source(source, timeout_seconds=timeout_seconds)

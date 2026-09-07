@@ -1738,6 +1738,62 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/features/chart-bot",
         "",
     ),
+    # ── Track S — owner request, 2026-09-07 ───────────────────────────
+    #
+    # An AI that walks all the code including its own, improves the app and
+    # itself, stays awake to do it, and is locked away so nobody can use it to
+    # change our code. Every advancement approved.
+    #
+    # Section "S", not a number: these rows are not in the specification, and
+    # filing them under §28 would claim the specification asked for them.
+    _c(
+        "improve.vault",
+        "S",
+        "C",
+        "Paths no AI-originated change may modify, whatever the approval",
+        "live",
+        "ai.vault.protected:FLOOR",
+        "A floor, not a default: configuration adds and can never subtract. It "
+        "replaces a list that SelfHealer.apply_config replaced wholesale from a "
+        "config field whose Pydantic default is empty \u2014 so the first config save "
+        "from the superadmin dashboard erased all thirty protected paths on the "
+        "live healer, and risk/manager.py, execution/engine.py, kill_switch.py "
+        "and auth/jwt.py became auto-patchable. Reproduced by execution before "
+        "the fix. The floor also covers what the AI could use to STOP BEING "
+        "STOPPED: the healer that checks patch signatures, the two-approver "
+        "policy, the permission registry, the invariants, the guardrails, the "
+        "tests, CI, and itself.",
+    ),
+    _c(
+        "improve.path_before_content",
+        "S",
+        "C",
+        "A protected path is refused before its content is read",
+        "live",
+        "ai.vault.protected:review",
+        "Verdict.inspected_content records which happened, so the ordering is "
+        "asserted rather than trusted. A content check that ran first could in "
+        "principle be talked into a verdict; a path check never reads the "
+        "argument carrying the persuasion.",
+    ),
+    _c(
+        "improve.sandbox_target_check",
+        "S",
+        "C",
+        "The repair sandbox refuses a protected target without running anything",
+        "live",
+        "security.ai_repair_sandbox:validate_repair_for_target",
+        "Refused before the source is parsed, written to a disposable directory or executed.",
+    ),
+    _c("improve.code_walker", "S", "C", "An agent that walks all the code, including the AI's own"),
+    _c("improve.finding_to_proposal", "S", "C", "A finding becomes a proposal that two humans must approve"),
+    _c(
+        "improve.always_awake",
+        "S",
+        "C",
+        "A continuous improvement cycle with a budget, a rate limit and a kill switch",
+    ),
+    _c("improve.honest_cycle_report", "S", "C", "A cycle that proposed nothing says so, with the reason"),
 )
 
 
@@ -1832,8 +1888,18 @@ def coverage() -> dict[str, Any]:
         "verified": report.resolved,
         "checked": report.checked,
         "discrepancies": [{"id": d.id, "detail": d.detail} for d in report.discrepancies],
-        "sections": sorted({c.section for c in REGISTRY}, key=int),
+        "sections": sorted({c.section for c in REGISTRY}, key=_section_order),
     }
+
+
+def _section_order(section: str) -> tuple[int, str]:
+    """Specification sections sort numerically; owner-requested tracks after them.
+
+    §4-§27 come from the specification. A capability the owner asked for that
+    the specification never named carries a letter, because filing it under a
+    number would claim the specification required it.
+    """
+    return (0, f"{int(section):03d}") if section.isdigit() else (1, section)
 
 
 def by_section(section: str) -> tuple[Capability, ...]:

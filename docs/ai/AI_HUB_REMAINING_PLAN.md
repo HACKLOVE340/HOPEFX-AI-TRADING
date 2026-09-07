@@ -88,9 +88,10 @@ would mean the first task in the cycle had already run.
    Starting a reader belongs to Phase B, where the orchestrator is the first
    thing that needs another worker's messages.
 
-## Phase B — §14 task orchestration  ← NEXT
+## Phase B — §14 task orchestration
 
-**Depends on:** Phase A's graph and bus, both now built.
+**Depends on:** Phase A's graph and bus, both now built. Sequenced after
+Track S at the owner's direction (2026-09-07).
 
 | Row | State |
 |---|---|
@@ -238,6 +239,163 @@ ring, muted text at 4.36:1) were in code that had passed review.
 
 §4's two rows are roll-ups: they become live when the layers beneath them are,
 and are deliberately last so they cannot be claimed early.
+
+---
+
+---
+
+# Track S — the AI that improves itself, inside a vault
+
+**Owner request, 2026-09-07:** the AI should walk all the code in the app —
+including its own — improve itself and the app, stay awake to do it, and be
+locked away from attack so nobody can use it to change our code. Every
+advancement gets approved.
+
+That is four capabilities and one containment, and the containment has to be
+built first. This track is sequenced accordingly: **S1 before S2, always.**
+
+## What already exists (measured, not assumed)
+
+| Control | Where | State |
+|---|---|---|
+| Integrity baseline, drift detection, quarantine, git rollback | `security/self_healer.py` | built |
+| HMAC-signed patch queue; unsigned is REFUSED by default (F130) | `security/self_healer.py` | built |
+| Fail-closed static validation of AI-proposed Python, in a disposable dir | `security/ai_repair_sandbox.py` | built |
+| Approve/decline API over `fixes:queue` | `api/security/fixes.py` | built |
+| Two distinct approvers, at least one superadmin; execution needs superadmin + 2FA | `ai/policy/roles.py` | built |
+| Untrusted-input fencing and output secret scanning | `ai/guardrails/` | built |
+| Tool layer with permission registry + 16 constitutional invariants | `ai/tools/bus.py` | built |
+
+So "approved" and "sandboxed" are largely solved. What is not:
+
+**`TRACKED_GLOBS` in `security/self_healer.py` includes `security/**/*.py`,
+`risk/**/*.py`, `execution/**/*.py`, `core/**/*.py` and `api/**/*.py`.** A
+signed, approved patch can therefore rewrite the self-healer that checks the
+signature, the risk manager that sizes positions, and the OMS that sends
+orders. Approval is a human reading a diff; a subtle change to a signature
+check is exactly the diff a human does not catch. That is the hole the vault
+closes, and it is why S1 comes first.
+
+---
+
+## Phase S1 — the vault: paths no AI-proposed change may touch  ✅ DONE
+
+**Files:** `ai/vault/protected.py` (new), `ai/vault/__init__.py`,
+`security/self_healer.py` (consult it before applying), and
+`security/ai_repair_sandbox.py` (refuse at validation, so a protected-path
+patch never even reaches the queue).
+
+**What it is:** a path list, evaluated **before** content, that no
+AI-originated change can modify no matter who approves it — the security
+layer, the risk layer, the execution layer, the invariants, the permission
+registry, the approval code itself, CI configuration, and the vault module and
+its own tests.
+
+**What it found, before it fixed anything.** `SelfHealer.apply_config`
+replaced the protected list with `cfg.get("protected_paths", "")`, and
+`HealingConfigBody.protected_paths` is a Pydantic field defaulting to `""`. So
+the first save of the auto-healing config from the superadmin dashboard — with
+that box left as it comes, empty — erased all thirty protected paths on the
+live healer. Reproduced by execution before the fix:
+
+```
+>>> h = SelfHealer(); h._is_protected("risk/manager.py")
+True
+>>> h.apply_config({"aggressiveness": "high"})
+>>> h._is_protected("risk/manager.py")
+False
+```
+
+`risk/manager.py`, `execution/engine.py`, `kill_switch.py` and `auth/jwt.py`
+were then auto-patchable by AI-generated code. And even at its default the old
+list protected none of the controls that stop the AI: not the healer that
+verifies patch signatures, not the two-approver policy, not the permission
+registry, not the invariants, not the guardrails, not the tests, not CI.
+
+**Four rules, each with a test:**
+
+1. **Refusal is by path, before content.** No amount of clean-looking diff
+   makes a protected path allowable. The content check runs only on paths that
+   already passed.
+2. **Fail closed on the unresolvable.** A traversal (`../`), an absolute path,
+   a symlink pointing out of the tree, or anything that will not resolve to a
+   file inside the repository is REFUSED, not allowed by default. Every
+   path-allowlist defect is this one.
+3. **No environment opt-out.** `HEAL_ALLOW_UNSIGNED_PATCHES` exists and is the
+   right shape for a dev convenience; the vault has none, because an env var is
+   precisely what an attacker who reached the host would set. Asserted: the
+   module reads no environment variable at all.
+4. **The vault protects the vault.** `ai/vault/**` and its tests are in the
+   list. A containment an AI can propose to widen is not a containment.
+
+**Registry:** three rows live (`improve.vault`, `improve.path_before_content`,
+`improve.sandbox_target_check`) under a new section `S` — a letter, not §28,
+because these are an owner request and the specification never named them.
+Four more are `planned` and carry no evidence, which is what the rest of this
+track will close. 20 tests, confirmed red on the pre-fix tree.
+
+---
+
+## Phase S2 — the code-walking agent, read-only  ← NEXT
+
+**Depends on:** S1. Building a proposer before its containment is backwards in
+a system that moves money.
+
+**Files:** `ai/improve/walker.py` (new), `ai/improve/finding.py` (new).
+
+**What it is:** an agent that walks every module in the repository — `ai/`
+included, which is the part the owner asked for by name — and emits
+**findings**, not patches. A finding carries a file, a line, a claim, and
+evidence that resolves; the registry's own discipline, applied to code review.
+
+**Rules:** it imports nothing that can write. It cannot reach `ai/tools/bus.py`
+(same AST assertion `ai/bus` carries). Its input is repository text, which is
+untrusted the moment a dependency or a comment can carry an instruction, so
+every file it reads is fenced through `ai/guardrails/input.py` before it
+reaches a model. A finding names what it measured; "looks fine" is not a
+finding and neither is a count of files scanned.
+
+---
+
+## Phase S3 — a finding becomes a proposal, and a proposal needs two humans
+
+**Depends on:** S1 and S2.
+
+**Files:** `ai/improve/proposal.py` (new), wiring into
+`security/ai_repair_sandbox.py` and `fixes:queue`.
+
+**What it is:** the path from finding → candidate diff → vault check → sandbox
+validation → signed queue entry → the existing two-approver, one-superadmin
+gate → `SelfHealer` applies it, with quarantine and rollback as they already
+are. Nothing new is invented for approval; the AI is a producer of proposals
+and never an applier.
+
+**Rule:** the AI's own modules are proposals like any other. A patch to
+`ai/improve/` needs the same two approvers. An AI that could self-modify
+without review is the failure mode this whole track is arranged against.
+
+---
+
+## Phase S4 — always awake, and honest about what it did not do
+
+**Depends on:** S1–S3, and Phase A's bus for reporting.
+
+**Files:** `ai/improve/cycle.py` (new), a startup factory, a registry row.
+
+**What it is:** a continuous improvement cycle — walk, find, propose, report —
+on a schedule, with a spend ceiling, a rate limit, and a kill switch that stops
+it without a deploy.
+
+**Rules:**
+- **A cycle that proposed nothing says so, with the reason.** Silence from a
+  self-improving system reads as "nothing is wrong". Every cycle reports what
+  it walked, what it found, what it proposed, and what it refused to propose
+  because the path was in the vault.
+- **The budget is real.** Every walk is paid model calls. It runs under
+  `ai/gateway/budget_store.py`'s shared ceiling, and a cycle that would exceed
+  it is skipped and says it was skipped — never silently truncated.
+- **Off by default, on by an owner decision.** A self-improvement loop that
+  starts itself on first deployment is a change nobody chose.
 
 ---
 

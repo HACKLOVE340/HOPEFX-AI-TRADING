@@ -635,7 +635,19 @@ class SelfHealer:
         getattr(logger, level)(msg, *args)
 
     def _is_protected(self, rel_path: str) -> bool:
-        """Return True if rel_path matches any protected path prefix/pattern."""
+        """Return True if rel_path is in the vault floor or this healer's own list.
+
+        The floor is consulted FIRST and is not overridable. `_protected_paths`
+        used to be the whole answer, and `apply_config` replaced it wholesale
+        with a config field whose Pydantic default is `""` — so the first config
+        save from the dashboard erased every protected path on the live healer.
+        Configuration now adds to the floor and cannot subtract from it.
+        """
+        from ai.vault import protected as _vault
+
+        if _vault.is_protected(rel_path):
+            return True
+
         norm = rel_path.replace("\\", "/")
         for raw_p in self._protected_paths:
             p = raw_p.strip()
@@ -683,11 +695,21 @@ class SelfHealer:
             cfg.get("require_approval_categories", self._require_approval_categories)
         )
         self._baseline_auto_rebuild = bool(cfg.get("baseline_auto_rebuild", self._baseline_auto_rebuild))
+        # Additions only. This used to REPLACE the list, and the config field it
+        # reads defaults to "" — so a config save that never mentioned protected
+        # paths erased all thirty of them on the live healer, and risk/manager.py
+        # became auto-patchable. The vault floor in `ai/vault/protected.py` is
+        # consulted by `_is_protected` regardless of anything here.
         raw_paths = cfg.get("protected_paths", "")
         if isinstance(raw_paths, str):
-            self._protected_paths = [p.strip() for p in raw_paths.split(",") if p.strip()]
+            additions = [p.strip() for p in raw_paths.split(",") if p.strip()]
         elif isinstance(raw_paths, list):
-            self._protected_paths = list(raw_paths)
+            additions = [str(p).strip() for p in raw_paths if str(p).strip()]
+        else:
+            additions = []
+        for addition in additions:
+            if addition not in self._protected_paths:
+                self._protected_paths.append(addition)
         # Propagate to module-level constants used by helpers
         global HEAL_SCAN_INTERVAL, HEAL_PATCH_INTERVAL, MAX_PATCH_SIZE
         HEAL_SCAN_INTERVAL = int(cfg.get("scan_interval_sec", HEAL_SCAN_INTERVAL))
