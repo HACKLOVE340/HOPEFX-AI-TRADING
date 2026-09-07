@@ -703,6 +703,52 @@ async def init_ai_agent_bus(s: Any) -> Any:
     return bus
 
 
+async def init_ai_improvement_cycle(s: Any) -> Any:
+    """Start the self-improvement cycle, if an owner has turned it on.
+
+    Owner request, 2026-09-07: the AI should always be awake to improve itself.
+    "Awake" is a scheduled walk of all the code, findings filed as proposals,
+    and two humans deciding — not an agent editing the repository.
+
+    **Off unless `AI_IMPROVE_CYCLE_HOURS` is a positive number.** A
+    self-improvement loop that starts itself on first deployment is a change
+    nobody chose, and the mistake it protects against is a typo being read as
+    "run continuously".
+
+    **No patch generator is wired here.** The cycle walks, reports findings and
+    files nothing until one is installed, and its report says exactly that
+    rather than reading as a clean bill. Wiring a model to write patches
+    unattended is a separate decision from turning the schedule on, and it
+    should be made separately.
+
+    Runs on a background task like the awareness watchers, so a slow walk never
+    delays the trading engine.
+    """
+    from ai.improve import cycle
+    from api.admin import log_activity
+
+    interval = cycle.interval_s()
+    if interval is None:
+        return {"started": False, "reason": "AI_IMPROVE_CYCLE_HOURS is not set to a positive number"}
+
+    redis = None
+    try:
+        from cache.redis_client import get_redis
+
+        redis = await get_redis()
+    except Exception as exc:
+        logger.debug("init_ai_improvement_cycle: Redis unavailable: %s", exc)
+
+    task = asyncio.create_task(cycle.run_forever(interval, redis=redis))
+    task.add_done_callback(lambda _t: None)
+    s.ai_improvement_cycle = task
+    log_activity(
+        f"AI self-improvement cycle scheduled every {interval / 3600:.1f}h \u2014 "
+        f"walks and files proposals for two-approver review; halt with `set {cycle.HALT_KEY} 1`"
+    )
+    return {"started": True, "interval_s": interval, "task": task}
+
+
 async def init_ai_awareness(s: Any) -> Any:
     """Start the department watchers. Spec §2's `awareness/`.
 
@@ -3268,6 +3314,15 @@ def build_component_registry(app, feature_flags):
             F.init_ai_agent_bus,
             required=False,
             deps=["event_bus"],
+        )
+        # Track S. Off unless AI_IMPROVE_CYCLE_HOURS is a positive number, and
+        # it files proposals rather than applying anything. After ai_departments
+        # because the walk it runs is the same one exposed there.
+        .register(
+            "ai_improvement_cycle",
+            F.init_ai_improvement_cycle,
+            required=False,
+            deps=["config"],
         )
         .register(
             "ai_awareness",

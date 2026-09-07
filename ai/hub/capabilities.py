@@ -1832,8 +1832,38 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "S",
         "C",
         "A continuous improvement cycle with a budget, a rate limit and a kill switch",
+        "live",
+        "ai.improve.cycle:run_forever",
+        "Bounded four ways. OFF unless AI_IMPROVE_CYCLE_HOURS is a positive "
+        "number \u2014 unset, empty, zero, negative, infinite and unparseable all "
+        "mean off, because a typo read as 'run continuously' is the worst "
+        "available reading of a mistake. A Redis kill switch stops it with no "
+        "deploy, and an UNREADABLE switch also stops it: the one place in this "
+        "package where unavailable means refuse rather than report, because a "
+        "loop that spends money and answers 'no halt found' to a connection "
+        "error has turned its kill switch into a suggestion. The shared budget "
+        "ceiling is consulted first, against the cycle's own operator so the "
+        "spend is attributable. Three proposals per cycle, ordered by severity "
+        "\u2014 the walker finds ~1,300 things and filing them all turns a "
+        "two-person review queue into noise. Wired by "
+        "init_ai_improvement_cycle; the loop sleeps FIRST, so a crash-looping "
+        "deployment is not a bill.",
     ),
-    _c("improve.honest_cycle_report", "S", "C", "A cycle that proposed nothing says so, with the reason"),
+    _c(
+        "improve.honest_cycle_report",
+        "S",
+        "C",
+        "A cycle that proposed nothing says so, with the reason",
+        "live",
+        "ai.improve.cycle:CycleReport",
+        "`reason` is populated whether or not the cycle ran, and every refusal "
+        "is named with the evidence it belongs to. Silence from a "
+        "self-improving system reads as 'nothing is wrong', which is the same "
+        "defect as a gauge showing zero because its probe failed. A finding on "
+        "a protected path is still REPORTED and never sent to the generator: "
+        "paying a model to write a patch that cannot be applied is money for "
+        "nothing.",
+    ),
 )
 
 

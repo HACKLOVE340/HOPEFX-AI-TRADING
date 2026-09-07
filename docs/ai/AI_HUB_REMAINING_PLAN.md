@@ -6,10 +6,25 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **216 capabilities · 161 live · 28 staged · 27 planned ·
-189/189 evidence resolved · 0 discrepancies · 75% built.**
+At the time of writing: **223 capabilities · 168 live · 28 staged · 27 planned ·
+196/196 evidence resolved · 0 discrepancies · 75% built.**
 
-Sections finished (nothing planned or staged): §5, §6, §12, §13, §15, §16, §19.
+Sections finished (nothing planned or staged): §5, §6, §12, §13, §15, §16, §19,
+and all of Track S.
+
+**55 rows remain**, across seventeen sections:
+
+| § | left | § | left | § | left |
+|---|---:|---|---:|---|---:|
+| 4 | 2 | 11 | 4 | 22 | 5 |
+| 7 | 1 | 14 | 3 | 23 | 8 |
+| 8 | 2 | 17 | 6 | 24 | 1 |
+| 9 | 2 | 18 | 5 | 25 | 1 |
+| 10 | 1 | 20 | 1 | 26 | 4 |
+| 21 | 2 | 27 | 7 | | |
+
+Seven phases (B through H) cover all of them. §4's two rows are roll-ups and
+land last by construction.
 
 ---
 
@@ -88,7 +103,7 @@ would mean the first task in the cycle had already run.
    Starting a reader belongs to Phase B, where the orchestrator is the first
    thing that needs another worker's messages.
 
-## Phase B — §14 task orchestration
+## Phase B — §14 task orchestration  ← NEXT
 
 **Depends on:** Phase A's graph and bus, both now built. Sequenced after
 Track S at the owner's direction (2026-09-07).
@@ -435,7 +450,7 @@ suite. Reproduced on the pre-fix tree. It now patches the constant.
 
 ---
 
-## Phase S4 — always awake, and honest about what it did not do  ← NEXT
+## Phase S4 — always awake, and honest about what it did not do  ✅ DONE
 
 **Depends on:** S1–S3, and Phase A's bus for reporting.
 
@@ -445,16 +460,35 @@ suite. Reproduced on the pre-fix tree. It now patches the constant.
 on a schedule, with a spend ceiling, a rate limit, and a kill switch that stops
 it without a deploy.
 
-**Rules:**
-- **A cycle that proposed nothing says so, with the reason.** Silence from a
-  self-improving system reads as "nothing is wrong". Every cycle reports what
-  it walked, what it found, what it proposed, and what it refused to propose
-  because the path was in the vault.
-- **The budget is real.** Every walk is paid model calls. It runs under
-  `ai/gateway/budget_store.py`'s shared ceiling, and a cycle that would exceed
-  it is skipped and says it was skipped — never silently truncated.
-- **Off by default, on by an owner decision.** A self-improvement loop that
-  starts itself on first deployment is a change nobody chose.
+**Bounded four ways, each with tests:**
+
+1. **Off by default.** `AI_IMPROVE_CYCLE_HOURS` unset, empty, zero, negative,
+   infinite or unparseable all mean off. A typo read as "run continuously" is
+   the worst available reading of a mistake.
+2. **A kill switch needing no deploy** — `redis-cli set
+   hopefx:ai:improve:halted 1`. And an **unreadable** switch also stops it: the
+   one place in this package where unavailable means refuse rather than report,
+   because a loop that spends money and answers "no halt found" to a connection
+   error has turned its kill switch into a suggestion.
+3. **The shared budget ceiling first**, against the cycle's own operator so the
+   spend is attributable and does not come out of a person's share. No headroom
+   → skipped, and it says it was skipped.
+4. **Three proposals per cycle, highest severity first.** The walk finds ~1,300
+   things; filing them all turns a two-person review queue into noise, and a
+   queue nobody reads is a queue nobody approves from. A finding on a
+   vault-protected path is still reported and never reaches the generator —
+   paying a model to write a patch that cannot be applied is money for nothing.
+
+**The report is the deliverable.** `reason` is populated whether or not the
+cycle ran, and every refusal is named with its evidence. Measured on a real
+run: 1,782 files walked, 1,305 findings, 0 proposed, reason *"proposed nothing
+because no patch generator is installed"*.
+
+**No patch generator is wired.** The factory starts the schedule; wiring a
+model to write patches unattended is a separate decision from turning the
+schedule on, and it should be made separately. Until one is installed the cycle
+walks and reports, and says that is what it did rather than reading as a clean
+bill.
 
 ---
 
