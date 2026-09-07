@@ -93,6 +93,36 @@ OUTPUT_FRAME_INTERVAL_S = 0.12
 TERMINAL_STATES = frozenset({"succeeded", "failed", "cancelled", "timed_out"})
 
 
+def _remember_task(job: Job) -> None:
+    """Tell §5's conversation context that this job exists.
+
+    Wrapped, because "is the backtest done?" being answerable is worth less than
+    the backtest running. A context store that cannot be written to degrades the
+    conversation; it must not be able to refuse work.
+    """
+    try:
+        from ai.core import context
+
+        context.note_task(job.operator, task_id=job.id, summary=job.prompt.strip()[:120])
+    except Exception:
+        logger.exception("ai.jobs: could not record %s in the conversation context", job.id)
+
+
+def _forget_task(job: Job) -> None:
+    """Move it out of the active list, keeping it referable.
+
+    "How did it go?" arrives after the work finishes, so the outcome goes with
+    it rather than the task simply disappearing.
+    """
+    try:
+        from ai.core import context
+
+        outcome = job.error.strip() if job.error else job.state
+        context.finish_task(job.operator, task_id=job.id, outcome=outcome[:160])
+    except Exception:
+        logger.exception("ai.jobs: could not close %s in the conversation context", job.id)
+
+
 class QueueFull(RuntimeError):
     """The runner is at its queue ceiling. Backpressure, not an error condition."""
 
@@ -193,6 +223,11 @@ class JobRunner:
             job = Job(id=str(uuid.uuid4()), prompt=prompt, operator=operator)
             self._jobs[job.id] = job
 
+        # §5: the conversation should know this is running. Outside the lock and
+        # swallowed on failure — a context store that cannot be written to must
+        # not stop work from being queued.
+        _remember_task(job)
+
         future = self.executor.submit(self._run, job, work, timeout_s, on_change)
         with self._lock:
             self._futures[job.id] = future
@@ -279,6 +314,7 @@ class JobRunner:
     def _finish(self, job: Job, state: str, *, on_change: Callable[[Job], None] | None) -> None:
         job.state = state
         job.finished_at = datetime.now(UTC).isoformat()
+        _forget_task(job)
         self._notify(job, on_change)
 
     @staticmethod

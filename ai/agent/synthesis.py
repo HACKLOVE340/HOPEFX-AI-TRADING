@@ -38,11 +38,14 @@ no change, and this module never touches the tool bus.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 #: Ordered least to most severe, so `max` over this is the escalation rule.
+logger = logging.getLogger(__name__)
+
 SEVERITY_ORDER = ("info", "warning", "critical")
 
 #: What a department is saying about the subject.
@@ -144,6 +147,22 @@ class Recommendation:
             alternatives=("Take no action and request the missing readings first.",),
         )
 
+    def weaknesses(self) -> list[Any]:
+        """Where this recommendation is thin (§5).
+
+        Read from `ai/core/challenge.py` rather than reimplemented, so the rules
+        an operator sees in the queue are the same ones the reasoning surface
+        applies. Failure is swallowed: a challenger that cannot run must not
+        stop a recommendation reaching a human.
+        """
+        try:
+            from ai.core.challenger import challenge
+
+            return challenge(self.reasoning())
+        except Exception:
+            logger.exception("ai.agent: could not challenge the synthesis for %s", self.subject)
+            return []
+
     def as_proposal(self) -> dict[str, Any]:
         """Render for the same approval queue everything else lands in.
 
@@ -159,6 +178,12 @@ class Recommendation:
             lines.extend(f"  - {d}" for d in self.disagreements)
         if self.unresolved:
             lines.extend(["", f"No reading from: {', '.join(self.unresolved)}"])
+
+        # §5: where this argument is thin, in the body rather than behind a
+        # link. A weakness an operator has to click to find is a weakness they
+        # read after deciding, which is the wrong order.
+        for weakness in self.weaknesses():
+            lines.extend(["", f"Weak point ({weakness.severity}): {weakness.counterargument}"])
 
         return {
             "id": f"synthesis-{self.subject}-{datetime.now(UTC).timestamp():.0f}".replace(" ", "-"),

@@ -108,6 +108,9 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-core/departments` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/evals` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/models` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/self/calibration` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/self/context` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/self/depths` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/summary` | JWT |  | AI Core |
 | `GET` | `/api/ai-notifications` | JWT |  | AI Notifications |
 | `GET` | `/api/ai-notifications/policy` | JWT |  | AI Notifications |

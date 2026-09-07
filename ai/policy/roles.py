@@ -97,6 +97,10 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     # only, and _VIEW like every other row: a map of the system's surface is
     # exactly the kind of reconnaissance that should need a login.
     "ai_core_app_surface": _VIEW,
+    # §5. Read-only, and each is scoped to the caller's own conversation.
+    "ai_core_conversation_context": _VIEW,
+    "ai_core_calibration": _VIEW,
+    "ai_core_depths": _VIEW,
     # §19 (api/ai_notifications.py). Every one is scoped to the calling
     # operator's own notifications and settings, so a viewer role is the right
     # floor: there is nothing here one operator can do to another.

@@ -212,6 +212,70 @@ async def ai_core_budget(user: TokenPayload = Depends(_viewer)) -> dict[str, Any
     return body
 
 
+# ── §5: what the Core knows about itself ──────────────────────────────────────
+#
+# Both GET. This router is asserted read-only by
+# `test_the_page_reads_no_endpoint_that_can_mutate`, and recording a prediction
+# or noting a task is a write that belongs on its own surface — the mistake this
+# module already made once with the §19 notification settings.
+
+
+@router.get("/self/context")
+async def ai_core_conversation_context(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """What is running for the caller, and what recently finished (§5).
+
+    Scoped to the token's operator, never to a query parameter: one operator's
+    work is not context for another's conversation.
+    """
+    from ai.core import context
+
+    return {
+        "operator": user.sub,
+        "active": context.active(user.sub),
+        "description": context.describe(user.sub),
+    }
+
+
+@router.get("/self/calibration")
+async def ai_core_calibration(user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """How the stated confidences have actually held up (§5).
+
+    An agent with too few resolved predictions is reported as unchecked rather
+    than as accurate — a confidence nobody has verified is the author's
+    judgement, and presenting it as a measured frequency is the fake-precision
+    failure §22 exists to stop.
+    """
+    from ai.core import calibration
+
+    records = calibration.summary()
+    return {
+        "operator": user.sub,
+        "minimum_sample": calibration.MIN_SAMPLE,
+        "tolerance": calibration.TOLERANCE,
+        "agents": records,
+        "note": (
+            "Calibration annotates a stated confidence; it never rewrites one. "
+            f"An agent needs {calibration.MIN_SAMPLE} resolved predictions in a "
+            "confidence band before any rate is reported for it."
+        ),
+    }
+
+
+@router.get("/self/depths")
+async def ai_core_depths(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """The explanation registers, and the rule they all obey (§5)."""
+    from ai.core import DEPTHS
+
+    return {
+        "depths": list(DEPTHS),
+        "invariant": (
+            "Every number, the counter-thesis, and what would change the conclusion "
+            "survive every depth. A shorter version missing one of those is a "
+            "different argument, not a simpler one."
+        ),
+    }
+
+
 @router.get("/calls")
 async def ai_core_calls(
     user: TokenPayload = Depends(_viewer),

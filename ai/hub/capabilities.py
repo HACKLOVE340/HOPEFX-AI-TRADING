@@ -151,7 +151,19 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "from `permitted` so a planner that confuses them is refused.",
     ),
     # §5 — AI Core and personality
-    _c("core.context_across_tasks", "5", "B", "Maintain conversation context across active tasks"),
+    _c(
+        "core.context_across_tasks",
+        "5",
+        "B",
+        "Maintain conversation context across active tasks",
+        "live",
+        "ai.core.context:describe",
+        "Written by the job runner itself, so the conversation knows what is "
+        "running without anybody remembering to tell it. Finished work stays "
+        'referable \u2014 "how did it go?" arrives after the job ends. Per '
+        "operator, and bounded so a week-long session does not bury the "
+        "question in old tasks.",
+    ),
     _c(
         "core.interruptible_speech",
         "5",
@@ -161,17 +173,42 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/hub/conversation.ts",
         "Barge-in cancels synthesis immediately.",
     ),
-    _c("core.adaptive_depth", "5", "B", "Adapt explanation depth without changing the intelligence"),
+    _c(
+        "core.adaptive_depth",
+        "5",
+        "B",
+        "Adapt explanation depth without changing the intelligence",
+        "live",
+        "ai.core.depth:explain",
+        "Five registers. Every number, the counter-thesis and what would change "
+        "the conclusion survive all of them, asserted by rendering each and "
+        "looking for all three: a shorter version missing one is a different "
+        "argument, and the reader who asked for shorter cannot tell.",
+    ),
     _c(
         "core.states_uncertainty",
         "5",
         "B",
         "State uncertainty honestly",
-        "staged",
-        "ai.guardrails.output:bounded_severity",
-        "Bounded severity exists; calibrated uncertainty does not.",
+        "live",
+        "ai.core.calibration:assess",
+        "A confidence nobody has checked is reported as unchecked, with the "
+        "sample size \u2014 not as a rate. Twenty resolved predictions in a band "
+        "before any figure is claimed. Calibration annotates a stated "
+        "confidence and never rewrites one: the author put their name to it.",
     ),
-    _c("core.challenges_assumptions", "5", "B", "Challenge weak assumptions and present counterarguments"),
+    _c(
+        "core.challenges_assumptions",
+        "5",
+        "B",
+        "Challenge weak assumptions and present counterarguments",
+        "live",
+        "ai.core.challenger:challenge",
+        "States the counterargument, not the flaw \u2014 a Challenge whose text is "
+        "under thirty characters fails at construction. Allowed to find nothing: "
+        "a challenger that always fires is one nobody reads. Surfaced in the "
+        "proposal body a human reads, not behind a link.",
+    ),
     _c(
         "core.no_false_completion",
         "5",
@@ -777,9 +814,11 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "13",
         "C",
         "Track agent calibration and historical reliability",
-        "staged",
-        "ai.evals.suite:run_suite",
-        "The scoring mechanism exists; per-agent calibration does not.",
+        "live",
+        "ai.core.calibration:summary",
+        "Per agent and per confidence band \u2014 accuracy at 90% says nothing about "
+        "accuracy at 55%, and pooling them hides both. A prediction resolves "
+        "once, so a retry cannot double an agent's apparent accuracy.",
     ),
     _c(
         "debate.neutral_synthesis",
