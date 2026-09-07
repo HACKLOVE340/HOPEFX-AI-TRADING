@@ -472,16 +472,44 @@ to stop now.
 afterwards means the image was already in memory, which is exactly what the
 panel's "frames stay in memory" promise is about.
 
-### E2 — §18 itself  ← NEXT
+### E2 — §18 itself  ✅ DONE (three live, two honestly staged)
 
-Five rows, now with somewhere to ask permission. `vision.local_processing` is
-the one that matters most and should lead: a frame that never leaves the
-machine needs no consent conversation about where it went.
+**The judgement this phase turned on.** §18's five rows are not equally
+buildable, and pretending otherwise is how a registry starts lying. Three are
+achievable now, locally, with **no camera, no new dependency and no consent
+conversation at all** — and those are the ones to build first, because the
+cheapest way to respect somebody's privacy is not to need their permission.
 
-**Rules E2 must not violate:** every sensor path calls `consent.check` and none
-of them caches the answer past a revocation; a refused sensor is reported to the
-operator rather than retried; and nothing in §18 may claim a native capability
-a browser only simulates.
+- **`attention.ts`** — visibility, window focus, time since input. *Unknown is
+  not away*: a state derived from inputs nobody supplied means "nobody looked",
+  and reporting it as "the operator has left" would have the presence go quiet
+  on somebody sitting right in front of it. A visible but *unfocused* window
+  reads as away, because attention is on whatever is on top.
+- **`visionSource.ts`** — the half worth getting right is that **a screen share
+  and a webcam are different consents**. A webcam shows a face; a screen share
+  shows the whole desktop and every other application. Treating them as one
+  permission quietly widens what the system may see. "Not checked" is reported
+  distinctly from "no camera" — only one is a fact.
+- **`frameTriage.ts`** — this is a *privacy* row, not a performance one. The
+  feasible local processing on a video stream is not running a model in the
+  browser; it is noticing that most frames need never leave. Identical, blank
+  and too-frequent frames are dropped **on the machine that captured them**.
+  Every drop is counted with a reason, because "the AI saw nothing" and "we
+  sent nothing" are different facts. `keptLocal` is the number worth reading.
+
+**Also closes §7** (`presence.idle_attention`), whose note said "no attention
+tracking yet". It breathes when present, settles when genuinely away, and keeps
+breathing on *unknown* — going still there would look broken rather than
+tactful on any browser that does not report visibility.
+
+**Two rows stay staged, and the note names the missing half.** Camera gesture
+recognition and physical pointing both need hand or body landmarks, and this
+repository has no landmark source. The pointer halves are real and are built —
+swipes and long press, and a hit test answering the topmost panel under a point
+— but building a camera recogniser that nothing feeds would be
+`hopefx-dead-controls` wearing a camera. `recogniseGesture` returns **null**
+rather than the nearest gesture: on a trading screen a wrong swipe moves a
+panel somebody was reading.
 
 ---
 

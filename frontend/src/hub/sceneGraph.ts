@@ -103,6 +103,11 @@ export class SceneGraph {
     return this.require(id).rect;
   }
 
+  /** Draw order. Needed by `gestures.pointingAt` to answer the topmost panel. */
+  zOf(id: string): number {
+    return this.require(id).z;
+  }
+
   parentOf(id: string): string | null {
     return this.require(id).parent;
   }

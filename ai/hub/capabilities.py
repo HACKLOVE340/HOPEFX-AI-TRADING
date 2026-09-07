@@ -353,9 +353,14 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "7",
         "A",
         "Natural idle movement and attention states",
-        "staged",
-        "frontend/src/hub/PresenceCore.tsx",
-        "Breathes at rest and pulses under load; no attention tracking yet.",
+        "live",
+        "frontend/src/hub/attention.ts:idleMotion",
+        "The attention tracking this row was waiting for. Still when the "
+        "operator is genuinely away \u2014 animating to an empty room is wasted "
+        "frames \u2014 breathing when they are present, and breathing when attention "
+        "is UNKNOWN, because a presence that goes still on unknown looks broken "
+        "rather than tactful on every browser that does not report visibility. "
+        "Reduced motion stops it entirely, as a floor rather than a weight.",
     ),
     _c(
         "presence.animation_states",
@@ -1227,11 +1232,83 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "api.safe_agent_platform:vision_interpret",
         "",
     ),
-    _c("vision.gesture", "18", "A", "Gesture recognition"),
-    _c("vision.pointing", "18", "A", "Pointing and object reference"),
-    _c("vision.attention_aware", "18", "A", "Optional attention-aware interaction"),
-    _c("vision.source_selection", "18", "A", "Screen and camera source selection"),
-    _c("vision.local_processing", "18", "C", "Local processing where feasible"),
+    _c(
+        "vision.gesture",
+        "18",
+        "A",
+        "Gesture recognition",
+        "staged",
+        "frontend/src/hub/gestures.ts:recogniseGesture",
+        "The POINTER half is built \u2014 swipes and long press, no camera and no "
+        "consent, returning null rather than the nearest gesture because a "
+        "wrongly-recognised swipe moves a panel somebody was reading. The "
+        "CAMERA half needs hand landmarks and this repository has no landmark "
+        "source; building a recogniser nothing feeds would be "
+        "hopefx-dead-controls wearing a camera.",
+    ),
+    _c(
+        "vision.pointing",
+        "18",
+        "A",
+        "Pointing and object reference",
+        "staged",
+        "frontend/src/hub/gestures.ts:pointingAt",
+        "The OBJECT REFERENCE half is built: a hit test against the scene graph "
+        "answering the topmost panel under a point, and null on empty space "
+        "rather than the nearest panel \u2014 'I am pointing at nothing' is an "
+        "answer. The PHYSICAL POINTING half needs body landmarks, which no "
+        "source in this repository produces.",
+    ),
+    _c(
+        "vision.attention_aware",
+        "18",
+        "A",
+        "Optional attention-aware interaction",
+        "live",
+        "frontend/src/hub/attention.ts:attentionFrom",
+        "Built from document visibility, window focus and time since input \u2014 no "
+        "camera, no consent conversation, nothing leaving the machine. The "
+        "cheapest way to respect somebody's privacy is not to need their "
+        "permission, so this half was built before the gaze-tracking half. "
+        "UNKNOWN IS NOT AWAY: a state derived from inputs nobody supplied means "
+        "'nobody looked', and reporting it as 'the operator has left' would "
+        "have the presence go quiet on somebody sitting right in front of it. "
+        "A visible but unfocused window reads as away, because attention is on "
+        "whatever is on top of it.",
+    ),
+    _c(
+        "vision.source_selection",
+        "18",
+        "A",
+        "Screen and camera source selection",
+        "live",
+        "frontend/src/hub/visionSource.ts:selectSource",
+        "The half worth getting right is that a SCREEN SHARE AND A WEBCAM ARE "
+        "DIFFERENT CONSENTS. A webcam shows a face; a screen share shows the "
+        "whole desktop, every other application and whatever was open behind "
+        "the browser. A system treating them as one permission has quietly "
+        "widened what it may see. Unknown capability reports as 'not checked' "
+        "rather than 'no camera' \u2014 only one of those is a fact. `none` is "
+        "always allowed, because a control that can be refused is not an off "
+        "switch.",
+    ),
+    _c(
+        "vision.local_processing",
+        "18",
+        "C",
+        "Local processing where feasible",
+        "live",
+        "frontend/src/hub/frameTriage.ts:FrameTriage",
+        "This is a PRIVACY row, not a performance one. The feasible local "
+        "processing on a video stream is not running a model in the browser; it "
+        "is noticing that most frames are not worth sending anywhere. A frame "
+        "identical to the last carries nothing new, a blank frame is a lens "
+        "cap, and forty a second is thirty-nine more than anyone can act on \u2014 "
+        "each dropped ON THE MACHINE THAT CAPTURED IT, never travelling. Every "
+        "drop is counted with a reason, because 'the AI saw nothing' and 'we "
+        "sent nothing' are different facts; `keptLocal` is the number worth "
+        "reading.",
+    ),
     _c(
         "vision.hard_disable",
         "18",
