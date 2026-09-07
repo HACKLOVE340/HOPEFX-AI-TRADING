@@ -1165,9 +1165,42 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/features/chart-bot",
         "",
     ),
-    _c("viz.heatmap", "21", "D", "Heatmaps for intensity"),
-    _c("viz.network_graph", "21", "D", "Network graphs for relationships"),
-    _c("viz.timeline", "21", "D", "Timelines for chronology"),
+    _c(
+        "viz.heatmap",
+        "21",
+        "D",
+        "Heatmaps for intensity",
+        "live",
+        "frontend/src/hub/VizMarks.tsx:Heatmap",
+        "Five-step sequential ramp, validated on the real composited surface: "
+        "seven steps put adjacent cells \u0394L 0.047 apart, below the 0.06 floor. "
+        "An unmeasured cell draws as the grid, not as step zero \u2014 quietest and "
+        "unmeasured must not look the same.",
+    ),
+    _c(
+        "viz.network_graph",
+        "21",
+        "D",
+        "Network graphs for relationships",
+        "live",
+        "frontend/src/hub/VizMarks.tsx:NetworkGraph",
+        "Three categorical hues is the measured ceiling on this surface; every "
+        "candidate fourth fell below the normal-vision \u0394E 15 floor, which "
+        "labelling does not excuse. Beyond three folds to a neutral. Circular "
+        "layout, not force-directed: a graph that settles differently each "
+        'render makes "the one on the left" meaningless.',
+    ),
+    _c(
+        "viz.timeline",
+        "21",
+        "D",
+        "Timelines for chronology",
+        "live",
+        "frontend/src/hub/VizMarks.tsx:Timeline",
+        "Only timestamped events are placed. Headlines that carry no timestamp "
+        "are counted and named rather than pinned to now, which would put "
+        "yesterday's news at the right-hand edge.",
+    ),
     _c(
         "viz.distributions",
         "21",
@@ -1178,9 +1211,40 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "",
     ),
     _c("viz.tables", "21", "D", "Tables for precise comparison", "live", "frontend/src/hub/SurfaceView.tsx", ""),
-    _c("viz.scientific_3d", "21", "D", "3D and scientific models where they aid understanding"),
-    _c("viz.media_panels", "21", "D", "Video and image panels"),
-    _c("viz.drill_down", "21", "D", "Interactive drill-down"),
+    _c(
+        "viz.scientific_3d",
+        "21",
+        "D",
+        "3D and scientific models where they aid understanding",
+        "staged",
+        "frontend/src/hub/projection.ts:RENDERERS",
+        "The presence takes schematic scientific forms (distribution, network, "
+        "waveform, timeline) and the renderer abstraction names WebGL, WebXR "
+        "and holographic output \u2014 but only canvas2d is implemented, and "
+        "availableRenderers() says so rather than implying otherwise.",
+    ),
+    _c(
+        "viz.media_panels",
+        "21",
+        "D",
+        "Video and image panels",
+        "live",
+        "frontend/src/hub/VizMarks.tsx:Media",
+        "`alt` is a required field on the data rather than an optional prop, so "
+        "a media panel nobody can describe cannot be constructed. Video ships "
+        "with controls and never autoplays.",
+    ),
+    _c(
+        "viz.drill_down",
+        "21",
+        "D",
+        "Interactive drill-down",
+        "live",
+        "frontend/src/hub/SurfaceView.tsx",
+        "Clicking a cell, node or event enters a \u00a79 layer named after the mark "
+        "rather than after the panel, so a trail of three reads as three things. "
+        "Every mark is keyboard-reachable with a 24px hit target.",
+    ),
     _c(
         "viz.selection_intelligence",
         "21",

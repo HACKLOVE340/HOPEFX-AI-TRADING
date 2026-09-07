@@ -30,12 +30,50 @@
 import { useStore } from '../store';
 import { applyZoom, type ZoomRange } from './spatial';
 
+/** One cell of a heatmap: a labelled bucket with a 0-1 intensity. */
+export interface Cell {
+  row: string;
+  column: string;
+  /** 0-1, already normalised by whoever measured it. */
+  intensity: number;
+  /** The underlying figure, for the tooltip and the table view. */
+  label: string;
+}
+
+/** One node of a relationship graph. */
+export interface Node {
+  id: string;
+  label: string;
+  /** Stable category name. Colour follows this, never the node's rank. */
+  category: string;
+}
+
+export interface Edge {
+  from: string;
+  to: string;
+  /** Why these two are connected, in words. */
+  because: string;
+}
+
+/** One thing that happened, at a time. */
+export interface Event {
+  at: number;
+  label: string;
+  category: string;
+}
+
 export interface SurfaceData {
   points?: number[];
   rows?: [string, string][];
   items?: string[];
   body?: string;
   values?: number[];
+  cells?: Cell[];
+  nodes?: Node[];
+  edges?: Edge[];
+  events?: Event[];
+  /** A media source and its description. `alt` is required, never optional. */
+  media?: { src: string; alt: string; kind: 'image' | 'video' };
   /** True when there is nothing to draw — for either reason. */
   empty: boolean;
   /** Which reason. Rendered in place of the content, never alongside a zero. */
@@ -145,6 +183,109 @@ export function surfaceData({ kind, key, data }: SurfaceIdentity): SurfaceData {
         rows: [['Account equity', String(account.equity ?? '—')]],
         empty: false,
       };
+    }
+
+    // ── §21 heatmap: where the movement actually was ─────────────────────────
+    case 'session-heatmap': {
+      const history = (state.priceHistory?.[SYMBOL] ?? []) as unknown[];
+      const prices = history
+        .map((p) => (typeof p === 'number' ? p : Number((p as { mid?: number; price?: number })?.mid ?? (p as { price?: number })?.price ?? NaN)))
+        .filter((n: number) => Number.isFinite(n));
+      // Two points make one move. One point makes none, and a grid of zeros
+      // would read as a calm session rather than as an empty one.
+      if (prices.length < 3) {
+        return {
+          empty: true,
+          note: 'Not enough price history to measure movement. A heatmap of one reading would be a grid of zeros, which reads as a calm session rather than an unmeasured one.',
+        };
+      }
+      const moves = prices.slice(1).map((p, i) => Math.abs(p - (prices[i] as number)));
+      const peak = Math.max(...moves);
+      const BUCKETS = 12;
+      const size = Math.ceil(moves.length / BUCKETS);
+      const cells: Cell[] = [];
+      for (let i = 0; i < Math.min(BUCKETS, Math.ceil(moves.length / size)); i += 1) {
+        const slice = moves.slice(i * size, (i + 1) * size);
+        if (slice.length === 0) continue;
+        const largest = Math.max(...slice);
+        cells.push({
+          row: 'Movement',
+          column: `T${i + 1}`,
+          // Against the session's own peak. Against an absolute scale the grid
+          // would be uniformly dark on a quiet day and tell nobody anything.
+          intensity: peak > 0 ? largest / peak : 0,
+          label: `${largest.toFixed(2)} peak move`,
+        });
+      }
+      return { cells, empty: false };
+    }
+
+    // ── §21 network: how the things on the plane relate ──────────────────────
+    case 'relationships': {
+      // Derived from the declared relation table (`hub/summary.ts`), not from a
+      // model's guess at what connects to what. An invented edge in a graph is
+      // a claim the reader has no way to check.
+      const nodes: Node[] = [];
+      const edges: Edge[] = [];
+      const positions = state.positions ?? [];
+      for (const p of positions) {
+        const id = `pos:${p.symbol}`;
+        if (!nodes.some((n) => n.id === id)) {
+          nodes.push({ id, label: String(p.symbol), category: 'Position' });
+        }
+      }
+      if (positions.length > 0) {
+        nodes.push({ id: 'risk', label: 'Risk limits', category: 'Risk' });
+        for (const p of positions) {
+          edges.push({
+            from: `pos:${p.symbol}`,
+            to: 'risk',
+            because: 'those limits govern this position',
+          });
+        }
+      }
+      const headlines = (state.newsItems ?? []).slice(0, 3);
+      for (const [i, item] of headlines.entries()) {
+        const id = `news:${i}`;
+        nodes.push({ id, label: String(item.title ?? '').slice(0, 40) || 'Headline', category: 'News' });
+        for (const p of positions) {
+          edges.push({ from: id, to: `pos:${p.symbol}`, because: 'headlines move this instrument' });
+        }
+      }
+      if (nodes.length === 0) {
+        return {
+          empty: true,
+          note: 'Nothing on this connection to relate yet — no open positions and no headlines have arrived.',
+        };
+      }
+      return { nodes, edges, empty: false };
+    }
+
+    // ── §21 timeline: what happened, in order ────────────────────────────────
+    case 'chronology': {
+      const events: Event[] = (state.newsItems ?? [])
+        .map((n) => {
+          const when = Date.parse(String(n.published_at ?? ''));
+          return Number.isFinite(when)
+            ? { at: when, label: String(n.title ?? '').slice(0, 60), category: String(n.sentiment_label ?? 'neutral') }
+            : null;
+        })
+        .filter((e): e is Event => e !== null)
+        .sort((a, b) => a.at - b.at);
+      if (events.length === 0) {
+        // Distinguished from a quiet feed: a headline with no timestamp cannot
+        // be placed on a timeline, and pretending it happened now would put
+        // yesterday's news at the right-hand edge.
+        const untimed = (state.newsItems ?? []).length;
+        return {
+          empty: true,
+          note:
+            untimed > 0
+              ? `${untimed} headline(s) have arrived but none carries a timestamp, so none can be placed in time.`
+              : 'Nothing timestamped has arrived on this connection yet.',
+        };
+      }
+      return { events, empty: false };
     }
 
     default:

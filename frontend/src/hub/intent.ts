@@ -83,6 +83,26 @@ const SUBJECTS: { match: RegExp; surfaces: SurfaceRequest[] }[] = [
     match: /\blog|\bterminal\b|\bcalls?\b/i,
     surfaces: [{ kind: 'terminal', intent: 'Recent model calls', priority: 'background', key: 'calls' }],
   },
+  // §21. Each names the QUESTION it answers, not the chart type, because that
+  // is how somebody asks: "where was the movement", not "render a heatmap".
+  {
+    match: /\bheat ?map\b|\bintensity\b|\bwhere was the (movement|action)\b|\bbusiest\b/i,
+    surfaces: [
+      { kind: 'heatmap', intent: 'Session movement', priority: 'secondary', key: 'session-heatmap' },
+    ],
+  },
+  {
+    match: /\bnetwork\b|\brelationships?\b|\bhow (do|does) .* (relate|connect)\b|\bconnections?\b|\bgraph\b/i,
+    surfaces: [
+      { kind: 'network', intent: 'How these relate', priority: 'secondary', key: 'relationships' },
+    ],
+  },
+  {
+    match: /\btimeline\b|\bchronolog|\bwhat happened when\b|\bin order\b|\bsequence of events\b/i,
+    surfaces: [
+      { kind: 'timeline', intent: 'What happened, in order', priority: 'secondary', key: 'chronology' },
+    ],
+  },
 ];
 
 const CLEAR = /\bsimplify\b|\bclear\b|\bclose everything\b|\bhide everything\b|\bstart over\b|\bclean\b/i;

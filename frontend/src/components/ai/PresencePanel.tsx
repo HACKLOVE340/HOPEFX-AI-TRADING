@@ -620,6 +620,17 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
         workspace.close(id);
         syncWorkspace();
       }}
+      onDrillSurface={(surface, label) => {
+        // §21 drill-down reuses §9's layer stack: the crumb is named after the
+        // mark that was clicked, not after the panel, so a trail of three reads
+        // as three things rather than as the same panel three times.
+        workspace.focus(surface.id);
+        layers.enter({ surfaceId: surface.id, label });
+        setTrail([...layers.trail]);
+        syncWorkspace();
+        turn.say(`Looking at ${label}.`);
+        setTranscript([...turn.transcript]);
+      }}
       onPinSurface={(id) => {
         const current = surfaces.find((x) => x.id === id);
         workspace.pin(id, !current?.pinned);

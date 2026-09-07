@@ -132,6 +132,8 @@ export interface PresenceStageProps {
   onToggleMute: () => void;
   onCloseSurface: (id: string) => void;
   onPinSurface: (id: string) => void;
+  /** §21 drill-down: a mark inside a panel was clicked. */
+  onDrillSurface?: (surface: Surface, label: string) => void;
   onExit: () => void;
 }
 
@@ -140,7 +142,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   trail = [], onBreadcrumb, onPositions, modeName, accent,
   utterance = '', speechProgress = null, speaking = false,
   projections, representation = 'core',
-  onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onExit,
+  onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onDrillSurface, onExit,
 }) => {
   const [typed, setTyped] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -440,6 +442,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
                 spokenAbout={spokenAbout.includes(surface.id)}
                 onClose={() => onCloseSurface(surface.id)}
                 onPin={() => onPinSurface(surface.id)}
+                onDrill={onDrillSurface}
               />
             ))}
           </div>

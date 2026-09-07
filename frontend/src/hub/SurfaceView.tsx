@@ -13,10 +13,13 @@
  */
 
 import React from 'react';
-import { Pin, X } from 'lucide-react';
+import { Pin, Table as TableIcon, X } from 'lucide-react';
 import type { Surface } from './workspace';
 import { surfaceData, type SurfaceData } from './surfaceData';
 import { focusTransition } from './spatial';
+import {
+  Heatmap, HeatmapTable, Media, NetworkGraph, NetworkTable, Timeline, TimelineTable,
+} from './VizMarks';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
 const C = {
@@ -62,7 +65,9 @@ const iconBtn: React.CSSProperties = {
  * the title and the controls belong to `SurfaceView`, so every surface has the
  * same edges and the same way to close it.
  */
-const RENDERERS: Record<string, React.FC<{ surface: Surface; data: SurfaceData }>> = {
+type RendererProps = { surface: Surface; data: SurfaceData; onDrill?: (label: string) => void };
+
+const RENDERERS: Record<string, React.FC<RendererProps>> = {
   chart: ({ data }) => <Sparkline points={data.points ?? []} />,
   table: ({ data }) => <Rows rows={data.rows ?? []} />,
   news: ({ data }) => <Headlines items={data.items ?? []} />,
@@ -88,6 +93,32 @@ const RENDERERS: Record<string, React.FC<{ surface: Surface; data: SurfaceData }
   ),
   distribution: ({ data }) => <Bars values={data.values ?? []} />,
   agent_activity: ({ data }) => <Rows rows={data.rows ?? []} />,
+  heatmap: ({ data, onDrill }) => <Heatmap cells={data.cells ?? []} onDrill={onDrill} />,
+  network: ({ data, onDrill }) => (
+    <NetworkGraph nodes={data.nodes ?? []} edges={data.edges ?? []} onDrill={onDrill} />
+  ),
+  timeline: ({ data, onDrill }) => <Timeline events={data.events ?? []} onDrill={onDrill} />,
+  image: ({ data }) =>
+    data.media ? <Media media={data.media} /> : <Empty>No image source.</Empty>,
+  video: ({ data }) =>
+    data.media ? <Media media={data.media} /> : <Empty>No video source.</Empty>,
+};
+
+/**
+ * The table-view twin (§21, and the accessibility rule behind it).
+ *
+ * A heatmap encodes magnitude in colour and a graph encodes category in colour.
+ * Colour is not a channel everybody has, and a tooltip is not the answer because
+ * it gates the value behind a gesture nobody can perform on a keyboard-only
+ * screen reader. So every mark that encodes in colour has a text equivalent, and
+ * the panel carries a switch between them.
+ *
+ * A kind with no entry here has no colour-only encoding to escape from.
+ */
+const TABLES: Record<string, React.FC<{ data: SurfaceData }>> = {
+  heatmap: ({ data }) => <HeatmapTable cells={data.cells ?? []} />,
+  network: ({ data }) => <NetworkTable nodes={data.nodes ?? []} edges={data.edges ?? []} />,
+  timeline: ({ data }) => <TimelineTable events={data.events ?? []} />,
 };
 
 export interface SurfaceViewProps {
@@ -107,12 +138,20 @@ export interface SurfaceViewProps {
   spokenAbout?: boolean;
   onClose: () => void;
   onPin: () => void;
+  /**
+   * §21 interactive drill-down: the reader clicked one mark and wants what is
+   * behind it. Carries the mark's own description, so the layer this opens is
+   * named after what was clicked rather than after the panel.
+   */
+  onDrill?: (surface: Surface, label: string) => void;
 }
 
 export const SurfaceView: React.FC<SurfaceViewProps> = ({
-  surface, span, focused, spokenAbout = false, onClose, onPin,
+  surface, span, focused, spokenAbout = false, onClose, onPin, onDrill,
 }) => {
   const Renderer = RENDERERS[surface.kind];
+  const Table = TABLES[surface.kind];
+  const [asTable, setAsTable] = React.useState(false);
   // Resolved here rather than inside each renderer, so "there is nothing to
   // show" is decided in ONE place and cannot be answered differently by a
   // sparkline and a table looking at the same absent feed.
@@ -178,6 +217,17 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
           </h3>
         </div>
         <div style={{ display: 'flex', gap: 5, flex: '0 0 auto' }}>
+          {Table && (
+            <button
+              type="button"
+              onClick={() => setAsTable((v) => !v)}
+              aria-label={asTable ? `Show ${surface.meaning} as a chart` : `Show ${surface.meaning} as a table`}
+              aria-pressed={asTable}
+              style={{ ...iconBtn, color: asTable ? C.core : C.quiet }}
+            >
+              <TableIcon size={12} aria-hidden />
+            </button>
+          )}
           <button
             type="button"
             onClick={onPin}
@@ -206,8 +256,14 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
           // book and a dead feed both render as nothing unless somebody says
           // which one this is.
           <p style={{ margin: 0, fontSize: 12, color: C.quiet, lineHeight: 1.6 }}>{data.note}</p>
+        ) : asTable && Table ? (
+          <Table data={data} />
         ) : (
-          <Renderer surface={surface} data={data} />
+          <Renderer
+            surface={surface}
+            data={data}
+            onDrill={onDrill ? (label) => onDrill(surface, label) : undefined}
+          />
         )}
       </div>
     </section>

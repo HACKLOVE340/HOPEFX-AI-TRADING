@@ -511,7 +511,7 @@ def test_the_policy_cannot_stop_a_proposal_being_queued():
     """The safety property of the wiring. A notification policy that could
     suppress a proposal would be one that can delete the audit record of a
     condition."""
-    import ai.notify.service as service
+    from ai.notify import service
     from ai.awareness import watchers
 
     watchers.reset_for_testing()
@@ -680,7 +680,7 @@ async def test_a_watch_is_created_for_the_caller_not_for_a_name_in_the_body():
         {"subject": "daily_loss_pct", "comparison": "gte", "threshold": 4.0, "operator": "bob"},
         alice,
     )
-    assert len(((await notification_watches(alice))["watches"])) == 1
+    assert len((await notification_watches(alice))["watches"]) == 1
     assert (await notification_watches(bob))["watches"] == []
 
 
