@@ -2313,15 +2313,18 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "10",
         "D",
         "Multi-display console",
-        "staged",
-        "frontend/src/hooks/useAICommandCenter.ts",
-        "MEASURED: NINE live sources, each carrying its own loading/ready/degraded state and the "
-        "timestamp it was last updated, so one dead feed degrades its own tile instead of the "
-        "console. The previous note said six and never said what was MISSING, which is the one note "
-        "shape this registry forbids — a note that lists what exists reads as complete. What is "
-        "missing is the display half: 'multi-display' means spanning more than one physical screen, "
-        "and nothing here calls getScreenDetails or places a window on a second monitor. It is one "
-        "console with nine sources, which is not the same claim.",
+        "live",
+        "frontend/src/hub/displays.ts:readDisplays",
+        "The previous note said this needed 'a second physical screen this deployment does not have'. "
+        "WRONG: the Window Management API is a browser API and the code plus its degradation are "
+        "buildable without owning a monitor. Three states, not one boolean — unsupported (no API), "
+        "unpermitted (not granted), measured (real, including one) — because collapsing them into 'no "
+        "extra screens' tells an operator on a three-monitor desk they have one, and they go looking "
+        "for a hardware fault. Reading is a PROBE that never prompts: a permission dialog raised by a "
+        "component mounting is one people learn to dismiss. When the plane spreads, critical and "
+        "primary surfaces stay on the primary screen. RUNTIME UNVERIFIED: placement across real "
+        "monitors cannot be exercised in this container — the state machine and the degradation are "
+        "covered by 15 tests, the hardware path is not.",
     ),
     _c(
         "legacy.price_action_visualization",

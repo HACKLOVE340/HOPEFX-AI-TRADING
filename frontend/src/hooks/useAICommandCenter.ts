@@ -1,5 +1,6 @@
 import { useQueries } from '@tanstack/react-query';
 import { accountsApi, backtestApi, dataLayerApi, mlApi, tradingApi, walkForwardApi } from './useApi';
+import { useDisplays } from '../hub/useDisplays';
 
 type SourceState<T> = {
   data?: T;
@@ -47,5 +48,25 @@ export function useAICommandCenter(symbol = 'XAUUSD') {
     walkForward: resolve(walkForward, 'backtesting.walk-forward'),
   };
 
-  return { sources, isRefreshing: results.some((query) => query.isFetching), hasDegradedSources: Object.values(sources).some((source) => source.status === 'degraded'), refresh: () => results.forEach((query) => void query.refetch()) };
+  // §10. The console's other half: how many screens it is actually on.
+  //
+  // This hook aggregated nine sources and called itself a multi-display
+  // console, which it was not — "multi-display" means spanning more than one
+  // physical screen, and nothing here had ever asked how many there were.
+  // `displays.state` distinguishes "this browser cannot tell" from "you have
+  // one screen", because an operator on a three-monitor desk told they have
+  // one goes looking for a fault in their hardware.
+  //
+  // Reading is a probe: it never raises a permission prompt. `requestDisplays`
+  // is the path an operator takes deliberately.
+  const { snapshot: displays, request: requestDisplays } = useDisplays();
+
+  return {
+    sources,
+    displays,
+    requestDisplays,
+    isRefreshing: results.some((query) => query.isFetching),
+    hasDegradedSources: Object.values(sources).some((source) => source.status === 'degraded'),
+    refresh: () => results.forEach((query) => void query.refetch()),
+  };
 }

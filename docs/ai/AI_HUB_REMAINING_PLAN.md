@@ -6,7 +6,7 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 222 live · 8 staged · 0 planned ·
+At the time of writing: **230 capabilities · 223 live · 7 staged · 0 planned ·
 230/230 evidence resolved · 0 discrepancies · 97% built.**
 
 That live count went **down** by one, and the percentage with it. §4's four
@@ -18,7 +18,7 @@ it was wrong before, not now.
 Sections finished (nothing planned or staged): §5, §6, §7, §8, §11, §12, §13,
 §14, §15, §16, §17, §19, §20, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**8 rows remain**, across five sections. The owner asked for everything I had
+**7 rows remain**, across four sections. The owner asked for everything I had
 called blocking to be built, and re-examining the list found I was **wrong
 about four of the six** — I had labelled work I declined to do as
 infrastructure that did not exist:
@@ -27,7 +27,7 @@ infrastructure that did not exist:
 |---|---|---|---|
 | 24 | Isolated agent workers | "no process boundary this deployment has" | **Wrong.** stdlib. ✅ built |
 | 21 | 3D and scientific models | "only canvas2d implemented" | **Wrong as a blocker** — a renderer is code |
-| 10 | Multi-display console | "no second physical screen" | **Wrong as a blocker** — `getScreenDetails` is a browser API |
+| 10 | Multi-display console | "no second physical screen" | **Wrong as a blocker.** browser API. ✅ built |
 | 18 | Pointing and object reference | "no landmark source" | **Half wrong** — the built half has no caller |
 | 18 | Gesture recognition | "no landmark source" | True for the camera half; needs a new dependency |
 | 26 | Runaway recursive delegation | "does not exist to bound" | Genuinely circular — the bound belongs at §24's boundary |
@@ -1255,6 +1255,58 @@ the row describes.
 
 ---
 
+## Phase I2 — §10, the second screen I said we did not have  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §10 Multi-display console | staged | **live** | `hub/displays.ts:readDisplays` |
+
+The note said this needed "a second physical screen this deployment does not
+have". The Window Management API is a browser API. Not owning a monitor makes
+the hardware path unverifiable; it does not make the code unwritable, and I had
+used the first fact to excuse the second.
+
+### Three states, because two of them look like the third
+
+`unsupported` (no API), `unpermitted` (not granted), `measured` (real, and one
+screen is a real answer). Collapsing them into "no extra screens" is §22's rule
+broken in a new place — an unmeasured display count is **absent, never zero**.
+An operator on a three-monitor desk told they have one screen goes looking for
+a fault in their hardware, which is worse than being told the browser cannot
+see them.
+
+### Rendering never asks for permission
+
+`getScreenDetails()` prompts. Calling it because a component mounted makes
+*opening the app* the request — the same mistake the camera panel made before
+§25, and a prompt nobody asked for is one people learn to dismiss, after which
+the prompt they meant to accept is dismissed too. The automatic read is a
+probe; only `request()` can prompt.
+
+Both of those were verified by injecting them: treating the unsupported case as
+one screen fails the state test, and removing the probe branch fails the
+no-prompt test.
+
+### Risk does not move to a monitor nobody is watching
+
+When the plane spreads, critical and primary surfaces stay on the primary
+screen. Same reasoning that made risk `critical` in the war room so a crowded
+plane could not fold it into a chip.
+
+The secondary split is round-robin rather than by area or by guessing where
+somebody is looking. Both of those would be inventions; an even split is at
+least a rule an operator can predict.
+
+### What is proven, and what is not
+
+**Automated (PASS):** 15 tests over the state machine, the degradations, the
+malformed-answer and zero-area cases, and the placement rules.
+**Runtime (UNVERIFIED):** placement across real monitors. This container has
+one screen and no Window Management permission, so the hardware path has never
+executed. The registry note says so rather than implying otherwise.
+
+---
+
 ## Phase H — the remainder
 
 Nine rows, five sections. Regenerated from the registry rather than
@@ -1267,7 +1319,6 @@ that Phases E and F made live, which is the shape of stale plan a reader trusts.
 | 18 | Gesture recognition | staged |
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
-| 10 | Multi-display console | staged |
 | 4 | Presence layer — identity, voice, animation, spatial state | planned |
 | 4 | Environment layer — the dynamic workspace | planned |
 
