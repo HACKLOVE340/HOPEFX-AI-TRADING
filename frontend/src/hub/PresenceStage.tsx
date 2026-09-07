@@ -30,6 +30,7 @@ import { Mic, Minimize2, Send, Square, Volume2, VolumeX, X } from 'lucide-react'
 import { PresenceCore } from './PresenceCore';
 import { useRovingFocus } from './useRovingFocus';
 import { sceneFrom, type Measurement } from './sceneFrom';
+import { useFrameBudget } from './useFrameBudget';
 import type { SceneGraph } from './sceneGraph';
 import type { Presence } from './presence';
 import type { Surface } from './workspace';
@@ -38,6 +39,7 @@ import { positionOf, type Layer, type Position } from './spatial';
 import { singleProjection, type Projection, type Representation } from './projection';
 import { SurfaceView } from './SurfaceView';
 import { useViewportWidth } from './useViewportWidth';
+import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
 const C = {
   void: '#070c16',
@@ -204,6 +206,21 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   const hidden = placements.length - visible.length;
   const hasSurfaces = visible.length > 0;
 
+  /**
+   * §26. What the machine can currently afford, measured rather than assumed.
+   *
+   * The plane is the heaviest thing this app draws — a canvas presence, a grid
+   * of live panels, and a projection layer. `nextFidelity` has decided how much
+   * of that to draw since Phase D1 and, until this call, was asked by nobody.
+   *
+   * Reduced motion is passed straight through rather than applied here:
+   * `nextFidelity` owns the rule that it is a cap and not one input among
+   * several, and applying it twice in two places is how the two come to
+   * disagree.
+   */
+  const reducedMotion = usePrefersReducedMotion();
+  const budget = useFrameBudget({ reducedMotion });
+
   // The collapsed stack is a horizontal toolbar: one tab stop, arrows within.
   // Declaring the axis matters here — the plane scrolls vertically behind it,
   // and swallowing ArrowUp would stop that scroll from a focused chip.
@@ -342,6 +359,18 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
             {surfaces.length ? `${layout.replace('_', ' ')} · ${surfaces.length} on the plane` : 'clear'}
             {hidden > 0 && ` · ${hidden} hidden`}
           </span>
+          {budget.fidelity !== 'full' && (
+            // §26 with §22's honesty and §27's rule about colour: a plane that
+            // degrades silently teaches an operator that the screen is just
+            // slow. The level is a word, the cause is in the title, and both
+            // are text rather than a dimmed animation nobody can name.
+            <span
+              title={budget.reason}
+              style={{ ...label, color: C.bad }}
+            >
+              {`${budget.fidelity} fidelity`}
+            </span>
+          )}
           <button
             type="button"
             onClick={onExit}
@@ -379,6 +408,13 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
         >
           <PresenceCore
             presence={presence}
+            // §26. The heaviest thing on this screen is the animated canvas, so
+            // it is the first thing the frame budget takes away. Anything below
+            // full fidelity stops it — the presence still draws, it stops
+            // moving, which is what "pause or reduce animation under load"
+            // asks for. `nextFidelity` has already folded the reduced-motion
+            // preference in, so it is not re-applied here.
+            reducedMotion={budget.fidelity !== 'full'}
             size={Math.round((hasSurfaces ? 220 : 300) * scale)}
             representation={representation}
             utterance={utterance}

@@ -21,6 +21,7 @@ import {
   Heatmap, HeatmapTable, Media, NetworkGraph, NetworkTable, Timeline, TimelineTable,
 } from './VizMarks';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
+import { VIRTUALIZE_ABOVE, VirtualList } from './VirtualList';
 
 const C = {
   hull: 'linear-gradient(155deg, rgba(16,26,44,.92), rgba(11,19,34,.92))',
@@ -306,30 +307,86 @@ const Bars: React.FC<{ values: number[] }> = ({ values }) => {
   );
 };
 
-const Rows: React.FC<{ rows: [string, string][] }> = ({ rows }) =>
-  rows.length === 0 ? (
-    <Empty>Nothing to show.</Empty>
-  ) : (
-    <dl style={{ margin: 0, display: 'grid', gap: 5, fontSize: 12 }}>
-      {rows.map(([k, v]) => (
-        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-          <dt style={{ color: C.quiet }}>{k}</dt>
-          <dd style={{ margin: 0, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{v}</dd>
-        </div>
-      ))}
-    </dl>
-  );
+/** Row height the virtual window is computed from. Matches the 12px/1.4 line box. */
+const ROW_HEIGHT = 22;
 
-const Headlines: React.FC<{ items: string[] }> = ({ items }) =>
-  items.length === 0 ? (
-    <Empty>No headlines.</Empty>
-  ) : (
-    <ul style={{ margin: 0, paddingLeft: 15, display: 'grid', gap: 5, fontSize: 12, color: C.dim }}>
-      {items.map((t) => (
-        <li key={t}>{t}</li>
-      ))}
-    </ul>
+/** Scroll-container height for a virtualised list inside a panel. */
+const LIST_HEIGHT = 220;
+
+const Row: React.FC<{ pair: [string, string] }> = ({ pair: [k, v] }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, height: ROW_HEIGHT, alignItems: 'center' }}>
+    <span style={{ color: C.quiet }}>{k}</span>
+    <span style={{ color: C.text, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+  </div>
+);
+
+/**
+ * §26. Short tables render whole; long ones render a window.
+ *
+ * Before this, every row went into the document — a surface carrying five
+ * thousand rows put five thousand nodes on the plane, and `windowFor` had been
+ * sitting in `virtualization.ts` since Phase D1 with nothing calling it.
+ *
+ * The `<dl>` is dropped in the virtual case rather than half-populated: a
+ * definition list whose terms are a scrolled subset is worse markup than a
+ * labelled group, because assistive technology reports its length.
+ */
+const Rows: React.FC<{ rows: [string, string][] }> = ({ rows }) => {
+  if (rows.length === 0) return <Empty>Nothing to show.</Empty>;
+  if (rows.length <= VIRTUALIZE_ABOVE) {
+    return (
+      <dl style={{ margin: 0, display: 'grid', gap: 5, fontSize: 12 }}>
+        {rows.map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+            <dt style={{ color: C.quiet }}>{k}</dt>
+            <dd style={{ margin: 0, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{v}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+  return (
+    <div style={{ fontSize: 12 }}>
+      <VirtualList
+        items={rows}
+        itemHeight={ROW_HEIGHT}
+        height={LIST_HEIGHT}
+        noun="rows"
+        label="Table rows"
+        keyFor={([k], i) => `${k}-${i}`}
+        renderItem={(pair) => <Row pair={pair} />}
+      />
+    </div>
   );
+};
+
+const Headlines: React.FC<{ items: string[] }> = ({ items }) => {
+  if (items.length === 0) return <Empty>No headlines.</Empty>;
+  if (items.length <= VIRTUALIZE_ABOVE) {
+    return (
+      <ul style={{ margin: 0, paddingLeft: 15, display: 'grid', gap: 5, fontSize: 12, color: C.dim }}>
+        {items.map((t) => (
+          <li key={t}>{t}</li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <div style={{ fontSize: 12, color: C.dim }}>
+      <VirtualList
+        items={items}
+        itemHeight={ROW_HEIGHT}
+        height={LIST_HEIGHT}
+        noun="headlines"
+        label="Headlines"
+        keyFor={(t, i) => `${t}-${i}`}
+        renderItem={(t) => (
+          <div style={{ display: 'flex', alignItems: 'center', height: ROW_HEIGHT }}>{t}</div>
+        )}
+      />
+    </div>
+  );
+};
 
 const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p style={{ margin: 0, fontSize: 12, color: C.quiet }}>{children}</p>

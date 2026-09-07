@@ -6,20 +6,20 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 210 live · 14 staged · 6 planned ·
-224/224 evidence resolved · 0 discrepancies · 91% built.**
+At the time of writing: **230 capabilities · 213 live · 13 staged · 4 planned ·
+226/226 evidence resolved · 0 discrepancies · 93% built.**
 
 Sections finished (nothing planned or staged): §5, §6, §7, §12, §13, §15, §16,
 §17, §19, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**20 rows remain**, across ten sections:
+**17 rows remain**, across ten sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 26 performance | 4 | 21 visualisation | 2 | 14 long-running | 1 |
-| 11 agents | 3 | 4 roll-ups | 2 | 20 war room | 1 |
-| 18 ambient awareness | 2 | 8 surface types | 1 | 24 agent runtime | 1 |
-| 27 accessibility | 2 | 10 multi-display | 1 | | |
+| 11 agents | 3 | 27 accessibility | 2 | 14 long-running | 1 |
+| 18 ambient awareness | 2 | 4 roll-ups | 2 | 20 war room | 1 |
+| 21 visualisation | 2 | 8 surface types | 1 | 24 agent runtime | 1 |
+| 26 performance | 1 | 10 multi-display | 1 | | |
 
 Phase H covers all of them. §4's two rows are roll-ups and land last by
 construction: they become live when the layers beneath them are, so claiming
@@ -737,17 +737,89 @@ their screen.
 
 ---
 
+## Phase H2 — §26, two deciders that nobody asked  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| Render large workspaces efficiently | planned | **live** | `hub/VirtualList.tsx:VirtualList` |
+| Pause or reduce animation under load | planned | **live** | `hub/useFrameBudget.ts:useFrameBudget` |
+| Graceful offline and degraded states | staged | **live** | `hooks/useWebSocket.ts` |
+| Prevent runaway recursive delegation | staged | staged | `ai.agent.loop` |
+
+### Both deciders existed, passed their unit tests, and were never called
+
+`virtualization.ts:windowFor` and `frameBudget.ts:nextFidelity` were built in
+Phase D1. Measured at the start of this phase, each was imported by exactly
+zero components. That is `hopefx-dead-controls` in its most convincing form: a
+correct function, a green test, and no caller — the tests pass whether or not
+the product does the thing.
+
+So the work was the two halves neither had. A **consumer** for the window, and
+the two **readings** the load sample needed.
+
+### Five thousand rows were five thousand nodes
+
+`SurfaceView` mapped over every row and every headline. A surface carrying the
+whole position book put the whole book in the document. `VirtualList` renders a
+window above a declared threshold and gets out of the way below it —
+virtualising ten rows costs a scroll container and breaks find-in-page to save
+nothing.
+
+A window is a lie by omission, so the real length is stated in words and in
+`aria-rowcount`. §27's rule that colour is never the only indicator has the
+same shape here: a scrollbar is not an indicator everybody has.
+
+### The load reading is where F176 would have come back
+
+`GET /api/ai-core/telemetry` already existed and the frontend never called it.
+It returns host CPU as a §22 `Reading` — a value, a `measured` flag, a reason.
+Reading `value` and skipping `measured` is precisely the defect §22 was written
+about: `infrastructure/metrics.py` leaves the gauge unset when psutil is
+missing, an unset gauge reads back 0.0, and the machine reports itself idle
+because nobody looked. `readHostCpu` treats `measured` as the authority,
+refuses a number that sits beside `measured: false`, and carries the reason
+with the null so a held fidelity can be explained.
+
+Frame time is a **median over a burst**, not the last frame. One garbage
+collection would drag a mean past the 50ms threshold and step fidelity down for
+a machine that is fine, and the next sample would send it back — a screen
+oscillating between two appearances is worse than one consistently reduced. An
+interval spanning a hidden tab is dropped outright: `requestAnimationFrame`
+stops in the background, so the first frame back is seconds long.
+
+And the sampler runs in bursts with a rest between them. A frame-timing loop
+that runs forever is itself a cost, paid on exactly the loaded machine it is
+meant to help.
+
+### Degrading silently is the failure, not degrading
+
+Anything below full fidelity stops the presence canvas **and** names the level
+on screen, with the measured cause in its title. A plane that quietly gets less
+animated teaches an operator that the app is just slow today, and then the
+indicator that is meant to warn them is one they have learned to ignore.
+
+That, with the stale feed `useWebSocket` already detects and the offline
+presence `PresenceCore` already draws as a dead ring plus the word "Offline",
+is three degraded states each named in words — which is what moved
+`degraded_states` to live.
+
+### One row stays staged, and the note was already right
+
+`perf.no_runaway_delegation`: the agent loop is bounded, and recursive
+delegation does not exist to bound. Grepped again this phase — no `delegate`,
+no spawn path in `ai/agent/loop.py`. Building a limiter for a mechanism nobody
+has written is a control that can never fire.
+
+---
+
 ## Phase H — the remainder
 
-Twenty rows, ten sections. Regenerated from the registry rather than
+Seventeen rows, ten sections. Regenerated from the registry rather than
 carried forward: the earlier version of this table still listed §7 and §25 rows
 that Phases E and F made live, which is the shape of stale plan a reader trusts.
 
 | § | Row | State |
 |---|---|---|
-| 26 | Render large workspaces efficiently | planned |
-| 26 | Pause or reduce animation under load | planned |
-| 26 | Graceful offline and degraded states | staged |
 | 26 | Prevent runaway recursive delegation | staged |
 | 11 | System agent — infrastructure, services, resources, failures | planned |
 | 11 | Vision agent | staged |

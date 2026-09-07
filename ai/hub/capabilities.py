@@ -1969,16 +1969,45 @@ REGISTRY: Final[tuple[Capability, ...]] = (
     # §26 — Performance
     _c("perf.non_blocking", "26", "B", "Conversation never blocks on long-running tasks", "live", "ai.jobs.runner", ""),
     _c("perf.stream_partials", "26", "B", "Stream partial results", "live", "ai.gateway.client:GatewayClient", ""),
-    _c("perf.large_workspaces", "26", "D", "Render large workspaces efficiently"),
-    _c("perf.reduce_animation_under_load", "26", "A", "Pause or reduce animation under load"),
+    _c(
+        "perf.large_workspaces",
+        "26",
+        "D",
+        "Render large workspaces efficiently",
+        "live",
+        "frontend/src/hub/VirtualList.tsx:VirtualList",
+        "windowFor decided which slice to draw from Phase D1 onwards and was called by nothing, so a "
+        "table of five thousand positions put five thousand nodes on the plane. Now a short list still "
+        "renders whole — virtualising ten rows breaks find-in-page to save nothing — and a long one "
+        "renders a window that states its real length in words and in aria-rowcount, because a window "
+        "is a lie by omission and a scrollbar is not an indicator everybody has.",
+    ),
+    _c(
+        "perf.reduce_animation_under_load",
+        "26",
+        "A",
+        "Pause or reduce animation under load",
+        "live",
+        "frontend/src/hub/useFrameBudget.ts:useFrameBudget",
+        "nextFidelity has decided since Phase D1 and was asked by nobody; hostLoad.ts is the two "
+        "readings it never had. Host cpu comes from GET /api/ai-core/telemetry and is read through the "
+        "§22 measured flag, not the value — an unset gauge reading back 0.0 is F176 itself. Frame time "
+        "is a median over a burst, so one slow frame does not oscillate the plane between two "
+        "appearances, and an interval spanning a hidden tab is dropped rather than counted. Anything "
+        "below full fidelity stops the presence canvas AND names the level on screen: a plane that "
+        "degrades silently teaches an operator the app is just slow.",
+    ),
     _c(
         "perf.degraded_states",
         "26",
         "D",
         "Graceful offline and degraded states",
-        "staged",
+        "live",
         "frontend/src/hooks/useWebSocket.ts",
-        "Stale-feed detection exists.",
+        "Three degraded states, each named in words rather than drawn as a dimmer screen: a stale feed "
+        "(useWebSocket), an offline presence (PresenceCore stops the activity ring dead and says "
+        "Offline), and reduced render fidelity under load (PresenceStage names the level, with the "
+        "measured cause in its title).",
     ),
     _c(
         "perf.stale_detection",
