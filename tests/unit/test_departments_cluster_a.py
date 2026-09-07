@@ -47,16 +47,17 @@ def test_all_four_cluster_a_departments_are_declared():
     This asserted the four were the ONLY departments, which was true until §11's
     remaining agents landed. Split rather than loosened: the point of the
     original was that the set cannot grow quietly, and asserting the full set
-    keeps that while letting Cluster B exist.
+    keeps that while letting Clusters B and C exist.
+
+    Cluster C (system, vision, memory) closed §11. Adding it here is the cost
+    of the rule and the reason the rule works — the set moved, and a human had
+    to say so.
     """
     cluster_a = {"markets_execution", "risk_compliance", "research_intelligence", "platform_engineering"}
+    cluster_b = {"news_intelligence", "voice_interface", "notification_ops", "data_ops"}
+    cluster_c = {"system_ops", "vision_ops", "memory_ops"}
     assert cluster_a <= set(departments.DEPARTMENTS)
-    assert set(departments.DEPARTMENTS) == cluster_a | {
-        "news_intelligence",
-        "voice_interface",
-        "notification_ops",
-        "data_ops",
-    }
+    assert set(departments.DEPARTMENTS) == cluster_a | cluster_b | cluster_c
 
 
 @pytest.mark.parametrize(

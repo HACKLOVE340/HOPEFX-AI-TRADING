@@ -421,6 +421,112 @@ def _watch_news_feed_silence() -> Observation | None:
     )
 
 
+#: Above this a host reading counts as pressure. Chosen to sit above
+#: `frameBudget.ts`'s CPU_HIGH of 85 so the plane degrades its own rendering
+#: first and only escalates to a proposal when that was not enough — two alarms
+#: at the same threshold is one alarm and one duplicate.
+_HOST_PRESSURE_PERCENT = 90.0
+
+
+def _watch_host_pressure() -> Observation | None:
+    """Spec §11 system agent: the machine is running out of something.
+
+    §22's rule decides the None cases here, and it decides them twice. A probe
+    that could not run returns None — an unavailable check is not a finding,
+    and treating an unmeasured CPU as a busy one would raise a resource alarm
+    on every deployment without psutil. A probe that ran and read low also
+    returns None, which is the ordinary case.
+
+    So the only thing that fires is a reading that exists and is high.
+    """
+    from ai.departments import system_ops
+
+    result = system_ops.host_resources(operator="owner")
+    if not result.get("available"):
+        return None
+
+    pressured: dict[str, float] = {}
+    for name, reading in (result.get("readings") or {}).items():
+        if not isinstance(reading, dict) or not reading.get("measured"):
+            continue
+        value = reading.get("value")
+        if isinstance(value, (int, float)) and value >= _HOST_PRESSURE_PERCENT:
+            pressured[name] = float(value)
+    if not pressured:
+        return None
+
+    worst = max(pressured, key=lambda k: pressured[k])
+    return Observation(
+        department="system_ops",
+        trigger="resource_pressure",
+        severity="warning",
+        summary=(
+            f"{worst} is at {pressured[worst]:.0f}%. A machine this close to its limit drops frames "
+            "and times out model calls, and both look like the platform being slow rather than full."
+        ),
+        detail={"readings": pressured},
+    )
+
+
+def _watch_camera_consent_withdrawn() -> Observation | None:
+    """Spec §11 vision agent: vision is configured and consent is not held.
+
+    `info`, not a warning, and deliberately so. Consent withheld is the
+    CORRECT state, not a fault — the point of noticing it is that a model
+    asked to look at something will be refused, and the refusal should not
+    read to an operator as the feature being broken.
+    """
+    from ai.departments import vision_ops
+
+    status = vision_ops.vision_status(operator="owner")
+    if not status.get("available"):
+        return None
+    if not status.get("vendor_configured"):
+        # Nothing to consent to. Reporting withheld consent for a capability
+        # that cannot run would be an alarm about a hypothetical.
+        return None
+    if status.get("camera_consent"):
+        return None
+    return Observation(
+        department="vision_ops",
+        trigger="camera_consent_withdrawn",
+        severity="info",
+        summary=(
+            "Vision is configured and camera consent is not held, so any request to look at "
+            "something will be refused. That is the gate working, not a fault."
+        ),
+        detail={"consent_reason": status.get("consent_reason", "")},
+    )
+
+
+def _watch_memory_not_durable() -> Observation | None:
+    """Spec §11 memory agent: memory will not survive a restart.
+
+    `durable` is tri-state on purpose. None means the backend could not be
+    read, and that is not the same as "not durable" — one is a question and the
+    other is an answer. Only a measured False fires.
+    """
+    from ai.departments import memory_ops
+
+    health = memory_ops.memory_health(operator="owner")
+    if not health.get("available"):
+        return None
+    durable = health.get("durable")
+    if durable is None or durable:
+        return None
+    return Observation(
+        department="memory_ops",
+        trigger="memory_not_durable",
+        severity="warning",
+        summary=(
+            "Department memory is in-process only, so everything it holds is lost on restart. "
+            "An operator who has been told the AI remembers them has been told something that "
+            "stops being true at the next deploy."
+        ),
+        detail={"department_store": health.get("department_store", {})},
+    )
+
+
 def install_default_watchers() -> None:
     """Register one watcher per department, for the triggers spec §4 names."""
     register("markets_execution", "broker_connection", _watch_broker_connection)
@@ -435,6 +541,12 @@ def install_default_watchers() -> None:
     register("voice_interface", "no_voice_provider", _watch_voice_providers)
     register("notification_ops", "escalation_unacknowledged", _watch_unacknowledged_escalation)
     register("news_intelligence", "news_feed_silent", _watch_news_feed_silence)
+    # Cluster C (§11). Same rule: a declared awareness trigger with no watcher
+    # behind it is a department that notices nothing, and the test above is
+    # what catches it — it caught exactly this when these three were added.
+    register("system_ops", "resource_pressure", _watch_host_pressure)
+    register("vision_ops", "camera_consent_withdrawn", _watch_camera_consent_withdrawn)
+    register("memory_ops", "memory_not_durable", _watch_memory_not_durable)
 
 
 def reset_for_testing() -> None:

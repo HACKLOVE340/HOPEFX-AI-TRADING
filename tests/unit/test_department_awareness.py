@@ -245,6 +245,71 @@ def test_every_department_has_at_least_one_watcher():
         assert key in covered, f"{key} has no watcher, so it notices nothing"
 
 
+#: Departments whose `awareness` entries are PROSE rather than watcher names.
+#:
+#: Found by the test below when it was written, not designed. Cluster A
+#: declares things like "broker disconnect detection"; Clusters B and C declare
+#: "feed_stale" — the same field means two things, and `as_dict()` puts both on
+#: the wire, so normalising Cluster A would change text an operator reads.
+#:
+#: Recorded here rather than quietly excluded, and asserted to be exactly these
+#: four: closing the inconsistency means shrinking this list, and leaving it
+#: stale fails.
+PROSE_AWARENESS = {
+    "markets_execution",
+    "risk_compliance",
+    "research_intelligence",
+    "platform_engineering",
+}
+
+
+def test_every_declared_trigger_has_a_watcher():
+    """A department's `awareness` tuple is a claim about what it notices.
+
+    The existing test above counts departments: one watcher each is enough to
+    pass it. That let `system_ops` ship declaring `breaker_open` with nothing
+    watching for it — a trigger named in the directory, put on the wire by
+    `as_dict()`, and unreachable. This asserts the claim itself, for every
+    department that states it as a trigger name.
+    """
+    from ai.awareness.watchers import install_default_watchers, registered
+    from ai.departments import DEPARTMENTS
+
+    install_default_watchers()
+    watched: dict[str, set[str]] = {}
+    for department, name in registered():
+        watched.setdefault(department, set()).add(name)
+
+    for key, department in DEPARTMENTS.items():
+        if key in PROSE_AWARENESS:
+            continue
+        for trigger in department.awareness:
+            assert trigger in watched.get(key, set()), (
+                f"{key} declares awareness of {trigger!r} and no watcher registers it, "
+                f"so nothing ever notices — registered for {key}: {sorted(watched.get(key, set()))}"
+            )
+
+
+def test_the_prose_exemption_is_exactly_the_departments_that_need_it():
+    """The exemption above must shrink when the inconsistency is fixed.
+
+    An exemption list nobody re-checks becomes a permanent hole. This one
+    fails if a department is added to it without needing it, and fails if one
+    stops needing it and stays.
+    """
+    from ai.departments import DEPARTMENTS
+
+    still_prose = {
+        key
+        for key, department in DEPARTMENTS.items()
+        # A trigger name is an identifier. Prose has spaces in it.
+        if any(" " in trigger for trigger in department.awareness)
+    }
+    assert still_prose == PROSE_AWARENESS, (
+        f"PROSE_AWARENESS is stale: departments whose awareness is still prose are {sorted(still_prose)}"
+    )
+
+
 def test_the_default_watchers_survive_a_run_with_no_live_services():
     """CI has no broker, no feed, no positions. Nothing may throw."""
     from ai.awareness.watchers import install_default_watchers, run_all

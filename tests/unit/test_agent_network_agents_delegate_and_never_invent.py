@@ -36,6 +36,10 @@ the System agent's own remit (infrastructure, services, resources, failures)
 had no agent at all. Two rows were pointing at one module; the tests below pin
 the corrected mapping.
 
+The System agent has since been built as `ai/departments/system_ops.py`
+(Cluster C), so the correction now reads as two rows resolving to two different
+modules rather than as one waiting to be filled.
+
 These fail on the pre-fix tree: the four departments do not exist there.
 """
 
@@ -236,12 +240,20 @@ def test_the_development_agent_is_the_one_that_audits_code():
 def test_the_system_agent_is_not_claimed_on_the_development_agents_evidence():
     """Two rows pointing at one module is how a section reports twelve agents
     and has eleven. The System agent's remit — infrastructure, services,
-    resources, failures — is not what `platform_engineering` does."""
+    resources, failures — is not what `platform_engineering` does.
+
+    This also asserted `state != "live"`, which was a snapshot of the day it was
+    written: it passed while the row was planned and failed the moment the
+    agent was actually built. A test that fails BECAUSE the work landed teaches
+    people to edit tests when they ship, so only the invariant is left — the
+    two rows resolve to different modules, whatever either of them claims.
+    """
     from ai.hub.capabilities import REGISTRY
 
     system = next(c for c in REGISTRY if c.id == "agents.system")
-    assert system.state != "live", "agents.system still claims to be built"
+    development = next(c for c in REGISTRY if c.id == "agents.development")
     assert "platform_engineering" not in system.evidence
+    assert system.evidence != development.evidence, "two §11 rows share one module's evidence again"
 
 
 def _raising(reason: str):

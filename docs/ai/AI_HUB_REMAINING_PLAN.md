@@ -6,20 +6,20 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 213 live · 13 staged · 4 planned ·
-226/226 evidence resolved · 0 discrepancies · 93% built.**
+At the time of writing: **230 capabilities · 216 live · 11 staged · 3 planned ·
+227/227 evidence resolved · 0 discrepancies · 94% built.**
 
-Sections finished (nothing planned or staged): §5, §6, §7, §12, §13, §15, §16,
-§17, §19, §22, §23, §25, §27, and both owner tracks — P and S.
+Sections finished (nothing planned or staged): §5, §6, §7, §11, §12, §13, §15,
+§16, §17, §19, §22, §23, §25, and both owner tracks — P and S.
 
-**17 rows remain**, across ten sections:
+**14 rows remain**, across nine sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 11 agents | 3 | 27 accessibility | 2 | 14 long-running | 1 |
-| 18 ambient awareness | 2 | 4 roll-ups | 2 | 20 war room | 1 |
-| 21 visualisation | 2 | 8 surface types | 1 | 24 agent runtime | 1 |
-| 26 performance | 1 | 10 multi-display | 1 | | |
+| 18 ambient awareness | 2 | 4 roll-ups | 2 | 14 long-running | 1 |
+| 21 visualisation | 2 | 8 surface types | 1 | 20 war room | 1 |
+| 27 accessibility | 2 | 10 multi-display | 1 | 24 agent runtime | 1 |
+| 26 performance | 1 | | | | |
 
 Phase H covers all of them. §4's two rows are roll-ups and land last by
 construction: they become live when the layers beneath them are, so claiming
@@ -812,18 +812,98 @@ has written is a control that can never fire.
 
 ---
 
+## Phase H3 — §11's last three agents  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| System agent | planned | **live** | `ai.departments.system_ops` |
+| Vision agent | staged | **live** | `ai.departments.vision_ops` |
+| Memory agent | staged | **live** | `ai.departments.memory_ops` |
+
+§11 is closed. Both staged rows carried the same note shape — the capability
+exists, "it is not yet an agent on the bus" — and Cluster B had already
+established what an agent is here: a department in one table that drives the
+directory, the permission registry and the bus registration together.
+
+### Every action is READ_ONLY, and two of the refusals are the point
+
+Cluster B's docstring already says it for voice and notification. Cluster C
+turns on two sharper versions:
+
+**The vision agent can be shown a picture and cannot go and take one.** A
+camera opened mid-loop, by a model deciding a look would help, is a camera
+opened on a trading desk by something nobody instructed. `describe_image` takes
+the images as an argument, checks §25 consent **before** the pixels are read,
+and has no path to a capture API at all. Both are asserted by parsing the
+module, because a file that explains what it must not do contains the words it
+must not call — the same technique `ai/bus/` and `ai/improve/` use.
+
+**The memory agent reads and may not forget.** §16's right to be forgotten is
+the operator's. An agent holding it is a memory hole with a permission tier: a
+model deciding mid-loop that some history is no longer relevant, erasing it, and
+leaving the person whose history it was with no way to know. `correct` is out
+for the same reason plus one more — an agent that can edit a memory can edit
+the memory of what it was told, and then the audit trail and the thing being
+audited share a writer. `describe_retention` names the route to erasure and
+does not take it.
+
+Both guards were verified by reintroducing the defect: a `cv2.VideoCapture` in
+the vision module and a `governance.forget` in the memory one. Three tests
+failed, including the behavioural one that noticed the memory was actually
+gone.
+
+### The system agent passes readings through rather than summarising them
+
+`ai/telemetry/` was built for §22 and served by an endpoint a dashboard polls.
+What was missing was something `ai/agent/loop.py` could ask. The temptation
+when wiring that is to flatten: `{"cpu": 7.0}` reads better and is exactly the
+defect §22 exists about — `infrastructure/metrics.py` leaves the gauge unset
+when psutil is missing, an unset gauge reads back 0.0, and the machine reports
+itself idle. Every reading keeps its `measured` flag, and `unmeasured` is its
+own key so a caller never infers absence by scanning for nulls.
+
+There is no restart, scale, clear-cache or kill. Not because they are hard: a
+struggling machine is precisely when an agent acting on its own initiative does
+the most damage, and this one is reachable from a model's tool loop.
+
+### Two existing tests fired, and both were right
+
+`test_all_four_cluster_a_departments_are_declared` asserts the *full* set of
+departments, so three new ones failed it. That is the rule working — the set
+cannot grow quietly — and the fix was a human adding Cluster C to it.
+
+`test_every_department_has_at_least_one_watcher` caught that all three declared
+`awareness` triggers with nothing watching for them. Three real watchers were
+written rather than the declarations dropped: host pressure (only a reading
+that exists and is high fires — an unmeasured CPU is not a busy one), camera
+consent withheld (`info`, because consent withheld is the gate working rather
+than a fault), and memory not durable (tri-state, because "could not read the
+backend" and "not durable" are different answers).
+
+### A pre-existing inconsistency this phase found and did not widen into
+
+Writing the stronger version of that test — *every declared trigger* has a
+watcher, not one per department — surfaced that `awareness` means two things.
+Cluster A declares prose ("broker disconnect detection"); Clusters B and C
+declare trigger names ("feed_stale"). `Department.as_dict()` puts both on the
+wire, so normalising Cluster A would change text an operator reads.
+
+Out of scope for a phase about three new agents. Recorded in the tree instead:
+`PROSE_AWARENESS` names the four departments, with the reason, and a second
+test asserts the list is **exactly** the departments that still need it — so
+closing the inconsistency means shrinking it, and leaving it stale fails.
+
+---
+
 ## Phase H — the remainder
 
-Seventeen rows, ten sections. Regenerated from the registry rather than
+Fourteen rows, nine sections. Regenerated from the registry rather than
 carried forward: the earlier version of this table still listed §7 and §25 rows
 that Phases E and F made live, which is the shape of stale plan a reader trusts.
 
 | § | Row | State |
 |---|---|---|
 | 26 | Prevent runaway recursive delegation | staged |
-| 11 | System agent — infrastructure, services, resources, failures | planned |
-| 11 | Vision agent | staged |
-| 11 | Memory agent — retrieval, consolidation, governance | staged |
 | 18 | Gesture recognition | staged |
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |

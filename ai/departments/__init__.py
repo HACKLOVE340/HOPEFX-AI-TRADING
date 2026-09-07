@@ -39,11 +39,14 @@ from ai import execution_shadow
 from . import (
     data_ops,
     markets_execution,
+    memory_ops,
     news_intelligence,
     notification_ops,
     platform_engineering,
     research,
     risk_compliance,
+    system_ops,
+    vision_ops,
     voice_interface,
 )
 
@@ -51,7 +54,7 @@ from . import (
 #: permission set cannot be audited after the fact.
 #: Bumped when the per-department `recall_memory` actions landed — spec §2's
 #: `memory/`, which had been a tuple of strings.
-PERMISSIONS_VERSION: Final = "departments-cluster-b-agent-network-2026-09-07"
+PERMISSIONS_VERSION: Final = "departments-cluster-c-system-vision-memory-2026-09-07"
 ACTION_VERSION: Final = "1.0.0"
 
 
@@ -402,6 +405,107 @@ DEPARTMENTS: Final[dict[str, Department]] = {
         ),
         memory=("feed_health",),
         awareness=("feed_stale",),
+    ),
+    # ── Cluster C — §11's last three agents ──────────────────────────────────
+    #
+    # Same rule as Cluster B and two sharper reasons for it. The vision agent
+    # can be SHOWN a picture and cannot go and take one: a camera opened
+    # mid-loop on a trading desk is a different act from interpreting a frame
+    # somebody handed over, and only the second is what §25's consent covers.
+    # The memory agent can READ and cannot forget: §16's right to be forgotten
+    # belongs to the operator, and an agent holding it is a memory hole with a
+    # permission tier. Both are asserted by parsing the modules in
+    # `tests/unit/test_departments_cluster_c.py`, not promised in a docstring.
+    "system_ops": Department(
+        key="system_ops",
+        title="System",
+        status="reporting: host resources, vendor reachability, recent failures",
+        agents=("Resource Watch", "Service Warden"),
+        actions=(
+            _action(
+                "system_ops",
+                "host_resources",
+                ToolRisk.READ_ONLY,
+                "CPU, memory, disk and GPU with §22's absences intact — never flattened into bare numbers.",
+                system_ops.host_resources,
+            ),
+            _action(
+                "system_ops",
+                "service_health",
+                ToolRisk.READ_ONLY,
+                "Which model vendors are reachable and which breakers are open. States, never keys.",
+                system_ops.service_health,
+            ),
+            _action(
+                "system_ops",
+                "recent_failures",
+                ToolRisk.READ_ONLY,
+                "What has been failing, and separately what nobody counted.",
+                system_ops.recent_failures,
+            ),
+        ),
+        memory=("resource_pressure", "vendor_outage"),
+        # One trigger, and it is the one with a watcher behind it. `breaker_open`
+        # was declared here first and had none — a department that declares an
+        # awareness trigger nothing watches notices nothing, which is the
+        # failure `test_every_declared_trigger_has_a_watcher` now catches for
+        # every department rather than for the count of them.
+        awareness=("resource_pressure",),
+    ),
+    "vision_ops": Department(
+        key="vision_ops",
+        title="Vision",
+        status="reading: images it is given, never images it goes and takes",
+        agents=("Frame Reader",),
+        actions=(
+            _action(
+                "vision_ops",
+                "describe_image",
+                ToolRisk.READ_ONLY,
+                "Interpret images the caller supplies, behind §25's camera consent. Captures nothing.",
+                vision_ops.describe_image,
+            ),
+            _action(
+                "vision_ops",
+                "vision_status",
+                ToolRisk.READ_ONLY,
+                "Whether vision can run and whether consent is held. Booleans, never keys or frames.",
+                vision_ops.vision_status,
+            ),
+        ),
+        memory=("detection",),
+        awareness=("camera_consent_withdrawn",),
+    ),
+    "memory_ops": Department(
+        key="memory_ops",
+        title="Memory",
+        status="recalling: tiers, durability, retention — read side only",
+        agents=("Recall Warden",),
+        actions=(
+            _action(
+                "memory_ops",
+                "recall_operator_memory",
+                ToolRisk.READ_ONLY,
+                "One operator's memory across the tiers, bounded, and never another operator's.",
+                memory_ops.recall_memory,
+            ),
+            _action(
+                "memory_ops",
+                "memory_health",
+                ToolRisk.READ_ONLY,
+                "How much is held per tier, and whether it survives a restart.",
+                memory_ops.memory_health,
+            ),
+            _action(
+                "memory_ops",
+                "describe_retention",
+                ToolRisk.READ_ONLY,
+                "What is kept, for how long, and the route to erasure this agent may not take.",
+                memory_ops.describe_retention,
+            ),
+        ),
+        memory=("recall_request",),
+        awareness=("memory_not_durable",),
     ),
 }
 

@@ -732,9 +732,13 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "11",
         "C",
         "System agent — infrastructure, services, resources, failures",
-        "planned",
-        "",
-        "",
+        "live",
+        "ai.departments.system_ops",
+        "Three READ_ONLY actions over measurements §22 already produced and no agent could reach. "
+        "Readings pass through with their measured flag intact rather than flattened into bare "
+        "numbers — flattening is how an unset gauge reads back 0.0 and the machine reports itself "
+        "idle. There is no restart, scale or kill: a struggling machine is exactly when an agent "
+        "acting on its own initiative does the most damage.",
     ),
     _c(
         "agents.news",
@@ -751,9 +755,12 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "11",
         "C",
         "Vision agent",
-        "staged",
-        "ai.vision.detect:interpret",
-        "Interpretation exists; it is not yet an agent on the bus.",
+        "live",
+        "ai.departments.vision_ops",
+        "It can be SHOWN a picture and cannot go and take one. describe_image takes images as an "
+        "argument, checks §25 camera consent BEFORE the pixels are read, and has no path to a capture "
+        "API — asserted by parsing the module, not promised in a docstring. A camera opened mid-loop "
+        "on a trading desk is a different act from interpreting a frame somebody handed over.",
     ),
     _c(
         "agents.voice",
@@ -772,9 +779,14 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "11",
         "C",
         "Memory agent — retrieval, consolidation, governance",
-        "staged",
-        "ai.memory.store",
-        "A store exists; an agent that governs it does not.",
+        "live",
+        "ai.departments.memory_ops",
+        "It reads and it may not forget. §16's right to be forgotten is the operator's, and an agent "
+        "holding it is a memory hole with a permission tier — a model deciding mid-loop that some "
+        "history is no longer relevant, erasing it, and leaving the person whose history it was with "
+        "no way to know. describe_retention names the route to erasure and does not take it; the "
+        "module calls nothing that erases or edits, asserted by parsing it. Recall is keyed by "
+        "operator, not filtered — the P0 in ai/jobs/runner.py with a longer memory.",
     ),
     _c(
         "agents.notification",
