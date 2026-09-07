@@ -1803,7 +1803,30 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "package. A restricted walk DROPS dead_control and names the drop, "
         "because a caller in a directory never entered is not an absent caller.",
     ),
-    _c("improve.finding_to_proposal", "S", "C", "A finding becomes a proposal that two humans must approve"),
+    _c(
+        "improve.finding_to_proposal",
+        "S",
+        "C",
+        "A finding becomes a proposal that two humans must approve",
+        "live",
+        "ai.improve.proposal:prepare",
+        "Five gates in order \u2014 the evidence resolves, the vault by path before "
+        "any content is read, the patch changes something, it is under the "
+        "64KB ceiling, the disposable-directory sandbox accepts it \u2014 then a "
+        "pending record on fixes:queue and nothing further. It cannot sign and "
+        "cannot apply: no import of security.self_healer, and the names "
+        "_sign_patch, _apply_patch and the applied queue appear nowhere outside "
+        "this module's own prose, asserted by parsing rather than grepping. "
+        "Two corrections came from running the code: SelfHealer's auto-apply "
+        "path is INERT in every configuration, because nothing in the "
+        "repository ever signs an entry and all three writers of the applied "
+        "queue push unsigned records \u2014 so the live route is a pull request a "
+        "human merges, and this phase does not turn auto-apply on. And "
+        "api/security/fixes.py:approve_fix, the gate an AI-authored patch "
+        "actually passes, took a SINGLE admin while ai/policy/roles.py "
+        "declared that a repair needs two approvers including a superadmin. "
+        "That rule now lives in one place and both callers use it.",
+    ),
     _c(
         "improve.always_awake",
         "S",

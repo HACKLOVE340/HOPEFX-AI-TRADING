@@ -383,26 +383,59 @@ vault-protected paths, so `proposable` is False and no patch may follow):
 
 ---
 
-## Phase S3 — a finding becomes a proposal, and a proposal needs two humans  ← NEXT
+## Phase S3 — a finding becomes a proposal, and a proposal needs two humans  ✅ DONE
 
 **Depends on:** S1 and S2.
 
 **Files:** `ai/improve/proposal.py` (new), wiring into
 `security/ai_repair_sandbox.py` and `fixes:queue`.
 
-**What it is:** the path from finding → candidate diff → vault check → sandbox
-validation → signed queue entry → the existing two-approver, one-superadmin
-gate → `SelfHealer` applies it, with quarantine and rollback as they already
-are. Nothing new is invented for approval; the AI is a producer of proposals
-and never an applier.
+**What it is:** `ai/improve/proposal.py` — five gates in order, then a
+`pending` record on `fixes:queue` and nothing further. The gates: the finding's
+evidence resolves; the vault, by path, before any content is read; the patch
+changes something; it is under the 64KB ceiling; the disposable-directory
+sandbox accepts it. A refusal names the gate that refused it — a proposal that
+vanished looks, from the queue, exactly like one that was never made.
 
-**Rule:** the AI's own modules are proposals like any other. A patch to
-`ai/improve/` needs the same two approvers. An AI that could self-modify
-without review is the failure mode this whole track is arranged against.
+**Two things the plan got wrong, found by running the code.**
+
+*"Signed queue entry → `SelfHealer` applies it" was not a real path.* Nothing
+in this repository ever signs a patch entry: `_sign_patch` has no production
+caller, and all three writers of `fixes:approved` push unsigned records.
+Measured:
+
+```
+HEAL_PATCH_SIGNING_KEY set    -> _patch_entry_is_trusted(...) False   (no _sig)
+unset, no dev opt-out         -> False                                (fail closed)
+```
+
+So auto-apply is **inert in every configuration**, and the live route for an
+approved fix is a GitHub pull request a human merges. This phase did not turn
+auto-apply on. Making an AI able to write Python to disk is not a step toward
+"every advancement approved" — it is the thing approval exists to prevent.
+
+*"The existing two-approver gate" did not cover this queue.*
+`ai/policy/roles.py` declared that a repair needs two distinct approvers, at
+least one a superadmin, and `api/safe_agent_platform.py:decide_approval`
+enforced exactly that — on a different queue. `api/security/fixes.py:approve_fix`,
+the gate an AI-authored patch actually passes, required a **single admin**. The
+rule now lives in `ai/policy/roles.py:quorum` and both callers use it; the
+first approval is recorded on the queued record and the second completes it.
+
+**Rule held:** the AI's own modules are proposals like any other. `ai/improve/`
+is deliberately outside the vault floor — the AI improving itself is the point
+— and gets no shorter path: the same five gates and the same two humans.
+
+**Also fixed, found on the way:** `test_returns_error_when_no_token` patched
+the environment variable while `GITHUB_TOKEN` is read into a module constant at
+import time. It passed only while it happened to be the first test to import
+the module; any earlier importer left the ambient token in place and
+`publish()` made a **real outbound request to the GitHub API** from the unit
+suite. Reproduced on the pre-fix tree. It now patches the constant.
 
 ---
 
-## Phase S4 — always awake, and honest about what it did not do
+## Phase S4 — always awake, and honest about what it did not do  ← NEXT
 
 **Depends on:** S1–S3, and Phase A's bus for reporting.
 

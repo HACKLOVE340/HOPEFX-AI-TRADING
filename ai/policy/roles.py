@@ -33,8 +33,9 @@ See docs/audit/plans/2026-09-05-ai-core.md Part 1B for the full matrix.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 VIEW: Final = "view"
 PROPOSE: Final = "propose"
@@ -183,6 +184,81 @@ ROLES_ADMITTED: Final[dict[str, frozenset[str]]] = {
 }
 
 
+@dataclass(frozen=True)
+class QuorumVerdict:
+    """Whether a set of decisions clears the approval bar, and why not if it does not.
+
+    `reason` is always populated. An approver looking at a screen that says
+    "not yet" and nothing else cannot tell whether they are waiting for another
+    person or for a different kind of person.
+    """
+
+    met: bool
+    reason: str
+    distinct_approvers: int
+    required: int
+    has_superadmin: bool
+    needs_superadmin: bool
+
+
+def quorum(
+    decisions: Sequence[Mapping[str, Any]],
+    *,
+    kind: str,
+    required: int = 2,
+) -> QuorumVerdict:
+    """Whether `decisions` approve something of `kind`.
+
+    Each decision is `{"approver": str, "approver_role": str, "decision": str}`.
+    Only `approve` decisions count, and each approver counts once however many
+    times they appear.
+
+    This rule lived inline in `api/safe_agent_platform.py:decide_approval` and
+    nowhere else, so the queue that AI-authored code patches actually pass —
+    `api/security/fixes.py:approve_fix` — required a single admin. One
+    definition, called from both, is the difference between a rule and a
+    convention.
+
+    Lives in this module, which is inside `ai/vault/protected.py`'s floor: the
+    rule that decides what the AI may change must not itself be something the
+    AI can propose to change.
+    """
+    approvals = [d for d in decisions if d.get("decision") == "approve"]
+    approvers = {str(d.get("approver", "")) for d in approvals if str(d.get("approver", "")).strip()}
+    has_superadmin = any(d.get("approver_role") == "superadmin" for d in approvals)
+    needs_superadmin = kind in QUORUM_NEEDS_SUPERADMIN_KINDS
+
+    if len(approvers) < required:
+        return QuorumVerdict(
+            met=False,
+            reason=f"{len(approvers)} of {required} distinct approvers so far",
+            distinct_approvers=len(approvers),
+            required=required,
+            has_superadmin=has_superadmin,
+            needs_superadmin=needs_superadmin,
+        )
+    if needs_superadmin and not has_superadmin:
+        return QuorumVerdict(
+            met=False,
+            reason=(
+                f"a {kind} needs at least one superadmin among its approvers; "
+                "two admins approving between them is the overtake case this rule closes"
+            ),
+            distinct_approvers=len(approvers),
+            required=required,
+            has_superadmin=False,
+            needs_superadmin=True,
+        )
+    return QuorumVerdict(
+        met=True,
+        reason=f"{len(approvers)} distinct approvers" + (", including a superadmin" if has_superadmin else ""),
+        distinct_approvers=len(approvers),
+        required=required,
+        has_superadmin=has_superadmin,
+        needs_superadmin=needs_superadmin,
+    )
+
+
 def capability_for(endpoint_name: str) -> Capability | None:
     """The capability for an endpoint, or None when it is not classified.
 
@@ -202,5 +278,7 @@ __all__ = [
     "ROLES_ADMITTED",
     "VIEW",
     "Capability",
+    "QuorumVerdict",
     "capability_for",
+    "quorum",
 ]

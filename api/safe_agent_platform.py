@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, require_role
-from ai.policy.roles import QUORUM_NEEDS_SUPERADMIN_KINDS
+from ai.policy.roles import quorum
 from api.superadmin._shared import require_superadmin_2fa
 from core.config_store import config_store
 
@@ -1264,20 +1264,20 @@ async def decide_approval(request: ApprovalRequest, user: TokenPayload = Depends
     if request.decision == "reject":
         proposal["status"] = "rejected"
     else:
-        approvals = [a for a in _APPROVALS if a["proposal_id"] == request.proposal_id and a["decision"] == "approve"]
-        distinct_approvers = {a["approver"] for a in approvals}
+        decisions = [a for a in _APPROVALS if a["proposal_id"] == request.proposal_id]
         # Quorum rule (plan Part 1B.2). "An approver cannot decide twice" was
         # already enforced above and is correct, but both approvers could be
         # admins -- so two admins could approve a repair between them with no
         # superadmin involved, which is the overtake case this closes.
-        needs_superadmin = proposal["kind"] in QUORUM_NEEDS_SUPERADMIN_KINDS
-        has_superadmin = any(a.get("approver_role") == "superadmin" for a in approvals)
-        quorum_met = len(distinct_approvers) >= proposal["required_approvals"] and (
-            has_superadmin or not needs_superadmin
-        )
-        if quorum_met:
+        #
+        # The rule itself now lives in ai/policy/roles.py:quorum, because it
+        # also has to gate api/security/fixes.py -- the queue an AI-authored
+        # code patch actually passes, which required a single admin while this
+        # copy of the rule sat here. One definition, two callers.
+        verdict = quorum(decisions, kind=proposal["kind"], required=proposal["required_approvals"])
+        if verdict.met:
             proposal["status"] = "approved_pending_execution"
-        elif needs_superadmin and not has_superadmin:
+        elif verdict.needs_superadmin and not verdict.has_superadmin:
             proposal["quorum_pending"] = "awaiting_superadmin_approval"
     _save_state(user.sub)
     return {
