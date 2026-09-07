@@ -6,20 +6,20 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 207 live · 17 staged · 6 planned ·
-224/224 evidence resolved · 0 discrepancies · 90% built.**
+At the time of writing: **230 capabilities · 210 live · 14 staged · 6 planned ·
+224/224 evidence resolved · 0 discrepancies · 91% built.**
 
 Sections finished (nothing planned or staged): §5, §6, §7, §12, §13, §15, §16,
 §17, §19, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**23 rows remain**, across twelve sections:
+**20 rows remain**, across ten sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 26 performance | 4 | 27 accessibility | 2 | 10 multi-display | 1 |
-| 11 agents | 3 | 4 roll-ups | 2 | 14 long-running | 1 |
-| 18 ambient awareness | 2 | 8 surface types | 2 | 20 war room | 1 |
-| 21 visualisation | 2 | 9 scene model | 2 | 24 agent runtime | 1 |
+| 26 performance | 4 | 21 visualisation | 2 | 14 long-running | 1 |
+| 11 agents | 3 | 4 roll-ups | 2 | 20 war room | 1 |
+| 18 ambient awareness | 2 | 8 surface types | 1 | 24 agent runtime | 1 |
+| 27 accessibility | 2 | 10 multi-display | 1 | | |
 
 Phase H covers all of them. §4's two rows are roll-ups and land last by
 construction: they become live when the layers beneath them are, so claiming
@@ -663,9 +663,83 @@ layout nobody designed, reachable only on a device nobody tested.
 
 ---
 
+## Phase H1 — §9's scene model, given a producer and a consumer  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §9 Scene model | staged | **live** | `hub/sceneFrom.ts:sceneFrom` |
+| §9 Semantic panel registry | staged | **live** | `hub/resolveReference.ts:resolveReference` |
+| §8 Priority tiers | staged | **live** | `hub/layout.ts:SPAN_BY_PRIORITY` |
+| §8 Surface types | staged | staged | `hub/SurfaceView.tsx:RENDERERS` (note corrected) |
+
+### Two rows were dead controls, and two were understated
+
+The four rows shared a note shape — "the model exists and nothing populates
+it". Measured against the tree rather than against the note, they turned out to
+be two different problems in opposite directions.
+
+**Genuinely dead.** `sceneGraph.ts`, built in Phase D1, was constructed in
+**zero** production modules; `gestures.ts` imports the type. Every method on it
+throws for an id nobody placed, so the whole spatial API answered every question
+with an exception. Meanwhile `PresenceStage` was reading each panel's
+`getBoundingClientRect()` once a frame, reducing it to which ninth of the screen
+it sits in, and discarding the rectangle — the producer was already running and
+throwing away exactly what the scene needed.
+
+**Understated.** `workspace.priority_tiers` claimed nothing ranks by the tiers.
+`layout.ts:place()` sizes every panel from its tier and collapses only the
+background and on-demand ones, and `PresenceStage` calls it on every render —
+proven by execution in Phase G's own test, which renders eight surfaces and
+drives the collapsed stack the tiers produce. The evidence pointed at the Python
+constant, which is the half of the contract with no ranker behind it.
+
+`workspace.surface_types` claimed "none render yet". Twelve of the eighteen
+declared kinds render, and six of §8's own twelve do: chart, image, video,
+table, terminal, news. It stays **staged** — six of §8's list genuinely do not
+render — with a note naming which six, because a note that hides finished work
+is the same defect as one that claims unfinished work.
+
+### The defect the consumer fixed
+
+`workspace.resolve` matches a phrase against what a panel MEANS. It returns
+null for "the one on the right", and that null went straight into
+`workspace.focus(null)` — so asking for a panel by its position **unfocused
+everything and said nothing about it**. The operator got no panel, no error and
+no reason. Reproduced by execution first: the rendering test failed on the
+pre-fix tree with focus cleared, then passed.
+
+`resolveReference` refuses in four distinguishable ways, because the operator's
+next move differs for each: nothing matched, two panels matched (candidates
+named), a relative phrase with no anchor, and nothing in that direction. One
+`null` for all four is the shape that makes an assistant say "I did not
+understand" to somebody who was perfectly clear.
+
+**A direction with nothing in it never wraps.** `RovingFocus` wraps, because a
+keyboard list that stops dead reads as broken. A spatial reference is the
+opposite: "the one on the left" wrapping to the far right of the plane moves a
+panel the operator was not looking at.
+
+### Containment is declared, never inferred
+
+The obvious inference — a rectangle inside another is inside it — is wrong twice
+here: grid panels never contain each other, and two panels transiently overlap
+during a layout change. Inferring would report "the gold chart is inside the
+order ticket" for one frame, and answering "inside what" correctly is the whole
+point of the row.
+
+### One thing the scene refuses to place
+
+A rectangle with no area. `getBoundingClientRect` returns all zeros for an
+element that has not been laid out, and `spatial.positionOf` already refuses to
+call that "top left". Placed in a scene it sits at the origin, so it wins "the
+panel on the far left" — and the AI points an operator at a panel that is not on
+their screen.
+
+---
+
 ## Phase H — the remainder
 
-Twenty-three rows, twelve sections. Regenerated from the registry rather than
+Twenty rows, ten sections. Regenerated from the registry rather than
 carried forward: the earlier version of this table still listed §7 and §25 rows
 that Phases E and F made live, which is the shape of stale plan a reader trusts.
 
@@ -685,9 +759,6 @@ that Phases E and F made live, which is the shape of stale plan a reader trusts.
 | 27 | High contrast option | staged |
 | 27 | Touch and mouse support | staged |
 | 8 | Charts, images, video, documents, tables, maps, terminals, code, camera, news, research, simulations | staged |
-| 8 | Critical, primary, secondary, background, on-demand tiers | staged |
-| 9 | Scene model — identity, position, size, z-order, content, meaning | staged |
-| 9 | Semantic panel registry | staged |
 | 10 | Multi-display console | staged |
 | 14 | Long-running research jobs | staged |
 | 20 | Market war room generated on demand | planned |

@@ -466,8 +466,12 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "D",
         "Charts, images, video, documents, tables, maps, terminals, code, camera, news, research, simulations",
         "staged",
-        "ai.hub.contracts:SURFACE_KINDS",
-        "Every §8 type is a nameable kind; none render yet.",
+        "frontend/src/hub/SurfaceView.tsx:RENDERERS",
+        "MEASURED, not remembered: 12 of the 18 declared kinds render, and 6 of §8's own 12 do — "
+        "chart, image, video, table, terminal, news. document, map, code, camera, research and "
+        "simulation do not, and SurfaceView says so on screen rather than drawing an empty panel. "
+        "The previous note said 'none render yet', which was wrong in the direction that hides "
+        "finished work; this one names the six that are left.",
     ),
     _c(
         "workspace.concurrent_surfaces",
@@ -483,9 +487,13 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "8",
         "D",
         "Critical, primary, secondary, background, on-demand tiers",
-        "staged",
-        "ai.hub.contracts:PRIORITIES",
-        "Named and enforced at construction; nothing ranks by them yet.",
+        "live",
+        "frontend/src/hub/layout.ts:SPAN_BY_PRIORITY",
+        "place() sizes every panel from its tier and collapses only the background and on-demand ones, "
+        "and PresenceStage calls it on every render. Proven by execution rather than by reading: "
+        "hub_a11y_reaches_the_plane.test.tsx renders eight surfaces and drives the collapsed stack the "
+        "tiers produce. The previous note said nothing ranks by them, and pointed at the Python "
+        "constant — the half of the contract with no ranker behind it.",
     ),
     _c(
         "workspace.auto_layout",
@@ -551,18 +559,25 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "9",
         "D",
         "Scene model — identity, position, size, z-order, content, meaning",
-        "staged",
-        "ai.hub.contracts:Scene",
-        "The model and resolve() exist; nothing populates it yet.",
+        "live",
+        "frontend/src/hub/sceneFrom.ts:sceneFrom",
+        "PresenceStage populates it from the same measurement pass that produces the spoken positions. "
+        "It was already reading every rectangle and discarding it, so sceneGraph.ts — built in Phase D1 — "
+        "was constructed in zero production modules and answered every question with a throw. z comes "
+        "from paint order; a rectangle with no area is dropped rather than placed at the origin, where "
+        "it would win 'the panel on the far left' while not being on screen.",
     ),
     _c(
         "spatial.panel_registry",
         "9",
         "D",
         "Semantic panel registry",
-        "staged",
-        "ai.hub.contracts:Scene",
-        "Scene.resolve turns 'the gold chart' into a panel.",
+        "live",
+        "frontend/src/hub/resolveReference.ts:resolveReference",
+        "Meaning first, then the scene. It fixed a real defect: workspace.resolve returns null for 'the "
+        "one on the right' and that null went into workspace.focus(null), so asking for a panel by its "
+        "position unfocused everything and said nothing. Four refusals, each with its own reason, "
+        "because the operator's next move differs; and a direction with nothing in it never wraps round.",
     ),
     _c(
         "spatial.viewport_awareness",

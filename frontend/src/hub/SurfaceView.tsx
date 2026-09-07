@@ -174,6 +174,10 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
       // Read back by the stage to measure where this panel actually is, so the
       // AI can say "top right" only when that is measured to be true.
       data-surface-id={surface.id}
+      // Focus is expressed only as a border colour and a shadow. Colour is not
+      // a channel everybody has (§27), and it is not a channel a test has
+      // either — this is the same fact, stated once, for both readers.
+      data-focused={focused ? 'true' : undefined}
       style={{
         gridColumn: `span ${span ?? surface.span}`,
         display: 'grid',

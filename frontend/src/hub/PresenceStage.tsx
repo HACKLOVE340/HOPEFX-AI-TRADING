@@ -29,6 +29,8 @@ import { Mic, Minimize2, Send, Square, Volume2, VolumeX, X } from 'lucide-react'
 
 import { PresenceCore } from './PresenceCore';
 import { useRovingFocus } from './useRovingFocus';
+import { sceneFrom, type Measurement } from './sceneFrom';
+import type { SceneGraph } from './sceneGraph';
 import type { Presence } from './presence';
 import type { Surface } from './workspace';
 import { place, type LayoutName } from './layout';
@@ -111,6 +113,16 @@ export interface PresenceStageProps {
    */
   onPositions?: (positions: Record<string, Position>) => void;
   /**
+   * The measured scene (§9), from the same pass that produces `onPositions`.
+   *
+   * Separate from `onPositions` because the two answer different questions and
+   * one of them was being thrown away: `positionOf` reduces a rectangle to
+   * which ninth of the screen it is in, which cannot answer "the panel to the
+   * left of that one". The rectangles were already being read; until this,
+   * nothing kept them, and `sceneGraph.ts` had no producer at all.
+   */
+  onScene?: (scene: SceneGraph) => void;
+  /**
    * §6: which register the AI is speaking in. Named on screen, always.
    *
    * A mode that changes how much scaffolding goes round a number, without
@@ -141,7 +153,7 @@ export interface PresenceStageProps {
 export const PresenceStage: React.FC<PresenceStageProps> = ({
   presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout, spokenAbout = [],
   trail = [], onBreadcrumb, onPositions, modeName, accent,
-  utterance = '', speechProgress = null, speaking = false,
+  utterance = '', speechProgress = null, speaking = false, onScene,
   projections, representation = 'core',
   onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onDrillSurface, onExit,
 }) => {
@@ -209,19 +221,31 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
    * than a wrong one.
    */
   useEffect(() => {
-    if (!onPositions) return;
+    if (!onPositions && !onScene) return;
     const measure = () => {
       const root = planeRef.current;
       if (!root) return;
       const viewport = root.getBoundingClientRect();
       const found: Record<string, Position> = {};
+      // Document order is paint order, which is what `sceneFrom` turns into z.
+      const measurements: Measurement[] = [];
       for (const el of Array.from(root.querySelectorAll('[data-surface-id]'))) {
         const id = el.getAttribute('data-surface-id');
         if (!id) continue;
-        const position = positionOf(el.getBoundingClientRect(), viewport);
+        const rect = el.getBoundingClientRect();
+        const position = positionOf(rect, viewport);
         if (position) found[id] = position;
+        // Kept in viewport coordinates, the same frame of reference the
+        // rectangles were measured in. Converting to plane-relative here would
+        // put two coordinate systems in one scene the first time the plane
+        // scrolls.
+        measurements.push({ id, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
       }
-      onPositions(found);
+      onPositions?.(found);
+      // No containment is declared: these are grid siblings. `sceneFrom`
+      // refuses to infer it, and this is the caller that would have been
+      // tempted to.
+      onScene?.(sceneFrom(measurements));
     };
     const frame = requestAnimationFrame(measure);
     window.addEventListener('resize', measure);
@@ -229,7 +253,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', measure);
     };
-  }, [onPositions, surfaces, layout, width]);
+  }, [onPositions, onScene, surfaces, layout, width]);
 
   return (
     <div

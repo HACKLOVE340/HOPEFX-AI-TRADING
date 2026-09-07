@@ -31,6 +31,8 @@ import { readIntent } from '../../hub/intent';
 import { readLayout, suggestLayout, type LayoutName } from '../../hub/layout';
 import { SnapshotStore, capacityFor, readHistoryIntent } from '../../hub/history';
 import { spokenFocus } from '../../hub/reference';
+import { resolveReference } from '../../hub/resolveReference';
+import type { SceneGraph } from '../../hub/sceneGraph';
 import { asksForSummary, summarise } from '../../hub/summary';
 import { LayerStack, readNavigation, readZoom, type Layer, type Position } from '../../hub/spatial';
 import { resolveMode, readMode, type ModeId } from '../../hub/modes';
@@ -250,6 +252,19 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
 
   /** Measured positions of the panels, reported up by the stage (§9). */
   const [positions, setPositions] = useState<Record<string, Position>>({});
+  /**
+   * The measured scene (§9), reported by the stage from the same pass.
+   *
+   * A ref, not state: it changes on every layout frame and nothing renders
+   * from it — only the command path reads it, and re-rendering the whole plane
+   * because a rectangle moved two pixels would be a frame budget spent on
+   * nothing.
+   */
+  const sceneRef = useRef<SceneGraph | null>(null);
+  const onScene = useCallback((next: SceneGraph) => {
+    sceneRef.current = next;
+  }, []);
+
   const onPositions = useCallback((next: Record<string, Position>) => {
     setPositions((prev) => {
       // Replacing an identical map on every animation frame would re-render the
@@ -534,12 +549,35 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       }
       for (const request of intent.open) workspace.open(request);
       if (intent.focus) {
-        const chosen = workspace.resolve(intent.focus);
-        workspace.focus(chosen);
-        const surface = chosen ? workspace.surfaces.find((s) => s.id === chosen) : undefined;
-        if (surface) {
-          layers.enter({ surfaceId: surface.id, label: surface.meaning });
-          setTrail([...layers.trail]);
+        // Meaning first, then the scene. `workspace.resolve` matches the words
+        // against what a panel MEANS and returns null for "the one on the
+        // right" — and that null went straight into `workspace.focus(null)`,
+        // so asking for a panel by its position UNFOCUSED everything and said
+        // nothing about it. §9's scene model exists to answer exactly this,
+        // and until the stage started reporting it there was nothing to ask.
+        let chosen = workspace.resolve(intent.focus);
+        let refusal = '';
+        if (chosen === null && sceneRef.current) {
+          const relative = resolveReference(intent.focus, workspace.surfaces, sceneRef.current, { focusedId });
+          if (relative.resolved) chosen = relative.id;
+          else refusal = relative.why;
+        }
+        if (chosen === null) {
+          // Not `focus(null)`. A phrase nobody could resolve is not a request
+          // to clear the selection, and taking away what the operator had is a
+          // second wrong answer on top of the first.
+          turn.say(
+            refusal
+              ? `${refusal.charAt(0).toUpperCase()}${refusal.slice(1)}.`
+              : 'I could not tell which panel you meant.',
+          );
+        } else {
+          workspace.focus(chosen);
+          const surface = workspace.surfaces.find((s) => s.id === chosen);
+          if (surface) {
+            layers.enter({ surfaceId: surface.id, label: surface.meaning });
+            setTrail([...layers.trail]);
+          }
         }
       }
 
@@ -606,6 +644,7 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       modeName={mode.name}
       accent={mode.accent}
       onPositions={onPositions}
+      onScene={onScene}
       onBreadcrumb={(index) => {
         const now = layers.to(index);
         setTrail([...layers.trail]);
