@@ -680,9 +680,21 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "11",
         "C",
         "Orchestrator — decompose, allocate, track, merge, resolve",
-        "staged",
-        "ai.agent.loop",
-        "A sequential loop exists; a task graph does not.",
+        "live",
+        "ai.agent.orchestrator:decompose",
+        "Executes a TaskGraph rather than re-implementing ordering \u2014 a second "
+        "scheduler beside the graph is how the graph stops being the thing that "
+        "decides, and a test parses this module for any sorting of its own. "
+        "Decomposition is DECLARED: turning a question into steps is a "
+        "planner's paid model call, and keeping it out makes the graph "
+        "deterministic. Allocation NAMES what it could not place \u2014 an unknown "
+        "department, an unimplemented action, or one that is not read-only \u2014 "
+        "because a step dropped from the plan reads exactly like a step that "
+        "ran and returned nothing. merge() reports which tasks answered nothing "
+        "separately from what the others answered. A conflict goes to "
+        "ai/debate/session.py and is never averaged: averaging two opposite "
+        "conclusions produces a number nobody argued for, and cannot express "
+        "UNRESOLVED.",
     ),
     _c("agents.trading", "11", "C", "Trading agent", "live", "ai.departments.markets_execution", ""),
     _c(
@@ -920,8 +932,39 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "ai.evals.schedule:run_forever",
         "Opt-in scheduling exists for the eval suite.",
     ),
-    _c("parallel.event_triggered", "14", "C", "Event-triggered tasks"),
-    _c("parallel.long_running", "14", "C", "Long-running research jobs"),
+    _c(
+        "parallel.event_triggered",
+        "14",
+        "C",
+        "Event-triggered tasks",
+        "live",
+        "ai.bus.triggers:TriggerRegistry",
+        "A trigger ENQUEUES and never executes: running the task inside the "
+        "subscriber callback would make the message bus an execution path, "
+        "which is the one thing \u00a712 was built not to be. ai/bus/triggers.py "
+        "cannot import ai.tools, asserted by parsing. Every triggered item "
+        "carries a depth one higher than the message that caused it and a "
+        "trigger refuses to fire past its ceiling, because a task that "
+        "publishes the event that triggers it is a loop that eats the queue. A "
+        "predicate that raises, and a queue that is full, are recorded on the "
+        "registry rather than returned to the publisher as a broken "
+        "subscriber \u2014 the message was delivered correctly and the trigger is "
+        "what failed.",
+    ),
+    _c(
+        "parallel.long_running",
+        "14",
+        "C",
+        "Long-running research jobs",
+        "staged",
+        "ai.jobs.runner:JobRunner",
+        "The SCHEDULING half is built and the DURABILITY half is not. A job can "
+        "now carry any deadline at `background` priority without starving "
+        "interactive work and, because the queue ages, without being starved by "
+        "it. But JobRunner holds jobs in an in-process dict: an hour-long "
+        "research job dies with the process and its result is not recoverable, "
+        "so calling this live would promise something a restart disproves.",
+    ),
     _c("parallel.streaming_progress", "14", "C", "Streaming task progress", "live", "ai.jobs.progress:publish", ""),
     _c("parallel.budgets", "14", "C", "Cancellation and resource budgets", "live", "ai.gateway.budget:check", ""),
     _c(
@@ -929,9 +972,19 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "14",
         "C",
         "Concurrency limits and priority queues",
-        "staged",
-        "ai.jobs.runner:DEFAULT_MAX_CONCURRENT",
-        "Limits exist; priority queues do not.",
+        "live",
+        "ai.jobs.priority:AgeingPriorityQueue",
+        "Rank is priority MINUS how long an item has waited, so the bottom tier "
+        "cannot be starved: a background item overtakes a just-arrived critical "
+        "one after exactly the tier gap in ageing periods. A plain priority "
+        "queue answers 'critical' for ever under sustained load, and the "
+        "starved job shows `queued` on the operator's screen \u2014 "
+        "indistinguishable from one about to start. Wired into JobRunner "
+        "ADMISSION and consulted only when the pool is saturated: "
+        "ThreadPoolExecutor is the live path for every AI Core panel, and "
+        "priority can only decide anything under contention, so uncontended "
+        "submission is unchanged. The snapshot reports the longest wait as well "
+        "as the depth, because depth alone hides starvation.",
     ),
     _c(
         "parallel.failure_isolation",

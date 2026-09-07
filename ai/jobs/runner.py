@@ -190,11 +190,26 @@ class JobRunner:
         # Guards `_jobs`, `_futures` and `_cancelled`. Worker threads mutate job
         # state while the event loop reads it for the screen, so this is a real
         # race rather than a theoretical one.
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.executor = ThreadPoolExecutor(
             max_workers=self.max_concurrent,
             thread_name_prefix="hopefx-ai-job",
         )
+        # §14's priority queue, consulted ONLY when the pool is saturated.
+        #
+        # `ThreadPoolExecutor` is strictly FIFO, and it is the live path for
+        # every panel on the AI Core screen. Replacing it would put a scheduler
+        # in front of code that works; instead the queue sits beside it and
+        # engages exactly where priority can matter -- when there is contention.
+        # Uncontended submission is unchanged, which is what the existing tests
+        # exercise.
+        #
+        # Imported here rather than at module scope: ai/jobs/priority.py imports
+        # QueueFull from this module, and a top-level import would be a cycle.
+        from ai.jobs.priority import AgeingPriorityQueue
+
+        self._admission = AgeingPriorityQueue(max_queued=self.max_queued)
+        self._running = 0
 
     # -- submitting ------------------------------------------------------------
 
@@ -206,21 +221,36 @@ class JobRunner:
         operator: str,
         timeout_s: float = DEFAULT_JOB_TIMEOUT_S,
         on_change: Callable[[Job], None] | None = None,
+        priority: str = "secondary",
     ) -> str:
         """Queue a job and return its id.
 
         `work` is handed a `report(note)` callable so it can say what it is
         doing while it does it.
+
+        `priority` is one of §8's tiers. It only decides anything when the pool
+        is saturated: with a free worker the job starts immediately, exactly as
+        before. Waiting jobs are ordered by priority MINUS how long they have
+        waited, so the bottom tier cannot be starved by a stream of critical
+        work — see `ai/jobs/priority.py`.
         """
         if not prompt or not prompt.strip():
             raise ValueError("a job needs a prompt")
 
         with self._lock:
-            waiting = sum(1 for j in self._jobs.values() if j.state == "queued")
-            if waiting >= self.max_queued:
-                raise QueueFull(f"{waiting} jobs are already waiting; the ceiling is {self.max_queued}")
-
             job = Job(id=str(uuid.uuid4()), prompt=prompt, operator=operator)
+            start_now = self._running < self.max_concurrent
+            if start_now:
+                self._running += 1
+            else:
+                # Raises QueueFull at the ceiling, before the job is recorded --
+                # a refused submission must not leave a job nobody will run.
+                self._admission.push(
+                    job.id,
+                    priority=priority,
+                    operator=operator,
+                    payload=(work, timeout_s, on_change),
+                )
             self._jobs[job.id] = job
 
         # §5: the conversation should know this is running. Outside the lock and
@@ -228,10 +258,43 @@ class JobRunner:
         # not stop work from being queued.
         _remember_task(job)
 
+        if start_now:
+            self._start(job, work, timeout_s, on_change)
+        return job.id
+
+    def _start(
+        self,
+        job: Job,
+        work: Callable[[Callable[[str], None]], Any],
+        timeout_s: float,
+        on_change: Callable[[Job], None] | None,
+    ) -> None:
+        """Hand one job to the pool. The caller has already taken its slot."""
         future = self.executor.submit(self._run, job, work, timeout_s, on_change)
         with self._lock:
             self._futures[job.id] = future
-        return job.id
+
+    def _dispatch_next(self) -> None:
+        """Give the freed slot to the highest-effective-priority waiter.
+
+        Called when a job ends. If nothing is waiting the slot is released, so a
+        later submission takes the immediate path rather than queueing behind an
+        empty queue.
+        """
+        with self._lock:
+            item = self._admission.pop()
+            if item is None:
+                self._running = max(0, self._running - 1)
+                return
+            job = self._jobs.get(item.id)
+            if job is None or job.state != "queued":
+                # Cancelled or evicted while waiting. The slot stays taken for
+                # this pass and the next end releases it; recursing here would
+                # hold the lock across an unbounded chain.
+                self._running = max(0, self._running - 1)
+                return
+        work, timeout_s, on_change = item.payload
+        self._start(job, work, timeout_s, on_change)
 
     # -- running ---------------------------------------------------------------
 
@@ -316,6 +379,9 @@ class JobRunner:
         job.finished_at = datetime.now(UTC).isoformat()
         _forget_task(job)
         self._notify(job, on_change)
+        # Last, and outside the notify: a listener that raises must not leave
+        # the slot held, or one broken screen would stall the whole pool.
+        self._dispatch_next()
 
     @staticmethod
     def _notify(job: Job, on_change: Callable[[Job], None] | None) -> None:
@@ -463,10 +529,17 @@ class JobRunner:
             jobs = [j.as_dict() for j in mine]
             running = sum(1 for j in mine if j.state == "running")
             queued = sum(1 for j in mine if j.state == "queued")
+            admission = self._admission.snapshot()
         return {
             "jobs": jobs,
             "running": running,
             "queued": queued,
+            # The admission queue's own depth and, more usefully, the longest
+            # wait on it. Depth alone hides starvation: three waiting jobs could
+            # be three seconds old or three hours old.
+            "waiting": admission["waiting"],
+            "longest_wait_s": admission["longest_wait_s"],
+            "waiting_by_priority": admission["by_priority"],
             "max_concurrent": self.max_concurrent,
             "max_queued": self.max_queued,
         }

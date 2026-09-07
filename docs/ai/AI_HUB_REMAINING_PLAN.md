@@ -103,7 +103,7 @@ would mean the first task in the cycle had already run.
    Starting a reader belongs to Phase B, where the orchestrator is the first
    thing that needs another worker's messages.
 
-## Phase B — §14 task orchestration  ← NEXT
+## Phase B — §14 task orchestration  ✅ DONE
 
 **Depends on:** Phase A's graph and bus, both now built. Sequenced after
 Track S at the owner's direction (2026-09-07).
@@ -115,23 +115,99 @@ Track S at the owner's direction (2026-09-07).
 | Concurrency limits and priority queues | staged |
 | §11 Orchestrator — decompose, allocate, track, merge, resolve | staged |
 
-**Files:** `ai/jobs/runner.py` (priority queue), `ai/agent/orchestrator.py`
-(new), `ai/bus/triggers.py` (new — an event pattern that starts a task graph),
-`ai/bus/agent_bus.py` (start a `consume` reader, closing Phase A's third
-finding).
+**Built:** `ai/jobs/priority.py`, `ai/bus/triggers.py`,
+`ai/agent/orchestrator.py`, plus admission wiring in `ai/jobs/runner.py`.
 
-**Second rule:** the orchestrator decomposes into a `TaskGraph` and executes
-it; it does not re-implement ordering. A second scheduler beside the graph is
-how the graph stops being the thing that decides what runs.
+**Rule held — a priority queue must not starve.** Rank is priority *minus* how
+long an item has waited, so a `background` item overtakes a just-arrived
+`critical` one after exactly the tier gap in ageing periods. Bounded and
+stated, rather than absent and hoped for. A plain priority queue answers
+"critical" for ever under sustained load, and the starved job shows `queued` on
+the operator's screen — indistinguishable from one about to start.
 
-**Rule:** a priority queue must not starve. A low-priority job that never runs
-because high-priority work keeps arriving is a job that silently never happens,
-and the operator sees `queued` for ever. Ageing, and a test that asserts a
-low-priority job eventually runs under sustained high-priority load.
+**Priority engages only under contention.** `ThreadPoolExecutor` is the live
+path for every AI Core panel and is strictly FIFO; replacing it would put a
+scheduler in front of code that works. The queue sits in front of *admission*
+and is consulted only when the pool is saturated, so uncontended submission is
+byte-for-byte unchanged — which is what the existing job tests exercise, and
+they still pass.
+
+**Second rule held — the orchestrator executes a graph.** A test parses
+`ai/agent/orchestrator.py` for any sorting of its own. Decomposition is
+*declared*: turning a question into steps is a planner's paid model call, and
+keeping it out makes the graph deterministic. Allocation **names** what it
+could not place — unknown department, unimplemented action, or one that is not
+read-only — because a step dropped from the plan reads exactly like a step that
+ran and returned nothing. A conflict goes to `ai/debate/session.py` and is
+never averaged: an average cannot express UNRESOLVED.
+
+**A trigger enqueues and never executes.** Running the task inside the
+subscriber callback would make the bus an execution path, which is the one
+thing §12 was built not to be. Every triggered item carries a depth one higher
+than the message that caused it, because a task that publishes the event that
+triggers it is a loop that eats the queue.
+
+**`parallel.long_running` is staged, not live** — the honest half-verdict. The
+*scheduling* half is built: a job can carry any deadline at `background`
+priority without starving interactive work and, because the queue ages, without
+being starved by it. The *durability* half is not: `JobRunner` holds jobs in an
+in-process dict, so an hour-long research job dies with the process and its
+result is unrecoverable. Calling it live would promise something a restart
+disproves.
+
+**Three tests my own arithmetic got wrong**, fixed against the code rather than
+the other way round: a "just arrived" critical item is one enqueued at the
+moment of comparison (a waiting one is ageing too); `shadow_place_order` is
+READ_ONLY because shadow mode does not place anything; and a single stance
+comes back UNRESOLVED with a reason rather than raising — which is the better
+behaviour and was already built.
 
 ---
 
-## Phase C — §22 telemetry honesty
+## Phase S5 — the patch generator, as its own decision  ← NEXT
+
+**Owner decision, 2026-09-07.** S4 deliberately shipped without one: *"turning
+the schedule on and letting a model author code unattended are two different
+decisions, and they should be made separately."* This is the second decision,
+taken separately, as asked.
+
+**Files:** `ai/improve/patcher.py` (new), wiring into `ai/improve/cycle.py`'s
+`patcher` parameter and `core/startup_factories.py`.
+
+**What it is:** a callable that takes a `Finding` and returns candidate source
+for the file it names. It runs through `ai/gateway`, so it is budgeted,
+audited, rate-limited and circuit-broken like every other model call in this
+system.
+
+**What does not change, and this is the point.** The generated source still
+passes S3's five gates — evidence resolves, the vault by path, it changes
+something, under the ceiling, the sandbox accepts it — and still needs two
+distinct approvers, one a superadmin, before it becomes a pull request a human
+merges. The model gains the ability to *write a suggestion*. It gains nothing
+else.
+
+**The rules this phase must not violate:**
+
+1. **Its input is untrusted.** The file it is asked to patch is repository text,
+   and a comment or a docstring in it can carry an instruction. Everything
+   reaching the model goes through `ai/guardrails/input.py:fence`, and the
+   finding's own `as_prompt_data()` already does this.
+2. **Its output is untrusted too.** `ai/guardrails/output.py:scan_output` runs
+   on what comes back, before it reaches the proposal gates — a model that
+   echoes a credential from the file it read must not put it in a queue entry.
+3. **It never sees a protected file.** S4 already refuses to hand the generator
+   a finding whose path is in the vault. This phase must not add a second path
+   that does.
+4. **Separately enabled.** A second switch, not the schedule's. `AI_IMPROVE_CYCLE_HOURS`
+   turns the walk on; the generator needs its own, so the decision the owner
+   drew a line under stays two decisions in the code as well as in prose.
+5. **A refusal is a result.** A model that declines, times out, returns prose
+   instead of code, or blows the budget is recorded against that finding in the
+   cycle report — never a silent skip.
+
+---
+
+## Phase C — §22 telemetry honesty  ← NEXT (after S5)
 
 **Unblocks:** §23 resource-aware rendering, §26 pause-under-load.
 
