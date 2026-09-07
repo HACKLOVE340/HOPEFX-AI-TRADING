@@ -730,10 +730,48 @@ REGISTRY: Final[tuple[Capability, ...]] = (
     ),
     _c("bus.task_graph", "12", "C", "Task graph rather than a sequential queue"),
     # §13 — Debate and conflict resolution
-    _c("debate.opposing_perspectives", "13", "C", "Invoke opposing perspectives for high-value decisions"),
-    _c("debate.no_forced_consensus", "13", "C", "Do not force artificial consensus"),
-    _c("debate.record_claims", "13", "C", "Record competing claims and evidence"),
-    _c("debate.evidence_weighting", "13", "C", "Weight evidence by quality and freshness"),
+    _c(
+        "debate.opposing_perspectives",
+        "13",
+        "C",
+        "Invoke opposing perspectives for high-value decisions",
+        "live",
+        "ai.debate.session:debate",
+        "A single stance is refused as a debate: dressing one position as a "
+        "debate implies an opposing view was sought and found wanting.",
+    ),
+    _c(
+        "debate.no_forced_consensus",
+        "13",
+        "C",
+        "Do not force artificial consensus",
+        "live",
+        "ai.debate.session:DECISIVE_RATIO",
+        "UNRESOLVED is a distinct outcome, not a weaker verdict. Sides within "
+        "1.5x have not been separated by the evidence, and calling that a "
+        "resolution is artificial consensus wearing a decimal point.",
+    ),
+    _c(
+        "debate.record_claims",
+        "13",
+        "C",
+        "Record competing claims and evidence",
+        "live",
+        "ai.debate.session:DebateResult",
+        "Every position keeps its evidence, its weight, and whether that "
+        "evidence was stale. An unsupported dissent is recorded, not dropped.",
+    ),
+    _c(
+        "debate.evidence_weighting",
+        "13",
+        "C",
+        "Weight evidence by quality and freshness",
+        "live",
+        "ai.debate.evidence:weigh",
+        "Measured outranks recalled by 8x, so repetition is no substitute for "
+        "sourcing. Stale is downweighted and marked, never dropped; an absent "
+        "timestamp is unmeasured, never treated as fresh.",
+    ),
     _c(
         "debate.calibration",
         "13",
@@ -787,14 +825,83 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "One job's failure is that job's outcome.",
     ),
     # §15 — Reasoning, explainability and challenge
-    _c("reason.thesis", "15", "B", "State the thesis"),
-    _c("reason.counter_thesis", "15", "B", "State the counter-thesis"),
-    _c("reason.evidence", "15", "B", "Show key evidence"),
-    _c("reason.assumptions", "15", "B", "Identify assumptions"),
-    _c("reason.missing_information", "15", "B", "Identify missing information"),
-    _c("reason.confidence", "15", "B", "Calibrated confidence where possible"),
-    _c("reason.what_would_change_it", "15", "B", "Explain what would change the conclusion"),
-    _c("reason.risk_alternatives", "15", "B", "Provide risk and alternative actions"),
+    _c(
+        "reason.thesis",
+        "15",
+        "B",
+        "State the thesis",
+        "live",
+        "ai.debate.reasoning:Reasoning",
+        "",
+    ),
+    _c(
+        "reason.counter_thesis",
+        "15",
+        "B",
+        "State the counter-thesis",
+        "live",
+        "ai.debate.reasoning:ReasoningIncomplete",
+        "Required at construction. It is one of the two parts dropped first "
+        "under pressure, because it is one of the two that make the author "
+        "less persuasive.",
+    ),
+    _c(
+        "reason.evidence",
+        "15",
+        "B",
+        "Show key evidence",
+        "live",
+        "ai.debate.evidence:Evidence",
+        "Evidence for and against are separate fields, so the balance is readable without re-reading every item.",
+    ),
+    _c(
+        "reason.assumptions",
+        "15",
+        "B",
+        "Identify assumptions",
+        "live",
+        "ai.debate.reasoning:Reasoning",
+        "",
+    ),
+    _c(
+        "reason.missing_information",
+        "15",
+        "B",
+        "Identify missing information",
+        "live",
+        "ai.agent.synthesis:Recommendation",
+        "A department with no reading becomes stated missing information; "
+        "silence about a blind spot reads as an all-clear.",
+    ),
+    _c(
+        "reason.confidence",
+        "15",
+        "B",
+        "Calibrated confidence where possible",
+        "live",
+        "ai.debate.reasoning:Reasoning",
+        "Absent is allowed; unfounded is refused. A confidence requires a basis "
+        "\u2014 a bare number is a mood, and somebody may size a position against "
+        "it. Absence is stated in words, not omitted.",
+    ),
+    _c(
+        "reason.what_would_change_it",
+        "15",
+        "B",
+        "Explain what would change the conclusion",
+        "live",
+        "ai.debate.reasoning:ReasoningIncomplete",
+        "Required at construction. An argument with no stated way to be wrong is an assertion.",
+    ),
+    _c(
+        "reason.risk_alternatives",
+        "15",
+        "B",
+        "Provide risk and alternative actions",
+        "live",
+        "ai.debate.reasoning:Reasoning",
+        "Doing nothing is always among the alternatives offered.",
+    ),
     # §16 — Memory and knowledge
     _c("memory.working", "16", "B", "Working memory for the current turn"),
     _c("memory.session", "16", "B", "Session memory"),
@@ -925,10 +1032,41 @@ REGISTRY: Final[tuple[Capability, ...]] = (
     _c("trading.mode_awareness", "20", "C", "Live and paper trading awareness", "live", "api.safe_agent_platform", ""),
     _c("trading.independent_risk", "20", "C", "Independent risk agent", "live", "ai.departments.risk_compliance", ""),
     _c("trading.war_room", "20", "D", "Market war room generated on demand"),
-    _c("trading.thesis_counter", "20", "B", "Trade thesis and counter-thesis"),
-    _c("trading.correlation", "20", "B", "News, macro, technical and microstructure correlation"),
+    _c(
+        "trading.thesis_counter",
+        "20",
+        "B",
+        "Trade thesis and counter-thesis",
+        "live",
+        "ai.debate.trade:analyse_trade",
+        "A trade thesis without a counter-thesis is a pitch, and fails to "
+        "construct. The analysis carries no side, size or price: a structure an "
+        "order router could read is one refactor from an AI trading on its own "
+        "argument.",
+    ),
+    _c(
+        "trading.correlation",
+        "20",
+        "B",
+        "News, macro, technical and microstructure correlation",
+        "live",
+        "ai.debate.correlation:correlate",
+        "The caveat that co-occurrence is not causation is part of the rendered "
+        "output, not a footnote, and correlation never produces MEASURED "
+        "evidence \u2014 what was measured is the price and the signal, not the "
+        "link. A domain with no signal is named as a blind spot.",
+    ),
     _c("trading.kill_switch_awareness", "20", "C", "Risk limits and kill-switch awareness", "live", "risk.manager", ""),
-    _c("trading.explainability", "20", "B", "Explainability for AI-generated trade analysis"),
+    _c(
+        "trading.explainability",
+        "20",
+        "B",
+        "Explainability for AI-generated trade analysis",
+        "live",
+        "ai.debate.trade:TradeAnalysis",
+        "explain() carries the argument and the scored debate behind it. A "
+        "conclusion with no working is not explainable.",
+    ),
     _c(
         "trading.execution_permission",
         "20",

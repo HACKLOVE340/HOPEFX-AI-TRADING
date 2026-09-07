@@ -82,6 +82,68 @@ class Recommendation:
     unresolved: list[str] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
 
+    def reasoning(self) -> Any:
+        """This recommendation as §15's eight-part structure.
+
+        The synthesis already knows every part §15 asks for — it just spelled
+        them as prose in `as_proposal`. Rendering them as fields makes an
+        omission an error rather than a shorter paragraph, and puts the
+        counter-thesis and "what would change this" where a reader cannot skip
+        past them.
+
+        Built here rather than in `ai/debate/` because this is where the
+        material is. `ai.debate.Reasoning` would otherwise be a structure with
+        nothing in the platform producing one — a control nobody runs.
+        """
+        from ai.debate.reasoning import Reasoning
+
+        concerns = [f for f in self.findings if f.stance == "concern"]
+        clears = [f for f in self.findings if f.stance == "clear"]
+
+        # The strongest voice on the other side, whichever side that is. When
+        # nobody dissented, that is said outright rather than left blank —
+        # "no department disagreed" and "nobody was asked" are different facts,
+        # and an empty counter-thesis cannot tell them apart.
+        if concerns and clears:
+            other = clears[0] if concerns else concerns[0]
+            counter = f"{other.department} looked at the same subject and reports it clear: {other.summary}"
+        elif concerns:
+            counter = (
+                "No department contradicted this. That is agreement among those that reported, "
+                "not independent confirmation."
+            )
+        else:
+            counter = (
+                "No department raised a concern, but a clear reading from every department is "
+                "still only as good as what each of them can see."
+            )
+
+        # Every department with no reading is a stated gap. §15 asks for missing
+        # information to be identified; silence about a blind spot reads as an
+        # all-clear.
+        missing = tuple(f"{name} could not get a reading." for name in self.unresolved)
+
+        change = [f"A reading from {name}, which is currently missing." for name in self.unresolved]
+        if not change:
+            change.append("A department reversing its stance, or a fresh reading contradicting the one this rests on.")
+
+        return Reasoning(
+            subject=self.subject,
+            thesis=self.headline,
+            counter_thesis=counter,
+            assumptions=tuple(f"{f.department}'s reading of {self.subject} is current." for f in self.findings),
+            missing_information=missing,
+            confidence=self.confidence,
+            confidence_basis=(
+                f"How much the departments agree: {len(concerns)} concerned, {len(clears)} clear, "
+                f"{len(self.unresolved)} with no reading. This is not a probability that the "
+                "conclusion is correct."
+            ),
+            what_would_change_it=tuple(change),
+            risks=tuple(d for d in self.disagreements),
+            alternatives=("Take no action and request the missing readings first.",),
+        )
+
     def as_proposal(self) -> dict[str, Any]:
         """Render for the same approval queue everything else lands in.
 
