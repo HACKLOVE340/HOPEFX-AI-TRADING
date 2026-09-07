@@ -6,19 +6,19 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 219 live · 8 staged · 3 planned ·
-227/227 evidence resolved · 0 discrepancies · 95% built.**
+At the time of writing: **230 capabilities · 221 live · 7 staged · 2 planned ·
+228/228 evidence resolved · 0 discrepancies · 96% built.**
 
 Sections finished (nothing planned or staged): §5, §6, §7, §8, §11, §12, §13,
-§15, §16, §17, §19, §22, §23, §25, §27, and both owner tracks — P and S.
+§15, §16, §17, §19, §20, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**11 rows remain**, across seven sections:
+**9 rows remain**, across six sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 18 ambient awareness | 2 | 4 roll-ups | 2 | 20 war room | 1 |
-| 21 visualisation | 2 | 10 multi-display | 1 | 24 agent runtime | 1 |
-| 14 long-running | 1 | 26 performance | 1 | | |
+| 18 ambient awareness | 2 | 10 multi-display | 1 | 24 agent runtime | 1 |
+| 4 roll-ups | 2 | 14 long-running | 1 | 26 performance | 1 |
+| 21 visualisation | 1 | | | | |
 
 Phase H covers all of them. §4's two rows are roll-ups and land last by
 construction: they become live when the layers beneath them are, so claiming
@@ -972,9 +972,76 @@ fire one first and every one of them passed with the guess in place.
 
 ---
 
+## Phase H5 — the war room, and choosing what to draw  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §20 Market war room generated on demand | planned | **live** | `hub/warRoom.ts:warRoomSurfaces` |
+| §21 Choose the representation that suits the information | staged | **live** | `hub/representation.ts:representationFor` |
+
+### The war room was a layout pretending to be a feature
+
+`war_room` has existed since Phase 2.1 — `readLayout('war room')` returns it,
+`suggestLayout` reaches for it at eight surfaces. So the phrase **rearranged**
+whatever happened to be on the plane, and on an empty plane it rearranged
+nothing and read as a broken command. §20 asks for one to be *generated*.
+
+The obvious implementation opens all nine candidates. On a deployment with no
+news feed and a flat book that is six panels reading "nothing is connected to
+this yet" — a war room that looks like a dead platform, which is worse than not
+opening one. So the set is filtered by what actually has data.
+
+Silently dropping the empty ones has its own failure, though: an operator who
+expected a news panel and does not see one cannot tell whether the feed is
+silent or the war room forgot. So `omitted` names them and the panel says the
+sentence aloud.
+
+**Risk is declared `critical`, and that is load-bearing.** `layout.ts` folds
+`background` and `on_demand` into the collapsed stack once the plane is
+crowded, and a war room is crowded by definition. Risk turning into a chip at
+exactly the moment somebody opened a war room is the one collapse that must not
+happen.
+
+### The representation row was not waiting for a model
+
+The staged note said "a model does not choose it yet", which framed the row as
+blocked on a model call. That framing was mine and it was wrong.
+
+A numeric series is a chart. Pairs are a table. Timestamped events are a
+timeline. Nodes with edges are a network. Those follow from the **shape of what
+arrived**, and deciding them locally is better than deciding them in a model:
+instant, free, deterministic, testable, and still working when every vendor is
+unreachable. `intent.ts` already makes exactly this argument — *"this is the
+reflex, the model is the thought"* — and it applies with more force to a
+question whose answer is already in the data. The model is not cut out; it is
+the fallback for what this cannot decide, which is what `null` means.
+
+Two refusals worth recording. A **one-point series** returns null rather than a
+chart: a line between one point is a dot, `surfaceData` already refuses to
+chart a single price, and a chooser that reinstated it would undo a decision
+made for a reason. And when two shapes are present the **richer** one wins —
+cells with rows is a heatmap plus its accessible twin, not a table that happens
+to carry cells.
+
+### Both wirings verified by reverting them
+
+Turning off the war-room assembly failed all four plane tests. Making the
+assembly open every candidate regardless of data failed five, including the two
+that check it says what it left out.
+
+### §21's other row stays staged, honestly
+
+`viz.scientific_3d`: the presence already takes schematic scientific forms and
+the renderer abstraction names WebGL, WebXR and holographic output — but only
+canvas2d is implemented, and `availableRenderers()` says so rather than
+implying otherwise. Claiming it would be claiming three renderers that do not
+exist.
+
+---
+
 ## Phase H — the remainder
 
-Eleven rows, seven sections. Regenerated from the registry rather than
+Nine rows, six sections. Regenerated from the registry rather than
 carried forward: the earlier version of this table still listed §7 and §25 rows
 that Phases E and F made live, which is the shape of stale plan a reader trusts.
 
@@ -984,10 +1051,8 @@ that Phases E and F made live, which is the shape of stale plan a reader trusts.
 | 18 | Gesture recognition | staged |
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
-| 21 | Choose the representation that suits the information | staged |
 | 10 | Multi-display console | staged |
 | 14 | Long-running research jobs | staged |
-| 20 | Market war room generated on demand | planned |
 | 24 | Isolated agent workers with task contracts | staged |
 | 4 | Presence layer — identity, voice, animation, spatial state | planned |
 | 4 | Environment layer — the dynamic workspace | planned |

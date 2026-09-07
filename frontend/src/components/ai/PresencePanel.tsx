@@ -31,6 +31,8 @@ import { readIntent } from '../../hub/intent';
 import { readLayout, suggestLayout, type LayoutName } from '../../hub/layout';
 import { SnapshotStore, capacityFor, readHistoryIntent } from '../../hub/history';
 import { spokenFocus } from '../../hub/reference';
+import { warRoomSurfaces } from '../../hub/warRoom';
+import { surfaceData } from '../../hub/surfaceData';
 import { resolveReference } from '../../hub/resolveReference';
 import type { SceneGraph } from '../../hub/sceneGraph';
 import { asksForSummary, summarise } from '../../hub/summary';
@@ -587,9 +589,23 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       const named = readLayout(phrase);
       if (named) setNamedLayout(named === 'auto' ? null : named);
 
+      // §20. A war room is GENERATED, not rearranged. `readLayout` has always
+      // returned `war_room` for the phrase, and arranging an empty plane into
+      // a war room arranges nothing — which reads as the command being broken.
+      // The panels are assembled from the feeds that actually have something,
+      // and the ones left out are said aloud rather than silently missing.
+      let warRoomSaid = '';
+      if (named === 'war_room') {
+        const built = warRoomSurfaces((key) => !surfaceData({ kind: 'table', key }).empty);
+        for (const request of built.surfaces) workspace.open(request);
+        warRoomSaid = built.reason;
+      }
+
       syncWorkspace();
 
-      if (named) {
+      if (warRoomSaid) {
+        turn.say(warRoomSaid);
+      } else if (named) {
         turn.say(named === 'auto' ? 'Back to the default arrangement.' : `${named.replace('_', ' ')} layout.`);
       } else if (intent.unhandled) {
         turn.say(

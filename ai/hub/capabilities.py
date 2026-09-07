@@ -1512,7 +1512,21 @@ REGISTRY: Final[tuple[Capability, ...]] = (
     # §20 — Trading and HOPEFX integration
     _c("trading.mode_awareness", "20", "C", "Live and paper trading awareness", "live", "api.safe_agent_platform", ""),
     _c("trading.independent_risk", "20", "C", "Independent risk agent", "live", "ai.departments.risk_compliance", ""),
-    _c("trading.war_room", "20", "D", "Market war room generated on demand"),
+    _c(
+        "trading.war_room",
+        "20",
+        "D",
+        "Market war room generated on demand",
+        "live",
+        "frontend/src/hub/warRoom.ts:warRoomSurfaces",
+        "war_room was already a LAYOUT — readLayout returned it and suggestLayout reached for it at "
+        "eight surfaces — so the phrase rearranged whatever happened to be on the plane and, on an "
+        "empty one, rearranged nothing. It now ASSEMBLES the panels, and only those whose feed has "
+        "something: a war room of six 'nothing is connected yet' panels looks like a dead platform. "
+        "What was left out is named aloud, because an operator who expected a news panel cannot "
+        "otherwise tell whether the feed is silent or the war room forgot. Risk is declared critical "
+        "so the crowded-plane collapse cannot fold it into a chip at the moment it matters most.",
+    ),
     _c(
         "trading.thesis_counter",
         "20",
@@ -1651,11 +1665,17 @@ REGISTRY: Final[tuple[Capability, ...]] = (
     _c(
         "viz.selection_intelligence",
         "21",
-        "B",
+        "D",
         "Choose the representation that suits the information",
-        "staged",
-        "frontend/src/hub/intent.ts",
-        "Intent picks the kind; a model does not choose it yet.",
+        "live",
+        "frontend/src/hub/representation.ts:representationFor",
+        "The earlier note said 'a model does not choose it yet', which framed this as waiting for a "
+        "model call — that framing was wrong. A series is a chart, pairs are a table, timestamped "
+        "events are a timeline: decidable from the shape of what arrived, instantly and while every "
+        "vendor is unreachable, which is the argument intent.ts already makes for resolving the "
+        "obvious commands locally. The model remains the fallback for what this cannot decide, which "
+        "is what null means. It refuses a one-point series rather than undoing surfaceData's existing "
+        "refusal to chart a single price, and prefers the richer shape when two are present.",
     ),
     # §22 — Real system monitoring
     _c(
