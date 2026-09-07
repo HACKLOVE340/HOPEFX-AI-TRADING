@@ -6,8 +6,8 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **223 capabilities · 168 live · 28 staged · 27 planned ·
-196/196 evidence resolved · 0 discrepancies · 75% built.**
+At the time of writing: **228 capabilities · 184 live · 26 staged · 18 planned ·
+210/210 evidence resolved · 0 discrepancies · 81% built.**
 
 Sections finished (nothing planned or staged): §5, §6, §12, §13, §15, §16, §19,
 and all of Track S.
@@ -278,7 +278,79 @@ and tool_denials each reported unmeasured with a reason; neural engine
 
 ---
 
-## Phase D — §23 component architecture  ← NEXT
+# Phase P — the AI present on every screen
+
+**Owner request, 2026-09-07:** *"allow the AI hologram to be available and able
+to appear in any screen in the app, including any dashboard... I should be able
+to interact, diagnose the page, move around the page. The page should be able to
+do anything in the page."*
+
+Today the presence lives on the AI Core page. This makes it app-wide.
+
+## It splits at the approval gate, and that split is not negotiable
+
+`.claude/skills/flow-by-flow` is unambiguous: *"Every major UI/UX change
+requires a `flow-prototype` review surface and explicit user approval before
+production implementation. No post-hoc approval."* A presence overlay on every
+screen in a money-moving platform is as major as UI changes get here — it sits
+above the order ticket.
+
+So:
+
+**P1 — architecture. No visual change, no gate.  ✅ DONE**
+
+Pure logic in `frontend/src/hub/`, the same shape as everything else there: it
+decides what the presence knows and what it may do, and draws nothing.
+
+- `pageContext.ts` — derived from `NAV_ITEMS`, the app's own source of truth for
+  routes. An unknown route reports `known: false` **with the path**, because
+  falling back to the nearest page would have the AI confidently describing a
+  screen the operator is not looking at. `inspected` is a separate field from
+  `problems`, so a page with no landmarks reported cannot be read as a healthy
+  one — §22's rule applied to a page rather than to a gauge.
+- `presenceDock.ts` — tries each corner and takes the first that collides with
+  nothing the operator is using. When every corner collides it **reports the
+  overlap** rather than quietly sitting on a form somebody is filling in. Never
+  a keyboard trap (`trapsFocus` is a field, so a test can assert it). Dismissal
+  survives navigation — a presence that returns on the next route change was
+  delayed, not dismissed. Narrow viewports get an edge bar, the only arrangement
+  that cannot cover content. Transform and opacity only.
+- `pageCapabilities.ts` — two fields and deliberately no combined one. A write
+  with no registered tool is listed as `unavailable` **with the reason**, not
+  filtered out: "the AI cannot do this" and "this does not exist" are different
+  answers to an operator asking why nothing happened.
+
+23 tests. `presence.overlay` stays `planned` and carries no evidence, which is
+the registry's way of holding P2 open rather than letting it be forgotten.
+
+**P2 — the overlay itself. Behind the gate.  ← NEXT, needs your approval**
+
+A `flow-prototype` approval surface first, showing the presence on a real page
+in every state — idle, listening, thinking, speaking, alerting, dismissed, and
+reduced-motion — then production implementation only after explicit approval.
+
+This is the one thing in this plan I will not ship unasked. It is a floating
+element above every screen in a platform that places trades, and the repo's own
+rule is explicit that post-hoc approval does not count.
+
+## The rule P1 must not violate
+
+**Observing a page is not acting on it.** The presence may read any page it is
+on and describe what it sees. Anything that *changes* the page — submitting a
+form, cancelling an order, toggling a setting — goes through `ai/tools/bus.py`
+and its two gates exactly as it does today, with an operator identity and a
+risk tier. "The page should be able to do anything in the page" is the
+capability; the gate is what makes it safe to have, and there is no version of
+this where a presence overlay becomes a second way to place a trade.
+
+`pageCapabilities.ts` therefore returns two lists that are never merged: what
+can be read here, and what can be requested here. `ai/agent/loop.py` already
+holds this exact distinction between `permitted` and `platform_context`, for
+the same reason, and P1 mirrors it.
+
+---
+
+## Phase D — §23 component architecture
 
 **Depends on:** Phase C's telemetry for resource-aware rendering.
 
@@ -292,6 +364,10 @@ and tool_denials each reported unmeasured with a reason; neural engine
 | Schema-driven panel generation | staged |
 | Layout engine independent of content | staged |
 | Accessibility and reduced-motion support (for generated panels) | staged |
+
+**D1 is done** (scene graph, workspace store, virtualisation, frame budget).
+D2 covers the remaining §23 rows: schema-driven panels, a second layout
+strategy, accessibility for generated panels, and the cognitive stream.
 
 **Also closes:** §8 surface types + priority tiers, §9 scene model + panel
 registry, §21 representation selection, §10 multi-display console.

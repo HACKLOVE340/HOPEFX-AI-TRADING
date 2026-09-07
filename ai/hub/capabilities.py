@@ -1600,8 +1600,39 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/hub/PresenceCore.tsx",
         "Draws a Presence and computes nothing.",
     ),
-    _c("ui.scene_graph", "23", "D", "Scene graph for spatial awareness"),
-    _c("ui.workspace_store", "23", "D", "State store for workspace sessions"),
+    _c(
+        "ui.scene_graph",
+        "23",
+        "D",
+        "Scene graph for spatial awareness",
+        "live",
+        "frontend/src/hub/sceneGraph.ts",
+        "hub/spatial.ts answers where ONE rectangle is; this answers what needs "
+        "more than one panel to mean anything \u2014 the chart on the left, inside "
+        "the war room, the panel behind that one. Without it the AI can say "
+        "where a panel is and cannot resolve 'the one under it', which is most "
+        "of how people refer to things on a screen. An unknown id THROWS rather "
+        "than returning null: 'no such panel' and 'nothing in that direction' "
+        "are different facts and one value for both hides one of them. A "
+        "containment cycle is refused when the edge is made, the same rule "
+        "ai/bus/graph.py holds for tasks.",
+    ),
+    _c(
+        "ui.workspace_store",
+        "23",
+        "D",
+        "State store for workspace sessions",
+        "live",
+        "frontend/src/hub/workspaceStore.ts",
+        "It never comes back one panel short without saying so. A saved session "
+        "naming a surface kind this build no longer has is restored WITHOUT it "
+        "and the drop is NAMED \u2014 returning three of four panels silently is "
+        "the workspace losing an operator's work and reporting success. An "
+        "unknown schema version is refused rather than coerced: reading a "
+        "future session with today's rules produces something that looks "
+        "restored and is not. A focus pointing at a surface that did not "
+        "survive is dropped and named too.",
+    ),
     _c(
         "ui.event_streaming",
         "23",
@@ -1611,8 +1642,42 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "api.ws_live",
         "15 typed channels with a private-channel rule.",
     ),
-    _c("ui.virtualization", "23", "D", "Virtualisation for high-density displays"),
-    _c("ui.frame_protection", "23", "A", "Resource-aware rendering and frame-rate protection"),
+    _c(
+        "ui.virtualization",
+        "23",
+        "D",
+        "Virtualisation for high-density displays",
+        "live",
+        "frontend/src/hub/virtualization.ts",
+        "\u00a722's rule arriving in the browser: an UNKNOWN VIEWPORT MUST NEVER "
+        "RENDER ZERO ITEMS. A window computed from a height nobody measured \u2014 "
+        "a container not laid out yet, a hidden tab, a late ref \u2014 gives "
+        "start == end, and an empty list is indistinguishable from 'there is "
+        "nothing to show'. So an unmeasured viewport falls back to a STATED "
+        "number of rows and says why; not to all of them either, since "
+        "rendering ten thousand nodes because a ref was late is the same "
+        "failure from the other side. A genuinely empty list reports as "
+        "measured, because it is.",
+    ),
+    _c(
+        "ui.frame_protection",
+        "23",
+        "A",
+        "Resource-aware rendering and frame-rate protection",
+        "live",
+        "frontend/src/hub/frameBudget.ts",
+        "Reads \u00a722's telemetry and the browser's frame timing. An UNMEASURED "
+        "load changes nothing: assuming idle is the 0% CPU gauge deciding to "
+        "start more work, and assuming busy degrades a fast machine over a "
+        "missing number \u2014 so fidelity HOLDS and the reason says the input was "
+        "missing, which is a state somebody can see and act on. Degrades and "
+        "recovers one step at a time, because a jump to the floor on one slow "
+        "frame is a visible lurch the next measurement undoes, and a screen "
+        "oscillating between two appearances is worse than one consistently "
+        "reduced. Reduced motion caps fidelity outright rather than being "
+        "weighed: a fast machine must not animate past somebody's "
+        "accessibility setting.",
+    ),
     _c(
         "ui.accessibility",
         "23",
@@ -1968,6 +2033,71 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "a protected path is still REPORTED and never sent to the generator: "
         "paying a model to write a patch that cannot be applied is money for "
         "nothing.",
+    ),
+    # ── Track P — owner request, 2026-09-07 ──────────────────────────
+    #
+    # The presence available on every screen, able to diagnose the page around
+    # it, move around it, and act on it. Not a specification section: filing
+    # these under a number would claim the specification asked for them.
+    _c(
+        "presence.page_context",
+        "P",
+        "A",
+        "The presence knows what page it is on and what is wrong with it",
+        "live",
+        "frontend/src/hub/pageContext.ts:describePage",
+        "Derived from NAV_ITEMS, the app's own single source of truth for "
+        "routes \u2014 a hand-written per-page table would be correct on the day it "
+        "was written and wrong by the next release. An unknown route reports "
+        "known: false with the path, because falling back to the nearest page "
+        "would have the AI confidently describing a screen the operator is not "
+        "looking at. `inspected` is separate from `problems`, so a page with no "
+        "landmarks reported cannot be read as a healthy one \u2014 \u00a722's rule "
+        "applied to the page rather than to a gauge.",
+    ),
+    _c(
+        "presence.dock",
+        "P",
+        "A",
+        "The presence sits where it helps and never blocks",
+        "live",
+        "frontend/src/hub/presenceDock.ts:dockFor",
+        "Everywhere but the AI Core page the presence is a guest on somebody "
+        "else's screen, one of them the order ticket. It tries each corner and "
+        "takes the first that collides with nothing the operator is using; when "
+        "every corner collides it REPORTS the overlap rather than quietly "
+        "sitting on a form somebody is filling in. Never a keyboard trap "
+        "(trapsFocus is a field, so a test can assert it). Dismissal survives "
+        "navigation \u2014 a presence that returns on the next route change was "
+        "delayed, not dismissed. Narrow viewports get an edge bar, the only "
+        "arrangement that cannot cover content. Transform and opacity only.",
+    ),
+    _c(
+        "presence.page_capabilities",
+        "P",
+        "A",
+        "What the AI may read here, and what it may request here, never merged",
+        "live",
+        "frontend/src/hub/pageCapabilities.ts:pageCapabilities",
+        "Two fields and deliberately no combined one: a caller handed a single "
+        "list would reasonably conclude everything on it can be done. The same "
+        "discipline as ai/agent/loop.py's permitted/platform_context split and "
+        "app_surface's visible/invokable pair, arriving at the page level. A "
+        "write with no registered tool is listed as UNAVAILABLE with the "
+        "reason, not filtered out \u2014 'the AI cannot do this' and 'this does not "
+        "exist' are different answers to an operator asking why nothing "
+        "happened. The gate itself is unchanged: anything that acts still "
+        "passes ai/tools/bus.py with an authenticated operator, so a presence "
+        "overlay cannot become a second way to place a trade.",
+    ),
+    _c(
+        "presence.overlay",
+        "P",
+        "A",
+        "The presence rendered on every screen in the app",
+        "planned",
+        "",
+        "",
     ),
     _c(
         "improve.patch_generator",

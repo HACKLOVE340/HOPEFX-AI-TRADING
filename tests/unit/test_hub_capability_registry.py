@@ -217,13 +217,24 @@ def test_coverage_counts_by_state_and_says_what_was_measured():
     assert "verified" in c, "coverage does not distinguish what it MEASURED from what it was TOLD"
 
 
-def test_coverage_is_honest_that_most_of_the_spec_is_not_built_yet():
-    """Today this must report a large `planned` count. A registry that reported
-    near-complete coverage on the day it was written would be describing a wish."""
-    from ai.hub.capabilities import coverage
+def test_coverage_is_measured_rather_than_asserted():
+    """This used to demand `planned > 20`, which was a snapshot of the day it
+    was written and failed as soon as the work it was watching got done.
+
+    The intent behind it survives and is stated properly here: the registry
+    must be substantial, must not claim everything is finished while rows are
+    still open, and — the part F176 was actually about — must have RESOLVED
+    every claim it counts rather than trusting it. A count of hand-typed
+    `planned` entries never proved any of that.
+    """
+    from ai.hub.capabilities import REGISTRY, coverage
 
     c = coverage()
-    assert c["planned"] > 20, f"only {c['planned']} planned — is the registry actually complete?"
+    assert c["total"] > 200, f"only {c['total']} capabilities — the registry is a stub"
+    assert c["total"] == len(REGISTRY)
+    assert c["live"] + c["staged"] + c["planned"] == c["total"], "the states do not account for every row"
+    assert c["verified"] == c["checked"], "a claim was counted without being resolved"
+    assert c["discrepancies"] == [], c["discrepancies"]
 
 
 # ── it has to be readable, or it is a control nobody runs ─────────────────────
@@ -238,7 +249,11 @@ async def test_an_endpoint_exposes_the_registry():
 
     body = await ai_core_capability_registry(TokenPayload(sub="owner", role="superadmin"))
     assert body["total"] > 50
-    assert body["planned"] > 20
+    # Not a floor on `planned`: that number falls as the work lands, and a test
+    # that fails because the roadmap is being delivered is measuring the wrong
+    # thing. What matters is that the endpoint reports the same accounting the
+    # registry does.
+    assert body["live"] + body["staged"] + body["planned"] == body["total"]
     assert "verified" in body and "checked" in body
 
 

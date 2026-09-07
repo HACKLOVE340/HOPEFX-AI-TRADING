@@ -108,7 +108,9 @@ def gpu() -> dict[str, Any]:
             devices.append(
                 {
                     "index": index,
-                    "utilisation": absent(f"gpu{index}_utilisation", f"{type(exc).__name__}: {exc}", unit="%").as_dict(),
+                    "utilisation": absent(
+                        f"gpu{index}_utilisation", f"{type(exc).__name__}: {exc}", unit="%"
+                    ).as_dict(),
                     "memory": absent(f"gpu{index}_memory", f"{type(exc).__name__}: {exc}", unit="%").as_dict(),
                 }
             )
