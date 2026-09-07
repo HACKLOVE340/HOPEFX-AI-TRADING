@@ -513,20 +513,52 @@ panel somebody was reading.
 
 ---
 
-## Phase F — §17 real-time conversation
+## Phase F — §17 real-time conversation  ✅ DONE
 
-| Row | State |
-|---|---|
-| Wake word where privacy-appropriate | planned |
-| Pronunciation dictionary for names and financial terms | planned |
-| Adjustable speech speed and voice preference | planned |
-| Low-latency streaming speech recognition | staged |
-| Push-to-talk and optional continuous conversation | staged |
-| Turn detection | staged |
+All six rows. `listening.ts`, `pronunciation.ts`, `voicePrefs.ts`.
 
-**Rule:** a wake word means an always-listening microphone. It ships off, it
-says so on screen while it is on, and "privacy-appropriate" is decided by the
-operator rather than by a default.
+**Three failure modes shaped the design.**
+
+**A microphone that stays open.** Push-to-talk is open while held and shut the
+instant it is not, and *every* way of losing the key closes it — release, a
+hidden tab, a blur, dispose. The one path that does not is the one that leaves
+a trading desk being recorded. `dispose()` is final: nothing reopens the
+microphone afterwards, so a navigation cannot race a keypress. Continuous mode
+and the wake word both hold the mic open, so both need consent, both are off by
+default, and both stop **the instant** consent is withdrawn — a revocation that
+waits for the next mode change is not a revocation.
+
+**A transcript claiming words nobody said.** An interim result is a *guess*.
+Recognition revises as it hears more — "sell", "sell gold", "sell gold now" —
+and appending those builds a transcript of half-heard phrases attributed to the
+operator. An interim replaces the previous interim, only a final result commits,
+and an interim still pending when the mic closes is **dropped**: a half-heard
+phrase left on screen reads as something that was said.
+
+**Endpointing that fires on nothing.** Silence alone is not the end of a turn —
+an open microphone in a quiet room would fire one every second. It endpoints
+only after something was heard and then stopped, and commits the pending interim
+rather than losing it with the turn it belonged to.
+
+**Pronunciation is not cosmetic.** The presence speaks unprompted in exactly one
+situation — an alert — and `XAUUSD` read letter by letter is unintelligible
+precisely when the operator needs to hear it without looking. Whole tokens only,
+because a naive replace turns `PIPELINE` into `point-in-percentageELINE`.
+
+**Preferences are about the bounds, not the adjustment.** Both ends of the range
+lose the one message that had to arrive: a rate of 10 turns an alert into noise,
+0.05 turns it into something the operator mutes. A non-number falls back to the
+*default* rather than a bound, because `NaN` through a comparison yields
+whichever branch operator precedence reaches first.
+
+**One real bug the tests found.** Arming a wake word did not open the
+microphone, so it could never fire — a control that exists, reads correctly and
+never runs. Arming now opens it, and the snapshot reports the open mic from the
+moment it is armed rather than from the moment somebody speaks.
+
+**Two evidence locators the verifier rejected**: `Listening.heard` and
+`Listening.endpointed` are not literal strings in the file, so they were pointed
+at `Listening` with the method named in the note.
 
 ---
 

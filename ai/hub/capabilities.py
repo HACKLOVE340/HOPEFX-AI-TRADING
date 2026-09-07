@@ -1161,9 +1161,16 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "17",
         "A",
         "Low-latency streaming speech recognition",
-        "staged",
-        "frontend/src/hooks/useVoice.ts",
-        "Recognition exists; it is not low-latency streaming.",
+        "live",
+        "frontend/src/hub/listening.ts:Listening",
+        "Listening.heard. An interim result is a GUESS, and guesses do not go in the transcript. "
+        "Recognition revises as it hears more \u2014 'sell', 'sell gold', 'sell gold "
+        "now' \u2014 and appending those builds a transcript of half-heard phrases "
+        "attributed to the operator. An interim REPLACES the previous interim, "
+        "only a final result commits, and an interim still pending when the "
+        "microphone closes is DROPPED, because a half-heard phrase left on "
+        "screen reads as something that was said. Anything heard while the "
+        "microphone is shut is ignored outright.",
     ),
     _c(
         "voice.tts",
@@ -1188,22 +1195,80 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "17",
         "A",
         "Push-to-talk and optional continuous conversation",
-        "staged",
-        "frontend/src/hooks/useVoice.ts",
-        "",
+        "live",
+        "frontend/src/hub/listening.ts:Listening",
+        "Open while held, shut the instant it is not. Every way of losing the "
+        "key closes it \u2014 release, a hidden tab, a blur, dispose \u2014 because the "
+        "one path that does not is the one that leaves a trading desk being "
+        "recorded. dispose() is FINAL: nothing reopens the microphone "
+        "afterwards, so a navigation cannot race a keypress. Key repeat is "
+        "ignored rather than restarting it. Continuous mode is off by default "
+        "and needs microphone consent, since it holds the mic open, and it "
+        "stops the instant consent is withdrawn \u2014 a revocation that waits for "
+        "the next mode change is not a revocation.",
     ),
-    _c("voice.wake_word", "17", "A", "Wake word where privacy-appropriate"),
-    _c("voice.pronunciation", "17", "A", "Pronunciation dictionary for names and financial terms"),
+    _c(
+        "voice.wake_word",
+        "17",
+        "A",
+        "Wake word where privacy-appropriate",
+        "live",
+        "frontend/src/hub/listening.ts:Listening",
+        "'Where privacy-appropriate' is the whole clause: a wake word holds the "
+        "microphone open, so it needs microphone consent, is off by default, "
+        "and disarms the instant consent is withdrawn. Arming OPENS the "
+        "microphone \u2014 a wake word that does not listen can never fire, which "
+        "would be a control that exists, reads correctly and never runs, and "
+        "the snapshot reports the open mic from the moment it is armed rather "
+        "than from the moment somebody speaks. Matched on word boundaries, so "
+        "'hopefxtrading' does not wake it, and a phrase under four characters "
+        "is refused: 'hi' fires on half of ordinary speech, which is an "
+        "always-on microphone with extra steps.",
+    ),
+    _c(
+        "voice.pronunciation",
+        "17",
+        "A",
+        "Pronunciation dictionary for names and financial terms",
+        "live",
+        "frontend/src/hub/pronunciation.ts:PRONUNCIATIONS",
+        "Not cosmetic. The presence speaks unprompted in exactly one situation "
+        "\u2014 an alert \u2014 and XAUUSD read letter by letter is unintelligible "
+        "precisely when the operator needs to hear it without looking. A spoken "
+        "alert they have to read anyway is not a spoken alert. Whole tokens "
+        "only, because a naive replace turns PIPELINE into "
+        "point-in-percentageELINE. It never returns an empty utterance: a "
+        "dictionary that could silence an alert is a worse failure than one "
+        "that mispronounces it.",
+    ),
     _c(
         "voice.turn_detection",
         "17",
         "A",
         "Turn detection",
-        "staged",
-        "frontend/src/hub/conversation.ts",
-        "Turn state machine exists; automatic endpointing does not.",
+        "live",
+        "frontend/src/hub/listening.ts:Listening",
+        "Listening.endpointed. The state machine existed and automatic endpointing did not. Silence "
+        "ALONE is not the end of a turn: an open microphone in a quiet room "
+        "would fire one every second, so it endpoints only after something was "
+        "heard and then stopped. The pending interim is committed when it "
+        "endpoints, rather than being lost with the turn it belonged to.",
     ),
-    _c("voice.preferences", "17", "A", "Adjustable speech speed and voice preference"),
+    _c(
+        "voice.preferences",
+        "17",
+        "A",
+        "Adjustable speech speed and voice preference",
+        "live",
+        "frontend/src/hub/voicePrefs.ts:clampPreferences",
+        "The adjustment is trivial; the BOUNDS are the point. Both ends of the "
+        "range lose the one message that had to arrive: a rate of 10 turns an "
+        "alert into noise, and 0.05 turns it into something the operator mutes. "
+        "A non-number falls back to the DEFAULT rather than to a bound, because "
+        "NaN through a comparison yields whichever branch operator precedence "
+        "reaches first \u2014 a behaviour nobody chose. Every adjustment is named, "
+        "so a corrected setting is not a silent one.",
+    ),
     # §18 — Camera, vision and gesture
     _c(
         "vision.scene_understanding",
