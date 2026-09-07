@@ -6,18 +6,32 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 222 live · 6 staged · 2 planned ·
-228/228 evidence resolved · 0 discrepancies · 97% built.**
+At the time of writing: **230 capabilities · 221 live · 9 staged · 0 planned ·
+230/230 evidence resolved · 0 discrepancies · 96% built.**
+
+That live count went **down** by one, and the percentage with it. §4's four
+layer roll-ups stopped being typed and started being derived, and the
+derivation found `arch.layer_c.workforce` claiming `live` with two of its
+eighty-two rows staged. A headline number that falls when you start measuring
+it was wrong before, not now.
 
 Sections finished (nothing planned or staged): §5, §6, §7, §8, §11, §12, §13,
 §14, §15, §16, §17, §19, §20, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**8 rows remain**, across five sections:
+**9 rows remain**, across five sections — and six of them are blocked on
+things this deployment does not have, not on work being deferred:
 
-| § | left | § | left | § | left |
-|---|---:|---|---:|---|---:|
-| 18 ambient awareness | 2 | 21 visualisation | 1 | 24 agent runtime | 1 |
-| 4 roll-ups | 2 | 10 multi-display | 1 | 26 performance | 1 |
+| § | Row | Blocked on |
+|---|---|---|
+| 18 | Gesture recognition | no landmark source; a recogniser nothing feeds is a dead control |
+| 18 | Pointing and object reference | the same missing landmark source |
+| 21 | 3D and scientific models | only canvas2d exists; WebGL/WebXR/holographic are named, not built |
+| 24 | Isolated agent workers | no process or container boundary — threads share a heap and a GIL |
+| 26 | Prevent runaway recursive delegation | recursive delegation does not exist to bound |
+| 10 | Multi-display console | nine sources aggregate; nothing spans a second physical screen |
+
+The remaining three are §4's roll-ups, which are now **derived** and move on
+their own as the rows above them close.
 
 Phase H covers all of them. §4's two rows are roll-ups and land last by
 construction: they become live when the layers beneath them are, so claiming
@@ -1115,9 +1129,71 @@ row would be claiming a blast radius that does not exist.
 
 ---
 
+## Phase H7 — the roll-ups stop being claims  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §4 Presence layer | planned | **staged** (derived) | `ai.hub.capabilities:layer_state` |
+| §4 Environment layer | planned | **staged** (derived) | `ai.hub.capabilities:layer_state` |
+| §4 Intelligence layer | live (typed) | **live** (derived) | `ai.hub.capabilities:layer_state` |
+| §4 Workforce layer | live (typed) | **staged** (derived) | `ai.hub.capabilities:layer_state` |
+| §10 Multi-display console | staged | staged | note corrected |
+
+### Keeping them last was a scheduling answer to a structural problem
+
+The plan said §4's roll-ups land last "so they cannot be claimed early". That
+works exactly as long as somebody remembers. A roll-up whose state is **typed**
+is a claim about other claims with nothing measuring it — F176 one level up:
+`scripts/invariant_coverage.py` certified components by counting hand-typed
+`True` literals, so it could not print anything except full coverage while
+three of them were provably unprotected.
+
+Every capability already carried its layer. Nothing was reading it.
+
+### What the derivation found
+
+`arch.layer_c.workforce` was **live with two of its eighty-two rows staged**.
+Written by hand, in good faith, by somebody who had just finished four of its
+departments — which is how every one of these gets written.
+
+Deriving it costs a live row and a percentage point. That is the correct
+direction, and it is worth saying plainly: **a headline number that goes down
+when you start measuring it was wrong before, not now.**
+
+`planned` fell to zero at the same time, because the two remaining planned rows
+were these roll-ups and their layers have plenty of live rows in them. Nothing
+was completed to make that happen; a wrong state became a right one.
+
+### A roll-up names what is outstanding
+
+`Derived: 80 of 82 rows in layer C are live. Outstanding — stack.agent_runtime,
+perf.no_runaway_delegation.` A roll-up reporting `staged` with no list is a
+number somebody has to go and investigate, and an uninvestigated number is how
+a stale claim survives — which is exactly how `agents.system` sat live on
+another agent's module for as long as it did.
+
+A layer with nothing started reports `planned`, not `staged`: a roll-up over
+nothing begun must not read as partly done. No layer is in that state today,
+which is why the rule is tested against injected rows rather than against the
+registry.
+
+### §10's note described what exists and never what was missing
+
+"Six live sources with degraded-source tracking." Counted: **nine**. And the
+sentence never said what was absent, which is the one note shape this registry
+forbids — a note listing what exists reads as complete.
+
+What is missing is the display half. "Multi-display" means spanning more than
+one physical screen, and nothing calls `getScreenDetails` or places a window on
+a second monitor. It is one console with nine sources, which is a different
+claim. `docs/ai/AI_HUB_DECISIONS.md` carried the same stale "six" and the same
+wrong word, and was corrected with it.
+
+---
+
 ## Phase H — the remainder
 
-Eight rows, five sections. Regenerated from the registry rather than
+Nine rows, five sections. Regenerated from the registry rather than
 carried forward: the earlier version of this table still listed §7 and §25 rows
 that Phases E and F made live, which is the shape of stale plan a reader trusts.
 

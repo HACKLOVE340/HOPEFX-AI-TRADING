@@ -98,7 +98,57 @@ def _c(
 # section with no entry is a section that was dropped, and the test suite fails
 # on that rather than letting it pass unnoticed.
 
-REGISTRY: Final[tuple[Capability, ...]] = (
+#: §4's four layer roll-ups. Their state is DERIVED, never typed — see
+#: `layer_state`. Named here so `_c` can refuse evidence on them and so the
+#: derivation can exclude them from their own inputs, which would otherwise be
+#: a roll-up measuring itself.
+ROLLUP_IDS: Final[frozenset[str]] = frozenset(
+    {
+        "arch.layer_a.presence",
+        "arch.layer_b.intelligence",
+        "arch.layer_c.workforce",
+        "arch.layer_d.environment",
+    },
+)
+
+
+def layer_state(layer: str, rows: Any = None) -> State:
+    """What a §4 layer actually is, measured from the rows inside it.
+
+    A roll-up whose state is typed is a claim about other claims with nothing
+    measuring it — F176 one level up. `scripts/invariant_coverage.py` certified
+    components by counting hand-typed `True` literals and so could not print
+    anything except full coverage, while three of them were provably
+    unprotected.
+
+    This found the same defect here: `arch.layer_c.workforce` was marked live
+    with two of its eighty-two rows staged. Written by hand, in good faith, by
+    somebody who had just finished four of its departments.
+
+    * `live`    — every row in the layer is live. One outstanding row is enough
+                  to stop it, because a layer is not "mostly" anything: the
+                  operator either has the capability or does not.
+    * `staged`  — the layer has been started and is not finished.
+    * `planned` — nothing in it has been started, or it has no rows at all. A
+                  roll-up over nothing begun must not read as partly done.
+
+    `rows` is injectable so the rule is testable on cases the registry does not
+    currently contain, which is the only way to assert the empty-layer branch
+    without inventing a fifth layer.
+    """
+    if rows is None:
+        rows = [c for c in _DECLARED if c.layer == layer and c.id not in ROLLUP_IDS]
+    states = [getattr(row, "state", "planned") for row in rows]
+    if not states:
+        return "planned"
+    if all(state == "live" for state in states):
+        return "live"
+    if all(state == "planned" for state in states):
+        return "planned"
+    return "staged"
+
+
+_DECLARED: Final[tuple[Capability, ...]] = (
     # §4 — Four-layer architecture
     _c("arch.layer_a.presence", "4", "A", "Presence layer — identity, voice, animation, spatial state"),
     _c(
@@ -2261,7 +2311,13 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "Multi-display console",
         "staged",
         "frontend/src/hooks/useAICommandCenter.ts",
-        "Six live sources with degraded-source tracking.",
+        "MEASURED: NINE live sources, each carrying its own loading/ready/degraded state and the "
+        "timestamp it was last updated, so one dead feed degrades its own tile instead of the "
+        "console. The previous note said six and never said what was MISSING, which is the one note "
+        "shape this registry forbids — a note that lists what exists reads as complete. What is "
+        "missing is the display half: 'multi-display' means spanning more than one physical screen, "
+        "and nothing here calls getScreenDetails or places a window on a second monitor. It is one "
+        "console with nine sources, which is not the same claim.",
     ),
     _c(
         "legacy.price_action_visualization",
@@ -2500,6 +2556,53 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "like a finding that was fixed.",
     ),
 )
+
+
+def _rollup(layer: str) -> Capability:
+    """One §4 roll-up, rebuilt from what its layer measures.
+
+    The note NAMES what is outstanding rather than saying "not finished". A
+    roll-up that reports `staged` with no list is a number somebody has to go
+    and investigate, which is how a stale claim survives — the whole reason
+    `agents.system` sat live on another agent's module for as long as it did.
+    """
+    rollup = next(c for c in _DECLARED if c.id in ROLLUP_IDS and c.layer == layer)
+    rows = [c for c in _DECLARED if c.layer == layer and c.id not in ROLLUP_IDS]
+    state = layer_state(layer, rows=rows)
+    outstanding = [c.id for c in rows if c.state != "live"]
+
+    if state == "live":
+        note = f"Derived: all {len(rows)} rows in layer {layer} are live."
+        evidence = "ai.hub.capabilities:layer_state"
+    elif state == "planned":
+        note = f"Derived: nothing in layer {layer} has been started."
+        # No evidence for a layer nothing has begun. A pointer to the
+        # derivation would resolve and mean nothing.
+        evidence = ""
+    else:
+        note = (
+            f"Derived: {len(rows) - len(outstanding)} of {len(rows)} rows in layer {layer} are live. "
+            f"Outstanding — {', '.join(outstanding)}."
+        )
+        evidence = "ai.hub.capabilities:layer_state"
+
+    return Capability(
+        id=rollup.id,
+        section=rollup.section,
+        layer=rollup.layer,
+        title=rollup.title,
+        state=state,
+        evidence=evidence,
+        note=note,
+    )
+
+
+#: The registry as it is read everywhere else: the declared rows, with §4's
+#: four roll-ups replaced by what their layers actually measure.
+#:
+#: Built rather than typed because a roll-up is a claim about other claims, and
+#: this file exists to stop exactly that kind of claim going unmeasured.
+REGISTRY: Final[tuple[Capability, ...]] = tuple(_rollup(c.layer) if c.id in ROLLUP_IDS else c for c in _DECLARED)
 
 
 # ── verification ──────────────────────────────────────────────────────────────

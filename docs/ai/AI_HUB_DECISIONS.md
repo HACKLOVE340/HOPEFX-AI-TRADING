@@ -21,8 +21,10 @@ whole repository — not only the frontend — found none of them.
 What *does* exist, and is preserved rather than rebuilt: the holographic stage
 (`frontend/src/index.css:230-239` — two counter-rotating orbital rings, a
 scan-line overlay, a projection glow, a 3D perspective and a reduced-motion
-guard), the multi-display console (`useAICommandCenter.ts`, six live sources
-with degraded-source tracking), the camera (`VisualIntelligenceWorkspaces.tsx`),
+guard), the aggregating console (`useAICommandCenter.ts`, nine live sources
+with per-source degraded tracking — counted, not remembered; it was described
+here as six, and as *multi-display*, which it is not: nothing spans a second
+physical screen), the camera (`VisualIntelligenceWorkspaces.tsx`),
 voice (`hooks/useVoice.ts`), and real model/spend/drift telemetry.
 
 The five absent capabilities are registered in `ai/hub/capabilities.py` with a
