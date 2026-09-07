@@ -323,15 +323,42 @@ decides what the presence knows and what it may do, and draws nothing.
 23 tests. `presence.overlay` stays `planned` and carries no evidence, which is
 the registry's way of holding P2 open rather than letting it be forgotten.
 
-**P2 — the overlay itself. Behind the gate.  ← NEXT, needs your approval**
+**P2 — the overlay itself.  ✅ DONE — approved by the owner, 2026-09-07**
 
-A `flow-prototype` approval surface first, showing the presence on a real page
-in every state — idle, listening, thinking, speaking, alerting, dismissed, and
-reduced-motion — then production implementation only after explicit approval.
+`PresenceAnywhere.tsx`, mounted in `App.tsx` behind `isAuth`. It introduces **no
+new visual language**: `PresenceCore` already draws the presence, `presenceDock`
+already places a floating element, `pageContext` and `pageCapabilities` already
+decide what it knows and may do. That is why a whole-app overlay could be added
+without a redesign.
 
-This is the one thing in this plan I will not ship unasked. It is a floating
-element above every screen in a platform that places trades, and the repo's own
-rule is explicit that post-hoc approval does not count.
+The state coverage map `flow-prototype` asks for lives in the test file rather
+than a throwaway route — a route would have to be deleted afterwards and would
+prove nothing durable. 35 tests: idle · page problems · expanded · alerting ·
+dismissed · narrow-viewport bar · reduced motion · unknown page · no-capability
+page · surface-unavailable · absent on the page that is already a presence.
+`N/A: haptics` — a browser vibration API is a simulation, and this repository's
+rule is never to claim native behaviour from one.
+
+**Four defects the checklists found in my own work, all fixed:**
+
+- A **second polite live region**. `PresenceCore` already owns one; mine
+  announced on every navigation and spoke over it. A screen reader saying two
+  things at once is one nobody leaves on.
+- **No focus rings.** The browser default is close to invisible on a near-black
+  panel. Named once as `FOCUS_RING` so a new button cannot be added without it.
+- **22px hit areas.** The dismiss control was a 14px icon in `p-1` — half the
+  44px minimum, on the button an operator reaches for when the assistant is in
+  their way.
+- **`text-slate-500` at 4.21:1**, below the 4.5:1 floor. Measured, not
+  eyeballed; `slate-400` is 7.81:1.
+
+**Two rules it holds that are not cosmetic.** Dismissal persists across
+navigation *except* for an alerting presence — dismissing an assistant is not
+consent to be uninformed about a kill switch, which is §19's critical floor
+arriving in the UI. And a capability surface it could not load is reported as
+unloaded, never as an empty one: "nothing here is exposed to me" and "I could
+not find out" are different sentences, and only one is true when the request
+500s.
 
 ## The rule P1 must not violate
 

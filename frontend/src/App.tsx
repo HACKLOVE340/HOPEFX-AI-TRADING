@@ -29,6 +29,7 @@ import SubscriptionGate from './components/SubscriptionGate';
 import TrialBanner from './components/TrialBanner';
 import Sidebar from './components/sidebar/Sidebar';
 import AISupportWidget from './components/ai/AISupportWidget';
+import { PresenceAnywhereMount } from './hub/PresenceAnywhereMount';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ToastProvider } from './components/Toast';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
@@ -680,6 +681,12 @@ const AppShell: React.FC = () => {
       </div>
     </div>
     {isAuth && <AISupportWidget />}
+    {/* The AI presence, on every authenticated screen. Owner request,
+        2026-09-07. It renders nothing on /ai-core, which is already a
+        presence, and nothing at all when it cannot see the page: an assistant
+        overlay must never be the reason a trading page fails to render, and
+        must never claim to be watching something it cannot see. */}
+    {isAuth && <PresenceAnywhereMount />}
     </>
   );
 };

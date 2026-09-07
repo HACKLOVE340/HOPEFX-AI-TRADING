@@ -2095,9 +2095,22 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "P",
         "A",
         "The presence rendered on every screen in the app",
-        "planned",
-        "",
-        "",
+        "live",
+        "frontend/src/hub/PresenceAnywhere.tsx:PresenceAnywhere",
+        "Owner approved it on 2026-09-07, after this row sat planned pending "
+        "that approval \u2014 flow-by-flow requires explicit sign-off before a major "
+        "UI change, and 'no post-hoc approval'. It introduces NO new visual "
+        "language: PresenceCore already draws the presence, presenceDock "
+        "already decides where a floating element may sit, pageContext and "
+        "pageCapabilities already decide what it knows and may do. Mounted in "
+        "App.tsx behind isAuth, asserted \u2014 a component nobody renders is the "
+        "defect this codebase keeps finding. Absent on /ai-core, which is "
+        "already a presence. Never aria-modal and never a focus trap, on a "
+        "platform where the page behind it places trades. Dismissal persists "
+        "across navigation, EXCEPT for an alerting presence: dismissing an "
+        "assistant is not consent to be uninformed about a kill switch. One "
+        "live region, not two \u2014 a second polite region here announced on every "
+        "navigation and spoke over PresenceCore's.",
     ),
     _c(
         "improve.patch_generator",
