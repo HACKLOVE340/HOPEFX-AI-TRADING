@@ -784,28 +784,44 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "12",
         "C",
         "Typed message — task id, correlation id, priority, status, confidence, evidence, expiry",
-        "staged",
-        "ai.hub.contracts:AgentMessage",
-        "The envelope exists; no bus carries it yet.",
+        "live",
+        "ai.bus.agent_bus:AgentBus",
+        "The bus carries THIS type and refuses a dict, so a second untyped envelope cannot grow beside the typed one.",
     ),
-    _c("bus.pubsub", "12", "C", "Publish/subscribe event bus"),
+    _c(
+        "bus.pubsub",
+        "12",
+        "C",
+        "Publish/subscribe event bus",
+        "live",
+        "ai.bus.agent_bus:AgentBus",
+        "Operator-scoped by dictionary key rather than by filter, so a lookup "
+        "that forgets the scope finds nothing rather than everything. It cannot "
+        "invoke a tool: ai/bus imports nothing from ai/tools, asserted by AST "
+        "rather than by grep, so publishing is not a second execution path "
+        "around the permission registry and the invariants.",
+    ),
     _c(
         "bus.lifecycle_events",
         "12",
         "C",
         "Task lifecycle events",
-        "staged",
-        "ai.hub.contracts:MESSAGE_STATUSES",
-        "The vocabulary exists, including cancelled and timed_out.",
+        "live",
+        "ai.bus.lifecycle:TaskLifecycle",
+        "Terminal is terminal, and an illegal transition raises rather than "
+        "logging: two contradictory reports would leave the displayed state "
+        "decided by delivery order. A queued task cannot report succeeded — an "
+        "outcome for work that never ran is invented, not observed.",
     ),
     _c(
         "bus.streaming_partials",
         "12",
         "C",
         "Streaming partial results",
-        "staged",
-        "ai.gateway.client:GatewayClient",
-        "The gateway streams; the bus does not exist yet.",
+        "live",
+        "ai.bus.lifecycle:TaskLifecycle",
+        "TaskLifecycle.partial. Numbered from 1, so a consumer can see 1, 2, 4 and say so instead of "
+        "concatenating text that is missing a piece and looking complete.",
     ),
     _c(
         "bus.cancellation",
@@ -816,7 +832,19 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "ai.jobs.runner:JobRunner",
         "Deadlines, cancellation and reaping are built.",
     ),
-    _c("bus.task_graph", "12", "C", "Task graph rather than a sequential queue"),
+    _c(
+        "bus.task_graph",
+        "12",
+        "C",
+        "Task graph rather than a sequential queue",
+        "live",
+        "ai.bus.graph:TaskGraph",
+        "A cycle is refused by add(), which is the last moment at which nothing "
+        "has run yet; detecting one at schedule time means the first task in it "
+        "already executed. A failed dependency blocks its dependents and names "
+        "what blocked them, rather than dropping them from the report where "
+        "they would read as succeeded.",
+    ),
     # §13 — Debate and conflict resolution
     _c(
         "debate.opposing_perspectives",
@@ -1510,7 +1538,22 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "ai.jobs.runner",
         "A bounded pool exists; isolated workers do not.",
     ),
-    _c("stack.event_bus", "24", "C", "Event bus — Redis streams or equivalent"),
+    _c(
+        "stack.event_bus",
+        "24",
+        "C",
+        "Event bus — Redis streams or equivalent",
+        "live",
+        "core.event_bus:EventBus",
+        "This row said planned while a Redis pub/sub bus with 49 importers was "
+        "connected at startup by init_event_bus. Registry error, not a gap. One "
+        "caveat that matters to anything built on it: subscribe_local handlers "
+        "fire only on the DEGRADED path, so a subscription registered there "
+        "works in every test (no Redis, local delivery) and never in production "
+        "(Redis up, published to a channel nobody reads). ai/bus/agent_bus.py "
+        "therefore delivers in-process directly and treats this as additive "
+        "fan-out.",
+    ),
     _c(
         "stack.persistence",
         "24",

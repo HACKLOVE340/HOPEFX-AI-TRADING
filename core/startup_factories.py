@@ -677,6 +677,32 @@ async def init_ai_job_progress(s: Any) -> Any:
     return manager
 
 
+async def init_ai_agent_bus(s: Any) -> Any:
+    """Give §12's agent bus its cross-worker leg.
+
+    The bus delivers in-process on its own and needs nothing from startup to do
+    that. What it cannot do alone is reach the other API workers: `API_WORKERS`
+    can be greater than 1, and then a message published in worker 2 is invisible
+    to a subscriber in worker 1.
+
+    This points its fan-out at `core.event_bus`, which is already connected by
+    the `event_bus` factory this one depends on.
+
+    **Fan-out is publish only.** Receiving another worker's messages needs a
+    reader loop per operator (`ai.bus.agent_bus.consume`), and nothing starts one
+    yet. That gap is reported in words by every `Delivery.fanout`, rather than
+    being left for a reader to infer from a number that looks fine.
+    """
+    from ai.bus.agent_bus import get_agent_bus, install_redis_fanout
+    from api.admin import log_activity
+
+    bus = get_agent_bus()
+    label = install_redis_fanout(bus, asyncio.get_running_loop())
+    s.ai_agent_bus = bus
+    log_activity(f"AI agent bus cross-worker fan-out installed — {label}")
+    return bus
+
+
 async def init_ai_awareness(s: Any) -> Any:
     """Start the department watchers. Spec §2's `awareness/`.
 
@@ -3233,6 +3259,15 @@ def build_component_registry(app, feature_flags):
             F.init_ai_job_progress,
             required=False,
             deps=["config"],
+        )
+        # Spec §12 agent-to-agent messaging. Depends on event_bus because that
+        # is the transport its cross-worker leg publishes through; in-process
+        # delivery works with or without this factory.
+        .register(
+            "ai_agent_bus",
+            F.init_ai_agent_bus,
+            required=False,
+            deps=["event_bus"],
         )
         .register(
             "ai_awareness",

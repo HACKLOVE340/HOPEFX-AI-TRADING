@@ -79,10 +79,10 @@ def test_a_backend_that_cannot_delete_makes_the_result_incomplete():
     class _WriteOnly:
         """The backend as it was: write and read, no delete."""
 
-        def write(self, entry):  # noqa: ARG002
+        def write(self, entry):
             return None
 
-        def read(self, department, *, kind=None, limit=50):  # noqa: ARG002
+        def read(self, department, *, kind=None, limit=50):
             return []
 
     store.set_backend(_WriteOnly())
@@ -99,10 +99,10 @@ def test_a_backend_that_can_delete_is_asked_to():
     deleted: list[str] = []
 
     class _Deleting:
-        def write(self, entry):  # noqa: ARG002
+        def write(self, entry):
             return None
 
-        def read(self, department, *, kind=None, limit=50):  # noqa: ARG002
+        def read(self, department, *, kind=None, limit=50):
             return []
 
         def delete(self, *, operator):
@@ -289,7 +289,7 @@ def test_correcting_something_that_is_not_yours_is_refused():
 
 
 def test_reviewing_returns_everything_remembered_about_one_operator():
-    """"Review" that shows a subset is not review."""
+    """ "Review" that shows a subset is not review."""
     from ai.memory import governance, tiers
 
     for tier in tiers.TIERS:
@@ -448,9 +448,7 @@ def test_a_critical_notification_becomes_an_episodic_memory():
 
     service.reset_for_testing()
     service.submit(
-        Notification(
-            key="kill", severity=Severity.CRITICAL, title="Kill switch tripped", body="b", operator="owner"
-        )
+        Notification(key="kill", severity=Severity.CRITICAL, title="Kill switch tripped", body="b", operator="owner")
     )
     remembered = tiers.recall("episodic", operator="owner")
     assert len(remembered) == 1
@@ -465,9 +463,7 @@ def test_routine_chatter_does_not_become_an_episodic_memory():
     from ai.notify import Notification, Severity, service
 
     service.reset_for_testing()
-    service.submit(
-        Notification(key="fyi", severity=Severity.INFORMATIONAL, title="t", body="b", operator="owner")
-    )
+    service.submit(Notification(key="fyi", severity=Severity.INFORMATIONAL, title="t", body="b", operator="owner"))
     assert tiers.recall("episodic", operator="owner") == []
     service.reset_for_testing()
 
