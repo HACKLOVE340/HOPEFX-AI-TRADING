@@ -148,11 +148,48 @@ def submit(notification: Notification, *, now: datetime | None = None, wake_valu
     if decision.action in ("deliver", "escalate"):
         who.inbox.append(record)
         del who.inbox[:-MAX_INBOX]
+        _remember_if_significant(notification, decision)
     elif decision.action == "defer":
         who.deferred.append(record)
         del who.deferred[:-MAX_INBOX]
 
     return decision
+
+
+def _remember_if_significant(notification: Notification, decision: Decision) -> None:
+    """§16 episodic memory: keep the events that mattered.
+
+    "Significant" is defined rather than felt: an interrupting severity, or an
+    escalation. Everything else is a notification, and an episodic memory of
+    every informational notice is a log with a grander name.
+
+    Swallowed on failure. Remembering an event is worth less than delivering
+    it, and a memory store that cannot be written to must not be able to stop a
+    critical alert reaching somebody.
+    """
+    if not (notification.severity.interrupts or decision.action == "escalate"):
+        return
+    try:
+        from ai.memory import tiers
+
+        tiers.remember(
+            "episodic",
+            operator=notification.operator,
+            kind="notification",
+            value={
+                "key": notification.key,
+                "title": notification.title,
+                "severity": decision.severity.value,
+                "action": decision.action,
+                "why": decision.reason,
+            },
+            source=f"notify:{notification.source or 'policy'}",
+        )
+    except Exception:
+        logger.exception(
+            "ai.notify: could not record %s as an episodic memory; it was still delivered",
+            notification.key,
+        )
 
 
 def inbox_for(operator: str) -> list[dict[str, Any]]:

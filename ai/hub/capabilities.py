@@ -993,22 +993,82 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "Doing nothing is always among the alternatives offered.",
     ),
     # §16 — Memory and knowledge
-    _c("memory.working", "16", "B", "Working memory for the current turn"),
-    _c("memory.session", "16", "B", "Session memory"),
+    _c(
+        "memory.working",
+        "16",
+        "B",
+        "Working memory for the current turn",
+        "live",
+        "ai.memory.tiers:end_turn",
+        "Cleared when the turn ends, asserted \u2014 working memory that survives "
+        "the turn is not working memory, it is a leak with a label.",
+    ),
+    _c(
+        "memory.session",
+        "16",
+        "B",
+        "Session memory",
+        "live",
+        "ai.memory.tiers:end_session",
+        "Ends the turn inside it too: a turn cannot outlive the session it happened in.",
+    ),
     _c("memory.project", "16", "B", "Project memory for long-running work", "live", "ai.memory.store", ""),
     _c(
         "memory.long_term",
         "16",
         "B",
         "Long-term memory for approved persistent facts",
-        "staged",
-        "ai.memory.sql_backend",
-        "Durable storage exists; approval governance does not.",
+        "live",
+        "ai.memory.governance:approve_long_term",
+        "A fact reaches long-term when somebody approves it and not before, and "
+        'the approver\'s name is stored with it. Without that, "long-term" was a '
+        'synonym for "everything, for ever".',
     ),
-    _c("memory.episodic", "16", "B", "Episodic memory for significant events"),
-    _c("memory.knowledge_graph", "16", "B", "Knowledge graph across entities, projects, tasks"),
-    _c("memory.provenance", "16", "B", "Memory provenance and timestamps", "staged", "ai.memory.store", ""),
-    _c("memory.user_controls", "16", "B", "User review, correction and deletion"),
+    _c(
+        "memory.episodic",
+        "16",
+        "B",
+        "Episodic memory for significant events",
+        "live",
+        "ai.notify.service:_remember_if_significant",
+        '"Significant" is defined rather than felt: an interrupting severity or '
+        "an escalation. An episodic memory of every informational notice is a "
+        "log with a grander name.",
+    ),
+    _c(
+        "memory.knowledge_graph",
+        "16",
+        "B",
+        "Knowledge graph across entities, projects, tasks",
+        "live",
+        "ai.memory.graph:RELATIONS",
+        "Eight declared relations; an invented edge is refused. Per operator "
+        "and cleared by a deletion \u2014 a graph left behind keeps the shape of "
+        "what was deleted, which is most of what it recorded.",
+    ),
+    _c(
+        "memory.provenance",
+        "16",
+        "B",
+        "Memory provenance and timestamps",
+        "live",
+        "ai.memory.tiers:remember",
+        "`source` is required at construction. An unattributable memory is one "
+        "nobody can check, and it will be handed back to a model later as "
+        "though somebody had.",
+    ),
+    _c(
+        "memory.user_controls",
+        "16",
+        "B",
+        "User review, correction and deletion",
+        "live",
+        "ai.memory.governance:ForgetResult",
+        "Deletion reports what it could NOT reach, and `complete` is derived "
+        "from that rather than stored, so the two cannot disagree. The durable "
+        "department store is keyed by department with no operator column, so it "
+        "is named as out of reach rather than silently skipped.",
+    ),
     # §17 — Voice and real-time conversation
     _c(
         "voice.streaming_stt",

@@ -112,6 +112,13 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-core/self/context` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/self/depths` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/summary` | JWT |  | AI Core |
+| `GET` | `/api/ai-memory` | JWT |  | AI Memory |
+| `POST` | `/api/ai-memory/forget` | JWT |  | AI Memory |
+| `GET` | `/api/ai-memory/long-term/pending` | JWT |  | AI Memory |
+| `POST` | `/api/ai-memory/long-term/{proposal_id}/approve` | JWT |  | AI Memory |
+| `POST` | `/api/ai-memory/long-term/{proposal_id}/reject` | JWT |  | AI Memory |
+| `GET` | `/api/ai-memory/tiers` | JWT |  | AI Memory |
+| `PATCH` | `/api/ai-memory/{entry_id}` | JWT |  | AI Memory |
 | `GET` | `/api/ai-notifications` | JWT |  | AI Notifications |
 | `GET` | `/api/ai-notifications/policy` | JWT |  | AI Notifications |
 | `PUT` | `/api/ai-notifications/policy` | JWT |  | AI Notifications |

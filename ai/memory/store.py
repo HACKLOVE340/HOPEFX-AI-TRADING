@@ -67,6 +67,17 @@ def backend_is_durable() -> bool:
     return _BACKEND is not None
 
 
+def current_backend() -> Any | None:
+    """The installed durable backend, or None.
+
+    Public so `ai/memory/governance.py` can ask what it supports without
+    reaching into a private. Deletion has to know whether the store it is
+    clearing can actually be cleared, and a governed deletion that guessed
+    would be the failure that module exists to prevent.
+    """
+    return _BACKEND
+
+
 def _known_departments() -> frozenset[str]:
     # Imported lazily: `ai.departments` imports the handlers that import this.
     from ai.departments import DEPARTMENTS
@@ -158,6 +169,7 @@ def reset_for_testing() -> None:
 
 
 __all__ = [
+    "current_backend",
     "MAX_PER_KIND",
     "backend_is_durable",
     "recall",

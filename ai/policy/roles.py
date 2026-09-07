@@ -101,6 +101,16 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     "ai_core_conversation_context": _VIEW,
     "ai_core_calibration": _VIEW,
     "ai_core_depths": _VIEW,
+    # §16 (api/ai_memory.py). Every route is scoped to the caller's own memory,
+    # so a viewer role is the right floor: there is nothing here one operator
+    # can read, correct or delete of another's.
+    "memory_review": _VIEW,
+    "memory_tiers": _VIEW,
+    "memory_correct": _VIEW,
+    "memory_pending_long_term": _VIEW,
+    "memory_approve_long_term": _VIEW,
+    "memory_reject_long_term": _VIEW,
+    "memory_forget": _VIEW,
     # §19 (api/ai_notifications.py). Every one is scoped to the calling
     # operator's own notifications and settings, so a viewer role is the right
     # floor: there is nothing here one operator can do to another.
