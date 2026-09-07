@@ -991,14 +991,17 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "14",
         "C",
         "Long-running research jobs",
-        "staged",
-        "ai.jobs.runner:JobRunner",
-        "The SCHEDULING half is built and the DURABILITY half is not. A job can "
-        "now carry any deadline at `background` priority without starving "
-        "interactive work and, because the queue ages, without being starved by "
-        "it. But JobRunner holds jobs in an in-process dict: an hour-long "
-        "research job dies with the process and its result is not recoverable, "
-        "so calling this live would promise something a restart disproves.",
+        "live",
+        "ai.jobs.store:RedisJobStore",
+        "The scheduling half landed in Phase B; this is the durability half its own note said was "
+        "missing. Same shape and same lesson as ai/gateway/budget_store.py, where spend lived in a "
+        "module global and every restart reset the month to zero. A job that was RUNNING when the "
+        "process died comes back INTERRUPTED, not running: its thread is gone, and a job that says "
+        "running for ever is one nobody can act on. Memory wins over the store for a live job — the "
+        "store is written after each transition and is behind by design. The operator is part of the "
+        "KEY, not a filter applied after the read, because ai/jobs/runner.py is where that exact P0 "
+        "was found. Without Redis the runner reports durable=False with the reason rather than "
+        "losing work quietly.",
     ),
     _c("parallel.streaming_progress", "14", "C", "Streaming task progress", "live", "ai.jobs.progress:publish", ""),
     _c("parallel.budgets", "14", "C", "Cancellation and resource budgets", "live", "ai.gateway.budget:check", ""),
@@ -1913,8 +1916,15 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "C",
         "Isolated agent workers with task contracts",
         "staged",
-        "ai.jobs.runner",
-        "A bounded pool exists; isolated workers do not.",
+        "ai.jobs.runner:JobRunner",
+        "The CONTRACT half is real and now durable: a job carries an operator, a prompt, a priority "
+        "tier, a timeout and a deadline, it is admitted through a bounded queue, and its outcome "
+        "survives the process (ai/jobs/store.py). The ISOLATION half is not, and the earlier note "
+        "was too vague about why. ThreadPoolExecutor gives threads in one interpreter: agent work "
+        "shares a heap, a GIL, an import table and a filesystem with the API serving the screen, so "
+        "one runaway agent can starve or crash the process it runs in. That needs a process or "
+        "container boundary this deployment does not have, and no amount of code in this repository "
+        "creates one — claiming it would be claiming a blast radius that does not exist.",
     ),
     _c(
         "stack.event_bus",

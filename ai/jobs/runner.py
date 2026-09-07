@@ -52,6 +52,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from ai.jobs.store import INTERRUPTED, JobRecord, JobStore, interrupted
+
 logger = logging.getLogger(__name__)
 
 #: Jobs in flight at once, by default.
@@ -90,7 +92,10 @@ MAX_RETAINED_JOBS = 64
 OUTPUT_FRAME_INTERVAL_S = 0.12
 
 #: queued -> running -> one of the three terminal states.
-TERMINAL_STATES = frozenset({"succeeded", "failed", "cancelled", "timed_out"})
+#: `interrupted` is set only by recovery, never by this process — see
+#: `ai/jobs/store.py`. It is terminal because nothing is going to move it:
+#: the worker that would have finished it does not exist any more.
+TERMINAL_STATES = frozenset({"succeeded", "failed", "cancelled", "timed_out", INTERRUPTED})
 
 
 def _remember_task(job: Job) -> None:
@@ -181,9 +186,23 @@ class JobRunner:
         *,
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
         max_queued: int = DEFAULT_MAX_QUEUED,
+        store: JobStore | None = None,
     ) -> None:
         self.max_concurrent = max(1, int(max_concurrent))
         self.max_queued = max(1, int(max_queued))
+        # §14's durability half. None is the honest default: without a store
+        # every job here dies with the process, and a runner that claimed
+        # otherwise would promise something a restart disproves.
+        self._store = store
+        self.durable = store is not None
+        self.durability_reason = (
+            ""
+            if store is not None
+            else (
+                "no job store is installed, so a job and its result do not survive a restart of this "
+                "process; long-running work should be resubmitted after a deploy"
+            )
+        )
         self._jobs: dict[str, Job] = {}
         self._futures: dict[str, Future] = {}
         self._cancelled: set[str] = set()
@@ -378,10 +397,91 @@ class JobRunner:
         job.state = state
         job.finished_at = datetime.now(UTC).isoformat()
         _forget_task(job)
+        self._persist(job)
         self._notify(job, on_change)
         # Last, and outside the notify: a listener that raises must not leave
         # the slot held, or one broken screen would stall the whole pool.
         self._dispatch_next()
+
+    def _persist(self, job: Job) -> None:
+        """Record this job so it outlives the process. Never fails the job.
+
+        A durability layer that failed work it was only supposed to WRITE DOWN
+        would be worse than having none: the operator loses the answer AND the
+        record of having asked. So every failure here is logged and swallowed.
+        """
+        store = self._store
+        if store is None:
+            return
+        try:
+            store.write(
+                JobRecord(
+                    id=job.id,
+                    operator=job.operator,
+                    prompt=job.prompt,
+                    state=job.state,
+                    result=job.result,
+                    error=job.error,
+                    progress=list(job.progress),
+                    partial=job.partial,
+                    submitted_at=job.submitted_at,
+                    finished_at=job.finished_at,
+                ),
+            )
+        except Exception:
+            logger.exception("ai.jobs: could not record job %s; the work itself is unaffected", job.id)
+
+    def recover(self, operator: str) -> list[JobRecord]:
+        """One operator's jobs, including those from a process that has gone.
+
+        **Memory wins for anything this process knows about.** The store is
+        written after each transition, so it is behind by design; a reader that
+        preferred it would report `interrupted` for a job that succeeded in the
+        very process doing the reading.
+
+        **The operator is the key, not a filter.** `ai/jobs/runner.py` is where
+        a P0 leak was found — one operator's prompt and the model's answer
+        reaching another's screen — and a recovery that read everything and
+        filtered afterwards would rebuild it.
+        """
+        if not operator or not operator.strip():
+            return []
+
+        live: dict[str, JobRecord] = {}
+        with self._lock:
+            for job in self._jobs.values():
+                if job.operator != operator:
+                    continue
+                live[job.id] = JobRecord(
+                    id=job.id,
+                    operator=job.operator,
+                    prompt=job.prompt,
+                    state=job.state,
+                    result=job.result,
+                    error=job.error,
+                    progress=list(job.progress),
+                    partial=job.partial,
+                    submitted_at=job.submitted_at,
+                    finished_at=job.finished_at,
+                )
+
+        stored: list[JobRecord] = []
+        store = self._store
+        if store is not None:
+            try:
+                stored = store.read_for(operator)
+            except Exception:
+                # An unreachable store recovers nothing. It must not take down
+                # the screen that asked, and it must not hide the live jobs.
+                logger.exception("ai.jobs: could not read stored jobs for this operator")
+                stored = []
+
+        out = list(live.values())
+        for record in stored:
+            if record.id in live:
+                continue
+            out.append(interrupted(record))
+        return out
 
     @staticmethod
     def _notify(job: Job, on_change: Callable[[Job], None] | None) -> None:
@@ -553,9 +653,19 @@ _RUNNER: JobRunner | None = None
 
 
 def get_runner() -> JobRunner:
+    """The process-wide runner, with a durable store when one is reachable.
+
+    §14. Built here rather than at a startup factory so every entry point — the
+    API, the engine, a script — gets the same answer, and so a deployment with
+    Redis does not depend on remembering to wire it in one of three places.
+    `build_from_env` returns None when there is no Redis, and the runner then
+    reports `durable = False` with the reason instead of quietly losing work.
+    """
     global _RUNNER
     if _RUNNER is None:
-        _RUNNER = JobRunner()
+        from ai.jobs.store import build_from_env
+
+        _RUNNER = JobRunner(store=build_from_env())
     return _RUNNER
 
 

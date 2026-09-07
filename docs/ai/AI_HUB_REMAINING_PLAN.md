@@ -6,19 +6,18 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 221 live · 7 staged · 2 planned ·
-228/228 evidence resolved · 0 discrepancies · 96% built.**
+At the time of writing: **230 capabilities · 222 live · 6 staged · 2 planned ·
+228/228 evidence resolved · 0 discrepancies · 97% built.**
 
 Sections finished (nothing planned or staged): §5, §6, §7, §8, §11, §12, §13,
-§15, §16, §17, §19, §20, §22, §23, §25, §27, and both owner tracks — P and S.
+§14, §15, §16, §17, §19, §20, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**9 rows remain**, across six sections:
+**8 rows remain**, across five sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 18 ambient awareness | 2 | 10 multi-display | 1 | 24 agent runtime | 1 |
-| 4 roll-ups | 2 | 14 long-running | 1 | 26 performance | 1 |
-| 21 visualisation | 1 | | | | |
+| 18 ambient awareness | 2 | 21 visualisation | 1 | 24 agent runtime | 1 |
+| 4 roll-ups | 2 | 10 multi-display | 1 | 26 performance | 1 |
 
 Phase H covers all of them. §4's two rows are roll-ups and land last by
 construction: they become live when the layers beneath them are, so claiming
@@ -1039,9 +1038,86 @@ exist.
 
 ---
 
+## Phase H6 — a job that outlives the process that ran it  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §14 Long-running research jobs | staged | **live** | `ai.jobs.store:RedisJobStore` |
+| §24 Isolated agent workers with task contracts | staged | staged | note sharpened |
+
+The scheduling half landed in Phase B — any deadline at `background` priority,
+an ageing queue so neither tier starves the other — and its note was honest
+about what was left: `JobRunner` holds jobs in an in-process dict, so an
+hour-long research job dies with the process and its result is not recoverable.
+
+The precedent is `ai/gateway/budget_store.py`, and it is the same lesson twice.
+Spend lived in a module global; every restart reset the month to zero, and at
+`API_WORKERS=4` each worker kept its own dict, so the ceiling in the settings
+form silently meant four times what it said.
+
+### A job that was RUNNING did not survive, and must not claim to
+
+Its thread is gone. Bringing it back as `running` is the worst available
+answer: a job that says running for ever is one nobody can act on, and the
+screen spins against a worker that does not exist. Every non-terminal state
+recovers as `interrupted`, which is terminal and carries a reason.
+
+`queued` lands there too, for a different reason. Nothing was lost — it never
+started — but nothing is going to start it either, and leaving it queued
+promises a worker that is not coming.
+
+### The store is never the source of truth for a live job
+
+It is written after each transition, so it is behind by design. `recover`
+prefers what this process is actually running and consults the store only for
+jobs it has never heard of.
+
+**The first version of that test passed while the de-duplication was broken.**
+Removing the "already live" check makes the operator see the job *twice* — once
+succeeded from memory, once interrupted from the store — and the test found the
+live one first and passed. Caught by injecting exactly that defect; it now
+asserts the id appears exactly once.
+
+### The operator is the key, not a filter
+
+`ai/jobs/runner.py` is where a P0 leak was found: one operator's prompt and the
+model's answer could reach another's screen, because the scoping was applied at
+the read and anything that forgot it leaked everything. A record is stored
+under its operator, so a recovery that forgets the operator addresses nothing
+rather than addressing everybody. Verified by making the in-memory store read
+across operators — one test failed, and it was the right one.
+
+### Failing to record must never fail the work
+
+A durability layer that failed a job it was only supposed to *write down* would
+be worse than having none: the operator loses the answer **and** the record of
+having asked. Every store failure is logged and swallowed, on both the write
+and the read.
+
+And with no Redis the runner reports `durable = False` with the reason, rather
+than losing work quietly — the same choice `build_from_env` already makes for
+the budget counter, ping included, so a store that cannot be reached declines
+to install instead of installing and failing on every job.
+
+### §24 stays staged, and its note now says why
+
+The old note — "a bounded pool exists; isolated workers do not" — was true and
+too vague to act on. The contract half is real and now durable: a job carries
+an operator, a prompt, a priority tier, a timeout and a deadline, is admitted
+through a bounded queue, and its outcome survives the process.
+
+The isolation half is not, and no amount of code in this repository creates it.
+`ThreadPoolExecutor` gives threads in one interpreter — agent work shares a
+heap, a GIL, an import table and a filesystem with the API serving the screen,
+so one runaway agent can starve or crash the process it runs in. That needs a
+process or container boundary this deployment does not have, and claiming the
+row would be claiming a blast radius that does not exist.
+
+---
+
 ## Phase H — the remainder
 
-Nine rows, six sections. Regenerated from the registry rather than
+Eight rows, five sections. Regenerated from the registry rather than
 carried forward: the earlier version of this table still listed §7 and §25 rows
 that Phases E and F made live, which is the shape of stale plan a reader trusts.
 
@@ -1052,7 +1128,6 @@ that Phases E and F made live, which is the shape of stale plan a reader trusts.
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
 | 10 | Multi-display console | staged |
-| 14 | Long-running research jobs | staged |
 | 24 | Isolated agent workers with task contracts | staged |
 | 4 | Presence layer — identity, voice, animation, spatial state | planned |
 | 4 | Environment layer — the dynamic workspace | planned |
