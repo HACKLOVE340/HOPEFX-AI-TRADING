@@ -34,6 +34,10 @@ import { spokenFocus } from '../../hub/reference';
 import { asksForSummary, summarise } from '../../hub/summary';
 import { LayerStack, readNavigation, readZoom, type Layer, type Position } from '../../hub/spatial';
 import { resolveMode, readMode, type ModeId } from '../../hub/modes';
+import {
+  minimiseProjections, readProjection, representationFor, repositionProjections,
+  singleProjection, splitProjection, type Projection,
+} from '../../hub/projection';
 import { useViewportWidth } from '../../hub/useViewportWidth';
 import { useStore, selectAiJobs, selectKillSwitch } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
@@ -241,6 +245,9 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
   const layers = layersRef.current;
   const [trail, setTrail] = useState<readonly Layer[]>(() => [...layers.trail]);
 
+  /** §7 multiple projections: where the presence is and how many of it. */
+  const [projections, setProjections] = useState<Projection[]>(singleProjection);
+
   /** Measured positions of the panels, reported up by the stage (§9). */
   const [positions, setPositions] = useState<Record<string, Position>>({});
   const onPositions = useCallback((next: Record<string, Position>) => {
@@ -412,6 +419,41 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
         return;
       }
 
+      // §7: minimise, move, split or merge the presence itself.
+      const projectionIntent = readProjection(phrase);
+      if (projectionIntent) {
+        switch (projectionIntent.kind) {
+          case 'minimise':
+            setProjections((current) => minimiseProjections(current, true));
+            turn.say('Out of the way.');
+            break;
+          case 'restore':
+            setProjections((current) => minimiseProjections(current, false));
+            turn.say('Back.');
+            break;
+          case 'split': {
+            const split = splitProjection(workspace.surfaces);
+            setProjections(split);
+            turn.say(
+              split.length > 1
+                ? `Split into ${split.length}, one for each of the first ${split.length}.`
+                : 'There is only one thing on the plane to attend to, so I have stayed as one.',
+            );
+            break;
+          }
+          case 'merge':
+            setProjections(singleProjection());
+            turn.say('One of me again.');
+            break;
+          case 'move':
+            setProjections((current) => repositionProjections(current, projectionIntent.anchor));
+            turn.say(`Moved to the ${projectionIntent.anchor.replace('_', ' ')}.`);
+            break;
+        }
+        setTranscript([...turn.transcript]);
+        return;
+      }
+
       // §6: change the register the AI is speaking in, and what it puts up.
       const namedMode = readMode(phrase);
       if (namedMode) {
@@ -556,6 +598,10 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       utterance={voice.spokenText}
       speechProgress={voice.speechProgress}
       speaking={voice.speaking}
+      projections={projections}
+      representation={representationFor(
+        surfaces.find((s) => s.id === (focus.ids[0] ?? focusedId)) ?? null,
+      )}
       trail={trail}
       modeName={mode.name}
       accent={mode.accent}

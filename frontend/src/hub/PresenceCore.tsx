@@ -35,6 +35,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { Presence, PresenceState, PresenceTone } from './presence';
 import { gazeToward, headOffset, mouthFor, particleField, type Gaze } from './head';
+import type { Representation } from './projection';
 
 /** Colour per tone, from the platform's own palette (COLOR in AICore.tsx). */
 const TONE: Record<PresenceTone, string> = {
@@ -86,16 +87,113 @@ export interface PresenceCoreProps {
    * than pointing confidently at the origin.
    */
   targetRect?: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * §7 contextual transformation. `core` is the head and rings; the others
+   * replace the head with a second view of the subject being discussed.
+   *
+   * The rings are never replaced whatever this says — they carry the activity
+   * and risk-headroom measurements, and a transformation that took those off
+   * the screen would be a decoration removing data.
+   */
+  representation?: Representation;
+}
+
+/**
+ * The scientific figures §7 asks for, drawn where the head would be.
+ *
+ * Deliberately schematic rather than plotted from data: this is the presence
+ * taking the *shape* of the subject, and the panel beside it holds the real
+ * numbers. Drawing a half-size unlabelled copy of a distribution here and
+ * calling it the distribution would be two charts disagreeing about which is
+ * authoritative.
+ */
+function drawRepresentation(
+  ctx: CanvasRenderingContext2D,
+  kind: Representation,
+  hr: number,
+  hue: string,
+  t: number,
+): void {
+  ctx.strokeStyle = hue;
+  ctx.globalAlpha = 0.75;
+  ctx.lineWidth = 2;
+
+  if (kind === 'distribution') {
+    ctx.beginPath();
+    for (let i = 0; i <= 40; i += 1) {
+      const x = (i / 40) * 2 - 1;
+      const y = -Math.exp(-(x * x) * 4);
+      const px = x * hr * 0.8;
+      const py = y * hr * 0.7 + hr * 0.4;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'waveform') {
+    ctx.beginPath();
+    for (let i = 0; i <= 48; i += 1) {
+      const x = (i / 48) * 2 - 1;
+      const py = Math.sin(x * 5 + t * 0.002) * hr * 0.35;
+      const px = x * hr * 0.85;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'timeline') {
+    ctx.beginPath();
+    ctx.moveTo(-hr * 0.85, 0);
+    ctx.lineTo(hr * 0.85, 0);
+    ctx.stroke();
+    for (let i = 0; i < 5; i += 1) {
+      const px = -hr * 0.7 + (i / 4) * hr * 1.4;
+      ctx.beginPath();
+      ctx.arc(px, 0, hr * 0.07, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    return;
+  }
+
+  // network
+  const nodes = 6;
+  const points: [number, number][] = [];
+  for (let i = 0; i < nodes; i += 1) {
+    const a = (i / nodes) * Math.PI * 2 + t * 0.0002;
+    points.push([Math.cos(a) * hr * 0.62, Math.sin(a) * hr * 0.62]);
+  }
+  ctx.globalAlpha = 0.3;
+  for (let i = 0; i < nodes; i += 1) {
+    for (let j = i + 1; j < nodes; j += 1) {
+      if ((i + j) % 2 !== 0) continue;
+      ctx.beginPath();
+      ctx.moveTo(points[i]![0], points[i]![1]);
+      ctx.lineTo(points[j]![0], points[j]![1]);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = hue;
+  for (const [px, py] of points) {
+    ctx.beginPath();
+    ctx.arc(px, py, hr * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 export const PresenceCore: React.FC<PresenceCoreProps> = ({
   presence, reducedMotion, size = 300,
   utterance = '', speechProgress = null, speaking = false, targetRect = null,
+  representation = 'core',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Read every frame without re-running the animation effect.
-  const voice = useRef({ utterance, speechProgress, speaking, targetRect });
-  voice.current = { utterance, speechProgress, speaking, targetRect };
+  const voice = useRef({ utterance, speechProgress, speaking, targetRect, representation });
+  voice.current = { utterance, speechProgress, speaking, targetRect, representation };
   // A ref, not state: the animation reads the newest presence every frame
   // without the frame loop being a dependency of a re-render.
   const latest = useRef(presence);
@@ -217,6 +315,18 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
       ctx.strokeStyle = `rgba(115,167,255,${0.55 + p.intensity * 0.3})`;
       ctx.lineWidth = 2;
 
+      if (v.representation !== 'core') {
+        // §7 contextual transformation. The head becomes a second view of the
+        // subject — but only for subjects where the representation IS the
+        // thing (`hub/projection.ts` decides), so the presence does not reshape
+        // constantly and become a distraction wearing the costume of
+        // information.
+        drawRepresentation(ctx, v.representation, hr, hue, still ? 0 : now);
+        ctx.restore();
+        if (!still) raf = requestAnimationFrame(draw);
+        return;
+      }
+
       // Skull — an ellipse, deliberately abstract. A rendered human face on a
       // trading platform reads as a mascot; §7 asks for "professional".
       ctx.beginPath();
@@ -276,7 +386,10 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
 
   return (
     <section
-      aria-label="AI presence"
+      // Distinct from the stage's own "AI presence" landmark. Two regions with
+      // the same accessible name are two indistinguishable stops in a screen
+      // reader's landmark list, and this one is the readout inside the other.
+      aria-label="Presence core"
       style={{ display: 'grid', justifyItems: 'center', gap: 16, minWidth: 0 }}
     >
       <div style={{ position: 'relative', width: size, height: size }}>

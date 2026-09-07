@@ -374,9 +374,40 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "measured rect. An unmeasured one yields null and no gesture at all, "
         "rather than a confident point at the origin.",
     ),
-    _c("presence.multi_projection", "7", "A", "Minimise, reposition, or split into multiple projections"),
-    _c("presence.transformations", "7", "A", "Contextual transformation into scientific representations"),
-    _c("presence.xr_abstraction", "7", "A", "Renderer abstraction for 3D, AR, VR and holographic output"),
+    _c(
+        "presence.multi_projection",
+        "7",
+        "A",
+        "Minimise, reposition, or split into multiple projections",
+        "live",
+        "frontend/src/hub/projection.ts:splitProjection",
+        "Split capped at three \u2014 six talking heads is a worse screen than one "
+        "presence that turns. Minimised is small, never gone: the presence is "
+        "where the alert state is shown.",
+    ),
+    _c(
+        "presence.transformations",
+        "7",
+        "A",
+        "Contextual transformation into scientific representations",
+        "live",
+        "frontend/src/hub/projection.ts:representationFor",
+        "Only when the representation IS the subject. Schematic, not plotted: a "
+        "half-size unlabelled copy of the distribution beside the real one is "
+        "two charts disagreeing about which is authoritative.",
+    ),
+    _c(
+        "presence.xr_abstraction",
+        "7",
+        "A",
+        "Renderer abstraction for 3D, AR, VR and holographic output",
+        "live",
+        "frontend/src/hub/projection.ts:selectRenderer",
+        "The abstraction is the deliverable; only canvas2d is implemented and "
+        "availableRenderers() says so. Asking for webxr returns canvas2d with "
+        "fellBack=true and a reason \u2014 never a silent fall-back that would let "
+        "a deployment believe it was in VR.",
+    ),
     # §8 — Dynamic generative workspace engine
     _c(
         "workspace.engine",

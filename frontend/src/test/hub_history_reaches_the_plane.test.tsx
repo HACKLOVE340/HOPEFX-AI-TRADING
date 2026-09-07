@@ -145,7 +145,9 @@ describe('degrading on a small device', () => {
     // capacityFor(375) is 4. Every surface is full width at this size, so a
     // twelve-deep plane would be a twelve-screen scroll.
     await waitFor(() => {
-      const panels = screen.getAllByRole('region').filter((el) => el.getAttribute('aria-label') !== 'AI presence');
+      const panels = screen
+        .getAllByRole('region')
+        .filter((el) => !['AI presence', 'Presence core'].includes(el.getAttribute('aria-label') ?? ''));
       expect(panels.length).toBeLessThanOrEqual(4);
       expect(panels.length).toBeGreaterThan(0);
     });

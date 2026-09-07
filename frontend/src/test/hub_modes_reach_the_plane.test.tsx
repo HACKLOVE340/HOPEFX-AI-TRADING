@@ -46,7 +46,7 @@ function panels(): string[] {
   return screen
     .getAllByRole('region')
     .map((el) => el.getAttribute('aria-label') ?? '')
-    .filter((l) => l !== 'AI presence');
+    .filter((l) => l !== 'AI presence' && l !== 'Presence core');
 }
 
 beforeEach(() => {

@@ -32,6 +32,7 @@ import type { Presence } from './presence';
 import type { Surface } from './workspace';
 import { place, type LayoutName } from './layout';
 import { positionOf, type Layer, type Position } from './spatial';
+import { singleProjection, type Projection, type Representation } from './projection';
 import { SurfaceView } from './SurfaceView';
 import { useViewportWidth } from './useViewportWidth';
 
@@ -121,6 +122,10 @@ export interface PresenceStageProps {
   utterance?: string;
   speechProgress?: number | null;
   speaking?: boolean;
+  /** §7: how many projections there are, where, and how large. */
+  projections?: readonly Projection[];
+  /** §7: what shape the presence takes for what is being discussed. */
+  representation?: Representation;
   onCommand: (phrase: string) => void;
   onTalk: () => void;
   onStop: () => void;
@@ -134,6 +139,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout, spokenAbout = [],
   trail = [], onBreadcrumb, onPositions, modeName, accent,
   utterance = '', speechProgress = null, speaking = false,
+  projections, representation = 'core',
   onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onExit,
 }) => {
   const [typed, setTyped] = useState('');
@@ -166,6 +172,13 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   // Measured, not assumed. A three-of-twelve panel is ninety pixels wide on a
   // phone: it renders, it passes a screenshot test, and nobody can read it.
   const width = useViewportWidth();
+
+  // §7 projections. The first one drives the main presence; a split adds the
+  // rest as smaller companions beside it.
+  const shownProjections = projections && projections.length > 0 ? projections : singleProjection();
+  const primary = shownProjections[0] ?? singleProjection()[0]!;
+  const anchor = primary.anchor;
+  const scale = primary.scale;
   const placements = useMemo(
     () => place(surfaces, { layout, focusedId, viewport: { width }, collapseBackground: true }),
     [surfaces, layout, focusedId, width],
@@ -319,10 +332,20 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'grid', justifyItems: 'center', gap: 14, minWidth: 0 }}>
+        <div
+          style={{
+            display: 'grid',
+            justifyItems:
+              anchor === 'left' ? 'start' : anchor === 'right' || anchor === 'bottom_right' ? 'end' : 'center',
+            alignContent: anchor === 'top_left' ? 'start' : anchor === 'bottom_right' ? 'end' : 'center',
+            gap: 14,
+            minWidth: 0,
+          }}
+        >
           <PresenceCore
             presence={presence}
-            size={hasSurfaces ? 220 : 300}
+            size={Math.round((hasSurfaces ? 220 : 300) * scale)}
+            representation={representation}
             utterance={utterance}
             speechProgress={speechProgress}
             speaking={speaking}
