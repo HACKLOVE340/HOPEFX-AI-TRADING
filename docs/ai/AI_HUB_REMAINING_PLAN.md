@@ -430,24 +430,58 @@ test asserts the user-facing stream contains no tool names or raw payloads.
 
 ---
 
-## Phase E — §18 ambient awareness
+## Phase E — §18 ambient awareness, behind §25's consent gate
 
-| Row | State |
-|---|---|
-| Gesture recognition | planned |
-| Pointing and object reference | planned |
-| Optional attention-aware interaction | planned |
-| Screen and camera source selection | planned |
-| Local processing where feasible | planned |
+§18's five rows are gesture recognition, pointing, attention-aware
+interaction, camera and screen source selection, and local processing. Every
+one is **continuous observation of the person using the platform**.
 
-**Also closes:** §25 privacy controls for memory/microphone/camera, §7 attention
-states.
+So E splits, and the order is not a preference:
 
-**Rule:** every ambient capability is **off by default and revocable in one
-action.** A camera or microphone that turns itself on is the worst thing in this
-plan, and "optional" in the spec's own wording is a requirement, not a hint.
-Local processing is preferred *and stated* — the operator must be able to see
-whether a frame left the machine.
+### E1 — §25 privacy: one place that decides  ✅ DONE
+
+`ai/privacy/consent.py`. Built before §18 for the same reason the vault was
+built before the code walker: a containment that arrives after the thing it
+contains is not a containment, it is an apology.
+
+**What "gated" turned out to mean.** The registry said the camera was gated,
+and it was — `Depends(_admin)` plus a rate limit. That is *authorisation*: it
+answers "may this ROLE call this endpoint". It never asks whether the person in
+front of the camera agreed to be looked at. Those are different questions and
+the second one had nowhere to live.
+
+**Default denied.** "Permitted until somebody objects" means the first frame is
+taken before anyone was asked, and there is no way to un-take it.
+
+**Unreadable means refuse** — the one inversion of this codebase's usual rule.
+Everywhere else an unmeasured thing is *reported* as absent rather than guessed
+at. Here the question is not "what is true" but "was I permitted", and a system
+that cannot read its permissions and proceeds anyway does not have any. The same
+inversion `ai/improve/cycle.py`'s kill switch makes.
+
+**A session grant really expires.** One that outlives the session is a permanent
+grant with a reassuring label — worse than an honest permanent one, because the
+operator believes something false about it.
+
+**Revocation is recorded, not erased.** "Never consented" and "consented and
+withdrew it" are different facts, and an audit that cannot tell them apart is
+not one. `revoke_all` is the control an operator reaches for when they want it
+to stop now.
+
+`vision_interpret` consults it **before the frame is decoded** — refusing
+afterwards means the image was already in memory, which is exactly what the
+panel's "frames stay in memory" promise is about.
+
+### E2 — §18 itself  ← NEXT
+
+Five rows, now with somewhere to ask permission. `vision.local_processing` is
+the one that matters most and should lead: a frame that never leaves the
+machine needs no consent conversation about where it went.
+
+**Rules E2 must not violate:** every sensor path calls `consent.check` and none
+of them caches the answer past a revocation; a refused sensor is reported to the
+operator rather than retried; and nothing in §18 may claim a native capability
+a browser only simulates.
 
 ---
 

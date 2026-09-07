@@ -1782,9 +1782,23 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "25",
         "A",
         "Privacy controls for memory, microphone and camera",
-        "staged",
-        "frontend/src/components/intelligence/VisualIntelligenceWorkspaces.tsx",
-        "Camera is gated; memory and microphone controls are not centralised.",
+        "live",
+        "ai.privacy.consent:check",
+        "The row said the camera was gated. What that meant was Depends(_admin) "
+        "plus a rate limit \u2014 authorisation, which answers 'may this ROLE call "
+        "this endpoint' and never asks whether the person in front of the "
+        "camera agreed to be looked at. Those are different questions and the "
+        "second had nowhere to live. Default DENIED, because 'permitted until "
+        "somebody objects' means the first frame is taken before anyone was "
+        "asked and there is no way to un-take it. An unreadable store REFUSES: "
+        "everywhere else here an unmeasured thing is reported as absent, but "
+        "the question here is 'was I permitted', and a system that cannot read "
+        "its permissions and proceeds anyway has none. A session grant really "
+        "expires \u2014 one that outlives the session is a permanent grant with a "
+        "reassuring label. Revocation is recorded rather than erased, because "
+        "'never consented' and 'consented and withdrew it' are different facts. "
+        "vision_interpret consults it BEFORE decoding the frame; refusing "
+        "afterwards means the image was already in memory.",
     ),
     _c(
         "sec.least_privilege_agents",

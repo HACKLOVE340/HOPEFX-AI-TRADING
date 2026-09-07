@@ -605,6 +605,20 @@ async def vision_interpret(
     """
     await _enforce_rate_limit(user)
 
+    # §25. `Depends(_admin)` answers "may this ROLE call this endpoint"; it
+    # never asks whether the person in front of the camera agreed to be looked
+    # at. Those are different questions, and until `ai/privacy/consent.py` the
+    # second one had nowhere to live.
+    #
+    # Checked HERE, before the frame is decoded: refusing afterwards means the
+    # image was already in memory, which is precisely what the panel's "frames
+    # stay in memory" promise is about.
+    from ai.privacy import consent as _consent
+
+    permission = _consent.check(user.sub, "camera")
+    if not permission.allowed:
+        raise HTTPException(status_code=403, detail=f"camera consent required: {permission.reason}")
+
     if not body.image_b64:
         # The shape the frontend currently sends. Answering plainly beats a 422.
         return {

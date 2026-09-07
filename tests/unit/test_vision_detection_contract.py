@@ -192,6 +192,24 @@ def test_the_route_is_registered_at_the_path_the_frontend_calls():
 # and would have raised NameError on the first real frame.
 
 
+@pytest.fixture(autouse=True)
+def _camera_consent():
+    """§25 gates the camera on the OPERATOR's consent, not only on their role.
+
+    These four tests predate `ai/privacy/consent.py` and asserted the
+    behaviour of an endpoint that asked whether an admin was calling and never
+    whether the person in front of the camera had agreed. They now grant it
+    explicitly, which is also the proof that the gate is real: removing this
+    fixture turns all four red.
+    """
+    from ai.privacy import consent
+
+    consent.reset_for_testing()
+    consent.grant("owner", "camera", scope="until_revoked")
+    yield
+    consent.reset_for_testing()
+
+
 @pytest.mark.asyncio
 async def test_the_handler_answers_the_no_frame_shape_the_frontend_sends():
     """`{"source": "camera_frame"}` with no image — what the UI posts today."""
