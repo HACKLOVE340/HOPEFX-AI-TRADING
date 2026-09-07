@@ -142,6 +142,35 @@ def _handle(observation: Observation) -> None:
         return  # same condition, same severity, already queued
     _OPEN[observation.key()] = observation.severity
     _raise_proposal(observation, escalated=previous is not None)
+    _notify(observation)
+
+
+def _notify(observation: Observation) -> None:
+    """Ask §19's policy whether to INTERRUPT somebody about this.
+
+    A third channel, deliberately narrower than the two above it. `_remember`
+    records what the department saw; `_raise_proposal` records what a human was
+    asked about; this decides only whether to interrupt them now.
+
+    It runs AFTER the proposal is queued and cannot affect it. That ordering is
+    the safety property: a notification policy that could suppress a proposal
+    would be one that can delete the audit record of a condition, whereas
+    suppressing an interruption only means the operator reads it in the queue
+    instead of being woken by it. Remove this function and every proposal is
+    still queued exactly as before.
+
+    Failure here is logged and swallowed for the same reason: a policy that
+    cannot decide must not stop a condition being recorded.
+    """
+    try:
+        from ai.notify.service import handle_observation
+
+        handle_observation(observation)
+    except Exception:
+        logger.exception(
+            "ai.awareness: notification policy failed for %s; the proposal was queued regardless",
+            observation.trigger,
+        )
 
 
 def _remember(observation: Observation) -> None:

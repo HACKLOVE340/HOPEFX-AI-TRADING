@@ -215,6 +215,7 @@ def register_routers(
     from api.backtesting import _compat_router as backtesting_compat_router
     from api.backtesting import router as backtesting_router
     from api.ai_core import router as ai_core_router
+    from api.ai_notifications import router as ai_notifications_router
     from api.brain import router as brain_router
     from api.broker import router as broker_router
     from api.calendar import router as calendar_router
@@ -335,6 +336,7 @@ def register_routers(
         safe_agent_platform_router,
         superadmin_ai_operations_router,
         ai_core_router,
+        ai_notifications_router,
         profiles_router,
         social_feed_router,
         social_leaderboard_router,

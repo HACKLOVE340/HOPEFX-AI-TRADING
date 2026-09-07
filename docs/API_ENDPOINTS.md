@@ -109,6 +109,13 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-core/evals` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/models` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/summary` | JWT |  | AI Core |
+| `GET` | `/api/ai-notifications` | JWT |  | AI Notifications |
+| `GET` | `/api/ai-notifications/policy` | JWT |  | AI Notifications |
+| `PUT` | `/api/ai-notifications/policy` | JWT |  | AI Notifications |
+| `POST` | `/api/ai-notifications/release` | JWT |  | AI Notifications |
+| `GET` | `/api/ai-notifications/watches` | JWT |  | AI Notifications |
+| `POST` | `/api/ai-notifications/watches` | JWT |  | AI Notifications |
+| `POST` | `/api/ai-notifications/{key}/acknowledge` | JWT |  | AI Notifications |
 | `GET` | `/api/alerts/` | JWT |  | Alerts |
 | `POST` | `/api/alerts/` | JWT |  | Alerts |
 | `GET` | `/api/alerts/active` | JWT |  | Alerts |

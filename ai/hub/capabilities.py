@@ -1011,7 +1011,18 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "",
     ),
     # §19 — Monitoring, sleep and alerts
-    _c("monitor.user_watches", "19", "C", "User-defined watches and thresholds"),
+    _c(
+        "monitor.user_watches",
+        "19",
+        "C",
+        "User-defined watches and thresholds",
+        "live",
+        "ai.notify.policy:Watch",
+        "Owned by one operator, taken from the token and never from the request "
+        'body. An unmeasured reading fires nothing: None is "nobody measured '
+        'it", not zero, and a drawdown watch firing on a dead feed would send '
+        "the operator looking for a loss that did not happen.",
+    ),
     _c(
         "monitor.health_watchers",
         "19",
@@ -1021,13 +1032,80 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "ai.awareness.watchers",
         "Watchers raise a proposal and never act.",
     ),
-    _c("monitor.severity", "19", "C", "Four notification severities"),
-    _c("monitor.quiet_hours", "19", "C", "Quiet hours and sleep mode"),
-    _c("monitor.escalation", "19", "C", "Escalation rules"),
-    _c("monitor.alarm_scheduling", "19", "C", "Alarm scheduling"),
-    _c("monitor.wake_conditions", "19", "C", "User-configured wake-up conditions"),
-    _c("monitor.dedup", "19", "C", "Notification deduplication and anti-spam"),
-    _c("monitor.explain_interruption", "19", "C", "Explain why an interruption occurred"),
+    _c(
+        "monitor.severity",
+        "19",
+        "C",
+        "Four notification severities",
+        "live",
+        "ai.notify.policy:Severity",
+        "Identical to AlertSeverity in hub/presence.ts, and only high and "
+        'critical interrupt \u2014 two definitions of "worth interrupting for" is '
+        "one too many.",
+    ),
+    _c(
+        "monitor.quiet_hours",
+        "19",
+        "C",
+        "Quiet hours and sleep mode",
+        "live",
+        "ai.notify.policy:QuietHours",
+        "Defers, never discards, and says when it will arrive. Handles a window "
+        "crossing midnight, which a naive start<end check gets wrong in both "
+        "directions. Never applies to a critical.",
+    ),
+    _c(
+        "monitor.escalation",
+        "19",
+        "C",
+        "Escalation rules",
+        "live",
+        "ai.notify.router:Router",
+        "An unacknowledged interrupting notice rises one step, not straight to "
+        "critical: escalation must not be a route by which an informational "
+        "notice becomes an alarm at three in the morning.",
+    ),
+    _c(
+        "monitor.alarm_scheduling",
+        "19",
+        "C",
+        "Alarm scheduling",
+        "live",
+        "ai.notify.policy:Alarm",
+        "Fires once, through the same policy as everything else.",
+    ),
+    _c(
+        "monitor.wake_conditions",
+        "19",
+        "C",
+        "User-configured wake-up conditions",
+        "live",
+        "ai.notify.policy:decide",
+        "Pierces sleep mode and quiet hours, but only for the subject the "
+        "operator named and only when its threshold is actually crossed.",
+    ),
+    _c(
+        "monitor.dedup",
+        "19",
+        "C",
+        "Notification deduplication and anti-spam",
+        "live",
+        "ai.notify.router:Router",
+        "Suppression expires, because suppression that never expires is "
+        "permanent blindness. A severity increase is news and is never "
+        "deduplicated. Rate state is per operator. Never applies to a critical.",
+    ),
+    _c(
+        "monitor.explain_interruption",
+        "19",
+        "C",
+        "Explain why an interruption occurred",
+        "live",
+        "ai.notify.policy:Decision",
+        "Every decision carries a reason naming the mechanism that made it \u2014 "
+        '"suppressed" is not an explanation, "you have already been told about '
+        'this in the last hour" is. Asserted for deliver, defer and suppress.',
+    ),
     # §20 — Trading and HOPEFX integration
     _c("trading.mode_awareness", "20", "C", "Live and paper trading awareness", "live", "api.safe_agent_platform", ""),
     _c("trading.independent_risk", "20", "C", "Independent risk agent", "live", "ai.departments.risk_compliance", ""),
@@ -1379,7 +1457,11 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "19",
         "C",
         "Sleep monitor bound to the notification policy",
-        note="§3 lists this as existing; it is not in this repository.",
+        "live",
+        "ai.notify.service:release_deferred",
+        "Sleep mode holds non-critical notifications and keeps them; a "
+        "sleep-mode deferral has no scheduled end and is released by the "
+        "operator, never by a clock guessing at a time nobody set.",
     ),
     _c(
         "legacy.multi_display_console",

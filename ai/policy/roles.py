@@ -97,6 +97,16 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     # only, and _VIEW like every other row: a map of the system's surface is
     # exactly the kind of reconnaissance that should need a login.
     "ai_core_app_surface": _VIEW,
+    # §19 (api/ai_notifications.py). Every one is scoped to the calling
+    # operator's own notifications and settings, so a viewer role is the right
+    # floor: there is nothing here one operator can do to another.
+    "notification_inbox": _VIEW,
+    "acknowledge_notification": _VIEW,
+    "release_deferred_notifications": _VIEW,
+    "notification_policy": _VIEW,
+    "set_notification_policy": _VIEW,
+    "notification_watches": _VIEW,
+    "add_notification_watch": _VIEW,
     # Which models each vendor currently serves. Reporting, not acting: choosing
     # a model is `route_model`, which is superadmin + 2FA below. Admin may see
     # WHICH vendors are configured -- a boolean, never a credential.

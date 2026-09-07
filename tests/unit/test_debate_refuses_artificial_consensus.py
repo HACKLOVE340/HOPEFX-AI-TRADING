@@ -82,9 +82,7 @@ def test_a_confidence_with_no_basis_is_refused():
     from ai.debate import Reasoning, ReasoningIncomplete
 
     with pytest.raises(ReasoningIncomplete) as caught:
-        Reasoning(
-            subject="s", thesis="t", counter_thesis="c", what_would_change_it=("x",), confidence=0.8
-        )
+        Reasoning(subject="s", thesis="t", counter_thesis="c", what_would_change_it=("x",), confidence=0.8)
     assert "confidence_basis" in caught.value.missing
 
 
@@ -111,8 +109,12 @@ def test_a_confidence_outside_zero_to_one_is_refused():
 
     with pytest.raises(ValueError, match="not a probability"):
         Reasoning(
-            subject="s", thesis="t", counter_thesis="c", what_would_change_it=("x",),
-            confidence=1.4, confidence_basis="because",
+            subject="s",
+            thesis="t",
+            counter_thesis="c",
+            what_would_change_it=("x",),
+            confidence=1.4,
+            confidence_basis="because",
         )
 
 
@@ -134,8 +136,16 @@ def test_the_prose_carries_all_eight_parts():
         alternatives=("wait",),
     ).as_prose()
     for fragment in (
-        "Thesis:", "Counter-thesis:", "Evidence:", "Against:", "Assuming:",
-        "Not known:", "Confidence:", "Would change it:", "Risks:", "Alternatives:",
+        "Thesis:",
+        "Counter-thesis:",
+        "Evidence:",
+        "Against:",
+        "Assuming:",
+        "Not known:",
+        "Confidence:",
+        "Would change it:",
+        "Risks:",
+        "Alternatives:",
     ):
         assert fragment in prose, f"{fragment} is missing from the prose"
 
@@ -189,7 +199,7 @@ def test_evidence_with_no_timestamp_is_unmeasured_not_fresh():
 
 
 def test_evidence_needs_a_source():
-    """"Somebody said" is not attributable, and an unattributable claim cannot be
+    """ "Somebody said" is not attributable, and an unattributable claim cannot be
     weighed at all."""
     from ai.debate import Evidence, EvidenceQuality
 
@@ -203,8 +213,10 @@ def test_a_naive_timestamp_is_refused_at_construction():
 
     with pytest.raises(ValueError, match="timezone-aware"):
         Evidence(
-            claim="x", source="s", quality=EvidenceQuality.MEASURED,
-            observed_at=datetime(2026, 3, 10, 12, 0),  # noqa: DTZ001 — the point of the test
+            claim="x",
+            source="s",
+            quality=EvidenceQuality.MEASURED,
+            observed_at=datetime(2026, 3, 10, 12, 0),
         )
 
 
@@ -238,7 +250,9 @@ def test_a_decisive_margin_is_called():
         subject="s",
         positions=[
             Position(
-                agent="a", stance="for", argument="strong",
+                agent="a",
+                stance="for",
+                argument="strong",
                 evidence=(_ev("a"), _ev("b"), _ev("c")),
             ),
             Position(agent="b", stance="against", argument="weak", evidence=(_ev("d", "recalled"),)),
@@ -308,10 +322,17 @@ def test_headcount_does_not_beat_evidence():
         subject="s",
         positions=[
             *[
-                Position(agent=f"crowd{i}", stance="against", argument="I recall", evidence=(_ev("hearsay", "recalled"),))
+                Position(
+                    agent=f"crowd{i}", stance="against", argument="I recall", evidence=(_ev("hearsay", "recalled"),)
+                )
                 for i in range(4)
             ],
-            Position(agent="measurer", stance="for", argument="the books say", evidence=(_ev("reconciled"), _ev("also reconciled"))),
+            Position(
+                agent="measurer",
+                stance="for",
+                argument="the books say",
+                evidence=(_ev("reconciled"), _ev("also reconciled")),
+            ),
         ],
         now=NOW,
     )
@@ -392,8 +413,12 @@ def test_its_confidence_says_where_it_came_from():
     from ai.debate import analyse_trade
 
     analysis = analyse_trade(
-        symbol="XAUUSD", thesis="up", counter_thesis="down",
-        supporting=[_ev("a")], opposing=[_ev("b", "recalled")], now=NOW,
+        symbol="XAUUSD",
+        thesis="up",
+        counter_thesis="down",
+        supporting=[_ev("a")],
+        opposing=[_ev("b", "recalled")],
+        now=NOW,
     )
     assert analysis.reasoning.confidence is not None
     assert "evidence weight" in analysis.reasoning.confidence_basis
@@ -405,7 +430,12 @@ def test_with_no_evidence_at_all_there_is_no_confidence():
     from ai.debate import analyse_trade
 
     analysis = analyse_trade(
-        symbol="XAUUSD", thesis="up", counter_thesis="down", supporting=[], opposing=[], now=NOW,
+        symbol="XAUUSD",
+        thesis="up",
+        counter_thesis="down",
+        supporting=[],
+        opposing=[],
+        now=NOW,
     )
     assert analysis.reasoning.confidence is None
     assert "none on either side" in analysis.reasoning.what_would_change_it[0].lower()
@@ -416,8 +446,12 @@ def test_an_unresolved_debate_reaches_the_reasoning_not_only_the_debate():
     from ai.debate import analyse_trade
 
     analysis = analyse_trade(
-        symbol="XAUUSD", thesis="up", counter_thesis="down",
-        supporting=[_ev("a")], opposing=[_ev("b")], now=NOW,
+        symbol="XAUUSD",
+        thesis="up",
+        counter_thesis="down",
+        supporting=[_ev("a")],
+        opposing=[_ev("b")],
+        now=NOW,
     )
     assert analysis.debate.resolved is False
     assert any("does not separate" in item for item in analysis.reasoning.missing_information)
@@ -428,8 +462,12 @@ def test_the_explanation_carries_both_the_argument_and_how_it_was_reached():
     from ai.debate import analyse_trade
 
     text = analyse_trade(
-        symbol="XAUUSD", thesis="up", counter_thesis="down",
-        supporting=[_ev("a"), _ev("b"), _ev("c")], opposing=[_ev("d", "recalled")], now=NOW,
+        symbol="XAUUSD",
+        thesis="up",
+        counter_thesis="down",
+        supporting=[_ev("a"), _ev("b"), _ev("c")],
+        opposing=[_ev("d", "recalled")],
+        now=NOW,
     ).explain()
     assert "Counter-thesis:" in text
     assert "how this was reached" in text
@@ -442,7 +480,12 @@ def test_a_trade_analysis_without_a_counter_thesis_will_not_build():
 
     with pytest.raises(ReasoningIncomplete):
         analyse_trade(
-            symbol="XAUUSD", thesis="up", counter_thesis="", supporting=[_ev("a")], opposing=[], now=NOW,
+            symbol="XAUUSD",
+            thesis="up",
+            counter_thesis="",
+            supporting=[_ev("a")],
+            opposing=[],
+            now=NOW,
         )
 
 
@@ -486,7 +529,7 @@ def test_a_department_with_no_reading_becomes_stated_missing_information():
 
 
 def test_unanimous_agreement_is_not_dressed_up_as_confirmation():
-    """"No department disagreed" and "nobody independent checked" are different
+    """ "No department disagreed" and "nobody independent checked" are different
     facts, and an empty counter-thesis cannot tell them apart."""
     from ai.agent.synthesis import Finding, synthesise
 
@@ -543,7 +586,7 @@ def test_signals_moving_with_the_price_are_separated_from_those_against():
 
 
 def test_an_unknown_direction_is_not_counted_as_neutral_agreement():
-    """"This does not push either way" and "nobody worked out which way this
+    """ "This does not push either way" and "nobody worked out which way this
     pushes" are different, and merging them fabricates a neutral."""
     from ai.debate.correlation import correlate
 
@@ -563,7 +606,7 @@ def test_a_signal_outside_the_window_is_counted_not_silently_dropped():
 
 
 def test_a_domain_with_no_signal_is_named_as_a_blind_spot():
-    """"No news moved it" and "the news feed did not answer" render identically
+    """ "No news moved it" and "the news feed did not answer" render identically
     as an empty list."""
     from ai.debate.correlation import correlate
 
@@ -611,7 +654,7 @@ def test_a_naive_signal_timestamp_is_refused():
     from ai.debate.correlation import Signal
 
     with pytest.raises(ValueError, match="timezone-aware"):
-        Signal(domain="news", label="x", at=datetime(2026, 3, 10))  # noqa: DTZ001 — the point
+        Signal(domain="news", label="x", at=datetime(2026, 3, 10))
 
 
 def test_an_unknown_domain_is_refused():
