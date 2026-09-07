@@ -700,11 +700,20 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "11",
         "C",
         "System agent — infrastructure, services, resources, failures",
-        "live",
-        "ai.departments.platform_engineering",
+        "planned",
+        "",
         "",
     ),
-    _c("agents.news", "11", "C", "News intelligence agent"),
+    _c(
+        "agents.news",
+        "11",
+        "C",
+        "News intelligence agent",
+        "live",
+        "ai.departments.news_intelligence",
+        "Headlines and geopolitical severity, both delegated. A handler that "
+        "scored a headline itself would be a sentiment number no feed produced.",
+    ),
     _c(
         "agents.vision",
         "11",
@@ -714,7 +723,18 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "ai.vision.detect:interpret",
         "Interpretation exists; it is not yet an agent on the bus.",
     ),
-    _c("agents.voice", "11", "C", "Voice agent — recognition, synthesis, turn management"),
+    _c(
+        "agents.voice",
+        "11",
+        "C",
+        "Voice agent — recognition, synthesis, turn management",
+        "live",
+        "ai.departments.voice_interface",
+        "Reports whether a provider key is set, never its value \u2014 an agent "
+        "result lands in memory and is fenced back into a model. Read-only: it "
+        "cannot speak, because a system that can talk to somebody who did not "
+        "ask it to is a different risk tier.",
+    ),
     _c(
         "agents.memory",
         "11",
@@ -724,9 +744,40 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "ai.memory.store",
         "A store exists; an agent that governs it does not.",
     ),
-    _c("agents.notification", "11", "C", "Notification agent — severity, escalation, interruption"),
-    _c("agents.data", "11", "C", "Data agent — acquisition, validation, freshness"),
-    _c("agents.development", "11", "C", "Development agent — code, debugging, architecture"),
+    _c(
+        "agents.notification",
+        "11",
+        "C",
+        "Notification agent — severity, escalation, interruption",
+        "live",
+        "ai.departments.notification_ops",
+        "The dry run calls decide(), never route() or submit() \u2014 so asking "
+        '"what would happen to this?" cannot deliver it, spend the rate budget, '
+        "or write the deduplication record that would silence the real one.",
+    ),
+    _c(
+        "agents.data",
+        "11",
+        "C",
+        "Data agent — acquisition, validation, freshness",
+        "live",
+        "ai.departments.data_ops",
+        "An unavailable reading carries no reading at all. Of the four agents "
+        "added here this is the one where inventing an answer does concrete "
+        "harm: a freshness figure nobody measured reports a dead feed as live.",
+    ),
+    _c(
+        "agents.development",
+        "11",
+        "C",
+        "Development agent — code, debugging, architecture",
+        "live",
+        "ai.departments.platform_engineering",
+        "scan_secrets, run_tests, check_broken_imports and propose_fix \u2014 code, "
+        "debugging and architecture. This row and agents.system both pointed at "
+        "this one module; the System agent's own remit (infrastructure, "
+        "services, resources, failures) has no agent, and is planned again.",
+    ),
     # §12 — Agent-to-agent communication
     _c(
         "bus.message_envelope",

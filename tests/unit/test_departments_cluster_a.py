@@ -42,11 +42,20 @@ pytestmark = pytest.mark.unit
 
 
 def test_all_four_cluster_a_departments_are_declared():
-    assert set(departments.DEPARTMENTS) == {
-        "markets_execution",
-        "risk_compliance",
-        "research_intelligence",
-        "platform_engineering",
+    """Cluster A is intact, and the whole set is exactly what is declared.
+
+    This asserted the four were the ONLY departments, which was true until §11's
+    remaining agents landed. Split rather than loosened: the point of the
+    original was that the set cannot grow quietly, and asserting the full set
+    keeps that while letting Cluster B exist.
+    """
+    cluster_a = {"markets_execution", "risk_compliance", "research_intelligence", "platform_engineering"}
+    assert cluster_a <= set(departments.DEPARTMENTS)
+    assert set(departments.DEPARTMENTS) == cluster_a | {
+        "news_intelligence",
+        "voice_interface",
+        "notification_ops",
+        "data_ops",
     }
 
 

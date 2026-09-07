@@ -27,6 +27,7 @@ kind of half-enforced action this audit keeps finding.
 from __future__ import annotations
 
 import logging
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -90,6 +91,14 @@ class ToolResult:
 class _Registered:
     handler: Callable[..., Any]
     allowed_actions: frozenset[str]
+    #: Whether the handler asked for the authenticated operator by name.
+    #:
+    #: Decided once at registration rather than at every call, and only for
+    #: handlers that declare the parameter. Passing it to everything would break
+    #: the eight `recall_memory` handlers, which take an explicit keyword-only
+    #: signature with no `**kwargs` — a blast radius out of proportion to the
+    #: problem.
+    wants_operator: bool = False
 
 
 #: Keys the permission gate computes for itself. A caller may not supply them
@@ -109,7 +118,28 @@ class ToolBus:
         self._audit: list[dict[str, Any]] = []
 
     def register(self, name: str, handler: Callable[..., Any], *, allowed_actions: set[str] | None = None) -> None:
-        self._tools[name] = _Registered(handler, frozenset(allowed_actions or {name}))
+        """Register a handler.
+
+        A handler that declares an `operator` parameter is given the
+        **authenticated** operator at call time, and cannot be told a different
+        one: `operator` is a named parameter of `invoke`, so it never reaches
+        `context` and a caller has no way to supply it.
+
+        That is what makes an operator-scoped tool correct by construction. The
+        alternative — accepting `operator` as an ordinary tool parameter — would
+        be a cross-operator read through the bus, and it also collided at the
+        Python level with `invoke`'s own argument, making such a tool
+        permitted, registered and uncallable.
+        """
+        wants = False
+        try:
+            parameters = inspect.signature(handler).parameters
+            wants = "operator" in parameters
+        except (TypeError, ValueError):
+            # A builtin or C callable with no introspectable signature. It
+            # cannot have asked for the operator by name, so it does not get it.
+            wants = False
+        self._tools[name] = _Registered(handler, frozenset(allowed_actions or {name}), wants_operator=wants)
 
     def audit(self) -> list[dict[str, Any]]:
         return list(self._audit)
@@ -192,7 +222,13 @@ class ToolBus:
             self._record(tool, operator, False, tuple(reason_codes))
             raise ToolDenied(tuple(reason_codes), f"{tool}: {getattr(result, 'reason', 'refused')}")
 
-        value = registered.handler(**context)
+        # The authenticated operator, for handlers that asked for it. Appended
+        # after `context` so a caller cannot displace it — and it could not
+        # anyway, since `operator` binds to this method's own parameter.
+        if registered.wants_operator:
+            value = registered.handler(**context, operator=operator)
+        else:
+            value = registered.handler(**context)
         self._record(tool, operator, True, ("permission_granted",))
         return ToolResult(tool=tool, allowed=True, value=value, reason_codes=("permission_granted",))
 

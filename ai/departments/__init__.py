@@ -36,13 +36,22 @@ from core.ai_tool_permissions import ToolPermission, ToolPermissionRegistry, Too
 
 from ai import execution_shadow
 
-from . import markets_execution, platform_engineering, research, risk_compliance
+from . import (
+    data_ops,
+    markets_execution,
+    news_intelligence,
+    notification_ops,
+    platform_engineering,
+    research,
+    risk_compliance,
+    voice_interface,
+)
 
 #: Bumped whenever the action set or a risk tier changes. An unversioned
 #: permission set cannot be audited after the fact.
 #: Bumped when the per-department `recall_memory` actions landed — spec §2's
 #: `memory/`, which had been a tuple of strings.
-PERMISSIONS_VERSION: Final = "departments-cluster-a-memory-shadow-2026-09-06"
+PERMISSIONS_VERSION: Final = "departments-cluster-b-agent-network-2026-09-07"
 ACTION_VERSION: Final = "1.0.0"
 
 
@@ -271,6 +280,117 @@ DEPARTMENTS: Final[dict[str, Department]] = {
         ),
         memory=("audit history", "bug registry", "dead execution paths"),
         awareness=("commits touching security-sensitive files", "CI failure patterns"),
+    ),
+    # ── Cluster B — §11's remaining agents ───────────────────────────────────
+    #
+    # Every action here is READ_ONLY, and that is a design decision rather than
+    # a starting point. A voice agent that could synthesise on its own
+    # initiative can talk to somebody who did not ask it to; a notification
+    # agent that could notify is a spam generator with a review process. Both
+    # belong to a different risk tier and a different review than "can be asked
+    # a question", which is all these four do.
+    "news_intelligence": Department(
+        key="news_intelligence",
+        title="News Intelligence",
+        status="reading: headlines and geopolitical severity",
+        agents=("Headline Reader", "Geopolitical Analyst"),
+        actions=(
+            _action(
+                "news_intelligence",
+                "fetch_headlines",
+                ToolRisk.READ_ONLY,
+                "Recent headlines from the feed manager.",
+                news_intelligence.fetch_headlines,
+            ),
+            _action(
+                "news_intelligence",
+                "score_geopolitical_risk",
+                ToolRisk.READ_ONLY,
+                "Geopolitical severity of one piece of text, from the existing scorer.",
+                news_intelligence.score_geopolitical_risk,
+            ),
+        ),
+        memory=("headline", "severity_score"),
+        awareness=("news_feed_silent",),
+    ),
+    "voice_interface": Department(
+        key="voice_interface",
+        title="Voice",
+        status="reporting: provider configuration and turn rules",
+        agents=("Turn Manager",),
+        actions=(
+            _action(
+                "voice_interface",
+                "voice_status",
+                ToolRisk.READ_ONLY,
+                "Which synthesis and recognition providers are configured. Booleans, never keys.",
+                voice_interface.voice_status,
+            ),
+            _action(
+                "voice_interface",
+                "turn_policy",
+                ToolRisk.READ_ONLY,
+                "The turn-taking rules this deployment actually enforces.",
+                voice_interface.turn_policy,
+            ),
+        ),
+        memory=("voice_availability",),
+        awareness=("no_voice_provider",),
+    ),
+    "notification_ops": Department(
+        key="notification_ops",
+        title="Notification",
+        status="watching: severity, escalation, interruption",
+        agents=("Interruption Warden",),
+        actions=(
+            _action(
+                "notification_ops",
+                "evaluate_notification",
+                ToolRisk.READ_ONLY,
+                "What the policy WOULD do with a notification. A dry run that delivers nothing.",
+                notification_ops.evaluate_notification,
+            ),
+            _action(
+                "notification_ops",
+                "pending_notifications",
+                ToolRisk.READ_ONLY,
+                "One operator's inbox, held notifications and unacknowledged keys.",
+                notification_ops.pending_notifications,
+            ),
+            _action(
+                "notification_ops",
+                "describe_policy",
+                ToolRisk.READ_ONLY,
+                "One operator's notification settings, and the floor no setting turns off.",
+                notification_ops.describe_policy,
+            ),
+        ),
+        memory=("interruption",),
+        awareness=("escalation_unacknowledged",),
+    ),
+    "data_ops": Department(
+        key="data_ops",
+        title="Data",
+        status="validating: acquisition, freshness, cross-source agreement",
+        agents=("Feed Warden", "Quality Auditor"),
+        actions=(
+            _action(
+                "data_ops",
+                "feed_health",
+                ToolRisk.READ_ONLY,
+                "Per-source health as the quality engine computes it.",
+                data_ops.feed_health,
+            ),
+            _action(
+                "data_ops",
+                "stale_sources",
+                ToolRisk.READ_ONLY,
+                "Which sources the engine currently considers stale, and which it checked.",
+                data_ops.stale_sources,
+            ),
+        ),
+        memory=("feed_health",),
+        awareness=("feed_stale",),
     ),
 }
 

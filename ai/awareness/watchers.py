@@ -311,12 +311,130 @@ def _watch_broken_imports() -> Observation | None:
     )
 
 
+def _watch_feed_staleness() -> Observation | None:
+    """Spec §11 data agent: a source the quality engine has marked stale.
+
+    Stale is not the same as absent. When the engine cannot be reached at all
+    this returns None — an unavailable check is not a finding, and raising one
+    would mean every process without a quality engine reports a stale feed.
+    """
+    from ai.departments import data_ops
+
+    result = data_ops.stale_sources()
+    if not result.get("available"):
+        return None
+    stale = result.get("stale") or []
+    if not stale:
+        return None
+    return Observation(
+        department="data_ops",
+        trigger="feed_stale",
+        severity="critical",
+        summary=(
+            f"{', '.join(stale)} {'is' if len(stale) == 1 else 'are'} stale. Prices from a stale "
+            "source are the wrong prices, and everything downstream assumes freshness was checked."
+        ),
+        detail={"stale": stale, "checked": result.get("checked", [])},
+    )
+
+
+def _watch_voice_providers() -> Observation | None:
+    """Spec §11 voice agent: no synthesis provider configured.
+
+    `info`, not a warning. Web Speech in the browser is a real fallback, so this
+    is a note about identity — the AI sounds like a different person on every
+    machine — rather than a fault.
+    """
+    from ai.departments import voice_interface
+
+    status = voice_interface.voice_status()
+    if not status.get("available"):
+        return None
+    providers = status.get("providers") or {}
+    if any(providers.values()):
+        return None
+    return Observation(
+        department="voice_interface",
+        trigger="no_voice_provider",
+        severity="info",
+        summary=(
+            "No speech provider is configured, so synthesis falls back to whatever voice the "
+            "operating system provides — the AI has no consistent voice of its own."
+        ),
+        detail={"providers": providers},
+    )
+
+
+def _watch_unacknowledged_escalation() -> Observation | None:
+    """Spec §11 notification agent: an interrupting notice nobody acknowledged.
+
+    Deliberately scoped to `owner`. There is no listing here that spans
+    operators, for the same reason the notification endpoints have none: one
+    operator's unacknowledged alert is not another's business, and a watcher
+    that enumerated everybody would be the cross-operator leak rebuilt as a
+    background task.
+    """
+    from ai.departments import notification_ops
+
+    pending = notification_ops.pending_notifications(operator="owner")
+    if not pending.get("available"):
+        return None
+    outstanding = pending.get("unacknowledged") or []
+    if not outstanding:
+        return None
+    return Observation(
+        department="notification_ops",
+        trigger="escalation_unacknowledged",
+        severity="warning",
+        summary=(
+            f"{len(outstanding)} notification(s) delivered and not acknowledged. Unacknowledged is "
+            "not the same as unseen, but it is the only signal there is."
+        ),
+        detail={"keys": outstanding[:10]},
+    )
+
+
+def _watch_news_feed_silence() -> Observation | None:
+    """Spec §11 news agent: the headline feed has produced nothing.
+
+    A quiet feed and a dead feed look identical from downstream, which is the
+    reason to say something. Only raised when the manager is reachable and
+    returns nothing — an unreachable manager is `available: False` and produces
+    no observation, because nobody measured silence.
+    """
+    from ai.departments import news_intelligence
+
+    result = news_intelligence.fetch_headlines(limit=1)
+    if not result.get("available"):
+        return None
+    if result.get("headlines"):
+        return None
+    return Observation(
+        department="news_intelligence",
+        trigger="news_feed_silent",
+        severity="info",
+        summary=(
+            "The headline feed is reachable and has returned nothing. A quiet feed and a stopped "
+            "feed look the same from downstream, so this is worth noticing rather than assuming."
+        ),
+        detail={},
+    )
+
+
 def install_default_watchers() -> None:
     """Register one watcher per department, for the triggers spec §4 names."""
     register("markets_execution", "broker_connection", _watch_broker_connection)
     register("risk_compliance", "drawdown", _watch_drawdown)
     register("research_intelligence", "regime_shift", _watch_regime_shift)
     register("platform_engineering", "broken_imports", _watch_broken_imports)
+    # Cluster B (§11). Each department declares an awareness trigger, and a
+    # department that declares one without registering a watcher notices
+    # nothing — `test_every_department_has_at_least_one_watcher` is what
+    # catches that, and it caught exactly this when the four were added.
+    register("data_ops", "feed_stale", _watch_feed_staleness)
+    register("voice_interface", "no_voice_provider", _watch_voice_providers)
+    register("notification_ops", "escalation_unacknowledged", _watch_unacknowledged_escalation)
+    register("news_intelligence", "news_feed_silent", _watch_news_feed_silence)
 
 
 def reset_for_testing() -> None:
