@@ -31,6 +31,7 @@ import { PresenceCore } from './PresenceCore';
 import type { Presence } from './presence';
 import type { Surface } from './workspace';
 import { place, type LayoutName } from './layout';
+import { positionOf, type Layer, type Position } from './spatial';
 import { SurfaceView } from './SurfaceView';
 import { useViewportWidth } from './useViewportWidth';
 
@@ -94,6 +95,19 @@ export interface PresenceStageProps {
    * depending on who was speaking.
    */
   spokenAbout?: readonly string[];
+  /** §9 breadcrumbs: where the operator has drilled to. Root first. */
+  trail?: readonly Layer[];
+  onBreadcrumb?: (index: number) => void;
+  /**
+   * Measured positions of the rendered panels, reported upward (§9 coordinate
+   * and viewport awareness).
+   *
+   * Measured, never derived from the grid the layout engine asked for: that
+   * would be wrong the moment anything wrapped, scrolled, or folded into the
+   * background stack, and wrong in the direction that has the AI pointing an
+   * operator at the wrong corner of their own screen.
+   */
+  onPositions?: (positions: Record<string, Position>) => void;
   onCommand: (phrase: string) => void;
   onTalk: () => void;
   onStop: () => void;
@@ -105,10 +119,12 @@ export interface PresenceStageProps {
 
 export const PresenceStage: React.FC<PresenceStageProps> = ({
   presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout, spokenAbout = [],
+  trail = [], onBreadcrumb, onPositions,
   onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onExit,
 }) => {
   const [typed, setTyped] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const planeRef = useRef<HTMLDivElement>(null);
 
   // Escape leaves. A full-screen surface with no way out is a trap, and the
   // keyboard route matters more than the button for anyone not using a mouse.
@@ -145,6 +161,37 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   const stacked = visible.filter((p) => p.collapsed);
   const hidden = placements.length - visible.length;
   const hasSurfaces = visible.length > 0;
+
+  /**
+   * Measure where the panels ended up.
+   *
+   * After paint, and again whenever the plane changes shape. A rect read before
+   * layout is zero, and `positionOf` returns null for a zero rect rather than
+   * calling it "top left" — so a too-early measurement produces no claim rather
+   * than a wrong one.
+   */
+  useEffect(() => {
+    if (!onPositions) return;
+    const measure = () => {
+      const root = planeRef.current;
+      if (!root) return;
+      const viewport = root.getBoundingClientRect();
+      const found: Record<string, Position> = {};
+      for (const el of Array.from(root.querySelectorAll('[data-surface-id]'))) {
+        const id = el.getAttribute('data-surface-id');
+        if (!id) continue;
+        const position = positionOf(el.getBoundingClientRect(), viewport);
+        if (position) found[id] = position;
+      }
+      onPositions(found);
+    };
+    const frame = requestAnimationFrame(measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', measure);
+    };
+  }, [onPositions, surfaces, layout, width]);
 
   return (
     <div
@@ -191,7 +238,40 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           background: 'linear-gradient(180deg, rgba(16,26,44,.6), transparent)',
         }}
       >
-        <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: '.15em' }}>HOPEFX</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: '.15em' }}>HOPEFX</span>
+          {trail.length > 1 && (
+            // §9 layer navigation. Rendered only when there is somewhere to go
+            // back to — a breadcrumb trail of one is a label.
+            <nav aria-label="Breadcrumbs" style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+              {trail.map((layer, i) => (
+                <React.Fragment key={`${layer.surfaceId ?? 'root'}-${i}`}>
+                  {i > 0 && <span aria-hidden style={{ ...label, color: C.edge2 }}>/</span>}
+                  <button
+                    type="button"
+                    onClick={() => onBreadcrumb?.(i)}
+                    aria-current={i === trail.length - 1 ? 'page' : undefined}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      fontSize: 11.5,
+                      color: i === trail.length - 1 ? C.text : C.quiet,
+                      fontWeight: i === trail.length - 1 ? 700 : 500,
+                      maxWidth: 160,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {layer.label}
+                  </button>
+                </React.Fragment>
+              ))}
+            </nav>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={label}>
             {surfaces.length ? `${layout.replace('_', ' ')} · ${surfaces.length} on the plane` : 'clear'}
@@ -210,6 +290,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
       {/* The plane. Core centred when empty; core and surfaces side by side
           once anything has been summoned. */}
       <div
+        ref={planeRef}
         style={{
           position: 'relative',
           display: 'grid',

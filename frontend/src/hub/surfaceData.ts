@@ -28,6 +28,7 @@
  */
 
 import { useStore } from '../store';
+import { applyZoom, type ZoomRange } from './spatial';
 
 export interface SurfaceData {
   points?: number[];
@@ -47,9 +48,22 @@ const SYMBOL = 'XAU/USD';
 export interface SurfaceIdentity {
   kind: string;
   key: string;
+  /**
+   * The surface's own data bag. Carries `zoom` when the operator has zoomed
+   * into a region (§9), which is applied to the series here rather than in the
+   * renderer — a zoom that only changed the drawing would leave the panel's
+   * empty-state text describing a range nobody is looking at.
+   */
+  data?: Record<string, unknown>;
 }
 
-export function surfaceData({ kind, key }: SurfaceIdentity): SurfaceData {
+function zoomOf(data: Record<string, unknown> | undefined): ZoomRange | null {
+  const zoom = data?.zoom as Partial<ZoomRange> | undefined;
+  if (!zoom || typeof zoom.from !== 'number' || typeof zoom.to !== 'number') return null;
+  return { from: zoom.from, to: zoom.to };
+}
+
+export function surfaceData({ kind, key, data }: SurfaceIdentity): SurfaceData {
   const state = useStore.getState();
 
   switch (key) {
@@ -64,7 +78,13 @@ export function surfaceData({ kind, key }: SurfaceIdentity): SurfaceData {
           note: 'No price history has arrived yet. A line drawn from one point would be a shape, not a trend.',
         };
       }
-      return { points, empty: false };
+      const zoomed = applyZoom(points, zoomOf(data));
+      if (zoomed.length < 2) {
+        // A zoom that leaves one point is not a view of a smaller range; it is
+        // an empty chart that looks like a dead feed.
+        return { points, empty: false };
+      }
+      return { points: zoomed, empty: false };
     }
 
     case 'positions':

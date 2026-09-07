@@ -358,7 +358,17 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "ai.hub.contracts:Scene",
         "Scene.resolve turns 'the gold chart' into a panel.",
     ),
-    _c("spatial.viewport_awareness", "9", "D", "Coordinate and viewport awareness"),
+    _c(
+        "spatial.viewport_awareness",
+        "9",
+        "D",
+        "Coordinate and viewport awareness",
+        "live",
+        "frontend/src/hub/spatial.ts:positionOf",
+        "Measured from a real DOMRect, never derived from the grid the layout "
+        "asked for. A zero or unmeasured rect yields null and no position is "
+        "claimed \u2014 a wrong corner points the operator at the wrong screen.",
+    ),
     _c(
         "spatial.target_highlight",
         "9",
@@ -370,9 +380,37 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         'aria-current and the words "speaking about" \u2014 colour is never the '
         "only indicator. Whole-word matching only.",
     ),
-    _c("spatial.focus_transitions", "9", "D", "Animated focus transitions"),
-    _c("spatial.zoom_regions", "9", "D", "Zoom into data regions"),
-    _c("spatial.layer_navigation", "9", "D", "Layer navigation and breadcrumbs"),
+    _c(
+        "spatial.focus_transitions",
+        "9",
+        "D",
+        "Animated focus transitions",
+        "live",
+        "frontend/src/hub/spatial.ts:focusTransition",
+        "Transform and opacity only, 200ms, and removed outright rather than "
+        "shortened under prefers-reduced-motion. Asserted by test, both.",
+    ),
+    _c(
+        "spatial.zoom_regions",
+        "9",
+        "D",
+        "Zoom into data regions",
+        "live",
+        "frontend/src/hub/spatial.ts:readZoom",
+        "Applied to the series, not just the drawing, and dropped when you "
+        "navigate out of the layer \u2014 a chart still showing a sliced range "
+        "after you left that view is lying about its range.",
+    ),
+    _c(
+        "spatial.layer_navigation",
+        "9",
+        "D",
+        "Layer navigation and breadcrumbs",
+        "live",
+        "frontend/src/hub/spatial.ts:LayerStack",
+        "Shown only when there is somewhere to go back to. Breadcrumbs for "
+        "closed surfaces are pruned rather than left navigating nowhere.",
+    ),
     _c(
         "spatial.speech_sync",
         "9",

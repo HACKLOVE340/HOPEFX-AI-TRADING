@@ -16,6 +16,8 @@ import React from 'react';
 import { Pin, X } from 'lucide-react';
 import type { Surface } from './workspace';
 import { surfaceData, type SurfaceData } from './surfaceData';
+import { focusTransition } from './spatial';
+import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
 const C = {
   hull: 'linear-gradient(155deg, rgba(16,26,44,.92), rgba(11,19,34,.92))',
@@ -114,7 +116,13 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
   // Resolved here rather than inside each renderer, so "there is nothing to
   // show" is decided in ONE place and cannot be answered differently by a
   // sparkline and a table looking at the same absent feed.
-  const data = surfaceData({ kind: surface.kind, key: surface.key });
+  const data = surfaceData({ kind: surface.kind, key: surface.key, data: surface.data });
+
+  // §9 animated focus transitions. Transform and opacity only, 200ms, and
+  // removed outright rather than shortened when the viewer asked for less
+  // motion — a 1ms transform is still a transform.
+  const reducedMotion = usePrefersReducedMotion();
+  const motion = focusTransition({ focused, spokenAbout, reducedMotion });
 
   return (
     <section
@@ -124,6 +132,9 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
       // describing — §27, and colour is never the only indicator here.
       aria-current={spokenAbout ? 'true' : undefined}
       data-spoken-about={spokenAbout ? 'true' : undefined}
+      // Read back by the stage to measure where this panel actually is, so the
+      // AI can say "top right" only when that is measured to be true.
+      data-surface-id={surface.id}
       style={{
         gridColumn: `span ${span ?? surface.span}`,
         display: 'grid',
@@ -140,7 +151,8 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
             : 'none',
         // 150-300ms: fast enough to track a sentence, slow enough not to flicker
         // through a list of short ones.
-        transition: 'border-color 200ms ease, box-shadow 200ms ease',
+        transition: motion.transition,
+        transform: motion.transform,
         minWidth: 0,
         minHeight: 128,
         boxSizing: 'border-box',

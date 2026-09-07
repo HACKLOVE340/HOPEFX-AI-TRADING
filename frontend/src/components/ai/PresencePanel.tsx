@@ -32,6 +32,7 @@ import { readLayout, suggestLayout, type LayoutName } from '../../hub/layout';
 import { SnapshotStore, capacityFor, readHistoryIntent } from '../../hub/history';
 import { spokenFocus } from '../../hub/reference';
 import { asksForSummary, summarise } from '../../hub/summary';
+import { LayerStack, readNavigation, readZoom, type Layer, type Position } from '../../hub/spatial';
 import { useViewportWidth } from '../../hub/useViewportWidth';
 import { useStore, selectAiJobs } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
@@ -194,6 +195,31 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
   const [namedLayout, setNamedLayout] = useState<LayoutName | null>(null);
   const layout = namedLayout ?? suggestLayout(surfaces, focusedId);
 
+  /**
+   * §9 layer navigation. One stack for the life of the panel, mirrored into
+   * state so React re-renders — the class is the source of truth and the array
+   * is a copy of it, never the other way round.
+   */
+  const layersRef = useRef<LayerStack | null>(null);
+  if (layersRef.current === null) layersRef.current = new LayerStack('Plane');
+  const layers = layersRef.current;
+  const [trail, setTrail] = useState<readonly Layer[]>(() => [...layers.trail]);
+
+  /** Measured positions of the panels, reported up by the stage (§9). */
+  const [positions, setPositions] = useState<Record<string, Position>>({});
+  const onPositions = useCallback((next: Record<string, Position>) => {
+    setPositions((prev) => {
+      // Replacing an identical map on every animation frame would re-render the
+      // whole plane forever.
+      const keys = Object.keys(next);
+      if (keys.length === Object.keys(prev).length &&
+          keys.every((k) => prev[k]?.phrase === next[k]?.phrase)) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
   // History (§8: "bring back yesterday's workspace"). One store for the life of
   // the panel; it reads and writes localStorage and fails soft when that is
   // unavailable, which is every server render and Safari's private mode.
@@ -233,9 +259,14 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
   }, [surfaces, history, workspace, namedLayout]);
 
   const syncWorkspace = useCallback(() => {
-    setSurfaces([...workspace.surfaces]);
+    const next = [...workspace.surfaces];
+    setSurfaces(next);
     setFocusedId(workspace.focused);
-  }, [workspace]);
+    // A breadcrumb pointing at a surface that was closed navigates nowhere,
+    // which is worse than no breadcrumb.
+    layers.prune(new Set(next.map((s) => s.id)));
+    setTrail([...layers.trail]);
+  }, [workspace, layers]);
 
   /**
    * What happens when someone asks for something.
@@ -324,9 +355,78 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       // at" names no subject and would otherwise open nothing and be refused.
       if (asksForSummary(phrase)) {
         const summary = summarise(surfaces);
-        turn.say(summary.text || 'The plane is empty — there is nothing to summarise yet.');
+        // §9 coordinate awareness, used where it is worth something: naming
+        // where a panel is only when that was actually measured. A panel with
+        // no measured rect is named without a position rather than guessed at.
+        const placed = surfaces
+          .map((s) => {
+            const where = positions[s.id];
+            return where ? `${s.meaning} is in ${where.phrase}` : null;
+          })
+          .filter((line): line is string => line !== null)
+          .slice(0, 3);
+        const text = summary.text
+          ? [summary.text, ...(placed.length > 0 ? [`${placed.join('; ')}.`] : [])].join(' ')
+          : '';
+        turn.say(text || 'The plane is empty — there is nothing to summarise yet.');
         setTranscript([...turn.transcript]);
         return;
+      }
+
+      // §9 navigation: "go back", "back to the top".
+      const nav = readNavigation(phrase);
+      if (nav) {
+        const now = nav === 'root' ? layers.reset() : layers.back();
+        setTrail([...layers.trail]);
+        if (now.surfaceId === null) {
+          workspace.focus(null);
+          // Leaving a layer leaves its zoom behind with it. A chart still
+          // showing a sliced range after you navigated out of that view is a
+          // chart quietly lying about its range.
+          for (const surface of workspace.surfaces) {
+            if (surface.data.zoom) {
+              workspace.open({
+                kind: surface.kind,
+                intent: surface.meaning,
+                priority: surface.priority,
+                key: surface.key,
+                data: { ...surface.data, zoom: undefined },
+              });
+            }
+          }
+        } else {
+          workspace.focus(now.surfaceId);
+        }
+        syncWorkspace();
+        turn.say(now.surfaceId === null ? 'Back to the plane.' : `Back to ${now.label}.`);
+        setTranscript([...turn.transcript]);
+        return;
+      }
+
+      // §9 zoom into a data region. Only against a surface that is actually
+      // open — zooming "the gold chart" when no chart is on the plane is a
+      // request that cannot be honoured, and saying so beats doing nothing.
+      const target = workspace.resolve(phrase) ?? focusedId;
+      const targetSurface = target ? workspace.surfaces.find((s) => s.id === target) : undefined;
+      if (targetSurface) {
+        const series = (targetSurface.data.points as unknown[] | undefined)?.length ?? 0;
+        const zoom = readZoom(phrase, series > 0 ? series : 100);
+        if (zoom) {
+          workspace.open({
+            kind: targetSurface.kind,
+            intent: targetSurface.meaning,
+            priority: targetSurface.priority,
+            key: targetSurface.key,
+            data: { ...targetSurface.data, zoom },
+          });
+          workspace.focus(targetSurface.id);
+          layers.enter({ surfaceId: targetSurface.id, label: targetSurface.meaning, zoom });
+          setTrail([...layers.trail]);
+          syncWorkspace();
+          turn.say(`Zoomed into ${targetSurface.meaning}.`);
+          setTranscript([...turn.transcript]);
+          return;
+        }
       }
 
       const intent = readIntent(phrase);
@@ -339,8 +439,13 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       }
       for (const request of intent.open) workspace.open(request);
       if (intent.focus) {
-        const target = workspace.resolve(intent.focus);
-        workspace.focus(target);
+        const chosen = workspace.resolve(intent.focus);
+        workspace.focus(chosen);
+        const surface = chosen ? workspace.surfaces.find((s) => s.id === chosen) : undefined;
+        if (surface) {
+          layers.enter({ surfaceId: surface.id, label: surface.meaning });
+          setTrail([...layers.trail]);
+        }
       }
 
       // §8's layout commands. Read locally and instantly for the same reason
@@ -366,7 +471,7 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       }
       setTranscript([...turn.transcript]);
     },
-    [turn, workspace, syncWorkspace, onHistory, surfaces],
+    [turn, workspace, syncWorkspace, onHistory, surfaces, layers, focusedId, positions],
   );
 
   /**
@@ -394,6 +499,14 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       transcript={transcript}
       layout={layout}
       spokenAbout={focus.ids}
+      trail={trail}
+      onPositions={onPositions}
+      onBreadcrumb={(index) => {
+        const now = layers.to(index);
+        setTrail([...layers.trail]);
+        workspace.focus(now.surfaceId);
+        syncWorkspace();
+      }}
       onCommand={onCommand}
       onTalk={onTalk}
       onStop={onStop}
