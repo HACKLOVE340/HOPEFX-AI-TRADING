@@ -1578,18 +1578,35 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "23",
         "D",
         "Schema-driven panel generation",
-        "staged",
-        "ai.hub.contracts:SurfaceRequest",
-        "The request schema exists; no engine reads it yet.",
+        "live",
+        "frontend/src/hub/panelSchema.ts:describePanel",
+        "The request schema existed and no engine read it. Now a SurfaceRequest "
+        "becomes a descriptor nobody hand-wrote \u2014 and one that CANNOT EXIST "
+        "without an accessible label: describePanel throws on an empty intent "
+        "rather than emitting an unlabelled panel, because a panel that renders "
+        "is a panel somebody ships. It invents no fields: every field listed was "
+        "found in the data, since a schema listing what a kind COULD have "
+        "produces permanent blank rows. An empty table is renderable because "
+        "'no open positions' is an answer; an empty chart is not, because an "
+        "empty frame is indistinguishable from a loading state that never "
+        "resolves.",
     ),
     _c(
         "ui.layout_engine",
         "23",
         "D",
         "Layout engine independent of content",
-        "staged",
-        "frontend/src/hub/workspace.ts",
-        "Independent of content; a single grid strategy so far.",
+        "live",
+        "frontend/src/hub/layoutStrategy.ts:geometryFor",
+        "It was independent of content and had a single geometry: everything "
+        "place() produced was a twelve-column grid. A second strategy sits on "
+        "top rather than inside, because 2,231 existing tests depend on place()'s "
+        "output and rewriting it to add one would put all of them at risk to "
+        "gain one. `grid` expresses the engine's importance ordering as width; "
+        "`stack` expresses the same ordering as sequence, for reading and for "
+        "narrow screens. An unknown strategy is REFUSED \u2014 falling back to grid "
+        "would render a screen nobody asked for, report success, and leave the "
+        "caller never finding out their strategy name was wrong.",
     ),
     _c(
         "ui.animation_engine",
@@ -1683,9 +1700,16 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "23",
         "D",
         "Accessibility and reduced-motion support",
-        "staged",
-        "frontend/src/index.css",
-        "Present in places; must hold for generated panels too.",
+        "live",
+        "frontend/src/hub/panelSchema.ts:PanelA11y",
+        "Generated panels are exactly where accessibility quietly dies: a "
+        "hand-built panel gets a label because somebody typed one, and a "
+        "generated one gets whatever the generator remembered \u2014 usually "
+        "nothing, so a screen reader announces 'region' forty times. The only "
+        "arrangement where it survives is one where the descriptor cannot be "
+        "constructed without a label, a real ARIA role, and a text alternative. "
+        "Reduced motion is a property of the PANEL rather than of the renderer, "
+        "so a component cannot forget to ask.",
     ),
     # §24 — Technical architecture
     _c("stack.frontend", "24", "D", "React/TypeScript preserved and improved", "live", "frontend/src/App.tsx", ""),
@@ -1862,7 +1886,19 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "23",
         "D",
         "Cognitive stream — user-facing explanation distinct from internal trace",
-        note="§3 lists this as existing; it is not in this repository.",
+        "live",
+        "frontend/src/hub/cognitiveStream.ts:CognitiveStream",
+        "\u00a73 listed this as existing and it was not in this repository. They are "
+        "TWO streams and merging them is a leak, not a tidy-up: the trace "
+        "carries prompts, tool names, model identifiers and raw tool output, "
+        "while the explanation is a sentence for somebody deciding whether to "
+        "trust an answer. `forOperator()` returns a shape the trace is not "
+        "reachable from, because returning the object and letting the caller "
+        "pick fields puts the trace one property access away from a render. A "
+        "step with nothing to say reports 'Working.', never the trace \u2014 showing "
+        "it because it is the only text available is the leak arriving by "
+        "convenience rather than by design. Both lists are bounded and the "
+        "number dropped is reported.",
     ),
     _c(
         "legacy.neural_engine",

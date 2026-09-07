@@ -6,24 +6,23 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **228 capabilities · 184 live · 26 staged · 18 planned ·
-210/210 evidence resolved · 0 discrepancies · 81% built.**
+At the time of writing: **228 capabilities · 189 live · 23 staged · 16 planned ·
+212/212 evidence resolved · 0 discrepancies · 83% built.**
 
 Sections finished (nothing planned or staged): §5, §6, §12, §13, §15, §16, §19,
-and all of Track S.
+§22, §23, and both owner tracks — P and S.
 
-**55 rows remain**, across seventeen sections:
+**39 rows remain**, across fifteen sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 4 | 2 | 11 | 4 | 22 | 5 |
-| 7 | 1 | 14 | 3 | 23 | 8 |
-| 8 | 2 | 17 | 6 | 24 | 1 |
-| 9 | 2 | 18 | 5 | 25 | 1 |
-| 10 | 1 | 20 | 1 | 26 | 4 |
-| 21 | 2 | 27 | 7 | | |
+| 27 accessibility | 7 | 21 visualisation | 2 | 10 multi-display | 1 |
+| 17 conversation | 6 | 4 roll-ups | 2 | 14 long-running | 1 |
+| 18 ambient awareness | 5 | 7 idle movement | 1 | 20 war room | 1 |
+| 26 performance | 4 | 8 surface types | 2 | 24 agent runtime | 1 |
+| 11 agents | 3 | 9 scene model | 2 | 25 privacy | 1 |
 
-Seven phases (B through H) cover all of them. §4's two rows are roll-ups and
+Four phases (E through H) cover all of them. §4's two rows are roll-ups and
 land last by construction.
 
 ---
@@ -377,7 +376,7 @@ the same reason, and P1 mirrors it.
 
 ---
 
-## Phase D — §23 component architecture
+## Phase D — §23 component architecture  ✅ DONE
 
 **Depends on:** Phase C's telemetry for resource-aware rendering.
 
@@ -392,9 +391,31 @@ the same reason, and P1 mirrors it.
 | Layout engine independent of content | staged |
 | Accessibility and reduced-motion support (for generated panels) | staged |
 
-**D1 is done** (scene graph, workspace store, virtualisation, frame budget).
-D2 covers the remaining §23 rows: schema-driven panels, a second layout
-strategy, accessibility for generated panels, and the cognitive stream.
+**§23 has nothing planned or staged.** D1 built the scene graph, workspace
+store, virtualisation and frame budget. D2 closed the rest:
+
+- **`panelSchema.ts`** — a `SurfaceRequest` becomes a descriptor nobody
+  hand-wrote, and one that **cannot exist without an accessible label**.
+  `describePanel` throws on an empty intent rather than emitting an unlabelled
+  panel, because a panel that renders is a panel somebody ships. Generated
+  panels are exactly where accessibility dies quietly: a hand-built panel gets
+  a label because somebody typed one; a generated one gets whatever the
+  generator remembered.
+- **An empty table is renderable; an empty chart is not.** "No open positions"
+  is an answer. "No series" is a missing input, and an empty frame is
+  indistinguishable from a loading state that never resolves.
+- **`layoutStrategy.ts`** — the engine had seven layouts and one geometry.
+  `grid` expresses importance as width, `stack` expresses the same ordering as
+  sequence. It sits *on top of* `place()` rather than inside it, because 2,231
+  tests depend on that function and rewriting it to gain one strategy would
+  risk all of them. An unknown strategy is refused, not silently gridded.
+- **`cognitiveStream.ts`** — §3 listed this as existing and it did not.
+  They are two streams and merging them is a **leak**: the trace carries
+  prompts, tool names and raw tool output; the explanation is a sentence for
+  somebody deciding whether to trust an answer. `forOperator()` returns a shape
+  the trace is not reachable from — returning the object and letting the caller
+  pick fields puts the trace one property access away from a render. A step
+  with nothing to say reports "Working.", never the trace.
 
 **Also closes:** §8 surface types + priority tiers, §9 scene model + panel
 registry, §21 representation selection, §10 multi-display console.
