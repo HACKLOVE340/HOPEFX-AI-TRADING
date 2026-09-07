@@ -164,7 +164,7 @@ behaviour and was already built.
 
 ---
 
-## Phase S5 — the patch generator, as its own decision  ← NEXT
+## Phase S5 — the patch generator, as its own decision  ✅ DONE
 
 **Owner decision, 2026-09-07.** S4 deliberately shipped without one: *"turning
 the schedule on and letting a model author code unattended are two different
@@ -186,28 +186,41 @@ distinct approvers, one a superadmin, before it becomes a pull request a human
 merges. The model gains the ability to *write a suggestion*. It gains nothing
 else.
 
-**The rules this phase must not violate:**
+**Built:** `ai/improve/patcher.py`, wired through
+`core/startup_factories.py:init_ai_improvement_cycle`. All five rules held:
 
-1. **Its input is untrusted.** The file it is asked to patch is repository text,
-   and a comment or a docstring in it can carry an instruction. Everything
-   reaching the model goes through `ai/guardrails/input.py:fence`, and the
-   finding's own `as_prompt_data()` already does this.
-2. **Its output is untrusted too.** `ai/guardrails/output.py:scan_output` runs
-   on what comes back, before it reaches the proposal gates — a model that
-   echoes a credential from the file it read must not put it in a queue entry.
-3. **It never sees a protected file.** S4 already refuses to hand the generator
-   a finding whose path is in the vault. This phase must not add a second path
-   that does.
-4. **Separately enabled.** A second switch, not the schedule's. `AI_IMPROVE_CYCLE_HOURS`
-   turns the walk on; the generator needs its own, so the decision the owner
-   drew a line under stays two decisions in the code as well as in prose.
-5. **A refusal is a result.** A model that declines, times out, returns prose
-   instead of code, or blows the budget is recorded against that finding in the
-   cycle report — never a silent skip.
+1. **Input untrusted.** The whole file AND the snippet are fenced separately
+   through `ai/guardrails/input.py` — the finding pointed at four lines and the
+   model is shown all of them, so any line can carry an instruction. Our
+   instruction comes first, the fenced blocks after: a fence placed before the
+   instruction invites the model to read the instruction as part of the data.
+2. **Output untrusted.** `scan_output` runs before the text is returned, not
+   after the proposal is built. A refusal never logs the text — the whole point
+   is that it may carry the secret.
+3. **Never a protected file.** Checked here as well as in the cycle. A second
+   door into the same room is how the first one stops mattering.
+4. **A second switch.** `AI_IMPROVE_PATCHER`, off by default, and a typo fails
+   towards *disabled*. A test asserts that turning the schedule on does not turn
+   the generator on.
+5. **Refusals are results.** Prose, unparseable code, an unchanged file, a
+   gateway failure, a guardrail refusal — each recorded against its finding.
+
+**A file too large is refused, never truncated.** Truncating asks a model to
+rewrite a file it only half saw, and the answer would look complete.
+
+**Two defects the tests caught in my own code:** `extract_source` was stripping
+the file's final newline, which would have put a diff on the last line of every
+file it ever touched; and my "file too large" test picked a vault-protected
+path, so it was passing for the wrong reason — the size gate never ran.
+
+**Nothing else changed.** A generated patch passes the same five gates in
+`ai/improve/proposal.py` and needs the same two approvers, one a superadmin,
+before it becomes a pull request a human merges. The model gained the ability
+to write a suggestion. It gained nothing else.
 
 ---
 
-## Phase C — §22 telemetry honesty  ← NEXT (after S5)
+## Phase C — §22 telemetry honesty  ← NEXT
 
 **Unblocks:** §23 resource-aware rendering, §26 pause-under-load.
 

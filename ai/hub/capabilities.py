@@ -1917,6 +1917,29 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "paying a model to write a patch that cannot be applied is money for "
         "nothing.",
     ),
+    _c(
+        "improve.patch_generator",
+        "S",
+        "C",
+        "A model authoring candidate patches, behind its own switch",
+        "live",
+        "ai.improve.patcher:GatewayPatcher",
+        "Owner decision, 2026-09-07, taken separately from turning the schedule "
+        "on, because those are two decisions. AI_IMPROVE_PATCHER is its own "
+        "variable and off by default; a typo fails towards DISABLED. The model "
+        "gains the ability to write a suggestion and nothing else: what comes "
+        "back passes the same five gates in ai/improve/proposal.py and needs the "
+        "same two approvers, one a superadmin. Both directions are untrusted \u2014 "
+        "the whole file and the snippet are fenced separately on the way in, "
+        "and scan_output runs on the way out BEFORE the text is returned, so a "
+        "model echoing a credential out of the file it read cannot put it in a "
+        "queue entry. A file too large to send is REFUSED, never truncated: "
+        "truncating asks a model to rewrite a file it only half saw, and the "
+        "answer would look complete. Prose, unparseable code, an unchanged "
+        "file, a gateway failure and a guardrail refusal are each recorded "
+        "against the finding \u2014 a finding that quietly vanished looks exactly "
+        "like a finding that was fixed.",
+    ),
 )
 
 

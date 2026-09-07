@@ -715,21 +715,29 @@ async def init_ai_improvement_cycle(s: Any) -> Any:
     nobody chose, and the mistake it protects against is a typo being read as
     "run continuously".
 
-    **No patch generator is wired here.** The cycle walks, reports findings and
-    files nothing until one is installed, and its report says exactly that
-    rather than reading as a clean bill. Wiring a model to write patches
-    unattended is a separate decision from turning the schedule on, and it
-    should be made separately.
+    **The patch generator is a SECOND switch.** `AI_IMPROVE_CYCLE_HOURS` starts
+    the walk; `AI_IMPROVE_PATCHER` lets a model author candidate patches. They
+    are deliberately separate, because turning the schedule on and letting a
+    model write code unattended are two decisions, and one variable for both
+    would re-merge them where nobody would notice. Without the second, the cycle
+    walks, reports findings, files nothing, and says exactly that rather than
+    reading as a clean bill.
+
+    A generated patch gains nothing from being generated: it passes the same
+    five gates in `ai/improve/proposal.py` and needs the same two approvers, one
+    a superadmin.
 
     Runs on a background task like the awareness watchers, so a slow walk never
     delays the trading engine.
     """
-    from ai.improve import cycle
+    from ai.improve import cycle, patcher
     from api.admin import log_activity
 
     interval = cycle.interval_s()
     if interval is None:
         return {"started": False, "reason": "AI_IMPROVE_CYCLE_HOURS is not set to a positive number"}
+
+    generator = patcher.build_patcher()
 
     redis = None
     try:
@@ -739,14 +747,15 @@ async def init_ai_improvement_cycle(s: Any) -> Any:
     except Exception as exc:
         logger.debug("init_ai_improvement_cycle: Redis unavailable: %s", exc)
 
-    task = asyncio.create_task(cycle.run_forever(interval, redis=redis))
+    task = asyncio.create_task(cycle.run_forever(interval, redis=redis, patcher=generator))
     task.add_done_callback(lambda _t: None)
     s.ai_improvement_cycle = task
     log_activity(
         f"AI self-improvement cycle scheduled every {interval / 3600:.1f}h \u2014 "
-        f"walks and files proposals for two-approver review; halt with `set {cycle.HALT_KEY} 1`"
+        f"{'authoring patches with a model' if generator else 'reporting findings only'}, "
+        f"filed for two-approver review; halt with `set {cycle.HALT_KEY} 1`"
     )
-    return {"started": True, "interval_s": interval, "task": task}
+    return {"started": True, "interval_s": interval, "patcher": generator is not None, "task": task}
 
 
 async def init_ai_awareness(s: Any) -> Any:
