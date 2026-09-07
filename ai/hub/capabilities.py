@@ -282,7 +282,17 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "Same digits, ordinary words. Asserted across all ten registers: a mode that rounded a drawdown to suit its register would be a mode that lies.",
     ),
     # §7 — Holographic presence system
-    _c("presence.head", "7", "A", "Professional holographic head as the default presence"),
+    _c(
+        "presence.head",
+        "7",
+        "A",
+        "Professional holographic head as the default presence",
+        "live",
+        "frontend/src/hub/PresenceCore.tsx",
+        "Drawn inside the rings, not instead of them \u2014 the rings carry "
+        "measurements and a face replacing them would be decoration replacing "
+        "data. Abstract rather than rendered: a human face here reads as a mascot.",
+    ),
     _c(
         "presence.stage",
         "7",
@@ -319,16 +329,51 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "frontend/src/hub/presence.ts",
         "Eight states, derived from real inputs, each with a reason.",
     ),
-    _c("presence.lip_sync", "7", "A", "Lip synchronisation where the voice pipeline supports it"),
+    _c(
+        "presence.lip_sync",
+        "7",
+        "A",
+        "Lip synchronisation where the voice pipeline supports it",
+        "live",
+        "frontend/src/hub/head.ts:mouthFor",
+        "Driven by the character actually being spoken, from a real engine "
+        "index. Unmeasured holds a steady shape and reports measured=false; a "
+        "sine wave would play identically for a word and a briefing, and keep "
+        "playing after synthesis died.",
+    ),
     _c(
         "presence.particle_field",
         "7",
         "A",
         "Particle field, used with restraint",
-        note="§3 lists this as existing; it is not in this repository. Tracked as work.",
+        "live",
+        "frontend/src/hub/head.ts:particleField",
+        "Restraint enforced in code, not left to the drawing: none under "
+        "reduced motion, none when offline, and the count tracks measured "
+        "intensity so a quiet system looks quiet.",
     ),
-    _c("presence.spatial_movement", "7", "A", "Move toward the panel being discussed"),
-    _c("presence.gestures", "7", "A", "Pointing, highlighting and gesture overlays"),
+    _c(
+        "presence.spatial_movement",
+        "7",
+        "A",
+        "Move toward the panel being discussed",
+        "live",
+        "frontend/src/hub/head.ts:headOffset",
+        "A small lean, capped at 6% of the core \u2014 a presence that slides "
+        "across the screen takes the eye off the panel it is pointing at. Zero "
+        "under reduced motion.",
+    ),
+    _c(
+        "presence.gestures",
+        "7",
+        "A",
+        "Pointing, highlighting and gesture overlays",
+        "live",
+        "frontend/src/hub/head.ts:gazeToward",
+        "Eyes track the panel and a dashed ray points to it \u2014 only from a "
+        "measured rect. An unmeasured one yields null and no gesture at all, "
+        "rather than a confident point at the origin.",
+    ),
     _c("presence.multi_projection", "7", "A", "Minimise, reposition, or split into multiple projections"),
     _c("presence.transformations", "7", "A", "Contextual transformation into scientific representations"),
     _c("presence.xr_abstraction", "7", "A", "Renderer abstraction for 3D, AR, VR and holographic output"),

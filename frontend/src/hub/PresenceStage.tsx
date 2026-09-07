@@ -117,6 +117,10 @@ export interface PresenceStageProps {
    */
   modeName?: string;
   accent?: string;
+  /** §7 lip sync — a real character index or playback position, or null. */
+  utterance?: string;
+  speechProgress?: number | null;
+  speaking?: boolean;
   onCommand: (phrase: string) => void;
   onTalk: () => void;
   onStop: () => void;
@@ -129,6 +133,7 @@ export interface PresenceStageProps {
 export const PresenceStage: React.FC<PresenceStageProps> = ({
   presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout, spokenAbout = [],
   trail = [], onBreadcrumb, onPositions, modeName, accent,
+  utterance = '', speechProgress = null, speaking = false,
   onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onExit,
 }) => {
   const [typed, setTyped] = useState('');
@@ -315,7 +320,22 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
         }}
       >
         <div style={{ display: 'grid', justifyItems: 'center', gap: 14, minWidth: 0 }}>
-          <PresenceCore presence={presence} size={hasSurfaces ? 220 : 300} />
+          <PresenceCore
+            presence={presence}
+            size={hasSurfaces ? 220 : 300}
+            utterance={utterance}
+            speechProgress={speechProgress}
+            speaking={speaking}
+            // §7: the head turns toward the panel being discussed. Measured
+            // here, from the DOM, so an unlaid-out panel yields null and the
+            // head faces forward rather than pointing at the origin.
+            targetRect={(() => {
+              const id = spokenAbout[0];
+              if (!id || !planeRef.current) return null;
+              const el = planeRef.current.querySelector(`[data-surface-id="${id}"]`);
+              return el ? el.getBoundingClientRect() : null;
+            })()}
+          />
           {lastFew.length > 0 && (
             <ol
               aria-label="Recent conversation"

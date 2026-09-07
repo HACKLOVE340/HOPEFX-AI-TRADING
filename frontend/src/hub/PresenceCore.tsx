@@ -34,6 +34,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import type { Presence, PresenceState, PresenceTone } from './presence';
+import { gazeToward, headOffset, mouthFor, particleField, type Gaze } from './head';
 
 /** Colour per tone, from the platform's own palette (COLOR in AICore.tsx). */
 const TONE: Record<PresenceTone, string> = {
@@ -69,10 +70,32 @@ export interface PresenceCoreProps {
   /** Overrides the media query. The review surface and tests set it directly. */
   reducedMotion?: boolean;
   size?: number;
+  /**
+   * What is being said right now, and how far through synthesis has got (§7
+   * lip sync). Progress is a real character index or a playback position;
+   * `null` means nobody measured it, and the mouth then holds a steady shape
+   * rather than animating from a clock.
+   */
+  utterance?: string;
+  speechProgress?: number | null;
+  speaking?: boolean;
+  /**
+   * Measured rect of the panel being discussed (§7 "move toward the panel being
+   * discussed", "pointing overlays"). Null when nothing is, or when it has no
+   * measured rect — the head then faces forward and makes no gesture, rather
+   * than pointing confidently at the origin.
+   */
+  targetRect?: { x: number; y: number; width: number; height: number } | null;
 }
 
-export const PresenceCore: React.FC<PresenceCoreProps> = ({ presence, reducedMotion, size = 300 }) => {
+export const PresenceCore: React.FC<PresenceCoreProps> = ({
+  presence, reducedMotion, size = 300,
+  utterance = '', speechProgress = null, speaking = false, targetRect = null,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Read every frame without re-running the animation effect.
+  const voice = useRef({ utterance, speechProgress, speaking, targetRect });
+  voice.current = { utterance, speechProgress, speaking, targetRect };
   // A ref, not state: the animation reads the newest presence every frame
   // without the frame loop being a dependency of a re-render.
   const latest = useRef(presence);
@@ -103,6 +126,27 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({ presence, reducedMot
 
       if (!still && p.state !== 'offline') spin += dt * 0.0006 * (0.4 + p.intensity * 1.6);
       ctx.clearRect(0, 0, S, S);
+
+      const v = voice.current;
+      const coreRect = canvas.getBoundingClientRect();
+      const gaze: Gaze | null = gazeToward(coreRect, v.targetRect ?? null);
+      const lean = headOffset(gaze, S, still);
+
+      // §7 particle field, "used with restraint" — none under reduced motion,
+      // none when offline, and the count tracks measured intensity so a quiet
+      // system looks quiet.
+      for (const particle of particleField(now, {
+        intensity: p.intensity,
+        reducedMotion: still,
+        offline: p.state === 'offline',
+      })) {
+        ctx.globalAlpha = particle.alpha;
+        ctx.fillStyle = hue;
+        ctx.beginPath();
+        ctx.arc(C + particle.x * C * 0.9, C + particle.y * C * 0.9, particle.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
 
       // Outer — activity. Stops dead when offline, which is the honest reading:
       // there is nothing arriving to rotate for.
@@ -159,6 +203,67 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({ presence, reducedMot
       ctx.beginPath();
       ctx.arc(C, C, r, 0, Math.PI * 2);
       ctx.stroke();
+
+      // §7 — the head. Drawn inside the core rather than instead of it: the
+      // rings carry measurements (activity, risk headroom) and a face that
+      // replaced them would be a decoration replacing data.
+      const mouth = mouthFor(v.utterance, v.speechProgress, v.speaking);
+      const hx = C + lean.x;
+      const hy = C + lean.y;
+      const hr = r * 0.62;
+
+      ctx.save();
+      ctx.translate(hx, hy);
+      ctx.strokeStyle = `rgba(115,167,255,${0.55 + p.intensity * 0.3})`;
+      ctx.lineWidth = 2;
+
+      // Skull — an ellipse, deliberately abstract. A rendered human face on a
+      // trading platform reads as a mascot; §7 asks for "professional".
+      ctx.beginPath();
+      ctx.ellipse(0, -hr * 0.06, hr * 0.62, hr * 0.82, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Eyes. They track the panel being discussed when one is measured, and
+      // sit centred when none is.
+      const eyeShift = gaze ? gaze.x * hr * 0.12 : 0;
+      const eyeDrop = gaze ? gaze.y * hr * 0.1 : 0;
+      ctx.fillStyle = hue;
+      ctx.globalAlpha = 0.85;
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(side * hr * 0.26 + eyeShift, -hr * 0.16 + eyeDrop, hr * 0.09, hr * 0.05, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Mouth. Height is the openness from `head.ts` — the character actually
+      // being spoken, where the engine reported one.
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = hue;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.ellipse(0, hr * 0.4, hr * 0.22, Math.max(0.6, mouth.openness * hr * 0.2), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // §7 pointing overlay: a ray from the core toward the panel being
+      // discussed. Only when a rect was measured — see `gazeToward`.
+      if (gaze && !still && gaze.reach > 0.02) {
+        ctx.save();
+        ctx.translate(C, C);
+        ctx.strokeStyle = hue;
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 8]);
+        ctx.lineDashOffset = -now * 0.02;
+        const dir = Math.atan2(gaze.y, gaze.x);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(dir) * r * 1.05, Math.sin(dir) * r * 1.05);
+        ctx.lineTo(Math.cos(dir) * C * 0.97, Math.sin(dir) * C * 0.97);
+        ctx.stroke();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+      }
 
       if (!still) raf = requestAnimationFrame(draw);
     };
