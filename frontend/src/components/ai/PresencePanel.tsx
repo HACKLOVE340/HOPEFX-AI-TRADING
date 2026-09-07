@@ -33,8 +33,9 @@ import { SnapshotStore, capacityFor, readHistoryIntent } from '../../hub/history
 import { spokenFocus } from '../../hub/reference';
 import { asksForSummary, summarise } from '../../hub/summary';
 import { LayerStack, readNavigation, readZoom, type Layer, type Position } from '../../hub/spatial';
+import { resolveMode, readMode, type ModeId } from '../../hub/modes';
 import { useViewportWidth } from '../../hub/useViewportWidth';
-import { useStore, selectAiJobs } from '../../store';
+import { useStore, selectAiJobs, selectKillSwitch } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
 
 const COLOR = {
@@ -83,6 +84,21 @@ export interface PresencePanelProps {
 
 export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable, ready = true, onExit }) => {
   const wsStatus = useStore((s) => s.wsStatus);
+  /**
+   * The one signal that must reach the presence.
+   *
+   * `alert` was hard-coded to null here with a note deferring it to Phase 4,
+   * which made `alerting` unreachable in the running app — and with it the
+   * emergency mode promotion, the alert tone and the interrupting reason. A
+   * control that cannot fire is not a control (F176), and this one guards the
+   * kill switch.
+   *
+   * Read through `selectKillSwitch`, the single source the S2-01 audit
+   * established, rather than from `riskSnapshot` directly: that selector is a
+   * deliberate OR across two sources so a safety indicator can over-report but
+   * never under-report.
+   */
+  const killSwitch = useStore(selectKillSwitch);
   const feedStale = useStore((s) => s.feedStale);
   const jobs = useStore(selectAiJobs);
   const voice = useVoice();
@@ -110,7 +126,12 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
     // for a number nobody has measured is exactly the decorative value §22
     // forbids. Phase 4 connects it.
     riskHeadroom: null,
-    alert: null,
+    alert: killSwitch
+      ? {
+          severity: 'critical' as const,
+          text: 'The kill switch is tripped. Trading is halted until it is cleared.',
+        }
+      : null,
     providersReachable: providersReachable ?? 1,
   };
 
@@ -193,7 +214,22 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
    * itself under someone who told it not to.
    */
   const [namedLayout, setNamedLayout] = useState<LayoutName | null>(null);
-  const layout = namedLayout ?? suggestLayout(surfaces, focusedId);
+
+  /**
+   * §6 presentation mode. A preference — unless something is wrong.
+   *
+   * `resolveMode` promotes emergency whenever the presence is alerting, so a
+   * kill switch that trips during an executive briefing is not kept quiet by
+   * the briefing's calm register. Selecting a mode is a preference; an alert is
+   * a fact.
+   */
+  const [chosenMode, setChosenMode] = useState<ModeId | null>(null);
+  const mode = resolveMode(chosenMode, presence.state);
+
+  // The mode's layout is a default, not an override: naming a layout out loud
+  // has to win over the one the mode came with, or "compare these" stops
+  // working the moment somebody is in mission control.
+  const layout = namedLayout ?? mode.layout ?? suggestLayout(surfaces, focusedId);
 
   /**
    * §9 layer navigation. One stack for the life of the panel, mirrored into
@@ -236,10 +272,13 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
    */
   const viewportWidth = useViewportWidth();
   useEffect(() => {
-    workspace.setCapacity(capacityFor(viewportWidth));
+    // The smaller of the two ceilings. A mode asking for twenty surfaces does
+    // not get them on a phone, and a phone does not get four when the operator
+    // asked for minimal focus.
+    workspace.setCapacity(Math.min(mode.density, capacityFor(viewportWidth)));
     setSurfaces([...workspace.surfaces]);
     setFocusedId(workspace.focused);
-  }, [viewportWidth, workspace]);
+  }, [viewportWidth, workspace, mode.density]);
 
   /**
    * Keep an automatic snapshot of the plane, at most once a minute.
@@ -373,6 +412,20 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
         return;
       }
 
+      // §6: change the register the AI is speaking in, and what it puts up.
+      const namedMode = readMode(phrase);
+      if (namedMode) {
+        setChosenMode(namedMode === 'professional_core' ? null : namedMode);
+        const entering = resolveMode(namedMode, presence.state);
+        setNamedLayout(null);
+        workspace.setCapacity(Math.min(entering.density, capacityFor(viewportWidth)));
+        for (const request of entering.opens) workspace.open(request);
+        syncWorkspace();
+        turn.say(entering.greeting);
+        setTranscript([...turn.transcript]);
+        return;
+      }
+
       // §9 navigation: "go back", "back to the top".
       const nav = readNavigation(phrase);
       if (nav) {
@@ -471,7 +524,8 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       }
       setTranscript([...turn.transcript]);
     },
-    [turn, workspace, syncWorkspace, onHistory, surfaces, layers, focusedId, positions],
+    [turn, workspace, syncWorkspace, onHistory, surfaces, layers, focusedId, positions,
+     presence.state, viewportWidth],
   );
 
   /**
@@ -500,6 +554,8 @@ export const PresencePanel: React.FC<PresencePanelProps> = ({ providersReachable
       layout={layout}
       spokenAbout={focus.ids}
       trail={trail}
+      modeName={mode.name}
+      accent={mode.accent}
       onPositions={onPositions}
       onBreadcrumb={(index) => {
         const now = layers.to(index);

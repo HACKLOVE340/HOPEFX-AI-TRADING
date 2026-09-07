@@ -108,6 +108,15 @@ export interface PresenceStageProps {
    * operator at the wrong corner of their own screen.
    */
   onPositions?: (positions: Record<string, Position>) => void;
+  /**
+   * §6: which register the AI is speaking in. Named on screen, always.
+   *
+   * A mode that changes how much scaffolding goes round a number, without
+   * saying which mode is in force, leaves an operator unable to tell whether
+   * "you have used most of your room" is the whole story.
+   */
+  modeName?: string;
+  accent?: string;
   onCommand: (phrase: string) => void;
   onTalk: () => void;
   onStop: () => void;
@@ -119,7 +128,7 @@ export interface PresenceStageProps {
 
 export const PresenceStage: React.FC<PresenceStageProps> = ({
   presence, surfaces, focusedId, listening, muted, sttSupported, transcript, layout, spokenAbout = [],
-  trail = [], onBreadcrumb, onPositions,
+  trail = [], onBreadcrumb, onPositions, modeName, accent,
   onCommand, onTalk, onStop, onToggleMute, onCloseSurface, onPinSurface, onExit,
 }) => {
   const [typed, setTyped] = useState('');
@@ -273,6 +282,9 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {modeName && (
+            <span style={{ ...label, color: accent ?? C.quiet }}>{modeName}</span>
+          )}
           <span style={label}>
             {surfaces.length ? `${layout.replace('_', ' ')} · ${surfaces.length} on the plane` : 'clear'}
             {hidden > 0 && ` · ${hidden} hidden`}
