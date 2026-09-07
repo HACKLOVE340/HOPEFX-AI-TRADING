@@ -6,20 +6,19 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 216 live · 11 staged · 3 planned ·
-227/227 evidence resolved · 0 discrepancies · 94% built.**
+At the time of writing: **230 capabilities · 219 live · 8 staged · 3 planned ·
+227/227 evidence resolved · 0 discrepancies · 95% built.**
 
-Sections finished (nothing planned or staged): §5, §6, §7, §11, §12, §13, §15,
-§16, §17, §19, §22, §23, §25, and both owner tracks — P and S.
+Sections finished (nothing planned or staged): §5, §6, §7, §8, §11, §12, §13,
+§15, §16, §17, §19, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**14 rows remain**, across nine sections:
+**11 rows remain**, across seven sections:
 
 | § | left | § | left | § | left |
 |---|---:|---|---:|---|---:|
-| 18 ambient awareness | 2 | 4 roll-ups | 2 | 14 long-running | 1 |
-| 21 visualisation | 2 | 8 surface types | 1 | 20 war room | 1 |
-| 27 accessibility | 2 | 10 multi-display | 1 | 24 agent runtime | 1 |
-| 26 performance | 1 | | | | |
+| 18 ambient awareness | 2 | 4 roll-ups | 2 | 20 war room | 1 |
+| 21 visualisation | 2 | 10 multi-display | 1 | 24 agent runtime | 1 |
+| 14 long-running | 1 | 26 performance | 1 | | |
 
 Phase H covers all of them. §4's two rows are roll-ups and land last by
 construction: they become live when the layers beneath them are, so claiming
@@ -895,9 +894,87 @@ closing the inconsistency means shrinking it, and leaving it stale fails.
 
 ---
 
+## Phase H4 — the three rows my own notes said nothing consumed  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §27 High contrast option | staged | **live** | `hub/useContrastMode.ts:useContrastMode` |
+| §27 Touch and mouse support | staged | **live** | `hub/SurfaceView.tsx:affordanceVisibility` |
+| §8 Surface types | staged | **live** | `hub/SurfaceView.tsx:RENDERED_KINDS` |
+
+Two of these were staged in Phase G with notes I wrote in capitals — "NOTHING
+RENDERS IT YET", "NO COMPONENT CALLS IT YET". Refusing to claim them was right:
+a contract whose evidence resolves and whose behaviour never runs is F176 with a
+passing test. But a refusal recorded twice and never acted on is a slower
+version of the same omission.
+
+### §8 was never a missing renderer
+
+Six of §8's twelve kinds did not draw, and the obvious reading was that six
+renderers were missing. Measured, the blocker was one branch: `surfaceData`'s
+`default` **discarded caller-supplied data entirely**, so an AI opening a
+document surface *with the document in it* got "nothing is connected to a
+document surface yet". The panel was real, the content had arrived, and the
+screen said neither had happened.
+
+Content is now passed through with **every shape checked** — `data` reaches
+there from a model, and a string where rows belong would meet a renderer that
+maps over it, taking the whole plane down from inside one panel.
+
+`camera` draws its **consent state** rather than "this deployment cannot draw a
+camera": §25 already knew the answer, and the panel was describing a missing
+renderer instead of it. It never opens a stream — a panel that requested the
+camera because it was rendered would make *opening a panel* the consent.
+
+`map` and `simulation` stay unrendered, and `UNRENDERED_KINDS` asserts it so the
+set cannot drift. There is no tile source and no simulator, and a map drawn from
+nothing is read as a map.
+
+### High contrast reaches every leaf, or it reaches none
+
+The panel publishes the mode's palette as CSS custom properties. The
+alternative was threading a palette through `Rows`, `Headlines`, `Prose`,
+`Code` and six more — which works until somebody adds the eleventh and forgets,
+and then one element stays at standard contrast in high-contrast mode and
+nothing says so.
+
+**The first version of the test passed while the feature was broken.** It
+asserted `data-contrast="high"` on the panel, which proves the media query was
+read and nothing else: pinning the palette to `standard` while still reporting
+"high" passed it. Found by injecting exactly that defect. The test now asserts
+the rendered custom properties carry the high tokens — measured, not told,
+which is the distinction the whole registry is built on.
+
+### The touch defect was the readout, not the tooltip
+
+First attempt drew each heatmap cell's label inside the cell. Two things
+killed it, and both are worth recording:
+
+* the labels are prose ("0.8% peak move"), which does not fit a 26px mark and
+  duplicated the readout that already sits below the grid;
+* **no single ink clears 4.5:1 across the intensity ramp** — white measures
+  8.10 on the darkest step and 1.79 on the lightest, and the dark ink is the
+  reverse. A per-step ink function was written and measured, then deleted with
+  the label it served, because an exported measured function nobody calls is
+  the dead control this phase exists to remove.
+
+The actual defect was simpler and worse: the readout is opened by `mouseenter`
+or keyboard focus. `mouseenter` does not fire on touch, and iOS Safari does not
+reliably focus a button on tap — so the accessible twin this file already
+shipped was reachable by mouse and by keyboard and **by nothing a tablet
+operator could do**. A tap now opens it.
+
+The affordance still starts at `unknown`, which counts as unable to hover.
+Guessing mouse is how a hover-only affordance ships: the guess is invisible and
+the people it fails are the ones least able to work round it. A separate test
+asserts the state **before any pointer event**, because all three of the others
+fire one first and every one of them passed with the guess in place.
+
+---
+
 ## Phase H — the remainder
 
-Fourteen rows, nine sections. Regenerated from the registry rather than
+Eleven rows, seven sections. Regenerated from the registry rather than
 carried forward: the earlier version of this table still listed §7 and §25 rows
 that Phases E and F made live, which is the shape of stale plan a reader trusts.
 
@@ -908,9 +985,6 @@ that Phases E and F made live, which is the shape of stale plan a reader trusts.
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
 | 21 | Choose the representation that suits the information | staged |
-| 27 | High contrast option | staged |
-| 27 | Touch and mouse support | staged |
-| 8 | Charts, images, video, documents, tables, maps, terminals, code, camera, news, research, simulations | staged |
 | 10 | Multi-display console | staged |
 | 14 | Long-running research jobs | staged |
 | 20 | Market war room generated on demand | planned |

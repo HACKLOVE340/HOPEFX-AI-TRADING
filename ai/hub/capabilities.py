@@ -465,13 +465,16 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "8",
         "D",
         "Charts, images, video, documents, tables, maps, terminals, code, camera, news, research, simulations",
-        "staged",
-        "frontend/src/hub/SurfaceView.tsx:RENDERERS",
-        "MEASURED, not remembered: 12 of the 18 declared kinds render, and 6 of §8's own 12 do — "
-        "chart, image, video, table, terminal, news. document, map, code, camera, research and "
-        "simulation do not, and SurfaceView says so on screen rather than drawing an empty panel. "
-        "The previous note said 'none render yet', which was wrong in the direction that hides "
-        "finished work; this one names the six that are left.",
+        "live",
+        "frontend/src/hub/SurfaceView.tsx:RENDERED_KINDS",
+        "Ten of §8's twelve render. The blocker was not a missing renderer: surfaceData's default "
+        "branch DISCARDED caller-supplied data, so an AI opening a document surface with the document "
+        "in it got 'nothing is connected to a document surface yet'. Content is now passed through "
+        "with every shape checked, because data reaches there from a model and a string where rows "
+        "belong crashes a panel and takes the plane with it. camera draws its consent state rather "
+        "than 'cannot draw a camera' — §25 already knew the answer. map and simulation stay "
+        "unrendered and UNRENDERED_KINDS asserts it: there is no tile source and no simulator, and a "
+        "map drawn from nothing is read as a map.",
     ),
     _c(
         "workspace.concurrent_surfaces",
@@ -2097,11 +2100,13 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "27",
         "D",
         "High contrast option",
-        "staged",
-        "frontend/src/hub/a11yContrast.ts:prefersHighContrast",
-        "The AAA palette is measured (every token clears 7:1 on all three surfaces, re-measured each "
-        "test run) and the media query is read. NOTHING RENDERS IT YET — no component asks for the "
-        "high palette, so this is a contract, not a mode an operator can turn on.",
+        "live",
+        "frontend/src/hub/useContrastMode.ts:useContrastMode",
+        "SurfaceView reads the preference and publishes the palette as CSS custom properties, so the "
+        "mode reaches every leaf at once rather than being threaded through eleven components and "
+        "forgotten at the twelfth. Measured, not asserted: the suite checks the high tokens clear 7:1 "
+        "AND that the rendered panel actually carries them — pinning the palette to standard while "
+        "still reporting data-contrast=high passed an earlier version of that test.",
     ),
     _c(
         "a11y.responsive",
@@ -2119,11 +2124,14 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "27",
         "D",
         "Touch and mouse support",
-        "staged",
-        "frontend/src/hub/a11yPointer.ts:affordanceVisibility",
-        "The policy exists and is tested — an unreadable pointer is treated as unable to hover, so an "
-        "affordance stays visible rather than vanishing on a tablet. NO COMPONENT CALLS IT YET; the hub "
-        "has no hover-only affordance today, and adding one to justify the row would be backwards.",
+        "live",
+        "frontend/src/hub/SurfaceView.tsx:affordanceVisibility",
+        "The heatmap's mark labels were a `title` tooltip, which on a tablet never appears — a sighted "
+        "touch user got the colour and nothing else, which is §27's 'never rely on colour alone' "
+        "failing silently. The panel reads the pointer in use and draws the label permanently for "
+        "anything that cannot hover, INCLUDING before any pointer has been seen. No single ink clears "
+        "4.5:1 across the intensity ramp, so vizPalette.inkForStep picks per step with the "
+        "measurements recorded.",
     ),
     _c(
         "a11y.focus_states",

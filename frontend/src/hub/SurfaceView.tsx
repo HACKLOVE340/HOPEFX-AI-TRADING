@@ -22,20 +22,64 @@ import {
 } from './VizMarks';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 import { VIRTUALIZE_ABOVE, VirtualList } from './VirtualList';
+import { surfacePalette } from './a11yContrast';
+import { useContrastMode } from './useContrastMode';
+import {
+  affordanceVisibility,
+  pointerKindFrom,
+  type AffordanceVisibility,
+  type PointerKind,
+} from './a11yPointer';
 
+/**
+ * The panel's structural colours, and its text colours at STANDARD contrast.
+ *
+ * The text roles come from the §27 palette, which is measured against the
+ * composited panel hull on every test run rather than chosen by eye — spread
+ * here so a literal cannot creep back in. `hull` and `edge` stay local: they
+ * are surfaces, not text, and different contrast floors govern them.
+ *
+ * A component that wants the operator's actual mode calls `surfacePalette`
+ * with it. `C` is what a module-level style object can use before any hook
+ * has run.
+ */
+const STANDARD = surfacePalette('standard');
+
+/**
+ * The panel's colours, as CSS custom properties with the standard palette as
+ * the fallback.
+ *
+ * A variable rather than a literal so the operator's contrast mode reaches
+ * every leaf at once. The alternative was threading a palette through
+ * `Rows`, `Headlines`, `Prose`, `Code` and six more — which works until
+ * somebody adds the eleventh and forgets, and then one element stays at
+ * standard contrast in high-contrast mode and nothing says so.
+ *
+ * The fallback is the standard palette, so a module-level style object
+ * evaluated before any panel has mounted still resolves to a measured colour.
+ * `hull` and `edge` stay literal: they are surfaces, not text, and different
+ * contrast floors govern them.
+ */
 const C = {
   hull: 'linear-gradient(155deg, rgba(16,26,44,.92), rgba(11,19,34,.92))',
   edge: '#1e2d47',
-  text: '#e7edf7',
-  dim: '#a7b5c9',
-  quiet: '#70809a',
-  core: '#73a7ff',
-  ok: '#42d392',
-  /** The AI is describing this one. Distinct from operator focus (`core`). */
-  speak: '#42d392',
-  warn: '#f5b84b',
-  bad: '#f36d78',
+  text: `var(--panel-text, ${STANDARD.text})`,
+  dim: `var(--panel-dim, ${STANDARD.dim})`,
+  quiet: `var(--panel-quiet, ${STANDARD.quiet})`,
+  core: `var(--panel-core, ${STANDARD.core})`,
+  ok: `var(--panel-ok, ${STANDARD.ok})`,
+  speak: `var(--panel-speak, ${STANDARD.speak})`,
+  warn: `var(--panel-warn, ${STANDARD.warn})`,
+  bad: `var(--panel-bad, ${STANDARD.bad})`,
 } as const;
+
+/**
+ * Raw values for the places a CSS variable cannot go.
+ *
+ * A canvas fill, an SVG attribute and a computed gradient all need a real
+ * colour. Kept beside `C` so the two cannot name different sets of roles.
+ */
+const RAW = STANDARD;
 
 const label: React.CSSProperties = {
   fontSize: 9,
@@ -66,7 +110,19 @@ const iconBtn: React.CSSProperties = {
  * the title and the controls belong to `SurfaceView`, so every surface has the
  * same edges and the same way to close it.
  */
-type RendererProps = { surface: Surface; data: SurfaceData; onDrill?: (label: string) => void };
+type RendererProps = {
+  surface: Surface;
+  data: SurfaceData;
+  onDrill?: (label: string) => void;
+  /**
+   * §27. Whether a mark's label must be drawn permanently rather than on hover.
+   *
+   * Decided once, in the panel, from the pointer actually in use — a renderer
+   * that detected this itself would be one more place to get it wrong, and the
+   * places that get it wrong are the ones nobody tests on a tablet.
+   */
+  affordance: AffordanceVisibility;
+};
 
 const RENDERERS: Record<string, React.FC<RendererProps>> = {
   chart: ({ data }) => <Sparkline points={data.points ?? []} />,
@@ -94,7 +150,9 @@ const RENDERERS: Record<string, React.FC<RendererProps>> = {
   ),
   distribution: ({ data }) => <Bars values={data.values ?? []} />,
   agent_activity: ({ data }) => <Rows rows={data.rows ?? []} />,
-  heatmap: ({ data, onDrill }) => <Heatmap cells={data.cells ?? []} onDrill={onDrill} />,
+  heatmap: ({ data, onDrill, affordance }) => (
+    <Heatmap cells={data.cells ?? []} onDrill={onDrill} affordance={affordance} />
+  ),
   network: ({ data, onDrill }) => (
     <NetworkGraph nodes={data.nodes ?? []} edges={data.edges ?? []} onDrill={onDrill} />
   ),
@@ -103,7 +161,31 @@ const RENDERERS: Record<string, React.FC<RendererProps>> = {
     data.media ? <Media media={data.media} /> : <Empty>No image source.</Empty>,
   video: ({ data }) =>
     data.media ? <Media media={data.media} /> : <Empty>No video source.</Empty>,
+  // §8's remaining text-shaped kinds. They were unrendered not for want of a
+  // renderer but because `surfaceData` discarded caller-supplied content, so
+  // there was never anything for one to draw.
+  document: ({ data }) => <Prose body={data.body ?? ''} />,
+  research: ({ data }) =>
+    data.items ? <Headlines items={data.items} /> : data.rows ? <Rows rows={data.rows} /> : <Prose body={data.body ?? ''} />,
+  code: ({ data }) => <Code body={data.body ?? ''} />,
+  // A camera panel draws its CONSENT state, not a stream. §25 already decides
+  // whether the camera may be used, and a panel that said "this deployment
+  // cannot draw a camera" was describing a missing renderer while the real
+  // answer — nobody has agreed — was already known.
+  camera: () => <CameraConsent />,
 };
+
+/**
+ * The kinds that render, and the two that deliberately do not.
+ *
+ * Exported so the registry's §8 claim is checked against the component rather
+ * than against a note somebody typed. `map` needs a tile source this
+ * deployment does not have and `simulation` needs a simulator — and a map
+ * drawn from nothing is worse than a panel saying it cannot draw one, because
+ * an operator reads a rendered map as a map.
+ */
+export const RENDERED_KINDS: readonly string[] = Object.freeze(Object.keys(RENDERERS));
+export const UNRENDERED_KINDS: readonly string[] = Object.freeze(['map', 'simulation']);
 
 /**
  * The table-view twin (§21, and the accessibility rule behind it).
@@ -164,6 +246,23 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
   const reducedMotion = usePrefersReducedMotion();
   const motion = focusTransition({ focused, spokenAbout, reducedMotion });
 
+  // §27. The operator's contrast preference, and the pointer they are actually
+  // using — both read here and handed down, so no renderer has to know how
+  // either is detected.
+  const contrast = useContrastMode();
+  const palette = React.useMemo(() => surfacePalette(contrast), [contrast]);
+
+  // Starts `unknown`, which `affordanceVisibility` treats as unable to hover.
+  // Guessing mouse is how a hover-only affordance ships: the guess is
+  // invisible, and the people it fails are the ones least able to work round
+  // it. A desktop operator pays one visible label until their first click.
+  const [pointer, setPointer] = React.useState<PointerKind>('unknown');
+  const onPointerDown = React.useCallback((event: React.PointerEvent) => {
+    const kind = pointerKindFrom(event.nativeEvent as unknown as { pointerType?: string });
+    setPointer((previous) => (previous === kind ? previous : kind));
+  }, []);
+  const markAffordance = affordanceVisibility(pointer, 'on-hover');
+
   return (
     <section
       aria-label={surface.meaning}
@@ -179,7 +278,22 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
       // a channel everybody has (§27), and it is not a channel a test has
       // either — this is the same fact, stated once, for both readers.
       data-focused={focused ? 'true' : undefined}
+      // Which contrast mode painted this, so a screenshot and a bug report can
+      // agree about what was on screen.
+      data-contrast={contrast}
+      onPointerDown={onPointerDown}
       style={{
+        // The mode's palette, published to every descendant at once. See `C`.
+        ...({
+          '--panel-text': palette.text,
+          '--panel-dim': palette.dim,
+          '--panel-quiet': palette.quiet,
+          '--panel-core': palette.core,
+          '--panel-ok': palette.ok,
+          '--panel-speak': palette.speak,
+          '--panel-warn': palette.warn,
+          '--panel-bad': palette.bad,
+        } as React.CSSProperties),
         gridColumn: `span ${span ?? surface.span}`,
         display: 'grid',
         gridTemplateRows: 'auto 1fr',
@@ -267,6 +381,7 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
           <Renderer
             surface={surface}
             data={data}
+            affordance={markAffordance}
             onDrill={onDrill ? (label) => onDrill(surface, label) : undefined}
           />
         )}
@@ -387,6 +502,76 @@ const Headlines: React.FC<{ items: string[] }> = ({ items }) => {
     </div>
   );
 };
+
+/** A document or a research brief: prose, at a readable measure. */
+const Prose: React.FC<{ body: string }> = ({ body }) =>
+  body ? (
+    <div style={{ maxHeight: LIST_HEIGHT, overflowY: 'auto' }}>
+      {body.split(/\n{2,}/).map((paragraph, i) => (
+        <p
+          key={i}
+          // 65-75 characters is the readable measure; 1.6 is inside the
+          // 1.5-1.75 band for body text.
+          style={{ margin: i === 0 ? 0 : '9px 0 0', fontSize: 12.5, lineHeight: 1.6, color: C.dim, maxWidth: '70ch' }}
+        >
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  ) : (
+    <Empty>This document has no content.</Empty>
+  );
+
+/**
+ * Code. Monospace and unhighlighted on purpose.
+ *
+ * A syntax highlighter is a dependency and a language guess, and a wrong guess
+ * colours the code misleadingly — which is worse than no colour on a screen
+ * where colour already means something else.
+ */
+const Code: React.FC<{ body: string }> = ({ body }) =>
+  body ? (
+    <pre
+      style={{
+        margin: 0,
+        maxHeight: LIST_HEIGHT,
+        overflow: 'auto',
+        fontSize: 11.5,
+        lineHeight: 1.6,
+        color: C.text,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        // Never wrapped. Wrapped code changes what the lines are, and a line
+        // number in a review comment stops matching what is on screen.
+        whiteSpace: 'pre',
+        tabSize: 2,
+      }}
+    >
+      {body}
+    </pre>
+  ) : (
+    <Empty>This code surface has no content.</Empty>
+  );
+
+/**
+ * The camera panel: what the consent gate currently says.
+ *
+ * It never opens a stream. §25 grants consent from an explicit operator
+ * action, and a panel that requested the camera because it was rendered would
+ * make opening a panel the consent — which is the whole thing the gate exists
+ * to prevent.
+ */
+const CameraConsent: React.FC = () => (
+  <div style={{ display: 'grid', gap: 6 }}>
+    <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: C.dim }}>
+      The camera is off. Nothing is captured, streamed or stored until you grant camera consent, and
+      granting it is an action you take — opening this panel is not one.
+    </p>
+    <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.6, color: C.quiet }}>
+      Consent is per operator and can be withdrawn at any time; withdrawing it stops any use
+      immediately rather than at the next request.
+    </p>
+  </div>
+);
 
 const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p style={{ margin: 0, fontSize: 12, color: C.quiet }}>{children}</p>

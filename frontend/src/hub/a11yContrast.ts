@@ -120,6 +120,37 @@ export function textPalette(mode: ContrastMode): Readonly<Record<string, string>
 }
 
 /**
+ * The panel's colours by ROLE, in the names `SurfaceView` already uses.
+ *
+ * Two things this is not. It is not a second palette — every value comes from
+ * `PALETTES` above, so a colour added here without being measured is
+ * impossible. And it is not only text: a high-contrast mode that raised the
+ * body copy and left `warn` and `bad` alone would be a screen where the words
+ * are readable and the warnings are not.
+ *
+ * `speak` and `ok` deliberately share a value. They mean different things —
+ * "the AI is describing this panel" and "healthy" — and are never drawn on the
+ * same element, and §27's rule that colour is never the only indicator is what
+ * keeps them distinguishable: the spoken-about panel also carries
+ * `aria-current` and the words "speaking about".
+ */
+export function surfacePalette(mode: ContrastMode): Readonly<Record<SurfaceRole, string>> {
+  const p = PALETTES[mode];
+  return Object.freeze({
+    text: p.strong!,
+    dim: p.body!,
+    quiet: p.muted!,
+    core: p.accent!,
+    ok: p.good!,
+    speak: p.good!,
+    warn: p.warn!,
+    bad: p.bad!,
+  });
+}
+
+export type SurfaceRole = 'text' | 'dim' | 'quiet' | 'core' | 'ok' | 'speak' | 'warn' | 'bad';
+
+/**
  * `#rgb`, `#rrggbb` and `#rrggbbaa`.
  *
  * Alpha is parsed and discarded: this function measures a colour against a

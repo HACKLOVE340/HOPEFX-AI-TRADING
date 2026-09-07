@@ -25,6 +25,7 @@ import React, { useState } from 'react';
 
 import { CATEGORY, GRID, INK, OTHER, categoryColour, intensityStep } from './vizPalette';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
+import type { AffordanceVisibility } from './a11yPointer';
 import type { Cell, Edge, Event, Node } from './surfaceData';
 
 const cellLabel = (c: Cell) => `${c.column}, ${c.row}: ${c.label}`;
@@ -48,10 +49,24 @@ function markTransition(reducedMotion: boolean): string {
 
 // ── heatmap ───────────────────────────────────────────────────────────────────
 
-export const Heatmap: React.FC<{ cells: Cell[]; onDrill?: (label: string) => void }> = ({
-  cells,
-  onDrill,
-}) => {
+export const Heatmap: React.FC<{
+  cells: Cell[];
+  onDrill?: (label: string) => void;
+  /**
+   * §27. Whether the mark's label has to be drawn permanently.
+   *
+   * `title` is a HOVER tooltip. On a tablet it never appears, so a sighted
+   * touch user gets the colour and nothing else — which is §27's "never rely
+   * on colour alone" failing silently, in the one place this file already
+   * takes seriously enough to ship a table twin for.
+   *
+   * Defaults to `always` rather than `on-hover`, matching `a11yPointer`'s rule
+   * that an unread pointer cannot hover: a desktop operator pays one visible
+   * label until their first click, and a tablet operator does not lose the
+   * value entirely.
+   */
+  affordance?: AffordanceVisibility;
+}> = ({ cells, onDrill, affordance = 'always' }) => {
   const [hovered, setHovered] = useState<string | null>(null);
   const reducedMotion = usePrefersReducedMotion();
   const columns = [...new Set(cells.map((c) => c.column))];
@@ -84,6 +99,19 @@ export const Heatmap: React.FC<{ cells: Cell[]; onDrill?: (label: string) => voi
                 onMouseLeave={() => setHovered(null)}
                 onFocus={() => setHovered(key)}
                 onBlur={() => setHovered(null)}
+                // §27. A tap, not only a hover. `mouseenter` does not fire on
+                // touch and iOS Safari does not reliably focus a button on tap,
+                // so without this the readout below — the accessible twin this
+                // file already ships — is reachable by mouse and keyboard and
+                // by nothing a tablet operator can do.
+                onPointerDown={() => setHovered(key)}
+                // §27. A tap, not only a hover. `mouseenter` does not fire on
+                // touch and iOS Safari does not reliably focus a button on tap,
+                // so without this the readout below — the accessible twin this
+                // file already ships — is reachable by mouse and keyboard and
+                // by nothing a tablet operator can do.
+                data-mark-label={cell ? cellLabel(cell) : `${column}: not measured`}
+                data-affordance={affordance}
                 style={{
                   ...focusable,
                   // A cell with no reading is the grid colour, not step zero:

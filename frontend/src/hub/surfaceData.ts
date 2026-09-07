@@ -101,6 +101,73 @@ function zoomOf(data: Record<string, unknown> | undefined): ZoomRange | null {
   return { from: zoom.from, to: zoom.to };
 }
 
+/**
+ * Content a caller put in the surface's own data bag.
+ *
+ * Every shape is CHECKED rather than cast. `data` reaches here from a model —
+ * `workspace.open` carries whatever the AI asked for — and a string where rows
+ * belong would reach a renderer that maps over it, taking the whole plane down
+ * from inside one panel. A wrong shape is treated as no content, which lands
+ * on the honest note below.
+ */
+/**
+ * One heatmap cell, checked field by field.
+ *
+ * `intensity` drives the colour ramp, so a string here would produce
+ * `intensityStep(NaN)` — the grid colour, which is what an UNMEASURED cell
+ * draws. A malformed cell would then be indistinguishable from a missing one.
+ */
+function isCell(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  const c = value as Record<string, unknown>;
+  return (
+    typeof c.row === 'string' &&
+    typeof c.column === 'string' &&
+    typeof c.label === 'string' &&
+    typeof c.intensity === 'number' &&
+    Number.isFinite(c.intensity)
+  );
+}
+
+function supplied(kind: string, data: Record<string, unknown> | undefined): SurfaceData {
+  const nothingConnected: SurfaceData = {
+    empty: true,
+    note:
+      `Nothing is connected to a ${kind} surface yet. The request was understood and the panel is ` +
+      "real; the data source is a later phase.",
+  };
+  if (!data) return nothingConnected;
+
+  const out: SurfaceData = { empty: false };
+  let found = false;
+
+  if (typeof data.body === 'string' && data.body.length > 0) {
+    out.body = data.body;
+    found = true;
+  }
+  if (Array.isArray(data.items) && data.items.every((i) => typeof i === 'string')) {
+    out.items = data.items as string[];
+    found = true;
+  }
+  if (
+    Array.isArray(data.rows) &&
+    data.rows.every((r) => Array.isArray(r) && r.length === 2 && r.every((c) => typeof c === 'string'))
+  ) {
+    out.rows = data.rows as [string, string][];
+    found = true;
+  }
+  if (Array.isArray(data.points) && data.points.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+    out.points = data.points as number[];
+    found = true;
+  }
+  if (Array.isArray(data.cells) && data.cells.every(isCell)) {
+    out.cells = data.cells as Cell[];
+    found = true;
+  }
+
+  return found ? out : nothingConnected;
+}
+
 export function surfaceData({ kind, key, data }: SurfaceIdentity): SurfaceData {
   const state = useStore.getState();
 
@@ -289,12 +356,14 @@ export function surfaceData({ kind, key, data }: SurfaceIdentity): SurfaceData {
     }
 
     default:
-      // Registered, requested, understood — and not yet connected to anything.
-      // Saying that is more useful than a blank panel, which is indistinguishable
-      // from a feed that has gone quiet.
-      return {
-        empty: true,
-        note: `Nothing is connected to a ${kind} surface yet. The request was understood and the panel is real; the data source is a later phase.`,
-      };
+      // Content the CALLER supplied, before the "nothing connected" note.
+      //
+      // This branch used to discard `data` entirely, which meant an AI opening
+      // a document surface WITH the document in it got "nothing is connected
+      // to a document surface yet" — the panel was real, the content had
+      // arrived, and the screen said neither had happened. Six of §8's twelve
+      // kinds were unreachable for exactly that reason rather than for want of
+      // a renderer.
+      return supplied(kind, data);
   }
 }
