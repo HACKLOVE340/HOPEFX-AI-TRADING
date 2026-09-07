@@ -255,13 +255,13 @@ def test_the_vault_rows_are_live_and_filed_outside_the_specification():
     for row in ("improve.vault", "improve.path_before_content", "improve.sandbox_target_check"):
         assert rows[row].state == "live", f"{row} is {rows[row].state}"
 
-    # The rest of the track is named and not yet built, which is the whole
-    # point of a registry: a capability absent from it does not exist.
-    for row in (
-        "improve.code_walker",
-        "improve.finding_to_proposal",
-        "improve.always_awake",
-        "improve.honest_cycle_report",
-    ):
-        assert rows[row].state == "planned"
-        assert rows[row].evidence == "", "a planned row carrying evidence reads as progress"
+    # The rest of the track is named whether or not it is built yet, which is
+    # the whole point of a registry: a capability absent from it does not exist.
+    # Which of them are planned changes as the track lands, so this asserts the
+    # invariant rather than a snapshot: a planned row carries no evidence,
+    # because a pointer to nothing reads as progress.
+    for row in ("improve.finding_to_proposal", "improve.always_awake", "improve.honest_cycle_report"):
+        assert row in rows, f"{row} was dropped from the registry"
+    for capability in rows.values():
+        if capability.state == "planned":
+            assert capability.evidence == "", f"{capability.id} is planned and carries evidence"

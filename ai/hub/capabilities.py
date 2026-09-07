@@ -1785,7 +1785,24 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "security.ai_repair_sandbox:validate_repair_for_target",
         "Refused before the source is parsed, written to a disposable directory or executed.",
     ),
-    _c("improve.code_walker", "S", "C", "An agent that walks all the code, including the AI's own"),
+    _c(
+        "improve.code_walker",
+        "S",
+        "C",
+        "An agent that walks all the code, including the AI's own",
+        "live",
+        "ai.improve.walker:walk",
+        "Deterministic static analysis, not a model call per file: seventeen "
+        "hundred files on a loop meant to stay awake is a bill rather than a "
+        "capability, and its findings would not be reproducible run to run. The "
+        "five checks are this repository's own defect history \u2014 dead_control "
+        "(F176/F260), unmeasured_as_zero (\u00a722), float_money, silent_except, "
+        "permissive_env_default. Reachable as platform_engineering.walk_code at "
+        "READ_ONLY, which is structural: ai/improve imports nothing from "
+        "ai/tools and calls nothing that writes, both asserted by parsing the "
+        "package. A restricted walk DROPS dead_control and names the drop, "
+        "because a caller in a directory never entered is not an absent caller.",
+    ),
     _c("improve.finding_to_proposal", "S", "C", "A finding becomes a proposal that two humans must approve"),
     _c(
         "improve.always_awake",

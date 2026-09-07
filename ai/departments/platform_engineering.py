@@ -248,3 +248,37 @@ def scan_secrets(*, scan: Callable[[], list[dict[str, Any]]] | None = None, **_:
 
 
 __all__ = ["check_broken_imports", "run_tests", "scan_secrets"]
+
+
+# ── the code walk ─────────────────────────────────────────────────────────────
+
+
+def walk_code(*, paths: str = "", checks: str = "", limit: int = 50, **_: Any) -> dict[str, Any]:
+    """Walk the repository — the AI's own code included — and report findings.
+
+    Read-only in the strongest available sense: `ai/improve/` imports nothing
+    from `ai/tools/`, calls nothing that writes, and a test parses every module
+    there to keep both true. What comes back is a list of claims with evidence
+    that resolves, never a patch.
+
+    `paths` and `checks` are comma-separated. A restricted `paths` drops the
+    `dead_control` check, because a caller in a directory the walk never entered
+    is not an absent caller — the report names the check it dropped and why.
+    """
+    from ai.improve import walker
+
+    selected_paths = tuple(p.strip() for p in paths.split(",") if p.strip()) or None
+    selected_checks = tuple(c.strip() for c in checks.split(",") if c.strip()) if checks.strip() else None
+
+    try:
+        report = walker.walk(paths=selected_paths, checks=selected_checks)
+    except OSError as exc:
+        return _unavailable(f"the walk could not read the tree: {type(exc).__name__}")
+
+    bounded = max(1, min(int(limit), 500))
+    return {
+        "available": True,
+        **report.summary(),
+        "returned": min(bounded, len(report.findings)),
+        "findings": [f.as_dict() for f in report.findings[:bounded]],
+    }

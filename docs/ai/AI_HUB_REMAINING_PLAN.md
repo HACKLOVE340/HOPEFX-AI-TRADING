@@ -336,7 +336,7 @@ track will close. 20 tests, confirmed red on the pre-fix tree.
 
 ---
 
-## Phase S2 — the code-walking agent, read-only  ← NEXT
+## Phase S2 — the code-walking agent, read-only  ✅ DONE
 
 **Depends on:** S1. Building a proposer before its containment is backwards in
 a system that moves money.
@@ -348,16 +348,42 @@ included, which is the part the owner asked for by name — and emits
 **findings**, not patches. A finding carries a file, a line, a claim, and
 evidence that resolves; the registry's own discipline, applied to code review.
 
-**Rules:** it imports nothing that can write. It cannot reach `ai/tools/bus.py`
-(same AST assertion `ai/bus` carries). Its input is repository text, which is
-untrusted the moment a dependency or a comment can carry an instruction, so
-every file it reads is fenced through `ai/guardrails/input.py` before it
-reaches a model. A finding names what it measured; "looks fine" is not a
-finding and neither is a count of files scanned.
+**Rules held:** it imports nothing that can write (parsed, not trusted: no
+`write_text`, `unlink`, `rmtree`, `open()` anywhere in the package). It cannot
+reach `ai/tools/bus.py` — the same AST assertion `ai/bus` carries. A snippet
+that goes on to reach a model is fenced through `ai/guardrails/input.py`
+first, because a comment in a file it read can carry an instruction.
+
+**A parser, not a model.** Seventeen hundred files on a loop that is meant to
+stay awake is a bill rather than a capability, and model findings would not be
+reproducible run to run. The paid step moves to S3, per finding, behind the
+vault and the approval gate rather than in front of them. Full-tree walk: 1,778
+files in 7.5 seconds.
+
+**Two false-positive classes found by running it and removed:** `dead_control`
+is now dropped on a partial walk and the report names the drop, because a
+caller in a directory the walk never entered is not an absent caller; and a
+decorated function is never a dead control, because a route handler is reached
+through its decorator and has no by-name caller anywhere.
+
+**Reachable:** `platform_engineering.walk_code`, `ToolRisk.READ_ONLY`. A walker
+nobody can invoke is a module, not an agent.
+
+**What the first real run found** (reported, not fixed — both are on
+vault-protected paths, so `proposable` is False and no patch may follow):
+
+- `auth/router.py:1069` `validate_csrf_token` has no caller anywhere, and the
+  comment above it says the middleware calls it. `core/middleware.py` has its
+  own CSRF implementation with its own cookie name and its own exempt list.
+  CSRF *is* enforced — this is a dead duplicate plus a wrong comment, and two
+  exempt lists that can drift apart.
+- `brokers/prop_firms/ftmo.py:386` `check_ftmo_compliance` is called only from
+  `tests/unit/test_broker_connectors.py`. `prop_firm_mode.json` ships
+  `enabled: true` with the FTMO ruleset.
 
 ---
 
-## Phase S3 — a finding becomes a proposal, and a proposal needs two humans
+## Phase S3 — a finding becomes a proposal, and a proposal needs two humans  ← NEXT
 
 **Depends on:** S1 and S2.
 

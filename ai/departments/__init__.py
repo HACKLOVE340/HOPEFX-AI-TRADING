@@ -277,6 +277,17 @@ DEPARTMENTS: Final[dict[str, Department]] = {
                 "Find imports that do not resolve.",
                 platform_engineering.check_broken_imports,
             ),
+            # Owner request, 2026-09-07: an agent that walks all the code,
+            # including the AI's own. READ_ONLY is structural here, not a
+            # label: `ai/improve/` cannot import the tool bus and calls
+            # nothing that writes, both asserted by parsing the package.
+            _action(
+                "platform_engineering",
+                "walk_code",
+                ToolRisk.READ_ONLY,
+                "Walk the repository, the AI's own code included, and report findings with evidence.",
+                platform_engineering.walk_code,
+            ),
         ),
         memory=("audit history", "bug registry", "dead execution paths"),
         awareness=("commits touching security-sensitive files", "CI failure patterns"),
