@@ -94,6 +94,10 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     # than about any operator's data — but it stays behind _VIEW like every other
     # row here, because "which controls are not built yet" is a map of the gaps.
     "ai_core_capability_registry": _VIEW,
+    # §22. What the platform can measure about itself, and what it cannot.
+    # Reporting only, and _VIEW like every other row here: "which probes are
+    # blind" is a map of where the monitoring is not looking.
+    "ai_core_telemetry": _VIEW,
     # What the platform can do, derived from its own route table. Reporting
     # only, and _VIEW like every other row: a map of the system's surface is
     # exactly the kind of reconnaissance that should need a login.

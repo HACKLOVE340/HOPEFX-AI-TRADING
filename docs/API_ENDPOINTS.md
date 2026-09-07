@@ -112,6 +112,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-core/self/context` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/self/depths` | JWT |  | AI Core |
 | `GET` | `/api/ai-core/summary` | JWT |  | AI Core |
+| `GET` | `/api/ai-core/telemetry` | JWT |  | AI Core |
 | `GET` | `/api/ai-memory` | JWT |  | AI Memory |
 | `POST` | `/api/ai-memory/forget` | JWT |  | AI Memory |
 | `GET` | `/api/ai-memory/long-term/pending` | JWT |  | AI Memory |

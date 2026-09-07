@@ -1491,7 +1491,17 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "22",
         "C",
         "GPU, CPU and memory telemetry",
-        note="§3 lists this as existing; it is not in this repository.",
+        "live",
+        "ai.telemetry.host:snapshot",
+        "\u00a73 listed this as existing and it was not in this repository. Every "
+        "probe returns a real reading or an absence WITH A REASON \u2014 psutil "
+        "missing, the call raising, /proc unreadable. The GPU report separates "
+        "'cannot look' from 'looked and found none': a dashboard showing 0 GPUs "
+        "because pynvml is absent tells an operator their inference is on CPU "
+        "when it may not be. The probes are fetched through a function rather "
+        "than imported at module scope, so a host without psutil gets a reason "
+        "instead of an ImportError \u2014 infrastructure/health.py imports it at "
+        "module level and is unimportable there.",
     ),
     _c(
         "telemetry.latency",
@@ -1505,19 +1515,53 @@ REGISTRY: Final[tuple[Capability, ...]] = (
     _c("telemetry.api_health", "22", "C", "API health", "live", "ai.gateway.providers", ""),
     _c("telemetry.database_health", "22", "C", "Database health", "live", "core.startup_factories", ""),
     _c("telemetry.queue_depth", "22", "C", "Queue depth", "live", "ai.jobs.runner:JobRunner", ""),
-    _c("telemetry.agent_health", "22", "C", "Agent health"),
+    _c(
+        "telemetry.agent_health",
+        "22",
+        "C",
+        "Agent health",
+        "live",
+        "ai.telemetry.agents:agent_health",
+        "A department that exists and has no implemented action is a name in a "
+        "directory, and `status` says which of the two each one is. Sources are "
+        "INJECTED rather than reached for, so a job pool reported as running: 0 "
+        "when no runner was passed cannot happen \u2014 that is the zero-gauge "
+        "defect in a different costume, reading as an idle pool rather than an "
+        "unobserved one. 'The watchers have never run' is likewise distinct "
+        "from 'no observations', because only one of them is a problem.",
+    ),
     _c("telemetry.model_availability", "22", "C", "Model availability", "live", "ai.gateway.breakers", ""),
     _c("telemetry.data_freshness", "22", "C", "Data freshness", "live", "data_layer.orchestrator", ""),
-    _c("telemetry.security_events", "22", "C", "Security events"),
+    _c(
+        "telemetry.security_events",
+        "22",
+        "C",
+        "Security events",
+        "live",
+        "ai.telemetry.security:security_events",
+        "Counted from the tool bus's own audit trail rather than a second "
+        "tally, which would be free to drift \u2014 and the drift would be towards "
+        "looking calmer than the system is. No bus attached reports ABSENT, not "
+        "zero: 'nothing has been refused' and 'nothing was watching' are "
+        "different facts and only one of them is reassuring.",
+    ),
     _c("telemetry.spend", "22", "C", "Cost and spend ceilings", "live", "ai.gateway.budget", ""),
     _c(
         "telemetry.no_decorative_values",
         "22",
         "C",
         "No fake live values in production",
-        "staged",
-        "api.ai_core",
-        "The durability block reports what is real; host metrics are still absent.",
+        "live",
+        "ai.telemetry.reading:Reading",
+        "The type refuses to express a fake value. `value=None` requires a "
+        "reason at construction and a value forbids one \u2014 a number and an "
+        "excuse are two answers to one question. A genuine 0.0 stays "
+        "expressible, which is the part 'return None everywhere' would break. "
+        "The defect this closes is measurable in this repository: with psutil "
+        "unavailable, infrastructure/metrics.py leaves system_cpu_percent unset "
+        "and the Gauge reads back 0.0, while the same registry's "
+        "get_all_metrics() reports None \u2014 two readers of one gauge "
+        "disagreeing about whether the machine is idle or unknown.",
     ),
     # §23 — Dynamic UI architecture
     _c(
@@ -1760,7 +1804,15 @@ REGISTRY: Final[tuple[Capability, ...]] = (
         "22",
         "C",
         "Neural engine indicator bound to real model state",
-        note="§3 lists this as existing; it is not in this repository.",
+        "live",
+        "ai.telemetry.neural:neural_engine",
+        "\u00a73 listed this as existing and it was not. The tempting version is a "
+        "light that pulses whenever the page is open, which is the zero CPU "
+        "gauge wearing different clothes \u2014 it would say 'thinking' on a "
+        "deployment with no credential configured. Status is derived from three "
+        "facts and nothing else: which vendors are reachable, which of their "
+        "circuit breakers are open, and whether any call has succeeded. "
+        "`last_success_at` stays None rather than becoming 'just now'.",
     ),
     _c(
         "legacy.sleep_monitor",

@@ -533,4 +533,49 @@ async def ai_core_summary(user: TokenPayload = Depends(_viewer)) -> dict[str, An
     }
 
 
+@router.get("/telemetry")
+async def ai_core_telemetry(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """§22. What the platform can actually measure about itself, and what it cannot.
+
+    The rule this endpoint exists to hold: **an unmeasured metric is absent,
+    never zero.** Every number here is either a real reading or `null` with a
+    reason, and `unmeasured` lists the second group separately so a caller does
+    not have to infer it from the first.
+
+    That is not a hypothetical discipline. `infrastructure/metrics.py` returns
+    early when psutil is unavailable, leaving `system_cpu_percent` unset — and
+    an unset `Gauge` reads back 0.0, so the same registry's two readers
+    disagree about whether the machine is idle or unknown.
+
+    The `neural_engine` block is bound to real model state: which vendors this
+    deployment can reach, which of their breakers are open, whether anything
+    has succeeded. The specification lists such an indicator among what already
+    exists; it did not, and a decorative one that pulses whatever the model
+    layer is doing would be the zero gauge in different clothes.
+    """
+    from ai import telemetry
+
+    # No tool bus and no watcher count are passed, and both come back as
+    # UNMEASURED with a reason rather than as zero. That is deliberate, not an
+    # oversight: `build_tool_bus()` constructs a fresh bus per caller, so there
+    # is no process-wide audit trail to count, and reporting a brand-new bus's
+    # empty audit as "0 denials" would be this section's own defect — a
+    # reassuring number produced by never having looked.
+    return telemetry.snapshot(runner=_job_runner())
+
+
+def _job_runner() -> Any:
+    """The live job pool, or None when there is not one to observe.
+
+    None matters: `agents.agent_health` reports an absent runner as unmeasured
+    rather than as an idle pool, which is the same rule as every reading here.
+    """
+    try:
+        from ai.jobs.runner import get_runner
+
+        return get_runner()
+    except Exception:
+        return None
+
+
 __all__ = ["router"]

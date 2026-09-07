@@ -220,7 +220,7 @@ to write a suggestion. It gained nothing else.
 
 ---
 
-## Phase C — §22 telemetry honesty  ← NEXT
+## Phase C — §22 telemetry honesty  ✅ DONE
 
 **Unblocks:** §23 resource-aware rendering, §26 pause-under-load.
 
@@ -232,18 +232,53 @@ to write a suggestion. It gained nothing else.
 | Neural engine indicator bound to real model state | planned |
 | No fake live values in production | staged |
 
-**Files:** `ai/telemetry/` (new), `api/ai_core.py` (read surface only).
+**Built:** `ai/telemetry/{reading,host,agents,security,neural}.py`, plus
+`GET /api/ai-core/telemetry` and its `_VIEW` row in `ai/policy/roles.py`.
+§22 now has nothing planned or staged.
 
-**Rule — the one this whole section is named for:** *an unmeasured metric is
-absent, never zero.* A CPU gauge reading 0% because `psutil` is not installed is
-the exact defect §22 exists to forbid, and it is worse than no gauge because it
-reads as an idle machine. Every metric is `None` with a reason or a real
-reading. The "neural engine" indicator must be bound to actual model state —
-§3 claims it exists; it does not, and a decorative one would be the same lie.
+**The defect is real here, and was measured before anything was written.**
+`infrastructure/metrics.py:update_system_metrics` returns early when psutil is
+unavailable, leaving the gauge unset — and an unset `Gauge` reads back its
+default:
+
+```
+>>> m.PSUTIL_AVAILABLE = False
+>>> reg.update_system_metrics()
+>>> reg.get_collector("system_cpu_percent").get_value()
+0.0
+```
+
+The same registry's `get_all_metrics()` reports `None` for that gauge, so its
+two readers disagree about whether the machine is idle or unknown.
+
+**The type refuses to express a fake value.** `Reading(value=None)` requires a
+reason at construction; `Reading(value=12.0, reason=...)` is refused, because a
+number and an excuse are two answers to one question. A genuine `0.0` stays
+expressible — which is the part "return None everywhere" would have broken.
+
+**"Cannot look" is not "there are none".** The GPU report separates them. A
+dashboard showing 0 GPUs because pynvml is absent tells an operator their
+inference is on CPU when it may not be.
+
+**The neural-engine indicator is bound to three real facts** — which vendors
+are reachable, which breakers are open, whether any call has succeeded — and
+nothing else. §3 listed it as existing; it did not, and the tempting version is
+a light that pulses whenever the page is open, which would say "thinking" on a
+deployment with no credential configured.
+
+**Two absences on the live endpoint are deliberate and annotated.**
+`build_tool_bus()` constructs a fresh bus per caller, so there is no
+process-wide audit trail to count — reporting a brand-new bus's empty audit as
+"0 denials" would be this section's own defect, a reassuring number produced by
+never having looked. It comes back unmeasured, with that reason.
+
+**Runtime proof:** cpu 4.8%, memory 5.9%, disk 48.0% measured; gpu, awareness
+and tool_denials each reported unmeasured with a reason; neural engine
+`offline` because no provider is configured in this environment.
 
 ---
 
-## Phase D — §23 component architecture
+## Phase D — §23 component architecture  ← NEXT
 
 **Depends on:** Phase C's telemetry for resource-aware rendering.
 
