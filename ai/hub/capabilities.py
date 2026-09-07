@@ -1965,16 +1965,20 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "24",
         "C",
         "Isolated agent workers with task contracts",
-        "staged",
-        "ai.jobs.runner:JobRunner",
-        "The CONTRACT half is real and now durable: a job carries an operator, a prompt, a priority "
-        "tier, a timeout and a deadline, it is admitted through a bounded queue, and its outcome "
-        "survives the process (ai/jobs/store.py). The ISOLATION half is not, and the earlier note "
-        "was too vague about why. ThreadPoolExecutor gives threads in one interpreter: agent work "
-        "shares a heap, a GIL, an import table and a filesystem with the API serving the screen, so "
-        "one runaway agent can starve or crash the process it runs in. That needs a process or "
-        "container boundary this deployment does not have, and no amount of code in this repository "
-        "creates one — claiming it would be claiming a blast radius that does not exist.",
+        "live",
+        "ai.jobs.isolation:run_isolated",
+        "The previous note said this needed 'a process or container boundary this deployment does not "
+        "have'. That was WRONG: multiprocessing with spawn and resource.setrlimit are standard "
+        "library, and the boundary was code nobody had written. A contract NAMES an importable "
+        "function and picklable arguments — a closure cannot cross a process boundary, so 'task "
+        "contract' is what makes isolation possible rather than decoration on it. Every refusal "
+        "happens at construction in the caller's process, not as a mysterious dead child. One process "
+        "per task, not a pool, because a pool cannot kill a running task. spawn never fork: this "
+        "process has threads, and fork copies the address space with one of them. Asserted against a "
+        "real child: os._exit does not take the parent, RLIMIT_AS stops a 4GB allocation, and a "
+        "spinning task is terminated and verified gone by pid. Opt-in — every existing job still runs "
+        "on the thread pool, because silently moving live trading work across a boundary to close a "
+        "registry row would change the failure modes of the thing the row describes.",
     ),
     _c(
         "stack.event_bus",

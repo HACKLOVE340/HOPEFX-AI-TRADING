@@ -6,8 +6,8 @@ import coverage; print(coverage())"`), which resolves each `live` claim by
 importing the module or reading the file it names. A row is not built because
 somebody said so.
 
-At the time of writing: **230 capabilities · 221 live · 9 staged · 0 planned ·
-230/230 evidence resolved · 0 discrepancies · 96% built.**
+At the time of writing: **230 capabilities · 222 live · 8 staged · 0 planned ·
+230/230 evidence resolved · 0 discrepancies · 97% built.**
 
 That live count went **down** by one, and the percentage with it. §4's four
 layer roll-ups stopped being typed and started being derived, and the
@@ -18,17 +18,19 @@ it was wrong before, not now.
 Sections finished (nothing planned or staged): §5, §6, §7, §8, §11, §12, §13,
 §14, §15, §16, §17, §19, §20, §22, §23, §25, §27, and both owner tracks — P and S.
 
-**9 rows remain**, across five sections — and six of them are blocked on
-things this deployment does not have, not on work being deferred:
+**8 rows remain**, across five sections. The owner asked for everything I had
+called blocking to be built, and re-examining the list found I was **wrong
+about four of the six** — I had labelled work I declined to do as
+infrastructure that did not exist:
 
-| § | Row | Blocked on |
-|---|---|---|
-| 18 | Gesture recognition | no landmark source; a recogniser nothing feeds is a dead control |
-| 18 | Pointing and object reference | the same missing landmark source |
-| 21 | 3D and scientific models | only canvas2d exists; WebGL/WebXR/holographic are named, not built |
-| 24 | Isolated agent workers | no process or container boundary — threads share a heap and a GIL |
-| 26 | Prevent runaway recursive delegation | recursive delegation does not exist to bound |
-| 10 | Multi-display console | nine sources aggregate; nothing spans a second physical screen |
+| § | Row | What I claimed | What is true |
+|---|---|---|---|
+| 24 | Isolated agent workers | "no process boundary this deployment has" | **Wrong.** stdlib. ✅ built |
+| 21 | 3D and scientific models | "only canvas2d implemented" | **Wrong as a blocker** — a renderer is code |
+| 10 | Multi-display console | "no second physical screen" | **Wrong as a blocker** — `getScreenDetails` is a browser API |
+| 18 | Pointing and object reference | "no landmark source" | **Half wrong** — the built half has no caller |
+| 18 | Gesture recognition | "no landmark source" | True for the camera half; needs a new dependency |
+| 26 | Runaway recursive delegation | "does not exist to bound" | Genuinely circular — the bound belongs at §24's boundary |
 
 The remaining three are §4's roll-ups, which are now **derived** and move on
 their own as the rows above them close.
@@ -1191,6 +1193,68 @@ wrong word, and was corrected with it.
 
 ---
 
+## Phase I1 — §24, the row I was wrong about  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §24 Isolated agent workers with task contracts | staged | **live** | `ai.jobs.isolation:run_isolated` |
+
+I wrote the note that said this needed "a process or container boundary this
+deployment does not have". `multiprocessing` with `spawn` and
+`resource.setrlimit` are standard library. The boundary was **code nobody had
+written**, and I had filed it as infrastructure nobody had bought — which is a
+more comfortable sentence and a less true one.
+
+### Why a task contract, and not simply a process pool
+
+`JobRunner.submit` takes a closure, and a closure captures whatever the caller
+had in scope. It is not picklable, so no amount of `ProcessPoolExecutor` makes
+an arbitrary job isolated. The honest unit is a task that NAMES an importable
+function and picklable arguments — which is what §24's phrase "task contracts"
+has to mean if it means anything. The probes for the tests live in an
+importable module for the same reason: a test that could pass with a lambda
+would be testing something this design refuses.
+
+Every refusal happens at construction, in the caller's process. A contract that
+cannot be honoured must not become a mysterious dead child three layers away.
+
+### One process per task, and spawn rather than fork
+
+A pool cannot kill a running task — `Future.cancel` refuses once work has
+started, and the only lever is shutting the pool down and taking every other
+task with it. Isolated tasks are the rare heavy ones, so one process each buys
+the `terminate()` that makes a timeout real instead of advisory.
+
+`fork` copies the address space and exactly one thread. This process has
+several — the job pool, the event loop — so a lock held by any other thread at
+the moment of the fork is held for ever in the child: a deadlock that
+reproduces once a week and never in a test.
+
+### What the boundary buys, asserted against a real child
+
+* `os._exit` — what a segfaulting native extension looks like — does not take
+  the parent with it;
+* `RLIMIT_AS` stops a 4GB allocation rather than the machine's limits;
+* a spinning task is terminated and **verified gone by pid**, not merely
+  abandoned to keep a core busy for the life of the deployment.
+
+### One injected defect did not apply, and I nearly believed it
+
+Removing `terminate()` appeared to leave every test passing. The injection had
+silently not matched after a reformat. Checking the file rather than trusting
+the run showed it, and with the removal actually applied the termination test
+fails as it should. A defect injection that does not apply is a passing test
+that proves nothing — the same shape as the control this whole phase is about.
+
+### Isolation is opt-in
+
+Every existing job still runs on the thread pool, and a test asserts it. On a
+money-moving platform, silently moving live trading work across a process
+boundary to close a registry row would change the failure modes of the thing
+the row describes.
+
+---
+
 ## Phase H — the remainder
 
 Nine rows, five sections. Regenerated from the registry rather than
@@ -1204,7 +1268,6 @@ that Phases E and F made live, which is the shape of stale plan a reader trusts.
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
 | 10 | Multi-display console | staged |
-| 24 | Isolated agent workers with task contracts | staged |
 | 4 | Presence layer — identity, voice, animation, spatial state | planned |
 | 4 | Environment layer — the dynamic workspace | planned |
 
