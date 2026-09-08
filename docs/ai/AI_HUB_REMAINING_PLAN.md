@@ -1521,6 +1521,93 @@ call for one.
 
 ---
 
+## Phase I5 — §18's camera half, and the question I was asked to settle  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §18 Landmark adapter | *(new)* | **live** | `test/hub_landmarks.test.ts` |
+| §18 Gesture recognition | staged | staged | one missing thing, named |
+| §18 Pointing and object reference | staged | staged | one missing thing, named |
+
+The owner's answer to the supply-chain question was: **if shipping it does not
+spoil things, ship it.** So it needed an actual answer rather than another
+deferral.
+
+### The answer: shipping the model would spoil something, and not the dependency
+
+I checked. npm is reachable and `@mediapipe/tasks-vision` is one install away,
+so "supply chain" was never the real obstacle and it would have been a
+comfortable excuse.
+
+The real obstacle is that **there is no camera in the environment this was built
+in.** Installing a 2MB runtime and an 8MB model into a platform that moves money
+and never executing it once is committing code on faith. "Prove by execution,
+not by reading" is the rule that forbids exactly that, and it is not a rule to
+suspend because a row is close to closing. Nine of the defects found in this
+repository read as correct.
+
+### So everything except the model shipped
+
+The gap is now one line of deployment configuration wide. What is built and
+proven against synthetic landmarks:
+
+* **A hand is a SOURCE, not a second pipeline.** `trackFromHands` produces the
+  same `TrackPoint[]` that `recogniseGesture` has read since Phase E2 and that
+  Phase I3 wired. A parallel camera pipeline would give the console two ways to
+  decide what a swipe is, and they would eventually disagree.
+* **Four states, because three of them are not "off":** `unconfigured` (no model
+  deployed), `unsupported` (deployed, browser cannot run it), `unpermitted`
+  (could run, no consent), `measured`. An operator whose camera gesture does
+  nothing needs to know which — "not working" sends them hunting a fault that is
+  not there.
+* **A model comes from this origin or not at all.** The vendor's documented
+  `storage.googleapis.com` URL is refused. Shipping it would have a trading
+  console fetch from a third party on the operator's behalf: a runtime
+  dependency on a host nobody here controls, and a signal to that host every
+  time this desk opens its console.
+* **Mirrored**, because a front camera shows a reflection; following the raw
+  coordinate moves focus the opposite way from the gesture.
+* **A partial detection is not a hand** — a few points under bad light is how a
+  gesture happens that nobody made. And a lost frame is dropped, never
+  interpolated: inventing the missing points invents the gesture spanning them.
+
+### The rows stay staged, and that is the point
+
+`vision.gesture` and `vision.pointing` are **not** live. One thing is genuinely
+missing and the hardware path has never executed. Their notes now name exactly
+that one thing, so "staged" cannot be read as "nothing here works" — the same
+treatment §10 got for a second monitor this deployment does not have.
+
+### What is proven
+
+**Automated (PASS):** 25 tests. Seven injections, each grepped before the run
+was trusted:
+
+| Injection | Result |
+|---|---|
+| Allow any origin for the model | 3 CDN-refusal tests fail |
+| Undefined consent counts as consent | **passed at first.** See below |
+| Do not mirror | 2 fail, including the end-to-end swipe |
+| Use the wrist instead of the fingertip | 3 fail |
+| Interpolate over lost frames | 2 fail |
+| Accept a partial hand | 1 fails |
+| Absolute clock instead of relative | 1 fails |
+
+**The consent injection is the one worth reading**, because it is the privacy
+gate. The first version of that test passed while consent was granted to
+everybody — with `receiving` unset, the *next* check returned the same
+`unpermitted` state, so the assertion could not tell which branch had refused.
+Setting `receiving: true` is what makes the test able to fail. This is the third
+time in three phases that a test of mine passed under the injection it existed
+to catch.
+
+**Runtime (UNVERIFIED):** everything involving an actual camera. No hand has
+ever been in front of this code.
+
+**Assurance:** self-reviewed, lower assurance.
+
+---
+
 ## Phase H — the remainder
 
 **Five rows, three sections.** Regenerated from the registry each time this
@@ -1529,41 +1616,42 @@ E and F had made live, and a stale plan is one a reader trusts.
 
 | § | Row | State |
 |---|---|---|
+| 4 | Presence layer — identity, voice, animation, spatial state | staged |
+| 4 | Environment layer — the dynamic workspace | staged |
 | 18 | Gesture recognition | staged |
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
-| 4 | Presence layer — identity, voice, animation, spatial state | staged |
-| 4 | Environment layer — the dynamic workspace | staged |
 
 ### What is actually blocked, after re-triaging what I had called blocked
 
-I was wrong about five of the six rows I had called blocked, and the pattern is
-worth keeping visible because it is one mistake repeated: treating *unverifiable
-on this hardware* as *unbuildable*.
+I was wrong about every row I called blocked, and it was one mistake repeated:
+treating *unverifiable on this hardware* as *unbuildable*.
 
 * **§24 agent runtime** — "no process boundary this deployment has". Wrong;
   `multiprocessing` is standard library. Built in Phase I1.
 * **§10 multi-display** — "no second physical screen". Wrong as a blocker; the
   Window Management API is a browser API. Built in Phase I2.
-* **§18's built halves** — the recogniser and the hit test existed with **zero
-  production callers**. Not blocked at all; wired in Phase I3.
+* **§18's built halves** — the recogniser and the hit test had **zero production
+  callers**. Not blocked at all; wired in Phase I3.
 * **§26 delegation bound** — "does not exist to bound". Circular rather than
-  blocked: I1's worker boundary gave it somewhere to live. Built in Phase I4.
+  blocked. Built in Phase I4.
+* **§18's camera halves** — "a supply-chain decision for the owner". Half an
+  excuse: npm is reachable and the package is one install away. Everything
+  except the model shipped in Phase I5.
 * **§21 scientific 3D** — "only canvas2d implemented". A renderer is code.
-  Still open, and genuinely schedulable — this is the next one.
+  Still open, and the next one.
 
-One is really blocked, and for a reason that is not technical:
+**Nothing here is blocked on a decision any more.** Two rows are held open by
+the same honest limit rather than by a question:
 
-* **§18's camera halves** need a hand/body landmark model this repository does
-  not carry. That is a **supply-chain decision for the owner** — a new
-  dependency and a shipped model, on a platform that moves money — not one to
-  make unilaterally in a phase.
+* §18's `vision.*` rows need a deployed hand-landmark model AND a camera to
+  verify it against. The code either side of that gap ships and is proven; the
+  gap is one line of deployment configuration wide.
 
 §4's two remaining rows are **derived roll-ups**: `layer_state()` computes them
 from their constituents, so they move on their own and cannot be typed live
 early. The workforce layer moved by itself when §26 closed, which is the
-mechanism working. Deriving them is what caught `arch.layer_c.workforce`
-claiming live with two of eighty-two constituents staged.
+mechanism working.
 
 ---
 

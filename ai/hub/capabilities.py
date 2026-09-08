@@ -1387,9 +1387,15 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "Gesture recognition",
         "staged",
         "frontend/src/hub/gestures.ts:recogniseGesture",
-        "STAGED on the CAMERA half only. Hand landmarks need a model this "
-        "repository does not carry, and adding one is a supply-chain decision "
-        "for the owner rather than mine to make. The POINTER half is built AND "
+        "STAGED on ONE missing thing: a deployed hand-landmark model. Everything "
+        "either side of it is built and proven \u2014 frontend/src/hub/landmarks.ts turns "
+        "landmarks into the same TrackPoints recogniseGesture already reads, so the camera "
+        "is a SOURCE for the pipeline rather than a second pipeline that would eventually "
+        "disagree with it. Not vendored, and the reason is not the dependency: npm is "
+        "reachable and the package is one install away. There is NO CAMERA in the "
+        "environment this was built in, so shipping a 2MB runtime plus an 8MB model into a "
+        "money-moving platform would be committing code that had never executed once. The "
+        "POINTER half is built AND "
         "WIRED \u2014 see input.pointer_gestures; it was left staged under this "
         "id because a pointer swipe is not vision, and marking a vision row "
         "live for pointer input would be renaming the capability to fit what "
@@ -1403,12 +1409,32 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "Pointing and object reference",
         "staged",
         "frontend/src/hub/gestures.ts:pointingAt",
-        "STAGED on the PHYSICAL POINTING half only \u2014 body landmarks, the same "
-        "absent model as vision.gesture. The OBJECT REFERENCE half is built AND "
+        "STAGED on the same one missing thing as vision.gesture: a deployed model. "
+        "pointingPoint maps a fingertip into the pixels the scene graph already speaks, "
+        "MIRRORED because a front camera shows a reflection and a console following the raw "
+        "coordinate would move focus the opposite way from the gesture. The OBJECT "
+        "REFERENCE half is built AND "
         "WIRED against the measured scene: see input.pointing_resolves. It hit-"
         "tests the topmost panel under a point and answers null on empty space "
         "rather than the nearest panel, because 'I am pointing at nothing' is "
         "an answer.",
+    ),
+    _c(
+        "input.landmark_adapter",
+        "18",
+        "A",
+        "Hand landmarks feed the gesture pipeline, or say honestly why they do not",
+        "live",
+        "frontend/src/test/hub_landmarks.test.ts",
+        "Everything around the missing model, so installing one is configuration rather than code. "
+        "FOUR states, because three of them are not 'off': unconfigured (no model deployed), "
+        "unsupported (deployed, browser cannot run it), unpermitted (could run, no consent), measured. "
+        "Undefined consent is REFUSAL \u2014 \u00a725's rule, and the first version of that test passed under an "
+        "injection that granted consent to everybody, because the next check returned the same state. "
+        "A model is loaded from THIS ORIGIN or not at all: the vendor's documented "
+        "storage.googleapis.com URL is refused, because a trading console does not fetch a model from "
+        "a third party on an operator's behalf. Seven injections; the CDN refusal, the mirroring, the "
+        "fingertip-not-wrist choice and the dropped-frame rule each fail their own tests.",
     ),
     _c(
         "input.pointer_gestures",

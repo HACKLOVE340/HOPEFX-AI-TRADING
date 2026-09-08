@@ -340,3 +340,69 @@ stand-in that releases the GIL inside the fan-out check. Under it the unlocked
 ledger admits 15 children against a limit of 8. The lesson generalises: a
 concurrency test that has never been run against the unsynchronised version is
 not evidence that synchronisation is needed.
+
+---
+
+## Phase I5 — answering "does shipping the model spoil things"
+
+### It does, and not for the reason I had been giving
+
+I had recorded §18's camera halves as blocked on a **supply-chain decision for
+the owner**. Asked to settle it, I checked, and that framing was half an excuse:
+npm is reachable and `@mediapipe/tasks-vision` is one install away.
+
+The real obstacle is smaller and harder. **There is no camera in the environment
+this was built in.** Installing a two-megabyte runtime and an eight-megabyte
+model into a platform that moves money, and never executing either once, is
+committing code on faith. That is the thing `verification-before-completion` and
+"prove by execution, not by reading" exist to stop, and it is not a rule to
+suspend because a row is nearly closed.
+
+So the decision is: **ship everything except the model.** The gap is now one line
+of deployment configuration wide, and it is named in both registry notes rather
+than described as a blocker.
+
+### A hand is a source, not a second pipeline
+
+`trackFromHands` produces the same `TrackPoint[]` that `recogniseGesture` has
+read since Phase E2. Building a camera pipeline beside the pointer one would
+give the console two ways to decide what a swipe is, and they would eventually
+disagree — the same argument that put one `shownFocus` in `PresenceStage` rather
+than two notions of focus.
+
+### The model comes from this origin or not at all
+
+The vendor's documentation hands you a `storage.googleapis.com` URL to paste
+into a constructor. `resolveModelUrl` refuses it. A trading console fetching a
+model from a third party on the operator's behalf is a runtime dependency on a
+host nobody here controls, in front of a feature, and a signal to that host every
+time this desk opens its console. Self-hosted or absent — and refused *loudly*,
+because a model that silently failed to load would present as `unsupported` and
+send somebody hunting a browser problem.
+
+### Four states, and undefined consent is refusal
+
+`unconfigured`, `unsupported`, `unpermitted`, `measured`. Collapsing them is §22's
+rule broken where it matters most: an operator whose camera gesture does nothing
+needs to know which one, because "not working" sends them looking for a hardware
+fault that is not there.
+
+Consent is the inversion: undefined is **refusal**, never permission, per §25.
+
+### Three phases, three of my own tests that could not fail
+
+Worth recording as a pattern rather than three incidents:
+
+* **I3** — three pointer tests each fired an event before asserting, so the
+  initial `unknown` state was never checked and starting at `'mouse'` passed
+  them all.
+* **I4** — two versions of a concurrency test passed with the lock removed,
+  because `admit` runs too few bytecodes between read and increment for threads
+  to land in the window.
+* **I5** — the consent test passed while consent was granted to everybody,
+  because with `receiving` unset the *next* check returned the same state.
+
+The shape is identical each time: **an assertion that a second code path can
+also satisfy.** A test only proves the branch it can distinguish, and the only
+way to find that out is to inject the defect and watch. Every one of these was
+found by injection and none by reading.
