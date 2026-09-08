@@ -15,6 +15,37 @@ Read those before any non-trivial change. The notes below are the high-signal su
 
 ---
 
+## Picking up mid-programme — start here
+
+If you are joining this work rather than starting it, **run this first**:
+
+```bash
+python scripts/backlog_report.py        # what is left, measured from the code
+```
+
+It reads the registries, the specifications and the working tree, so its answer
+is always today's. Everything below is the shape; that command is the state.
+
+| Question | Where it is answered |
+|---|---|
+| What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
+| Which spec capabilities are live, staged or planned? | `python scripts/backlog_report.py` · `ai/hub/capabilities.py` |
+| Which safety gates have been proven able to fail? | `python scripts/gate_evidence.py` · `docs/GATE_EVIDENCE.toml` |
+| How are the four specification groups organised? | `docs/ai/BACKLOG_GROUPS.md` |
+| What binds every group? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — T0, twelve Articles, INV-01…21 |
+| How do I recover the database? | `docs/runbooks/database-restore.md` |
+| Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
+
+**Every number in those documents is a snapshot; every number the scripts print
+is current.** Where they disagree, the script is right and the document is stale
+— fix the document.
+
+The ratcheted checks below run in `pre-commit`, so a regression blocks rather
+than accumulating: document registry, documentation freshness, Group 4 source
+preservation, volume-index drift, and gate injection evidence.
+
+---
+
 ## What this is
 
 HOPEFX is a Python/FastAPI + React/Vite AI trading platform for XAUUSD (gold):
