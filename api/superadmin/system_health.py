@@ -258,45 +258,27 @@ async def trigger_backup(
     backup_type = body.get("type", "incremental")
     backup_id = str(uuid.uuid4())
 
-    # Attempt real DB dump
+    # Route through the verified path from Phase R1 instead of reimplementing
+    # pg_dump/shutil here: run_backup() raises on failure rather than
+    # returning a falsy result, and verify_backup() proves the artefact is
+    # actually restorable (catches e.g. a WAL-mode SQLite copy that opens
+    # fine but contains none of the committed rows) before this reports
+    # success.
     size_mb = 0.0
-    status = "completed"
-    location = f"backups/{backup_id}.sql.gz"
+    status = "failed"
+    location = ""
+    error: str | None = None
     try:
-        import subprocess
-        import tempfile
+        from database.backup import run_backup
+        from database.restore import verify_backup
 
-        # Use the OS temp dir (cross-platform): "/tmp" doesn't exist on Windows,
-        # which made this endpoint fail/mislocate the dump on Windows hosts.
-        _tmp = tempfile.gettempdir()
-        db_url = os.getenv("DATABASE_URL", "")
-        if db_url.startswith("postgresql"):
-            # pg_dump
-            dump_path = os.path.join(_tmp, f"{backup_id}.dump")
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["pg_dump", "--format=custom", f"--file={dump_path}", db_url],
-                capture_output=True,
-                timeout=60,
-                check=False,
-            )
-            if result.returncode == 0:
-                size_mb = round(os.path.getsize(dump_path) / 1024 / 1024, 2)
-                location = dump_path
-            else:
-                status = "failed"
-        elif db_url.startswith("sqlite"):
-            import shutil
-
-            db_path = db_url.replace("sqlite:///", "").replace("sqlite://", "")
-            if os.path.exists(db_path):
-                dest = os.path.join(_tmp, f"{backup_id}.db")
-                await asyncio.to_thread(shutil.copy2, db_path, dest)
-                size_mb = round(os.path.getsize(dest) / 1024 / 1024, 2)
-                location = dest
+        backup_path = await asyncio.to_thread(run_backup)
+        report = await asyncio.to_thread(verify_backup, backup_path)
+        location = str(backup_path)
+        size_mb = round(report.bytes_uncompressed / 1024 / 1024, 2)
+        status = "completed"
     except Exception as exc:
-        logger.warning("Backup trigger: %s", exc)
-        status = "completed"  # non-fatal
+        error = safe_error(exc, context="backup trigger")
 
     record: dict[str, Any] = {
         "backup_id": backup_id,
@@ -307,6 +289,8 @@ async def trigger_backup(
         "location": location,
         "triggered_by": user.sub,
     }
+    if error is not None:
+        record["error"] = error
 
     try:
         from cache.redis_client import get_sync_redis_client
@@ -320,8 +304,8 @@ async def trigger_backup(
     except Exception:  # nosec B110  # noqa: S110
         pass
 
-    _log_superadmin_action(user, "backup_trigger", {"backup_id": backup_id, "type": backup_type})
-    return {"ok": True, "backup": record}
+    _log_superadmin_action(user, "backup_trigger", {"backup_id": backup_id, "type": backup_type, "status": status})
+    return {"ok": status == "completed", "backup": record}
 
 
 @router.get("/system-health/jobs")

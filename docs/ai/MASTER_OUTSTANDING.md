@@ -128,13 +128,28 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | 11 | ADR system, back-filling the eight known decisions | Group 3 Ch 6 |
 | 12 | Failure memory with the five questions | Group 3 Ch 8 — seven lessons currently live only in a transcript |
 | 13 | **Decision Governance** — Architecture Decision Registry and Decision Ledger carrying *expected outcome, actual outcome, lessons* | Group 4 Ch 9 · Group 3 Ch 6 · Group 2 Ch 6 |
-| 14 | **The second, unverified backup path** — `api/superadmin/system_health.py::trigger_backup` runs its own `pg_dump --format=custom`, does not go through `database/backup.py`, is not verified, and reports a `location` of `backups/<uuid>.sql.gz` that is not where the file lands | Group 2 Ch 9 |
+| ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
 
-**Item 14 was found while building Phase R1 and deliberately left alone.** It is
-the same defect class R1 closed — a backup nobody verifies — but in a superadmin
-endpoint with its own request path, permissions and response contract. Folding it
-into the restore change would have widened that change past what could be
-reviewed as one thing. It is one commit's work with its own tests.
+**Item 14 was found while building Phase R1, deliberately left alone, and is now
+DONE (2026-09-08).** `trigger_backup` no longer reimplements `pg_dump`/`shutil`
+itself — it calls `database/backup.py::run_backup()` and then
+`database/restore.py::verify_backup()` before reporting success, the same
+verified path Phase R1 proved for the scheduled backup job. Folding it into the
+restore change would have widened that change past what could be reviewed as
+one thing, so it stayed its own commit with its own tests, as recorded here.
+
+**Fixing it found a defect this entry did not name.** The `except Exception`
+around the old dump logic set `status = "completed"` unconditionally — so a
+missing `pg_dump` binary, a permission error, or a timeout all reported success,
+with `size_mb: 0.0` and a `location` nothing had written. Same shape as gate M
+and gate K in §E3/§E4: success reported for work that did not happen. Fixed by
+making failure (including a backup that writes but does not verify) report
+`status: "failed"`, `ok: false`, and a `safe_error()`-scrubbed reason rather than
+the raw exception string — a first pass returned `str(exc)` directly and
+`tests/unit/test_exception_info_exposure.py`'s ratchet caught it. Proven by
+`tests/unit/test_superadmin.py::TestBackupTriggerEndpoint` (3 tests: failed run,
+verified success, and a backup that writes but fails verification — each
+red-green checked by reverting the fix and confirming the test fails first).
 
 **Item 13 is not a fourth thing.** It is items 11 (ADR system) and 5 (change
 records with expected effect) seen from a third source, and the complete Group 4

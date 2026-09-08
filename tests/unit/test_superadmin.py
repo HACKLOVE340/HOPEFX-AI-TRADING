@@ -693,6 +693,66 @@ class TestMLEndpoints:
 
 
 @pytest.mark.unit
+class TestBackupTriggerEndpoint:
+    """POST /api/superadmin/system-health/backups/trigger.
+
+    This used to run its own ad-hoc pg_dump/shutil copy instead of the
+    verified database/backup.py::run_backup() path from Phase R1, and its
+    except block forced status="completed" on ANY exception — so a missing
+    pg_dump binary, a permission error, or a timeout all reported success
+    with size_mb=0.0 and a location that was never written. §B2 item 14 in
+    docs/ai/MASTER_OUTSTANDING.md names the unverified-path half of this;
+    this covers the fail-open half found while fixing it.
+    """
+
+    def test_a_failed_backup_is_reported_as_failed_not_completed(self, sa_client):
+        with (
+            patch("database.backup.run_backup", side_effect=RuntimeError("DATABASE_URL is not set")),
+            patch("api.superadmin.system_health._log_superadmin_action"),
+        ):
+            resp = sa_client.post("/api/superadmin/system-health/backups/trigger", json={"type": "incremental"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["backup"]["status"] == "failed"
+        assert body["ok"] is False
+        assert body["backup"]["size_mb"] == 0.0
+
+    def test_a_successful_backup_is_verified_and_reports_the_real_path(self, sa_client, tmp_path):
+        fake_backup = tmp_path / "hopefx_20260908.sql.gz"
+        fake_backup.write_bytes(b"not a real dump, just needs to exist")
+        fake_report = MagicMock(bytes_uncompressed=2 * 1024 * 1024)
+        with (
+            patch("database.backup.run_backup", return_value=fake_backup),
+            patch("database.restore.verify_backup", return_value=fake_report),
+            patch("api.superadmin.system_health._log_superadmin_action"),
+        ):
+            resp = sa_client.post("/api/superadmin/system-health/backups/trigger", json={"type": "incremental"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["backup"]["status"] == "completed"
+        assert body["backup"]["location"] == str(fake_backup)
+        assert body["backup"]["size_mb"] == 2.0
+
+    def test_an_unverifiable_backup_is_reported_as_failed(self, sa_client, tmp_path):
+        # run_backup() succeeded but the artefact it wrote does not survive
+        # verify_backup() (e.g. the WAL-sidecar defect Phase R1 found) — the
+        # trigger must not call that success either.
+        fake_backup = tmp_path / "hopefx_20260908.sql.gz"
+        fake_backup.write_bytes(b"not a real dump, just needs to exist")
+        with (
+            patch("database.backup.run_backup", return_value=fake_backup),
+            patch("database.restore.verify_backup", side_effect=RuntimeError("backup contains no tables")),
+            patch("api.superadmin.system_health._log_superadmin_action"),
+        ):
+            resp = sa_client.post("/api/superadmin/system-health/backups/trigger", json={"type": "incremental"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["backup"]["status"] == "failed"
+        assert body["ok"] is False
+
+
+@pytest.mark.unit
 class TestDashboardEndpoint:
     def test_dashboard_returns_html(self, sa_client):
         resp = sa_client.get("/api/superadmin/")
