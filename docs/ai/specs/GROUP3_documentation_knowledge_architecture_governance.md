@@ -982,7 +982,7 @@ requirement ──► implementation ──► test ──► KPI
 | Link | Mechanism | Status |
 |---|---|---|
 | Requirement → implementation | Evidence locator on the registry row | **AVAILABLE** |
-| Implementation → *called* | Caller check | **NEW** |
+| Implementation → *called* | `scripts/capability_callers.py` | **AVAILABLE** (Phase G3-3) |
 | Implementation → test | Test naming the capability | PARTIAL |
 | Test → *can fail* | Injection evidence | **NEW** |
 | Capability → KPI | Telemetry metric per capability | PARTIAL |
@@ -1319,10 +1319,10 @@ missing decision record against a stale link hides the first.
 
 | # | Gap | Chapter | Priority | Why |
 |---|---|---|---|---|
-| 1 | Document registry with owners and tiers | 2 | **Critical** | Everything else queries it; ~126 documents are currently invisible |
-| 2 | Resolve the four API documents | 1, 3 | **Critical** | A live conflict — two different base URLs, no authority marker |
-| 3 | Referential freshness check | 15 | High | Would have caught all three known documentation errors |
-| 4 | Caller check on the capability registry | 13, 14 | High | Closes the gap that produced a dead control marked live |
+| ~~1~~ | ~~Document registry with owners and tiers~~ | 2 | **DONE** — Phase G3-1 | 198 documents registered; found 5 API claimants, not 4 |
+| 2 | Resolve the **five** API documents | 1, 3 | **Critical** | A live conflict — two different base URLs, no authority marker. The registry found a fifth (`docs/api.md` alongside `docs/API.md`) |
+| ~~3~~ | ~~Referential freshness check~~ | 15 | **DONE** — Phase G3-2 | Two layers, not one: referential would have caught none of the three known errors |
+| ~~4~~ | ~~Caller check on the capability registry~~ | 13, 14 | **DONE** — Phase G3-3 | 154 rows screened, 37 flagged; a screen, not a verdict |
 | 5 | Injection evidence as a traceability link | 13 | High | Five tests that could not fail, in one session |
 | 6 | ADR system + back-fill the eight known decisions | 6 | High | Each is already cited as precedent with no citable record |
 | 7 | Failure memory with the five questions | 8 | High | Seven lessons currently exist only in a transcript |
