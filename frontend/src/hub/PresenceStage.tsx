@@ -30,6 +30,7 @@ import { Mic, Minimize2, Send, Square, Volume2, VolumeX, X } from 'lucide-react'
 import { PresenceCore } from './PresenceCore';
 import { useRovingFocus } from './useRovingFocus';
 import { sceneFrom, type Measurement } from './sceneFrom';
+import { appendPoint, pointingAt, recogniseGesture, type TrackPoint } from './gestures';
 import { useFrameBudget } from './useFrameBudget';
 import type { SceneGraph } from './sceneGraph';
 import type { Presence } from './presence';
@@ -196,15 +197,107 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
   const primary = shownProjections[0] ?? singleProjection()[0]!;
   const anchor = primary.anchor;
   const scale = primary.scale;
+  // Focus moved by a gesture. Held here rather than pushed up so the stage
+  // works standalone; a parent that owns focus is followed the moment it
+  // changes `focusedId`.
+  const [gestureFocus, setGestureFocus] = useState<string | null>(null);
+  useEffect(() => {
+    setGestureFocus(null);
+  }, [focusedId]);
+  /**
+   * The one focus the plane draws itself around.
+   *
+   * Everything that asks "which surface is focused" reads THIS, layout
+   * included. Leaving `place()` on the raw prop gave the plane two notions of
+   * focus at once: a focus layout went on enlarging the panel the operator had
+   * selected while outlining the one they had just swiped to.
+   */
+  const shownFocus = gestureFocus ?? focusedId;
+
   const placements = useMemo(
-    () => place(surfaces, { layout, focusedId, viewport: { width }, collapseBackground: true }),
-    [surfaces, layout, focusedId, width],
+    () => place(surfaces, { layout, focusedId: shownFocus, viewport: { width }, collapseBackground: true }),
+    [surfaces, layout, shownFocus, width],
   );
   const visible = placements.filter((p) => p.visible);
   const shown = visible.filter((p) => !p.collapsed);
   const stacked = visible.filter((p) => p.collapsed);
   const hidden = placements.length - visible.length;
   const hasSurfaces = visible.length > 0;
+
+  /**
+   * §18's pointer half, given the caller it never had.
+   *
+   * `recogniseGesture` and `pointingAt` were written in Phase E2 and imported
+   * by nothing outside their own tests — the dead control this file's own
+   * docstring warns about, on the input side. `pointingAt` could not have been
+   * wired then: the scene graph had no producer until `sceneFrom` landed here.
+   *
+   * **Only reversible actions are bound.** `gestures.ts` says a wrongly
+   * recognised swipe moves a panel somebody was reading, so a swipe changes
+   * FOCUS — reversible, and already reachable by clicking — and a long press
+   * pins, which is a toggle with a button beside it. Nothing here closes a
+   * panel, leaves the plane, or touches an order.
+   */
+  const sceneRef = useRef<SceneGraph | null>(null);
+  const track = useRef<TrackPoint[] | null>(null);
+  const trackStart = useRef(0);
+
+  const onPlanePointerDown = useCallback((event: React.PointerEvent) => {
+    trackStart.current = performance.now();
+    track.current = [{ x: event.clientX, y: event.clientY, t: 0 }];
+  }, []);
+
+  const onPlanePointerMove = useCallback((event: React.PointerEvent) => {
+    if (track.current === null) return;
+    // Bounded. A pointer held down emits a move per frame, and `appendPoint`
+    // is where the ceiling lives because that is where the recogniser says
+    // what it actually reads.
+    appendPoint(track.current, {
+      x: event.clientX,
+      y: event.clientY,
+      t: performance.now() - trackStart.current,
+    });
+  }, []);
+
+  const onGesture = useCallback(
+    (event: React.PointerEvent) => {
+      const points = track.current;
+      track.current = null;
+      if (points === null) return;
+      appendPoint(points, { x: event.clientX, y: event.clientY, t: performance.now() - trackStart.current });
+
+      const gesture = recogniseGesture(points);
+      // Null is the common case and the safe one: a movement that is not
+      // clearly anything does nothing at all.
+      if (gesture === null) return;
+      const scene = sceneRef.current;
+      if (scene === null) return;
+
+      const first = points[0]!;
+      if (gesture === 'long_press') {
+        const under = pointingAt(scene, first.x, first.y);
+        if (under !== null) onPinSurface(under);
+        return;
+      }
+
+      const anchor = shownFocus ?? pointingAt(scene, first.x, first.y);
+      if (anchor === null || !scene.ids().includes(anchor)) return;
+      const direction =
+        gesture === 'swipe_left'
+          ? 'left'
+          : gesture === 'swipe_right'
+            ? 'right'
+            : gesture === 'swipe_up'
+              ? 'above'
+              : 'below';
+      const next = scene.neighbour(anchor, direction);
+      // Never wraps. `resolveReference` holds the same rule: a reference that
+      // wrapped would move an operator's attention to the far side of the
+      // plane, which is the opposite of what they asked for.
+      if (next !== null) setGestureFocus(next);
+    },
+    [onPinSurface, shownFocus],
+  );
 
   /**
    * §26. What the machine can currently afford, measured rather than assumed.
@@ -238,7 +331,10 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
    * than a wrong one.
    */
   useEffect(() => {
-    if (!onPositions && !onScene) return;
+    // Always measured, even when nobody asked for the reports. §18's gestures
+    // resolve through `sceneRef`, so a plane that only measured for an
+    // interested parent would answer "what am I pointing at" with nothing on
+    // every screen that did not happen to pass `onScene`.
     const measure = () => {
       const root = planeRef.current;
       if (!root) return;
@@ -258,11 +354,12 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
         // scrolls.
         measurements.push({ id, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
       }
+      sceneRef.current = sceneFrom(measurements);
       onPositions?.(found);
       // No containment is declared: these are grid siblings. `sceneFrom`
       // refuses to infer it, and this is the caller that would have been
       // tempted to.
-      onScene?.(sceneFrom(measurements));
+      onScene?.(sceneRef.current);
     };
     const frame = requestAnimationFrame(measure);
     window.addEventListener('resize', measure);
@@ -385,6 +482,17 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           once anything has been summoned. */}
       <div
         ref={planeRef}
+        // §18. The plane is where a pointer gesture is made; the individual
+        // panels see it by bubbling, which is what lets `pointingAt` decide
+        // which one was meant rather than trusting where the event landed.
+        onPointerDown={onPlanePointerDown}
+        onPointerMove={onPlanePointerMove}
+        onPointerUp={onGesture}
+        onPointerCancel={() => {
+          // A gesture the browser took away is not a gesture. Leaving the
+          // points behind would let the next press finish somebody else's.
+          track.current = null;
+        }}
         style={{
           position: 'relative',
           display: 'grid',
@@ -516,7 +624,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
                 key={surface.id}
                 surface={surface}
                 span={span}
-                focused={focusedId === surface.id}
+                focused={shownFocus === surface.id}
                 spokenAbout={spokenAbout.includes(surface.id)}
                 onClose={() => onCloseSurface(surface.id)}
                 onPin={() => onPinSurface(surface.id)}

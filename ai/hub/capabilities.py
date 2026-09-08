@@ -1387,12 +1387,14 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "Gesture recognition",
         "staged",
         "frontend/src/hub/gestures.ts:recogniseGesture",
-        "The POINTER half is built \u2014 swipes and long press, no camera and no "
-        "consent, returning null rather than the nearest gesture because a "
-        "wrongly-recognised swipe moves a panel somebody was reading. The "
-        "CAMERA half needs hand landmarks and this repository has no landmark "
-        "source; building a recogniser nothing feeds would be "
-        "hopefx-dead-controls wearing a camera.",
+        "STAGED on the CAMERA half only. Hand landmarks need a model this "
+        "repository does not carry, and adding one is a supply-chain decision "
+        "for the owner rather than mine to make. The POINTER half is built AND "
+        "WIRED \u2014 see input.pointer_gestures; it was left staged under this "
+        "id because a pointer swipe is not vision, and marking a vision row "
+        "live for pointer input would be renaming the capability to fit what "
+        "was built, which is how agents.system came to point at "
+        "platform_engineering.",
     ),
     _c(
         "vision.pointing",
@@ -1401,11 +1403,43 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "Pointing and object reference",
         "staged",
         "frontend/src/hub/gestures.ts:pointingAt",
-        "The OBJECT REFERENCE half is built: a hit test against the scene graph "
-        "answering the topmost panel under a point, and null on empty space "
-        "rather than the nearest panel \u2014 'I am pointing at nothing' is an "
-        "answer. The PHYSICAL POINTING half needs body landmarks, which no "
-        "source in this repository produces.",
+        "STAGED on the PHYSICAL POINTING half only \u2014 body landmarks, the same "
+        "absent model as vision.gesture. The OBJECT REFERENCE half is built AND "
+        "WIRED against the measured scene: see input.pointing_resolves. It hit-"
+        "tests the topmost panel under a point and answers null on empty space "
+        "rather than the nearest panel, because 'I am pointing at nothing' is "
+        "an answer.",
+    ),
+    _c(
+        "input.pointer_gestures",
+        "18",
+        "A",
+        "Pointer gestures move the plane",
+        "live",
+        "frontend/src/test/hub_pointer_input.test.tsx",
+        "The caller recogniseGesture never had. Written in Phase E2 and imported by nothing outside "
+        "its own tests until now \u2014 hopefx-dead-controls, in my own work. A swipe on the plane moves "
+        "FOCUS to the measured neighbour and a long press PINS: both reversible, both already "
+        "reachable by other means. Nothing destructive is bound, and a source-scanning test holds "
+        "that so a later edit cannot add one quietly. Proven by four injections, each grepped to "
+        "confirm it applied before the run was trusted: unwiring the handler fails all three "
+        "behavioural tests; making the swipe wrap fails exactly the no-wrap one; removing the track "
+        "bound fails the cap test; and dropping the OLDEST point instead of the newest breaks "
+        "recognition outright, which is why the ring buffer a reviewer would reach for first is "
+        "wrong here.",
+    ),
+    _c(
+        "input.pointing_resolves",
+        "18",
+        "A",
+        "What the operator is pointing at, against the real scene",
+        "live",
+        "frontend/src/hub/PresenceStage.tsx:pointingAt",
+        "pointingAt could not have been wired when it was written \u2014 the scene graph had no producer "
+        "until sceneFrom landed in PresenceStage in Phase H1. It has one now, so a long press "
+        "resolves to the panel under the finger rather than the element the event bubbled to. The "
+        "measure effect had to change to make this true: it returned early unless a positions or "
+        "scene callback was supplied, so sceneRef was null on every standalone mount.",
     ),
     _c(
         "vision.attention_aware",

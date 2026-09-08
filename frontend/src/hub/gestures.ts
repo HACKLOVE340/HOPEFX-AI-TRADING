@@ -43,6 +43,31 @@ const LONG_PRESS_MS = 500;
 /** And must not have wandered more than this. */
 const LONG_PRESS_SLOP = 12;
 
+/**
+ * The most points a single gesture keeps.
+ *
+ * A pointer held down emits a move event per frame, so an unbounded track is a
+ * user-driven allocation with no ceiling on the heaviest screen this app draws
+ * — and `recogniseGesture` reads only the first point and the last one, so
+ * every point in between was being kept for nothing.
+ */
+export const MAX_TRACK_POINTS = 64;
+
+/**
+ * Add a point to a track, bounded.
+ *
+ * Once the cap is reached the newest point REPLACES the newest, rather than
+ * dropping the oldest: the first point is what a swipe is measured from and
+ * what `pointingAt` hit-tests, so losing it would silently change which panel
+ * a gesture meant. Mutates and returns the same array — this runs on every
+ * pointermove.
+ */
+export function appendPoint(points: TrackPoint[], point: TrackPoint): TrackPoint[] {
+  if (points.length >= MAX_TRACK_POINTS) points[points.length - 1] = point;
+  else points.push(point);
+  return points;
+}
+
 export function recogniseGesture(points: readonly TrackPoint[]): Gesture | null {
   if (points.length < 2) return null;
 

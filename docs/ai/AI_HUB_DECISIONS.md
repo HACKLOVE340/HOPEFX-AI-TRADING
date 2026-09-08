@@ -203,3 +203,75 @@ docstring — no request bodies, no parameter schemas, no examples. A catalogue
 that quoted request models would eventually quote one with a credential field
 name and a sample value. The defence is structural: `AppCapability` has exactly
 eight fields, and a test fails if a ninth appears.
+
+---
+
+## Phase I3 — wiring a pointer is not shipping a camera
+
+### The decision: pointer input gets its own rows, `vision.*` stays staged
+
+§18's `vision.gesture` and `vision.pointing` had notes splitting them honestly
+into a built half and a camera half. The built halves — `recogniseGesture` and
+`pointingAt` — turned out to be imported by **nothing outside their own tests**.
+Dead controls, in my own work, in the file whose docstring warns about exactly
+that.
+
+Wiring them raised the tempting question: does that make the two `vision.` rows
+live? No. Every other row in §18 is camera-derived — scene understanding,
+capture indication, frame retention, source selection — and `vision.` means
+vision. A pointer swipe is not vision.
+
+Marking those rows live for pointer input would be **renaming the capability to
+fit what was built**. That is precisely the move that had `agents.system`
+pointing at `platform_engineering`, and left §11 reporting twelve agents with
+eleven present. The registry only means something if the id constrains the
+evidence rather than the other way round.
+
+So: two new ids, `input.pointer_gestures` and `input.pointing_resolves`, and the
+`vision.` rows keep their staged state with only the camera half named. Their
+notes now point at the new ids, so "staged" cannot be misread as "nothing here
+works".
+
+### What is NOT being decided here
+
+The camera halves need a hand/body landmark model this repository does not
+carry. Adding one is a **supply-chain decision for the owner** — a new
+dependency, pulled into a money-moving platform, shipping a model. That belongs
+to the owner, not to a phase that happened to be nearby.
+
+### Only reversible actions are bound to a gesture
+
+`gestures.ts` argues in its own docstring that on a trading screen a wrongly
+recognised swipe moves a panel somebody was reading. The answer is that no
+gesture removes anything: a swipe moves FOCUS, a long press PINS. Both are
+reversible and both are already reachable by other means. Nothing closes a
+panel, leaves the plane, or touches an order — and a source-scanning test holds
+that, so a later edit cannot add one quietly.
+
+The recogniser's own refusal is what makes this safe, and it is re-asserted at
+the call site: a movement that is not clearly anything returns null and does
+nothing at all. It never wraps, on the same grounds as `resolveReference` — a
+reference that wrapped would move an operator's attention to the far side of
+the plane, which is the opposite of what they asked for.
+
+### The bound belongs where the recogniser is, not where the events are
+
+A pointer held down emits a move per frame, so an unbounded track is a
+user-driven allocation with no ceiling. `appendPoint` caps it, and lives in
+`gestures.ts` because that is where the code that says *what is actually read*
+lives — the recogniser reads only the first point and the last one.
+
+Which point to drop is the real decision. A ring buffer dropping the **oldest**
+is the obvious implementation and is wrong here: the first point is what a swipe
+is measured from and what `pointingAt` hit-tests against, so dropping it
+silently changes which panel a gesture meant. Injected, it does not degrade
+gracefully — recognition fails outright. The cap therefore replaces the
+**newest** point once full, keeping both ends exact.
+
+### One focus, read by everything
+
+Adding gesture focus without repointing `place()` gave the plane two notions of
+focus at once: the ring followed the swipe while the layout went on enlarging
+the operator's original selection. `shownFocus` is now declared above the
+placement memo and feeds it, so there is one answer to "which surface is
+focused" and everything downstream reads it.

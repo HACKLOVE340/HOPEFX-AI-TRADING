@@ -1307,11 +1307,120 @@ executed. The registry note says so rather than implying otherwise.
 
 ---
 
+## Phase I3 — §18's built halves, given the callers they never had  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §18 Pointer gestures move the plane | *(new)* | **live** | `test/hub_pointer_input.test.tsx` |
+| §18 What the operator is pointing at | *(new)* | **live** | `hub/PresenceStage.tsx:pointingAt` |
+| §18 Gesture recognition | staged | staged | camera half named |
+| §18 Pointing and object reference | staged | staged | camera half named |
+
+`recogniseGesture` and `pointingAt` were written in Phase E2 and, measured now,
+were imported by **nothing outside their own tests**. That is
+`hopefx-dead-controls` — and it is mine: I wrote the module docstring
+explaining why building a recogniser nothing feeds would be a dead control, and
+then built one anyway on the input side.
+
+`pointingAt` could not have been wired when it was written. The scene graph had
+no producer until `sceneFrom` landed in `PresenceStage` in Phase H1. It has one
+now.
+
+### The naming question, settled before building
+
+Wiring pointer input does **not** make `vision.gesture` and `vision.pointing`
+live. Every other row in §18 is camera-derived — scene understanding, capture
+indication, frame retention, source selection — and `vision.` means vision. A
+pointer swipe is not vision. Marking those rows live because pointer input
+works would be renaming the capability to fit what was built, which is exactly
+how `agents.system` came to point at `platform_engineering` and §11 came to
+report twelve agents with eleven present.
+
+So the pointer work gets **its own two rows**, and the two `vision.` rows stay
+staged with only the camera half named in the note. Their notes now say what is
+built and wired, and point at the new ids, so a reader cannot mistake "staged"
+for "nothing here works".
+
+The camera halves need a hand/body landmark model this repository does not
+carry. **Adding one is a supply-chain decision for the owner, not mine to make
+unilaterally** — it is the one thing in this phase I am not deciding.
+
+### Only reversible actions are bound
+
+`gestures.ts` says in its own docstring that on a trading screen a wrongly
+recognised swipe moves a panel somebody was reading. The answer is that no
+gesture removes anything:
+
+* **swipe** → moves FOCUS to the measured neighbour. Reversible, and already
+  reachable by clicking.
+* **long press** → PINS, which is a toggle with a button beside it.
+
+Nothing closes a panel, leaves the plane, or touches an order. A
+source-scanning test asserts the `onGesture` block contains neither
+`onCloseSurface` nor `onExit`, so a later edit cannot add one quietly.
+
+**It never wraps.** `resolveReference` holds the same rule: a reference that
+wrapped would move an operator's attention to the far side of the plane, which
+is the opposite of what they asked for.
+
+### Three defects the wiring exposed, all mine
+
+**The scene graph was built only for callers who asked about it.** The measure
+effect returned early unless an `onPositions` or `onScene` callback was
+supplied, so `sceneRef` was null on every standalone mount. Invisible while
+nothing hit-tested against it. It now always measures.
+
+**The track had no bound.** A pointer held down emits a move event per frame,
+so appending on every one is a user-driven allocation with no ceiling — on the
+heaviest screen this app draws. Worse, `recogniseGesture` reads only the first
+point and the last, so every point in between was being kept for nothing. The
+ceiling now lives in `appendPoint`, next to the recogniser that defines what is
+actually read.
+
+The interesting part is *which* point gets dropped. A ring buffer dropping the
+OLDEST is what a reviewer reaches for first, and it is wrong here: the first
+point is what a swipe is measured from and what `pointingAt` hit-tests, so
+dropping it silently changes which panel a gesture meant. Injected, it does not
+merely degrade — recognition fails outright.
+
+**The plane had two notions of focus at once.** The focus ring followed the
+gesture while `place()` went on reading the raw prop, so a focus layout kept
+enlarging the panel the operator had selected while outlining the one they had
+just swiped to. `shownFocus` now feeds the layout as well, and it is declared
+above the placement memo so nothing downstream can reach past it.
+
+### What is proven
+
+**Automated (PASS):** 9 tests, and the whole frontend suite at 2,537. Proven by
+four injections, each grepped to confirm it applied before the run was trusted
+(the Phase I1 lesson, where an injection silently failed to apply and I nearly
+concluded the code under test did not matter):
+
+| Injection | Result |
+|---|---|
+| Unwire `onPointerUp` | all 3 behavioural tests fail, on assertions |
+| Make the swipe wrap at the edge | exactly 1 fails — the no-wrap test |
+| Remove the track bound | the cap test fails |
+| Drop the oldest point, not the newest | cap test *and* recognition both fail |
+
+The first version of the no-wrap test failed on a null `querySelector` rather
+than an assertion, which is a test dying rather than a test proving. It now
+asserts focus after every step. The first version of the layout test leaned on
+a helper that did not exist; it now reads the rendered `gridColumn` spans, so
+it asks the layout what it did rather than what it was told.
+
+**Runtime (UNVERIFIED):** a real finger on a real touchscreen. jsdom fires
+synthetic pointer events; it does not prove a trackpad or a panel of glass
+behaves the same.
+
+---
+
 ## Phase H — the remainder
 
-Nine rows, five sections. Regenerated from the registry rather than
-carried forward: the earlier version of this table still listed §7 and §25 rows
-that Phases E and F made live, which is the shape of stale plan a reader trusts.
+**Seven rows, four sections.** Regenerated from the registry each time this
+section is touched rather than carried forward: an earlier version still listed
+§7 and §25 rows that Phases E and F had made live, and a stale plan is one a
+reader trusts.
 
 | § | Row | State |
 |---|---|---|
@@ -1319,21 +1428,37 @@ that Phases E and F made live, which is the shape of stale plan a reader trusts.
 | 18 | Gesture recognition | staged |
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
-| 4 | Presence layer — identity, voice, animation, spatial state | planned |
-| 4 | Environment layer — the dynamic workspace | planned |
+| 4 | Presence layer — identity, voice, animation, spatial state | staged |
+| 4 | Workforce layer — concurrent specialist agents | staged |
+| 4 | Environment layer — the dynamic workspace | staged |
 
-**Two of these are blocked on things this repository does not have**, and the
-plan should say so rather than scheduling them:
+### What is actually blocked, after I re-triaged what I had called blocked
 
-* §26's two performance rows want the `virtualization.ts` and `frameBudget.ts`
-  built in Phase D1 wired into a component that actually renders a large
-  workspace. That is real work, not a wiring pass.
-* §18's gesture rows have no landmark source. Building a recogniser nothing
-  feeds is `hopefx-dead-controls` wearing a camera, which is why they were
-  staged rather than skipped.
+I was wrong about four of the six rows I had called blocked, and the corrections
+are worth keeping visible because they were all the same mistake: treating
+*unverifiable on this hardware* as *unbuildable*.
 
-§4's two rows are roll-ups: they become live when the layers beneath them are,
-and are deliberately last so they cannot be claimed early.
+* **§24 agent runtime** — "no process boundary this deployment has". Wrong;
+  `multiprocessing` is standard library. Built in Phase I1.
+* **§10 multi-display** — "no second physical screen". Wrong as a blocker; the
+  Window Management API is a browser API. Built in Phase I2.
+* **§18's built halves** — the recogniser and the hit test existed with **zero
+  production callers**. Not blocked at all; wired in Phase I3.
+* **§21 scientific 3D** — "only canvas2d implemented". A renderer is code.
+  Still open, and genuinely schedulable.
+
+Two are really blocked, for two different reasons:
+
+* **§18's camera halves** need a hand/body landmark model this repository does
+  not carry. That is a **supply-chain decision for the owner**, not one to make
+  unilaterally in a phase.
+* **§26's delegation bound** was circular — there was nothing to bound. Phase I1
+  gave it a worker boundary, so the bound now has somewhere to live.
+
+§4's three rows are **derived roll-ups**: `layer_state()` computes them from
+their constituent rows, so they move on their own and cannot be typed live
+early. Deriving them is what caught `arch.layer_c.workforce` claiming live with
+two of eighty-two constituents staged.
 
 ---
 
