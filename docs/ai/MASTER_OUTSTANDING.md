@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 18 proven · **5 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 19 proven · **4 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 5 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5 (R3–R7).** 18 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 4 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4 (R3–R8).** 19 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -284,10 +284,10 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — five gates left.** `python scripts/gate_evidence.py`
+1. **Finish the ratchet — four gates left.** `python scripts/gate_evidence.py`
    lists them:
    `gate_j_circular_imports`, `gate_g_import_discipline`,
-   `gate_f_doc_consistency`, `gate_h_wordmap_schema`, `gate_d_model_accuracy`.
+   `gate_f_doc_consistency`, `gate_d_model_accuracy`.
    `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
    from `__file__` with no env indirection, so a per-test mirror is too slow.
 2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
@@ -447,6 +447,33 @@ that whichever one CI happens to run is the one under test.
 
 No defect found this time. Not every gate is broken; this is the check
 that says so with evidence rather than assumption.
+
+## §E8 — Phase R8 (2026-09-08)
+
+Ratchet 5 → 4. One gate proven, and like gate C it was already alive.
+
+`gate_h_wordmap_schema.py` validates `WORDMAP.json.example`, the reference
+file operators copy to `WORDMAP.json`. The consequence it guards is quiet:
+if the example loses its structure, `NuclearWordmapScorer` silently falls
+back to built-in keywords, so a misconfiguration looks like normal
+operation. All eight documented rules were injected into a real mutated
+copy of the file — invalid JSON, a missing `nuclear_risk` key, that key as
+a list rather than an object, an uppercase category name, a non-object
+category, an empty category, an empty keyword string, an over-length
+keyword, a non-numeric weight, weights above 10 and below 0, too few
+categories, and too few total keywords. All refused.
+
+Two of those cases are worth separating, because they are the ones a
+truncation defect would actually produce: the category floor and the
+keyword floor fire independently, so a file that keeps all eight categories
+but strips each to one keyword is still caught.
+
+As with gate C, the clean first run was not taken at face value: disabling
+the weight-range check in a scratch copy turned both range tests red, then
+the real file was restored and the suite reran clean.
+
+No defect found. Two gates in a row alive is worth stating plainly — the
+ratchet's value is the evidence either way, not a defect count.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

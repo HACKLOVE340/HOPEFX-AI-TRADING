@@ -69,8 +69,8 @@ injected = ""
 id = "gate_h_wordmap_schema"
 kind = "ci_gate"
 runs = "scripts/ci/gate_h_wordmap_schema.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_h_wordmap_schema_injections.py"
+injected = "All 8 documented rules injected into a real mutated copy of WORDMAP.json.example: invalid JSON, missing nuclear_risk key, nuclear_risk as a non-dict, an uppercase category name, a non-dict category, an empty category, an empty keyword string, an over-length keyword, a non-numeric weight, weights above 10 and below 0, too few categories, and too few total keywords — all fail. Sanity probe (disabling the weight-range check) confirmed the suite would catch a real regression. No defect found — already alive"
 
 [[gate]]
 id = "gate_i_migration_chain"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 5
+unproven_count = 4
