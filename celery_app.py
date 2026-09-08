@@ -623,18 +623,54 @@ def database_backup(self=None):
     """
     Trigger a database backup snapshot.
 
-    Calls database.backup.run_backup() to write a snapshot and returns its
-    path. run_backup is synchronous and raises RuntimeError on failure.
+    Calls database.backup.run_backup() to write a snapshot, then
+    database.restore.verify_backup() to check the snapshot is restorable, and
+    returns both the path and the verification.
+
+    The verification is not optional politeness. Until it existed this task
+    returned "ok" whenever run_backup did not raise, and the SQLite path was
+    writing artefacts that restored to an empty database — committed rows were
+    left in the WAL sidecar, and every layer above reported success. An
+    unverified backup is absent, not assumed good (Rule 2), so a snapshot that
+    cannot be verified is reported as `unverified` rather than `ok`.
+
+    A failed verification does not raise: the artefact is still on disk and may
+    be salvageable, and raising would retry the dump against a database that is
+    probably fine. It returns a status an operator and an alert can both read.
     """
     try:
         # Lock TTL must exceed time_limit (2100 s) so the lock does not expire
         # while the task is still running.  Use time_limit + 60 s buffer.
         with _redis_lock("database_backup", timeout=2160):
             from database.backup import run_backup
+            from database.restore import RestoreRefused, verify_backup
 
             result = run_backup()
-            logger.info("database_backup: %s", result)
-            return {"status": "ok", "backup": str(result)}
+            try:
+                report = verify_backup(result)
+            except RestoreRefused as exc:
+                logger.error("database_backup wrote an unverifiable snapshot %s: %s", result, exc)
+                return {
+                    "status": "unverified",
+                    "verified": False,
+                    "backup": str(result),
+                    "reason": str(exc),
+                }
+            logger.info(
+                "database_backup: %s (%s, %d tables, %s bytes)",
+                result,
+                report.format.value,
+                report.tables,
+                f"{report.bytes_uncompressed:,}",
+            )
+            return {
+                "status": "ok",
+                "verified": True,
+                "backup": str(result),
+                "format": report.format.value,
+                "tables": report.tables,
+                "bytes_uncompressed": report.bytes_uncompressed,
+            }
     except RuntimeError as exc:
         if "already held" in str(exc):
             logger.info("database_backup skipped — lock already held by another task")

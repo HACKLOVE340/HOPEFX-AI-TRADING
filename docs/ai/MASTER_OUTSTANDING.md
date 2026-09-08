@@ -25,27 +25,34 @@ they are not equally trustworthy, so they are separated:
 
 These are not blocked on engineering. They are blocked on someone deciding.
 
-### A1. Backup and restore — how much recovery is enough?
+### A1. Backup and restore — how much recovery is enough? *(partly delivered)*
 
-**The measurement.** `database/backup.py` exists and is scheduled. There is **no
-restore path and no test of either**. Group 2 ranks this **Critical** and it is
-the only gap in the whole programme whose worst case is *unrecoverable* — every
-other Critical item costs money or trust, this one costs the data.
+**Delivered in Phase R1**, because it did not need the decision: `database/restore.py`
+verifies before it restores and refuses six ways a backup arrives worthless, and the
+round trip is proven by execution — SQLite in the fast suite, a real `pg_dump`
+restored into a real PostgreSQL 16.13 database with matching checksums in the
+integration suite. `celery_app.database_backup` now verifies what it wrote.
+`docs/runbooks/database-restore.md` is the 3am procedure.
 
-**What must be picked:** the recovery point objective (how much data may be lost)
-and the recovery time objective (how long a restore may take). Those two numbers
-decide whether this is a nightly `pg_dump` to object storage or streaming WAL
-archiving with point-in-time recovery. They are business numbers, not engineering
-ones.
+**Building it found two live defects a survey could not have:**
 
-**Recommendation:** this is the first thing to build, whatever the numbers are.
-Start with the cheap version — nightly dump, restore *proven by executing it into
-a scratch database*, both in CI — and tighten later. A restore that has never run
-is not a backup.
+* **SQLite backups of a WAL database restored to nothing.** Committed rows live in
+  the `-wal` sidecar; the backup copied the main file alone. Reproduced by
+  execution. The nightly job logged success every time. **Any SQLite backup taken
+  before 2026-09-08 is suspect** — the runbook carries a sweep that finds them,
+  and `--verify` refuses them by name.
+* **`pg_dump` was buffered entirely in memory** before writing, so a
+  production-sized database would have exhausted the worker mid-incident.
 
-*(`pg_dump`, `psql` and `docker` are all available in this environment, so the
-proof can be executed rather than described. An earlier note in this programme
-claimed otherwise; it was wrong.)*
+**Still yours to pick, and now the only thing blocking the rest:**
+
+| Question | Why it cannot be defaulted |
+|---|---|
+| **RPO** — how much data may be lost? | Today it is **24 hours by schedule, not by decision**. That number came from a cron entry, not from anyone weighing it |
+| **RTO** — how long may a restore take? | Decides whether snapshots are enough, or whether this needs WAL archiving and point-in-time recovery |
+
+Those two answers decide whether PITR gets built. Everything else in this item is
+done and tested.
 
 ### A2. `data/` ÷ `data_layer/` — where does new market-data code go?
 
@@ -101,27 +108,34 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
-| 1 | **Tested backup and restore** | Group 2 Ch 9 · decision A1 | The only gap whose worst case is unrecoverable |
-| 2 | **Rule 1 injection evidence across existing gates** | Group 2 Ch 0, 19, 20 | Five controls that could not fail are already known by name; the rest are unmeasured. A control with no injection record is treated as absent |
+| ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
+| 1 | **Rule 1 injection evidence across existing gates** | Group 2 Ch 0, 19, 20 | Five controls that could not fail are already known by name; the rest are unmeasured. A control with no injection record is treated as absent |
 
 ### B2. High
 
 | # | Item | Where |
 |---:|---|---|
-| 3 | Acceleration answer-invariance — cache age carried, downgrade always visible | Group 2 Ch 28, 32, 33 |
-| 4 | Data egress and sovereignty boundary | Group 2 Ch 13 — blocks Group 1 §23/§24 |
-| 5 | Correlation key joining metrics, traces, logs and changes | Group 2 Ch 14 — blocks Group 1 §16 |
-| 6 | Change records carrying their expected effect | Group 2 Ch 6 — blocks Group 1 §16, §21, §32 |
-| 7 | Authority Tiers 0 and 3 (four of six exist) | Group 2 Ch 10 · INV-09 · Group 4 Ch 6 |
-| 8 | Stated degradation order, trading path excluded from it | Group 2 Ch 34 |
-| 9 | Progressive delivery and automated rollback | Group 2 Ch 5 |
-| 10 | Package ownership register with enforced edges | Group 2 Ch 1 · INV-01 |
-| 11 | Injection evidence as a traceability link | Group 3 Ch 13 |
-| 12 | ADR system, back-filling the eight known decisions | Group 3 Ch 6 |
-| 13 | Failure memory with the five questions | Group 3 Ch 8 — seven lessons currently live only in a transcript |
-| 14 | **Decision Governance** — Architecture Decision Registry and Decision Ledger carrying *expected outcome, actual outcome, lessons* | Group 4 Ch 9 · Group 3 Ch 6 · Group 2 Ch 6 |
+| 2 | Acceleration answer-invariance — cache age carried, downgrade always visible | Group 2 Ch 28, 32, 33 |
+| 3 | Data egress and sovereignty boundary | Group 2 Ch 13 — blocks Group 1 §23/§24 |
+| 4 | Correlation key joining metrics, traces, logs and changes | Group 2 Ch 14 — blocks Group 1 §16 |
+| 5 | Change records carrying their expected effect | Group 2 Ch 6 — blocks Group 1 §16, §21, §32 |
+| 6 | Authority Tiers 0 and 3 (four of six exist) | Group 2 Ch 10 · INV-09 · Group 4 Ch 6 |
+| 7 | Stated degradation order, trading path excluded from it | Group 2 Ch 34 |
+| 8 | Progressive delivery and automated rollback | Group 2 Ch 5 |
+| 9 | Package ownership register with enforced edges | Group 2 Ch 1 · INV-01 |
+| 10 | Injection evidence as a traceability link | Group 3 Ch 13 |
+| 11 | ADR system, back-filling the eight known decisions | Group 3 Ch 6 |
+| 12 | Failure memory with the five questions | Group 3 Ch 8 — seven lessons currently live only in a transcript |
+| 13 | **Decision Governance** — Architecture Decision Registry and Decision Ledger carrying *expected outcome, actual outcome, lessons* | Group 4 Ch 9 · Group 3 Ch 6 · Group 2 Ch 6 |
+| 14 | **The second, unverified backup path** — `api/superadmin/system_health.py::trigger_backup` runs its own `pg_dump --format=custom`, does not go through `database/backup.py`, is not verified, and reports a `location` of `backups/<uuid>.sql.gz` that is not where the file lands | Group 2 Ch 9 |
 
-**Item 14 is not a fourth thing.** It is items 12 (ADR system) and 6 (change
+**Item 14 was found while building Phase R1 and deliberately left alone.** It is
+the same defect class R1 closed — a backup nobody verifies — but in a superadmin
+endpoint with its own request path, permissions and response contract. Folding it
+into the restore change would have widened that change past what could be
+reviewed as one thing. It is one commit's work with its own tests.
+
+**Item 13 is not a fourth thing.** It is items 11 (ADR system) and 5 (change
 records with expected effect) seen from a third source, and the complete Group 4
 document names the field the other two omit: *actual* outcome compared against
 expected. Build them as one artefact or you get half a ledger three times.
@@ -190,6 +204,16 @@ document points at it rather than trying to be it.
 
 
 ---
+
+## §E2 — What Phase R1 changed (2026-09-08)
+
+| | |
+|---|---|
+| Built | `database/restore.py` · `docs/runbooks/database-restore.md` · `tests/integration/test_database_restore_postgres.py` |
+| Fixed | The WAL backup defect · the misleading `.sql.gz` name · `pg_dump` memory buffering · rotation that would have stopped silently at the extension change |
+| Proven | 23 tests. Every refusal by handing the code the exact broken artefact; the round trip against a live PostgreSQL 16.13 with matching checksums |
+| A control that could not fail | **One of my own**, caught by injection: a "leaves no partial file" test that the atomic staging already guaranteed, so deleting the cleanup did not fail it. Replaced with the falsifiable property — an existing database is untouched when a restore fails |
+| Operational consequence | **Sweep the backup directory.** Any SQLite artefact from before today may restore to nothing, and `--verify` is what tells you which |
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

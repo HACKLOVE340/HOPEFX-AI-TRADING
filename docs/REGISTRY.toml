@@ -583,20 +583,20 @@ state = "active"
 note = "All 186 source chapter titles, routed to the group that owns each. Generated from the source, not retyped."
 
 [[document]]
-path = "docs/ai/specs/GROUP4_master_ai_operating_system_v2_complete.txt"
-tier = "T1"
-subject = "group4-master-ai-os-v2"
-owner = "hacklove340"
-state = "active"
-note = "Uploaded source, preserved verbatim. Complete Volumes I-XX: 118 named sections, each with a statement. Not a superset of v1."
-
-[[document]]
 path = "docs/ai/specs/GROUP4_master_ai_operating_system.txt"
 tier = "T1"
 subject = "group4-master-ai-os"
 owner = "hacklove340"
 state = "active"
 note = "Uploaded source (v1), preserved verbatim. Table of contents: 20 volumes, 186 chapters; 7 written. Superseded by nothing — see the v2 entry."
+
+[[document]]
+path = "docs/ai/specs/GROUP4_master_ai_operating_system_v2_complete.txt"
+tier = "T1"
+subject = "group4-master-ai-os-v2"
+owner = "hacklove340"
+state = "active"
+note = "Uploaded source, preserved verbatim. Complete Volumes I-XX: 118 named sections, each with a statement. Not a superset of v1."
 
 [[document]]
 path = "docs/ai_change_ledger.md"
@@ -1334,3 +1334,11 @@ tier = "T2"
 subject = "roadmap"
 owner = ""
 state = "draft"
+
+[[document]]
+path = "docs/runbooks/database-restore.md"
+tier = "T2"
+subject = "database-restore"
+owner = "hacklove340"
+state = "active"
+note = "SEV1 recovery procedure. Every command executed and verified 2026-09-08, not transcribed."

@@ -752,13 +752,34 @@ ability to trade with degraded data is not obviously better than not trading.
 | 1 | Pod/node loss | < 1 min | 0 | k8s reschedule | AVAILABLE |
 | 2 | Cluster loss | < 1 hr | < 5 min | Compose on VPS | Scripts AVAILABLE, **unrehearsed** |
 | 3 | Region/provider loss | < 4 hr | < 15 min | Second provider | **NEW** |
-| 4 | Data corruption | < 4 hr | to last good backup | PITR restore | **NEW — no evidenced backup policy** |
+| 4 | Data corruption | < 4 hr | to last good backup | Verified restore from snapshot | **PARTIAL — Phase R1.** Backup and restore are now tested both ways; PITR is not built, and RPO is still 24 h by schedule, not by decision |
 | 5 | Total loss | < 24 hr | < 1 hr | Rebuild from git + backups | PARTIAL |
 
-**Tier 4 is the most serious gap in this document.** Corruption is the failure that
-redundancy makes *worse*, because a corrupt write replicates faithfully to every
-replica. Nothing in the survey evidenced a tested backup-and-restore policy for
-Postgres.
+**Tier 4 was the most serious gap in this document, and is now half closed.**
+Corruption is the failure that redundancy makes *worse*, because a corrupt write
+replicates faithfully to every replica.
+
+**Phase R1 closed the tested-restore half.** `database/restore.py` verifies an
+artefact before restoring it and refuses six distinct ways a backup arrives
+worthless; the round trip is proven by executing it — SQLite in the fast suite,
+and a real `pg_dump` restored into a real PostgreSQL 16.13 database with matching
+checksums in `tests/integration/`. `docs/runbooks/database-restore.md` is the
+3am procedure.
+
+Building it found two live defects that a survey could not have:
+
+* **A SQLite backup of a WAL database restored to nothing.**
+  `database/connection.py` sets `journal_mode=WAL`, so committed rows sit in the
+  `-wal` sidecar; the backup copied the main file alone. Reproduced: one
+  committed row, and the restored copy had no such table. The scheduled job
+  logged success every night. Backups written before 2026-09-08 are suspect and
+  the runbook carries the sweep that finds them.
+* **`pg_dump` was buffered entirely in memory** before a byte was written, so a
+  production-sized database would have exhausted the worker — during an incident.
+
+**What remains NEW:** point-in-time recovery, and an RPO that is a decision
+rather than a side effect of a 24-hour schedule. Both are named in
+`docs/ai/MASTER_OUTSTANDING.md` §A1 as the owner's call.
 
 ### The continuity decision
 
@@ -771,7 +792,10 @@ understand is the scenario with unbounded downside.
 ### Failure modes of the recovery itself
 
 * **The backup that was never restored.** A backup is a hypothesis until a restore
-  proves it. Rule 1 applies: an unrestored backup is not a backup.
+  proves it. Rule 1 applies: an unrestored backup is not a backup. **Closed in
+  Phase R1** — `celery_app.database_backup` now verifies what it wrote and
+  reports `unverified` rather than `ok` when it cannot, because the status an
+  operator reads must never be more confident than the evidence behind it.
 * **The runbook that assumes a working console.** Recovery procedures must not
   depend on the system being recovered.
 * **The credential nobody can reach.** Break-glass credentials must be retrievable
@@ -795,8 +819,10 @@ executes nothing at Tier 2 or above.
 
 ### Priority
 
-**Tier 4 backup-and-restore is the highest-priority NEW item in this entire
-document.** It is the only gap whose worst case is unrecoverable.
+**Tier 4 backup-and-restore was the highest-priority NEW item in this entire
+document** — the only gap whose worst case is unrecoverable. Phase R1 delivered
+the tested restore; **point-in-time recovery and a decided RPO remain**, and they
+inherit the priority.
 
 ### Why this design
 
@@ -1953,7 +1979,7 @@ of the whole specification.
 
 | # | Gap | Chapter | Priority | Why this rank |
 |---|---|---|---|---|
-| 1 | Tested backup and restore | 9 | **Critical** | The only gap whose worst case is unrecoverable |
+| ~~1~~ | ~~Tested backup and restore~~ | 9 | **DONE** — Phase R1 | `database/restore.py`; round trip proven against SQLite and a live PostgreSQL 16.13 with matching checksums. Found two defects by execution: a WAL database backed up file-only restored to nothing, and pg_dump was buffered entirely in memory |
 | 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | Five controls that could not fail are already known; the rest are unmeasured |
 | 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
 | 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
