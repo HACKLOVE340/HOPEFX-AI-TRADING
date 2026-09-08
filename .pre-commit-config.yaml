@@ -126,7 +126,16 @@ repos:
 
       - id: coverage-gate
         name: Per-module coverage gate (≥80%)
-        language: python
+        # system, not python: this shells out to pytest against real test
+        # files that import the full production stack (fastapi, sqlalchemy,
+        # ...). An isolated `language: python` venv has none of that unless
+        # additional_dependencies lists the whole project, so every
+        # measurement silently failed with "No module named pytest" and
+        # every module read as unmeasurable rather than measured — the same
+        # failure shape this gate already had to be fixed against once.
+        # Matches every sibling hook here that needs project code importable
+        # (docs-freshness, gate-evidence, doc-metrics, ...).
+        language: system
         entry: python scripts/pre_commit_coverage.py
         types: [python]
         # Only run on production source files that have corresponding test files.

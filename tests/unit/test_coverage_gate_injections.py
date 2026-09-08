@@ -269,3 +269,40 @@ class TestTheUnmeasurableBaselineIsARatchet:
             "def test_nothing():\n    assert True\n", encoding="utf-8"
         )
         assert _run(project, "mymod/fresh.py").returncode != 0
+
+
+class TestTheHookItselfCanRunTheGateItNames:
+    """The logic above is proven; whether pre-commit can actually reach it
+    was not. `entry: python scripts/pre_commit_coverage.py` shells out to
+    `sys.executable -m pytest` against real test files that import the full
+    production stack (fastapi, sqlalchemy, ...). Under `language: python`,
+    pre-commit builds an isolated venv with none of that installed unless
+    `additional_dependencies` lists it — and this hook listed nothing, so
+    every module measurement failed with "No module named pytest" and was
+    reported as unmeasurable rather than measured. Every sibling hook that
+    needs to import project code (docs-freshness, gate-evidence, doc-metrics,
+    ...) uses `language: system` instead, which reuses whatever interpreter
+    is already on PATH — the one with the project's own dependencies.
+
+    Confirmed directly: running `python scripts/pre_commit_coverage.py
+    notifications/alert_engine.py` with the project's own .venv active
+    returns a real number (67% < 80%) instead of "could not be measured" —
+    the gate's logic works; only the isolated hook environment couldn't
+    reach it.
+    """
+
+    def test_the_coverage_gate_hook_uses_the_ambient_interpreter(self) -> None:
+        import yaml
+
+        config = yaml.safe_load(Path(".pre-commit-config.yaml").read_text(encoding="utf-8"))
+        hooks = {hook["id"]: hook for repo in config["repos"] for hook in repo["hooks"]}
+        gate_hook = hooks.get("coverage-gate")
+        assert gate_hook is not None, "the coverage-gate hook is gone from .pre-commit-config.yaml"
+        assert gate_hook.get("language") == "system", (
+            "coverage-gate uses language: "
+            f"{gate_hook.get('language')!r} — an isolated language: python venv has no "
+            "pytest/pytest-cov/fastapi/sqlalchemy unless additional_dependencies lists the "
+            "whole project, so every measurement silently degrades to 'could not be "
+            "measured'. Match the sibling hooks (docs-freshness, gate-evidence, ...) and use "
+            "language: system so it runs with the project's own interpreter."
+        )
