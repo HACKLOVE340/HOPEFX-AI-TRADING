@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 13 proven · **10 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 15 proven · **8 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 10 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2), ratchet turned 13→10 (R3).** 23 gates now, 13 proven. Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 8 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10 (R3), 10→8 (R4).** 15 proven. Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -234,6 +234,55 @@ the migration root, and a test credential containing the substring `EXAMPLE`
 which the scanner allowlists. Both would have reported a live control as dead.
 **Verifying that the injection applied is now part of the method**, not an
 afterthought.
+
+## §E4 — Phase R4, and what comes next (2026-09-08)
+
+Ratchet 10 → 8. Two gates proven, one dead behaviour fixed, one blind spot
+recorded rather than silently widened.
+
+| Gate | Outcome |
+|---|---|
+| `gate_b_env_consistency` | **Proven.** An undocumented `${VAR}` reference fails; a literal value does not, which is its documented scope; deleting either input fails closed |
+| `gate_k_requirements_consistency` | **Proven, and a fail-open fixed.** `[gate-k] SKIP` on a missing requirements file exited **0** — CI and production could install different code with nothing disagreeing. Same shape as gate M, one phase later |
+| `coverage-gate` | **Not reached.** Scope went to the two defects above |
+| `gate_j_circular_imports` | **Not reached** |
+
+### Recorded, not fixed — the build toolchain is unguarded
+
+`gate_k`'s `_SKIP_NAMES` excludes `pip`, `wheel` and `setuptools`, and every rule
+iterates the parsed sets, so **the CVE-pinned build toolchain is checked by
+nothing in that gate**. requirements.txt pins those three against four named
+CVEs; the lock could drift below them and gate K would still pass.
+
+Widening the exclusion is a scope decision with a real cost — build-toolchain
+versions in a lock are often environment-specific, and false positives train
+people to bypass gates. `test_gate_k_requirements_injections.py` pins the
+exclusion at exactly those three so it cannot quietly grow, and this is the
+record so it cannot be forgotten while the gate looks green.
+
+**Decide it deliberately.** Either extend gate K to cover them, or state in
+requirements.txt why they are out of scope.
+
+---
+
+## What is next
+
+In order, and each is a command away from being verified rather than assumed:
+
+1. **Finish the ratchet — 8 gates left.** `python scripts/gate_evidence.py` lists
+   them. Two phases at the current rate. Every phase so far has found a real
+   defect, so this is still the cheapest place to find them:
+   `coverage-gate`, `gate_j_circular_imports`, `gate_g_import_discipline`,
+   `gate_c_docker_compose`, `gate_e_dead_files`, `gate_f_doc_consistency`,
+   `gate_h_wordmap_schema`, `gate_d_model_accuracy`.
+   `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
+   from `__file__` with no env indirection, so a per-test mirror is too slow.
+2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
+   Three documents name the same missing artefact from three angles; build them
+   as one or you get half a ledger three times.
+3. **The owner's decisions in §A**, chiefly **A1**: RPO is 24 hours because of a
+   cron entry, not because anyone weighed it. That and RTO decide whether
+   point-in-time recovery gets built.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

@@ -20,8 +20,8 @@ injected = "An unauthenticated mutating route, and a fake auth alias — both st
 id = "gate_b_env_consistency"
 kind = "ci_gate"
 runs = "scripts/ci/gate_b_env_consistency.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_b_env_injections.py"
+injected = "An undocumented ${VAR} reference in docker-compose, and one with a default, both fail; a literal value does not, which is documented scope rather than a miss; deleting either input file fails closed"
 
 [[gate]]
 id = "gate_broken_imports"
@@ -90,8 +90,8 @@ injected = ""
 id = "gate_k_requirements_consistency"
 kind = "ci_gate"
 runs = "scripts/ci/gate_k_requirements_consistency.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_k_requirements_injections.py"
+injected = "A direct dependency removed from the lock (Rule 1) and a lock pinned below the stated lower bound (Rule 4) both fail. A missing requirements file now fails instead of exiting 0 — the defect found here. The pip/wheel/setuptools blind spot is pinned so the exclusion cannot grow"
 
 [[gate]]
 id = "gate_l_safety_invariants"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 10
+unproven_count = 8

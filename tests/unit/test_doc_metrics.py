@@ -86,15 +86,46 @@ class TestTheCheckCanActuallyFail:
 
     def test_a_wrong_number_is_reported(self, tmp_path: Path) -> None:
         doc = tmp_path / "STALE.md"
-        doc.write_text("The ledger holds 999 gates today.\n", encoding="utf-8")
+        doc.write_text("The ledger holds 999 gates, most of them proven.\n", encoding="utf-8")
         report = check(extra_documents=[doc])
         assert any(d.path == doc and d.stated == 999 for d in report.drift), report.drift
 
     def test_a_correct_number_is_not_reported(self, tmp_path: Path) -> None:
         measured = measure()["gates_total"]
         doc = tmp_path / "FRESH.md"
-        doc.write_text(f"The ledger holds {measured} gates today.\n", encoding="utf-8")
+        doc.write_text(f"The ledger holds {measured} gates, all listed.\n", encoding="utf-8")
         assert not [d for d in check(extra_documents=[doc]).drift if d.path == doc]
+
+    @pytest.mark.parametrize("shape", ["23 gates · 15 proven", "23 gates, 15 proven", "23 gates discovered"])
+    def test_the_total_shapes_documents_actually_use_are_matched(
+        self, tmp_path: Path, shape: str
+    ) -> None:
+        # The positive control for the narrowing below: tightening the pattern
+        # must not stop it matching the shapes real documents write.
+        measured = measure()["gates_total"]
+        doc = tmp_path / "SHAPE.md"
+        doc.write_text(shape.replace("23", str(measured + 1)) + "\n", encoding="utf-8")
+        assert [d for d in check(extra_documents=[doc]).drift if d.metric == "gates_total"], shape
+
+
+class TestACountOfWhatRemainsIsNotATotal:
+    """`(\d+)\s+gates` also matched "8 gates left" — a true sentence the checker
+    called drift. A check that forces awkward prose gets worked around, so the
+    pattern narrowed rather than the writing. This pins that."""
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "Finish the ratchet — 8 gates left.",
+            "There are 8 gates still unproven in the ledger",
+            "roughly 4 gates per phase at the current rate",
+        ],
+    )
+    def test_a_remaining_count_is_not_read_as_a_total(self, tmp_path: Path, sentence: str) -> None:
+        doc = tmp_path / "PROSE.md"
+        doc.write_text(sentence + "\n", encoding="utf-8")
+        drift = [d for d in check(extra_documents=[doc]).drift if d.metric == "gates_total"]
+        assert not drift, f"{sentence!r} was read as a total: {drift}"
 
 
 class TestItRefusesRatherThanReportingClean:

@@ -28,6 +28,7 @@
 # Exits 0 on pass, 1 on failure.
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -278,8 +279,22 @@ def main() -> int:
         if not p.exists():
             missing.append(str(p.relative_to(REPO_ROOT)))
     if missing:
-        print(f"[gate-k] SKIP  Missing file(s): {', '.join(missing)}")
-        return 0
+        # A SKIP IS NOT A PASS.  All three requirements files are committed to
+        # this repository, so one going absent means a rename, a deletion or a
+        # bad checkout — never an environmental quirk.  Exiting 0 here made
+        # "the dependency sets agree" and "nobody checked" indistinguishable to
+        # every reader of the CI summary, which is how CI and production come to
+        # run different code without anyone noticing.
+        #
+        # Set REQ_ALLOW_SKIP=1 for a deliberate local run without them; never in
+        # CI, which is the one place a silent skip costs something.
+        if os.getenv("REQ_ALLOW_SKIP", "").strip().lower() in ("1", "true", "yes"):
+            print(f"[gate-k] SKIP  Missing file(s): {', '.join(missing)} (REQ_ALLOW_SKIP is set)")
+            return 0
+        print(f"[gate-k] FAIL  Missing file(s): {', '.join(missing)}")
+        print("These files are committed to the repository, so their absence is a defect.")
+        print("Set REQ_ALLOW_SKIP=1 only for a local run that deliberately lacks them.")
+        return 1
 
     txt_pkgs = _parse_requirements(REQUIREMENTS_TXT)
     lock_pkgs = _parse_requirements(REQUIREMENTS_LOCK)

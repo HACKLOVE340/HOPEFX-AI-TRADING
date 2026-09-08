@@ -73,18 +73,34 @@ for arriving without evidence.
 | Measured 2026-09-08 | |
 |---|---:|
 | Gates discovered | 23 |
-| Proven able to fail, by a test that injects | 13 |
-| Unproven — the ratcheted baseline | 10 |
+| Proven able to fail, by a test that injects | 15 |
+| Unproven — the ratcheted baseline | 8 |
 
-**Phase R3 turned it from 13 to 10, and injecting found two more defects.** Gate M
-exited **0** when its A/B dataset was missing, so a rename or deletion turned the
-ML edge guard off and left CI green — it fails closed now. And `check_secrets.sh`
-matched its placeholder allowlist against the whole line, so a genuine credential
-containing `xxx`, `none`, `null` or `tbd` anywhere in it was skipped; the match is
-now anchored to the parsed value.
+**R3 turned it 13→10, R4 turned it 10→8, and injecting keeps finding defects.**
 
-That is **eight** controls found unable to fail in this repository, every one
-found by breaking it rather than reading it.
+* Gate M exited **0** when its A/B dataset was missing, so a rename turned the ML
+  edge guard off and left CI green.
+* `check_secrets.sh` matched its placeholder allowlist against the whole line, so
+  a genuine credential containing `xxx`, `none`, `null` or `tbd` was skipped.
+* Gate K exited **0** when a requirements file was missing — `[gate-k] SKIP` — so
+  CI and production could install different code with nothing disagreeing. The
+  same shape as gate M, in a second gate, one phase later.
+
+All three now fail closed with an explicit local opt-out. That is **nine**
+controls found unable to fail here, every one found by breaking it rather than
+reading it.
+
+### A method correction R4 forced
+
+Three injections in R4 were the wrong *shape* before they were right: a
+list-style compose entry where the file uses mapping style, a literal value where
+the gate collects only `${VAR}` references, and a package the gate excludes by
+name. Each applied cleanly and still proved nothing, and each briefly looked like
+a dead rule.
+
+So the rule is now two-part: **assert the injection applied, and confirm it is
+the failure the gate declares it detects.** Read what a gate excludes before
+concluding it is dead.
 
 The count may only fall. A new gate with no evidence blocks; evidence that stops
 existing blocks; a proven gate downgraded blocks. All three were verified by
@@ -2018,7 +2034,7 @@ of the whole specification.
 | # | Gap | Chapter | Priority | Why this rank |
 |---|---|---|---|---|
 | ~~1~~ | ~~Tested backup and restore~~ | 9 | **DONE** — Phase R1 | `database/restore.py`; round trip proven against SQLite and a live PostgreSQL 16.13 with matching checksums. Found two defects by execution: a WAL database backed up file-only restored to nothing, and pg_dump was buffered entirely in memory |
-| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | **PARTIAL — Phases R2–R3.** Ledger built and ratcheting: 23 gates, **13 proven, 10 unproven**. Injecting found two further dead controls — gate M passed with no dataset, and the secret scanner skipped credentials containing `xxx` or `none` |
+| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | **PARTIAL — Phases R2–R4.** Ledger built and ratcheting: 23 gates, **15 proven, 8 unproven**. Injecting found two further dead controls — gate M passed with no dataset, and the secret scanner skipped credentials containing `xxx` or `none` |
 | 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
 | 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
 | 5 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |

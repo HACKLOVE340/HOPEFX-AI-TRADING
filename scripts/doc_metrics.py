@@ -91,7 +91,15 @@ class Report:
 #: Bound to the scripts that measure them. Each pattern captures exactly one
 #: integer, in a shape specific enough that ordinary prose does not match it.
 CLAIMS: Final[tuple[Claim, ...]] = (
-    Claim("gates_total", re.compile(r"(\d+)\s+gates\b"), "scripts/gate_evidence.py"),
+    # Anchored to the shapes that state a TOTAL. A bare `(\d+)\s+gates` also
+    # matched "8 gates left", which is a count of what remains — a true sentence
+    # the checker called drift. A check that forces awkward prose gets worked
+    # around, so the pattern narrowed rather than the writing.
+    Claim(
+        "gates_total",
+        re.compile(r"(\d+)\s+gates\s*(?:·|,|\bdiscovered\b)"),
+        "scripts/gate_evidence.py",
+    ),
     Claim("gates_proven", re.compile(r"(\d+)\s+proven\b"), "scripts/gate_evidence.py"),
     Claim("gates_unproven", re.compile(r"(\d+)\s+unproven\b"), "scripts/gate_evidence.py"),
     Claim("source_titles", re.compile(r"(\d+)\s+(?:source\s+)?titles\b"), "scripts/group4_preservation.py"),
