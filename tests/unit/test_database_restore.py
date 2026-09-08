@@ -406,3 +406,114 @@ class TestVerificationDoesNotLoadTheWholeDump:
         assert peak < uncompressed // 4, (
             f"peak {peak:,} bytes against a {uncompressed:,} byte dump — the verifier is buffering it"
         )
+
+
+class TestTheCommandLineAnOperatorActuallyUses:
+    """`python -m database.restore` is the interface in the runbook.
+
+    It was untested — the module's logic was covered, its entry point was not,
+    and the entry point is the part a person types at 3am under pressure. Every
+    command in `docs/runbooks/database-restore.md` is exercised here.
+    """
+
+    def test_verify_reports_a_sound_backup_and_exits_zero(self, tmp_path: Path, capsys) -> None:
+        from database.restore import main
+
+        source = tmp_path / "live.db"
+        _make_wal_database(source, rows=4)
+        blob = run_backup_for(source, tmp_path / "backups")
+
+        assert main([str(blob), "--verify"]) == 0
+        out = capsys.readouterr().out
+        assert "sqlite" in out and "table" in out
+
+    def test_verify_refuses_the_wal_victim_and_exits_nonzero(self, tmp_path: Path, capsys) -> None:
+        from database.restore import main
+
+        live = tmp_path / "live.db"
+        con = sqlite3.connect(live)
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY)")
+        con.execute("INSERT INTO trades VALUES (1)")
+        con.commit()
+        try:
+            victim = tmp_path / "victim.db.gz"
+            with open(live, "rb") as src, gzip.open(victim, "wb") as dst:
+                dst.write(src.read())
+        finally:
+            con.close()
+
+        assert main([str(victim), "--verify"]) == 1
+        assert "REFUSED" in capsys.readouterr().err
+
+    def test_a_restore_writes_the_target_and_reports_the_rows(self, tmp_path: Path, capsys) -> None:
+        from database.restore import main
+
+        source = tmp_path / "live.db"
+        _make_wal_database(source, rows=6)
+        blob = run_backup_for(source, tmp_path / "backups")
+        target = tmp_path / "recovered.db"
+
+        assert main([str(blob), "--target", str(target)]) == 0
+        assert target.exists()
+        assert "6 rows" in capsys.readouterr().out
+
+    def test_restoring_without_a_target_is_refused(self, tmp_path: Path, capsys) -> None:
+        from database.restore import main
+
+        source = tmp_path / "live.db"
+        _make_wal_database(source)
+        blob = run_backup_for(source, tmp_path / "backups")
+
+        assert main([str(blob)]) == 2
+        assert "--target is required" in capsys.readouterr().err
+
+    def test_an_existing_target_is_refused_without_overwrite(self, tmp_path: Path, capsys) -> None:
+        from database.restore import main
+
+        source = tmp_path / "live.db"
+        _make_wal_database(source)
+        blob = run_backup_for(source, tmp_path / "backups")
+        occupied = tmp_path / "occupied.db"
+        occupied.write_bytes(b"something a human cares about")
+
+        assert main([str(blob), "--target", str(occupied)]) == 1
+        assert occupied.read_bytes() == b"something a human cares about"
+        assert "REFUSED" in capsys.readouterr().err
+
+    def test_overwrite_is_honoured_when_stated(self, tmp_path: Path) -> None:
+        from database.restore import main
+
+        source = tmp_path / "live.db"
+        _make_wal_database(source, rows=2)
+        blob = run_backup_for(source, tmp_path / "backups")
+        occupied = tmp_path / "occupied.db"
+        occupied.write_bytes(b"stale")
+
+        assert main([str(blob), "--target", str(occupied), "--overwrite"]) == 0
+        assert sqlite3.connect(occupied).execute("SELECT count(*) FROM trades").fetchone()[0] == 2
+
+    def test_a_postgres_backup_sends_the_operator_to_the_runbook(self, tmp_path: Path, capsys) -> None:
+        # Restoring PostgreSQL is supervised; the CLI must say so rather than
+        # half-doing it.
+        from database.restore import main
+
+        blob = tmp_path / "pg.sql.gz"
+        with gzip.open(blob, "wt", encoding="utf-8") as fh:
+            fh.write("--\n-- PostgreSQL database dump\n--\nCREATE TABLE trades ();\n")
+
+        assert main([str(blob), "--target", str(tmp_path / "x.db")]) == 2
+        assert "database-restore.md" in capsys.readouterr().err
+
+    def test_a_missing_backup_exits_nonzero(self, tmp_path: Path, capsys) -> None:
+        from database.restore import main
+
+        assert main([str(tmp_path / "absent.db.gz"), "--verify"]) == 1
+        assert "does not exist" in capsys.readouterr().err
+
+
+def run_backup_for(source: Path, backups: Path) -> Path:
+    from database.backup import run_backup
+
+    backups.mkdir(parents=True, exist_ok=True)
+    return run_backup(f"sqlite:///{source}", backup_dir=backups)

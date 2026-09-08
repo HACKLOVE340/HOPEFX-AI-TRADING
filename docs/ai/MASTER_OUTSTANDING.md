@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 15 proven · **8 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 16 proven · **7 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 8 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10 (R3), 10→8 (R4).** 15 proven. Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 7 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7 (R3–R5).** 16 proven. Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -269,12 +269,12 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — 8 gates left.** `python scripts/gate_evidence.py` lists
-   them. Two phases at the current rate. Every phase so far has found a real
-   defect, so this is still the cheapest place to find them:
-   `coverage-gate`, `gate_j_circular_imports`, `gate_g_import_discipline`,
-   `gate_c_docker_compose`, `gate_e_dead_files`, `gate_f_doc_consistency`,
-   `gate_h_wordmap_schema`, `gate_d_model_accuracy`.
+1. **Finish the ratchet — seven gates left.** `python scripts/gate_evidence.py`
+   lists them. Two phases at the current rate. Every phase so far has found a
+   real defect, so this is still the cheapest place to find them:
+   `gate_j_circular_imports`, `gate_g_import_discipline`, `gate_c_docker_compose`,
+   `gate_e_dead_files`, `gate_f_doc_consistency`, `gate_h_wordmap_schema`,
+   `gate_d_model_accuracy`.
    `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
    from `__file__` with no env indirection, so a per-test mirror is too slow.
 2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
@@ -283,6 +283,69 @@ In order, and each is a command away from being verified rather than assumed:
 3. **The owner's decisions in §A**, chiefly **A1**: RPO is 24 hours because of a
    cron entry, not because anyone weighed it. That and RTO decide whether
    point-in-time recovery gets built.
+4. **The 361 unmeasurable modules** (§E5). Not a phase — a standing ratchet.
+   Worth attacking opportunistically: whenever you touch a module on that list,
+   make its test import it and drop the line.
+
+## §E5 — Phase R5 (2026-09-08)
+
+Ratchet 8 → 7. One gate proven, and it was the most inverted defect found yet.
+
+### The coverage gate passed the worst coverage
+
+| Module state | Gate result before R5 |
+|---|---|
+| 25% covered | **FAIL**, exit 1 — correct |
+| 0% covered (test never imports it) | **pass**, exit 0 |
+| Test file will not import at all | **pass**, exit 0 |
+
+When the module under test is never imported, coverage collects no data and
+prints no `TOTAL` line, so the parser returned `None` — and `None` took the "warn
+but do not block" branch. **The worse the coverage, the quieter the path through
+the gate.** Rule 2 says an unmeasured value is absent, never zero; here it was
+being treated as success.
+
+An unmeasurable module now fails. `SKIP_COVERAGE_GATE=1` was already the
+documented emergency bypass, so no second escape hatch was added.
+
+### The fix immediately found a real hole
+
+`database/backup.py` — the module that takes every database snapshot — resolved
+to `tests/unit/test_database.py` via the `test_{parent}.py` fallback, and that
+file never imports it. So it had **no effective coverage check at all**, and the
+gate reported nothing wrong.
+
+| Module | Before | After |
+|---|---:|---:|
+| `database/backup.py` | unmeasurable (silently) | **95%** |
+| `database/restore.py` | 78% (below the 80% threshold) | **95%** |
+
+Both are Phase R1 code. The PostgreSQL dump path is tested at the subprocess
+boundary — argument list, streamed output, failure handling, and that the
+password travels in the environment rather than argv where `ps` would show it —
+while the real `pg_dump` stays covered by the integration suite against a live
+server.
+
+### And it surfaced debt worth naming: 361 modules
+
+Repository-wide, **361 modules resolve to a test file that never imports them**.
+Every one had been passing the coverage gate while contributing nothing to
+coverage. That is not a number to fix in a phase, so it is recorded as a ratchet
+in `docs/COVERAGE_UNMEASURABLE.txt`: the list may only shrink, and a **new**
+unmeasurable module blocks the commit.
+
+The seed is static — every module whose resolved test file never mentions it —
+because measuring all 539 candidates takes about two hours. That is safe in the
+direction it errs: an entry only matters when measurement returns `None`, and a
+measurable module is judged on its number either way. Verified by execution — a
+baselined module at 25% still fails. A list that were too *narrow* would block
+legitimate work, so the seed is deliberately wide.
+`python scripts/pre_commit_coverage.py --adopt` replaces it with the exact
+measured set.
+
+**This is now the largest single piece of recorded debt in the repository**, and
+it is the honest reading of what the coverage gate was hiding. Paying it down is
+one module at a time: make the test file import the module it is named for.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

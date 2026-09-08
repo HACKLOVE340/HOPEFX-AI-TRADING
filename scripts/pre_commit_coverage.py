@@ -17,7 +17,10 @@ not the entire test suite.
 Exit codes
 ----------
 0 — coverage gate passed (or no testable modules changed)
-1 — coverage below threshold for one or more modules
+1 — coverage below threshold for one or more modules, OR coverage could not be
+    measured for one of them. An unmeasured module is not a covered module:
+    this gate used to pass a module at 0% while failing one at 25%, because a
+    module a test never imports produces no coverage table to parse.
 
 Environment variables
 ---------------------
@@ -40,7 +43,48 @@ from pathlib import Path
 _THRESHOLD = int(os.getenv("COVERAGE_THRESHOLD", "80"))
 _SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"
 
-# Modules excluded from coverage gate (generated code, migrations, examples)
+#: Where the recorded debt lives. Generated, never hand-written.
+#:
+#: Making an unmeasurable module fail was correct — the gate had been passing a
+#: module at 0% while failing one at 25% — but a hard cutover blocks every commit
+#: touching pre-existing debt, and a gate that blocks work people must do gets
+#: switched off with SKIP_COVERAGE_GATE=1, which disables the whole thing.
+#:
+#: And the debt is not small: **361 modules** resolve to a test file that never
+#: imports them. A hand-written constant was tried first and was the wrong shape
+#: at that scale, so this is the same ratchet the document registry, the
+#: freshness checker and the gate-evidence ledger use — a generated file that may
+#: only shrink.
+#:
+#: Each entry means "no test imports this module", which is worse than low
+#: coverage: it is no coverage, silently.
+#:
+#: ## Why an over-broad list is safe
+#:
+#: An entry only matters when measurement returns ``None``. A module that IS
+#: measurable is judged on its number regardless of whether it appears here —
+#: verified by execution: a baselined module at 25% still fails. So a list that
+#: is too broad is inert, and one that is too narrow blocks legitimate work.
+#: The seed below is therefore deliberately conservative.
+#:
+#: The seed is static — every module whose resolved test file never mentions it
+#: — because measuring all 539 candidates takes about two hours. ``--adopt``
+#: replaces it with the exact measured set when someone has the time to spend.
+#:
+#:     python scripts/pre_commit_coverage.py --adopt   # regenerate by measurement (slow)
+BASELINE_PATH = Path(__file__).resolve().parent.parent / "docs" / "COVERAGE_UNMEASURABLE.txt"
+
+
+def _load_baseline() -> frozenset[str]:
+    if not BASELINE_PATH.exists():
+        return frozenset()
+    return frozenset(
+        line.strip()
+        for line in BASELINE_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    )
+
+
 _EXCLUDED_PATTERNS = frozenset(
     {
         "alembic/",
@@ -174,9 +218,39 @@ def main(argv: list[str]) -> int:
         coverage_pct, output = _run_coverage(path, test_file)
 
         if coverage_pct is None:
-            # Could not determine coverage — warn but don't block
+            # AN UNMEASURED MODULE IS NOT A COVERED ONE.
+            #
+            # This used to warn and continue, which inverted the gate: a module
+            # at 25% failed, and a module at 0% PASSED. When a test never
+            # imports the module under test, coverage collects no data and
+            # pytest-cov prints no TOTAL line at all —
+            #
+            #   CoverageWarning: Module x.y was never imported. (module-not-imported)
+            #   CoverageWarning: No data was collected. (no-data-collected)
+            #   WARNING: Failed to generate report: No data to report.
+            #
+            # — so the parser returned None and the worst possible coverage took
+            # the quietest path through the gate. A test file that fails to
+            # import did the same thing.
+            #
+            # Rule 2: an unmeasured value is absent, never zero — and certainly
+            # never success. SKIP_COVERAGE_GATE=1 is the documented emergency
+            # bypass; a second escape hatch here would just be a second thing to
+            # reach for.
+            if str(path).replace("\\", "/") in _load_baseline():
+                print(
+                    f"pre_commit_coverage: BASELINED {path}: coverage still cannot be measured "
+                    f"(test: {test_file}). This is recorded debt, not permission — the list may "
+                    "only shrink.",
+                    file=sys.stderr,
+                )
+                continue
+            failures.append(
+                f"{path}: coverage could not be measured (test: {test_file}) — "
+                "the test may not import the module, or may fail to collect"
+            )
             print(
-                f"pre_commit_coverage: WARNING — could not measure coverage for {path} "
+                f"pre_commit_coverage: FAIL {path}: could not measure coverage "
                 f"(test: {test_file}). Output:\n{output[:500]}",
                 file=sys.stderr,
             )
@@ -210,5 +284,56 @@ def main(argv: list[str]) -> int:
     return 0
 
 
+def adopt() -> int:
+    """Regenerate the baseline by running the gate's own measurement.
+
+    Slow on purpose: it is the only way to produce a set that agrees exactly
+    with what the gate does at commit time. The committed seed is a static
+    approximation; this replaces it with the measured truth.
+    """
+    import subprocess as _sp
+
+    repo = Path(__file__).resolve().parent.parent
+    listed = _sp.run(  # nosec B603 — fixed args, no shell
+        ["git", "ls-files", "*.py"], cwd=repo, capture_output=True, text=True, check=False
+    ).stdout.split()
+
+    candidates = [
+        Path(f)
+        for f in listed
+        if not _is_excluded(Path(f)) and not Path(f).name.startswith("test_") and "tests/" not in f
+    ]
+    candidates = [p for p in candidates if _find_test_file(p) is not None]
+
+    print(f"measuring {len(candidates)} modules — this takes a while", flush=True)
+    unmeasurable: list[str] = []
+    for i, module in enumerate(candidates, 1):
+        test_file = _find_test_file(module)
+        assert test_file is not None  # nosec B101 — filtered above
+        pct, _ = _run_coverage(module, test_file)
+        if pct is None:
+            unmeasurable.append(str(module).replace("\\", "/"))
+        if i % 50 == 0:
+            print(f"  {i}/{len(candidates)} — {len(unmeasurable)} unmeasurable", flush=True)
+
+    header = [
+        "# Modules whose coverage the pre-commit gate cannot measure.",
+        "#",
+        "# Each line means: no test file imports this module, so coverage collects no",
+        "# data and produces no report. That is WORSE than low coverage — it is no",
+        "# coverage, silently. Until Phase R5 the gate PASSED these while failing",
+        "# modules that were merely under-covered.",
+        "#",
+        "# This list may only SHRINK. A new unmeasurable module blocks the commit.",
+        "# To remove an entry: make that module's test file actually import it.",
+        "",
+    ]
+    BASELINE_PATH.write_text("\n".join(header + sorted(unmeasurable)) + "\n", encoding="utf-8")
+    print(f"wrote {BASELINE_PATH.name}: {len(unmeasurable)} of {len(candidates)} unmeasurable")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--adopt" in sys.argv[1:]:
+        sys.exit(adopt())
     sys.exit(main(sys.argv[1:]))

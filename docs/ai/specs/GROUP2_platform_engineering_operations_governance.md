@@ -73,8 +73,8 @@ for arriving without evidence.
 | Measured 2026-09-08 | |
 |---|---:|
 | Gates discovered | 23 |
-| Proven able to fail, by a test that injects | 15 |
-| Unproven — the ratcheted baseline | 8 |
+| Proven able to fail, by a test that injects | 16 |
+| Unproven — the ratcheted baseline | 7 |
 
 **R3 turned it 13→10, R4 turned it 10→8, and injecting keeps finding defects.**
 
@@ -86,9 +86,19 @@ for arriving without evidence.
   CI and production could install different code with nothing disagreeing. The
   same shape as gate M, in a second gate, one phase later.
 
-All three now fail closed with an explicit local opt-out. That is **nine**
-controls found unable to fail here, every one found by breaking it rather than
-reading it.
+* The **coverage gate** passed a module at **0%** while failing one at 25%. When
+  a test never imports the module under test, coverage collects nothing and
+  prints no `TOTAL` line, so the parser returned `None` — and `None` meant "warn
+  but do not block". The worse the coverage, the quieter the path through the
+  gate. A test file that failed to import did the same.
+
+All four now fail closed with an explicit local opt-out. That is **ten** controls
+found unable to fail here, every one found by breaking it rather than reading it.
+
+The coverage fix immediately earned itself: `database/backup.py` — the module
+that takes every database snapshot — resolved to a test file that never imports
+it, so it had **no effective coverage check at all** and nothing said so. It now
+measures 95%.
 
 ### A method correction R4 forced
 
@@ -2034,7 +2044,7 @@ of the whole specification.
 | # | Gap | Chapter | Priority | Why this rank |
 |---|---|---|---|---|
 | ~~1~~ | ~~Tested backup and restore~~ | 9 | **DONE** — Phase R1 | `database/restore.py`; round trip proven against SQLite and a live PostgreSQL 16.13 with matching checksums. Found two defects by execution: a WAL database backed up file-only restored to nothing, and pg_dump was buffered entirely in memory |
-| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | **PARTIAL — Phases R2–R4.** Ledger built and ratcheting: 23 gates, **15 proven, 8 unproven**. Injecting found two further dead controls — gate M passed with no dataset, and the secret scanner skipped credentials containing `xxx` or `none` |
+| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | **PARTIAL — Phases R2–R5.** Ledger built and ratcheting: 23 gates, **16 proven, 7 unproven**. Injecting found two further dead controls — gate M passed with no dataset, and the secret scanner skipped credentials containing `xxx` or `none` |
 | 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
 | 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
 | 5 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |

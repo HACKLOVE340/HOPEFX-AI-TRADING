@@ -118,8 +118,8 @@ injected = "Real credentials staged into a throwaway repo across yaml/env/ini/cf
 id = "coverage-gate"
 kind = "precommit_hook"
 runs = "scripts/pre_commit_coverage.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_coverage_gate_injections.py"
+injected = "A module at 25% fails and a well-covered one passes; the defect found here is that a module at 0% PASSED, as did one whose test file could not be imported — coverage produced no TOTAL line, the parser returned None, and None meant 'warn but do not block'. An unmeasurable module now fails; SKIP_COVERAGE_GATE=1 remains the documented bypass"
 
 [[gate]]
 id = "doc-metrics"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 8
+unproven_count = 7

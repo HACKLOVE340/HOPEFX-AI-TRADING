@@ -223,6 +223,14 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/COVERAGE_UNMEASURABLE.txt"
+tier = "T3"
+subject = "coverage_unmeasurable"
+owner = "hacklove340"
+state = "active"
+note = "Ratchet: modules whose coverage cannot be measured. May only shrink; a new one blocks."
+
+[[document]]
 path = "docs/DEBUGGING.md"
 tier = "T2"
 subject = "debugging"
