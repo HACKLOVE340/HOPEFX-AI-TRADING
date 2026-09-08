@@ -72,8 +72,8 @@ for arriving without evidence.
 
 | Measured 2026-09-08 | |
 |---|---:|
-| Gates discovered | 22 |
-| Proven able to fail, by a test that injects | 12 |
+| Gates discovered | 23 |
+| Proven able to fail, by a test that injects | 13 |
 | Unproven — the ratcheted baseline | 10 |
 
 **Phase R3 turned it from 13 to 10, and injecting found two more defects.** Gate M
@@ -2018,7 +2018,7 @@ of the whole specification.
 | # | Gap | Chapter | Priority | Why this rank |
 |---|---|---|---|---|
 | ~~1~~ | ~~Tested backup and restore~~ | 9 | **DONE** — Phase R1 | `database/restore.py`; round trip proven against SQLite and a live PostgreSQL 16.13 with matching checksums. Found two defects by execution: a WAL database backed up file-only restored to nothing, and pg_dump was buffered entirely in memory |
-| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | **PARTIAL — Phases R2–R3.** Ledger built and ratcheting: 22 gates, **12 proven, 10 unproven**. Injecting found two further dead controls — gate M passed with no dataset, and the secret scanner skipped credentials containing `xxx` or `none` |
+| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | **PARTIAL — Phases R2–R3.** Ledger built and ratcheting: 23 gates, **13 proven, 10 unproven**. Injecting found two further dead controls — gate M passed with no dataset, and the secret scanner skipped credentials containing `xxx` or `none` |
 | 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
 | 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
 | 5 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |

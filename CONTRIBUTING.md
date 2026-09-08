@@ -53,14 +53,47 @@ mypy risk/analytics.py api/ ml/inference_engine.py
 # Tests (mirrors CI — skips e2e and slow)
 pytest -m "not e2e and not slow"
 
-# Security pre-commit hooks
+# Security and governance pre-commit hooks (see below — five of them ratchet)
 pre-commit run --all-files
 ```
+
+Before deciding *what* to change, run `python scripts/backlog_report.py`. It
+answers "what is left to build or fix" from the code rather than from a list
+someone maintained by hand. `docs/ai/MASTER_OUTSTANDING.md` §A holds the
+decisions that are the owner's to make, not a contributor's.
 
 PRs targeting `main` require:
 - All CI checks green
 - No new `detect-secrets` findings
 - Tests added or updated for changed behaviour
+
+### Six ratcheted checks will block your commit
+
+`pre-commit run --all-files` runs these alongside ruff, bandit and
+detect-secrets. Each records existing debt as a **baseline** and blocks only
+*new* violations, so the number they hold can shrink but never grow:
+
+| Check | Blocks when |
+|---|---|
+| `scripts/docs_registry.py --check` | A document exists with no registry row, or the unowned count rises |
+| `scripts/docs_freshness.py --check` | A living document names a path that does not exist, or makes a claim the tree contradicts |
+| `scripts/gate_evidence.py --check` | A new gate arrives with no evidence it can fail, or recorded evidence disappears |
+| `scripts/group4_preservation.py` | A title from either Group 4 source stops being listed |
+| `scripts/group4_index.py --check` | The generated volume index was hand-edited instead of regenerated |
+| `scripts/doc_metrics.py --check` | A living document states a figure that no longer matches the script measuring it |
+
+**Documentation ships with every push.** If your change makes a document
+stale — a count, a file path, a closed gap — update it in the same commit. A
+document that looks current while carrying a number that stopped being true is
+worse than no document, because a reader acts on it without checking.
+
+**Do not commit with `--no-verify`.** That is exactly how merge-conflict markers
+and lint regressions have entered this repository before. If a check blocks you
+and you believe it is wrong, fix the check and prove the fix — do not bypass it.
+
+If a check tells you to run a `--generate` command, run it; these files are
+generated from the tree on purpose, so that "generated from the source" is a
+claim anyone can verify rather than one only the author can.
 
 ---
 

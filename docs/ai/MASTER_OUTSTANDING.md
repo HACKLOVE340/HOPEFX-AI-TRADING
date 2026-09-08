@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 22 gates · 12 proven · **10 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 13 proven · **10 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 10 of 22 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2), ratchet turned 13→10 (R3).** Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 10 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2), ratchet turned 13→10 (R3).** 23 gates now, 13 proven. Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 

@@ -345,29 +345,55 @@ sudo iotop
 
 ## Backup Strategy
 
+> **A backup that has never been restored is not a backup.** The restore
+> procedure, and what to do when a backup refuses to verify, is
+> [`docs/runbooks/database-restore.md`](docs/runbooks/database-restore.md).
+> Walk it once before you need it.
+
 ### 1. Database Backups
+
+The application already takes verified snapshots on a schedule —
+`celery_app.database_backup` runs `database/backup.py` every 24 hours and then
+`database/restore.py::verify_backup` on what it wrote, reporting `unverified`
+rather than `ok` when the artefact cannot be restored. **Prefer that.** The
+script below exists for hosts that do not run the Celery worker.
 
 ```bash
 # Create backup script
 cat > /opt/hopefx-ai-trading/backup.sh << 'EOF'
 #!/bin/bash
+# `pipefail` is load-bearing, not style. Without it `pg_dump | gzip` reports
+# GZIP's exit status, so a failed dump exits 0 and writes a ~20-byte file while
+# the script prints "Backup completed". Verified by running it.
+set -euo pipefail
+
 BACKUP_DIR="/opt/hopefx-ai-trading/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
+DUMP="$BACKUP_DIR/db_$DATE.sql.gz"
 
 # Backup PostgreSQL
-pg_dump -U hopefx_admin hopefx_trading | gzip > $BACKUP_DIR/db_$DATE.sql.gz
+pg_dump -U hopefx_admin hopefx_trading | gzip > "$DUMP"
+
+# Verify it is restorable BEFORE trusting it or rotating anything away.
+# Exits non-zero on an empty, truncated, unrecognised or contentless dump.
+cd /opt/hopefx-ai-trading
+python -m database.restore --verify "$DUMP"
 
 # Backup configuration
-tar -czf $BACKUP_DIR/config_$DATE.tar.gz .env credentials/
+tar -czf "$BACKUP_DIR/config_$DATE.tar.gz" .env credentials/
 
-# Keep only last 30 days
-find $BACKUP_DIR -name "*.gz" -mtime +30 -delete
+# Keep only last 30 days — after verification, never before
+find "$BACKUP_DIR" -name "*.gz" -mtime +30 -delete
 
-echo "Backup completed: $DATE"
+echo "Backup verified and completed: $DATE"
 EOF
 
 chmod +x /opt/hopefx-ai-trading/backup.sh
 ```
+
+**Check the cron output, not just the file listing.** A directory full of `.gz`
+files is not evidence of a working backup; a non-zero exit from the verify step
+is evidence of a broken one.
 
 ### 2. Automated Backups
 

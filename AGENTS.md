@@ -12,6 +12,62 @@ multi-broker execution. The frontend is a React/TypeScript SPA served by Vite.
 
 **Current status:** Paper trading active. Live OANDA run is the next milestone.
 
+### Joining work already in progress? Start with these three
+
+```bash
+python scripts/backlog_report.py     # what is left to build or fix, measured now
+python scripts/gate_evidence.py      # which safety gates are proven able to fail
+```
+
+| I need to know | Where it is answered |
+|---|---|
+| What should I work on? | `python scripts/backlog_report.py`, then `docs/ai/MASTER_OUTSTANDING.md` §B |
+| What is blocked on the owner? | `docs/ai/MASTER_OUTSTANDING.md` §A — four decisions, each costed both ways |
+| What rules bind every change? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — **T0**, twelve Articles, INV-01…21 |
+| How is the specification organised? | `docs/ai/BACKLOG_GROUPS.md` — four groups, one-group rule |
+| How do I recover the database? | `docs/runbooks/database-restore.md` |
+| Which skills apply, and when? | `CLAUDE.md` — all 61, with trigger conditions |
+
+**A document's numbers are a snapshot; a script's numbers are today's.** Where
+they disagree the script is right — fix the document, do not work around it.
+
+### The four rules that govern this repository
+
+They are stated in full in `docs/ai/specs/GROUP2_platform_engineering_operations_governance.md`
+§0, and they decide most arguments:
+
+1. **A control that cannot fail is not a control.** Every gate ships with evidence
+   it can return a negative result, produced by injecting the defect it exists to
+   catch. Eight controls here have been found unable to fail; every one was found
+   by breaking it, none by reading it.
+2. **An unmeasured value is absent, never zero.** Report `unmeasured` and why —
+   never render a missing measurement as `0`, which looks like success.
+3. **Fail closed on anything that spends, trades or exposes.** If a control cannot
+   determine that an action is safe, it refuses.
+4. **Evidence that resolves is not evidence that runs.** A registry entry that
+   points at real code says nothing about whether anything calls it.
+
+### And a fifth, from the owner: documentation ships with every push
+
+**Never push code without updating the documents it makes stale.** The failure
+this guards against is not a missing file — it is a document that still looks
+current while carrying a figure that stopped being true, which a reader then
+acts on without checking.
+
+`python scripts/doc_metrics.py --check` runs in pre-commit and blocks when a
+living document states a figure that no longer matches its measuring script. It
+covers arithmetic; the rest is yours:
+
+| You changed | Update |
+|---|---|
+| What a gate, registry or ledger measures | Every document stating its figure — `doc_metrics.py --check` blocks on the verifiable ones |
+| A file a contributor must be able to find | `CLAUDE.md` routing table and `ARCHITECTURE.md` entry points |
+| A ranked gap you closed | Strike it through **with its evidence** in the Group 2/3 gap list, and update `docs/ai/MASTER_OUTSTANDING.md` |
+| A safety control | `docs/GATE_EVIDENCE.toml` — see *Add a gate, guard, or any other safety control* below |
+
+The commit message carries the reasoning; the documents carry the state. A
+successor gets both or neither.
+
 ---
 
 ## Repository Layout
@@ -253,6 +309,30 @@ Check service health:
 ```bash
 curl -s http://localhost:8000/api/health | python -m json.tool
 ```
+
+---
+
+### Add a gate, guard, or any other safety control
+
+**Rule 1 applies and it is enforced, not advisory.** `scripts/gate_evidence.py`
+runs in pre-commit, discovers gates rather than reading a list, and blocks a new
+one that arrives without evidence.
+
+1. Write the control.
+2. **Inject the defect it exists to catch** — against a copied tree, never the
+   working files. Watch it refuse. If it does not, you have a control-shaped
+   object, not a control.
+3. Make that injection a test, and assert the injection actually applied. An
+   injection that silently fails to apply leaves the gate passing, which is
+   indistinguishable from a gate that cannot fail. That mistake has been made
+   here twice.
+4. Add a row to `docs/GATE_EVIDENCE.toml` naming the test and the defect
+   injected. `python scripts/gate_evidence.py --generate` adds the row skeleton.
+5. Run `python scripts/gate_evidence.py --check`.
+
+Worked examples: `tests/unit/test_gate_l_safety_injections.py` (seven trading
+incidents), `tests/unit/test_check_secrets_injections.py` (a real bypass found
+and closed), `tests/unit/test_database_restore.py` (six fail-closed refusals).
 
 ---
 
@@ -500,3 +580,18 @@ See `ARCHITECTURE.md` for the canonical module map, ML model facts, component
 status, and key environment variable flags.
 
 See `docs/architecture.md` for the full system architecture diagram.
+
+### The governance layer above both
+
+| Document | Tier | What it settles |
+|---|---|---|
+| `docs/ai/specs/GROUP4_CONSTITUTION.md` | **T0** | Twelve Articles and INV-01…21. Above the specifications, and above code on the Articles: where code violates one, the code is the defect |
+| `docs/ai/specs/GROUP4_VOLUME_INDEX.md` | T1 | All 304 titles from both Group 4 sources, routed to the group that owns each |
+| `docs/ai/specs/GROUP1_advanced_intelligence_architecture.txt` | T1 | Intelligence: cognition, memory, perception, evolution |
+| `docs/ai/specs/GROUP2_platform_engineering_operations_governance.md` | T1 | Platform: 35 chapters, nine Parts, and the four rules |
+| `docs/ai/specs/GROUP3_documentation_knowledge_architecture_governance.md` | T1 | Knowledge: 18 chapters — how documents are governed |
+| `docs/REGISTRY.toml` | T2 | Which document is authoritative on which subject, and who owns it |
+
+Relationship rule across all of them: where an item touches another group, the
+owning group is **referenced, never copied**. That is the whole defence against
+duplicate specifications that disagree.

@@ -122,6 +122,13 @@ evidence = ""
 injected = ""
 
 [[gate]]
+id = "doc-metrics"
+kind = "precommit_hook"
+runs = "scripts/doc_metrics.py"
+evidence = "tests/unit/test_doc_metrics.py"
+injected = "A document stating a figure that no longer matches the measurement is reported as drift; a correct figure is not. It caught its own hook on arrival — adding it made the gate count 23 while three documents still said 22"
+
+[[gate]]
 id = "docs-freshness"
 kind = "precommit_hook"
 runs = "scripts/docs_freshness.py"

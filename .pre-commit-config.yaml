@@ -222,6 +222,18 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # The owner's standing rule: documentation ships with every push. The
+      # failure it guards against is not a missing file but a document that
+      # still looks current while carrying a figure that stopped being true.
+      # docs-freshness checks paths and claims; this one checks arithmetic.
+      - id: doc-metrics
+        name: Documents state the measured figures
+        language: system
+        entry: python scripts/doc_metrics.py --check
+        files: '^(docs/.*\.(md|toml)$|[A-Z_-]+\.md$|scripts/(gate_evidence|group4_preservation|docs_registry|doc_metrics)\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.

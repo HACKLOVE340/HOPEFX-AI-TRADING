@@ -42,7 +42,29 @@ is current.** Where they disagree, the script is right and the document is stale
 
 The ratcheted checks below run in `pre-commit`, so a regression blocks rather
 than accumulating: document registry, documentation freshness, Group 4 source
-preservation, volume-index drift, and gate injection evidence.
+preservation, volume-index drift, gate injection evidence, and stated-figure
+drift.
+
+### Standing rule from the owner — documentation ships with every push
+
+**Never push code without updating the documents it makes stale.** Not "when it
+seems worth it" — every push. A document that still looks current while carrying
+a number that stopped being true is worse than no document, because a reader
+acts on it without checking.
+
+Concretely, before every commit:
+
+1. If you changed what a gate, registry or ledger measures, run the script and
+   update every document that states its figure.
+   `python scripts/doc_metrics.py --check` blocks on the ones it can verify.
+2. If you added a file a contributor must find, name it in the routing table
+   above and in `ARCHITECTURE.md`.
+3. If you closed a ranked gap, strike it through in the Group 2 or Group 3 gap
+   list **with its evidence**, and update `docs/ai/MASTER_OUTSTANDING.md`.
+4. If a document and a script disagree, the script is right — fix the document.
+
+The commit message carries the reasoning; the documents carry the state. A
+successor gets both or neither.
 
 ---
 

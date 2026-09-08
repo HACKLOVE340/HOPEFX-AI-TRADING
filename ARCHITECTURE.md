@@ -2,6 +2,10 @@
 
 > For the full system architecture see [`docs/architecture.md`](docs/architecture.md).
 > This file documents canonical module locations and resolves naming ambiguities.
+>
+> **It does not say what to work on.** For that run `python scripts/backlog_report.py`,
+> and read [`docs/ai/MASTER_OUTSTANDING.md`](docs/ai/MASTER_OUTSTANDING.md) for the
+> decisions only the owner can make. [`CLAUDE.md`](CLAUDE.md) routes every other question.
 
 ---
 
@@ -15,7 +19,7 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | Backtesting | `backtesting/` | `backtest/` | `backtest/` re-exports from `backtesting/` |
 | Strategies | `strategies/` | `strategy/` | `strategy/` = live ML engine; `strategies/` = backtestable classes |
 | Data pipeline | `data_layer/` (access) | — | `data/` is live streaming/serving (real-time price engine, scheduler, DOM, tick feed, time & sales), 20 production importers; `market_data/` is broker-side feeds. The boundary between the three is undocumented (F216/F217). |
-| WebSocket | `api/ws_live.py` | `websocket/manager.py` | `websocket/manager.py` = standalone server; FastAPI uses `api/ws_live.py` |
+| WebSocket | `api/ws_live.py` | **never create a top-level `websocket/`** | The old standalone server is **deleted**. Recreating that package shadows the `websocket-client` library for the whole project and silently disables the REST fallback in `market_data/mt5_live_feed.py` (audit S13-02a) |
 
 ---
 
@@ -35,6 +39,11 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `execution/oms.py` | OMS: 9 order states, GTC/IOC/FOK/GTD/DAY, OCO/bracket |
 | `execution/smart_router.py` | Microstructure-aware broker routing with OFI alignment and circuit breakers |
 | `api/server.py` | FastAPI router aggregator — mounts all sub-routers |
+| `api/ws_live.py` | The **only** WebSocket surface. Holds the JWT auth gate. Never create a top-level `websocket/` package |
+| `database/backup.py` | Scheduled snapshots. SQLite uses the online backup API — a file copy loses WAL content |
+| `database/restore.py` | Verify-before-restore, and six fail-closed refusals. See [`docs/runbooks/database-restore.md`](docs/runbooks/database-restore.md) |
+| `ai/hub/capabilities.py` | The capability registry — 233 rows, each with an evidence locator `verify()` resolves |
+| `invariants/registry.py` | Discovers the 339 `verify_*` / `catastrophic_*` predicates |
 
 ---
 
@@ -81,7 +90,7 @@ Trained via `ml/train_rl_nuclear.py`. Powers `brain/nuclear_supervisor.py`.
 | # | Fix | File |
 |---|-----|------|
 | 1 | LLM sandbox subprocess isolation | `brain/llm_agent.py` |
-| 2 | WebSocket JWT auth gate | `websocket/manager.py` |
+| 2 | WebSocket JWT auth gate | `api/ws_live.py` |
 | 3 | Redis TLS enforcement in production | `cache/redis_client.py` |
 | 4 | detect-secrets pre-commit hook | `.pre-commit-config.yaml` |
 | 5 | Gitignore WORDMAP.json + prop_firm_mode.json | `.gitignore` |
@@ -147,6 +156,25 @@ print(severity, meta["category_scores"])
 
 ---
 
+## Governance and programme state
+
+Not module locations, but a newcomer needs them and they live nowhere else in
+this file. Each is a **command**, so its answer is current rather than a snapshot:
+
+| Command | Answers |
+|---|---|
+| `python scripts/backlog_report.py` | What is left to build or fix, measured from the code |
+| `python scripts/gate_evidence.py` | Which safety gates have been proven able to fail |
+| `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
+| `python scripts/docs_registry.py --check` | Document tiers, owners and contested subjects |
+| `python scripts/docs_freshness.py` | Stale references and false claims in living documents |
+
+All five run in `pre-commit` and are **ratcheted**: recorded debt may shrink,
+never grow. `docs/ai/specs/GROUP4_CONSTITUTION.md` is T0 — above these documents
+and, on its twelve Articles, above code.
+
+---
+
 ## Environment Variables — Key Flags
 
 | Variable | Default | Effect |
@@ -161,4 +189,4 @@ print(severity, meta["category_scores"])
 
 ---
 
-*Last updated: 2026-04-17 (v1.19 — corrected ML model facts, component status, and key entry points)*
+*Last updated: 2026-09-08 (v1.20 — removed two references to the deleted `websocket/` package, added the database, capability and invariant entry points, and routed programme state to the commands that measure it)*
