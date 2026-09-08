@@ -100,8 +100,12 @@ def test_model_mutating_ml_endpoints_additionally_require_2fa():
     trades. A stolen access token without a TOTP-verified claim must not
     reach them, the same as nuclear_controls."""
     targets = {"rollback_model", "deploy_model"}
-    found = {node.name: node for filename, node in _route_functions() if filename == "ml_ai.py" and node.name in targets}
-    assert found.keys() == targets, f"expected to find {targets}, found {sorted(found)} — have they moved or been renamed?"
+    found = {
+        node.name: node for filename, node in _route_functions() if filename == "ml_ai.py" and node.name in targets
+    }
+    assert found.keys() == targets, (
+        f"expected to find {targets}, found {sorted(found)} — have they moved or been renamed?"
+    )
 
     for name, node in found.items():
         signature = ast.unparse(node.args)
