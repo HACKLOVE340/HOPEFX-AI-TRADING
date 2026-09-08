@@ -195,8 +195,34 @@ out of relationships.**
 
 ## Chapter 2 — The Master Index and Document Registry
 
-**Status: NEW.** `mkdocs.yml`'s 64-entry navigation is the closest thing, and it
-covers roughly a third of the corpus.
+**Status: AVAILABLE as of Phase G3-1.** `scripts/docs_registry.py`,
+`docs/REGISTRY.toml` (198 documents), `tests/unit/test_docs_registry.py`
+(18 tests, 6 injections), wired as a blocking `pre-commit` hook.
+
+### What it found on its first run — more than the hand analysis did
+
+| Subject | Documents claiming it |
+|---|---|
+| `api` | **five** — `docs/API.md`, `API_ENDPOINTS.md`, `API_GUIDE.md`, `API_REFERENCE.md`, **and `docs/api.md`** |
+| `architecture` | `ARCHITECTURE.md`, `docs/architecture.md` |
+| `contributing` | `CONTRIBUTING.md`, `docs/CONTRIBUTING.md` |
+| `deployment` | `DEPLOYMENT.md`, `docs/DEPLOYMENT.md` |
+
+The manual survey found four API documents; the registry found **five**, because
+`docs/api.md` and `docs/API.md` both exist — a pair that would collide outright on
+a case-insensitive filesystem. It also found the `architecture` collision, which
+the hand analysis missed entirely.
+
+### The hole the first version had
+
+The duplicate check originally compared **T2 only**, and therefore could not see
+the root `CONTRIBUTING.md` (T0) diverging from `docs/CONTRIBUTING.md` (T2) — one of
+the five findings this chapter was written to catch. Authority is not a T2-only
+property: T0, T1 and T2 all claim a subject, and the check now spans all three.
+
+Worth recording as a pattern rather than a bug: **a check built from a list of
+findings should be run against that list before it is trusted.** It was not, and
+it silently missed one.
 
 ### Purpose and scope
 
@@ -225,6 +251,26 @@ indirectly: a subject claim is only enforceable if subjects are recorded.
 | `verified_at` | Date of last verification |
 | `depends_on` | Documents this one assumes |
 | `groups` | Which of Groups 0–3 it belongs to, if any |
+
+### The ratchet — and why the literal rule would have been a dead control
+
+This chapter originally said *CI fails while any entry lacks an owner*. Applied
+literally on day one that fails on **198 documents**, and a check that must be
+disabled to get any work done is a check that gets disabled — which would be
+`hopefx-dead-controls` committed inside the module written to prevent it.
+
+So enforcement is a ratchet. A baseline records the debt that already existed;
+anything **new** blocks immediately and the recorded debt may only shrink:
+
+| Rule | Shape | Why |
+|---|---|---|
+| Unregistered file | Blocks always | No debt to baseline — every file was registered at adoption |
+| Dangling entry | Blocks always | Same |
+| Duplicate subject | **Named** baseline | Four known collisions listed; a fifth blocks |
+| Missing owner | **Counted** baseline | 198 is too many to name; the count may not increase |
+
+Named beats counted wherever the list is short enough to read: a count says the
+debt grew, a name says *what* grew. Counting is the fallback for uniform debt.
 
 ### The generation rule, and why it matters
 

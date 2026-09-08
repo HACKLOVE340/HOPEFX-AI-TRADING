@@ -162,6 +162,18 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # Group 3 Chapter 2. Blocks a NEW unregistered document, a new duplicate
+      # subject claim, and any increase in unowned documents. Existing debt is
+      # baselined in docs/REGISTRY.toml and may only shrink — a check that failed
+      # on all 198 documents on day one would simply be removed.
+      - id: docs-registry
+        name: Document registry (Group 3 Ch 2)
+        language: system
+        entry: python scripts/docs_registry.py --check
+        files: '(^docs/.*\.(md|txt)$|^[A-Z_-]+\.md$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.

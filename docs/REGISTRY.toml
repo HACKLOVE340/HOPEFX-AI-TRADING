@@ -1,0 +1,1291 @@
+# Document registry — Group 3 Chapter 2. GENERATED skeleton, hand-enriched.
+#
+# Regenerate with:  python scripts/docs_registry.py --generate
+# Check with:       python scripts/docs_registry.py --check
+#
+# Human edits to tier, subject, owner, state and note are PRESERVED across
+# regeneration. Only the set of paths is derived from disk.
+
+[baseline]
+adopted = "2026-09-08"
+# The ratchet. These record what was already wrong at adoption so that NEW
+# violations fail while existing debt is paid down. They may only shrink.
+unowned_count = 198
+known_duplicate_subjects = ["api", "architecture", "contributing", "deployment"]
+
+[[document]]
+path = "AGENTS-IMPROVEMENT-SPEC.md"
+tier = "T2"
+subject = "agents-improvement-spec"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "AGENTS.md"
+tier = "T0"
+subject = "agents"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "ARCHITECTURE.md"
+tier = "T2"
+subject = "architecture"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "CHANGELOG.md"
+tier = "T2"
+subject = "changelog"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "CLA.md"
+tier = "T0"
+subject = "cla"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "CLAUDE.md"
+tier = "T0"
+subject = "claude"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "CODE_OF_CONDUCT.md"
+tier = "T0"
+subject = "code_of_conduct"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "CONTRIBUTING.md"
+tier = "T0"
+subject = "contributing"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "DEPLOYMENT.md"
+tier = "T2"
+subject = "deployment"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "LICENSE-COMMERCIAL.md"
+tier = "T0"
+subject = "license-commercial"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "NOTICE.md"
+tier = "T0"
+subject = "notice"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "README.md"
+tier = "T2"
+subject = "readme"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AB_ML_VS_BASELINE.md"
+tier = "T2"
+subject = "ab_ml_vs_baseline"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AI_PROVIDER.md"
+tier = "T2"
+subject = "ai_provider"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/API.md"
+tier = "T2"
+subject = "api"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/API_ENDPOINTS.md"
+tier = "T2"
+subject = "api"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/API_GUIDE.md"
+tier = "T2"
+subject = "api"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/API_REFERENCE.md"
+tier = "T2"
+subject = "api"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ASSET_DIVERSIFICATION.md"
+tier = "T2"
+subject = "asset_diversification"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AUDIT_2026-07-26.md"
+tier = "T3"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AUDIT_2026-07-27.md"
+tier = "T3"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AUDIT_AI_PAGES_2026-07-27.md"
+tier = "T3"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AUDIT_PLAYBOOK.md"
+tier = "T2"
+subject = "audit_playbook"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AUDIT_SIDEBAR_2026-07-27.md"
+tier = "T3"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/AUDIT_SYMBOL_TRADES_2026-07-27.md"
+tier = "T3"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/BACKTESTING_GUIDE.md"
+tier = "T2"
+subject = "backtesting"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/COMMUNITY.md"
+tier = "T2"
+subject = "community"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/COMPREHENSIVE_FIXES.md"
+tier = "T2"
+subject = "comprehensive_fixes"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/CONSTITUTION_COVERAGE.md"
+tier = "T2"
+subject = "constitution_coverage"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/CONTRIBUTING.md"
+tier = "T2"
+subject = "contributing"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/DEBUGGING.md"
+tier = "T2"
+subject = "debugging"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/DEEP_ANALYSIS.md"
+tier = "T2"
+subject = "deep_analysis"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/DEPLOYMENT.md"
+tier = "T2"
+subject = "deployment"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/DIAGNOSTIC_REPORT.md"
+tier = "T2"
+subject = "diagnostic_report"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ELITE_ARCHITECTURE_ASSESSMENT.md"
+tier = "T2"
+subject = "elite_architecture_assessment"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ENTERPRISE_CAPABILITIES.md"
+tier = "T2"
+subject = "enterprise_capabilities"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/FAQ.md"
+tier = "T2"
+subject = "faq"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/FOLD2_REGIME_ANALYSIS.md"
+tier = "T2"
+subject = "fold2_regime_analysis"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/FRONTEND_AUDIT_PLAYBOOK.md"
+tier = "T2"
+subject = "frontend_audit_playbook"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/GRAFANA_SETUP.md"
+tier = "T2"
+subject = "grafana_setup"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/HARDENING_BACKLOG.md"
+tier = "T2"
+subject = "hardening_backlog"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/INSTALLATION.md"
+tier = "T2"
+subject = "installation"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/INSTITUTIONAL_COMPARISON.md"
+tier = "T2"
+subject = "institutional_comparison"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/INSTITUTIONAL_READINESS.md"
+tier = "T2"
+subject = "institutional_readiness"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/INVARIANT_ROLLOUT.md"
+tier = "T2"
+subject = "invariant_rollout"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/KELLY_SIZING_COMPARISON.txt"
+tier = "T2"
+subject = "kelly_sizing_comparison"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/LIVE_DATA_SETUP.md"
+tier = "T2"
+subject = "live_data_setup"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/MASTER_INVARIANT_TRIAGE.md"
+tier = "T2"
+subject = "master_invariant_triage"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ML_GUIDE.md"
+tier = "T2"
+subject = "ml"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/MOBILE_GUIDE.md"
+tier = "T2"
+subject = "mobile"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/MOBILE_UPGRADE.md"
+tier = "T2"
+subject = "mobile_upgrade"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/MONETIZATION.md"
+tier = "T2"
+subject = "monetization"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ONBOARDING.md"
+tier = "T2"
+subject = "onboarding"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ORDER_FLOW_GUIDE.md"
+tier = "T2"
+subject = "order_flow"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/PLATFORM_AUDIT.md"
+tier = "T2"
+subject = "platform_audit"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/PROP_FIRM_GUIDE.md"
+tier = "T2"
+subject = "prop_firm"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/QUICKSTART.md"
+tier = "T2"
+subject = "quickstart"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/RISK_MANAGEMENT.md"
+tier = "T2"
+subject = "risk_management"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ROADMAP_GAPS.md"
+tier = "T2"
+subject = "roadmap_gaps"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/SAMPLE_STRATEGIES.md"
+tier = "T2"
+subject = "sample_strategies"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/SECURITY.md"
+tier = "T2"
+subject = "security"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/SECURITY_DEPENDABOT_2026-07-27.md"
+tier = "T3"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/SECURITY_DEPENDENCIES.md"
+tier = "T2"
+subject = "security_dependencies"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/SETUP_GUIDE.md"
+tier = "T2"
+subject = "setup"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/TRADING_STACK_REFERENCE.md"
+tier = "T2"
+subject = "trading_stack"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/TROUBLESHOOTING.md"
+tier = "T2"
+subject = "troubleshooting"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/UPDATE_RUNBOOK.md"
+tier = "T2"
+subject = "update_runbook"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/VIDEO_TUTORIALS.md"
+tier = "T2"
+subject = "video_tutorials"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/WORLD_MONITOR_INTEGRATION.md"
+tier = "T2"
+subject = "world_monitor_integration"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/AI_HUB_DECISIONS.md"
+tier = "T2"
+subject = "ai_hub_decisions"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/AI_HUB_REMAINING_PLAN.md"
+tier = "T2"
+subject = "ai_hub_remaining_plan"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/BACKLOG_GROUPS.md"
+tier = "T1"
+subject = "backlog_groups"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/MODEL_CATALOGUE.md"
+tier = "T2"
+subject = "model_catalogue"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/specs/GROUP1_advanced_intelligence_architecture.txt"
+tier = "T1"
+subject = "group1_advanced_intelligence_architecture"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/specs/GROUP23_brief.txt"
+tier = "T1"
+subject = "group23_brief"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/specs/GROUP2_platform_engineering_operations_governance.md"
+tier = "T1"
+subject = "group2_platform_engineering_operations_governance"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai/specs/GROUP3_documentation_knowledge_architecture_governance.md"
+tier = "T1"
+subject = "group3_documentation_knowledge_architecture_governance"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ai_change_ledger.md"
+tier = "T2"
+subject = "ai_change_ledger"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/api.md"
+tier = "T2"
+subject = "api"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/architecture.md"
+tier = "T2"
+subject = "architecture"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/archive/ALL_TEST_FIXES_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/ANALYSIS_AND_ROADMAP.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/BROKER_CONNECTIVITY_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/BUGS_FIXED_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CI_FIX_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CI_STATUS_CHECK.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CI_VERIFICATION_COMPLETE.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CODACY_SETUP_GUIDE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CODE_QUALITY_REPORT.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPETITIVE_ANALYSIS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPLETE_DEEP_DIVE_PHASES_1-3.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPLETE_IMPLEMENTATION_GUIDE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPLETE_IMPLEMENTATION_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPLETE_PHASE_INVENTORY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPLETE_PLATFORM_ANALYSIS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPREHENSIVE_DEEP_DIVE_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/COMPREHENSIVE_STATUS_REPORT.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CONTINUE_FIXING_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CRITICAL_FLAWS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CURRENT_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/CURRENT_STATUS_FINAL.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/DEBUGGING.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/DEEP_DIVE_PHASE_2_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/DEEP_DIVE_PLATFORM_SECRETS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/DEPLOYMENT_CHECKLIST.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/DEPLOYMENT_INFRASTRUCTURE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/ENHANCED_MONETIZATION_IMPLEMENTATION.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/ENHANCEMENT_PLAN.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/ENTERPRISE_ARCHITECTURE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/EVERYTHING_WE_HAVE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/EXECUTIVE_SUMMARY_ALL_FIXES.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/EXIT_CODE_1_FIX_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FEATURES.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FINAL_CI_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FINAL_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FINAL_STATUS.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FINAL_WORK_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FIXES_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FIX_TEST_CALCULATE_POSITION_SIZE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FRAMEWORK_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FRAMEWORK_PROGRESS_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/FRAMEWORK_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/HEALTH_ENDPOINT_FIXES.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/HTTPX_DEPENDENCY_FIX.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/HTTPX_FIX_VERIFICATION.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/IMPLEMENTATION_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/IMPLEMENTATION_ROADMAP.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/IMPLEMENTATION_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/IMPLEMENTATION_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/INTEGRATION_STATUS_FINAL.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/INTEGRATION_SUMMARY.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/INTEGRATION_TESTING_PLAN.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/INVENTORY_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/KEY_STRENGTHS_TRADING_PLATFORMS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/MAIN_INTEGRATION.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/MASTER_DIAGNOSIS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/NEXT_ACTIONS_PRIORITY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/NEXT_STEPS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/NEXT_STEPS_COMPREHENSIVE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/NOTIFICATION_TESTS_FIXED.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/NOTIFICATION_TEST_MOCK_FIX.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/OVERALL_FRAMEWORK_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/OVERALL_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE2_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE3_COMPLETE_FINAL.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE3_CONTINUATION_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE3_IMPLEMENTATION_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE3_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE4_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE5_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE5_NEWS_INTEGRATION_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PHASE6_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PRODUCTION_FIXES.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PULL_REQUEST.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/PYTHON_311_FIX_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/README_WHATS_NEXT.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/ROADMAP.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/SECURE_ENV_TEMPLATE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/SECURITY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/SECURITY_FIXES_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/SETUP_COMPLETE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/SETUP_STATUS.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/SMC_ITS_ML_IMPLEMENTATION.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/TASK_COMPLETION_STATUS.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/TASK_COMPLETION_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/TEST_COVERAGE_REPORT.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/TEST_FAILURES_FIXED.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/TEST_FAILURES_FIXED_COMPREHENSIVE.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/TEST_FIXES_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/UNIVERSAL_BROKER_CONNECTIVITY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/WALLET_PAYMENT_IMPLEMENTATION_SUMMARY.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/WALLET_PAYMENT_SYSTEM.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/WHATS_NEXT_ROADMAP.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/WHATS_NEXT_SUMMARY.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/WORDMAP.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/banner.md"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/coverage_output.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/archive/test_results.txt"
+tier = "T4"
+owner = ""
+state = "archived"
+
+[[document]]
+path = "docs/audit-2026-08-remediation.md"
+tier = "T2"
+subject = "audit-2026-08-remediation"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/AI_CORE_REMAINING.md"
+tier = "T2"
+subject = "ai_core_remaining"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/AI_CORE_SPEC.md"
+tier = "T2"
+subject = "ai_core_spec"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/AI_CORE_SPEC_INTAKE.md"
+tier = "T2"
+subject = "ai_core_spec_intake"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/CODE_READING_FINDINGS.md"
+tier = "T2"
+subject = "code_reading_findings"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/FIX_PHASES.md"
+tier = "T2"
+subject = "fix_phases"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/PLATFORM_ARCHITECTURE.md"
+tier = "T2"
+subject = "platform_architecture"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/REMEDIATION_PLAN.md"
+tier = "T2"
+subject = "remediation_plan"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/TODO.md"
+tier = "T2"
+subject = "todo"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/plans/2026-09-04-phase-c-honest-controls.md"
+tier = "T4"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/plans/2026-09-04-phase-d-ai-core-prereqs.md"
+tier = "T4"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/plans/2026-09-04-phase-e-risk-gates.md"
+tier = "T4"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/plans/2026-09-04-phase-g-correctness.md"
+tier = "T4"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/audit/plans/2026-09-05-ai-core.md"
+tier = "T4"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/ci_cd_pipeline.md"
+tier = "T2"
+subject = "ci_cd_pipeline"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/index.md"
+tier = "T2"
+subject = "index"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/live_trading_gate.md"
+tier = "T2"
+subject = "live_trading_gate"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/model_performance.md"
+tier = "T2"
+subject = "model_performance"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/oanda_paper_trading_setup.md"
+tier = "T2"
+subject = "oanda_paper_trading_setup"
+owner = ""
+state = "draft"
+
+[[document]]
+path = "docs/roadmap.md"
+tier = "T2"
+subject = "roadmap"
+owner = ""
+state = "draft"
