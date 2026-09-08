@@ -48,8 +48,8 @@ injected = ""
 id = "gate_e_dead_files"
 kind = "ci_gate"
 runs = "scripts/ci/gate_e_dead_files.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_e_dead_files_injections.py"
+injected = "An unimported file in each guarded package fails; three real defects found and fixed along the way, not just a coverage gap. (1) kill_switch is a single top-level file, not a directory — _collect_py_files checked root/'kill_switch' only and always returned [], so the guard silently checked nothing. (2) import execution.live synthesised bare 'execution' as an import, so mod.startswith(imp + '.') made every OTHER file in the package look live the moment any one file was imported — a genuinely dead sibling was invisible in every guarded package, always, in the real repo. (3) EXCLUDED_PATTERNS served two purposes at once: correctly kept app.py/__init__.py out of the guarded-candidate scan, but wrongly also kept them out of the import-SOURCE scan, so app.py's route-registration imports and __init__.py re-exports (real production wiring) went unseen — fixing (2) alone would have turned ~100 genuinely-live files into false positives. Confirmed on the real repository, not just the mirror: 12 real findings remain, tracked as their own follow-up rather than resolved here"
 
 [[gate]]
 id = "gate_f_doc_consistency"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 7
+unproven_count = 6

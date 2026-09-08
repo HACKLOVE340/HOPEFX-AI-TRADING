@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 16 proven · **7 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 17 proven · **6 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 7 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7 (R3–R5).** 16 proven. Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 6 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6 (R3–R6).** 17 proven. Proving them keeps finding defects: gate M passed with no dataset, the secret scanner skipped real credentials containing `xxx` or `none`, and gate E's dead-file detector had never actually detected a dead file in any guarded package. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -284,12 +284,11 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — seven gates left.** `python scripts/gate_evidence.py`
-   lists them. Two phases at the current rate. Every phase so far has found a
-   real defect, so this is still the cheapest place to find them:
+1. **Finish the ratchet — six gates left.** `python scripts/gate_evidence.py`
+   lists them. Every phase so far has found a real defect, so this is still
+   the cheapest place to find them:
    `gate_j_circular_imports`, `gate_g_import_discipline`, `gate_c_docker_compose`,
-   `gate_e_dead_files`, `gate_f_doc_consistency`, `gate_h_wordmap_schema`,
-   `gate_d_model_accuracy`.
+   `gate_f_doc_consistency`, `gate_h_wordmap_schema`, `gate_d_model_accuracy`.
    `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
    from `__file__` with no env indirection, so a per-test mirror is too slow.
 2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
@@ -361,6 +360,69 @@ measured set.
 **This is now the largest single piece of recorded debt in the repository**, and
 it is the honest reading of what the coverage gate was hiding. Paying it down is
 one module at a time: make the test file import the module it is named for.
+
+## §E6 — Phase R6 (2026-09-08)
+
+Ratchet 7 → 6. One gate proven, and three real defects found inside it —
+the dead-file detector had, as far as this phase could tell, never actually
+detected a dead file in any of its five guarded packages.
+
+### The guard that checked nothing
+
+`GUARDED_PACKAGES` names `kill_switch`, but `kill_switch` is a single
+top-level file (`kill_switch.py`), not a package directory.
+`_collect_py_files` checked `root / "kill_switch"` only, which is never a
+directory, and returned `[]` without ever looking at the file. A completely
+unimported `kill_switch.py` passed Gate E clean, in the real repository,
+before this fix.
+
+### The prefix that made every sibling look live
+
+`import execution.live` added both `"execution.live"` **and** the bare
+prefix `"execution"` to the imported-names set, so
+`"execution.orphan".startswith("execution" + ".")` was `True` purely
+because a *different* file in the same package had been imported — never
+because `orphan.py` itself had been. Confirmed directly against the real
+repository (not the mirror): `"execution"`, `"risk"`, `"core"`, and
+`"brokers"` were all in that set before this fix. In a codebase where each
+guarded package is imported from *somewhere*, which is always, this meant
+the gate could not have reported a real dead file in any of them, ever.
+Fixed by splitting the collected names into `exact` (a specific dotted name
+an import statement actually named) and `bare_packages` (a name imported
+with **no** further qualification at all, e.g. a literal `import
+execution`) — only the second grants "every submodule is reachable via
+attribute access."
+
+### Fixing that one immediately exposed a third
+
+With the prefix bug gone, ~100 genuinely-live files across `core/` and
+`brokers/` started reporting as dead. The cause: `EXCLUDED_PATTERNS` served
+two different questions with one list. Keeping `app.py`, `celery_app.py`,
+and `__init__.py` out of the *guarded-candidate* scan is correct — they are
+run directly or are package boilerplate, not "a module someone imports."
+But the same list also kept them out of the *import-source* scan, and real
+production wiring lives in exactly those files:
+`app.py: from core.health import register_health_routes`,
+`brokers/__init__.py: from brokers.smart_router import SmartOrderRouter`.
+Excluding them from the source scan made everything they alone import look
+unreferenced. Split into `EXCLUDED_PATTERNS` (guarded-candidate scope,
+unchanged) and a new `IMPORT_SCAN_EXCLUDED_PATTERNS` (source scope — drops
+`__init__` and the entry-point filenames, keeps the non-Python and
+test-only exclusions).
+
+### What real execution against the repository still finds
+
+After all three fixes, a real run reports **12** files across `brokers/`,
+`core/`, `execution/`, and `risk/` with no detectable production caller —
+down from 124 with only the prefix fix, and 32 with the prefix and
+entry-point fixes together. At least one (`risk/risk_manager.py`) is a
+documented backwards-compatibility shim exercised only by its own tests,
+which may be a correct finding rather than a defect. The 12 are not
+individually triaged here — proving the gate can fail is this phase's job;
+which of its findings are real dead code and which need one more scan
+refinement is real follow-up work, tracked separately, the same way R3–R5
+left their own findings for the next phase rather than resolving everything
+in one commit.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
