@@ -1,0 +1,53 @@
+# Freshness baseline — Group 3 Chapter 15. The ratchet.
+#
+# Findings that already existed when the check was adopted. A NEW finding
+# blocks; these do not. Removing a line here is how the debt is paid down,
+# and a line whose finding is fixed must be removed or it hides a recurrence.
+#
+# Regenerate:  python scripts/docs_freshness.py --adopt
+# Check:       python scripts/docs_freshness.py --check
+
+adopted = "2026-09-08"
+known = [
+  "stale_path|AGENTS-IMPROVEMENT-SPEC.md|`scripts/generate_wordmap.py` does not exist, but `scripts/` does",
+  "stale_path|ARCHITECTURE.md|`ml/saved_models/lstm_signal.pt` does not exist, but `ml/saved_models/` does",
+  "stale_path|README.md|`docs/FEATURES.md` does not exist, but `docs/` does",
+  "stale_path|docs/AB_ML_VS_BASELINE.md|`ml/saved_models/ab_baseline_report.json` does not exist, but `ml/saved_models/` does",
+  "stale_path|docs/AI_PROVIDER.md|`brain/llm_wrapper` does not exist, but `brain/` does",
+  "stale_path|docs/COMPREHENSIVE_FIXES.md|`auth/routes.py` does not exist, but `auth/` does",
+  "stale_path|docs/COMPREHENSIVE_FIXES.md|`docs/MASTER_DIAGNOSIS.md` does not exist, but `docs/` does",
+  "stale_path|docs/COMPREHENSIVE_FIXES.md|`risk/halt_state.json` does not exist, but `risk/` does",
+  "stale_path|docs/DEBUGGING.md|`risk/halt_state.json` does not exist, but `risk/` does",
+  "stale_path|docs/ELITE_ARCHITECTURE_ASSESSMENT.md|`risk/manager.value_at_risk` does not exist, but `risk/` does",
+  "stale_path|docs/FAQ.md|`risk/halt_state.json` does not exist, but `risk/` does",
+  "stale_path|docs/FOLD2_REGIME_ANALYSIS.md|`ml/saved_models/mtf_meta.json` does not exist, but `ml/saved_models/` does",
+  "stale_path|docs/GRAFANA_SETUP.md|`grafana/provisioning/dashboards/dashboards.yaml` does not exist, but `grafana/provisioning/dashboards/` does",
+  "stale_path|docs/GRAFANA_SETUP.md|`grafana/provisioning/datasources/prometheus.yaml` does not exist, but `grafana/provisioning/datasources/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`api/alerts._get_engine` does not exist, but `api/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`api/alerts._get_owned_alert` does not exist, but `api/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`api/risk_calculator._get_live_price` does not exist, but `api/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`api/settings_new_endpoints.get_performance_metrics` does not exist, but `api/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`core/middleware.DefaultRateLimitMiddleware` does not exist, but `core/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`dashboard/src/components/OrderPanel.tsx` does not exist, but `dashboard/src/components/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`execution/broker_call.call_broker` does not exist, but `execution/` does",
+  "stale_path|docs/HARDENING_BACKLOG.md|`monitoring/sentry_config._before_send` does not exist, but `monitoring/` does",
+  "stale_path|docs/INSTITUTIONAL_READINESS.md|`config/risk_appetite.json` does not exist, but `config/` does",
+  "stale_path|docs/RISK_MANAGEMENT.md|`risk/halt_state.json` does not exist, but `risk/` does",
+  "stale_path|docs/SECURITY.md|`auth/routes.py` does not exist, but `auth/` does",
+  "stale_path|docs/SETUP_GUIDE.md|`market_data/nuclear_streamer.py` does not exist, but `market_data/` does",
+  "stale_path|docs/UPDATE_RUNBOOK.md|`frontend/dist` does not exist, but `frontend/` does",
+  "stale_path|docs/VIDEO_TUTORIALS.md|`risk/halt_state.json` does not exist, but `risk/` does",
+  "stale_path|docs/architecture.md|`brokers/alpaca_broker.py` does not exist, but `brokers/` does",
+  "stale_path|docs/architecture.md|`brokers/binance_broker.py` does not exist, but `brokers/` does",
+  "stale_path|docs/architecture.md|`brokers/bybit_broker.py` does not exist, but `brokers/` does",
+  "stale_path|docs/architecture.md|`brokers/paper_broker.py` does not exist, but `brokers/` does",
+  "stale_path|docs/audit/CODE_READING_FINDINGS.md|`api/custom-indicators` does not exist, but `api/` does",
+  "stale_path|docs/audit/CODE_READING_FINDINGS.md|`api/metrics.py` does not exist, but `api/` does",
+  "stale_path|docs/audit/CODE_READING_FINDINGS.md|`config/credentials.enc` does not exist, but `config/` does",
+  "stale_path|docs/audit/CODE_READING_FINDINGS.md|`frontend/src/components/ds` does not exist, but `frontend/src/components/` does",
+  "stale_path|docs/audit/REMEDIATION_PLAN.md|`api/custom-indicators` does not exist, but `api/` does",
+  "stale_path|docs/ci_cd_pipeline.md|`k8s/production-deployment.yaml` does not exist, but `k8s/` does",
+  "stale_path|docs/ci_cd_pipeline.md|`k8s/staging-deployment.yaml` does not exist, but `k8s/` does",
+  "stale_path|docs/live_trading_gate.md|`logs/trading.log` does not exist, but `logs/` does",
+  "stale_path|docs/oanda_paper_trading_setup.md|`logs/paper_trading.log` does not exist, but `logs/` does",
+]

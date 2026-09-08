@@ -1076,8 +1076,19 @@ are each derived from a real overclaim that happened here.
 
 ## Chapter 15 — Documentation Quality Assurance and Freshness
 
-**Status: PARTIAL.** A `doc-freshness-review` skill exists and encodes the drift
-problem; `update_docs.yml` and `docs.yml` run. Nothing measures drift.
+**Status: AVAILABLE as of Phase G3-2** for the structural and referential layers,
+**PARTIAL** for semantic. `scripts/docs_freshness.py`,
+`docs/FRESHNESS_BASELINE.toml`, `tests/unit/test_docs_freshness.py` (18 tests,
+7 injections), wired as a blocking `pre-commit` hook.
+
+**Measured on adoption:** 45 stale references in living documents — including a
+broken link to a features document in `README.md` and a missing model artefact named
+in `ARCHITECTURE.md`. Three false-positive classes were found and fixed by
+inspecting findings rather than trusting them: absolute host paths (which crashed
+the first version), documents *reporting* a historical error rather than making
+it, and module references written without their `.py` extension — the last of
+which produced both of the first version's findings in the constitution
+documents, where being wrong costs most.
 
 ### Purpose and scope
 
@@ -1110,10 +1121,28 @@ Each was a plausible sentence that a careful reader would have believed.
 | **Referential** | A document naming a file, symbol, env var or command that no longer exists | Moderate; every PR |
 | **Semantic** | A document whose *claims* about behaviour are no longer true | Expensive; scheduled, AI-assisted, human-confirmed |
 
-The referential check is the highest value per unit of effort, and it would have
-caught the Python 3.10 error, the `prop_firm_mode.json` error, and every stale path
-reference in the corpus. **A document that names a symbol is making a checkable
-claim**, and most damaging documentation errors are of exactly that kind.
+**CORRECTION, made by testing this claim before building to it.** The sentence
+here originally said the referential check "would have caught the Python 3.10
+error, the `prop_firm_mode.json` error, and every stale path reference". Tested
+against all three historical errors, it would have caught **none of them**:
+
+| Error | Referential elements | Caught by referential? |
+|---|---|---|
+| "Python 3.10 ... is what `Dockerfile` runs" | `Dockerfile` — exists | **No.** The false part is a version |
+| "`prop_firm_mode.json` is gitignored" | the file — exists | **No.** The false part is a status |
+| "`data/` is legacy data files" | `data/` — exists | **No.** Purely semantic |
+
+In every case the referenced path existed and the false part was never the
+reference. So the check has **two layers**, not one:
+
+* **Referential** — paths and links. Genuinely valuable in a 198-document corpus
+  where files move, but it catches drift rather than those three.
+* **Claims** — a small, explicit set of assertions that are machine-checkable and
+  have already misled somebody here: gitignore status, and the pinned interpreter
+  version. These catch errors one and two.
+
+The third remains out of reach of both, and this chapter now says so rather than
+implying coverage the check does not have.
 
 ### Processes and workflows
 
