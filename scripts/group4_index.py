@@ -240,11 +240,11 @@ def render() -> str:
     return "\n".join(out) + "\n"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--generate", action="store_true", help="Rewrite the index from the sources")
     parser.add_argument("--check", action="store_true", help="Fail if the committed index has drifted")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         expected = render()
@@ -252,12 +252,13 @@ def main() -> int:
         print(f"REFUSED — {exc}", file=sys.stderr)
         return 2
 
+    index = INDEX
     if args.generate:
-        INDEX.write_text(expected, encoding="utf-8")
-        print(f"wrote {INDEX.relative_to(REPO)} ({expected.count(chr(10))} lines)")
+        index.write_text(expected, encoding="utf-8")
+        print(f"wrote {index.name} ({expected.count(chr(10))} lines)")
         return 0
 
-    actual = INDEX.read_text(encoding="utf-8") if INDEX.exists() else ""
+    actual = index.read_text(encoding="utf-8") if index.exists() else ""
     if actual == expected:
         print("group4 index: matches the sources")
         return 0

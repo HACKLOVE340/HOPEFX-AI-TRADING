@@ -103,13 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 22 gates · 9 proven · **13 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence across existing gates** | Group 2 Ch 0, 19, 20 | Five controls that could not fail are already known by name; the rest are unmeasured. A control with no injection record is treated as absent |
+| 1 | **Rule 1 injection evidence — 13 of 22 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (Phase R2).** `docs/GATE_EVIDENCE.toml` + `scripts/gate_evidence.py --check`, in pre-commit, ratcheted. What remains is the work itself: thirteen gates whose ability to fail nobody has demonstrated. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 

@@ -58,6 +58,34 @@ to Group 1, where the system evaluates itself: **a self-evaluating system whose
 evaluations cannot fail is worse than no evaluation, because it manufactures
 confidence instead of silence.**
 
+#### The rule is now enforced rather than remembered — Phase R2
+
+`docs/GATE_EVIDENCE.toml` records, per gate, whether its ability to fail has been
+demonstrated, by what injection, and where that injection lives as a re-runnable
+test. `scripts/gate_evidence.py --check` runs in pre-commit.
+
+Gates are **discovered**, never hand-listed — from `scripts/ci/gate_*.py` and from
+the pre-commit hooks that run this repository's own scripts. A list would go stale
+the first time somebody added a gate, and the omission would be indistinguishable
+from compliance. The ledger proved that immediately: it blocked **its own hook**
+for arriving without evidence.
+
+| Measured 2026-09-08 | |
+|---|---:|
+| Gates discovered | 22 |
+| Proven able to fail, by a test that injects | 9 |
+| Unproven — the ratcheted baseline | 13 |
+
+The count may only fall. A new gate with no evidence blocks; evidence that stops
+existing blocks; a proven gate downgraded blocks. All three were verified by
+performing them.
+
+**What this ledger does not cover, said plainly.** The 339 `verify_*` /
+`catastrophic_*` predicates under `invariants/` are controls too and are **not**
+in it. They are a different shape — pure functions returning violations rather
+than processes that exit non-zero — and need their own mechanism. Recording that
+is better than a ledger that silently implies they are covered.
+
 ### Rule 2 — An unmeasured value is absent, never zero
 
 A metric that was not collected, a screen count that could not be read, a
@@ -1980,7 +2008,7 @@ of the whole specification.
 | # | Gap | Chapter | Priority | Why this rank |
 |---|---|---|---|---|
 | ~~1~~ | ~~Tested backup and restore~~ | 9 | **DONE** — Phase R1 | `database/restore.py`; round trip proven against SQLite and a live PostgreSQL 16.13 with matching checksums. Found two defects by execution: a WAL database backed up file-only restored to nothing, and pg_dump was buffered entirely in memory |
-| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | Five controls that could not fail are already known; the rest are unmeasured |
+| 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | **PARTIAL — Phase R2.** The ledger exists and ratchets: 22 gates discovered, **9 proven, 13 unproven**. Gate L, which stops accidental live trading, had no test at all and now has twelve |
 | 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
 | 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
 | 5 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |

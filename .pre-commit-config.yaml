@@ -210,6 +210,18 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # Group 2 Rule 1: a control that cannot fail is not a control. Seven such
+      # controls have been found here, two of them in code running nightly. The
+      # ledger is discovered rather than hand-listed, so a new gate cannot be
+      # added and quietly omitted; recorded debt may only shrink.
+      - id: gate-evidence
+        name: Gate injection evidence (Rule 1)
+        language: system
+        entry: python scripts/gate_evidence.py --check
+        files: '^(scripts/ci/gate_.*\.py|\.pre-commit-config\.yaml|docs/GATE_EVIDENCE\.toml)$'
+        pass_filenames: false
+        stages: [pre-commit]
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.
