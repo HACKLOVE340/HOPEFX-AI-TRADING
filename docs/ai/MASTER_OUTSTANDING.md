@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 22 proven · **1 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · **23 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 1 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4→3→2→1 (R3–R11).** 22 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
+| ~~1~~ | ~~**Rule 1 injection evidence**~~ | Group 2 Ch 0, 19, 20 | **DONE — Phases R2–R12.** Ratchet 13→10→8→7→6→5→4→3→2→1→0. All 23 gates now carry an injection test that was watched to fail. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -284,9 +284,11 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — one gate left:** `gate_d_model_accuracy`.
-   `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
-   from `__file__` with no env indirection, so a per-test mirror is too slow.
+1. ~~**Finish the ratchet.**~~ **DONE in R12** — all 23 gates carry injection
+   evidence. What replaces it: the findings those phases produced are still
+   open. The 12 dead-file candidates from §E6 and the 7 `data_layer` import
+   violations recorded in §E9 are both real work, and the second is waiting
+   on decision **A2**.
 2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
    Three documents name the same missing artefact from three angles; build them
    as one or you get half a ledger three times.
@@ -589,6 +591,57 @@ cross-package cycles all fail, a diamond is correctly not a cycle, and the
 deliberate exemption for deferred function-level imports is pinned against
 the module-level form of the same pair, so it is a scoped exemption rather
 than a hole.
+
+## §E12 — Phase R12 — the ratchet reaches zero (2026-09-08)
+
+Ratchet 1 → 0. **All 23 gates now carry injection evidence.**
+
+`gate_d_model_accuracy.py` was deferred twice, and the reason recorded in
+§E3 was: it "validates 38 MB of model artefacts resolved from `__file__`,
+with no env indirection, so a per-test mirror would make the suite slow" —
+it "needs a manifest-level injection instead, a different design".
+
+**That premise was wrong, and this is the finding.** The gate does not
+require the artefacts to be *large*; it requires them to be *consistent*.
+What it checks is agreement — the `current.pkl` symlink resolves to the
+registered file, its SHA-256 matches the registry, the meta agrees with
+the registry, the Sharpe gate passed on a credible number of trades. A
+28-byte file whose real SHA-256 is written into a synthetic registry
+exercises every one of those, integrity hash included, against a real
+symlink in a real subprocess.
+
+The mirrors are about a kilobyte. Twenty-two injections run in four
+seconds. No env indirection had to be added to the production script, and
+nothing in the suite reads or writes the real `ml/saved_models/`.
+
+Fifteen distinct refusals were confirmed, and the wrapper was proven to
+propagate rather than report its own success: an inner exit 3 stays 3 and
+never prints PASSED — the shape gates M, K and F each had in a different
+form. The gate is alive; the blocker was an assumption about what it
+needed, not the gate.
+
+### What the twelve phases actually bought
+
+| Gate | Outcome |
+|---|---|
+| `gate_e_dead_files` | **Three defects.** Had never detected a dead file in any guarded package |
+| `gate_g_import_discipline` | **Two defects.** The rule named three modules; the code required three path segments |
+| `gate_f_doc_consistency` | **One defect.** A missing document was a skip, and a skip was a pass |
+| `gate_j_circular_imports` | **One defect.** Never had the kill switch in its graph |
+| `gate_c_docker_compose` | Alive |
+| `gate_h_wordmap_schema` | Alive |
+| `gate_d_model_accuracy` | Alive — the deferral was the defect |
+
+Seven real defects in four gates, and three gates confirmed sound. Two of
+those defects were the *same* defect — a guarded name resolved as
+`root / name` when it is a file, not a directory — found in gate E and
+again in gate J, six phases apart.
+
+**What this does not mean.** Every gate can now be shown to fail when it
+should. Nothing here says the tree is clean: gate E's fix surfaced 12
+dead-file candidates and gate G's surfaced 7 recorded import violations,
+all still open. The ratchet's job was to make the controls trustworthy;
+using them is the next job.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

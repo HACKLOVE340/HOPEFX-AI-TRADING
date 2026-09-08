@@ -41,8 +41,8 @@ injected = "Against a real mutated copy of docker-compose.yml (not synthetic): P
 id = "gate_d_model_accuracy"
 kind = "ci_gate"
 runs = "scripts/ci/gate_d_model_accuracy.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_d_model_accuracy_injections.py"
+injected = "Fifteen refusals against a consistent mirror: missing/invalid registry, missing or dangling active_version, missing symlink, a regular file in its place, a symlink to the wrong model, a tampered file failing SHA-256, an entry with no hash, sharpe_gate_passed=False, Sharpe under the floor, too few trades to be credible, a non-active state, missing meta, horizon mismatch, meta/registry hash mismatch, and oos_accuracy=null. The wrapper is proven to propagate rather than report its own success — an inner exit 3 stays 3 and never prints PASSED. This gate was deferred twice as needing a manifest-level injection because it \"validates 38 MB of artefacts resolved from __file__\"; that premise was wrong. The gate requires the artefacts to be CONSISTENT, not large: a 28-byte file whose real SHA-256 is written into a synthetic registry exercises every check, mirrors are about a kilobyte, and the suite runs in 4 seconds with no change to the production script. No defect found — alive"
 
 [[gate]]
 id = "gate_e_dead_files"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 1
+unproven_count = 0
