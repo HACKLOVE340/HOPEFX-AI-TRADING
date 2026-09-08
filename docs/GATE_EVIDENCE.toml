@@ -34,8 +34,8 @@ injected = "A new broken import, and a stale baseline entry — both fail the ga
 id = "gate_c_docker_compose"
 kind = "ci_gate"
 runs = "scripts/ci/gate_c_docker_compose.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_c_docker_compose_injections.py"
+injected = "Against a real mutated copy of docker-compose.yml (not synthetic): PAPER_TRADING defaulting to false, IS_FORCE_TLS and REDIS_FORCE_TLS defaulting to true, and alertmanager switched to image: without build: — all four fail, on both the PyYAML path and the regex fallback path checked directly. A sanity probe (temporarily disabling the PAPER_TRADING check) confirmed the suite would have caught a real regression before trusting the clean pass. No defect found — this one was already alive"
 
 [[gate]]
 id = "gate_d_model_accuracy"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 6
+unproven_count = 5

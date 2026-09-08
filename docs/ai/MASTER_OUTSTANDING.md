@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 17 proven · **6 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 18 proven · **5 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 6 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6 (R3–R6).** 17 proven. Proving them keeps finding defects: gate M passed with no dataset, the secret scanner skipped real credentials containing `xxx` or `none`, and gate E's dead-file detector had never actually detected a dead file in any guarded package. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 5 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5 (R3–R7).** 18 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -284,10 +284,9 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — six gates left.** `python scripts/gate_evidence.py`
-   lists them. Every phase so far has found a real defect, so this is still
-   the cheapest place to find them:
-   `gate_j_circular_imports`, `gate_g_import_discipline`, `gate_c_docker_compose`,
+1. **Finish the ratchet — five gates left.** `python scripts/gate_evidence.py`
+   lists them:
+   `gate_j_circular_imports`, `gate_g_import_discipline`,
    `gate_f_doc_consistency`, `gate_h_wordmap_schema`, `gate_d_model_accuracy`.
    `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
    from `__file__` with no env indirection, so a per-test mirror is too slow.
@@ -423,6 +422,31 @@ which of its findings are real dead code and which need one more scan
 refinement is real follow-up work, tracked separately, the same way R3–R5
 left their own findings for the next phase rather than resolving everything
 in one commit.
+
+## §E7 — Phase R7 (2026-09-08)
+
+Ratchet 6 → 5. One gate proven, and this one was already alive.
+
+`gate_c_docker_compose.py` checks four structural safety defaults in
+`docker-compose.yml`: `PAPER_TRADING` defaults to `true`, `IS_FORCE_TLS` and
+`REDIS_FORCE_TLS` default to `false`, and `alertmanager` uses `build:` (so
+its envsubst entrypoint runs) rather than `image:`. Injected against a real
+mutated copy of the repository's actual compose file, not a synthetic one —
+so an injection also proves the gate's string anchors still match the real
+file's current layout, not a layout it used to have. All four defaults
+correctly fail when flipped; a missing file is reported rather than
+crashing; and a sanity probe — temporarily disabling the `PAPER_TRADING`
+check itself and re-running the suite — confirmed the tests would have
+caught that regression, before trusting the clean pass on the real gate.
+
+The gate ships two code paths: `_check_yaml` (PyYAML present) and
+`_check_regex`, a fallback for when it is not. A fallback nobody exercises
+is exactly the shape this repository keeps finding dead, so both were
+proven directly against the same four injected cases rather than trusting
+that whichever one CI happens to run is the one under test.
+
+No defect found this time. Not every gate is broken; this is the check
+that says so with evidence rather than assumption.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
