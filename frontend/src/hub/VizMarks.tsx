@@ -27,6 +27,14 @@ import { CATEGORY, GRID, INK, OTHER, categoryColour, intensityStep } from './viz
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 import type { AffordanceVisibility } from './a11yPointer';
 import type { Cell, Edge, Event, Node } from './surfaceData';
+import {
+  DEFAULT_CAMERA,
+  describeSurface,
+  expectedFaceCount,
+  meshFaces,
+  warrants3D,
+  type SurfaceGrid,
+} from './surface3d';
 
 const cellLabel = (c: Cell) => `${c.column}, ${c.row}: ${c.label}`;
 
@@ -384,3 +392,159 @@ export const Media: React.FC<{ media: { src: string; alt: string; kind: 'image' 
   );
 
 export const OTHER_CATEGORY_COLOUR = OTHER;
+
+
+// ── §21 surfaces ──────────────────────────────────────────────────────────────
+
+/**
+ * A projected mesh, drawn as SVG polygons rather than on a GPU.
+ *
+ * `surface3d.ts` does the maths and hands back quads already ordered back to
+ * front, so painting them in order IS the depth buffer. That is why this needs
+ * no WebGL and no dependency — and why `projection.ts` can go on reporting
+ * `webgl` as unavailable without the capability being blocked on it.
+ *
+ * A refused verdict renders nothing and says why. Drawing a surface the
+ * `warrants3D` rules rejected would make the rules decoration.
+ */
+export const Surface3D: React.FC<{ grid: SurfaceGrid; width?: number; height?: number }> = ({
+  grid,
+  width = 320,
+  height = 200,
+}) => {
+  const verdict = warrants3D(grid);
+  const faces = verdict.warranted
+    ? meshFaces(grid, {
+        camera: { ...DEFAULT_CAMERA, scale: Math.min(width, height) * 0.72, centre: { x: width / 2, y: height / 2 } },
+      })
+    : [];
+
+  if (!verdict.warranted) {
+    return (
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.secondary }} data-surface3d="refused">
+        {describeSurface(grid, [])}
+      </p>
+    );
+  }
+
+  const values = faces.map((f) => f.value);
+  const lo = Math.min(...values);
+  const span = Math.max(...values) - lo || 1;
+  const dropped = expectedFaceCount(grid) - faces.length;
+
+  return (
+    <figure style={{ margin: 0 }}>
+      <svg
+        width="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={describeSurface(grid, faces)}
+        data-surface3d="drawn"
+        data-faces={faces.length}
+        data-dropped={dropped}
+      >
+        {faces.map((face, i) => (
+          <polygon
+            key={i}
+            points={face.corners.map((c) => `${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(' ')}
+            fill={surfaceInk((face.value - lo) / span)}
+            stroke={GRID}
+            strokeWidth={0.5}
+          />
+        ))}
+      </svg>
+      <figcaption style={{ fontSize: 11, lineHeight: 1.5, color: INK.secondary, marginTop: 4 }}>
+        {describeSurface(grid, faces)}
+      </figcaption>
+    </figure>
+  );
+};
+
+/**
+ * The colour ramp for a face.
+ *
+ * Height already encodes the value, so colour is a redundant second channel
+ * rather than the only one — which is the opposite of the heatmap's problem and
+ * the reason this ramp can be gentle. The table twin below is still mandatory:
+ * neither height nor hue is readable to a screen reader.
+ */
+export const SURFACE_INK_HUE = 212;
+export const SURFACE_INK_HUE_SPAN = 34;
+export const SURFACE_INK_SATURATION = 62;
+/**
+ * The floor is MEASURED, not chosen.
+ *
+ * At the 26% this started as, the darkest faces sat at 1.65:1 against the
+ * panel — a trough would have been indistinguishable from a hole, which is
+ * precisely the claim `surface3d.ts` exists to make. 44% is the first step
+ * clearing `NON_TEXT_FLOOR`, and a test derives that rather than trusting it.
+ */
+export const SURFACE_INK_MIN_LIGHT = 44;
+export const SURFACE_INK_MAX_LIGHT = 72;
+
+export function surfaceInk(t: number): string {
+  const clamped = Math.max(0, Math.min(1, t));
+  const light = SURFACE_INK_MIN_LIGHT + clamped * (SURFACE_INK_MAX_LIGHT - SURFACE_INK_MIN_LIGHT);
+  return `hsl(${SURFACE_INK_HUE - clamped * SURFACE_INK_HUE_SPAN} ${SURFACE_INK_SATURATION}% ${light}%)`;
+}
+
+/** The same colour as hex, so contrast can be measured against the palette. */
+export function surfaceInkHex(t: number): string {
+  const clamped = Math.max(0, Math.min(1, t));
+  const h = SURFACE_INK_HUE - clamped * SURFACE_INK_HUE_SPAN;
+  const l = (SURFACE_INK_MIN_LIGHT + clamped * (SURFACE_INK_MAX_LIGHT - SURFACE_INK_MIN_LIGHT)) / 100;
+  const sat = SURFACE_INK_SATURATION / 100;
+  const a = sat * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const v = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+    return Math.round(v * 255)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/**
+ * The table twin, and it is not optional.
+ *
+ * A surface encodes in height and hue, and a keyboard-only screen reader has
+ * neither. A hole is rendered as the words "no data" rather than as an empty
+ * cell, because an empty cell reads as a formatting accident.
+ */
+export const SurfaceTable: React.FC<{ grid: SurfaceGrid }> = ({ grid }) => (
+  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+    <caption style={{ captionSide: 'top', textAlign: 'left', color: INK.secondary, paddingBottom: 4 }}>
+      {grid.zLabel ?? 'value'} by {grid.xLabel ?? 'x'} and {grid.yLabel ?? 'y'}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col" style={{ textAlign: 'left', color: INK.secondary }}>
+          {grid.yLabel ?? 'y'}
+        </th>
+        {grid.xs.map((x) => (
+          <th key={x} scope="col" style={{ textAlign: 'right', color: INK.secondary }}>
+            {x}
+          </th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {grid.ys.map((y, yi) => (
+        <tr key={y}>
+          <th scope="row" style={{ textAlign: 'left', color: INK.secondary }}>
+            {y}
+          </th>
+          {grid.xs.map((x, xi) => {
+            const value = grid.z[yi]?.[xi];
+            return (
+              <td key={x} style={{ textAlign: 'right', color: INK.secondary }}>
+                {value === null || value === undefined ? 'no data' : value.toFixed(4)}
+              </td>
+            );
+          })}
+        </tr>
+      ))}
+    </tbody>
+  </table>
+);

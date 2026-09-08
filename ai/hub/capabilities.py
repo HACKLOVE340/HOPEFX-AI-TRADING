@@ -1746,12 +1746,24 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "21",
         "D",
         "3D and scientific models where they aid understanding",
-        "staged",
-        "frontend/src/hub/projection.ts:RENDERERS",
-        "The presence takes schematic scientific forms (distribution, network, "
-        "waveform, timeline) and the renderer abstraction names WebGL, WebXR "
-        "and holographic output \u2014 but only canvas2d is implemented, and "
-        "availableRenderers() says so rather than implying otherwise.",
+        "live",
+        "frontend/src/hub/surface3d.ts:meshFaces",
+        "The previous note said 'only canvas2d is implemented', which describes what exists rather "
+        "than naming a blocker, and it confused two things. 3D IS NOT WEBGL: the dimension is in the "
+        "data and the projection, not in the API that rasterises the triangles, so a mesh painted "
+        "back-to-front onto SVG polygons is real 3D with no GPU and no dependency. WebGL stays "
+        "honestly unavailable in projection.ts as an ACCELERATION path, and no longer holds the "
+        "capability hostage. 'Where they aid understanding' is enforced, not quoted: warrants3D "
+        "REFUSES a grid varying in one direction, one under 75% populated, and any malformed one \u2014 "
+        "because occlusion hides the value somebody needed, foreshortening makes equal magnitudes "
+        "read as different, and a receding plane removes the shared baseline. The projection is "
+        "ORTHOGRAPHIC so equal heights project equal; perspective on a z axis that is a price is a "
+        "chart misstating its own numbers. A HOLE IS NEVER DRAWN ACROSS: every face touching a "
+        "missing sample is omitted, because a mesh spanning an unquoted strike renders a price a "
+        "reader could act on that nobody ever made. NaN is refused separately from null so a broken "
+        "pricer cannot read as an absent quote. Nine injections. The ramp floor is MEASURED: at its "
+        "first value the darkest faces sat at 1.65:1 against the panel, so a trough would have been "
+        "indistinguishable from a hole.",
     ),
     _c(
         "viz.media_panels",

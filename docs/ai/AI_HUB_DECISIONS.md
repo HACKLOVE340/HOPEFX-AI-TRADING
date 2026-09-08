@@ -406,3 +406,79 @@ The shape is identical each time: **an assertion that a second code path can
 also satisfy.** A test only proves the branch it can distinguish, and the only
 way to find that out is to inject the defect and watch. Every one of these was
 found by injection and none by reading.
+
+---
+
+## Phase I6 — 3D is not WebGL, and a third dimension has to earn its place
+
+### Two things the old note confused
+
+It said "only canvas2d is implemented", which describes what exists rather than
+naming a blocker. **The dimension is in the data and the projection, not in the
+API that rasterises the triangles.** A mesh painted back to front onto SVG
+polygons is real 3D: painter's ordering *is* the depth buffer, which is exactly
+why it needs no GPU and no dependency.
+
+WebGL stays honestly unavailable in `projection.ts`, because no GPU-backed
+context has been proven here. It is an **acceleration path**, and it no longer
+holds the capability hostage.
+
+### The spec clause is a constraint, so it is enforced
+
+"Where they aid understanding" is in the spec text, and `warrants3D` refuses more
+often than it accepts. On a trading screen a gratuitous third dimension costs
+occlusion (a peak hides the trough behind it, and the hidden value is the one
+somebody needed), foreshortening (equal magnitudes read as different), and the
+shared baseline that comparison depends on. A 2D heatmap of the same grid has
+none of those, so 3D has to buy them back.
+
+It earns them for a genuine z = f(x, y) over two ordered, densely-sampled axes
+where the shape *between* the samples is the information. It is refused for data
+varying in one direction — a line repeated, whose depth is decoration.
+
+### Orthographic, because z is a price
+
+Perspective renders two equal values at different heights depending on where
+they sit. On a screen where the vertical axis is a price, that is a chart
+misstating its own numbers. Perspective is for photographs; measurement wants
+parallel projection.
+
+### A hole is never drawn across
+
+The rule the module exists for, and the third time this repository has landed on
+it. A volatility surface with no quote at a strike has a hole; a mesh drawn over
+it renders a smooth surface where there is no market — a price a reader could
+act on that nobody ever made. Every face touching a missing sample is omitted
+and the caption says how many, so the bite out of the surface reads as absent
+data rather than as a shape.
+
+`NaN` is refused **separately** from `null`. A missing sample is `null` and says
+so; `NaN` is a calculation that went wrong, and letting it read as "no quote"
+hides a broken pricer behind a plausible gap.
+
+That is the same rule `trackFromHands` holds for a lost camera frame and
+`sceneFrom` holds for containment: **absent is absent, never inferred.**
+
+### A colour ramp that made a trough look like a hole
+
+Measured during review: at the lightness the ramp started at, the darkest faces
+sat at **1.65:1** against the panel. A low region would have been
+indistinguishable from a gap — contradicting the one claim the module is built
+around, in the module that makes it.
+
+The floor is now derived from `NON_TEXT_FLOOR` by a test rather than chosen, so
+moving either the ramp or the palette fails loudly. This is the second time a
+measured contrast check has overturned a number that looked fine: the first was
+`slate-500` reading 3.67:1 where memory said 4.21.
+
+### A fourth test that could not fail
+
+A render test queried `document` and found the **previous** test's SVG, so the
+"refuses to draw" case passed while looking at a drawn surface. Scoped to each
+render's own container now.
+
+Four phases, four of these, and the shape is the same every time: **an assertion
+that something other than the code under test can also satisfy.** I3's pointer
+tests fired an event first; I4's concurrency test never reached the race; I5's
+consent test was satisfied by the next branch; I6's queried a shared DOM. None
+was found by reading.

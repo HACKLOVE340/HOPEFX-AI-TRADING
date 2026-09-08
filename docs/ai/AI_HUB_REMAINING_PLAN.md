@@ -1608,50 +1608,136 @@ ever been in front of this code.
 
 ---
 
+## Phase I6 — §21, where 3D earns its place  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §21 3D and scientific models | staged | **live** | `hub/surface3d.ts:meshFaces` |
+| §4 Environment layer | staged | **live** | derived |
+
+The note said "only canvas2d is implemented". That describes what exists rather
+than naming a blocker, and it confused two things.
+
+### 3D is not WebGL
+
+The dimension is in the **data and the projection**, not in the API that
+rasterises the triangles. A mesh painted back to front onto SVG polygons is real
+3D, with no GPU and no dependency — painter's ordering *is* the depth buffer.
+WebGL stays honestly unavailable in `projection.ts` as an **acceleration path**,
+and no longer holds the capability hostage.
+
+### "Where they aid understanding" is enforced, not quoted
+
+That clause is in the spec, so `warrants3D` refuses more often than it accepts.
+On a trading screen a gratuitous third dimension costs three things that are not
+cosmetic:
+
+| Cost | What it does |
+|---|---|
+| occlusion | a peak hides the trough behind it — the hidden value is the one somebody needed |
+| foreshortening | two equal values read as different because one is further away |
+| no shared baseline | comparing heights across a receding plane is a task humans do badly and confidently |
+
+A 2D heatmap of the same grid has none of those, so 3D has to buy them back. It
+earns it for a genuine z = f(x, y) over two ordered, densely-sampled axes — a
+volatility surface across strike and expiry. It is refused for data varying in
+one direction, for a grid under 75% populated, and for any malformed grid.
+
+### The projection is orthographic
+
+Perspective makes two equal values render at different heights depending on
+where they sit. On a screen where z is a **price**, that is a chart misstating
+its own numbers. Perspective is for photographs; measurement wants parallel
+projection.
+
+### A hole is never drawn across
+
+The rule this module exists for. A volatility surface with no quote at a strike
+has a hole, and a mesh drawn straight over it renders a smooth surface where
+there is no market — a price a reader could act on that nobody ever made. Every
+face touching a missing sample is omitted, and the caption says how many. `NaN`
+is refused *separately* from `null`, so a broken pricer cannot read as an absent
+quote.
+
+### What is proven
+
+**Automated (PASS):** 32 tests, and the whole frontend suite at 2,594. Nine
+injections, each grepped before the run was trusted:
+
+| Injection | Result |
+|---|---|
+| Interpolate across holes | 2 fail, including the caption |
+| Perspective on the height axis | the orthographic test fails |
+| NaN counts as a hole | 1 fails |
+| Allow a one-direction surface | 2 fail |
+| Allow a sparse grid | 1 fails |
+| No back-to-front sort | 1 fails |
+| Axis-aligned camera | 1 fails |
+| Do not clamp pitch | 1 fails |
+| Ramp floor back to its first value | the contrast test fails |
+
+**Two findings from my own review, both real:**
+
+* **The ramp made a trough look like a hole.** Measured, the darkest faces sat
+  at **1.65:1** against the panel — so a low region would have been
+  indistinguishable from a gap, contradicting the one claim this module is built
+  around. The floor is now derived from `NON_TEXT_FLOOR` in a test rather than
+  chosen.
+* **A render test leaked into the next one.** It queried `document` and found
+  the *previous* test's SVG, so the "refuses to draw" case passed while looking
+  at a drawn surface. Scoped to each render's own container.
+
+**Runtime (UNVERIFIED):** a real operator turning a real surface. The maths and
+the markup are proven; nobody has looked at one.
+
+**Assurance:** self-reviewed, lower assurance.
+
+Also removed a pre-existing unused `RAW` alias in `SurfaceView.tsx` — an eslint
+warning, and the same dead shape: a constant with a docstring explaining why it
+was needed, used nowhere.
+
+---
+
 ## Phase H — the remainder
 
-**Five rows, three sections.** Regenerated from the registry each time this
+**Three rows, two sections.** Regenerated from the registry each time this
 section is touched: an earlier version still listed §7 and §25 rows that Phases
 E and F had made live, and a stale plan is one a reader trusts.
 
 | § | Row | State |
 |---|---|---|
 | 4 | Presence layer — identity, voice, animation, spatial state | staged |
-| 4 | Environment layer — the dynamic workspace | staged |
 | 18 | Gesture recognition | staged |
 | 18 | Pointing and object reference | staged |
-| 21 | 3D and scientific models where they aid understanding | staged |
 
-### What is actually blocked, after re-triaging what I had called blocked
+### Every row I called blocked was buildable
 
-I was wrong about every row I called blocked, and it was one mistake repeated:
-treating *unverifiable on this hardware* as *unbuildable*.
+Six claims, six corrections, one mistake repeated: treating *unverifiable on
+this hardware* as *unbuildable*.
 
 * **§24 agent runtime** — "no process boundary this deployment has". Wrong;
-  `multiprocessing` is standard library. Built in Phase I1.
-* **§10 multi-display** — "no second physical screen". Wrong as a blocker; the
-  Window Management API is a browser API. Built in Phase I2.
-* **§18's built halves** — the recogniser and the hit test had **zero production
-  callers**. Not blocked at all; wired in Phase I3.
-* **§26 delegation bound** — "does not exist to bound". Circular rather than
-  blocked. Built in Phase I4.
+  `multiprocessing` is standard library. Phase I1.
+* **§10 multi-display** — "no second physical screen". The Window Management
+  API is a browser API. Phase I2.
+* **§18's built halves** — the recogniser and hit test had **zero production
+  callers**. Not blocked at all. Phase I3.
+* **§26 delegation bound** — "does not exist to bound". Circular, not blocked.
+  Phase I4.
 * **§18's camera halves** — "a supply-chain decision for the owner". Half an
-  excuse: npm is reachable and the package is one install away. Everything
-  except the model shipped in Phase I5.
-* **§21 scientific 3D** — "only canvas2d implemented". A renderer is code.
-  Still open, and the next one.
+  excuse; npm is reachable. Everything but the model shipped in Phase I5.
+* **§21 scientific 3D** — "only canvas2d implemented". 3D is not WebGL, and a
+  renderer is code. Phase I6.
 
-**Nothing here is blocked on a decision any more.** Two rows are held open by
-the same honest limit rather than by a question:
+**Nothing is blocked on a decision.** What is left:
 
-* §18's `vision.*` rows need a deployed hand-landmark model AND a camera to
-  verify it against. The code either side of that gap ships and is proven; the
-  gap is one line of deployment configuration wide.
-
-§4's two remaining rows are **derived roll-ups**: `layer_state()` computes them
-from their constituents, so they move on their own and cannot be typed live
-early. The workforce layer moved by itself when §26 closed, which is the
-mechanism working.
+* §18's two `vision.*` rows need a deployed hand-landmark model **and a camera
+  to verify it against**. The code either side of that gap ships and is proven;
+  the gap is one line of deployment configuration wide, and it stays staged
+  because nobody has held a hand in front of it.
+* §4's `arch.layer_a.presence` is a **derived roll-up** — `layer_state()`
+  computes it from its constituents, so it moves on its own and cannot be typed
+  live early. The workforce and environment layers moved by themselves when §26
+  and §21 closed, which is the mechanism working.
 
 ---
 

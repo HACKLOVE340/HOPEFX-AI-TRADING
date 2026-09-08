@@ -62,6 +62,8 @@ export interface Event {
   category: string;
 }
 
+import type { SurfaceGrid } from './surface3d';
+
 export interface SurfaceData {
   points?: number[];
   rows?: [string, string][];
@@ -74,6 +76,8 @@ export interface SurfaceData {
   events?: Event[];
   /** A media source and its description. `alt` is required, never optional. */
   media?: { src: string; alt: string; kind: 'image' | 'video' };
+  /** §21. A z = f(x, y) grid. `warrants3D` decides whether it earns a surface. */
+  grid?: SurfaceGrid;
   /** True when there is nothing to draw — for either reason. */
   empty: boolean;
   /** Which reason. Rendered in place of the content, never alongside a zero. */

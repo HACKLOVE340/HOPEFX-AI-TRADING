@@ -19,6 +19,8 @@ import { surfaceData, type SurfaceData } from './surfaceData';
 import { focusTransition } from './spatial';
 import {
   Heatmap, HeatmapTable, Media, NetworkGraph, NetworkTable, Timeline, TimelineTable,
+  Surface3D,
+  SurfaceTable,
 } from './VizMarks';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 import { VIRTUALIZE_ABOVE, VirtualList } from './VirtualList';
@@ -73,14 +75,6 @@ const C = {
   bad: `var(--panel-bad, ${STANDARD.bad})`,
 } as const;
 
-/**
- * Raw values for the places a CSS variable cannot go.
- *
- * A canvas fill, an SVG attribute and a computed gradient all need a real
- * colour. Kept beside `C` so the two cannot name different sets of roles.
- */
-const RAW = STANDARD;
-
 const label: React.CSSProperties = {
   fontSize: 9,
   fontWeight: 800,
@@ -133,6 +127,10 @@ const RENDERERS: Record<string, React.FC<RendererProps>> = {
       {data.body ?? surface.meaning}
     </p>
   ),
+  // §21. A projected mesh on SVG polygons: 3D is in the data and the
+  // projection, not in the API that rasterises it, so this needs no GPU and
+  // `projection.ts` can go on reporting webgl unavailable honestly.
+  surface3d: ({ data }) => (data.grid ? <Surface3D grid={data.grid} /> : <Empty>No grid was supplied for this surface.</Empty>),
   terminal: ({ data }) => (
     <pre
       style={{
@@ -202,6 +200,8 @@ const TABLES: Record<string, React.FC<{ data: SurfaceData }>> = {
   heatmap: ({ data }) => <HeatmapTable cells={data.cells ?? []} />,
   network: ({ data }) => <NetworkTable nodes={data.nodes ?? []} edges={data.edges ?? []} />,
   timeline: ({ data }) => <TimelineTable events={data.events ?? []} />,
+  // A surface encodes in height AND hue, and a screen reader has neither.
+  surface3d: ({ data }) => (data.grid ? <SurfaceTable grid={data.grid} /> : null),
 };
 
 export interface SurfaceViewProps {
