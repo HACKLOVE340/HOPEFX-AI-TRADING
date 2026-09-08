@@ -27,8 +27,8 @@ other is one of the territories.
 |---|---|---|
 | **Group 0** | AI Hub Institutional Master Architecture Specification v1.0 (31 §§) | **Delivered.** 233 registry rows, 230 live. |
 | **Group 1** | Advanced Intelligence, Cognition, Autonomy and Evolution Architecture (64 §§) | Uploaded as `text.txt`. Coverage mapped below. |
-| **Group 2** | Master Platform Engineering, Operations, Infrastructure and Governance | **To be written.** |
-| **Group 3** | Master Documentation, Knowledge Management and Architecture Governance | **To be written.** |
+| **Group 2** | Master Platform Engineering, Operations, Infrastructure and Governance | **Delivered.** 28 chapters — `specs/GROUP2_platform_engineering_operations_governance.md` |
+| **Group 3** | Master Documentation, Knowledge Management and Architecture Governance | **Delivered.** 18 chapters — `specs/GROUP3_documentation_knowledge_architecture_governance.md` |
 
 `text_25.txt` did not know about Group 0 — the 31-section spec already delivered.
 It is added here as Group 0 rather than folded into Group 1, because merging them
@@ -158,10 +158,12 @@ yet exist.
 
 ## 6. What was not decided here
 
-* Whether Group 2 should absorb the operational half of §16, §20, §21 and §22.
-  They are *intelligence about operations*, which Rule 1 puts in Group 1, but
-  their subject matter is Group 2's. **Recorded as an open question**, resolved
-  when Group 2 is written, and noted in both documents either way.
+* ~~Whether Group 2 should absorb the operational half of §16, §20, §21 and §22.~~
+  **RESOLVED in Group 2 Chapter 16.** They stay in Group 1; Group 2 owns their
+  inputs and enforcement points, and the interface between the two documents is
+  one table. The deciding question is not "is it about operations" but **"does it
+  require a hypothesis?"** — a threshold does not, a correlation between a deploy
+  and a latency change does.
 * §41 (quantum-ready) is kept verbatim as the source document requires, and
   flagged: the source itself says it must not be marketing terminology. It stays
   in W8 as research, with no implementation claim.
