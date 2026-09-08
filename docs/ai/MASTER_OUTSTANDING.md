@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 20 proven · **3 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 21 proven · **2 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 3 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4→3 (R3–R9).** 20 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 2 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4→3→2 (R3–R10).** 21 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -284,9 +284,8 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — three gates left.** `python scripts/gate_evidence.py`
-   lists them:
-   `gate_j_circular_imports`, `gate_f_doc_consistency`, `gate_d_model_accuracy`.
+1. **Finish the ratchet — two gates left.** `python scripts/gate_evidence.py`
+   lists them: `gate_j_circular_imports`, `gate_d_model_accuracy`.
    `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
    from `__file__` with no env indirection, so a per-test mirror is too slow.
 2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
@@ -522,6 +521,42 @@ entry does not cover the same file on another line. That last property —
 the keys carry line numbers — means editing a file above one of these
 imports turns a known violation into a new one. Loud rather than silent,
 so it is recorded in the gate's own comment rather than redesigned here.
+
+## §E10 — Phase R10 (2026-09-08)
+
+Ratchet 3 → 2. One gate proven, and the defect is the same one this
+ratchet has now found three times.
+
+`gate_f_doc_consistency.py` checks that the API shown in fenced `python`
+blocks in ARCHITECTURE.md, AGENTS.md and CONTRIBUTING.md is the API the
+code actually has. A missing document was skipped and the gate exited 0.
+With all three absent it printed:
+
+```text
+[gate-f] SKIP  ARCHITECTURE.md (file not found)
+[gate-f] SKIP  AGENTS.md (file not found)
+[gate-f] SKIP  CONTRIBUTING.md (file not found)
+[gate-f] PASS — checked 3 docs, no violations
+```
+
+Two failures in one message. Renaming a document turned the gate off with
+CI green — the gate M and gate K shape a third time — and *"checked 3
+docs"* was `len(DOCS_TO_SCAN)`, the length of a constant tuple, not a
+count of anything opened. That is F176's shape as well: a number that
+cannot report having measured nothing.
+
+Fixed as gates M and K were, deliberately reusing their convention rather
+than inventing a third one: a missing document fails closed,
+`DOC_ALLOW_SKIP=1` is the explicit local opt-out alongside `AB_ALLOW_SKIP`
+and `REQ_ALLOW_SKIP`, and the reported count now comes from what was
+actually read.
+
+Both rules were injected as well — an import of a module that does not
+exist, a name missing from a real module, and a PascalCase class the
+repository never defines all fail — along with the documented non-findings
+that keep the gate usable: external and stdlib prefixes, the SKIP_NAMES
+placeholders a doc example is expected to invent, and prose outside a
+fenced block.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

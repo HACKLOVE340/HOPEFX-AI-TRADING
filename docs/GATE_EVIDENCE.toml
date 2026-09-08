@@ -55,8 +55,8 @@ injected = "An unimported file in each guarded package fails; three real defects
 id = "gate_f_doc_consistency"
 kind = "ci_gate"
 runs = "scripts/ci/gate_f_doc_consistency.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_f_doc_consistency_injections.py"
+injected = "A doc importing a module that does not exist, a name missing from a real module, and a PascalCase class the repo never defines all fail; external prefixes, SKIP_NAMES placeholders and prose outside fenced blocks correctly do not. The defect found here is the third instance of the gate M / gate K shape: a missing document was SKIPPED and the gate exited 0 — with all three absent it printed \"checked 3 docs, no violations\", a count taken from len(DOCS_TO_SCAN) rather than from anything read, so renaming ARCHITECTURE.md turned the gate off with CI green. Missing docs now fail closed, DOC_ALLOW_SKIP=1 is the explicit local opt-out (matching AB_ALLOW_SKIP and REQ_ALLOW_SKIP), and the reported count comes from what was actually checked"
 
 [[gate]]
 id = "gate_g_import_discipline"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 3
+unproven_count = 2
