@@ -97,9 +97,7 @@ class TestTheCheckCanActuallyFail:
         assert not [d for d in check(extra_documents=[doc]).drift if d.path == doc]
 
     @pytest.mark.parametrize("shape", ["23 gates · 15 proven", "23 gates, 15 proven", "23 gates discovered"])
-    def test_the_total_shapes_documents_actually_use_are_matched(
-        self, tmp_path: Path, shape: str
-    ) -> None:
+    def test_the_total_shapes_documents_actually_use_are_matched(self, tmp_path: Path, shape: str) -> None:
         # The positive control for the narrowing below: tightening the pattern
         # must not stop it matching the shapes real documents write.
         measured = measure()["gates_total"]
@@ -109,7 +107,7 @@ class TestTheCheckCanActuallyFail:
 
 
 class TestACountOfWhatRemainsIsNotATotal:
-    """`(\d+)\s+gates` also matched "8 gates left" — a true sentence the checker
+    r"""`(\d+)\s+gates` also matched "8 gates left" — a true sentence the checker
     called drift. A check that forces awkward prose gets worked around, so the
     pattern narrowed rather than the writing. This pins that."""
 
