@@ -1,0 +1,1570 @@
+SOURCE PRESERVED VERBATIM — do not edit.
+
+Extracted from MASTER_AI_OPERATING_SYSTEM_FULL_COMPLETE_VOLUMES_I_XX.docx
+(uploaded 2026-09-08) by unzipping word/document.xml and reading every
+paragraph in document order. Bullet paragraphs are prefixed '- '; nothing
+else is added, reordered or removed. This is the complete Volumes I-XX
+document and it supersedes nothing: the earlier 186-chapter table of
+contents lives on in GROUP4_master_ai_operating_system.txt, and every title
+from both is accounted for by scripts/group4_preservation.py.
+
+==============================================================================
+
+MASTER AI OPERATING SYSTEM
+COMPLETE MASTER ARCHITECTURE, ENGINEERING, OPERATIONS, ACCELERATION, EXECUTION AND GOVERNANCE SPECIFICATION
+Authoritative Consolidated Blueprint — Volumes I–XX
+PRESERVATION RULE
+This document is governed by one rule: ADD AND EXPAND; NEVER SILENTLY REMOVE. Deferred implementation does not mean deletion. Every mandatory capability remains in the architecture registry and backlog until explicitly implemented or formally retired through governance.
+
+VOLUME I — CONSTITUTION AND ARCHITECTURAL FOUNDATION
+Purpose
+Establish the identity, constitution, non-negotiable principles and invariants of the AI Operating System.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+System Constitution
+Human sovereignty; evidence before confidence; least authority; accountability; reversibility; simulation before irreversible action; privacy; observability; replaceability; measurable intelligence; continuous improvement; graceful degradation.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Architecture Invariants
+Every subsystem must declare purpose, owner, interfaces, dependencies, data classification, authority boundary, security controls, failure modes, recovery behavior, observability, KPIs, tests, version and retirement path.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Decision Governance
+Maintain an Architecture Decision Registry and Decision Ledger recording context, alternatives, evidence, decision, expected outcome, actual outcome and lessons.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Operating Principle
+The platform is an institutional intelligence environment, not a chatbot, static dashboard or disconnected collection of agents.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME II — AI OPERATING SYSTEM CORE
+AI Runtime
+Persistent runtime coordinates sessions, requests, tasks, agents, models, tools, memory, permissions, artifacts and checkpoints.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Intelligence Governor
+Classifies complexity, risk, urgency, modality, privacy and expected value; chooses direct inference, retrieval, planning, multi-agent work, simulation, adversarial review or escalation.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Mission Control
+Maintains long-running missions, priorities, dependencies, checkpoints, blockers, budgets, escalation and completion verification.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Goal and Task Management
+Represents hierarchy from vision through strategic goals, programs, missions, tasks and actions; supports dependency graphs, scheduling, retries, cancellation and recovery.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Context and Planning
+Builds authorized context dynamically and supports strategic, tactical, operational and atomic planning, contingencies and replanning.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME III — COGNITION, REASONING AND META-COGNITION
+Problem Representation
+Convert requests into objectives, constraints, assumptions, unknowns, dependencies and success criteria.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Structured Reasoning
+Support decomposition, causal reasoning, systems thinking, temporal reasoning, comparison and alternative generation.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Meta-Cognitive Layer
+Monitor reasoning quality, assumptions, blind spots, repeated errors, confidence and strategy selection.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Hypothesis Intelligence
+Generate competing hypotheses, search for disconfirming evidence and preserve unresolved disagreement.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Uncertainty and Calibration
+Separate verified facts, supported inference, weak inference, hypotheses and speculation; calibrate confidence against evidence and historical performance.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Curiosity and Scientific Method
+Detect anomalies and knowledge gaps; generate questions, hypotheses, experiments, measurements, revisions and lessons.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Self-Evaluation
+Run pre-action critique, independent criticism, post-task review and outcome comparison.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME IV — MULTI-MODEL AND PROVIDER-NEUTRAL INTELLIGENCE
+Universal Model Layer
+Use adapters and normalized contracts so no provider controls core architecture.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Model Registry
+Track model identity, version, modality, context limits, quality, latency, cost, privacy, availability and benchmark history.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Capability-Based Routing
+Select models or ensembles by task capability, risk, privacy, latency, quality and economics.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Provider and Credential Governance
+Discover/register approved providers through authorized workflows; encrypt, rotate, validate and audit credentials.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Failover and Benchmarking
+Health failures route to approved alternatives; benchmark continuously to detect regressions and support upgrades or rollback.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Local and Private AI
+Support Ollama-compatible and other local runtimes as first-class private/offline/resilient options.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME V — MULTI-AGENT INTELLIGENCE
+Agent Registry
+Every agent has identity, role, capabilities, tools, models, permissions, budgets, health and performance history.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Dynamic Teams
+Create specialist teams for research, architecture, coding, testing, trading, operations, media and future domains.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Collaboration Protocols
+Exchange structured tasks, evidence, artifacts and state; avoid uncontrolled looping.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Consensus and Adversarial Review
+Use independent critics, verifiers and debate where mission risk justifies it.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Agent Governance
+Control lifecycle, isolation, authority, budgets, observability, replacement and termination centrally.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME VI — KNOWLEDGE, MEMORY AND UNDERSTANDING
+Knowledge Fabric
+Semantic knowledge graph links entities, systems, documents, capabilities, decisions, incidents, experiments and outcomes.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Institutional Memory
+Preserve reusable organizational intelligence across sessions, models and personnel.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Decision Memory
+Record rationale, alternatives, evidence, authority and actual outcomes.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Failure Memory
+Capture incidents, root causes, mitigations, failed approaches and lessons.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Knowledge Governance
+Manage provenance, freshness, conflict, access, retention, versioning and retirement.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME VII — PERCEPTION AND PLATFORM AWARENESS
+Sensory Layer
+Collect authorized internal and external signals from services, tools, documents, markets and data sources.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Event Nervous System
+Normalize, timestamp, classify, correlate and prioritize events.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Anomaly and Impact Intelligence
+Detect unusual behavior, estimate impact and connect related conditions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Operational Awareness
+Maintain live awareness of infrastructure, workloads, agents, missions, dependencies and risk.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Forecasting
+Generate calibrated early warnings and scenario-aware forecasts.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME VIII — INTELLIGENT ACCELERATION ARCHITECTURE
+Acceleration Philosophy
+Acceleration is a system-wide intelligence layer, not a single hardware purchase.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Hardware Abstraction
+Separate workload intent from CPU, GPU, NPU, cloud, local, distributed and future accelerator execution.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Workload Intelligence
+Classify interactive, generation, research, coding, simulation, analytics and background workloads.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Parallel and Concurrent Execution
+Run independent tasks simultaneously while respecting dependencies and protecting critical interactive services.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Resource Isolation
+Prevent image, video, research, coding and other heavy workloads from freezing the core AI experience.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Caching
+Use result, semantic, context, model and artifact caches.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Predictive Preparation
+Preload likely models, data and resources when justified.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Adaptive Quality
+Apply approved quality tiers, deferral, smaller models or alternative routing during pressure.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Autonomous Resource Intelligence
+Monitor utilization, predict capacity, redistribute workloads and recommend/perform approved scaling.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Future Accelerator Readiness
+Adopt new hardware through adapters, benchmarks and policy gates without redesigning intelligence.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME IX — EXECUTION ARCHITECTURE
+Thought vs Authority
+Capability to recommend never automatically grants capability to execute.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Controlled Pipeline
+Intent → validation → risk analysis → authority check → approval → execution → verification → rollback/completion → audit.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Action Registry
+Define action type, required authority, reversibility, validation, expected effects and emergency controls.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Verification
+Confirm actual outcomes instead of trusting command/API success alone.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Rollback and Idempotency
+Support safe reversal, duplicate protection and recovery.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Auditability
+Record actor, model/agent, authority, inputs, approvals, outputs and outcomes for significant actions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME X — RELIABILITY AND FAILURE ENGINEERING
+Failure Assumption
+Models, agents, networks, providers, databases, hardware and humans can fail.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Containment
+Use isolation, timeouts, circuit breakers, retries, fallback and bulkheads.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+High Availability
+Design redundancy and dependency health controls for critical services.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Recovery
+Use checkpoints, backups, disaster recovery and tested runbooks.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Chaos Engineering
+Inject safe failure scenarios to validate resilience.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Incident Learning
+Feed post-incident analysis into memory, tests, controls and architecture.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XI — SIMULATION AND FUTURE PROJECTION
+Projection Engine
+Generate multiple plausible futures rather than claiming guaranteed prediction.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+World Model and Simulation
+Model environments, rules, entities, constraints and interactions relevant to decisions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+What-If Analysis
+Compare alternative actions under changing assumptions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Digital Twin
+Maintain representative operational models for safe testing and experimentation.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Scenario Governance
+Label modeled outcomes, uncertainty and assumptions; validate simulations against reality when possible.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XII — SELF-IMPROVEMENT AND LEARNING
+Operational Learning
+Learn from outcomes, errors, bottlenecks and feedback.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Improvement Discovery
+Detect recurring friction, quality gaps, inefficiency and obsolete patterns.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Autonomous Experimentation
+Create controlled hypotheses and experiments in isolated environments.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Promotion Controls
+Require benchmarks, regression tests, security review and approval before significant production changes.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Self-Optimization
+Optimize routing, scheduling, caching and resource allocation within policy boundaries.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Learning Loop
+Observe → diagnose → hypothesize → experiment → measure → review → adopt/rollback → record lesson.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XIII — GOVERNANCE AND HUMAN OVERSIGHT
+Authority Tiers
+Observe, analyze, recommend, plan, prepare, execute approved actions and restricted high-impact actions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Human Sovereignty
+Humans can inspect, override, pause and terminate autonomous operations.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Policy Engine
+Centralize rules, exceptions, obligations, escalation and enforcement.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Audit
+Track approvals, exceptions, policy decisions and unresolved governance debt.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Cross-Cutting Governance
+Apply governance to models, agents, data, tools, execution, infrastructure and evolution.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XIV — SECURITY AND PRIVATE INTELLIGENCE
+Private Intelligence Zones
+Run sensitive workloads in controlled local/private environments.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Identity and Access
+Apply strong identity, least privilege, scoped credentials and explicit authorization to humans, agents and services.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Secrets Protection
+Encrypt, rotate and audit secrets; prevent broad agent exposure.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Defensive Security Intelligence
+Monitor authorized environments and support detection, investigation and controlled response.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Supply Chain Security
+Review models, plugins, dependencies and integrations for provenance and risk.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XV — RESEARCH AND INNOVATION
+Research Intelligence
+Use specialist workflows to monitor knowledge and formulate research questions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Innovation Incubator
+Move ideas through watch, research, prototype, benchmark, review, adoption or rejection.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Technology Adoption
+Evaluate value, compatibility, security, maintainability, cost and exit strategy.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Research Memory
+Preserve positive and negative experimental results to avoid repeated rediscovery.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XVI — CAPABILITY EVOLUTION
+Capability Registry
+Treat capabilities as managed assets with purpose, contracts, dependencies, permissions, tests and lifecycle.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Skills Marketplace
+Discover and compose approved AI skills, agents, tools and workflows.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Plugin Architecture
+Sandbox, version and govern extensions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Deprecation and Retirement
+Migrate and retire obsolete capabilities without breaking dependent systems.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Adaptive Architecture
+Continuously identify modernization and replacement opportunities.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XVII — PERFORMANCE AND RESOURCE ECONOMICS
+Performance Engineering
+Define workload-specific latency, throughput, responsiveness and availability objectives.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Resource Manager
+Allocate compute, memory, storage and network according to priority and policy.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Cost Intelligence
+Track cost per useful outcome and inefficient routing.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Capacity Forecasting
+Predict saturation and infrastructure demand.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Energy Awareness
+Measure energy and infrastructure efficiency as operational variables.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XVIII — QUALITY, TESTING AND CONTINUOUS VALIDATION
+AI Evaluation
+Test reasoning, factuality, confidence, planning, tool use and task completion.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Agent and Model Testing
+Evaluate individuals and teams under normal, adversarial and failure conditions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Integration Testing
+Validate boundaries, contracts, dependencies and failure propagation.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Invariant Framework
+Check architecture, functionality, UI, pages, controls, missing toggles/buttons, design defects, text and punctuation issues, performance and end-to-end behavior.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Continuous Verification
+Run regression suites around changes and block critical regressions.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Quality Metrics
+Measure correctness, reliability, safety, usability, performance, explainability and governance compliance.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XIX — INTERFACE, DOCUMENTATION, KNOWLEDGE MANAGEMENT AND ARCHITECTURE GOVERNANCE
+Interface Standards
+Define API/event/tool contracts, schemas, errors, authentication, authorization, versioning and compatibility.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Documentation System
+Create documents from controlled templates with owner, version, status, scope, dependencies and review schedule.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Versioning and Review
+Draft → technical review → architecture/governance review → approval → publication → periodic review → supersession/retirement.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Knowledge Connection
+Link documents, decisions, diagrams, specifications, services, capabilities, incidents and implementation artifacts through the knowledge fabric.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Architecture Governance
+Review changes for invariants, dependencies, security, performance, migration, compatibility and retirement impact.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+VOLUME XX — PLATFORM EVOLUTION AND INSTITUTIONAL INTELLIGENCE
+Institutional Operating Model
+Preserve intelligence about architecture, decisions, outcomes and operations beyond individual models or engineers.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Technical-Debt Intelligence
+Detect duplication, aging components, dependency risk and architectural drift.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Adaptive Architecture Manager
+Propose modernization, migration and replacement while protecting continuity.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Future Readiness
+Support new models, modalities, agents, interfaces, compute and domains through modular contracts.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Platform Intelligence Index
+Measure maturity of intelligence, autonomy, reliability, governance, learning, memory and evolution.
+Mandatory Engineering Requirements
+	- Define component/service boundaries and responsibilities.
+	- Define data flows, control flows and intelligence flows.
+	- Define APIs/events, contracts and dependencies.
+	- Define identity, permissions, authority and approval boundaries.
+	- Define persistence, state, checkpoint and recovery behavior.
+	- Define security, privacy and audit requirements.
+	- Define observability, logs, traces, alerts and KPIs.
+	- Define failure modes, containment, fallback and rollback.
+	- Define tests, evaluation benchmarks and invariant checks.
+	- Define versioning, ownership, documentation and evolution path.
+Implementation Backlog Preservation
+All capabilities in this volume remain mandatory architecture/backlog scope. Implementation may be phased, but no item is deleted merely because it is not built yet.
+
+AI HUB AND EXPERIENCE ARCHITECTURE
+Permanent AI Presence
+The holographic AI head remains the persistent interface presence. It is the AI's living visual and interaction identity, not a replacement for functional workspaces.
+Dynamic Workspace System
+Workspaces are created on demand for charts, research, news, coding, terminals, reports, analytics, images, videos, simulations and specialized tools.
+AI-Controlled Workspace Orchestration
+Subject to user control and authority, the AI can open, arrange, update, compare and close workspaces as missions change.
+Multimodal Generation
+Text, reports, code, images, video and future generation workloads are supported through isolated pipelines and acceleration controls.
+Optional Physical Projection
+Physical/hardware projection can exist as an external presentation layer; the AI core does not depend on a projector to function.
+Accelerator Mode
+Acceleration is architectural and platform-wide: workload classification, routing, parallelism, caching, isolation, scaling and hardware abstraction.
+SPECIALIZED TRADING DOMAIN PRESERVATION
+The broader AI Operating System does not remove the existing institutional trading platform. Trading remains a major specialized domain, including market intelligence, ML inference, regime detection, strategies, risk engines, execution routing, broker adapters, paper/live controls, backtesting, simulation, observability and governance. The AI OS can coordinate this domain alongside research, engineering and other capabilities.
+FINAL COMPLETENESS CHECKLIST
+	- All phases 0–6 preserved.
+	- All volumes I–XX present.
+	- Advanced capabilities remain mandatory, not optional.
+	- Execution and governance included.
+	- Acceleration architecture included.
+	- Simulation, projection and digital twin included.
+	- Local AI and provider-neutral architecture included.
+	- Multi-agent and multi-model intelligence included.
+	- Knowledge graph, memory and institutional intelligence included.
+	- Self-improvement and controlled evolution included.
+	- Documentation and architecture governance included.
+	- Testing, invariant validation and hidden-defect detection included.
+	- No architecture capability is to be silently removed.

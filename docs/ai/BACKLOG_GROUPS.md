@@ -27,7 +27,7 @@ other is one of the territories.
 |---|---|---|
 | **Group 0** | AI Hub Institutional Master Architecture Specification v1.0 (31 §§) | **Delivered.** 233 registry rows, 230 live. |
 | **Group 1** | Advanced Intelligence, Cognition, Autonomy and Evolution Architecture (64 §§) | Uploaded as `text.txt`. Coverage mapped below. |
-| **Group 2** | Master Platform Engineering, Operations, Infrastructure and Governance | **Delivered.** 28 chapters — `specs/GROUP2_platform_engineering_operations_governance.md` |
+| **Group 2** | Master Platform Engineering, Operations, Infrastructure and Governance | **Delivered.** 35 chapters across nine Parts — `specs/GROUP2_platform_engineering_operations_governance.md` |
 | **Group 3** | Master Documentation, Knowledge Management and Architecture Governance | **Delivered.** 18 chapters — `specs/GROUP3_documentation_knowledge_architecture_governance.md` |
 | **Group 4** | Master AI Operating System — Execution, Intelligence, Acceleration, Autonomy, Governance and Evolution | **Received, 3.8% written.** 20 volumes and 186 chapters listed, **7 written**. See `GROUP4_ANALYSIS.md` |
 
@@ -47,7 +47,7 @@ group **references** the relationship; it does not copy the content. That rule i
 the whole defence against the duplicate and conflicting specifications Group 3
 exists to prevent.
 
-### Group 4 does not fit the rule, and that is the open question
+### Group 4 did not fit the rule — RESOLVED: Option B adopted
 
 Group 4's own completeness rule enumerates areas Groups 1, 2 and 3 already own —
 multi-model, multi-agent, memory, perception, governance, security, research,
@@ -59,7 +59,7 @@ Two viable readings, both costed in `GROUP4_ANALYSIS.md` §2:
 * **Option A** — Group 4 becomes the umbrella and Groups 0–3 become volumes inside
   it. One table of contents for everything, at the cost of re-indexing delivered
   work into a numbering where 179 of 186 chapters do not exist.
-* **Option B (recommended)** — Group 4's **written** Volume I becomes the
+* **Option B — ADOPTED** — Group 4's **written** Volume I becomes the
   constitutional layer above all groups; its unwritten Volumes II–XX become an
   index pointing at the owning group; Volume VIII (Acceleration) becomes new
   Group 2 content, since no group owns it.
@@ -69,7 +69,33 @@ written and constrains everything; Volumes II–XX are 0% written and duplicate
 documents that are complete. **Adopting the empty structure over the full ones
 would trade delivered specification for an index.**
 
-**Not decided. This is the owner's call.**
+**Decided by the owner on 2026-09-08: Option B.** What that produced:
+
+| Piece | Where it landed |
+|---|---|
+| Volume I | `docs/ai/specs/GROUP4_CONSTITUTION.md` — **T0**, twelve Articles, INV-01…INV-21, fifteen chapters |
+| Volumes II–XX, both enumerations | `docs/ai/specs/GROUP4_VOLUME_INDEX.md` — **T1**, every title from both sources routed to its owner |
+| Volume VIII, Acceleration | Group 2 Part VIII, Chapters 28–34 — the one area no group owned |
+| The sources | `GROUP4_master_ai_operating_system.txt` (v1) and `GROUP4_master_ai_operating_system_v2_complete.txt` (v2), both preserved verbatim |
+
+**Later the same day the complete Volumes I–XX document arrived**, and Option B
+held rather than being revisited: v2 carries a statement under every section but
+names 118 sections where v1 named 186 chapters, so it is **not a superset**.
+Neither source replaces the other; both are listed side by side.
+
+All 304 titles across the two sources survive. Nothing removed, which is the rule
+the source document opens with — and `python scripts/group4_preservation.py` is
+what makes that a measurement rather than a promise.
+
+**Precedence.** The constitution sits at T0 — above the four master
+specifications, and above code on constitutional Articles: where code violates an
+Article, the code is the defect. Everywhere else Group 3 Chapter 3's order stands
+and running code wins.
+
+**Where the outstanding work now shows up.** `python scripts/backlog_report.py`
+sections 6 and 7: the invariants not yet AVAILABLE (told — the constitution's own
+status column) and whether every predicate the constitution cites still exists in
+`invariants/` (measured). A renamed verifier makes section 7 say so.
 
 ---
 

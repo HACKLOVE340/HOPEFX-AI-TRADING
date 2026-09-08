@@ -1686,7 +1686,7 @@ to prevent.
 
 ---
 
-# PART VII — EXPERIENCE, MEASUREMENT AND EVOLUTION
+# PART VII — EXPERIENCE AND MEASUREMENT
 
 ## Chapter 26 — Operator and Administrator Experience
 
@@ -1787,7 +1787,143 @@ one number, and one number is exactly what stops anyone looking at the seven.
 
 ---
 
-## Chapter 28 — Evolution and Modernisation Strategy
+# PART VIII — ACCELERATION ARCHITECTURE
+
+*Absorbed from Group 4 Volume VIII under Option B. This was the one area no
+existing document owned. Both Group 4 sources enumerate it — v1 as fifteen
+chapter titles, v2 as ten sections with a statement each — and both are preserved
+in `GROUP4_VOLUME_INDEX.md`, checked by `scripts/group4_preservation.py`. The
+substance is specified here, where the platform's other engineering concerns
+live.*
+
+*The complete v2 source confirmed this Part rather than changing it: all ten of
+its sections map onto Chapters 28–34 below. It added one concrete thing — **NPU**
+to the list of execution targets — which is folded into Chapter 29.*
+
+## Chapter 28 — The Acceleration Layer, and what it is not
+
+**Status: PARTIAL.** Substantial pieces exist and were never framed as one layer:
+`ai/jobs/isolation.py` (process isolation with `RLIMIT_AS` and real termination),
+`ai/jobs/runner.py` (bounded concurrency), `ai/jobs/priority.py` (ageing queue),
+`ai/gateway/chain.py` (model fall-through), `ai/cache/` and `cache/` (270 LOC plus
+a Redis pool), `ai/local_model.py` (604 LOC), 78 concurrency call sites.
+
+### Purpose
+
+Acceleration is about **spending the least compute that still produces a correct
+answer in time**. On a trading platform "in time" is a correctness property, not a
+comfort one: a signal acted on late is a different signal.
+
+### The distinction that governs this whole Part
+
+**Acceleration must never change an answer.** Faster is a property of the path,
+not of the result. A cache that returns a stale price, a routing decision that
+silently picks a weaker model, a degraded mode that skips a risk check — each of
+those is a *wrong answer delivered quickly*, which Group 2 Chapter 8 already ranks
+below a correct answer delivered late.
+
+Every chapter below therefore carries the same test: **what does it do when it
+cannot go faster safely?** The answer is always the slow correct path, never a
+different result.
+
+### Why this design
+
+Because the failure mode of an acceleration layer is not slowness — it is
+silence. A cache that never says it was stale, a router that never says it
+downgraded, and a degradation policy that never says what it dropped will each
+produce output indistinguishable from the full path. That is Rule 2 applied to
+speed: **an unreported downgrade is an absent measurement, not a free win.**
+
+## Chapter 29 — Hardware Abstraction and Future Accelerators
+
+**Status: NEW.** No GPU or accelerator abstraction exists; the references found
+are in `requirements-optional.txt`, `invariants/ml_pipeline.py` and `research/`.
+
+Group 4 Chapter 7's rule governs: **architectural readiness, not speculation.** An
+interface that admits a future backend is architecture; a claim about that backend
+is marketing. The same test that let `viz.scientific_3d` ship without WebGL.
+
+So: one execution-target interface (`cpu`, `gpu`, `npu`, `remote`,
+`local-model`, `distributed`) — the set v2 names — a capability probe that
+reports what is *actually* present, and — Rule 2 — a target that cannot be probed
+is **absent, never assumed**. No chapter here claims GPU or NPU support until one
+has run something.
+
+## Chapter 30 — Workload Management and Dynamic Compute Routing
+
+**Status: PARTIAL.** `ai/jobs/priority.py` ages priorities so the bottom tier is
+not starved; `ai/gateway/chain.py` falls through providers. What is missing is a
+route decision that considers *cost, latency and quality together* rather than
+availability alone, and the **priority floor** Chapter 7 already named: risk and
+execution work is never queued behind analysis, whatever the arrival order.
+
+**Every routing decision is recorded with its reason.** A router that cannot say
+why it chose a path cannot be debugged when it chooses badly.
+
+## Chapter 31 — Parallel, Distributed and Isolated Execution
+
+**Status: AVAILABLE for isolation, PARTIAL for the rest.** `ai/jobs/isolation.py`
+gives real process isolation — `spawn` not `fork` because this process has
+threads, memory capped by `RLIMIT_AS`, timeouts that actually terminate. Bounded
+concurrency and the delegation bound (depth, fan-out, total descendants) are in
+place. Distributed execution across hosts is NEW.
+
+The delegation bound is the precedent for anything distributed: **three separate
+limits, refusal recorded, and a grant that crosses the process boundary because a
+ledger cannot.**
+
+## Chapter 32 — Caching and Predictive Preloading
+
+**Status: PARTIAL.** `ai/cache/store.py`, `cache/redis_*` and a market-data cache
+exist without a stated coherence policy.
+
+Three rules, each derived from a failure this platform can actually suffer:
+
+1. **Every cached value carries its age**, and a consumer that cannot tolerate the
+   age gets the slow path. A stale price is not a fast price.
+2. **A cache miss is measured, not hidden.** Hit rate with no miss reason is a
+   number that cannot be acted on.
+3. **Preloading is speculative and must be free to be wrong.** It may never evict
+   something a live request needs, and it never warms a value it would not have
+   been allowed to compute.
+
+## Chapter 33 — Adaptive Model Selection and Resource Intelligence
+
+**Status: PARTIAL.** `ai/gateway/chain.py` has ordered chains and fall-through;
+budget ceilings and circuit breakers bound spend. Selection by *measured
+capability* needs Group 1 §7 (capability profiles) and §8 (rankings), which are
+unbuilt — recorded as a dependency, not duplicated here.
+
+**A downgrade is always visible.** If the router picks a cheaper model, the answer
+says so. Silent downgrade is how a platform stops noticing it got worse.
+
+## Chapter 34 — Performance Policy, Graceful Degradation and Capacity Intelligence
+
+**Status: PARTIAL.** Article IX is already enforced in four places — kill switch,
+budget ceiling, delegation bound, frame budget. What is missing is a single
+**stated order of what degrades first**, and the capacity forecast Chapter 7
+already lists as a gap (Redis currently reports `maxmemory` unlimited).
+
+The degradation order is a governance artefact, not an engineering one: it says
+what the platform is willing to lose. It is written by a human, reviewed like a
+vault path, and the trading path is never in it.
+
+### KPIs for this Part
+
+| KPI | Target |
+|---|---|
+| Answers changed by an acceleration decision | **0** |
+| Downgrades not reported to the caller | 0 |
+| Cache values served without an age | 0 |
+| Routing decisions with no recorded reason | 0 |
+| Saturation events where the trading path was affected | 0 |
+| Execution targets claimed but never probed | 0 |
+
+---
+
+# PART IX — EVOLUTION AND THE RANKED GAP LIST
+
+## Chapter 35 — Evolution and Modernisation Strategy
 
 **Status: NEW.**
 
@@ -1819,27 +1955,31 @@ of the whole specification.
 |---|---|---|---|---|
 | 1 | Tested backup and restore | 9 | **Critical** | The only gap whose worst case is unrecoverable |
 | 2 | Rule 1 injection evidence across existing gates | 0, 19, 20 | **Critical** | Five controls that could not fail are already known; the rest are unmeasured |
-| 3 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
-| 4 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |
-| 5 | Change records with expected effect | 6 | High | Blocks Group 1 §16, §21, §32 |
-| 6 | Authority Tiers 0 and 3 | 10 | High | Group 1's premise needs an observe-only tier |
-| 7 | Progressive delivery + automated rollback | 5 | High | A bad release reaches everyone at once |
-| 8 | Package ownership register with enforced edges | 1 | High | Depended on by 22, 23 and Group 1 §22/§56 |
-| 9 | Incident declaration, timeline, postmortem | 15 | Medium | Triggers Group 1 §50 |
-| 10 | Capacity forecasting and load-shed policy | 7 | Medium | Redis is currently unbounded on a bounded host |
-| 11 | Latency budgets per stage | 17 | Medium | Measurement exists; enforcement does not |
-| 12 | Nightly `slow`/`e2e` run | 5, 19 | Medium | Process isolation is specified and unexercised |
-| 13 | SBOM and dependency provenance | 12 | Medium | Turns advisory response from search into query |
-| 14 | Administrator console, starting with refusals | 26 | Medium | Governance evidence is invisible today |
-| 15 | Debt measurement and budget | 22 | Medium | Feeds Group 1 §21 |
-| 16 | API versioning and deprecation policy | 21 | Low | No external consumers yet |
-| 17 | Retention and classification policy | 25 | Low | Prerequisite for 3 at scale |
-| 18 | `data/` ÷ `data_layer/` boundary decision | 1, 25 | Low | Holding position is workable; decide deliberately |
+| 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
+| 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
+| 5 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |
+| 6 | Change records with expected effect | 6 | High | Blocks Group 1 §16, §21, §32 |
+| 7 | Authority Tiers 0 and 3 | 10 | High | Group 1's premise needs an observe-only tier |
+| 8 | Stated degradation order, with the trading path excluded from it | 34 | High | Article IX is enforced in four places with no stated order of what is shed first |
+| 9 | Progressive delivery + automated rollback | 5 | High | A bad release reaches everyone at once |
+| 10 | Package ownership register with enforced edges | 1 | High | Depended on by 22, 23 and Group 1 §22/§56 |
+| 11 | Incident declaration, timeline, postmortem | 15 | Medium | Triggers Group 1 §50 |
+| 12 | Capacity forecasting and load-shed policy | 7, 34 | Medium | Redis is currently unbounded on a bounded host |
+| 13 | Latency budgets per stage | 17 | Medium | Measurement exists; enforcement does not |
+| 14 | Nightly `slow`/`e2e` run | 5, 19 | Medium | Process isolation is specified and unexercised |
+| 15 | Routing decisions record the reason they chose a path | 30 | Medium | A router that cannot say why cannot be debugged when it chooses badly |
+| 16 | SBOM and dependency provenance | 12 | Medium | Turns advisory response from search into query |
+| 17 | Administrator console, starting with refusals | 26 | Medium | Governance evidence is invisible today |
+| 18 | Debt measurement and budget | 22 | Medium | Feeds Group 1 §21 |
+| 19 | Execution-target abstraction and capability probe | 29 | Medium | No target may be claimed until something has run on it |
+| 20 | API versioning and deprecation policy | 21 | Low | No external consumers yet |
+| 21 | Retention and classification policy | 25 | Low | Prerequisite for 3 at scale |
+| 22 | `data/` ÷ `data_layer/` boundary decision | 1, 25 | Low | Holding position is workable; decide deliberately |
 
 ### Why this design
 
 Because a specification that ends without a ranked list leaves the reader to
-re-derive priority from twenty-eight chapters, and they will derive a different
+re-derive priority from thirty-five chapters, and they will derive a different
 one each time. The ranking above follows a single rule — **worst case first, then
 what unblocks the most** — and it is the rule, not the list, that should survive
 revision.

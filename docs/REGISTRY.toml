@@ -524,6 +524,14 @@ state = "active"
 note = "Measured coverage of Group 4 against the working tree, and the umbrella-versus-constitution question."
 
 [[document]]
+path = "docs/ai/MASTER_OUTSTANDING.md"
+tier = "T2"
+subject = "master_outstanding"
+owner = "hacklove340"
+state = "active"
+note = "The one place answering what is outstanding. Shape only; scripts/backlog_report.py holds the numbers."
+
+[[document]]
 path = "docs/ai/MODEL_CATALOGUE.md"
 tier = "T2"
 subject = "model_catalogue"
@@ -559,12 +567,36 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/ai/specs/GROUP4_CONSTITUTION.md"
+tier = "T0"
+subject = "group4-constitution"
+owner = "hacklove340"
+state = "active"
+note = "Volume I promoted under Option B. Binding on all four groups; ten Articles and INV-01..INV-21."
+
+[[document]]
+path = "docs/ai/specs/GROUP4_VOLUME_INDEX.md"
+tier = "T1"
+subject = "group4-volume-index"
+owner = "hacklove340"
+state = "active"
+note = "All 186 source chapter titles, routed to the group that owns each. Generated from the source, not retyped."
+
+[[document]]
+path = "docs/ai/specs/GROUP4_master_ai_operating_system_v2_complete.txt"
+tier = "T1"
+subject = "group4-master-ai-os-v2"
+owner = "hacklove340"
+state = "active"
+note = "Uploaded source, preserved verbatim. Complete Volumes I-XX: 118 named sections, each with a statement. Not a superset of v1."
+
+[[document]]
 path = "docs/ai/specs/GROUP4_master_ai_operating_system.txt"
 tier = "T1"
 subject = "group4-master-ai-os"
 owner = "hacklove340"
 state = "active"
-note = "Uploaded source, preserved verbatim. 20 volumes and 186 chapters listed; 7 written."
+note = "Uploaded source (v1), preserved verbatim. Table of contents: 20 volumes, 186 chapters; 7 written. Superseded by nothing — see the v2 entry."
 
 [[document]]
 path = "docs/ai_change_ledger.md"

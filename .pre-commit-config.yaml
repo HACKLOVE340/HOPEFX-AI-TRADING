@@ -188,6 +188,28 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # The Group 4 source opens with one rule: ADD AND EXPAND; NEVER SILENTLY
+      # REMOVE. Two sources exist and neither is a superset of the other, so a
+      # title can be dropped by adopting either one alone. Enforced rather than
+      # intended: a rule nobody runs is not a rule.
+      - id: group4-preservation
+        name: Group 4 source preservation (nothing dropped)
+        language: system
+        entry: python scripts/group4_preservation.py
+        files: '^docs/ai/specs/GROUP4_.*$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The volume index claims to be generated. Without this, that claim is
+      # unverifiable and discourages the checking a hand-written file would get.
+      - id: group4-index
+        name: Group 4 volume index matches its sources
+        language: system
+        entry: python scripts/group4_index.py --check
+        files: '^(docs/ai/specs/GROUP4_.*|scripts/group4_index\.py)$'
+        pass_filenames: false
+        stages: [pre-commit]
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.
