@@ -10,8 +10,8 @@
 adopted = "2026-09-08"
 # The ratchet. These record what was already wrong at adoption so that NEW
 # violations fail while existing debt is paid down. They may only shrink.
-unowned_count = 198
-known_duplicate_subjects = ["api", "architecture", "contributing", "deployment"]
+unowned_count = 197
+known_duplicate_subjects = ["architecture", "contributing", "deployment"]
 
 [[document]]
 path = "AGENTS-IMPROVEMENT-SPEC.md"
@@ -114,9 +114,10 @@ state = "draft"
 [[document]]
 path = "docs/API.md"
 tier = "T2"
-subject = "api"
+subject = "api-overview"
 owner = ""
 state = "draft"
+note = "One-page overview."
 
 [[document]]
 path = "docs/API_ENDPOINTS.md"
@@ -124,20 +125,23 @@ tier = "T2"
 subject = "api"
 owner = ""
 state = "draft"
+note = "Generated from the routers by scripts/api_documentation_generator.py. Canonical."
 
 [[document]]
 path = "docs/API_GUIDE.md"
 tier = "T2"
-subject = "api"
+subject = "api-guide"
 owner = ""
 state = "draft"
+note = "Narrative: auth, quickstart, walkthroughs."
 
 [[document]]
 path = "docs/API_REFERENCE.md"
 tier = "T2"
-subject = "api"
+subject = "api-reference"
 owner = ""
 state = "draft"
+note = "Curated subset, ~190 endpoints with worked examples."
 
 [[document]]
 path = "docs/ASSET_DIVERSIFICATION.md"
@@ -550,13 +554,6 @@ state = "draft"
 path = "docs/ai_change_ledger.md"
 tier = "T2"
 subject = "ai_change_ledger"
-owner = ""
-state = "draft"
-
-[[document]]
-path = "docs/api.md"
-tier = "T2"
-subject = "api"
 owner = ""
 state = "draft"
 

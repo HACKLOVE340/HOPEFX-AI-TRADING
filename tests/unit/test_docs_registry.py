@@ -196,7 +196,16 @@ class TestTheLiveRegistryIsHonest:
             for s in baseline.known_duplicate_subjects
             if s in f.detail
         }
-        assert {"api", "contributing", "deployment"} <= subjects
+        # Derived from the baseline, not pinned to a literal set. The first
+        # version hard-coded {"api", "contributing", "deployment"} and failed the
+        # moment the api collision was FIXED and removed from the baseline — a
+        # test that punishes paying down the debt it was written to track.
+        assert subjects == set(baseline.known_duplicate_subjects), (
+            "every baselined collision must still be reported; a baselined "
+            "subject that stops appearing means the detector stopped looking, "
+            "not that the collision was resolved"
+        )
+        assert subjects, "the baseline lists no collisions, so this proves nothing"
 
     def test_authority_tiers_are_the_three_that_claim_a_subject(self) -> None:
         assert set(AUTHORITY_TIERS) == {"T0", "T1", "T2"}

@@ -203,15 +203,23 @@ out of relationships.**
 
 | Subject | Documents claiming it |
 |---|---|
-| `api` | **five** — `docs/API.md`, `API_ENDPOINTS.md`, `API_GUIDE.md`, `API_REFERENCE.md`, **and `docs/api.md`** |
+| `api` | **five** — `API.md`, `API_ENDPOINTS.md`, `API_GUIDE.md`, `API_REFERENCE.md`, and a lower-case twin |
 | `architecture` | `ARCHITECTURE.md`, `docs/architecture.md` |
 | `contributing` | `CONTRIBUTING.md`, `docs/CONTRIBUTING.md` |
 | `deployment` | `DEPLOYMENT.md`, `docs/DEPLOYMENT.md` |
 
-The manual survey found four API documents; the registry found **five**, because
-`docs/api.md` and `docs/API.md` both exist — a pair that would collide outright on
-a case-insensitive filesystem. It also found the `architecture` collision, which
-the hand analysis missed entirely.
+The manual survey found four API documents; the registry found **five**, because a
+lower-case twin of `API.md` also existed — a pair that would have collided
+outright on a case-insensitive filesystem. It also found the `architecture`
+collision, which the hand analysis missed entirely.
+
+**RESOLVED in Phase API-1.** The twin was a stale fork of the generated file —
+580 unique lines, four in common — and was deleted. `API_ENDPOINTS.md` is
+canonical because it is generated from the routers the application mounts and
+therefore cannot drift; the other three were narrowed to `api-reference`,
+`api-guide` and `api-overview`. The `api` entry was then **removed from the
+baseline**, so a recurrence blocks: a baselined line whose finding is fixed must
+be removed or it hides the very thing it was meant to tolerate once.
 
 ### The hole the first version had
 
@@ -1320,7 +1328,7 @@ missing decision record against a stale link hides the first.
 | # | Gap | Chapter | Priority | Why |
 |---|---|---|---|---|
 | ~~1~~ | ~~Document registry with owners and tiers~~ | 2 | **DONE** — Phase G3-1 | 198 documents registered; found 5 API claimants, not 4 |
-| 2 | Resolve the **five** API documents | 1, 3 | **Critical** | A live conflict — two different base URLs, no authority marker. The registry found a fifth (`docs/api.md` alongside `docs/API.md`) |
+| ~~2~~ | ~~Resolve the five API documents~~ | 1, 3 | **DONE** — Phase API-1 | Stale fork deleted; generated listing canonical; summary column filled for 859 of 1,137 endpoints |
 | ~~3~~ | ~~Referential freshness check~~ | 15 | **DONE** — Phase G3-2 | Two layers, not one: referential would have caught none of the three known errors |
 | ~~4~~ | ~~Caller check on the capability registry~~ | 13, 14 | **DONE** — Phase G3-3 | 154 rows screened, 37 flagged; a screen, not a verdict |
 | 5 | Injection evidence as a traceability link | 13 | High | Five tests that could not fail, in one session |
@@ -1383,9 +1391,9 @@ Measured on the working tree:
 
 ## Appendix C — Open questions
 
-1. **Where the four API documents consolidate to.** Merging is obvious; which file
-   survives, and whether the endpoint listing stays separate from the guide, is a
-   decision for whoever owns the API surface.
+1. ~~**Where the API documents consolidate to.**~~ **RESOLVED, Phase API-1.** The
+   generated listing survives as canonical; the curated reference is preserved
+   with a banner declaring its 18% coverage and pointing at the complete list.
 2. **Whether `docs/` root should be flattened into subject directories.** 66 files
    in one directory is navigable by search and not by browsing. Deferred until the
    registry exists, because the registry makes the answer measurable.

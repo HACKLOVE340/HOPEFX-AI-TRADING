@@ -1,5 +1,18 @@
 # API Reference
 
+> **Scope: a curated subset with worked examples.** This file documents roughly
+> 190 of the platform's endpoints in depth — request and response bodies you can
+> copy. It is **not** the complete list.
+>
+> The complete list is **[`API_ENDPOINTS.md`](API_ENDPOINTS.md)**, generated from
+> the routers the application actually mounts (1,137 endpoints, 859 with a
+> summary). If an endpoint is missing here, look there before concluding it does
+> not exist.
+>
+> For auth, quickstart and narrative walkthroughs see
+> [`API_GUIDE.md`](API_GUIDE.md).
+
+
 > Base URL: `http://localhost:8000` (development) | `https://yourdomain.com` (production)
 > Interactive docs: `/docs` (Swagger UI) | `/redoc` (ReDoc)
 > Last updated: 2026-07-14
