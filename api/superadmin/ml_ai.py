@@ -10,7 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.auth import TokenPayload
 
-from ._shared import DeployModelBody, MLControlBody, _log_superadmin_action, _require_superadmin, _utcnow
+from ._shared import (
+    DeployModelBody,
+    MLControlBody,
+    _log_superadmin_action,
+    _require_superadmin,
+    _utcnow,
+    require_superadmin_2fa,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +236,7 @@ async def retrain_model(model_name: str, user: TokenPayload = Depends(_require_s
 
 
 @router.post("/ml/deploy")
-async def deploy_model(body: DeployModelBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
+async def deploy_model(body: DeployModelBody, user: TokenPayload = Depends(require_superadmin_2fa)) -> dict:
     _log_superadmin_action(user, "deploy_model", f"{body.model}@{body.version}")
     try:
         from ml.model_registry import get_registry
@@ -252,7 +259,7 @@ async def deploy_model(body: DeployModelBody, user: TokenPayload = Depends(_requ
 
 
 @router.post("/ml/rollback/{model_name}")
-async def rollback_model(model_name: str, user: TokenPayload = Depends(_require_superadmin)) -> dict:
+async def rollback_model(model_name: str, user: TokenPayload = Depends(require_superadmin_2fa)) -> dict:
     _log_superadmin_action(user, "rollback_model", model_name)
     try:
         from ml.model_registry import get_registry

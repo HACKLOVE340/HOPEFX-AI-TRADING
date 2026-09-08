@@ -12,6 +12,7 @@ Covers: Pydantic models, _load_platform_config, _save_platform_config,
 """
 
 import json
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -39,6 +40,28 @@ def _make_superadmin_app() -> FastAPI:
     superadmin_dep = require_role("superadmin")
     app.dependency_overrides[superadmin_dep] = lambda: TokenPayload(sub="test-superadmin", role="superadmin")
     return app
+
+
+@contextmanager
+def _two_factor_verified_override(sa_client):
+    """Scope a passing require_superadmin_2fa override to one test.
+
+    sa_client's app-level override only satisfies the base `_require_superadmin`
+    dependency, so any route now behind `require_superadmin_2fa` (rollback,
+    deploy) 403s under it by default — correctly. Tests for the success path
+    opt in here rather than weakening the shared fixture for every other test.
+    """
+    from api.auth import TokenPayload
+    from api.superadmin._shared import require_superadmin_2fa
+
+    app = sa_client.app
+    app.dependency_overrides[require_superadmin_2fa] = lambda: TokenPayload(
+        sub="test-superadmin", role="superadmin", two_factor_verified=True
+    )
+    try:
+        yield
+    finally:
+        del app.dependency_overrides[require_superadmin_2fa]
 
 
 def _ensure_db_tables() -> None:
@@ -607,6 +630,21 @@ class TestMLEndpoints:
         body = resp.json()
         assert "status" in body
 
+    def test_rollback_model_403_without_2fa(self, sa_client):
+        # rollback() bypasses quality gates to force-promote a previous model
+        # version into live trading. A superadmin token with no TOTP claim
+        # must not reach it — the sa_client fixture's default override never
+        # sets two_factor_verified, so this is the "stolen token" case.
+        # get_registry is mocked even though the request should be blocked
+        # before reaching it: if the gate ever regresses, this must not fall
+        # through to mutating the real committed ml/saved_models/registry.json.
+        with (
+            patch("api.admin.log_activity"),
+            patch("ml.model_registry.get_registry", side_effect=AssertionError("must not reach the registry")),
+        ):
+            resp = sa_client.post("/api/superadmin/ml/rollback/xgboost")
+        assert resp.status_code == 403
+
     def test_rollback_model_200(self, sa_client):
         # Mock the registry so the rollback always finds a staging candidate,
         # regardless of the real registry state on disk.
@@ -620,10 +658,32 @@ class TestMLEndpoints:
         }
         mock_registry.rollback = MagicMock()
         with (
+            _two_factor_verified_override(sa_client),
             patch("api.admin.log_activity"),
             patch("ml.model_registry.get_registry", return_value=mock_registry),
         ):
             resp = sa_client.post("/api/superadmin/ml/rollback/xgboost")
+        assert resp.status_code == 200
+
+    def test_deploy_model_403_without_2fa(self, sa_client):
+        # Mocked for the same reason as the rollback case above: a regressed
+        # gate must not fall through to mutating the real registry on disk.
+        with (
+            patch("api.admin.log_activity"),
+            patch("ml.model_registry.get_registry", side_effect=AssertionError("must not reach the registry")),
+        ):
+            resp = sa_client.post("/api/superadmin/ml/deploy", json={"model": "xgboost", "version": "v3"})
+        assert resp.status_code == 403
+
+    def test_deploy_model_200(self, sa_client):
+        mock_registry = MagicMock()
+        mock_registry.promote = MagicMock()
+        with (
+            _two_factor_verified_override(sa_client),
+            patch("api.admin.log_activity"),
+            patch("ml.model_registry.get_registry", return_value=mock_registry),
+        ):
+            resp = sa_client.post("/api/superadmin/ml/deploy", json={"model": "xgboost", "version": "v3"})
         assert resp.status_code == 200
 
 

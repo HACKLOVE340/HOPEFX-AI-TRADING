@@ -94,6 +94,20 @@ def test_the_nuclear_controls_additionally_require_2fa():
         )
 
 
+def test_model_mutating_ml_endpoints_additionally_require_2fa():
+    """rollback_model bypasses quality gates and deploy_model force-promotes a
+    version into live trading — both mutate the model actually deciding
+    trades. A stolen access token without a TOTP-verified claim must not
+    reach them, the same as nuclear_controls."""
+    targets = {"rollback_model", "deploy_model"}
+    found = {node.name: node for filename, node in _route_functions() if filename == "ml_ai.py" and node.name in targets}
+    assert found.keys() == targets, f"expected to find {targets}, found {sorted(found)} — have they moved or been renamed?"
+
+    for name, node in found.items():
+        signature = ast.unparse(node.args)
+        assert "require_superadmin_2fa" in signature, f"ml_ai::{name} does not require a 2FA-verified superadmin token"
+
+
 def test_the_guard_rejects_a_token_without_two_factor():
     """The dependency itself, not just its presence in a signature."""
     from fastapi import HTTPException
