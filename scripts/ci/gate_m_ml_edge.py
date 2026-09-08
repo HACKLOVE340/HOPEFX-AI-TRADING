@@ -16,10 +16,20 @@
 #   AB_OOS_YEARS    default 3
 #
 # The A/B trains an XGBoost with a fixed random_state on a committed CSV, so the
-# result is deterministic. If the dataset or ML deps are unavailable the gate
-# SKIPS (exit 0) rather than producing a flaky failure.
+# result is deterministic.
 #
-# Exits 0 on pass/skip, 1 when the ML edge has regressed below threshold.
+# A SKIP IS NOT A PASS.  This gate used to exit 0 when the dataset was missing,
+# so a deleted, renamed or mis-pointed CSV turned the ML edge guard off and left
+# CI green.  The dataset is *committed to the repository*, so its absence is a
+# real problem rather than an environmental quirk, and the same is true of the
+# ML dependencies in any environment that runs this gate.
+#
+# Both now fail closed.  Set AB_ALLOW_SKIP=1 to restore the old behaviour for a
+# local run in an environment that deliberately lacks them — never in CI, which
+# is the one place a silent skip costs something.
+#
+# Exits 0 on pass, 1 when the ML edge has regressed below threshold, and 1 when
+# the gate could not measure anything (unless AB_ALLOW_SKIP=1).
 from __future__ import annotations
 
 import json
@@ -34,8 +44,19 @@ REPORT_PATH = REPO_ROOT / "ml" / "saved_models" / "ab_baseline_report.json"
 
 
 def _skip(msg: str) -> int:
-    print(f"Gate M SKIPPED — {msg}")
-    return 0
+    """Report an unmeasured run.
+
+    Rule 2: an unmeasured value is absent, never zero. Exiting 0 here made
+    "the ML edge is intact" and "nobody checked" indistinguishable to every
+    reader of the CI summary.
+    """
+    if os.getenv("AB_ALLOW_SKIP", "").strip().lower() in ("1", "true", "yes"):
+        print(f"Gate M SKIPPED — {msg} (AB_ALLOW_SKIP is set)")
+        return 0
+    print(f"Gate M FAILED — could not measure the ML edge: {msg}")
+    print("The dataset is committed to this repository, so its absence is a defect.")
+    print("Set AB_ALLOW_SKIP=1 only for a local run that deliberately lacks it.")
+    return 1
 
 
 def main() -> int:

@@ -76,8 +76,8 @@ injected = ""
 id = "gate_i_migration_chain"
 kind = "ci_gate"
 runs = "scripts/ci/gate_i_migration_chain.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_i_migration_injections.py"
+injected = "All six failure classes against a mirrored chain: duplicate revision id, broken down_revision link, second head, second root, disconnected island. Each injection asserts it actually changed the file first — two earlier no-op injections had reported live rules as dead"
 
 [[gate]]
 id = "gate_j_circular_imports"
@@ -104,15 +104,15 @@ injected = "Seven incidents into a copied tree: live broker, live trading on in 
 id = "gate_m_ml_edge"
 kind = "ci_gate"
 runs = "scripts/ci/gate_m_ml_edge.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_m_ml_edge_injections.py"
+injected = "A missing dataset now fails instead of exiting 0 (the defect found here), malformed thresholds are refused, and unreachable accuracy and lift floors fail against the real A/B"
 
 [[gate]]
 id = "check-secrets"
 kind = "precommit_hook"
 runs = "scripts/check_secrets.sh"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_check_secrets_injections.py"
+injected = "Real credentials staged into a throwaway repo across yaml/env/ini/cfg are blocked; every documented skip still skips; and the bypass found here — a real credential containing xxx, none, null or tbd as a substring — is now blocked where it previously passed"
 
 [[gate]]
 id = "coverage-gate"
@@ -165,4 +165,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 13
+unproven_count = 10

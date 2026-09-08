@@ -89,8 +89,28 @@ scan_content() {
         echo "$line" | grep -qE '<[A-Z_]' && continue
         # Skip empty values (KEY: "" or KEY: '')
         echo "$line" | grep -qE "[=:][[:space:]]*(\"\"[[:space:]]*$|''[[:space:]]*$|[[:space:]]*$)" && continue
-        # Skip known safe placeholder words
-        echo "$line" | grep -qiE '(changeme|placeholder|your[-_]|example|CHANGE_ME|REPLACE_ME|xxx|TBD|none|null|secretKeyRef|valueFrom|configMapKeyRef|ci-placeholder|ci-test)' && continue
+        # Skip structural references — these are never a literal credential.
+        echo "$line" | grep -qE '(secretKeyRef|valueFrom|configMapKeyRef)' && continue
+
+        # Skip known safe placeholder values.
+        #
+        # Anchored to the VALUE, not matched anywhere in the line. The previous
+        # version searched the whole line for 'xxx', 'none', 'null' and 'TBD' as
+        # substrings, so a genuine credential that happened to contain one was
+        # silently skipped:
+        #
+        #   - an api-key value beginning 'Sxxx' followed by 20 random
+        #     characters was skipped because it contains 'xxx'
+        #   - a db-password value beginning 'none' followed by 16 random
+        #     characters was skipped because it contains 'none'
+        #
+        # Both were verified to pass the old check. Long, unambiguous words
+        # (placeholder, example, changeme, your-) stay substring matches because
+        # they do not occur inside real credentials by accident; the short
+        # ambiguous ones must now be the entire value.
+        value=$(echo "$line" | sed -E 's/^[^=:]*[=:][[:space:]]*//; s/[[:space:]]*#.*$//; s/^["'"'"']//; s/["'"'"'][[:space:]]*$//; s/[[:space:]]*$//')
+        echo "$line" | grep -qiE '(placeholder|example|changeme|change_me|replace_me|your[-_]|ci-placeholder|ci-test)' && continue
+        echo "$value" | grep -qiE '^(x+|n/?a|none|null|nil|tbd|todo|secret|password|token|key|dummy|fake|test|redacted|\*+|\.\.\.)$' && continue
 
         echo -e "${RED}[BLOCKED]${NC} ${YELLOW}${file}:${line_num}${NC}: $line"
         found=1

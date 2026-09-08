@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 22 gates · 9 proven · **13 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 22 gates · 12 proven · **10 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 13 of 22 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (Phase R2).** `docs/GATE_EVIDENCE.toml` + `scripts/gate_evidence.py --check`, in pre-commit, ratcheted. What remains is the work itself: thirteen gates whose ability to fail nobody has demonstrated. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 10 of 22 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2), ratchet turned 13→10 (R3).** Proving them keeps finding defects: gate M passed with no dataset, and the secret scanner skipped real credentials containing `xxx` or `none`. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -215,6 +215,25 @@ document points at it rather than trying to be it.
 | Proven | 23 tests. Every refusal by handing the code the exact broken artefact; the round trip against a live PostgreSQL 16.13 with matching checksums |
 | A control that could not fail | **One of my own**, caught by injection: a "leaves no partial file" test that the atomic staging already guaranteed, so deleting the cleanup did not fail it. Replaced with the falsifiable property — an existing database is untouched when a restore fails |
 | Operational consequence | **Sweep the backup directory.** Any SQLite artefact from before today may restore to nothing, and `--verify` is what tells you which |
+
+## §E3 — Phase R3: turning the Rule 1 ratchet (2026-09-08)
+
+Five gates were scoped by consequence. **Three proven, two deferred**, and
+proving them found two more dead controls.
+
+| Gate | Outcome |
+|---|---|
+| `check-secrets` | **Proven, and a bypass fixed.** The placeholder allowlist matched the whole line, so a real credential containing `xxx`, `none`, `null` or `tbd` was skipped. Verified against the real tree: 27 blocked lines before and after, so no new false positives |
+| `gate_i_migration_chain` | **Proven.** All six failure classes caught. My first probe reported two live rules as dead — both injections were no-ops against the root migration. The test now asserts each injection changed the file before running the gate |
+| `gate_m_ml_edge` | **Proven, and a fail-open fixed.** It exited 0 when the A/B dataset was missing, so a rename turned the ML edge guard off with CI green. The dataset is committed, so absence is a defect; `AB_ALLOW_SKIP=1` is the explicit local opt-out |
+| `gate_d_model_accuracy` | **Deferred.** It validates 38 MB of model artefacts resolved from `__file__`, with no env indirection, so a per-test mirror would make the suite slow. Needs a manifest-level injection instead — a different design, not more of the same |
+| `coverage-gate` | **Deferred.** Not started; scope was spent on the two defects found above |
+
+Two probes of my own were wrong before they were right — a no-op `sed` against
+the migration root, and a test credential containing the substring `EXAMPLE`
+which the scanner allowlists. Both would have reported a live control as dead.
+**Verifying that the injection applied is now part of the method**, not an
+afterthought.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
