@@ -516,6 +516,14 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/ai/GROUP4_ANALYSIS.md"
+tier = "T1"
+subject = "group4-analysis"
+owner = "hacklove340"
+state = "active"
+note = "Measured coverage of Group 4 against the working tree, and the umbrella-versus-constitution question."
+
+[[document]]
 path = "docs/ai/MODEL_CATALOGUE.md"
 tier = "T2"
 subject = "model_catalogue"
@@ -549,6 +557,14 @@ tier = "T1"
 subject = "group3_documentation_knowledge_architecture_governance"
 owner = ""
 state = "draft"
+
+[[document]]
+path = "docs/ai/specs/GROUP4_master_ai_operating_system.txt"
+tier = "T1"
+subject = "group4-master-ai-os"
+owner = "hacklove340"
+state = "active"
+note = "Uploaded source, preserved verbatim. 20 volumes and 186 chapters listed; 7 written."
 
 [[document]]
 path = "docs/ai_change_ledger.md"

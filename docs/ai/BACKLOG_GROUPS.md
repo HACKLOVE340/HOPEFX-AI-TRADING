@@ -29,6 +29,7 @@ other is one of the territories.
 | **Group 1** | Advanced Intelligence, Cognition, Autonomy and Evolution Architecture (64 §§) | Uploaded as `text.txt`. Coverage mapped below. |
 | **Group 2** | Master Platform Engineering, Operations, Infrastructure and Governance | **Delivered.** 28 chapters — `specs/GROUP2_platform_engineering_operations_governance.md` |
 | **Group 3** | Master Documentation, Knowledge Management and Architecture Governance | **Delivered.** 18 chapters — `specs/GROUP3_documentation_knowledge_architecture_governance.md` |
+| **Group 4** | Master AI Operating System — Execution, Intelligence, Acceleration, Autonomy, Governance and Evolution | **Received, 3.8% written.** 20 volumes and 186 chapters listed, **7 written**. See `GROUP4_ANALYSIS.md` |
 
 `text_25.txt` did not know about Group 0 — the 31-section spec already delivered.
 It is added here as Group 0 rather than folded into Group 1, because merging them
@@ -45,6 +46,30 @@ A single item belongs to exactly one group. Where it touches another, the owning
 group **references** the relationship; it does not copy the content. That rule is
 the whole defence against the duplicate and conflicting specifications Group 3
 exists to prevent.
+
+### Group 4 does not fit the rule, and that is the open question
+
+Group 4's own completeness rule enumerates areas Groups 1, 2 and 3 already own —
+multi-model, multi-agent, memory, perception, governance, security, research,
+platform engineering. It is therefore **not a fifth sibling but a proposed
+reorganisation that absorbs the others**.
+
+Two viable readings, both costed in `GROUP4_ANALYSIS.md` §2:
+
+* **Option A** — Group 4 becomes the umbrella and Groups 0–3 become volumes inside
+  it. One table of contents for everything, at the cost of re-indexing delivered
+  work into a numbering where 179 of 186 chapters do not exist.
+* **Option B (recommended)** — Group 4's **written** Volume I becomes the
+  constitutional layer above all groups; its unwritten Volumes II–XX become an
+  index pointing at the owning group; Volume VIII (Acceleration) becomes new
+  Group 2 content, since no group owns it.
+
+The recommendation rests on a measurement, not a preference: Volume I is 100%
+written and constrains everything; Volumes II–XX are 0% written and duplicate
+documents that are complete. **Adopting the empty structure over the full ones
+would trade delivered specification for an index.**
+
+**Not decided. This is the owner's call.**
 
 ---
 
