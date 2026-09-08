@@ -228,9 +228,18 @@ def _is_external(module_root: str) -> bool:
 
 def _py_files(root: Path, package: str) -> list[Path]:
     pkg_dir = root / package
-    if not pkg_dir.exists():
-        return []
-    return [p for p in pkg_dir.rglob("*.py") if not any(exc in str(p) for exc in EXCLUDED_PATTERNS)]
+    if pkg_dir.is_dir():
+        return [p for p in pkg_dir.rglob("*.py") if not any(exc in str(p) for exc in EXCLUDED_PATTERNS)]
+    # Some guarded names are a single top-level module, not a package
+    # directory — kill_switch.py, not kill_switch/. Checking only for the
+    # directory left it out of the graph entirely while the PASS message went
+    # on naming it, so a cycle through the module holding the kill-switch
+    # singleton — the example this gate's own header gives for what a circular
+    # import can corrupt — was reported as no cycle at all.
+    single_file = root / f"{package}.py"
+    if single_file.is_file() and not any(exc in str(single_file) for exc in EXCLUDED_PATTERNS):
+        return [single_file]
+    return []
 
 
 def _module_name(path: Path, root: Path) -> str:

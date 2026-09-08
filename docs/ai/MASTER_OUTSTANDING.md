@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 21 proven · **2 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 22 proven · **1 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 2 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4→3→2 (R3–R10).** 21 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 1 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4→3→2→1 (R3–R11).** 22 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -284,8 +284,7 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — two gates left.** `python scripts/gate_evidence.py`
-   lists them: `gate_j_circular_imports`, `gate_d_model_accuracy`.
+1. **Finish the ratchet — one gate left:** `gate_d_model_accuracy`.
    `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
    from `__file__` with no env indirection, so a per-test mirror is too slow.
 2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
@@ -557,6 +556,39 @@ repository never defines all fail — along with the documented non-findings
 that keep the gate usable: external and stdlib prefixes, the SKIP_NAMES
 placeholders a doc example is expected to invent, and prose outside a
 fenced block.
+
+## §E11 — Phase R11 (2026-09-08)
+
+Ratchet 2 → 1. One gate proven, and the defect is one already found in
+this ratchet — in a different gate.
+
+`gate_j_circular_imports.py` builds an intra-repo import graph and looks
+for cycles across eleven trading packages. Its own header states the
+consequence it exists to prevent: a circular import can "silently corrupt
+module-level singletons (**e.g. the kill switch state**)".
+
+It never looked at the kill switch. `_py_files` did `pkg_dir = root /
+package; if not pkg_dir.exists(): return []`, and `kill_switch` is a
+single top-level file — `kill_switch.py`, not `kill_switch/` — so it
+resolved to nothing, while the PASS line went on listing `kill_switch`
+among the packages checked. Confirmed by execution: a genuine
+`core.uses_ks` ↔ `kill_switch` cycle produced *"Gate J PASSED — no
+circular imports detected"*.
+
+**This is §E6's defect in a second gate.** Same root cause, same shape,
+found six phases apart, in code written by the same hand as the gate that
+had it first. The lesson is not about either gate: any rule that resolves
+a "package" as `root / name` shares it, and the repository has at least
+one guarded name that is a module rather than a package. Both are now
+fixed the same way.
+
+The real graph goes from 401 to 402 modules with the fix and still passes,
+so this closed a blind spot without changing the verdict on the tree as it
+stands. The rest of the gate is alive: two-module, three-module and
+cross-package cycles all fail, a diamond is correctly not a cycle, and the
+deliberate exemption for deferred function-level imports is pinned against
+the module-level form of the same pair, so it is a scoped exemption rather
+than a hole.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

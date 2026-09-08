@@ -83,8 +83,8 @@ injected = "All six failure classes against a mirrored chain: duplicate revision
 id = "gate_j_circular_imports"
 kind = "ci_gate"
 runs = "scripts/ci/gate_j_circular_imports.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_j_circular_imports_injections.py"
+injected = "Two-module, three-module and cross-package cycles all fail; a diamond without a cycle passes; deferred function-level imports are correctly not edges (with the module-level form of the same pair failing, so the exemption is scoped rather than a hole). The defect found here is gate_e's single-file blind spot in a second gate: _py_files checked only for a package DIRECTORY, and kill_switch is kill_switch.py, so the module holding the kill-switch singleton was never in the graph while the PASS line kept naming it among the packages checked. Confirmed by execution — a genuine core.uses_ks <-> kill_switch cycle reported no cycles at all. The real graph goes 401 -> 402 modules with the fix and still passes"
 
 [[gate]]
 id = "gate_k_requirements_consistency"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 2
+unproven_count = 1
