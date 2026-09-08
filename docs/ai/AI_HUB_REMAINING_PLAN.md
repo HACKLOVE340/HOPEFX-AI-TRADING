@@ -1415,28 +1415,131 @@ behaves the same.
 
 ---
 
+## Phase I4 — §26, the bound that had nothing to bound  ✅ DONE
+
+| Row | Was | Now | Evidence |
+|---|---|---|---|
+| §26 Prevent runaway recursive delegation | staged | **live** | `ai.jobs.lineage:DelegationLedger` |
+| §24 Isolated agent workers | live *(no caller)* | **live** | `JobRunner.submit_isolated` |
+| §4 Workforce layer | staged | **live** | derived |
+
+The note said "recursive delegation does not exist yet to bound". True, and
+circular: nothing delegated, so there was nothing to bound, so the row stayed
+staged for as long as it stayed staged. Phase I1's worker boundary gave it
+somewhere to live.
+
+### Three bounds, because there are three failure modes
+
+Depth is the bound people reach for and it catches one of these:
+
+| Failure mode | What it looks like | Caught by |
+|---|---|---|
+| depth | A delegates to B delegates to C, for ever | `max_depth` |
+| fan-out | one node delegates to 500 children, all at depth 1 | `max_fanout` |
+| total descendants | depth 4 by fan-out 8 — 4,680 nodes, neither bound exceeded | `max_descendants` |
+
+Each of the three tests satisfies the **other two** bounds comfortably. That is
+the only way to show a bound is doing work rather than riding behind a stricter
+neighbour, and the first version of the depth test failed because it did not:
+a flat grant of 50 per level exhausted the descendants budget at depth 2, so
+the depth bound went untested. The test said so by failing.
+
+### The bound is enforced where the child is CREATED
+
+`TaskGraph.add()` already makes this argument for cycles: creation is the last
+moment at which nothing has happened yet. Afterwards the model call is paid for,
+and a bound that notices then is a bound that reports.
+
+### A refusal is local, and is never silent
+
+Refusing the child, not failing the tree — the work already done was paid for,
+and discarding it wastes exactly the spend the bound protects. But every refusal
+is recorded with the bound that caused it, because a quietly dropped child is a
+plan that ran differently from the plan that was written.
+
+### Fail-closed: an unknown parent is refused, not adopted
+
+The whole security of the thing. A node presenting a parent this ledger has no
+record of — a bug, a replay, a child restarting the count at zero — would, if
+admitted as a fresh root, receive a **whole new budget**. `open_root()` is the
+only way a tree begins, and `run_isolated` refuses a contract whose lineage its
+process cannot vouch for.
+
+### Across a process boundary, a grant travels instead of the ledger
+
+A ledger is per-process; a child's is empty. So the child is handed a `grant` —
+what it may spend beneath itself, in total — and seeds its ledger with exactly
+that. The parent is charged `1 + grant`, in full, because that is the worst case
+the child may spend; charging only for the child would let two siblings each be
+handed the remaining budget and each spend it. The default grant is **zero**, so
+delegation does not propagate unless somebody said so in the call that created
+the child.
+
+### A correction to Phase I1
+
+`run_isolated` was imported by **nothing outside its own tests**, and I marked
+`stack.agent_runtime` live anyway. That is `hopefx-dead-controls` inside the work
+that closed a row about isolation — two commits after I wrote the Phase I3 note
+about finding exactly this in my own work.
+
+**The registry cannot catch this class.** `verify()` resolves an evidence
+locator; it has no opinion about whether anything imports it. That is a real
+limit of the anti-omission mechanism and it should be written down rather than
+discovered again. `JobRunner.submit_isolated` is the caller now.
+
+### What is proven
+
+**Automated (PASS):** 21 tests, including four that run a **real child process**
+and assert what it managed to delegate. Seven injections, each grepped to
+confirm it applied:
+
+| Injection | Result |
+|---|---|
+| No depth check | depth test + refusal-record test fail |
+| No fan-out check | 4 tests fail, including the concurrency one |
+| Charge 1 instead of 1+grant | both descendants tests fail |
+| Unknown parent becomes a root | the fail-closed test fails |
+| Remove the lock | **passed — twice.** See below |
+| Lineage does not cross the boundary | the child admits 0 instead of 3 |
+| Child adopts a full budget, not its grant | the child admits 8 instead of 3 and 0 |
+
+**The lock injection is the one worth reading.** Two versions of the concurrency
+test passed with the lock removed, which makes them tests of nothing: `admit`
+runs so few bytecodes between reading `children` and incrementing it that
+sixteen threads never landed in the window, even with the switch interval at a
+microsecond. The third version widens the window where the race actually is — a
+bounds stand-in that releases the GIL inside the fan-out *check* — and with it
+the unlocked ledger admits 15 children against a limit of 8.
+
+**Runtime (UNVERIFIED):** a delegation tree under real production load. Nothing
+in the app delegates yet; `submit_isolated` is the path, and the first caller
+that uses it will be the first time these bounds see traffic.
+
+**Assurance:** self-reviewed, lower assurance — no independent reviewer ran on
+this, and the risk floor (spend control, fail-closed invariant) would normally
+call for one.
+
+---
+
 ## Phase H — the remainder
 
-**Seven rows, four sections.** Regenerated from the registry each time this
-section is touched rather than carried forward: an earlier version still listed
-§7 and §25 rows that Phases E and F had made live, and a stale plan is one a
-reader trusts.
+**Five rows, three sections.** Regenerated from the registry each time this
+section is touched: an earlier version still listed §7 and §25 rows that Phases
+E and F had made live, and a stale plan is one a reader trusts.
 
 | § | Row | State |
 |---|---|---|
-| 26 | Prevent runaway recursive delegation | staged |
 | 18 | Gesture recognition | staged |
 | 18 | Pointing and object reference | staged |
 | 21 | 3D and scientific models where they aid understanding | staged |
 | 4 | Presence layer — identity, voice, animation, spatial state | staged |
-| 4 | Workforce layer — concurrent specialist agents | staged |
 | 4 | Environment layer — the dynamic workspace | staged |
 
-### What is actually blocked, after I re-triaged what I had called blocked
+### What is actually blocked, after re-triaging what I had called blocked
 
-I was wrong about four of the six rows I had called blocked, and the corrections
-are worth keeping visible because they were all the same mistake: treating
-*unverifiable on this hardware* as *unbuildable*.
+I was wrong about five of the six rows I had called blocked, and the pattern is
+worth keeping visible because it is one mistake repeated: treating *unverifiable
+on this hardware* as *unbuildable*.
 
 * **§24 agent runtime** — "no process boundary this deployment has". Wrong;
   `multiprocessing` is standard library. Built in Phase I1.
@@ -1444,21 +1547,23 @@ are worth keeping visible because they were all the same mistake: treating
   Window Management API is a browser API. Built in Phase I2.
 * **§18's built halves** — the recogniser and the hit test existed with **zero
   production callers**. Not blocked at all; wired in Phase I3.
+* **§26 delegation bound** — "does not exist to bound". Circular rather than
+  blocked: I1's worker boundary gave it somewhere to live. Built in Phase I4.
 * **§21 scientific 3D** — "only canvas2d implemented". A renderer is code.
-  Still open, and genuinely schedulable.
+  Still open, and genuinely schedulable — this is the next one.
 
-Two are really blocked, for two different reasons:
+One is really blocked, and for a reason that is not technical:
 
 * **§18's camera halves** need a hand/body landmark model this repository does
-  not carry. That is a **supply-chain decision for the owner**, not one to make
-  unilaterally in a phase.
-* **§26's delegation bound** was circular — there was nothing to bound. Phase I1
-  gave it a worker boundary, so the bound now has somewhere to live.
+  not carry. That is a **supply-chain decision for the owner** — a new
+  dependency and a shipped model, on a platform that moves money — not one to
+  make unilaterally in a phase.
 
-§4's three rows are **derived roll-ups**: `layer_state()` computes them from
-their constituent rows, so they move on their own and cannot be typed live
-early. Deriving them is what caught `arch.layer_c.workforce` claiming live with
-two of eighty-two constituents staged.
+§4's two remaining rows are **derived roll-ups**: `layer_state()` computes them
+from their constituents, so they move on their own and cannot be typed live
+early. The workforce layer moved by itself when §26 closed, which is the
+mechanism working. Deriving them is what caught `arch.layer_c.workforce`
+claiming live with two of eighty-two constituents staged.
 
 ---
 

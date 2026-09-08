@@ -281,6 +281,50 @@ class JobRunner:
             self._start(job, work, timeout_s, on_change)
         return job.id
 
+    def submit_isolated(
+        self,
+        *,
+        prompt: str,
+        contract: Any,
+        timeout_s: float | None = None,
+        on_change: Callable[[Job], None] | None = None,
+        priority: str = "secondary",
+    ) -> str:
+        """Queue a job that runs behind §24's process boundary.
+
+        The caller `run_isolated` did not have. Phase I1 built the boundary and
+        wired it to nothing, which is `hopefx-dead-controls` in the work that
+        was closing a row about isolation — and the registry could not catch it,
+        because `verify()` resolves an evidence locator and has no opinion about
+        whether anything imports it.
+
+        The contract's operator wins over anything passed here: an isolated
+        result belongs to the operator named in the contract that produced it,
+        which is the scoping a P0 was fixed for.
+
+        Ordinary `submit` is untouched. Isolation stays opt-in — silently moving
+        live trading work across a process boundary to close a row would change
+        the failure modes of the thing the row describes.
+        """
+        from ai.jobs.isolation import run_isolated
+
+        def work(report: Callable[[str], None]) -> Any:
+            outcome = run_isolated(contract, report=report)
+            if outcome.state != "succeeded":
+                # Raised, so the job fails as a job. An isolated task that died
+                # must not be reported as a job that returned nothing.
+                raise RuntimeError(outcome.error or f"the isolated task {outcome.state}")
+            return outcome.result
+
+        return self.submit(
+            prompt=prompt,
+            work=work,
+            operator=contract.operator,
+            timeout_s=timeout_s if timeout_s is not None else contract.timeout_s + 30.0,
+            on_change=on_change,
+            priority=priority,
+        )
+
     def _start(
         self,
         job: Job,

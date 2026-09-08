@@ -67,6 +67,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from ai.jobs.lineage import DelegationRefused, Lineage, get_ledger
+
 logger = logging.getLogger(__name__)
 
 #: Default ceiling for an isolated task. Generous — the point is to stop a
@@ -98,6 +100,10 @@ class TaskContract:
     args: dict[str, Any] = field(default_factory=dict)
     timeout_s: float = DEFAULT_TIMEOUT_S
     memory_mb: int | None = DEFAULT_MEMORY_MB
+    #: §26. Where this task sits in its delegation tree, or None for a task
+    #: nobody delegated. It travels in the contract because a ledger is
+    #: per-process and cannot: see `ai/jobs/lineage.py`.
+    lineage: Lineage | None = None
 
     def __post_init__(self) -> None:
         if not self.operator or not self.operator.strip():
@@ -121,6 +127,40 @@ class TaskContract:
             raise ContractRefused(f"timeout must be positive, got {self.timeout_s!r}")
         if self.memory_mb is not None and (not isinstance(self.memory_mb, int) or self.memory_mb <= 0):
             raise ContractRefused(f"memory_mb must be a positive number of megabytes, got {self.memory_mb!r}")
+        if self.lineage is not None and not isinstance(self.lineage, Lineage):
+            raise ContractRefused(f"lineage must be a Lineage or None, got {type(self.lineage).__name__}")
+
+    def delegate(self, entrypoint: str, /, *, grant: int = 0, **args: Any) -> TaskContract:
+        """A child of this task, admitted against §26's bounds or refused.
+
+        This is the ONLY way one contract becomes another, and it is why the
+        bound is enforceable: a child that exists without passing through here
+        has no lineage, and `run_isolated` refuses to run one that claims a
+        lineage its ledger does not know.
+
+        `grant` is how many descendants the child may create beneath itself.
+        It is an explicit keyword rather than something read out of `**args`,
+        because a task with an argument of that name would otherwise have its
+        delegation budget set by a coincidence of naming.
+
+        Raises `DelegationRefused` naming the bound that stopped it. The
+        refusal is local — this task carries on with what it has — because the
+        work already done was paid for.
+        """
+        if self.lineage is None:
+            raise DelegationRefused(
+                "this task has no lineage, so it may not delegate; a tree begins with "
+                "DelegationLedger.open_root and nowhere else",
+            )
+        child = get_ledger().admit(self.lineage, grant=grant)
+        return TaskContract(
+            entrypoint=entrypoint,
+            operator=self.operator,
+            args=args,
+            timeout_s=self.timeout_s,
+            memory_mb=self.memory_mb,
+            lineage=child,
+        )
 
 
 def resolve_entrypoint(reference: str) -> Any:
@@ -177,7 +217,13 @@ def isolation_available() -> tuple[bool, str]:
     return True, ""
 
 
-def _child(reference: str, args: dict[str, Any], memory_mb: int | None, channel: Any) -> None:
+def _child(
+    reference: str,
+    args: dict[str, Any],
+    memory_mb: int | None,
+    channel: Any,
+    lineage: Lineage | None = None,
+) -> None:
     """The child's whole life. Runs in a fresh interpreter under `spawn`.
 
     Everything it says goes down `channel` as a tagged tuple. It never raises
@@ -187,6 +233,12 @@ def _child(reference: str, args: dict[str, Any], memory_mb: int | None, channel:
     """
     capped = False
     try:
+        if lineage is not None:
+            # §26. This is a fresh interpreter with an empty ledger, so the
+            # grant is what makes the bound survive the boundary: the child's
+            # ledger is seeded with exactly what the parent already paid for,
+            # and anything it delegates spends from that and nothing else.
+            get_ledger().adopt(lineage)
         if memory_mb is not None:
             try:
                 import resource
@@ -234,11 +286,26 @@ def run_isolated(contract: TaskContract, *, report: Any = None) -> IsolatedOutco
             error=f"this task asked to be isolated and could not be: {reason}",
         )
 
+    # §26, fail-closed. A contract carrying a lineage this process has no
+    # record of is not run: it could be a replay, or a child restarting the
+    # count at zero, and either way the budget it would spend from is unknown.
+    # A contract with NO lineage is a task nobody delegated, which is fine —
+    # it simply cannot delegate onward, because `delegate()` refuses.
+    if contract.lineage is not None and get_ledger().remaining(contract.lineage) is None:
+        return IsolatedOutcome(
+            state="failed",
+            operator=contract.operator,
+            error=(
+                "this task claims a delegation lineage this process has no record of, so the budget "
+                "it would spend from cannot be known"
+            ),
+        )
+
     context = multiprocessing.get_context("spawn")
     channel = context.Queue()
     process = context.Process(
         target=_child,
-        args=(contract.entrypoint, dict(contract.args), contract.memory_mb, channel),
+        args=(contract.entrypoint, dict(contract.args), contract.memory_mb, channel, contract.lineage),
         daemon=True,
     )
 

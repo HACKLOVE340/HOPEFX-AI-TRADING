@@ -64,3 +64,30 @@ def eat_memory(*, megabytes: int = 4096, report: Any = None) -> int:
 
 def echo_operator(*, operator: str = "", report: Any = None) -> str:
     return operator
+
+
+def delegate_until_refused(report: Any = None, *, entrypoint: str = "", grant: int = 0) -> dict[str, Any]:
+    """§26. Try to delegate from inside a child, and say what stopped it.
+
+    The point of running this in a real child is that the child's ledger is a
+    fresh, empty one: the only budget it has is the grant that travelled in its
+    contract. A probe that ran in the parent would be spending the parent's
+    ledger and would prove nothing about the boundary.
+    """
+    from ai.jobs.isolation import TaskContract
+    from ai.jobs.lineage import DelegationRefused, current_lineage
+
+    mine = current_lineage()
+    if mine is None:
+        return {"admitted": 0, "refused": "this child has no lineage at all"}
+
+    me = TaskContract(entrypoint=f"{__name__}:succeed", operator="alice", lineage=mine)
+    admitted = 0
+    while True:
+        try:
+            me.delegate(entrypoint or f"{__name__}:succeed", grant=grant)
+        except DelegationRefused as exc:
+            return {"admitted": admitted, "refused": str(exc), "depth": mine.depth, "grant": mine.grant}
+        admitted += 1
+        if admitted > 500:  # pragma: no cover - a bound that never fires is the bug
+            return {"admitted": admitted, "refused": "", "depth": mine.depth, "grant": mine.grant}

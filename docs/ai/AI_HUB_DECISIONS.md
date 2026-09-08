@@ -275,3 +275,68 @@ focus at once: the ring followed the swipe while the layout went on enlarging
 the operator's original selection. `shownFocus` is now declared above the
 placement memo and feeds it, so there is one answer to "which surface is
 focused" and everything downstream reads it.
+
+---
+
+## Phase I4 — a bound that is three bounds, and a limit of the registry
+
+### Depth alone is not the bound
+
+Three failure modes, enforced separately because each is invisible to the
+others: **depth** (A→B→C for ever), **fan-out** (500 children, all at depth 1,
+every one inside the depth limit), and **total descendants** (depth 4 by
+fan-out 8 exceeds neither and is 4,680 nodes). Each of the three tests satisfies
+the other two bounds comfortably — the only way to show a bound is doing work
+rather than riding behind a stricter neighbour.
+
+### Where the bound lives, and what it does when it fires
+
+At **creation**, on `TaskGraph.add()`'s own argument: creation is the last moment
+at which nothing has happened yet. After it, the model call is paid for.
+
+When it fires it **refuses the child and keeps the tree**. Failing the whole
+tree would discard finished work that was already paid for — wasting exactly the
+spend the bound exists to protect. The refusal is recorded with the bound that
+caused it, because a silently dropped child is a plan that ran differently from
+the plan that was written.
+
+### Fail-closed means an unknown parent is refused, not adopted
+
+A node presenting a parent the ledger has no record of would, if admitted as a
+fresh root, receive a whole new budget — which is precisely what a runaway
+needs. `open_root()` is the only way a tree begins.
+
+### A grant crosses the process boundary, because a ledger cannot
+
+The child's ledger is empty, so it is handed a `grant` and seeded with exactly
+that. The parent is charged `1 + grant` **in full**: charging only for the child
+would let two siblings each be handed the remaining budget and each spend it.
+The default grant is zero — delegation does not propagate unless somebody said
+so in the call that created the child.
+
+### What the capability registry cannot check
+
+`run_isolated` was imported by nothing outside its own tests, and I marked
+`stack.agent_runtime` **live** anyway — a dead control inside the work that
+closed a row about isolation, written two commits after the Phase I3 note about
+finding exactly this in my own work.
+
+`verify()` resolves an evidence locator. It has no opinion about whether
+anything imports it, so a row can be live, resolve cleanly, and point at code
+nothing calls. That is a real limit of the anti-omission mechanism, and writing
+it down here is the only thing that stops it being rediscovered a third time.
+The registry answers *does the evidence exist*; it does not answer *does
+anything run it*.
+
+### A concurrency test that passed without the lock
+
+Two versions of it did. `admit` runs so few bytecodes between reading the child
+count and incrementing it that sixteen threads never landed in the window, even
+with the switch interval at a microsecond — so the test passed whether or not
+the lock was there, which is a test of nothing.
+
+The fix was to widen the window where the race actually is, with a bounds
+stand-in that releases the GIL inside the fan-out check. Under it the unlocked
+ledger admits 15 children against a limit of 8. The lesson generalises: a
+concurrency test that has never been run against the unsynchronised version is
+not evidence that synchronisation is needed.

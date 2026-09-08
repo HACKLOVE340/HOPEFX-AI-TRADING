@@ -2010,6 +2010,11 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "per task, not a pool, because a pool cannot kill a running task. spawn never fork: this "
         "process has threads, and fork copies the address space with one of them. Asserted against a "
         "real child: os._exit does not take the parent, RLIMIT_AS stops a 4GB allocation, and a "
+        "CORRECTION, found while building \u00a726: this row was marked live while run_isolated was "
+        "imported by nothing outside its own tests \u2014 a dead control inside the work that closed a "
+        "row about isolation. verify() could not catch it, because it resolves an evidence locator "
+        "and has no opinion about whether anything imports it. JobRunner.submit_isolated is the "
+        "caller, and the operator on the contract wins over the caller's. "
         "spinning task is terminated and verified gone by pid. Opt-in — every existing job still runs "
         "on the thread pool, because silently moving live trading work across a boundary to close a "
         "registry row would change the failure modes of the thing the row describes.",
@@ -2165,9 +2170,21 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "26",
         "C",
         "Prevent runaway recursive delegation",
-        "staged",
-        "ai.agent.loop",
-        "The loop is bounded; recursive delegation does not exist yet to bound.",
+        "live",
+        "ai.jobs.lineage:DelegationLedger",
+        "The previous note said 'recursive delegation does not exist yet to bound' \u2014 true, and "
+        "circular: nothing delegated, so there was nothing to bound, so the row stayed staged. \u00a724's "
+        "worker boundary gave it somewhere to live. THREE bounds, not one, because depth catches one "
+        "failure mode of three: fan-out is 500 children all at depth 1, and total descendants is depth "
+        "4 by fan-out 8 exceeding neither and still being 4,680 nodes. Each test satisfies the other "
+        "two bounds comfortably, so no bound is riding behind a stricter neighbour. Enforced where the "
+        "child is CREATED, on TaskGraph.add's argument: after that the model call is paid for. A "
+        "refusal is local \u2014 the parent carries on, because discarding finished work wastes the spend "
+        "this bound protects \u2014 and recorded, never silent. FAIL-CLOSED: an unrecognised parent is "
+        "refused rather than admitted as a fresh root, which would hand it a whole new budget. Across "
+        "a process boundary a GRANT travels instead of the ledger, charged to the parent in full so "
+        "two siblings cannot each spend it; proven against a real child that delegates exactly its "
+        "grant and no more.",
     ),
     _c("perf.latency_measurement", "26", "C", "Measure end-to-end latency", "live", "ai.gateway.audit:record_call", ""),
     # §27 — Accessibility and professional UX
