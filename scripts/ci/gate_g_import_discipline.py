@@ -72,7 +72,30 @@ DATA_LAYER_PUBLIC: frozenset[str] = frozenset(
 # Format: "relative/path/to/file.py:lineno"
 # These are reported as warnings, not failures.
 # Remove entries here when the underlying import is fixed.
-KNOWN_VIOLATIONS: frozenset[str] = frozenset()
+#
+# The seven below were invisible until the data_layer rule was fixed to check
+# two-segment paths and `import x.y` statements (it previously required three
+# segments and examined only `from x.y import z`). They are recorded rather
+# than fixed because the fix is not mechanical: it means deciding what
+# data_layer's public surface actually is — sentiment, microstructure and
+# validation are all imported from outside it today — which is owner decision
+# A2 in docs/ai/MASTER_OUTSTANDING.md, not a gate change.
+#
+# Note the keys carry line numbers, so editing a file above one of these
+# imports turns a known violation into a "new" one. That is a property of this
+# mechanism as designed, and the failure is loud rather than silent, so it is
+# recorded here rather than redesigned in passing.
+KNOWN_VIOLATIONS: frozenset[str] = frozenset(
+    {
+        "api/signals.py:1228",
+        "api/trading.py:4574",
+        "ml/inference_engine.py:1097",
+        "ml/train_advanced.py:131",
+        "backtesting/data_handler.py:72",
+        "backtesting/engine_config.py:220",
+        "backtesting/engine_config.py:593",
+    }
+)
 
 
 def _is_legacy_import(node: ast.Import | ast.ImportFrom) -> tuple[bool, str]:
@@ -99,16 +122,29 @@ def _is_data_layer_internal(node: ast.Import | ast.ImportFrom, file_path: Path) 
     except ValueError:  # nosec B110 - relative_to raises ValueError when path is not under data_layer
         pass
 
+    # Both statement forms reach data_layer internals, and both must be
+    # checked. `import data_layer.internal.thing` was previously not examined
+    # at all: only ImportFrom was.
     if isinstance(node, ast.ImportFrom) and node.module:
-        parts = node.module.split(".")
-        if len(parts) >= 3 and parts[0] == "data_layer":
-            sub = parts[1]
-            if sub not in DATA_LAYER_PUBLIC:
-                return True, (
-                    f"direct import of data_layer internal `{node.module}` — "
-                    f"use `data_layer.orchestrator`, `data_layer.tick_store`, "
-                    f"or `data_layer.feeds.*` instead"
-                )
+        candidates = [node.module]
+    elif isinstance(node, ast.Import):
+        candidates = [alias.name for alias in node.names]
+    else:
+        return False, ""
+
+    for dotted in candidates:
+        parts = dotted.split(".")
+        # `>= 2`, not `>= 3`: the public surface is exactly the three names in
+        # DATA_LAYER_PUBLIC, so `from data_layer.sentiment import x` is as much
+        # a direct internal import as `data_layer.internal.thing` is. Requiring
+        # three segments meant every top-level private module — sentiment,
+        # microstructure — passed unexamined.
+        if len(parts) >= 2 and parts[0] == "data_layer" and parts[1] not in DATA_LAYER_PUBLIC:
+            return True, (
+                f"direct import of data_layer internal `{dotted}` — "
+                f"use `data_layer.orchestrator`, `data_layer.tick_store`, "
+                f"or `data_layer.feeds.*` instead"
+            )
     return False, ""
 
 

@@ -103,14 +103,14 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 19 proven · **4 unproven** |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · 20 proven · **3 unproven** |
 
 ### B1. Critical — do these first
 
 | # | Item | Where | Why it ranks here |
 |---:|---|---|---|
 | ~~1~~ | ~~**Tested backup and restore**~~ | Group 2 Ch 9 | **DONE — Phase R1.** Round trip proven against SQLite and live PostgreSQL. Point-in-time recovery and a decided RPO remain and inherit the rank — see §A1 |
-| 1 | **Rule 1 injection evidence — 4 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4 (R3–R8).** 19 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
+| 1 | **Rule 1 injection evidence — 3 of 23 gates still unproven** | Group 2 Ch 0, 19, 20 | **Mechanism built (R2); ratchet 13→10→8→7→6→5→4→3 (R3–R9).** 20 proven. Proving them keeps finding defects — gate M passed with no dataset, gate E's dead-file detector had never actually detected a dead file — though not every gate is broken: gate C (docker-compose safety defaults) was already alive. Run `python scripts/gate_evidence.py` for the current list |
 
 ### B2. High
 
@@ -284,10 +284,9 @@ requirements.txt why they are out of scope.
 
 In order, and each is a command away from being verified rather than assumed:
 
-1. **Finish the ratchet — four gates left.** `python scripts/gate_evidence.py`
+1. **Finish the ratchet — three gates left.** `python scripts/gate_evidence.py`
    lists them:
-   `gate_j_circular_imports`, `gate_g_import_discipline`,
-   `gate_f_doc_consistency`, `gate_d_model_accuracy`.
+   `gate_j_circular_imports`, `gate_f_doc_consistency`, `gate_d_model_accuracy`.
    `gate_d` needs a manifest-level injection — it resolves 38 MB of artefacts
    from `__file__` with no env indirection, so a per-test mirror is too slow.
 2. **Decision Governance** (§B2 item 13) — the single highest-leverage new build.
@@ -474,6 +473,55 @@ the real file was restored and the suite reran clean.
 
 No defect found. Two gates in a row alive is worth stating plainly — the
 ratchet's value is the evidence either way, not a defect count.
+
+## §E9 — Phase R9 (2026-09-08)
+
+Ratchet 4 → 3. One gate proven, two real gaps found in it, and seven
+pre-existing violations that had been invisible because of them.
+
+### The rule named three modules; the code required three segments
+
+`gate_g_import_discipline.py` enforces that canonical packages reach
+`data_layer` only through its public surface — `data_layer.orchestrator`,
+`data_layer.tick_store`, `data_layer.feeds.*`. The check required
+`len(parts) >= 3` before examining anything, so a two-segment path like
+`from data_layer.sentiment import get_sentiment` was never looked at.
+"Three names are public" and "paths with three segments are checked" are
+not the same rule, and the second was what shipped.
+
+Separately, `_is_data_layer_internal` examined only `ast.ImportFrom`, so
+the plain `import data_layer.internal.thing` form was not checked at all.
+
+Both were confirmed by execution at exit 0 against the real gate before
+being fixed, alongside two controls that correctly exited 1 — so the probe
+distinguished a dead rule from a rule the injection had simply missed.
+
+### What that had been hiding
+
+| File | Import |
+|---|---|
+| `api/signals.py:1228` | `data_layer.sentiment` |
+| `api/trading.py:4574` | `data_layer.microstructure` |
+| `ml/inference_engine.py:1097` | `data_layer.validation` |
+| `ml/train_advanced.py:131` | `data_layer.validation` |
+| `backtesting/data_handler.py:72` | `data_layer.validation` |
+| `backtesting/engine_config.py:220` | `data_layer.validation` |
+| `backtesting/engine_config.py:593` | `data_layer.validation` |
+
+These are **recorded in `KNOWN_VIOLATIONS`, not fixed**, which is what that
+list is for: the gate now warns on them, exits 0, and fails hard on
+anything new. Fixing them is not mechanical — three modules are imported
+from outside `data_layer` today, so resolving it means deciding what that
+package's public surface actually is. That is **decision A2**, and a gate
+change is not the place to make it.
+
+The escape hatch is pinned in both directions, because a debt list that
+could silence anything else would be an off-switch: a listed violation
+warns and exits 0, an unlisted one alongside it still fails, and a listed
+entry does not cover the same file on another line. That last property —
+the keys carry line numbers — means editing a file above one of these
+imports turns a known violation into a new one. Loud rather than silent,
+so it is recorded in the gate's own comment rather than redesigned here.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

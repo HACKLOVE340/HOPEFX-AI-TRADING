@@ -62,8 +62,8 @@ injected = ""
 id = "gate_g_import_discipline"
 kind = "ci_gate"
 runs = "scripts/ci/gate_g_import_discipline.py"
-evidence = ""
-injected = ""
+evidence = "tests/unit/test_gate_g_import_discipline_injections.py"
+injected = "Legacy imports (both statement forms, from a guarded package and from a top-level file) fail; the data_layer public surface is allowed; files inside data_layer may import each other. Two real gaps found and fixed, each confirmed by execution at exit 0 first: `from data_layer.sentiment import x` passed because the rule required three path segments though the public surface is exactly three NAMES, and `import data_layer.internal.thing` was never examined at all because only ast.ImportFrom was checked. Fixing both surfaced seven pre-existing violations across api/, ml/ and backtesting/ (data_layer.sentiment, .microstructure, .validation), now recorded in KNOWN_VIOLATIONS as warnings because resolving them means deciding data_layer public surface — owner decision A2 — not changing a gate. The escape hatch itself is pinned in both directions: a listed violation warns and exits 0, an unlisted one alongside it still fails, and a listed entry does not cover the same file on another line"
 
 [[gate]]
 id = "gate_h_wordmap_schema"
@@ -172,4 +172,4 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
-unproven_count = 4
+unproven_count = 3
