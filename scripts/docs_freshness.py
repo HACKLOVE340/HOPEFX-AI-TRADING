@@ -231,6 +231,13 @@ def check_document(path: Path, repo: Path) -> list[Finding]:
             parent = target.parent
             if not _inside(parent, repo):
                 continue
+            if _is_ignored(candidate, repo):
+                # A path git itself refuses to track is a runtime-generated
+                # artefact by construction — data/oanda_paper_start.json and
+                # backtest/results/multi_symbol_report.json are legitimately
+                # absent from a fresh checkout, and the doc referencing them
+                # is describing real behaviour, not a stale path.
+                continue
             if parent.exists() and parent != repo:
                 findings.append(
                     Finding(

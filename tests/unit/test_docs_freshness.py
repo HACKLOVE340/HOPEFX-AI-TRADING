@@ -138,6 +138,25 @@ class TestPrecisionOverRecall:
         doc = _doc(repo, "d.md", "Logs go to `/var/log/hopefx.log`.\n")
         assert check_document(doc, repo) == []
 
+    def test_a_missing_but_gitignored_path_is_not_reported(self, tmp_path: Path) -> None:
+        # data/oanda_paper_start.json is gitignored (.gitignore:166) — it is
+        # written at runtime by _stamp_oanda_paper_start() on first OANDA
+        # connection and is legitimately absent from a fresh checkout. CHANGELOG.md
+        # and docs/roadmap.md both reference it correctly; the checker was
+        # reporting an accurate description of a generated artefact as stale.
+        # Needs the real work tree, same as the gitignore_claim tests above —
+        # git check-ignore has nothing to check in a tmp_path with no .git.
+        real = Path(__file__).resolve().parent.parent.parent
+        doc = _doc(tmp_path, "d.md", "Gate: `data/oanda_paper_start.json`, started 2026-03-27.\n")
+        assert check_document(doc, real) == []
+
+    def test_a_missing_path_that_is_not_gitignored_is_still_reported(self, tmp_path: Path) -> None:
+        # The positive control: gitignore-awareness must not swallow every miss,
+        # only the ones the repo has actually declared as generated.
+        real = Path(__file__).resolve().parent.parent.parent
+        doc = _doc(tmp_path, "d.md", "See `ai/gateway/definitely_does_not_exist_xyz.py`.\n")
+        assert [f.rule for f in check_document(doc, real)] == ["stale_path"]
+
 
 class TestItIsScopedWhereStalenessIsADefect:
     def test_records_and_archived_material_are_not_checked(self) -> None:
@@ -162,5 +181,13 @@ class TestTheRatchet:
 
     def test_the_baseline_has_not_silenced_the_checker(self) -> None:
         # Baselined is not the same as gone. If this reaches zero it means the
-        # checker stopped looking, not that 45 references were fixed.
-        assert len(check_all(baseline=Baseline())) >= 40
+        # checker stopped looking, not that every reference was fixed.
+        #
+        # This floor was 40 (measured ~45) until the stale_path check itself
+        # gained gitignore-awareness: it was reporting accurate references to
+        # runtime-generated artefacts (data/oanda_paper_start.json,
+        # backtest/results/multi_symbol_report.json) as stale. Fixing that false
+        # positive dropped the real, unbaselined count to 37 — a genuine
+        # reduction in checker error, not the checker looking away. Floor kept
+        # well below the new count so a real regression still trips this.
+        assert len(check_all(baseline=Baseline())) >= 30
