@@ -110,6 +110,74 @@ jobs:
           # Short retention — vulnerability details should not persist publicly
           retention-days: 14
 
+  npm-audit:
+    # The npm dependency trees were audited by nothing.
+    #
+    # This repository already gates Python dependencies (the job above), runs
+    # bandit, and runs Trivy — but no workflow ever ran `npm audit`, so
+    # frontend/ and dashboard/ accumulated 23 advisories, 18 of them high,
+    # entirely unwatched. Every one was in build tooling rather than shipped
+    # code, which is why nothing broke; a compromised build chain still writes
+    # the bundle a browser executes.
+    #
+    # Same policy as the Python gate: block only on advisories that have a
+    # published fix, since an unfixable one is information, not an action.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [frontend, dashboard]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Audit ${{ matrix.workspace }}
+        working-directory: ${{ matrix.workspace }}
+        run: |
+          set -o pipefail
+          npm audit --json > npm-audit-${{ matrix.workspace }}.json || true
+          node -e '
+            const fs = require("fs");
+            const report = JSON.parse(
+              fs.readFileSync("npm-audit-${{ matrix.workspace }}.json", "utf8")
+            );
+            const vulns = report.vulnerabilities || {};
+            const fixable = Object.entries(vulns).filter(
+              ([, v]) => v.fixAvailable && ["high", "critical"].includes(v.severity)
+            );
+            const counts = (report.metadata || {}).vulnerabilities || {};
+            console.log("severity counts:", JSON.stringify(counts));
+            if (fixable.length) {
+              console.log(
+                `BLOCKED: ${fixable.length} high/critical advisory(s) have a published fix`
+              );
+              for (const [name, v] of fixable) {
+                const fix = typeof v.fixAvailable === "object"
+                  ? `${v.fixAvailable.name}@${v.fixAvailable.version}`
+                  : "npm audit fix";
+                console.log(`  ${v.severity} ${name} -> ${fix}`);
+              }
+              console.log("Run: cd ${{ matrix.workspace }} && npm audit fix");
+              process.exit(1);
+            }
+            console.log("npm audit: no fixable high/critical advisories");
+          '
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
+        with:
+          name: npm-audit-${{ matrix.workspace }}
+          path: ${{ matrix.workspace }}/npm-audit-${{ matrix.workspace }}.json
+          retention-days: 14
+
   trivy:
     runs-on: ubuntu-latest
     timeout-minutes: 20

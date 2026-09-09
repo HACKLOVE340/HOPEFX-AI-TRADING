@@ -1411,6 +1411,72 @@ that every edit is recorded with before and after, and that the window
 advertised as clean really is. 1758 pass across the affected slice.
 
 
+## §E19 — 23 dependency advisories, and the audit that never ran (2026-09-09)
+
+Dependabot reported 29 open alerts. The GitHub App backing this session has no
+Dependabot permission — `/repos/.../dependabot/alerts` returns
+`403 Resource not accessible by integration` — so rather than read the list, the
+dependency trees were scanned directly with `pip-audit` and `npm audit`.
+
+### What is actually exposed
+
+| surface | advisories | **reaches production** |
+|---|---:|---:|
+| `frontend/` npm | 21 (17 high, 4 moderate) | **0** |
+| `dashboard/` npm | 2 (1 high, 1 moderate) | **0** |
+| `requirements.txt` | 1 (`nltk`) | 1 |
+| installed venv | 2 (`nltk`, `ecdsa`) | 2 |
+
+`npm audit --omit=dev` returns **NONE** for both workspaces: every one of the 23
+npm findings is build tooling — the `@babel/*` chain behind `vite-plugin-pwa`,
+`browserslist`/`autoprefixer`, `js-yaml`, `vitest`. Nothing vulnerable is
+shipped to a browser. That is a materially different picture from "19 high", and
+worth stating plainly rather than reporting the raw count.
+
+It is not nothing: a compromised build chain writes the bundle a browser
+executes. `npm audit fix` cleared all 23 without a breaking change, and the
+result was verified rather than assumed — `tsc --noEmit` clean, `vite build`
+clean (77 assets), **2594 frontend tests pass**.
+
+### The two Python advisories, traced
+
+Neither is imported by first-party code; both are transitive, and neither has a
+published fix.
+
+* **`ecdsa` 0.19.2 · PYSEC-2026-1325** — a Minerva timing attack on P-256 that
+  leaks the nonce from `SigningKey.sign_digest()`. Verification is unaffected.
+  Pulled in by `hdwallet`, which `payments/crypto/bitcoin.py` uses for **BIP84
+  address derivation** only; signing and broadcast are delegated to BitGo,
+  Fireblocks or Bitcoin Core RPC. JWT auth is `HS256` everywhere — no ECDSA.
+  No `sign_digest` call exists in this repository.
+* **`nltk` 3.10.3 · PYSEC-2026-3740** — a file-sandbox bypass in
+  `TransitionParser`. Pulled in by `textblob` for `news/sentiment.py`.
+  `TransitionParser` is not referenced anywhere in the codebase.
+
+### The finding underneath the findings
+
+The Python dependency gate in `.github/workflows/security-scan.yml` is well
+built: it blocks only on advisories that have a **published fix**, so an
+unfixable one is information rather than a stuck pipeline. Both of the above
+correctly pass it.
+
+**No workflow ran `npm audit` at all.** bandit, safety, pip-audit, Trivy and
+CodeQL are all wired; the npm dependency trees were watched by nothing, which is
+how 23 advisories accumulated unnoticed. A new `npm-audit` job now runs over
+`frontend` and `dashboard` under the same policy as the Python gate.
+
+Proven by execution rather than asserted: the gate's exact logic exits 1 against
+the pre-fix lockfile ("BLOCKED: 2 high/critical advisory(s) have a published
+fix") and 0 against the fixed one.
+
+### Not done
+
+Reconciling against Dependabot's own list of 29, which needs the API permission
+this session lacks. The gap between 23 and 29 is most likely Dependabot counting
+per-manifest and including `requirements-dev.txt` / `requirements-optional.txt`
+separately.
+
+
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
 The owner supplied the full Volumes I–XX document. The earlier source was a table
