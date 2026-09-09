@@ -5,6 +5,13 @@
 Coverage tests for risk/manager.py — Part 1
 Targets: data classes, RiskConfig, RiskState, RiskManager construction,
          size_order hard gates, assess, update_equity, on_fill/on_close.
+
+These tests build a ``RiskManager`` with no orchestrator, so they pass
+``data_quality=1.0`` explicitly. That value used to arrive by itself: the gate
+in ``size_order`` read ``getattr(signal, "data_quality", 1.0)`` and
+``_MinimalSignal`` hardcoded ``1.0``, so an unmeasured feed scored perfect and
+the gate could not fire. Both are fixed (MASTER_OUTSTANDING §E12), and the
+assumption these tests were always making now has to be stated out loud.
 """
 
 from __future__ import annotations
@@ -576,6 +583,7 @@ class TestCalculatePositionSize:
             entry_price=1950.0,
             account_balance=100_000.0,
             direction="long",
+            data_quality=1.0,
         )
         assert r.quantity > 0
 
@@ -585,6 +593,7 @@ class TestCalculatePositionSize:
             symbol="XAU_USD",
             entry_price=1950.0,
             account_equity=200_000.0,
+            data_quality=1.0,
         )
         assert r.notional_usd > 0
 
@@ -595,6 +604,7 @@ class TestCalculatePositionSize:
             entry_price=1950.0,
             account_balance=100_000.0,
             stop_loss_price=1930.0,
+            data_quality=1.0,
         )
         assert r.stop_loss_usd == pytest.approx(1930.0)
 
@@ -605,6 +615,7 @@ class TestCalculatePositionSize:
             entry_price=1950.0,
             account_balance=100_000.0,
             take_profit_price=1990.0,
+            data_quality=1.0,
         )
         assert r.take_profit_usd == pytest.approx(1990.0)
 
@@ -615,6 +626,7 @@ class TestCalculatePositionSize:
             entry_price=1950.0,
             account_balance=100_000.0,
             signal_strength=0.90,
+            data_quality=1.0,
         )
         assert r.quantity > 0
 

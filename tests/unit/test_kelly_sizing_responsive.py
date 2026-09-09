@@ -18,6 +18,13 @@ of what the model said:
 
 Net effect: ``base_notional = equity × 0.05 × 0.25`` — exactly 1.25% of equity
 on every single trade, whether the model returned 0.53 or 0.95.
+
+These tests build a ``RiskManager`` with no orchestrator, so they pass
+``data_quality=1.0`` explicitly. That value used to arrive by itself: the gate
+in ``size_order`` read ``getattr(signal, "data_quality", 1.0)`` and
+``_MinimalSignal`` hardcoded ``1.0``, so an unmeasured feed scored perfect and
+the gate could not fire. Both are fixed (MASTER_OUTSTANDING §E12), and the
+assumption these tests were always making now has to be stated out loud.
 """
 
 import pytest
@@ -93,6 +100,7 @@ class TestSizingRespondsToConfidence:
             account_equity=100_000.0,
             signal_strength=0.50,
             probability=0.42,
+            data_quality=1.0,
         )
         strong = rm.calculate_position_size(
             symbol="XAU_USD",
@@ -100,6 +108,7 @@ class TestSizingRespondsToConfidence:
             account_equity=100_000.0,
             signal_strength=0.75,
             probability=0.42,
+            data_quality=1.0,
         )
 
         assert strong.quantity > weak.quantity, (
@@ -120,6 +129,7 @@ class TestSizingRespondsToConfidence:
             account_equity=100_000.0,
             signal_strength=0.70,
             probability=0.35,
+            data_quality=1.0,
         )
         high_p = rm.calculate_position_size(
             symbol="XAU_USD",
@@ -127,6 +137,7 @@ class TestSizingRespondsToConfidence:
             account_equity=100_000.0,
             signal_strength=0.70,
             probability=0.45,
+            data_quality=1.0,
         )
 
         assert high_p.quantity > low_p.quantity, (
@@ -171,6 +182,7 @@ class TestRiskFactorsCanReachZero:
             signal_strength=0.5,
             probability=0.30,
             confidence=0.5,
+            data_quality=1.0,
         )
         assert sizing.quantity == 0.0, (
             f"zero-edge signal sized {sizing.quantity} — the position floor is overriding the risk factors (S1-07)."

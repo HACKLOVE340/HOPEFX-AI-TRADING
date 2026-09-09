@@ -9,6 +9,13 @@ Extended tests for Risk Manager and Notification Manager modules.
 Covers uncovered code paths in:
 - risk/manager.py: method-based position sizing, can_open_position, validate_trade, etc.
 - notifications/manager.py: notification channels, console logging, etc.
+
+These tests build a ``RiskManager`` with no orchestrator, so they pass
+``data_quality=1.0`` explicitly. That value used to arrive by itself: the gate
+in ``size_order`` read ``getattr(signal, "data_quality", 1.0)`` and
+``_MinimalSignal`` hardcoded ``1.0``, so an unmeasured feed scored perfect and
+the gate could not fire. Both are fixed (MASTER_OUTSTANDING §E12), and the
+assumption these tests were always making now has to be stated out loud.
 """
 
 import contextlib
@@ -43,35 +50,35 @@ class TestRiskManagerExtended:
     # --- Position sizing methods ---
 
     def test_calculate_position_size_fixed_method(self, risk_mgr):
-        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="fixed", amount=5000.0)
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="fixed", amount=5000.0, data_quality=1.0)
         assert result.size > 0
 
     def test_calculate_position_size_percent_method(self, risk_mgr):
-        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="percent", percent=0.02)
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="percent", percent=0.02, data_quality=1.0)
         assert result.size > 0
 
     def test_calculate_position_size_risk_method_with_stop(self, risk_mgr):
-        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1930.0)
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1930.0, data_quality=1.0)
         assert result.size > 0
 
     def test_calculate_position_size_risk_method_no_stop(self, risk_mgr):
-        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk")
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", data_quality=1.0)
         assert result.size > 0
 
     def test_calculate_position_size_risk_zero_distance(self, risk_mgr):
         """Cover risk method with stop == entry (zero distance)."""
-        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1950.0)
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1950.0, data_quality=1.0)
         assert result.size > 0
 
     def test_calculate_position_size_unknown_method(self, risk_mgr):
         """Cover else branch for unknown method."""
-        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="unknown_method")
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="unknown_method", data_quality=1.0)
         assert result.size > 0
 
     def test_calculate_position_size_with_price_alias(self, risk_mgr):
         """Cover price/stop_loss parameter aliases."""
         result = risk_mgr.calculate_position_size(
-            "XAUUSD", 0.0, method="fixed", amount=5000.0, price=1950.0, stop_loss=1930.0
+            "XAUUSD", 0.0, method="fixed", amount=5000.0, price=1950.0, stop_loss=1930.0, data_quality=1.0
         )
         assert result.size > 0
 

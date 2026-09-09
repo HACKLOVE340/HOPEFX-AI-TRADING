@@ -129,6 +129,9 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | 12 | Failure memory with the five questions | Group 3 Ch 8 — seven lessons currently live only in a transcript |
 | 13 | **Decision Governance** — Architecture Decision Registry and Decision Ledger carrying *expected outcome, actual outcome, lessons* | Group 4 Ch 9 · Group 3 Ch 6 · Group 2 Ch 6 |
 | ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
+| ~~15~~ | ~~**`risk/manager.py`'s 1.0 default for unmeasured data quality**~~ | Group 2 Ch 34 · INV-14 — **DONE 2026-09-09, see §E12** |
+| 16 | `trader_full.py:677` builds a RiskManager with no orchestrator, so it now refuses every size | Not a deployed entry point; wire it to the orchestrator or have it assert its own data quality |
+| 17 | `RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()` | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
 
 **Item 14 was found while building Phase R1, deliberately left alone, and is now
 DONE (2026-09-08).** `trigger_backup` no longer reimplements `pg_dump`/`shutil`
@@ -768,13 +771,12 @@ falling back to non-ML confidence — a quality refusal must not degrade into
    Training records no Brier or ECE score, so there is no honest calibration
    *error* to read; the score is a presence signal and is documented as one.
 
-2. **`risk/manager.py::_get_data_quality` defaults to 1.0 when it cannot
-   measure.** `return getattr(signal, "data_quality", 1.0)` — and
-   `calculate_position_size` then gates on `data_quality < _MIN_DATA_QUALITY`.
-   An unmeasured feed therefore sizes as though quality were perfect, in the
-   money path. Same shape as the 1.0 default this phase removed from
-   `predict()`, one module over, and it is **not** changed here: it moves
-   position sizing, which is the owner's call. Tracked in §B.
+2. ~~**`risk/manager.py::_get_data_quality` defaults to 1.0 when it cannot
+   measure.**~~ **Fixed 2026-09-09 — see §E12.** `size_order()` now gates on
+   `_measured_data_quality()`, which returns `None` when nothing measured the
+   feed, and refuses. Evidence:
+   `tests/unit/test_risk_data_quality_is_measured.py` (21 tests; 13 fail
+   against the pre-fix tree).
 
 ## §E11 — advanced_ai.py: superseded, kept, pinned (2026-09-09)
 
@@ -826,6 +828,129 @@ in the repository. Adopting it means putting model weights and resident memory
 on the box that executes orders, so it is tracked as its own proposal to be
 decided on its merits — not settled as a side effect of "this file needs a
 caller".
+
+## §E12 — The risk gate that could not fire (2026-09-09)
+
+Fourth in the same family as §E9–§E11, and the first one in the **money path**.
+`ai/agent/loop.py` and `ml/model_quality_gate.py` were controls that existed and
+were never called. This is a control that existed, *was* called on every trade,
+and could not reach its own failure branch.
+
+### The defect
+
+`RiskManager.size_order()` refuses to size when data quality is below
+`RISK_MIN_DATA_QUALITY` (0.40). The value came from:
+
+```python
+def _get_data_quality(self, signal) -> float:
+    if self._orch is not None:
+        try:
+            tick = self._orch.get_latest_tick()
+            if tick is not None:
+                return tick.confidence
+        except Exception:
+            ...
+    return getattr(signal, "data_quality", 1.0)
+```
+
+`core.domain_models.Signal` has **no** `data_quality` field — verified by
+introspecting `Signal.model_fields`, not by reading. So that `getattr` default
+was not a rarely-taken fallback. It was the answer in every case except "the
+orchestrator returned a fresh tick":
+
+* no orchestrator wired onto the RiskManager
+* `get_latest_tick()` raised
+* `get_latest_tick()` returned `None` — Redis down, gold feed down, or the
+  cached tick older than `DQE_STALE_THRESHOLD_S` (30 s) and discarded
+
+Each of those scored **1.0 — perfect** and passed `< 0.40`. The gate could only
+fire when the feed was *working* and honestly reporting low confidence. In the
+condition it was written for — the feed being down or stale — it was
+structurally unable to refuse.
+
+Running the pre-fix tree against a dead feed shows it reaching sizing and being
+stopped several gates later by an unrelated check (`tick_mid_unavailable`),
+which is why the hole never surfaced as a bad trade in testing: a different
+gate happened to catch it, for a different reason, in one arrangement of inputs.
+
+### The same fabrication, one level up
+
+`_MinimalSignal` — the adapter `calculate_position_size()` wraps its arguments
+in — hardcoded `self.data_quality = 1.0` with no constructor parameter, so no
+caller could set it. `HOPEFXDecisionEngine._phase3_risk` (the central 5-phase
+pipeline) and `core/signal_engine.py`'s auto-trade path both size through it.
+Every one of those trades asserted flawless market data that nothing had looked
+at.
+
+### What changed
+
+`_measured_data_quality()` now distinguishes three cases the old code collapsed
+into 1.0:
+
+| case | result |
+|---|---|
+| orchestrator produced a tick | that confidence — the measurement |
+| caller *supplied* a `data_quality` | honoured — an assertion somebody made |
+| neither | `None` → `size_order()` refuses with `data_quality:unmeasured` |
+
+The distinction that matters is between a value a caller **supplied** and a
+`getattr` **default**: the first is a claim someone is accountable for, the
+second is silence read as perfection. Rule 2, in the position-sizing path.
+
+Alongside it:
+
+* `_MinimalSignal.data_quality` defaults to `None` instead of `1.0`, and
+  `calculate_position_size()` takes a `data_quality=` argument so callers that
+  genuinely measure it (backtests, replays) can still say so.
+* `_zero_sizing()` now carries its reason onto the result via
+  `_halt_reason_override`, so `result.reason` names the gate that refused
+  instead of the generic `"position_size_zero"`. It was logged and dropped
+  before, so a caller — or an operator reading a lineage record rather than a
+  log — could see *that* sizing refused but not *why*.
+
+Deliberately **not** changed: `_get_data_quality()` keeps its `float` signature
+and its 1.0 fallback, because `assess_risk()` feeds it into
+`RiskAssessment.data_quality`, typed `float`. Narrowing the reported record is a
+wider change than closing the sizing hole, and is tracked rather than smuggled
+in alongside it.
+
+### Why this is safe to enforce now
+
+Both deployed paths build `RiskManager` **with** an orchestrator —
+`hopefx_engine.py` explicitly, and `core/startup_factories.py::init_risk_manager`
+for the FastAPI app the container actually runs (`Dockerfile` → `app.py`). So
+the new refusal fires exactly when the orchestrator cannot produce a tick, which
+is the condition the gate exists for.
+
+`trader_full.py:677` builds a RiskManager with no orchestrator and will now
+refuse every size. It is **not** a deployed entry point (`run.py` uses
+`HopeFXEngine`), and the refusal is diagnosable rather than silent — it returns
+`reason="data_quality:unmeasured"`. Wiring it to the orchestrator, or having it
+assert its own quality, is tracked in §B.
+
+### What this does NOT close
+
+The gate now refuses when **no** tick can be produced. It still trusts the
+confidence on a tick it *does* get, and that confidence is recorded at ingest
+and never re-measured. `docs/HARDENING_BACKLOG.md` S5-02 and S5-03 (both open)
+describe the consequence: with Redis down, `orchestrator.get_latest_tick()`
+falls through to the in-memory consensus tick, which carries no age check, so an
+arbitrarily old tick is served with the high confidence it was graded with when
+it arrived. That path passes the data-quality gate before and after this change.
+
+So: "the feed is gone" is now caught; "the feed stopped and nobody noticed" is
+not. Closing the second one belongs in `feeds/gold/manager.py` and
+`data_layer/orchestrator.py` — making staleness a property of the read rather
+than of the ingest — not here.
+
+### Evidence
+
+`tests/unit/test_risk_data_quality_is_measured.py` — 21 tests. Against the
+pre-fix `risk/manager.py`, 12 fail. The 16 existing tests that had to change
+were all asserting the fail-open: they built a RiskManager with no orchestrator
+and expected a sized position. They now pass `data_quality=1.0` explicitly, so
+the assumption is stated in the test rather than supplied by a default.
+
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

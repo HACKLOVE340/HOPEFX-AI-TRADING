@@ -429,13 +429,20 @@ class _MinimalSignal:
         tick_ts: float | None = None,
         stop_loss_price: float | None = None,
         take_profit_price: float | None = None,
+        data_quality: float | None = None,
     ) -> None:
         self.symbol = symbol
         self.direction = direction
         self.tick_ts = tick_ts
         self.confidence = confidence
         self.probability = probability
-        self.data_quality = 1.0
+        # None = "the caller did not measure this", NOT "perfect". This was a
+        # hardcoded 1.0 that no caller could override, so every
+        # calculate_position_size() call — including the live decision engine's
+        # — asserted flawless data it had never looked at. size_order() now
+        # falls back to the orchestrator and refuses if that cannot measure
+        # either. See RiskManager._measured_data_quality.
+        self.data_quality = data_quality
         self.features: dict = {}
         self.tick_mid = tick_mid
         self.tick_spread = tick_spread
@@ -724,10 +731,19 @@ class RiskManager:
         lineage_id: str,
         reason: str = "",
     ) -> PositionSizingResult:
-        """Return a zero-quantity PositionSizingResult and log the rejection reason."""
+        """Return a zero-quantity PositionSizingResult and log the rejection reason.
+
+        The reason is also carried on the result via ``_halt_reason_override``,
+        so ``result.reason`` names the gate that refused instead of the generic
+        ``"position_size_zero"``. It was previously logged only, which meant a
+        caller — or an operator reading a lineage record rather than the log —
+        could see that sizing refused but not why. ``_zero_sized_with_reason``
+        already did this for the calculate_position_size path; this is the same
+        treatment for the size_order path.
+        """
         if reason:
             logger.warning("RiskManager: zero-size — %s", reason)
-        return PositionSizingResult(
+        result = PositionSizingResult(
             symbol=symbol,
             direction=direction,
             quantity=0.0,
@@ -737,6 +753,9 @@ class RiskManager:
             risk_usd=0.0,
             lineage_id=lineage_id,
         )
+        if reason:
+            result._halt_reason_override = reason
+        return result
 
     def _compute_stop_take(
         self,
@@ -869,7 +888,12 @@ class RiskManager:
                 f"max_open_positions:{open_pos}",
             )
 
-        data_quality = self._get_data_quality(signal)
+        # Gate on the *measured* value, not the reported one: an unmeasured
+        # feed must refuse rather than score itself perfect (see
+        # _measured_data_quality). This is the condition the gate exists for.
+        data_quality = self._measured_data_quality(signal)
+        if data_quality is None:
+            return self._zero_sizing(symbol, direction, lineage_id, "data_quality:unmeasured")
         if data_quality < _MIN_DATA_QUALITY:
             return self._zero_sizing(
                 symbol,
@@ -1219,6 +1243,7 @@ class RiskManager:
         stop_loss_price: float | None = None,
         take_profit_price: float | None = None,
         volatility: float = 0.0,
+        data_quality: float | None = None,
         **kwargs,
     ) -> PositionSizingResult:
         """
@@ -1228,6 +1253,10 @@ class RiskManager:
         Accepts both the legacy (account_balance) and extended
         (account_equity, signal_strength, stop_loss_price, take_profit_price,
         volatility) signatures so that all callers are satisfied.
+
+        ``data_quality`` is the caller's own measurement of the market data
+        behind this decision, if it has one. When omitted, sizing uses the
+        orchestrator's tick confidence and refuses if that is unavailable.
 
         Returns a PositionSizingResult with an additional .approved property
         and .recommended_size alias for downstream consumers.
@@ -1259,6 +1288,12 @@ class RiskManager:
             tick_ts=kwargs.pop("tick_ts", None),
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
+            # Callers that have measured their data quality (backtests,
+            # simulations, replays) can assert it here. Callers that have not
+            # leave it None, and size_order() falls back to the orchestrator —
+            # refusing outright if that cannot measure it either, rather than
+            # assuming perfect data as the old hardcoded 1.0 did.
+            data_quality=data_quality,
         )
 
         # Size against the supplied equity via equity_override — NO mutation of
@@ -1507,16 +1542,77 @@ class RiskManager:
 
     # ── Orchestrator data access ──────────────────────────────────────────────
 
-    def _get_data_quality(self, signal) -> float:
-        """Authoritative source: orchestrator tick confidence."""
+    def _measured_data_quality(self, signal) -> float | None:
+        """Data quality as actually measured, or ``None`` when it was not.
+
+        The orchestrator's tick confidence is the only real measurement
+        available here. ``None`` means every one of these happened:
+
+        * no orchestrator was wired onto this RiskManager
+        * ``get_latest_tick()`` raised
+        * ``get_latest_tick()`` returned nothing — Redis down, gold feed down,
+          or the cached tick too stale to be returned at all
+
+        Callers that gate on this must treat ``None`` as a refusal. Rule 2: an
+        unmeasured value is absent, never best case; and for a safety gate,
+        absent has to behave like failure. This used to fall back to
+        ``getattr(signal, "data_quality", 1.0)``, and ``Signal`` has no such
+        field — so a dead feed scored a perfect 1.0 and sailed through the
+        ``< RISK_MIN_DATA_QUALITY`` check that exists for exactly that case.
+        """
         if self._orch is not None:
             try:
                 tick = self._orch.get_latest_tick()
-                if tick is not None:
-                    return tick.confidence
             except Exception as exc:
-                logger.debug("RiskManager: orchestrator tick fetch failed: %s", exc)
-        return getattr(signal, "data_quality", 1.0)
+                # Was debug. A feed this path cannot reach is the exact
+                # condition the gate downstream exists for — it should not take
+                # debug logging to find out it happened.
+                logger.warning("RiskManager: orchestrator tick fetch failed: %s", exc)
+            else:
+                if tick is not None:
+                    # A malformed confidence must not raise out of the sizing
+                    # path: fall through to "unmeasured" and let the gate
+                    # refuse, rather than crashing the decision loop.
+                    try:
+                        return float(tick.confidence)
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            "RiskManager: tick confidence is not numeric: %r",
+                            getattr(tick, "confidence", None),
+                        )
+                else:
+                    # Debug, not warning: this is called once per gate check
+                    # AND once per assess_risk() report, so warning here would
+                    # log the same dead feed several times per decision.
+                    # _zero_sizing already logs the refusal itself at warning.
+                    logger.debug("RiskManager: orchestrator returned no tick for data quality")
+
+        # A caller that *supplies* a value has asserted it — backtests and
+        # simulations know their own data quality. A caller that supplies
+        # nothing has not, and `getattr(..., 1.0)` turned that silence into a
+        # perfect score.
+        supplied = getattr(signal, "data_quality", None)
+        if supplied is not None:
+            try:
+                return float(supplied)
+            except (TypeError, ValueError):
+                logger.warning("RiskManager: signal.data_quality is not numeric: %r", supplied)
+        return None
+
+    def _get_data_quality(self, signal) -> float:
+        """Data quality for *reporting*, with a best-case fallback.
+
+        ``assess_risk()`` records this into ``RiskAssessment.data_quality``,
+        which is typed ``float``, so this keeps its total signature. It is
+        deliberately NOT what ``size_order()`` gates on — see
+        :meth:`_measured_data_quality`. Narrowing the reported record's shape is
+        a separate, wider change than closing the sizing fail-open, and is
+        tracked rather than smuggled in alongside it.
+        """
+        measured = self._measured_data_quality(signal)
+        if measured is not None:
+            return measured
+        return float(getattr(signal, "data_quality", 1.0))
 
     def _get_orchestrator_features(self, signal) -> dict:
         """Authoritative source: orchestrator ML features."""
@@ -1763,12 +1859,17 @@ class RiskManager:
         account_equity: float,
         volatility: float,
         existing_positions: list[Any],
+        data_quality: float | None = None,
     ) -> PositionSizingResult:
         """
         Full position-size calculation with halt, R/R, and sizing checks.
 
         Returns a zero-quantity PositionSizingResult with a descriptive reason
         when any pre-trade gate rejects the signal.
+
+        ``data_quality`` is threaded through to ``calculate_position_size`` —
+        see its docstring. Omitted means "not measured", and sizing then
+        depends on the orchestrator rather than assuming perfect data.
         """
         if self._halt or self._trading_halted:
             return self._make_zero_result(
@@ -1801,6 +1902,7 @@ class RiskManager:
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
             volatility=volatility,
+            data_quality=data_quality,
         )
 
     # ── VaR ───────────────────────────────────────────────────────────────────

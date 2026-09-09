@@ -24,6 +24,13 @@ stamped with the literal constant ``"rat-te"`` and the authorization invariant
 — a truthiness check — passed on the forged value. The control could not detect
 the one thing it exists to detect, and flipping ``HOPEFX_INVARIANT_MODE`` to
 ``enforce`` would not have fixed it.
+
+These tests build a ``RiskManager`` with no orchestrator, so they pass
+``data_quality=1.0`` explicitly. That value used to arrive by itself: the gate
+in ``size_order`` read ``getattr(signal, "data_quality", 1.0)`` and
+``_MinimalSignal`` hardcoded ``1.0``, so an unmeasured feed scored perfect and
+the gate could not fire. Both are fixed (MASTER_OUTSTANDING §E12), and the
+assumption these tests were always making now has to be stated out loud.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -91,6 +98,7 @@ class TestOpenPositionAccounting:
             entry_price=3300.0,
             account_equity=100_000.0,
             signal_strength=0.9,
+            data_quality=1.0,
         )
         # The gate fired: zero size, and no approval token is issued for an
         # order that never passed sizing (which S1-05 then relies on).
@@ -105,6 +113,7 @@ class TestOpenPositionAccounting:
             entry_price=3300.0,
             account_equity=100_000.0,
             signal_strength=0.9,
+            data_quality=1.0,
         )
         assert ok.quantity > 0.0
 
@@ -171,7 +180,7 @@ class TestRiskApprovalTokenNotForged:
         risk.update_equity(100_000.0)
 
         sizing = risk.calculate_position_size(
-            symbol="XAU_USD", entry_price=3300.0, account_equity=100_000.0, signal_strength=0.9
+            symbol="XAU_USD", entry_price=3300.0, account_equity=100_000.0, signal_strength=0.9, data_quality=1.0
         )
         assert sizing.risk_approval_token, "sizing must issue a token for a valid order"
 
