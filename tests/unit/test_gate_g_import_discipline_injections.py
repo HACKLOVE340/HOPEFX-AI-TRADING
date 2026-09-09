@@ -177,7 +177,7 @@ class TestTheKnownViolationsEscapeHatchIsScoped:
 
     def test_a_listed_violation_warns_instead_of_failing(self, mirror: Path) -> None:
         _inject(mirror, "core/known.py", "from backtest.engine import x\n")
-        self._set_known(mirror, '{"core/known.py:1"}')
+        self._set_known(mirror, '{"core/known.py:backtest.engine"}')
         result = _run(mirror)
         assert result.returncode == 0, result.stdout
         assert "WARN" in result.stdout
@@ -186,19 +186,54 @@ class TestTheKnownViolationsEscapeHatchIsScoped:
     def test_an_unlisted_violation_still_fails_alongside_a_listed_one(self, mirror: Path) -> None:
         _inject(mirror, "core/known.py", "from backtest.engine import x\n")
         _inject(mirror, "core/fresh.py", "from backtest.engine import x\n")
-        self._set_known(mirror, '{"core/known.py:1"}')
+        self._set_known(mirror, '{"core/known.py:backtest.engine"}')
         result = _run(mirror)
         assert result.returncode == 1, "a new violation was swallowed by the known-violations list"
         assert "core/fresh.py" in result.stdout
 
-    def test_a_listed_entry_does_not_cover_the_same_file_on_another_line(self, mirror: Path) -> None:
-        # The keys carry line numbers by design. Pinned so the granularity is
-        # a stated property rather than an assumption.
-        _inject(mirror, "core/known.py", "import os\nfrom backtest.engine import x\n")
-        self._set_known(mirror, '{"core/known.py:1"}')
+    def test_a_listed_entry_does_not_cover_another_module_in_the_same_file(self, mirror: Path) -> None:
+        # This is where the narrowness has to hold. The keys used to carry line
+        # numbers, and this test pinned that a listed entry did not cover the
+        # same file on a *different line* — which turned out to be granularity
+        # in the wrong dimension (see the KNOWN_VIOLATIONS comment in the gate).
+        # The property worth having is that listing one import does not
+        # silence a different one.
+        _inject(mirror, "core/known.py", "from backtest.engine import x\nfrom strategy.legacy import y\n")
+        self._set_known(mirror, '{"core/known.py:backtest.engine"}')
+        result = _run(mirror)
+        assert result.returncode == 1, "listing one legacy import silenced a different one in the same file"
+        assert "strategy.legacy" in result.stdout
+
+    def test_a_listed_entry_does_not_cover_the_same_module_in_another_file(self, mirror: Path) -> None:
+        _inject(mirror, "core/known.py", "from backtest.engine import x\n")
+        _inject(mirror, "brain/elsewhere.py", "from backtest.engine import x\n")
+        self._set_known(mirror, '{"core/known.py:backtest.engine"}')
         result = _run(mirror)
         assert result.returncode == 1
-        assert "core/known.py:2" in result.stdout
+        assert "brain/elsewhere.py" in result.stdout
+
+    def test_moving_a_listed_import_down_the_file_is_not_a_new_violation(self, mirror: Path) -> None:
+        """The regression this re-keying exists for.
+
+        Under line-number keys, adding any lines above a recorded import made
+        the gate fail CI claiming a brand-new violation in an import nobody
+        had touched — which is what happened to ml/inference_engine.py's
+        data_layer.validation import when it moved from line 1097 to 1184.
+        The repair for that false failure was "bump the number", and a bumped
+        number is indistinguishable in a diff from allowlisting a real new
+        import.
+        """
+        _inject(mirror, "core/known.py", "from backtest.engine import x\n")
+        self._set_known(mirror, '{"core/known.py:backtest.engine"}')
+        assert _run(mirror).returncode == 0, "baseline is wrong — the listed import should warn, not fail"
+
+        # Same import, twenty lines further down. Nothing about the debt changed.
+        _inject(mirror, "core/known.py", "import os\n" * 20 + "from backtest.engine import x\n")
+        result = _run(mirror)
+        assert result.returncode == 0, (
+            "moving a recorded import down the file was reported as a NEW violation:\n" + result.stdout
+        )
+        assert "WARN" in result.stdout
 
 
 class TestTheRealRepositoryDebtIsRecorded:

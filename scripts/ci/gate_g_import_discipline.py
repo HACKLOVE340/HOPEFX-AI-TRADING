@@ -81,44 +81,64 @@ DATA_LAYER_PUBLIC: frozenset[str] = frozenset(
 # validation are all imported from outside it today — which is owner decision
 # A2 in docs/ai/MASTER_OUTSTANDING.md, not a gate change.
 #
-# Note the keys carry line numbers, so editing a file above one of these
-# imports turns a known violation into a "new" one. That is a property of this
-# mechanism as designed, and the failure is loud rather than silent, so it is
-# recorded here rather than redesigned in passing.
+# The keys are `path:imported-module`, NOT `path:line`. They were line-based,
+# and that comment said so, adding that "editing a file above one of these
+# imports turns a known violation into a 'new' one ... recorded here rather
+# than redesigned in passing". It happened: unrelated edits to
+# ml/inference_engine.py moved its data_layer.validation import from line 1097
+# to 1184, and the gate failed CI claiming a new violation in an import nobody
+# had touched.
+#
+# That failure mode is worse than the granularity it bought. The fix for a
+# false "new violation" is to bump a number — and bumping a number is
+# indistinguishable, in a diff, from allowlisting a genuinely new import. A
+# gate whose repair procedure is "edit the allowlist until it passes" teaches
+# people to do exactly the thing it exists to prevent.
+#
+# Keying on the imported module keeps the record narrow where narrowness
+# means something: a listed entry covers `api/signals.py` importing
+# `data_layer.sentiment`, and nothing else — not another module in that file,
+# not that module in another file. It is insensitive only to *where in the
+# file* the import sits, which was never the debt.
 KNOWN_VIOLATIONS: frozenset[str] = frozenset(
     {
-        "api/signals.py:1228",
-        "api/trading.py:4574",
-        "ml/inference_engine.py:1097",
-        "ml/train_advanced.py:131",
-        "backtesting/data_handler.py:72",
-        "backtesting/engine_config.py:220",
-        "backtesting/engine_config.py:593",
+        "api/signals.py:data_layer.sentiment",
+        "api/trading.py:data_layer.microstructure",
+        "ml/inference_engine.py:data_layer.validation",
+        "ml/train_advanced.py:data_layer.validation",
+        "backtesting/data_handler.py:data_layer.validation",
+        # engine_config.py imports data_layer.validation twice (was lines 220
+        # and 593). One entry, because it is one piece of debt.
+        "backtesting/engine_config.py:data_layer.validation",
     }
 )
 
 
-def _is_legacy_import(node: ast.Import | ast.ImportFrom) -> tuple[bool, str]:
-    """Return (is_violation, reason) for an import node."""
+def _is_legacy_import(node: ast.Import | ast.ImportFrom) -> tuple[bool, str, str]:
+    """Return (is_violation, reason, dotted_module) for an import node.
+
+    The dotted module is what KNOWN_VIOLATIONS is keyed on, so it identifies
+    the debt independently of where in the file the import happens to sit.
+    """
     if isinstance(node, ast.ImportFrom) and node.module:
         parts = node.module.split(".")
         top = parts[0]
         if top in LEGACY_PACKAGES:
-            return True, f"import from legacy package `{node.module}`"
+            return True, f"import from legacy package `{node.module}`", node.module
     elif isinstance(node, ast.Import):
         for alias in node.names:
             parts = alias.name.split(".")
             if parts[0] in LEGACY_PACKAGES:
-                return True, f"import of legacy package `{alias.name}`"
-    return False, ""
+                return True, f"import of legacy package `{alias.name}`", alias.name
+    return False, "", ""
 
 
-def _is_data_layer_internal(node: ast.Import | ast.ImportFrom, file_path: Path) -> tuple[bool, str]:
-    """Return (is_violation, reason) for data_layer internal import from outside."""
+def _is_data_layer_internal(node: ast.Import | ast.ImportFrom, file_path: Path) -> tuple[bool, str, str]:
+    """Return (is_violation, reason, dotted_module) for a data_layer internal import."""
     # Skip files inside data_layer/ — they can import each other freely
     try:
         file_path.relative_to(REPO_ROOT / "data_layer")
-        return False, ""
+        return False, "", ""
     except ValueError:  # nosec B110 - relative_to raises ValueError when path is not under data_layer
         pass
 
@@ -130,7 +150,7 @@ def _is_data_layer_internal(node: ast.Import | ast.ImportFrom, file_path: Path) 
     elif isinstance(node, ast.Import):
         candidates = [alias.name for alias in node.names]
     else:
-        return False, ""
+        return False, "", ""
 
     for dotted in candidates:
         parts = dotted.split(".")
@@ -140,12 +160,16 @@ def _is_data_layer_internal(node: ast.Import | ast.ImportFrom, file_path: Path) 
         # three segments meant every top-level private module — sentiment,
         # microstructure — passed unexamined.
         if len(parts) >= 2 and parts[0] == "data_layer" and parts[1] not in DATA_LAYER_PUBLIC:
-            return True, (
-                f"direct import of data_layer internal `{dotted}` — "
-                f"use `data_layer.orchestrator`, `data_layer.tick_store`, "
-                f"or `data_layer.feeds.*` instead"
+            return (
+                True,
+                (
+                    f"direct import of data_layer internal `{dotted}` — "
+                    f"use `data_layer.orchestrator`, `data_layer.tick_store`, "
+                    f"or `data_layer.feeds.*` instead"
+                ),
+                dotted,
             )
-    return False, ""
+    return False, "", ""
 
 
 def check_file(py_file: Path) -> list[tuple[str, bool]]:
@@ -163,17 +187,17 @@ def check_file(py_file: Path) -> list[tuple[str, bool]]:
         if not isinstance(node, ast.Import | ast.ImportFrom):
             continue
 
-        is_legacy, reason = _is_legacy_import(node)
+        is_legacy, reason, dotted = _is_legacy_import(node)
         if is_legacy:
-            key = f"{rel}:{node.lineno}"
-            is_known = key in KNOWN_VIOLATIONS
+            # Keyed on the module; the line number stays in the *message* so a
+            # human still gets taken straight to the import.
+            is_known = f"{rel}:{dotted}" in KNOWN_VIOLATIONS
             results.append((f"{rel}:{node.lineno}: {reason}", is_known))
             continue
 
-        is_internal, reason = _is_data_layer_internal(node, py_file)
+        is_internal, reason, dotted = _is_data_layer_internal(node, py_file)
         if is_internal:
-            key = f"{rel}:{node.lineno}"
-            is_known = key in KNOWN_VIOLATIONS
+            is_known = f"{rel}:{dotted}" in KNOWN_VIOLATIONS
             results.append((f"{rel}:{node.lineno}: {reason}", is_known))
 
     return results
