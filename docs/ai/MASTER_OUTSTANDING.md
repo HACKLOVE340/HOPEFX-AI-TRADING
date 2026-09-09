@@ -130,7 +130,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | 13 | **Decision Governance** — Architecture Decision Registry and Decision Ledger carrying *expected outcome, actual outcome, lessons* | Group 4 Ch 9 · Group 3 Ch 6 · Group 2 Ch 6 |
 | ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
 | ~~15~~ | ~~**`risk/manager.py`'s 1.0 default for unmeasured data quality**~~ | Group 2 Ch 34 · INV-14 — **DONE 2026-09-09, see §E12** |
-| 16 | `trader_full.py:677` builds a RiskManager with no orchestrator, so it now refuses every size | Not a deployed entry point; wire it to the orchestrator or have it assert its own data quality |
+| ~~16~~ | ~~`trader_full.py` builds a RiskManager with no orchestrator, so it now refuses every size~~ **DONE 2026-09-09.** Wired in `RiskManager.setup()` — the real construction site, not the line §E12 named |
 | ~~19~~ | ~~**441 malformed OHLC bars in `data/XAUUSD_40Y.csv`**~~ | **Owner chose clamp + restrict, DONE 2026-09-09 — see §E18.** Re-sourcing 2000–2019 from a vendor remains open and needs network access |
 | 18 | `accuracy_7d` on `/ml/status` is training-time OOS accuracy, not a 7-day rolling figure | Renaming a published API field is a contract change — see §E13 |
 | ~~17~~ | ~~`RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()`~~ **DONE 2026-09-09 — and it was a second live gate, not just a report. See §E16** | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
