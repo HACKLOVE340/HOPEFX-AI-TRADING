@@ -29,6 +29,7 @@ from __future__ import annotations
 import os
 import platform
 import secrets
+import subprocess  # nosec B404 — runs `pre-commit install`, fixed args
 import sys
 from pathlib import Path
 import logging
@@ -580,6 +581,55 @@ def build_frontend(verbose: bool = True) -> bool:
         return False
 
 
+def install_git_hooks(verbose: bool = True) -> bool:
+    """Install the pre-commit hooks, and say plainly when it could not.
+
+    CLAUDE.md states that the ratcheted checks "run in `pre-commit`, so a
+    regression blocks rather than accumulating". Nothing installed them, so on a
+    fresh clone the document registry, documentation freshness, Group 4 source
+    preservation, volume-index drift, gate injection evidence, stated-figure
+    drift and the per-module coverage gate all protected exactly the contributor
+    who remembered to run them by hand.
+
+    Deliberately does **not** fail bootstrap. A developer without `pre-commit`
+    on PATH still needs a working .env and seeded users, and a bootstrap that
+    dies on an optional step is one people stop running — which would leave the
+    hooks uninstalled for a second reason. It returns False and warns instead,
+    because reporting success for work that did not happen is the defect this
+    repository has spent the most time removing.
+    """
+    try:
+        result = subprocess.run(  # nosec B603 B607 — fixed args, no shell
+            ["pre-commit", "install", "--install-hooks"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+    except FileNotFoundError:
+        logger.warning(
+            "  pre-commit is not installed — the ratcheted checks will not run on commit. "
+            "Install it with `pip install pre-commit` and re-run this script."
+        )
+        return False
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("  Could not install git hooks: %s", exc)
+        return False
+
+    if result.returncode != 0:
+        logger.warning(
+            "  `pre-commit install` failed (exit %s): %s",
+            result.returncode,
+            (result.stderr or result.stdout or "").strip() or "no output",
+        )
+        return False
+
+    if verbose:
+        logger.info("  Git hooks installed  ->  the ratcheted checks now run on commit")
+    return True
+
+
 def bootstrap(verbose: bool = True) -> None:
     created = _generate_env()
 
@@ -604,6 +654,8 @@ def bootstrap(verbose: bool = True) -> None:
         except Exception as exc:  # pylint: disable=broad-exception-caught
             if verbose:
                 logger.warning("  %s seed skipped: %s", label, exc)
+
+    install_git_hooks(verbose=verbose)
 
     build_frontend(verbose=verbose)
 

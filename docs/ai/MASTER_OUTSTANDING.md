@@ -134,7 +134,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | ~~19~~ | ~~**441 malformed OHLC bars in `data/XAUUSD_40Y.csv`**~~ | **Owner chose clamp + restrict, DONE 2026-09-09 — see §E18.** Re-sourcing 2000–2019 from a vendor remains open and needs network access |
 | 18 | `accuracy_7d` on `/ml/status` is training-time OOS accuracy, not a 7-day rolling figure | Renaming a published API field is a contract change — see §E13 |
 | ~~20~~ | ~~**The per-module coverage gate had never taken a measurement**~~ | **DONE 2026-09-09 — see §E20.** `--cov=<dotted.module>` double-loaded numpy for every module in the repository; the 361-entry record is an artefact of that, not a census of untested modules |
-| 21 | **No pre-commit hook is installed under `.git/hooks/`, so no ratcheted check runs automatically** | Document registry, doc freshness, Group 4 preservation, volume index, gate evidence, doc metrics and the coverage gate all run only for someone who remembers `pre-commit run --all-files`. `scripts/bootstrap_dev.py` does not install them and no CI job runs them — see §E20 |
+| ~~21~~ | ~~**No pre-commit hook is installed, so no ratcheted check runs automatically**~~ | **DONE 2026-09-09 — see §E20.** `scripts/bootstrap_dev.py::install_git_hooks()` runs `pre-commit install --install-hooks` and warns rather than failing when it cannot. Whether CI should also run the hooks remains an owner decision |
 | ~~17~~ | ~~`RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()`~~ **DONE 2026-09-09 — and it was a second live gate, not just a report. See §E16** | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
 
 **Item 14 was found while building Phase R1, deliberately left alone, and is now
@@ -1724,13 +1724,33 @@ distinction is now *stronger* — a module its test never imports reports 0.00%,
 which is a measurement, and calling it unknown would be the same Rule 2 error
 pointed the other way.
 
-### Recorded, not fixed — the hooks are not installed
+### And the gates themselves had never been installed
 
-No pre-commit hook is installed under `.git/hooks/` in this container. Every ratcheted check
-CLAUDE.md leans on — document registry, doc freshness, Group 4 preservation,
-volume index, gate evidence, doc metrics, and this coverage gate — runs only for
-someone who remembers `pre-commit run --all-files` by hand. `scripts/bootstrap_dev.py`
-does not install them, and no CI job runs them. Configured, accurate, never
-invoked: the §E9–§E12 shape, applied to the machinery that is supposed to catch
-that shape. Needs an owner decision on `pre-commit install` at bootstrap, a CI
-job, or both.
+This was found by noticing that a commit produced no hook output. There was no
+hook. Every ratcheted check CLAUDE.md leans on — document registry, doc
+freshness, Group 4 preservation, volume index, gate evidence, doc metrics, and
+this coverage gate — protected only a contributor who remembered
+`pre-commit run --all-files` by hand. CLAUDE.md's own sentence, "the ratcheted
+checks below run in `pre-commit`, so a regression blocks rather than
+accumulating", was describing something that was not happening.
+
+Configured, accurate, never invoked: the §E9–§E12 shape, applied to the
+machinery whose job is catching that shape. Which is also why it went unnoticed
+so long — the gate that would have flagged it was one of the ones not running.
+
+`scripts/bootstrap_dev.py::install_git_hooks()` now runs
+`pre-commit install --install-hooks`. It deliberately does **not** fail
+bootstrap: a developer without `pre-commit` on PATH still needs a working `.env`
+and seeded users, and a bootstrap that dies on an optional step is one people
+stop running, which would leave the hooks uninstalled for a second reason. It
+returns False and warns — including on a non-zero exit, because reporting
+success for work that did not happen is the defect this repository has spent the
+most time removing.
+
+Proven by running it: no hook before, `.git/hooks/pre-commit` after, and every
+commit from that point ran the full set.
+
+**Still an owner decision:** whether CI should also run `pre-commit run
+--all-files`. Installing locally closes the gap for anyone who bootstraps; it
+does not close it for anyone who does not, and a CI job changes what blocks a
+merge.

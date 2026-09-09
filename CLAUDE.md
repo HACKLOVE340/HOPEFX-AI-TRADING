@@ -47,6 +47,13 @@ than accumulating: document registry, documentation freshness, Group 4 source
 preservation, volume-index drift, gate injection evidence, and stated-figure
 drift.
 
+**They only block once the hook is installed.** Until 2026-09-09 nothing
+installed it, so on a fresh clone that sentence described something that was not
+happening — every one of those gates protected only whoever remembered
+`pre-commit run --all-files` by hand. `python scripts/bootstrap_dev.py` now runs
+`pre-commit install`; if you cloned before that, run it, or run `pre-commit
+install` directly. See MASTER_OUTSTANDING §E20.
+
 ### Standing rule from the owner — documentation ships with every push
 
 **Never push code without updating the documents it makes stale.** Not "when it
@@ -137,7 +144,7 @@ lives in rather than moving code between them, and say which you chose in the PR
 
 ```bash
 # Backend
-python scripts/bootstrap_dev.py     # one-time: generate .env + seed dev users
+python scripts/bootstrap_dev.py     # one-time: .env + dev users + install the git hooks
 python run.py --mode api            # run FastAPI (port 8000)
 
 # Tests (Python)
