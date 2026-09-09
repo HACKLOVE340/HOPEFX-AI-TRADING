@@ -6,6 +6,46 @@
 """
 ml/advanced_ai.py
 =================
+**SUPERSEDED — kept for reference, deliberately not wired into production.**
+
+Every subsystem in this file has a replacement that is more developed and
+already running. Nothing here is called by production code, and
+`tests/unit/test_advanced_ai_is_superseded.py` pins that: it fails if anything
+imports this module, so wiring it in becomes a deliberate decision rather than
+a drift.
+
+| here                       | superseded by                         | which is wired into                   |
+|----------------------------|---------------------------------------|---------------------------------------|
+| `PPORLAgent`, `TradingEnv` | `ml/rl_agent.py`                      | `api/ml.py`, `ml/training_manager.py` |
+| `OnlineRetrainer`          | `ml/online_learner.py`                | `api/online_learner.py`               |
+| `VectorRAGNewsSentiment`   | `ai/departments/news_intelligence.py` | `ai/awareness/watchers.py`            |
+
+`ml/rl_agent.py` also carries `RLMetrics`, `RLAgentTrainer`,
+`walk_forward_eval` and a `get_rl_agent()` accessor. Giving `PPORLAgent` a
+caller beside it would put a second, less developed PPO agent and a second
+online retrainer into a live money-moving system, with no way to tell
+afterwards which one acted. That is why this file is marked rather than wired
+— and marked rather than deleted, so the work is still here to read.
+
+The supersession table above is checked, not just written: the test asserts
+each named replacement exists AND is itself imported by production code. A
+pointer to a module that was later renamed is how a note like this quietly
+becomes false.
+
+## The one thing here with no replacement
+
+`VectorRAGNewsSentiment` is embedding-based (FAISS + sentence-transformers).
+The live sentiment path is the keyword wordmap scorer reached through
+`api/news_feed.py::_get_nuclear_scorer`, so semantic sentiment exists nowhere
+else in this repository. Whether to adopt it is a real question with a real
+cost — those packages carry model weights and resident memory onto the box
+that executes orders — so it is tracked as its own proposal rather than
+settled as a side effect of giving this file a caller.
+
+---
+
+Original description:
+
 Advanced AI ensemble for HOPEFX:
 
   1. PPO RL agent (stable-baselines3) for dynamic position sizing and hedging.

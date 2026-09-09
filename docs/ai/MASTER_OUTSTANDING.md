@@ -776,6 +776,57 @@ falling back to non-ML confidence — a quality refusal must not degrade into
    `predict()`, one module over, and it is **not** changed here: it moves
    position sizing, which is the owner's call. Tracked in §B.
 
+## §E11 — advanced_ai.py: superseded, kept, pinned (2026-09-09)
+
+Third module in a row with no production caller, and the first where "give it
+a caller" was the **wrong** answer. The symptom is identical to §E9 and §E10;
+the cause is not.
+
+`ai/agent/loop.py` and `ml/model_quality_gate.py` were *built and never
+called*. `ml/advanced_ai.py` (698 lines) is *superseded* — each of its three
+subsystems has a more developed replacement that is already wired:
+
+| in advanced_ai.py          | superseded by                         | wired into                            |
+|----------------------------|---------------------------------------|---------------------------------------|
+| `PPORLAgent`, `TradingEnv` | `ml/rl_agent.py`                      | `api/ml.py`, `ml/training_manager.py` |
+| `OnlineRetrainer`          | `ml/online_learner.py`                | `api/online_learner.py`               |
+| `VectorRAGNewsSentiment`   | `ai/departments/news_intelligence.py` | `ai/awareness/watchers.py`            |
+
+`ml/rl_agent.py` additionally has `RLMetrics`, `RLAgentTrainer`,
+`walk_forward_eval` and `get_rl_agent()`. Wiring `PPORLAgent` in beside it puts
+a second, less developed PPO agent and a second online retrainer into a live
+money-moving system, with no way to tell afterwards which one acted. So: not
+wired, and — per the owner's standing instruction — **not deleted either**.
+
+### What "marked" means here, so it does not rot
+
+`tests/unit/test_advanced_ai_is_superseded.py` pins two things:
+
+1. **Nothing in production imports it.** Verified by injecting a real
+   `from ml.advanced_ai import PPORLAgent` into `ml/model_paths.py` and
+   watching the test refuse, naming the offending file, then reverting. A pin
+   nobody has seen refuse is not a pin.
+2. **The supersession claim is checked, not asserted.** Each named replacement
+   must exist AND itself be imported by production code. A pointer to a module
+   that was later renamed is exactly how a note like this quietly becomes
+   false — F176 applied to prose.
+
+Writing that test found a bug in the test: the first import matcher recorded
+only `node.module`, so `from ai.departments import news_intelligence` — the
+normal way this repository reaches a department — read as importing
+`ai.departments` and nothing else, and it reported `news_intelligence.py` as
+having no caller. Same shape as the gate E prefix defect.
+
+### One capability is genuinely unique and is not being discarded
+
+`VectorRAGNewsSentiment` is embedding-based (FAISS + sentence-transformers).
+The live path is the keyword wordmap scorer via
+`api/news_feed.py::_get_nuclear_scorer`; semantic sentiment exists nowhere else
+in the repository. Adopting it means putting model weights and resident memory
+on the box that executes orders, so it is tracked as its own proposal to be
+decided on its merits — not settled as a side effect of "this file needs a
+caller".
+
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
 The owner supplied the full Volumes I–XX document. The earlier source was a table
