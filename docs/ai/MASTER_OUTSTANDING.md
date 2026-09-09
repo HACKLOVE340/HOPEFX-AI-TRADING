@@ -131,7 +131,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
 | ~~15~~ | ~~**`risk/manager.py`'s 1.0 default for unmeasured data quality**~~ | Group 2 Ch 34 · INV-14 — **DONE 2026-09-09, see §E12** |
 | 16 | `trader_full.py:677` builds a RiskManager with no orchestrator, so it now refuses every size | Not a deployed entry point; wire it to the orchestrator or have it assert its own data quality |
-| 19 | **441 malformed OHLC bars in `data/XAUUSD_40Y.csv`** (6.9%, all pre-2020) | Owner decision — re-source, clamp, restrict training to 2020+, or accept. Each changes what the models train on. See §E15 |
+| ~~19~~ | ~~**441 malformed OHLC bars in `data/XAUUSD_40Y.csv`**~~ | **Owner chose clamp + restrict, DONE 2026-09-09 — see §E18.** Re-sourcing 2000–2019 from a vendor remains open and needs network access |
 | 18 | `accuracy_7d` on `/ml/status` is training-time OOS accuracy, not a 7-day rolling figure | Renaming a published API field is a contract change — see §E13 |
 | ~~17~~ | ~~`RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()`~~ **DONE 2026-09-09 — and it was a second live gate, not just a report. See §E16** | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
 
@@ -1337,6 +1337,78 @@ fail-open.
 against the pre-fix tree, plus one `slow` test proving the late-bind (it fails
 when the back-fill is reverted). 4272 pass across the
 gatekeeper/risk/startup/decision/execution/connector/data-layer slice.
+
+
+## §E18 — 441 bars repaired, and kept distinguishable from real ones (2026-09-09)
+
+§E15 measured 441 impossible bars in `data/XAUUSD_40Y.csv` and deliberately did
+not touch them, because rewriting a price is inventing one. Presented with the
+options, the owner chose **clamp with recorded provenance, and default to the
+clean 2020+ window** — both, because the second is what keeps the first honest.
+
+### The repair
+
+`scripts/clamp_ohlc.py` applies the smallest edit that makes a bar possible:
+
+```
+high := max(high, open, close)
+low  := min(low,  open, close)
+```
+
+Open and close are never touched — those are prints; the extremes are the
+fields contradicting them. Run against the real file:
+
+```
+source     data/XAUUSD_40Y.csv  (sha256 7ffc2bf58397…)
+bars       6415
+edited     441  (6.9%)
+range      2001-02-13 → 2011-11-14
+wrote      data/XAUUSD_40Y_clamped.csv
+provenance data/XAUUSD_40Y_clamped.provenance.json
+```
+
+The source is byte-identical afterwards, checked by hash. The sidecar records
+the source's sha256 and every edited bar with its before and after, so a later
+reader can tell both what changed and whether the repair still matches its
+input.
+
+### Why the clean window matters more than the repair
+
+A clamped high is the *lowest high consistent with the body*, not what the
+market reached. It is a reconstruction, and this repository's recurring defect
+is exactly a reconstructed or defaulted value reaching a consumer that cannot
+tell it from a real one. So:
+
+* `CLEAN_SINCE["XAUUSD"] = 2020-01-01` records where the data needs no repair —
+  1567 bars, verified `no OHLC violations` by the same check that found the
+  441;
+* `load_cached_daily(..., since=...)` trims to it, and
+  `scripts/predict_offline.py` now defaults to it, with `--full-history` to opt
+  back in;
+* a series loaded from a file with a provenance sidecar reports
+  `repaired: True` and says so in `describe()`.
+
+Three views, all correct at once:
+
+```
+REPAIRED  … XAUUSD_40Y_clamped.csv · ⚑ repaired: 441 bars reconstructed   (0 violations)
+ORIGINAL  … XAUUSD_40Y.csv · ⚠ 441 malformed bars (6.9%)                  (untouched)
+CLEAN     … 1567 bars · 2020-01-02 → 2026-03-25                           (no warning)
+```
+
+### Still open
+
+Re-sourcing 2000–2019 from a data vendor, which would replace reconstructions
+with observations. Not possible here — the egress proxy blocks yfinance and
+every market source tried — so it needs a Codespace with network access.
+
+### Evidence
+
+`tests/unit/test_ohlc_clamp_and_clean_window.py` — 14 tests, 13 failing before
+the implementation. They pin that clean bars are byte-identical after the
+repair, that open and close are never altered, that the source is not modified,
+that every edit is recorded with before and after, and that the window
+advertised as clean really is. 1758 pass across the affected slice.
 
 
 ## §F — What the complete Group 4 source changed (2026-09-08)

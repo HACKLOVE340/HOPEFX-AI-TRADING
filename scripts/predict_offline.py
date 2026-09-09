@@ -35,6 +35,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--symbol", default="XAUUSD", help="cached symbol (default: XAUUSD)")
     ap.add_argument("--file", default=None, help="specific CSV in data/, e.g. XAUUSD_5Y.csv")
     ap.add_argument("--bars", type=int, default=400, help="bars of history to feed the model (default: 400)")
+    ap.add_argument(
+        "--full-history",
+        action="store_true",
+        help="use the whole committed series instead of the clean window (see ml.cached_series.CLEAN_SINCE)",
+    )
     ap.add_argument("--verbose", action="store_true", help="show the engine's own logging")
     args = ap.parse_args(argv)
 
@@ -43,10 +48,13 @@ def main(argv: list[str] | None = None) -> int:
         format="  %(levelname)s %(name)s: %(message)s",
     )
 
-    from ml.cached_series import load_cached_daily
+    from ml.cached_series import CLEAN_SINCE, load_cached_daily
 
+    # Default to the window that needs no repair. XAUUSD_40Y.csv carries 441
+    # impossible bars, all before 2020; --full-history opts into them.
+    since = None if args.full_history else CLEAN_SINCE.get(args.symbol.upper().replace("_", ""))
     try:
-        series = load_cached_daily(args.symbol, filename=args.file)
+        series = load_cached_daily(args.symbol, filename=args.file, since=since)
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -55,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     print("DATA")
     print("─" * 74)
     print(f"  {series.describe()}")
+    if since is not None:
+        print(f"  window     from {since} — the range verified free of malformed bars (--full-history for all)")
     if series.is_stale:
         print(f"  NOT LIVE — this series ends {series.age_days} days ago. Treat the")
         print("  prediction below as a demonstration that the model runs, not as a signal.")

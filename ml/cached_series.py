@@ -44,7 +44,14 @@ from pathlib import Path
 
 import pandas as pd
 
-__all__ = ["CachedSeries", "DEFAULT_FILES", "IntegrityReport", "load_cached_daily"]
+__all__ = [
+    "CLEAN_SINCE",
+    "CachedSeries",
+    "DEFAULT_FILES",
+    "IntegrityReport",
+    "load_cached_daily",
+    "load_series_file",
+]
 
 #: Repository root — this file lives at <root>/ml/cached_series.py.
 _ROOT = Path(__file__).resolve().parent.parent
@@ -60,6 +67,17 @@ DEFAULT_FILES: dict[str, tuple[str, ...]] = {
 }
 
 _COLUMNS = ["open", "high", "low", "close", "volume"]
+
+#: The date from which each committed series needs no repair at all.
+#:
+#: XAUUSD_40Y.csv carries 441 impossible bars, every one of them before 2020
+#: (416 in the 2000s, 25 in the 2010s). scripts/clamp_ohlc.py can reconstruct
+#: them into a separate file with recorded provenance, but a clamped high is the
+#: lowest high consistent with the body, not what the market reached. Training
+#: and backtests should default to this window, where the bars are simply real.
+CLEAN_SINCE: dict[str, dt.date] = {
+    "XAUUSD": dt.date(2020, 1, 1),
+}
 
 #: Daily bars older than this are stale for any purpose that implies "recent".
 #: Three days rather than one, so an ordinary weekend is not an alarm.
@@ -129,6 +147,26 @@ class CachedSeries:
     source: Path
 
     @property
+    def repaired(self) -> bool:
+        """True when a provenance sidecar says bars in this file were edited.
+
+        A repaired series must never read like an original one. The sidecar is
+        written by scripts/clamp_ohlc.py and sits beside the CSV.
+        """
+        return self._provenance() is not None
+
+    def _provenance(self) -> dict | None:
+        sidecar = self.source.with_name(f"{self.source.stem}.provenance.json")
+        if not sidecar.exists():
+            return None
+        try:
+            import json
+
+            return json.loads(sidecar.read_text())
+        except Exception:
+            return None
+
+    @property
     def integrity(self) -> IntegrityReport:
         """OHLC sanity, measured on every load rather than assumed once."""
         return _check_integrity(self.frame)
@@ -160,6 +198,9 @@ class CachedSeries:
             f"{self.frame.index[0].date()} → {self.as_of.date()} "
             f"({self.age_days}d old) · {self.source.name}"
         )
+        prov = self._provenance()
+        if prov is not None:
+            line += f" · ⚑ repaired: {prov.get('bars_edited', '?')} bars reconstructed"
         report = self.integrity
         return line if report.clean else f"{line} · ⚠ {report.summary()}"
 
@@ -189,8 +230,23 @@ def _read(path: Path) -> pd.DataFrame:
     return frame[_COLUMNS].astype(float)
 
 
-def load_cached_daily(symbol: str, *, filename: str | None = None) -> CachedSeries:
+def load_series_file(path: Path | str, *, symbol: str, since: dt.date | None = None) -> CachedSeries:
+    """Load one specific CSV, wherever it lives. Used for repaired outputs."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"cached series not found: {path}")
+    frame = _read(path)
+    if since is not None:
+        frame = frame[frame.index >= pd.Timestamp(since, tz="UTC")]
+    return CachedSeries(symbol=symbol.upper(), frame=frame, source=path)
+
+
+def load_cached_daily(symbol: str, *, filename: str | None = None, since: dt.date | None = None) -> CachedSeries:
     """Load the committed daily series for *symbol*.
+
+    ``since`` trims the series to bars on or after that date. Pass
+    ``CLEAN_SINCE[symbol]`` to get the window that needs no repair — see that
+    constant for why the earlier history is not simply usable.
 
     Raises rather than returning an empty frame. A caller that receives no bars
     cannot tell "this symbol has no cache" from "today had no trading", and the
@@ -202,7 +258,7 @@ def load_cached_daily(symbol: str, *, filename: str | None = None) -> CachedSeri
         path = _DATA / filename
         if not path.exists():
             raise FileNotFoundError(f"cached series not found: {path} (requested {filename!r})")
-        return CachedSeries(symbol=key, frame=_read(path), source=path)
+        return load_series_file(path, symbol=key, since=since)
 
     candidates = DEFAULT_FILES.get(key)
     if not candidates:
@@ -213,6 +269,6 @@ def load_cached_daily(symbol: str, *, filename: str | None = None) -> CachedSeri
     for name in candidates:
         path = _DATA / name
         if path.exists():
-            return CachedSeries(symbol=key, frame=_read(path), source=path)
+            return load_series_file(path, symbol=key, since=since)
 
     raise FileNotFoundError(f"no cached series file present for {key}; looked for {list(candidates)} in {_DATA}")
