@@ -131,6 +131,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
 | ~~15~~ | ~~**`risk/manager.py`'s 1.0 default for unmeasured data quality**~~ | Group 2 Ch 34 · INV-14 — **DONE 2026-09-09, see §E12** |
 | 16 | `trader_full.py:677` builds a RiskManager with no orchestrator, so it now refuses every size | Not a deployed entry point; wire it to the orchestrator or have it assert its own data quality |
+| 19 | **441 malformed OHLC bars in `data/XAUUSD_40Y.csv`** (6.9%, all pre-2020) | Owner decision — re-source, clamp, restrict training to 2020+, or accept. Each changes what the models train on. See §E15 |
 | 18 | `accuracy_7d` on `/ml/status` is training-time OOS accuracy, not a 7-day rolling figure | Renaming a published API field is a contract change — see §E13 |
 | 17 | `RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()` | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
 
@@ -1130,6 +1131,73 @@ INFO ml.inference_engine: InferenceEngine: abstaining for XAU_USD —
   insufficient_daily_bars (300 intraday bars resampled to too few daily)
 reason  'insufficient_daily_bars'
 ```
+
+
+## §E15 — Offline prediction, and 441 bars that never happened (2026-09-09)
+
+The owner asked for the AI to be able to predict without a live feed. It turned
+out it already could — and the work of proving that surfaced a data defect.
+
+### The data was already there
+
+`data/XAUUSD_40Y.csv` (6415 daily bars, 2000→2026) has been committed for a
+long time. Handed 400 of its bars, the engine returns a genuine prediction:
+`advanced_oos_v1`, `fallback: False`, 222 features built, `probability 0.4974`
+— neutral because that sits between the thresholds, which is a real "no edge"
+answer rather than an abstention.
+
+What was missing was a way to *reach* it that carries provenance. Every
+existing reader drops it: `api/trading.py` opens the file inline for charts,
+`backtesting/cli_runner.py` has its own `load_ohlcv_csv`, and neither returns an
+as-of date. A caller gets a DataFrame indistinguishable from a live one — and
+this series ends 168 days before today.
+
+`ml/cached_series.py` returns a `CachedSeries` instead: frame plus `source`,
+`as_of`, `age_days`, `is_stale`, and a `describe()` that says "cached" out loud.
+`as_of` is the last bar, never the read.
+
+**Not wired as a fallback inside the engine, deliberately.** Cached history
+reaching `size_order()` would put fabricated freshness back into the path §E12
+just closed: the gate refuses when data quality is unmeasured, and a CSV has no
+tick confidence to measure. Offline prediction is an explicit request —
+`scripts/predict_offline.py` — and it prints how old the data was.
+
+### What the sanity test found
+
+The test began as `assert (high >= low).all()`. It failed, and the failure was
+the data:
+
+| violation | count |
+|---|---:|
+| high < low outright | 1 |
+| high below the open/close body | 236 |
+| low above the open/close body | 227 |
+| **distinct malformed bars** | **441 of 6415 (6.9%)** |
+
+All before 2020 — 416 in the 2000s, 25 in the 2010s — and none in the window
+the model predicted on, so that result stands.
+
+It matters anyway, because this is the **primary** file. `api/trading.py`
+prefers it for charts under a comment reading *"the clean 40Y file … no
+corrupted bars"*, `scripts/build_50y_data.py` calls it *"highest quality
+2000+"*, and the 50Y training builds draw on it. Every rolling high, low, ATR
+and true range over an affected window is computed from bars that never
+happened. `XAUUSD_5Y.csv` and `XAUUSD_2Y.csv` are clean.
+
+**Not repaired.** Dropping or rewriting those bars invents prices for a market
+that has already closed. The loader counts them, `describe()` prints a ⚠ line,
+and the choice — re-source, clamp with recorded provenance, restrict training
+to 2020+, or accept and document — is the owner's, because each one changes
+what the models are trained on. Tracked in §B.
+
+### Evidence
+
+`tests/unit/test_cached_series.py` — 18 tests, 17 of which fail without the
+module; one marked `slow` drives a real prediction end to end and would fail on
+an abstention. `scripts/predict_offline.py` prints the whole chain: provenance,
+the staleness warning, the 48% macro feature imputation the engine reports for
+itself, the decision, and `data_quality: None` — unmeasured, which offline is
+the honest answer.
 
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
