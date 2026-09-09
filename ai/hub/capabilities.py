@@ -1391,20 +1391,20 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "Gesture recognition",
         "staged",
         "frontend/src/hub/gestures.ts:recogniseGesture",
-        "STAGED on ONE missing thing: a deployed hand-landmark model. Everything "
-        "either side of it is built and proven \u2014 frontend/src/hub/landmarks.ts turns "
-        "landmarks into the same TrackPoints recogniseGesture already reads, so the camera "
-        "is a SOURCE for the pipeline rather than a second pipeline that would eventually "
-        "disagree with it. Not vendored, and the reason is not the dependency: npm is "
-        "reachable and the package is one install away. There is NO CAMERA in the "
-        "environment this was built in, so shipping a 2MB runtime plus an 8MB model into a "
-        "money-moving platform would be committing code that had never executed once. The "
-        "POINTER half is built AND "
-        "WIRED \u2014 see input.pointer_gestures; it was left staged under this "
-        "id because a pointer swipe is not vision, and marking a vision row "
-        "live for pointer input would be renaming the capability to fit what "
-        "was built, which is how agents.system came to point at "
-        "platform_engineering.",
+        'STAGED, and the reason changed on 2026-09-09. It was "a deployed model, and no '
+        'camera to execute it against" \u2014 shipping a runtime plus an 8MB model into a '
+        "money-moving platform without running either once. That is now measurably false: "
+        "`npm run prove:hands` runs the real MediaPipe detector in real Chromium against "
+        "MediaPipe's own photograph of a hand, model served from THIS ORIGIN, and reads 21 "
+        "landmarks; phase 2 drives the whole chain \u2014 getUserMedia \u2192 HandDetector \u2192 "
+        "HandGestureSource \u2192 recogniseGesture \u2014 off a fake camera device and gets a "
+        "mirrored swipe_left. hub/handDetector.ts, hub/handGestureSource.ts and "
+        "scripts/fetch_hand_model.py are the built pieces. What is missing now is ONE thing "
+        "and it is not technical: no operator-visible control turns this on, because whether "
+        "a trading console may watch its operator through a webcam is the owner's decision, "
+        "not an implementation detail. Marking it live on a capability nothing can reach "
+        "would be the dead-control shape this registry exists to catch \u2014 the same reason "
+        "Phase I3 refused to call it live for pointer input.",
     ),
     _c(
         "vision.pointing",
@@ -1413,15 +1413,16 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "Pointing and object reference",
         "staged",
         "frontend/src/hub/gestures.ts:pointingAt",
-        "STAGED on the same one missing thing as vision.gesture: a deployed model. "
-        "pointingPoint maps a fingertip into the pixels the scene graph already speaks, "
-        "MIRRORED because a front camera shows a reflection and a console following the raw "
-        "coordinate would move focus the opposite way from the gesture. The OBJECT "
-        "REFERENCE half is built AND "
-        "WIRED against the measured scene: see input.pointing_resolves. It hit-"
-        "tests the topmost panel under a point and answers null on empty space "
-        "rather than the nearest panel, because 'I am pointing at nothing' is "
-        "an answer.",
+        "STAGED for the same reason as vision.gesture, and it changed the same way: the "
+        "model is deployed by scripts/fetch_hand_model.py and the detector is proven by "
+        "execution, not by reading. `npm run prove:hands` phase 1 takes the index fingertip "
+        "through pointingPoint into pointingAt against a measured scene and gets a named "
+        "panel back. pointingPoint stays MIRRORED because a front camera shows a reflection "
+        "and a console following the raw coordinate would move focus the opposite way from "
+        "the gesture \u2014 phase 2 checks that by expecting swipe_left from a hand travelling "
+        "left to right. The OBJECT REFERENCE half was already wired: see input.pointing_resolves. "
+        "What remains is the operator-visible control, which is an owner decision about "
+        "webcams in a trading console rather than code.",
     ),
     _c(
         "input.landmark_adapter",

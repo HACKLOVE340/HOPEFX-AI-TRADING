@@ -326,3 +326,17 @@ data/reg_dlq/
 
 # Built by the CI Trivy step from requirements.lock; never committed.
 .trivy-pinned/
+
+# ── §18 hand-landmark model and runtime ───────────────────────────────────────
+# Fetched at deploy time by `python scripts/fetch_hand_model.py`, not committed:
+# the model is 7.8 MB and the WASM runtime tens more, both vendor artifacts with
+# published checksums. `check-added-large-files` caps a new file at 500 KB and
+# the cap is right — a history carrying rebuilt binary blobs is one nobody can
+# clone quickly. Their absence is a STATE, not a break: landmarkStatus reports
+# `unconfigured` and says pointer gestures still work.
+frontend/public/models/
+frontend/public/vendor/
+# Generated from frontend/proof/hand.jpg by scripts/make_swipe_y4m.py — 11 MB of
+# raw frames, rebuilt on demand rather than carried in the history.
+frontend/proof/swipe.y4m
+frontend/proof/shots/

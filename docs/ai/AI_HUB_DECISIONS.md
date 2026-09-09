@@ -362,6 +362,20 @@ So the decision is: **ship everything except the model.** The gap is now one lin
 of deployment configuration wide, and it is named in both registry notes rather
 than described as a blocker.
 
+> **Reversed 2026-09-09.** The reason above was a single falsifiable claim —
+> "never executing either once" — and it was not re-checked before being written
+> down. Chromium serves a video file as a webcam
+> (`--use-file-for-fake-video-capture`), so a camera was available the whole
+> time; what was missing was the idea, not the hardware. `npm run prove:hands`
+> now runs the real detector against MediaPipe's own photograph of a hand and
+> drives the full chain off a fake device. The model is fetched at deploy time
+> rather than committed, which also answers the cost half nobody had costed:
+> 7.8 MB does not enter the history, and the runtime is a dynamic import so it
+> does not enter the main bundle either.
+>
+> A decision recorded as settled is the hardest kind to re-examine, which is
+> exactly why this one sat for two phases. See MASTER_OUTSTANDING §E21.
+
 ### A hand is a source, not a second pipeline
 
 `trackFromHands` produces the same `TrackPoint[]` that `recogniseGesture` has

@@ -29,7 +29,7 @@
  * ## Four states, because three of them are not "off"
  *
  *   `unconfigured`  no model has been deployed; nobody asked for this
- *   `unsupported`   a model is named and this browser cannot run it
+ *   `unsupported`   a model is named, the runtime was PROBED, and it failed
  *   `unpermitted`   it could run and the operator has not consented
  *   `measured`      landmarks are arriving
  *
@@ -103,8 +103,15 @@ export function landmarkStatus(input: StatusInput = {}): LandmarkStatus {
         'pointer gestures work regardless',
     };
   }
-  if (input.runtimeAvailable !== true) {
-    // Not `!== false`. An unmeasured runtime is absent, never present.
+  if (input.runtimeAvailable === false) {
+    // `=== false` — probed and failed. This branch used to read `!== true`,
+    // with the comment "an unmeasured runtime is absent, never present", which
+    // is half of Rule 2: right not to claim an unprobed runtime WORKS, wrong to
+    // state it as BROKEN. `HandDetector` does not load the runtime before
+    // consent — downloading a detector for somebody who has not agreed is what
+    // §25 forbids — so `undefined` is the ordinary "not asked yet" case, and
+    // every one of those operators was told their browser was incapable and
+    // sent to look for a fault that is not there.
     return {
       state: 'unsupported',
       reason: 'a model is deployed and this browser cannot run it',

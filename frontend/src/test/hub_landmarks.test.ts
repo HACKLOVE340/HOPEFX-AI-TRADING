@@ -64,7 +64,13 @@ describe('§18 four states, because three of them are not "off"', () => {
   });
 
   it('distinguishes a browser that cannot run it from a model that is absent', () => {
-    expect(landmarkStatus({ modelUrl: '/m.task' }).state).toBe('unsupported');
+    // Was `.toBe('unsupported')`, which asserted a defect: it reported a
+    // runtime nobody had probed as one this browser cannot run. See
+    // hub_landmark_states_are_measured.test.ts. `unsupported` now requires
+    // `runtimeAvailable: false` — probed, and failed.
+    expect(landmarkStatus({ modelUrl: '/m.task', runtimeAvailable: false, consented: true }).state).toBe(
+      'unsupported',
+    );
     expect(landmarkStatus({ modelUrl: '/m.task', runtimeAvailable: true }).state).toBe('unpermitted');
   });
 

@@ -22,9 +22,11 @@
     "sweep": "node scripts/page_sweep.mjs",
     "check:tdz": "node scripts/find_tdz_reads.mjs",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "prove:hands": "node scripts/prove-hands.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-progress": "^1.1.8",
     "@radix-ui/react-scroll-area": "^1.2.10",

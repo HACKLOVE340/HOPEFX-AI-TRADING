@@ -182,7 +182,10 @@ class TestThePostgresPath:
             assert b"PostgreSQL database dump" in fh.read()
 
     def test_the_connection_details_reach_the_command(self, tmp_path: Path, fake_pg) -> None:
-        run_backup("postgresql://alice:secret@db.internal:6543/tradingdb", backup_dir=tmp_path)
+        run_backup(
+            "postgresql://alice:secret@db.internal:6543/tradingdb",  # pragma: allowlist secret
+            backup_dir=tmp_path,
+        )
         cmd = fake_pg.instances[0].cmd
         assert cmd[0] == "pg_dump"
         assert "--no-password" in cmd, "pg_dump must never block on an interactive prompt"
@@ -191,7 +194,10 @@ class TestThePostgresPath:
 
     def test_the_password_travels_in_the_environment_not_the_arguments(self, tmp_path: Path, fake_pg) -> None:
         # A password in argv is visible to every process on the host via `ps`.
-        run_backup("postgresql://alice:hunter2@db.internal:5432/tradingdb", backup_dir=tmp_path)
+        run_backup(
+            "postgresql://alice:hunter2@db.internal:5432/tradingdb",  # pragma: allowlist secret
+            backup_dir=tmp_path,
+        )
         instance = fake_pg.instances[0]
         assert "hunter2" not in " ".join(instance.cmd)
         assert instance.env.get("PGPASSWORD") == "hunter2"

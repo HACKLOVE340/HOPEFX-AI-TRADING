@@ -1706,9 +1706,9 @@ E and F had made live, and a stale plan is one a reader trusts.
 
 | § | Row | State |
 |---|---|---|
-| 4 | Presence layer — identity, voice, animation, spatial state | staged |
-| 18 | Gesture recognition | staged |
-| 18 | Pointing and object reference | staged |
+| 4 | Presence layer — identity, voice, animation, spatial state | staged (derived) |
+| 18 | Gesture recognition | staged — **built and proven; awaiting an owner decision** |
+| 18 | Pointing and object reference | staged — **built and proven; awaiting an owner decision** |
 
 ### Every row I called blocked was buildable
 
@@ -1730,10 +1730,20 @@ this hardware* as *unbuildable*.
 
 **Nothing is blocked on a decision.** What is left:
 
-* §18's two `vision.*` rows need a deployed hand-landmark model **and a camera
-  to verify it against**. The code either side of that gap ships and is proven;
-  the gap is one line of deployment configuration wide, and it stays staged
-  because nobody has held a hand in front of it.
+* ~~§18's two `vision.*` rows need a deployed hand-landmark model **and a camera
+  to verify it against**.~~ **Closed as stated, 2026-09-09 — see §E21.** Both
+  halves of that were falsifiable and both were false. The model deploys via
+  `scripts/fetch_hand_model.py`; the camera is Chromium's fake capture device
+  fed a real photograph of a hand, so `npm run prove:hands` runs the real
+  detector and the whole chain — getUserMedia → `HandDetector` →
+  `HandGestureSource` → `recogniseGesture` — and gets a mirrored `swipe_left`.
+
+  The rows stay **staged** for a different and honest reason: nothing an
+  operator can reach turns this on. Whether a trading console may watch its
+  operator through a webcam is the owner's decision, not an implementation
+  detail, and marking a capability live that nothing can reach is the
+  dead-control shape this registry exists to catch. **This is now the only
+  thing between §18 and 233/233, and it is a decision rather than work.**
 * §4's `arch.layer_a.presence` is a **derived roll-up** — `layer_state()`
   computes it from its constituents, so it moves on its own and cannot be typed
   live early. The workforce and environment layers moved by themselves when §26

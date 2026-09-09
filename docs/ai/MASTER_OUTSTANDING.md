@@ -1754,3 +1754,93 @@ commit from that point ran the full set.
 --all-files`. Installing locally closes the gap for anyone who bootstraps; it
 does not close it for anyone who does not, and a CI job changes what blocks a
 merge.
+
+## §E21 — The camera that was there all along (2026-09-09)
+
+§18's `vision.gesture` and `vision.pointing` were the last two rows of the AI Hub
+plan with real work in them, and they had been staged across two phases on one
+recorded reason:
+
+> There is no camera in the environment this was built in. Installing a
+> two-megabyte runtime and an eight-megabyte model into a platform that moves
+> money, and never executing either once, is committing code on faith.
+
+The reasoning was sound. The premise was not, and nobody re-checked it — a
+decision recorded as settled is the hardest kind to re-examine, which is why it
+survived two phases of work that touched the files either side of it.
+
+**Chromium serves a video file as a webcam.** `--use-fake-device-for-media-stream`
+with `--use-file-for-fake-video-capture` has existed for years. What was missing
+was the idea, not the hardware.
+
+### What it took to falsify
+
+| Claim on record | Measured |
+|---|---|
+| the dependency is a supply-chain question | `npm view @mediapipe/tasks-vision` resolves; the model host returns 206 |
+| there is no camera | Chromium 141 fakes one from a `.y4m` |
+| a hand to point it at | MediaPipe publishes its own test photograph |
+
+### What now exists
+
+* `hub/handDetector.ts` — the producer `landmarks.ts` was deliberately missing.
+  The runtime arrives through a dynamic `import()`, so an operator who never
+  turns this on downloads none of it — verified against the built bundle, where
+  no chunk contains the detector.
+* `hub/handGestureSource.ts` — a run of frames becomes one gesture track. A hand
+  has no pointer-up, so a gesture ends when the hand LEAVES, and "leaves" is a
+  RUN of empty frames rather than one: a single dropped detection mid-swipe is
+  ordinary, and cutting the track there makes two gestures too short to read.
+* `scripts/fetch_hand_model.py` — deploy-time fetch, sha256-verified, into this
+  origin. Not committed: 7.8 MB against a 500 KB cap, and its absence is a
+  *state* (`unconfigured`) rather than a break.
+* `npm run prove:hands` — two phases. The detector against a still photograph;
+  then the whole chain off a fake camera.
+
+### The evidence
+
+```
+PHASE 1  21 landmarks · a 5-point track · pointing at "order-ticket"
+PHASE 2  76 frames · 4 tracks · swipe_left ×4 · 481–600px over 326–441ms
+```
+
+`swipe_left` from a hand travelling left to right is the assertion doing work:
+the console mirrors the camera because an operator sees their own reflection,
+and a version that followed the raw coordinate would move focus the opposite way
+from the gesture.
+
+### Three defects the proof found, none of which a reading would have
+
+1. **`landmarkStatus` reported "your browser cannot run it" about a runtime it
+   had never tried to load.** The branch read `runtimeAvailable !== true` with
+   the comment "an unmeasured runtime is absent, never present" — half of Rule 2.
+   Not claiming an unprobed runtime works is right; stating it as broken is the
+   same error reversed. Since consent is checked *before* the runtime loads, the
+   ordinary "hasn't said yes yet" case hit this, so every such operator was sent
+   to look for a browser fault that did not exist. `unsupported` now means
+   probed and failed.
+2. **A closed detector claimed the same thing.** Switching camera gestures OFF
+   reported `unsupported`. Caught by the proof printing `closedState`, and the
+   proof's own assertion was too weak to catch it — it ruled out one wrong answer
+   and let the others through.
+3. **The synthetic gesture was wrong three times, and `recogniseGesture` was
+   right each time.** A 1.6-second swipe (`SWIPE_MAX_MS` is 600), then a 30fps
+   video the detector undersampled to two points, then five positions that jumped
+   128px and lost MediaPipe's inter-frame tracking. Each time the temptation was
+   to loosen a threshold; each time that would have changed what a swipe means
+   for POINTER input, to accommodate a video file.
+
+### Why the rows are still staged
+
+Nothing an operator can reach turns this on. `visionSource.ts` — §18's source
+selector — has no production consumer either, so there is no existing control to
+extend, and adding one is a UI change to a trading console.
+
+**Whether this console may watch its operator through a webcam is the owner's
+decision.** Marking a capability live that nothing can reach is precisely the
+dead-control shape this registry exists to catch, and is the same reason Phase I3
+refused to call these rows live for pointer input.
+
+So the position moved from *blocked on something unverifiable* to *one decision
+from live, with the code proven by execution* — and §4's `arch.layer_a.presence`
+roll-up moves with them, because it is derived.
