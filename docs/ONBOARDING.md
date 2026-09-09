@@ -428,6 +428,24 @@ The migration chain has a gap.  Run `alembic current` to see where you are, then
 
 LWC v5 requires integer line widths (1–5).  Change `lineWidth: 1.5` → `lineWidth: 2`.
 
+### Codespace opened but the app is not running / the page is blank
+
+Two separate causes, both now handled by `.devcontainer/start-services.sh`
+(`postStartCommand`), so this is here for when you are diagnosing rather than
+starting fresh:
+
+1. **Nothing started the server.** The `gitpod automations service start …`
+   commands in AGENTS.md are Gitpod-only — Codespaces reads neither that CLI
+   nor `automations.yaml`. Run `bash .devcontainer/start-services.sh`.
+2. **The server is up but the page is blank.** The SPA is served from
+   `static/`, which is gitignored, and the test suite writes a placeholder
+   `static/index.html` ("HOPEFX test SPA shell") that renders nothing. Check
+   for `static/assets/`; if it is missing, `cd frontend && npm run build`.
+
+Also note the app serves `503` on `/` for roughly 80 seconds after start —
+`app.py` yields the lifespan immediately and gates data endpoints until the
+feeds are up. That is the startup gate working, not a failure.
+
 ### Vite HMR not connecting in Gitpod / GitHub Codespaces
 
 The `vite.config.ts` `allowedHosts` list includes `.gitpod.io`, `.gitpod.dev`, and `.preview.app.github.dev`.  If your environment URL doesn't match, add it to that array.

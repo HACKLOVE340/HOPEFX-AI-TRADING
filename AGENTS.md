@@ -108,12 +108,35 @@ docs/                   Documentation (archive/ holds superseded docs)
 ## Development Environment
 
 The devcontainer (`.devcontainer/devcontainer.json`) provides Python 3.12,
-Node 20, and Redis. Three automations run on startup:
+Node 20, and Redis.
+
+**GitHub Codespaces — nothing to type.** `postStartCommand` runs
+`.devcontainer/start-services.sh` on every start and resume: Redis, `.env` and
+seed users, a frontend build if `static/assets` is missing, then the API. It
+waits for the startup gate to open and prints the seed passwords. Port **8000**
+auto-opens and is the whole application — the backend serves the built SPA, so
+5173 matters only when you want Vite's hot reload while editing the frontend.
+Ports stay **private** by default; the seeded superadmin account is why, and
+changing that should be a decision made in the Ports panel, not a default.
+
+**Gitpod** reads `.gitpod/automations.yaml` instead, and there the services are
+started through its own CLI:
 
 ```bash
 gitpod automations service start redis     # Redis on :6379
 gitpod automations service start backend   # FastAPI on :8000
 gitpod automations service start frontend  # Vite dev server on :5173
+```
+
+Those three lines used to sit here unqualified, under a heading about the
+devcontainer. They are Gitpod-only: Codespaces reads neither the `gitpod` CLI
+nor `automations.yaml`, so following them there produced `command not found`
+after a Codespace had already built the entire environment and served nothing.
+
+Either way, run it by hand any time — the script is idempotent:
+
+```bash
+bash .devcontainer/start-services.sh
 ```
 
 Bootstrap (run once, idempotent):
