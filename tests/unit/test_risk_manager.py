@@ -285,6 +285,25 @@ class TestTradingWorkflow:
         # RiskManager → position sizing → kill-switch integration
         from execution import Order, PaperExecutor
 
+        # A full cycle has a data layer. This test used to build the RiskManager
+        # without one and still expect a $20k position, which passed only because
+        # unmeasured data quality scored a perfect 1.0 (§E12). It now supplies
+        # something to measure, because "full trading cycle" with nothing feeding
+        # it is not the cycle — and `test_the_cycle_refuses_without_a_data_layer`
+        # below holds the other half, so the gate is satisfied rather than
+        # sidestepped.
+        class _Orch:
+            """Minimal stand-in for the data layer: one tick with a confidence."""
+
+            class _Tick:
+                confidence = 0.95
+
+            def get_latest_tick(self, symbol: str = "XAUUSD"):
+                return self._Tick()
+
+            def get_ml_features(self) -> dict:
+                return {}
+
         # Use a $1M account so position sizing produces a non-trivial lot count
         # at XAUUSD prices (~$1950/oz).  max_position_size_pct=0.02 → $20k max
         # notional → ~10 oz → approved.
@@ -293,6 +312,7 @@ class TestTradingWorkflow:
             config=config,
             initial_balance=1_000_000.0,
             halt_state_file=tmp_path / "halt_state.json",
+            orchestrator=_Orch(),
         )
 
         # 1. Equity update
@@ -328,3 +348,32 @@ class TestTradingWorkflow:
         rm.daily_starting_equity = 1_000_000.0
         rm.update_equity(890_000.0)  # 11% drawdown > 10% limit
         assert rm.kill_switch_active
+
+    def test_the_cycle_refuses_without_a_data_layer(self, tmp_path):
+        """The same cycle, with nothing to measure, must size nothing.
+
+        This is the half of the behaviour that the cycle test above stops
+        exercising once it is given an orchestrator. Without it, wiring the
+        orchestrator in would look like a fix for a failing test rather than
+        what it is — and nothing would notice if the refusal were removed.
+
+        Before §E12 this configuration produced a $20,000 position on data
+        quality that nobody had measured, scored 1.0 by default.
+        """
+        rm = RiskManager(
+            config=RiskConfig(max_drawdown_pct=0.10, max_position_size_pct=0.02),
+            initial_balance=1_000_000.0,
+            halt_state_file=tmp_path / "halt_state.json",
+        )
+        sizing = rm.calculate_position_size(
+            symbol="XAUUSD",
+            signal_strength=0.7,
+            entry_price=1950.0,
+            stop_loss_price=1930.0,
+            take_profit_price=1990.0,
+            account_equity=1_000_000.0,
+            volatility=0.01,
+        )
+        assert not sizing.approved
+        assert sizing.reason == "data_quality:unmeasured"
+        assert sizing.quantity == 0.0

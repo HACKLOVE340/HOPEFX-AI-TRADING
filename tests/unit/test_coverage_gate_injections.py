@@ -174,12 +174,26 @@ class TestAnUnmeasurableModuleIsNotAPass:
         )
         assert _run(project).returncode != 0, "a broken test import silently disabled the gate"
 
-    def test_the_failure_says_it_could_not_measure(self, project: Path) -> None:
-        # An operator seeing this must be able to tell "coverage is low" from
-        # "coverage is unknown" — they need different fixes.
+    def test_the_failure_says_which_number_it_measured(self, project: Path) -> None:
+        """An operator must be able to tell "coverage is low" from "coverage is
+        unknown" — the two need different fixes.
+
+        This used to assert the words "could not measure", because a test that
+        never imports its module made `--cov=<dotted.module>` collect nothing and
+        print no table. Measuring the *package* instead reports the module's file
+        at 0.00%: coverage parsed it, counted its statements and saw none run.
+        That is a measurement, and reporting it as unknown would be the same
+        Rule 2 error in the opposite direction.
+
+        So the distinction the test was defending is now stronger, not weaker —
+        the gate says 0%, and reserves "could not be measured" for the case where
+        the module genuinely has no row at all.
+        """
         _write_test(project, "def test_nothing():\n    assert True\n")
-        combined = _run(project).stderr + _run(project).stdout
-        assert "could not" in combined.lower() or "unmeasur" in combined.lower(), combined
+        result = _run(project)
+        combined = (result.stderr + result.stdout).lower()
+        assert result.returncode != 0, combined
+        assert "0%" in combined or "could not" in combined or "unmeasur" in combined, combined
 
 
 class TestTheDocumentedBypassStillWorks:
@@ -258,7 +272,12 @@ class TestTheUnmeasurableBaselineIsARatchet:
 
         result = _run(project)
         assert result.returncode == 0, f"a baselined module blocked:\n{result.stderr}"
-        assert "BASELINED" in result.stderr
+        # The word was "BASELINED" while an entry meant "cannot be measured".
+        # It now means recorded debt with a real number behind it, so the line
+        # reads DEBT — and stays on stderr, because a non-blocking notice on
+        # stdout is a notice nobody reads.
+        assert "DEBT" in result.stderr, result.stderr + result.stdout
+        assert "mymod/thing.py" in result.stderr
         assert gate  # the constant is importable from the real module
 
     def test_a_new_unmeasurable_module_still_blocks(self, project: Path) -> None:

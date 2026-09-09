@@ -52,31 +52,32 @@ _SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"
 
 #: Where the recorded debt lives. Generated, never hand-written.
 #:
-#: Making an unmeasurable module fail was correct — the gate had been passing a
-#: module at 0% while failing one at 25% — but a hard cutover blocks every commit
-#: touching pre-existing debt, and a gate that blocks work people must do gets
-#: switched off with SKIP_COVERAGE_GATE=1, which disables the whole thing.
+#: 361 modules, every one recorded because measurement returned ``None``. As
+#: `_coverage_target` explains, measurement returned ``None`` for *everything*
+#: until the dotted-module invocation was fixed, so this list records one broken
+#: invocation rather than 361 untested modules. Its former claim — "each entry
+#: means no test imports this module" — described a conclusion the gate had no
+#: means to reach.
 #:
-#: And the debt is not small: **361 modules** resolve to a test file that never
-#: imports them. A hand-written constant was tried first and was the wrong shape
-#: at that scale, so this is the same ratchet the document registry, the
-#: freshness checker and the gate-evidence ledger use — a generated file that may
-#: only shrink.
+#: Repairing the invocation without this list would swing the gate from passing
+#: everything to blocking every commit that touches any of 361 files, and a gate
+#: that blocks work people must do gets switched off with SKIP_COVERAGE_GATE=1.
+#: So it is the same ratchet the document registry, the freshness checker and the
+#: gate-evidence ledger use — a generated file that may only shrink, with
+#: pressure in both directions:
 #:
-#: Each entry means "no test imports this module", which is worse than low
-#: coverage: it is no coverage, silently.
+#:   * recorded and under the floor  -> reported as DEBT on stderr, does not block
+#:   * recorded and AT the floor     -> BLOCKS: delete the line
+#:   * not recorded                  -> judged on its number, blocks if short
 #:
-#: ## Why an over-broad list is safe
+#: The second rule is the tooth. Without it this is an allowlist, and an
+#: allowlist under no pressure is how a ratchet stops being one. See
+#: tests/unit/test_coverage_gate_ratchet.py.
 #:
-#: An entry only matters when measurement returns ``None``. A module that IS
-#: measurable is judged on its number regardless of whether it appears here —
-#: verified by execution: a baselined module at 25% still fails. So a list that
-#: is too broad is inert, and one that is too narrow blocks legitimate work.
-#: The seed below is therefore deliberately conservative.
-#:
-#: The seed is static — every module whose resolved test file never mentions it
-#: — because measuring all 539 candidates takes about two hours. ``--adopt``
-#: replaces it with the exact measured set when someone has the time to spend.
+#: An over-broad seed is therefore inert while a module stays under the floor and
+#: blocks the moment it clears one — the direction that costs nothing. The seed is
+#: static (every module whose resolved test file never mentions it) because
+#: measuring all 539 candidates takes about two hours:
 #:
 #:     python scripts/pre_commit_coverage.py --adopt   # regenerate by measurement (slow)
 BASELINE_PATH = Path(__file__).resolve().parent.parent / "docs" / "COVERAGE_UNMEASURABLE.txt"
@@ -251,6 +252,9 @@ class Verdict:
 
     ok: bool
     message: str
+    #: Recorded debt: does not block, but is a warning and goes to stderr like
+    #: one. A non-blocking line on stdout is a line nobody reads.
+    debt: bool = False
 
 
 def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: bool) -> Verdict:
@@ -280,7 +284,7 @@ def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: b
             "the test may not import the module, or may fail to collect"
         )
         if recorded:
-            return Verdict(True, f"DEBT {why}. Recorded in {BASELINE_PATH.name}; the list may only shrink.")
+            return Verdict(True, f"DEBT {why}. Recorded in {BASELINE_PATH.name}; the list may only shrink.", debt=True)
         return Verdict(False, why)
 
     if pct >= _THRESHOLD:
@@ -299,6 +303,7 @@ def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: b
             True,
             f"DEBT {shown}: {pct:.0f}% < {_THRESHOLD}% (test: {test_path}). Recorded in "
             f"docs/{BASELINE_PATH.name}. Not permission — raise it and delete the line.",
+            debt=True,
         )
     return Verdict(False, f"{shown}: coverage {pct:.0f}% < {_THRESHOLD}% threshold (test: {test_path})")
 
@@ -336,7 +341,7 @@ def main(argv: list[str]) -> int:
         verdict = _judge(path, test_file, coverage_pct, recorded=str(path).replace("\\", "/") in _load_baseline())
 
         if verdict.ok:
-            print(f"pre_commit_coverage: {verdict.message}")
+            print(f"pre_commit_coverage: {verdict.message}", file=sys.stderr if verdict.debt else sys.stdout)
             continue
 
         failures.append(verdict.message)

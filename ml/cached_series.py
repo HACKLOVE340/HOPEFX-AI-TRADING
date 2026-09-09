@@ -42,6 +42,7 @@ import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 __all__ = [
@@ -102,6 +103,17 @@ class IntegrityReport:
     high_below_body: int
     low_above_body: int
     malformed: int
+    #: Bars with a NaN or infinite price in open/high/low/close.
+    #:
+    #: Counted apart from the three contradictions above because a missing value
+    #: contradicts nothing — there is no impossible price to report, only an
+    #: absent one. Folding it into `high_below_low` would put a violation in the
+    #: record that the data does not contain.
+    #:
+    #: It has to be counted at all because every comparison against NaN is
+    #: False, so such a bar satisfies all three checks and was reported as
+    #: sound. A report that clears bad data is worse than no report.
+    non_finite: int = 0
 
     @property
     def clean(self) -> bool:
@@ -111,25 +123,49 @@ class IntegrityReport:
         if self.clean:
             return "no OHLC violations"
         pct = 100.0 * self.malformed / self.bars if self.bars else 0.0
-        return (
-            f"{self.malformed} malformed bars ({pct:.1f}%): "
-            f"high<low={self.high_below_low}, high<body={self.high_below_body}, "
-            f"low>body={self.low_above_body}"
-        )
+        parts = [
+            f"high<low={self.high_below_low}",
+            f"high<body={self.high_below_body}",
+            f"low>body={self.low_above_body}",
+        ]
+        if self.non_finite:
+            parts.append(f"non-finite={self.non_finite}")
+        return f"{self.malformed} malformed bars ({pct:.1f}%): " + ", ".join(parts)
 
 
 def _check_integrity(frame: pd.DataFrame) -> IntegrityReport:
+    """Count the bars that cannot have happened.
+
+    Finiteness first, then the property — the order every predicate in
+    `invariants/` uses, and for the same reason: `NaN < anything` is False, so a
+    bar with a missing high passes `high < low`, passes `high < body`, passes
+    `low > body`, and is counted as sound. Guarding after the comparisons would
+    be no guard at all.
+    """
+    present = [c for c in ("open", "high", "low", "close") if c in frame.columns]
+    finite = frame[present].apply(lambda col: np.isfinite(col.to_numpy(dtype="float64", na_value=np.nan))).all(axis=1)
+
     body_hi = frame[["open", "close"]].max(axis=1)
     body_lo = frame[["open", "close"]].min(axis=1)
-    hl = frame["high"] < frame["low"]
-    hb = frame["high"] < body_hi
-    lb = frame["low"] > body_lo
+    # Restricted to bars whose prices are all finite; on the rest there is
+    # nothing to compare, and a False from a NaN comparison means "unknown",
+    # never "fine".
+    hl = finite & (frame["high"] < frame["low"])
+    hb = finite & (frame["high"] < body_hi)
+    lb = finite & (frame["low"] > body_lo)
+    non_finite = ~finite
     return IntegrityReport(
         bars=len(frame),
         high_below_low=int(hl.sum()),
         high_below_body=int(hb.sum()),
         low_above_body=int(lb.sum()),
-        malformed=int((hl | hb | lb).sum()),
+        # healer: ignore — the nan_leak rule wants a .dropna()/.fillna() next to the
+        # aggregation and cannot see that these are boolean masks already
+        # intersected with `finite` above; there is no NaN left to leak. The
+        # rule was right about the original line, which compared prices with no
+        # guard at all, and is what made this fix a fix rather than an opinion.
+        malformed=int((hl | hb | lb | non_finite).sum()),  # healer: ignore
+        non_finite=int(non_finite.sum()),  # healer: ignore
     )
 
 
