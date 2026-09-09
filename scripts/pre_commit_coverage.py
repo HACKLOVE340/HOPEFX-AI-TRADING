@@ -14,6 +14,12 @@ COVERAGE_THRESHOLD (default 80%).
 Designed to be fast: only tests the modules that changed in this commit,
 not the entire test suite.
 
+A figure from this gate is therefore NOT the module's coverage across the suite,
+and the two must not be compared. `risk/manager.py` reads 43% here and 89.65% in
+.coveragerc's recorded measurement; both are correct, because this gate runs one
+test file and that figure runs all of them. Quoting this number as the module's
+coverage would understate it by 46 points.
+
 Exit codes
 ----------
 0 — coverage gate passed (or no testable modules changed)
@@ -38,6 +44,7 @@ from __future__ import annotations
 import os
 import subprocess  # nosec B404 — pytest subprocess, fixed args
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 _THRESHOLD = int(os.getenv("COVERAGE_THRESHOLD", "80"))
@@ -135,27 +142,91 @@ def _find_test_file(module_path: Path) -> Path | None:
     return None
 
 
-def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str]:
-    """
-    Run pytest with coverage for a single module/test pair.
+def _coverage_target(module_path: Path) -> str:
+    """What to hand `--cov=`.
 
-    Returns (coverage_pct, output_text) or (None, error_text) on failure.
-    """
-    module_dotted = str(module_path).replace("/", ".").replace("\\", ".").removesuffix(".py")
+    A dotted *module* name (``risk.manager``) makes coverage resolve and import
+    the module itself, which re-initialises numpy's C extension inside a process
+    that already imported it via ``tests/conftest.py``:
 
-    cmd = [
+        numpy/_core/multiarray.py:11: in <module>
+            from . import _multiarray_umath, overrides
+        ImportError: cannot load module more than once per process
+
+    Every module in scope imports numpy transitively, so the gate could not
+    measure a single one — and reported that as "the test may not import the
+    module", which blames the test and invites ``SKIP_COVERAGE_GATE=1``.
+
+    A *package* name resolves as a directory and does not import anything, so
+    ``--cov=risk`` works where ``--cov=risk.manager`` cannot. The module's own
+    figure is then read out of the report by `_parse_module_coverage`.
+    """
+    parts = Path(str(module_path).replace("\\", "/")).parts
+    if len(parts) > 1:
+        return parts[0]
+    # A module at the repository root has no package to name, and its bare stem
+    # would be a dotted module again. `.` measures the tree; the row is read the
+    # same way either way.
+    return "."
+
+
+def _coverage_command(module_path: Path, test_path: Path) -> list[str]:
+    """The pytest invocation the gate runs. Extracted so it can be asserted."""
+    return [
         sys.executable,
         "-m",
         "pytest",
         str(test_path),
-        f"--cov={module_dotted}",
-        "--cov-report=term-missing:skip-covered",
+        f"--cov={_coverage_target(module_path)}",
+        # NOT `:skip-covered` — a module at 100% would be omitted from the
+        # report, and an absent row is indistinguishable from unmeasured, so
+        # perfect coverage would fail the gate.
+        "--cov-report=term-missing",
         "--cov-config=.coveragerc",
+        # .coveragerc carries fail_under=70 for the whole project. This gate
+        # judges one module against its own floor, and a non-zero exit from the
+        # global figure would be read as "could not measure".
+        "--cov-fail-under=0",
         "-q",
         "--no-header",
         "--tb=no",
         "--timeout=30",
     ]
+
+
+def _parse_module_coverage(output: str, module_path: Path) -> float | None:
+    """Read *module_path*'s own row out of a term-missing report.
+
+    Returns None when the module has no row — which means nothing measured it,
+    not that it measured zero. TOTAL is deliberately not a fallback: with a
+    package-wide ``--cov`` it is the package's number, and reporting it as the
+    module's would be a fabricated measurement of exactly the kind this gate
+    exists to catch.
+    """
+    wanted = str(module_path).replace("\\", "/")
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        if parts[0].replace("\\", "/") != wanted:
+            continue
+        for token in reversed(parts):
+            if token.endswith("%"):
+                try:
+                    return float(token.rstrip("%"))
+                except ValueError:  # nosec B112 — malformed cell; keep scanning
+                    continue
+    return None
+
+
+def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str]:
+    """
+    Run pytest with coverage for a single module/test pair.
+
+    Returns (coverage_pct, output_text); coverage_pct is None when the module's
+    own row is absent from the report.
+    """
+    cmd = _coverage_command(module_path, test_path)
 
     try:
         result = subprocess.run(  # nosec B603 — fixed args, no shell
@@ -163,27 +234,73 @@ def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str
             check=False,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=180,
             env={**os.environ, "CI_FAST": "1"},
         )
         output = result.stdout + result.stderr
-
-        # Parse coverage percentage from pytest-cov output
-        # Line format: "TOTAL    123    45    63%"
-        for line in output.splitlines():
-            if line.strip().startswith("TOTAL"):
-                parts = line.split()
-                if parts and parts[-1].endswith("%"):
-                    try:
-                        return float(parts[-1].rstrip("%")), output
-                    except ValueError:  # nosec B110 — malformed coverage line; try next line
-                        pass
-
-        return None, output
+        return _parse_module_coverage(output, module_path), output
     except subprocess.TimeoutExpired:
         return None, f"Coverage check timed out for {module_path}"
     except Exception as exc:
         return None, f"Coverage check failed: {exc}"
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """What the gate decided about one module, and the sentence it says."""
+
+    ok: bool
+    message: str
+
+
+def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: bool) -> Verdict:
+    """Decide one module. Pure — no I/O, so the decision can be asserted.
+
+    Four states, and the recorded list changes only two of them:
+
+    ================  ==================  ====================================
+    measured          recorded            outcome
+    ================  ==================  ====================================
+    >= threshold      no                  pass
+    >= threshold      yes                 BLOCK — the entry is stale, remove it
+    < threshold       no                  BLOCK
+    < threshold       yes                 DEBT — reported, does not block
+    unmeasured        no                  BLOCK
+    unmeasured        yes                 DEBT — reported, does not block
+    ================  ==================  ====================================
+
+    The stale-entry block is what keeps the record a ratchet. Everything else
+    here is an allowlist, and an allowlist under no pressure becomes the reason
+    nobody notices the gate stopped saying anything.
+    """
+    shown = f"{module_path}"
+    if pct is None:
+        why = (
+            f"{shown}: coverage could not be measured (test: {test_path}) — "
+            "the test may not import the module, or may fail to collect"
+        )
+        if recorded:
+            return Verdict(True, f"DEBT {why}. Recorded in {BASELINE_PATH.name}; the list may only shrink.")
+        return Verdict(False, why)
+
+    if pct >= _THRESHOLD:
+        if recorded:
+            return Verdict(
+                False,
+                f"{shown}: now measures {pct:.0f}% >= {_THRESHOLD}% and must leave the record. "
+                f"Delete its line from docs/{BASELINE_PATH.name} — the list may only shrink, "
+                "and an entry that no longer describes anything is how a ratchet quietly stops "
+                "being one.",
+            )
+        return Verdict(True, f"OK   {shown}: {pct:.0f}% >= {_THRESHOLD}%")
+
+    if recorded:
+        return Verdict(
+            True,
+            f"DEBT {shown}: {pct:.0f}% < {_THRESHOLD}% (test: {test_path}). Recorded in "
+            f"docs/{BASELINE_PATH.name}. Not permission — raise it and delete the line.",
+        )
+    return Verdict(False, f"{shown}: coverage {pct:.0f}% < {_THRESHOLD}% threshold (test: {test_path})")
 
 
 def main(argv: list[str]) -> int:
@@ -216,54 +333,16 @@ def main(argv: list[str]) -> int:
 
         checked += 1
         coverage_pct, output = _run_coverage(path, test_file)
+        verdict = _judge(path, test_file, coverage_pct, recorded=str(path).replace("\\", "/") in _load_baseline())
 
-        if coverage_pct is None:
-            # AN UNMEASURED MODULE IS NOT A COVERED ONE.
-            #
-            # This used to warn and continue, which inverted the gate: a module
-            # at 25% failed, and a module at 0% PASSED. When a test never
-            # imports the module under test, coverage collects no data and
-            # pytest-cov prints no TOTAL line at all —
-            #
-            #   CoverageWarning: Module x.y was never imported. (module-not-imported)
-            #   CoverageWarning: No data was collected. (no-data-collected)
-            #   WARNING: Failed to generate report: No data to report.
-            #
-            # — so the parser returned None and the worst possible coverage took
-            # the quietest path through the gate. A test file that fails to
-            # import did the same thing.
-            #
-            # Rule 2: an unmeasured value is absent, never zero — and certainly
-            # never success. SKIP_COVERAGE_GATE=1 is the documented emergency
-            # bypass; a second escape hatch here would just be a second thing to
-            # reach for.
-            if str(path).replace("\\", "/") in _load_baseline():
-                print(
-                    f"pre_commit_coverage: BASELINED {path}: coverage still cannot be measured "
-                    f"(test: {test_file}). This is recorded debt, not permission — the list may "
-                    "only shrink.",
-                    file=sys.stderr,
-                )
-                continue
-            failures.append(
-                f"{path}: coverage could not be measured (test: {test_file}) — "
-                "the test may not import the module, or may fail to collect"
-            )
-            print(
-                f"pre_commit_coverage: FAIL {path}: could not measure coverage "
-                f"(test: {test_file}). Output:\n{output[:500]}",
-                file=sys.stderr,
-            )
+        if verdict.ok:
+            print(f"pre_commit_coverage: {verdict.message}")
             continue
 
-        if coverage_pct < _THRESHOLD:
-            failures.append(f"{path}: coverage {coverage_pct:.0f}% < {_THRESHOLD}% threshold (test: {test_file})")
-            print(
-                f"pre_commit_coverage: FAIL {path}: {coverage_pct:.0f}% < {_THRESHOLD}%",
-                file=sys.stderr,
-            )
-        else:
-            print(f"pre_commit_coverage: OK   {path}: {coverage_pct:.0f}% >= {_THRESHOLD}%")
+        failures.append(verdict.message)
+        print(f"pre_commit_coverage: FAIL {verdict.message}", file=sys.stderr)
+        if coverage_pct is None:
+            print(output[:500], file=sys.stderr)
 
     if not checked:
         return 0
@@ -316,18 +395,11 @@ def adopt() -> int:
         if i % 50 == 0:
             print(f"  {i}/{len(candidates)} — {len(unmeasurable)} unmeasurable", flush=True)
 
-    header = [
-        "# Modules whose coverage the pre-commit gate cannot measure.",
-        "#",
-        "# Each line means: no test file imports this module, so coverage collects no",
-        "# data and produces no report. That is WORSE than low coverage — it is no",
-        "# coverage, silently. Until Phase R5 the gate PASSED these while failing",
-        "# modules that were merely under-covered.",
-        "#",
-        "# This list may only SHRINK. A new unmeasurable module blocks the commit.",
-        "# To remove an entry: make that module's test file actually import it.",
-        "",
-    ]
+    # The header is the record's meaning; regenerating must not revert it to
+    # the pre-repair wording, which described a measurement that never ran.
+    header = [ln for ln in BASELINE_PATH.read_text(encoding="utf-8").splitlines() if ln.startswith("#")]
+    header.append("")
+
     BASELINE_PATH.write_text("\n".join(header + sorted(unmeasurable)) + "\n", encoding="utf-8")
     print(f"wrote {BASELINE_PATH.name}: {len(unmeasurable)} of {len(candidates)} unmeasurable")
     return 0

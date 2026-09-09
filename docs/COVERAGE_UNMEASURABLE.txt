@@ -1,24 +1,47 @@
-# Modules whose coverage the pre-commit gate cannot measure.
+# Modules with recorded coverage debt.
 #
-# Each line means: no test file imports this module, so coverage collects no
-# data and produces no report. That is WORSE than low coverage — it is no
-# coverage, silently. Until Phase R5 the gate PASSED these while failing
-# modules that were merely under-covered (a module at 0% passed; one at 25%
-# failed).
+# ## What a line means, and what it used to mean
 #
-# SEEDED STATICALLY, deliberately conservative: every module whose resolved
-# test file never mentions it. Measuring all 539 candidates takes about two
-# hours, and an over-broad list is inert — an entry only matters when
-# measurement returns None, and a measurable module is judged on its number
-# either way (verified: a baselined module at 25% still fails). A list that
-# is too NARROW would block legitimate work, so the seed errs wide.
+# It used to mean: no test file imports this module, so coverage collects no
+# data. That reading was itself a casualty of a broken measurement. The gate
+# invoked `pytest --cov=<dotted.module>`, which made coverage import the module
+# and re-initialise numpy's C extension inside a process that had already
+# imported numpy through tests/conftest.py:
+#
+#     ImportError: cannot load module more than once per process
+#
+# Every module in scope imports numpy transitively, so NOTHING could be
+# measured. This list therefore records one broken invocation, not 361
+# untested modules — and the header's old claim that "a baselined module at
+# 25% still fails" described a comparison the gate was never able to make.
+#
+# The invocation is fixed (`--cov=<package>`, then the module's own row is read
+# out of the report; see scripts/pre_commit_coverage.py and
+# tests/unit/test_coverage_gate_can_measure.py). A line now means: this module
+# is measurable, is below the floor, and that is recorded rather than blocking.
+#
+# ## The ratchet
+#
+#   * recorded + below the floor  -> reported as DEBT, does not block
+#   * recorded + unmeasurable     -> reported as DEBT, does not block
+#   * NOT recorded + below floor  -> blocks
+#   * NOT recorded + unmeasurable -> blocks
+#   * recorded + AT OR ABOVE floor -> BLOCKS, with one instruction: delete the
+#     line. An entry that no longer describes anything is how a ratchet stops
+#     being one.
+#
+# So this list may only SHRINK, and it applies pressure in both directions.
+# To remove an entry: raise that module's coverage past the floor, then delete
+# its line. Enforced by tests/unit/test_coverage_gate_ratchet.py.
+#
+# Seeded statically — every module whose resolved test file never mentions it —
+# because measuring all 539 candidates takes about two hours. An over-broad seed
+# is inert while the module stays under the floor, and blocks the moment it
+# clears it, which is the direction that costs nothing.
 #
 #   python scripts/pre_commit_coverage.py --adopt
 #
-# replaces this with the exact measured set.
-#
-# This list may only SHRINK. A new unmeasurable module blocks the commit.
-# To remove an entry: make that module's test file actually import it.
+# replaces the seed with the exact measured set.
 
 ai/cache/__init__.py
 ai/cache/store.py
