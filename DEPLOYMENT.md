@@ -162,8 +162,10 @@ open http://localhost:8000/docs
 # Update system
 sudo apt-get update && sudo apt-get upgrade -y
 
-# Install dependencies
-sudo apt-get install -y python3.10 python3.10-venv python3-pip redis-server postgresql
+# Install dependencies. 3.12 is not a preference: the committed model
+# artifacts under ml/saved_models/ are pickled by CI on 3.12, and a
+# different interpreter here loads them at your own risk.
+sudo apt-get install -y python3.12 python3.12-venv python3.12-dev python3-pip redis-server postgresql
 ```
 
 #### 2. Create Application User
@@ -185,7 +187,7 @@ cd /opt/hopefx-ai-trading
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git .
 
 # Create virtual environment
-python3.10 -m venv venv
+python3.12 -m venv venv
 source venv/bin/activate
 
 # Install dependencies

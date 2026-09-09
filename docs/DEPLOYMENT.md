@@ -1,12 +1,18 @@
 # Deployment Guide
 
-> Current version: **v1.17** — Python 3.10, 3.11, or 3.12 required. API server listens on port **8000**.
+> Current version: **v1.17** — Python 3.12 required (matches the `python:3.12-slim` Docker image).
+> API server listens on port **8000**.
+>
+> This previously read "Python 3.10, 3.11, or 3.12" while the install commands below
+> fetched 3.10. CI tests 3.11 and 3.12, production runs 3.12, and the committed `.pkl`
+> artifacts are pickled on 3.12 — so 3.10 was tested by nothing and loads those
+> artifacts at the reader's risk. See the Gotchas section of CLAUDE.md.
 > Last updated: 2026-04-01
 
 ## Prerequisites
 
 - Linux server (Ubuntu 22.04+ recommended)
-- Python 3.10, 3.11, or 3.12
+- Python 3.12 (must match the Docker image — `python:3.12-slim`)
 - Redis 7+
 - PostgreSQL 16+ (for production; SQLite used automatically in development)
 - Docker + Docker Compose (recommended)
@@ -110,8 +116,10 @@ open http://localhost:8000/docs
 # Update system
 sudo apt-get update && sudo apt-get upgrade -y
 
-# Install dependencies
-sudo apt-get install -y python3.10 python3.10-venv python3-pip redis-server postgresql
+# Install dependencies. 3.12 is not a preference: the committed model
+# artifacts under ml/saved_models/ are pickled by CI on 3.12, and a
+# different interpreter here loads them at your own risk.
+sudo apt-get install -y python3.12 python3.12-venv python3.12-dev python3-pip redis-server postgresql
 ```
 
 #### 2. Create Application User
@@ -133,7 +141,7 @@ cd /opt/hopefx-ai-trading
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git .
 
 # Create virtual environment
-python3.10 -m venv venv
+python3.12 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
