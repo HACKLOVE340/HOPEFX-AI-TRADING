@@ -103,7 +103,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 24 gates · **24 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 25 gates · **25 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -119,7 +119,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | 2 | Acceleration answer-invariance — cache age carried, downgrade always visible | Group 2 Ch 28, 32, 33 |
 | 3 | Data egress and sovereignty boundary | Group 2 Ch 13 — blocks Group 1 §23/§24 |
 | 4 | Correlation key joining metrics, traces, logs and changes | Group 2 Ch 14 — blocks Group 1 §16 |
-| 5 | Change records carrying their expected effect | Group 2 Ch 6 — blocks Group 1 §16, §21, §32 |
+| ~~5~~ | ~~Change records carrying their expected effect~~ | **DONE 2026-09-09 — see §E24.** `deployment/change_records.py`, enforced at `commit-msg`. Group 1 §16, §21 and §32 are unblocked |
 | 6 | Authority Tiers 0 and 3 (four of six exist) | Group 2 Ch 10 · INV-09 · Group 4 Ch 6 |
 | 7 | Stated degradation order, trading path excluded from it | Group 2 Ch 34 |
 | 8 | Progressive delivery and automated rollback | Group 2 Ch 5 |
@@ -1979,7 +1979,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      24 gates · 24 proven able to fail · 0 unproven
+    gate_evidence.py      25 gates · 25 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2094,3 +2094,107 @@ Group 2 Chapter 6's **change records carrying an expected effect** — the same
 prediction field one layer down, attached to a deployment rather than a
 decision. Ranked item 5, still open, and now the only part of Decision
 Governance that is not built.
+
+## §E24 — Change records, and a hole in the gate that enforces gates (2026-09-09)
+
+Ranked item 5, and the last open part of Decision Governance. §E22 recorded
+design decisions by humans, §E23 operational decisions by the system; this is
+the same prediction field one layer down, attached to a deployment.
+
+Chapter 6's own sentence for why:
+
+> A deployment log records that something happened, and a change record records
+> what it was *for*. Only the second can be evaluated. **A history without
+> predictions cannot teach anything.**
+
+### Generated, not written — except the one field that matters
+
+Every field comes from git and the tree. The exception is the expected effect,
+which is the point: it is the only field a machine cannot derive and the only one
+that makes the record evaluable. It arrives as an `Expected-Effect:` commit
+trailer, because trailers are already how this repository carries structured
+commit metadata (`Co-Authored-By`, `Claude-Session`) and a prediction kept
+anywhere else drifts from the commit it describes.
+
+Enforced at **`commit-msg`**, not `pre-commit`: the trailer being checked does not
+exist yet at the earlier stage.
+
+### The tier is derived from paths, and the module says so
+
+Chapter 6 sources "packages touched" from Chapter 1's package register, which
+**does not exist** — ranked item 10, still open. `TIER_SOURCE = "path-prefix"` is
+printed on every report and the docstring states it plainly, because a path table
+silently substituted for the register would make item 10 look delivered. That is
+the shape §E20 had to correct in §E5. Recorded as ADR 0011, including what would
+constitute reversing it.
+
+**Unknown is not safe.** An unclassified path is `unknown`, never `presentation`,
+and `unknown` requires a prediction exactly as `core` does. Rule 2 where it costs
+most: the alternative is that the first unclassified package added to this
+repository is the one that ships unpredicted.
+
+### Two defects the first version had, both found by running it
+
+**`lstrip("./")` strips a character SET, not a prefix.** `.gitignore` became
+`gitignore`, and `.github/workflows/ci.yml` would have become
+`github/workflows/ci.yml` — a path matching no prefix, landing in the wrong tier
+silently. Caught by a parametrised root-path test.
+
+**The root fell through to `unknown`,** so editing `CLAUDE.md` demanded a
+deployment prediction. Friction with no safety in it, and friction is how a gate
+earns a bypass. Calling the whole root `presentation` would have been the
+opposite error: `app.py`, `run.py`, `hopefx_engine.py` and `trader_full.py` all
+live there and all start the trading path. Root prose is presentation; anything
+else at the root is `core`.
+
+`.github/` and `.pre-commit-config.yaml` are classified `core` on evidence rather
+than instinct: CI is the control plane for every gate here, and §E20 found the
+pre-commit hooks had never been installed, so seven ratcheted checks protected
+nobody.
+
+### And the gate that enforces gates could not see it
+
+`scripts/gate_evidence.py` discovered hooks by matching `scripts/*.py` entries.
+This hook runs `python -m deployment.change_records`, so **it was invisible**: the
+ledger reported 24 gates before and after it was added, and `--check` passed.
+
+Any gate written as a module rather than a script was silently exempt from Rule 1
+— a hole in the census that every other gate's evidence depends on. Discovery now
+matches `python -m <dotted.module>` too, but only for modules this repository
+owns, since a `python -m` of a third-party tool is not a gate we can carry
+evidence for. Adding the match immediately produced the block it should have
+produced an hour earlier, and `tests/unit/test_change_record_gate_injections.py`
+is what it then demanded.
+
+That is the third time this session that adding something exposed a hole in the
+machinery meant to catch holes — the ledger's TOML writer in §E22, the coverage
+gate's single-file measurement in §E23, and now the gate census.
+
+### One more dead control, one hook type over
+
+`bootstrap_dev.py` ran `pre-commit install`, which installs only the `pre-commit`
+hook type. The change-record gate runs at `commit-msg`, so a fresh clone would
+have had it as a dead control from the day it shipped — §E20's defect, repeated
+one hook type over. Both types are installed now.
+
+### Measured
+
+    change_records                                42 tests
+    change-record gate injections                 15 tests
+    gate_evidence.py                              25 gates · 25 proven · 0 unproven
+    adr.py --check                                11 records, all well formed
+    docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
+
+Run against real history: the §E23 commit reports `core` (it touches `risk/`) and
+is correctly refused for stating no expected effect; the §18 commit reports `ai`
+and is not.
+
+### What this unblocks
+
+Group 1 §16 (operational correlation — "what deployed just before latency rose"
+is unanswerable without it), §21 (technical-debt forecasting, which needs
+modification frequency per package) and §32 (outcome memory).
+
+**Decision Governance is now complete**: ADRs for human design decisions, the
+ledger for automated operational ones, change records for deployments, and one
+prediction field running through all three.

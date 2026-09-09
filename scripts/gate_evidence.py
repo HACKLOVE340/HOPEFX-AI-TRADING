@@ -81,7 +81,15 @@ REPO: Final = Path(__file__).resolve().parent.parent
 LEDGER: Final = REPO / "docs" / "GATE_EVIDENCE.toml"
 
 #: A hook is ours when its entry runs a script from this repository.
+#: A hook entry that runs code THIS repository owns.
+#:
+#: Two forms, because matching only the first left a hole in the gate that
+#: enforces gates: a hook whose entry is `python -m deployment.change_records`
+#: was invisible to discovery, so it was silently exempt from Rule 1 — the
+#: ledger reported the same count before and after it was added, and `--check`
+#: passed. Every other gate's evidence is only as trustworthy as the census.
 _OURS: Final = re.compile(r"(?:python\s+)?(scripts/[\w/]+\.(?:py|sh))")
+_OURS_MODULE: Final = re.compile(r"python\s+-m\s+([\w]+(?:\.[\w]+)+)")
 
 _HOOK_ID: Final = re.compile(r"^\s*-\s*id:\s*(\S+)\s*$")
 _HOOK_ENTRY: Final = re.compile(r"^\s*entry:\s*(.+?)\s*$")
@@ -139,8 +147,15 @@ def _precommit_gates(repo: Path) -> list[Gate]:
             current = m.group(1)
             continue
         if (m := _HOOK_ENTRY.match(line)) and current:
-            if script := _OURS.search(m.group(1)):
+            entry = m.group(1)
+            if script := _OURS.search(entry):
                 out.append(Gate(current, "precommit_hook", script.group(1)))
+            elif module := _OURS_MODULE.search(entry):
+                dotted = module.group(1)
+                # Only ours: a `python -m` of a third-party tool is not a gate
+                # this repository owns and cannot carry our injection evidence.
+                if (repo / Path(dotted.replace(".", "/") + ".py")).exists():
+                    out.append(Gate(current, "precommit_hook", dotted))
             current = ""
     return out
 

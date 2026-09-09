@@ -53,6 +53,32 @@ class TestItInstallsTheHooks:
         assert boot.install_git_hooks(verbose=False) is True
         assert any("pre-commit" in " ".join(c) and "install" in c for c in calls), calls
 
+    def test_it_installs_the_commit_msg_hook_too(self, monkeypatch) -> None:
+        """`pre-commit install` alone installs only the pre-commit hook type.
+
+        The change-record gate (Group 2 Ch 6) runs at `commit-msg`, because the
+        `Expected-Effect:` trailer it checks does not exist yet at pre-commit
+        time. A bootstrap that installs one hook type ships the other as a dead
+        control on every fresh clone — which is the defect §E20 fixed, repeated
+        one hook type over.
+        """
+        calls: list[list[str]] = []
+
+        def _fake_run(cmd, *args, **kwargs):
+            calls.append(list(cmd))
+
+            class _R:
+                returncode = 0
+                stdout = "installed"
+                stderr = ""
+
+            return _R()
+
+        monkeypatch.setattr(boot.subprocess, "run", _fake_run)
+        boot.install_git_hooks(verbose=False)
+        joined = [" ".join(c) for c in calls]
+        assert any("commit-msg" in c for c in joined), joined
+
     def test_a_missing_pre_commit_does_not_break_bootstrap(self, monkeypatch, caplog) -> None:
         import logging
 

@@ -598,9 +598,22 @@ def install_git_hooks(verbose: bool = True) -> bool:
     because reporting success for work that did not happen is the defect this
     repository has spent the most time removing.
     """
+    # Both hook types. `pre-commit install` alone installs only `pre-commit`,
+    # and the change-record gate (Group 2 Ch 6) runs at `commit-msg` because the
+    # `Expected-Effect:` trailer it reads does not exist yet at pre-commit time.
+    # Installing one type would ship the other as a dead control on every fresh
+    # clone — the defect §E20 fixed, repeated one hook type over.
     try:
         result = subprocess.run(  # nosec B603 B607 — fixed args, no shell
-            ["pre-commit", "install", "--install-hooks"],
+            [
+                "pre-commit",
+                "install",
+                "--install-hooks",
+                "--hook-type",
+                "pre-commit",
+                "--hook-type",
+                "commit-msg",
+            ],
             cwd=str(ROOT),
             capture_output=True,
             text=True,

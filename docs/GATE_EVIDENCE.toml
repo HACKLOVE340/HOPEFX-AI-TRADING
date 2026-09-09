@@ -115,6 +115,13 @@ evidence = "tests/unit/test_adr_gate_injections.py"
 injected = "A one-option record, a missing section, an empty section, a supersede pointing at 0099, a numbering gap, and an unreferenceable filename — each refused, with the clean case asserted first so a gate that refused everything could not pass as one that works. Immutability is injected against a real throwaway git repository rather than a mock: an accepted record is committed, then edited, and the gate notices; a status-only change to `superseded by NNNN` is permitted, because a rule that forbids the correct action is one people route around."
 
 [[gate]]
+id = "change-record"
+kind = "precommit_hook"
+runs = "deployment.change_records"
+evidence = "tests/unit/test_change_record_gate_injections.py"
+injected = "A core-tier change with no Expected-Effect trailer, one with a blank trailer, an unclassified package, a root entry point, and a CI-config change — each refused; and a presentation-only change NOT refused, because a gate that blocks everything is not a working gate. The clean case is asserted first for the same reason. Four near-miss trailer forms are checked against the parser, and three cases run end to end through main() with a staged diff, which is what the commit-msg hook actually invokes. This gate was itself nearly exempt: discovery matched only scripts/*.py entries and this hook runs `python -m`, so the ledger reported the same count before and after it was added."
+
+[[gate]]
 id = "check-secrets"
 kind = "precommit_hook"
 runs = "scripts/check_secrets.sh"

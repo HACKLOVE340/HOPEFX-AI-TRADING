@@ -163,6 +163,16 @@ repos:
         # Coverage gate is slower than other hooks — run last
         stages: [pre-commit]
 
+      - id: change-record
+        name: Change record states its expected effect (Group 2 Ch 6)
+        # commit-msg, not pre-commit: the trailer being checked lives in the
+        # message, which does not exist yet at the pre-commit stage.
+        language: system
+        entry: python -m deployment.change_records --check-message
+        stages: [commit-msg]
+        pass_filenames: true
+        always_run: true
+
       - id: adr-check
         name: Decision records (Group 3 Ch 6)
         # system, not python: it shells out to git to enforce immutability, and

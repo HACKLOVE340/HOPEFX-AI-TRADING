@@ -92,3 +92,31 @@ class TestRegenerationPreservesWhatHumansWrote:
                     assert by_id_after[gate_id].get(field) == row[field], (
                         f"{gate_id}.{field} changed across regeneration"
                     )
+
+
+class TestAGateWrittenAsAModuleIsNotExempt:
+    """Discovery matched `scripts/*.py` and nothing else.
+
+    A hook whose entry is `python -m deployment.change_records` is a gate by
+    every meaning of the word — it runs in `.pre-commit-config.yaml`, it blocks
+    a commit, and Rule 1 says it ships with evidence it can fail. Discovery did
+    not see it, so it was silently exempt: the ledger reported the same count
+    before and after it was added, and `--check` passed.
+
+    A hole in the gate that enforces gates is the worst place for one, because
+    every other gate's evidence is only as trustworthy as the census of gates.
+    """
+
+    def test_the_change_record_hook_is_discovered(self, ge) -> None:
+        ids = {g.id for g in ge.discover_gates(REPO)}
+        assert "change-record" in ids, sorted(ids)
+
+    def test_a_module_entry_records_what_it_runs(self, ge) -> None:
+        gate = next(g for g in ge.discover_gates(REPO) if g.id == "change-record")
+        assert "deployment" in gate.runs and "change_records" in gate.runs
+
+    def test_script_entries_still_resolve(self, ge) -> None:
+        # The existing form must keep working; this widens discovery, it does
+        # not replace it.
+        gate = next(g for g in ge.discover_gates(REPO) if g.id == "adr-check")
+        assert gate.runs.endswith("adr.py")

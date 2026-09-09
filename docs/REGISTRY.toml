@@ -1380,6 +1380,13 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
+path = "docs/decisions/0011-the-risk-tier-is-derived-from-paths-until-the-package-register-exists.md"
+tier = "T3"
+subject = "decision-0011"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/decisions/README.md"
 tier = "T2"
 subject = "decision-records"
