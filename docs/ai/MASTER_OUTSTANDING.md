@@ -93,6 +93,33 @@ auto-rollback on an error-rate breach is a threshold (Group 2); auto-rollback on
 an anomaly score is inference (Group 1). It has not yet met a borderline case.
 Not urgent. Recorded so the first borderline case is decided rather than drifted.
 
+### A5. The frontend colour codemod — do we spend 2–3 sessions to revive three features?
+
+**Not a design question.** The design system is already chosen and correct:
+twelve semantic tokens in `frontend/src/index.css`, a working `ThemeContext`, a
+user-facing light/dark/system control, and `tailwind.config.ts` wired for
+`[data-theme="dark"]`. Nothing needs deciding about *what* the colours should be.
+
+**What needs deciding is whether to pay for the wiring.** 8,021 hardcoded hex
+literals across 202 files (measured — `python scripts/frontend_colour_ratchet.py
+--check`), almost all inside inline `style={{…}}` objects, which cannot
+participate in a cascade. Until they are tokens:
+
+* the light/dark toggle changes nothing on screen — it is a dead control;
+* a white-label tenant's brand colour cannot reach the product it brands;
+* five different greys keep drifting apart as "muted text".
+
+| Option | Cost | What it leaves |
+|---|---|---|
+| **Do the codemod** — map 210 literals onto the 12 tokens, add a `[data-theme="light"]` block | 2–3 sessions, one large mechanical diff across 202 files | Three features alive; a themeable product |
+| **Leave it** | nothing now | Ship with a toggle that does nothing and a white-label feature that cannot brand. Both currently *look* delivered, which is the part that costs later |
+| **Partial** — tokens only in the pages a white-label tenant actually sees | ~1 session | Branding works where it is sold; the toggle stays dead elsewhere |
+
+**Already done and not waiting on this decision:** the ratchet
+(`scripts/frontend_colour_ratchet.py`, in pre-commit, 26th gate in
+`GATE_EVIDENCE.toml`). The number can no longer grow, so the codemod is worth
+doing whenever it is done, and stays done afterwards. Full evidence in §E26.
+
 ---
 
 ## §B — Work, ranked
@@ -110,7 +137,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 25 gates · **25 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 26 gates · **26 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -1986,7 +2013,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      25 gates · 25 proven able to fail · 0 unproven
+    gate_evidence.py      26 gates · 26 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2188,7 +2215,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              25 gates · 25 proven · 0 unproven
+    gate_evidence.py                              26 gates · 26 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -2253,9 +2280,9 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
 ### What the instruments said
 
     backend tests        21,732 pass · 0 fail · 30 skipped
-    frontend tests        2,640 pass · 0 fail  (135 files)
+    frontend tests        2,645 pass · 0 fail  (136 files)
     CI gates                 14 of 14 pass
-    gate evidence            25 gates · 25 proven able to fail · 0 unproven
+    gate evidence            26 gates · 26 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -2324,3 +2351,102 @@ where a session is one complete slice: failing test, implementation, evidence,
 documentation, commit. Phases 3 to 5 touch the trading path and telemetry and
 carry ±50%; the governance phases ±20%. The full breakdown, per phase and per
 item, is in the programme plan.
+
+---
+
+## §E26 — The frontend page audit: three finished features, none of them connected (2026-09-09)
+
+Measured across all 70 page components in `frontend/src/pages`, 87 routes and
+every component, by running counters over the tree rather than reading it.
+
+### What is sound, and should not be touched
+
+87 routes, each wrapped in an `ErrorBoundary`. Four guard tiers compose
+correctly — `AuthGuard` → `SubscriptionGate` (36 routes plan-gated by feature
+key) → `AdminGuard` → `SuperAdminGuard`. 59 sidebar entries, **zero** pointing
+at a route that does not exist. 62 of 70 pages issue real API calls. Settings
+and SuperAdmin are decomposed into 45 focused `*Section` components.
+
+Two of these were reported wrong on the first pass and corrected before
+publication: a regex for `useQuery(` missed `useQuery<Type>({` and claimed 45
+pages fetched nothing, and a route scan reported `/admin` unguarded when
+`adminOnly()` wraps it in `AuthGuard` + `AdminGuard`. Rule 2 applies to audits
+of the UI exactly as it applies to the engine.
+
+### One root cause, three dead features
+
+| Signal | Count |
+|---|---:|
+| Hardcoded hex literals in `frontend/src` | **8,021** (202 files) |
+| …in `pages/` + `components/` alone | 7,340 (210 distinct) |
+| `var(--…)` uses in `pages/` + `components/` | **58** |
+| Inline `style={{…}}` blocks in `pages/` | 4,000 |
+| `className=` in `pages/` | 1,010 |
+| `dark:` variants in `pages/` + `components/` | **1** |
+| `[data-theme="light"]` rules in any stylesheet | **0** |
+
+Inline styles cannot participate in a cascade — they cannot respond to a
+`[data-theme]` attribute, a media query, or a variable they do not name. From
+that one fact:
+
+* **The light/dark toggle is a dead control.** `ThemeContext.tsx` reads
+  `prefers-color-scheme`, persists the choice and stamps `data-theme`;
+  `AppearanceSection.tsx` offers light / dark / system; `tailwind.config.ts`
+  declares `darkMode: ['class', '[data-theme="dark"]']`. Every part is correct.
+  No stylesheet responds. Choosing Light saves a preference and changes nothing.
+* **White-label branding cannot reach the product.** `WhitelabelAdmin.tsx`
+  collects and sends a tenant's `primary_color`; the surface is 8,021 literals.
+* **Five greys are doing "muted text"** — `#64748b` (673), `#94a3b8` (517),
+  `#475569` (412) and more, the Tailwind slate ramp transcribed by hand.
+
+**Closed this session:** `scripts/frontend_colour_ratchet.py` +
+`docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
+`GATE_EVIDENCE.toml` (26 gates, 26 proven). The count may now only fall. The
+codemod that would actually revive the three features is **owner's call** — see
+§A.
+
+### Pages that cannot report their own failure
+
+* **59 of 62 data-wired pages carry no staleness signal.**
+  `hooks/useDataFreshness.ts` was built for audit F1-01 and adopted by exactly
+  the three pages that audit named: Watchlist, RiskCalculator, TradeJournal.
+  This is the same shape as the Sortino defect closed the same day — a correct
+  fix connected only where the defect was found.
+* **43 genuinely silent `catch` blocks across 22 pages.** (A first count of 90
+  across 32 was wrong: the detector did not recognise `setAddressError` and
+  `setErr` as surfacing.) Worst: `CryptoCheckout.tsx` payment-status poll —
+  **closed this session**, it now degrades visibly after three consecutive
+  failures while continuing to poll. That makes four pages of sixty-two.
+* **Nine wired pages have no error path**; three have no loading affordance.
+  Including `AutoHealDashboard` — a page about the platform noticing its own
+  faults, which does not notice its own.
+
+### Accessibility
+
+138 `aria-*` and 51 `role=` across 392 buttons; **43 of 70 pages carry
+neither**. Only seven real toggles exist in the whole page tree — most of what
+reads as a switch is a styled button, so a screen reader gets no on/off state.
+`prefers-reduced-motion` is respected in 10 places and focus styling appears
+224 times; both should be kept.
+
+### Remaining, in order
+
+| # | Move | Buys | Size |
+|---|---|---|---|
+| 1 | Map the 210 hex values onto the 12 tokens; add a `[data-theme="light"]` block | Light mode works; white-label reaches the product; pages stop drifting. One change, three features revived. **Owner's call — see §A.** | 2–3 sessions |
+| 2 | Spread `useDataFreshness` to the other 58 pages | No page claims data is live while its loads fail | 2 sessions |
+| 3 | Error and loading states for the nine and the three | Start with `AutoHealDashboard` | 1 session |
+| 4 | Real `role="switch"` toggles, then ARIA on the 43 bare pages | Perceivable state for keyboard and screen-reader users | 1–2 sessions |
+
+### The rule this audit produces
+
+Every finding here is one defect wearing different clothes: something built
+correctly and then not connected to the surface it was built for. The theme
+system. The white-label colour. `useDataFreshness`, at three sites of
+sixty-two. The Sortino fix, at two call sites of eight.
+
+**A fix is not finished until you have counted the other places with the same
+shape.** That is one grep, and it would have caught every item above at the
+time it was introduced rather than today.
+
+Report: https://claude.ai/code/artifact/dffb0262-46cc-48bb-acf8-e9ce45077d9d

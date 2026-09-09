@@ -263,6 +263,22 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # The frontend's twelve semantic tokens are declared and almost unused:
+      # 8,021 hardcoded colour literals across frontend/src against 58 uses of
+      # var(--...). That is why the light/dark toggle changes nothing (no
+      # [data-theme="light"] rule exists anywhere) and why a white-label
+      # tenant's brand colour cannot reach the product. Replacing them is a
+      # codemod and the owner's call; keeping the number from growing is not.
+      # Reads the whole tree, not the staged subset: the "delete the line once
+      # a file reaches zero" rule cannot be evaluated from a partial view.
+      - id: frontend-colour-ratchet
+        name: Frontend colour literals may only decrease
+        language: system
+        entry: python scripts/frontend_colour_ratchet.py --check
+        files: '^(frontend/src/.*\.(tsx?|jsx?|css)$|docs/FRONTEND_COLOUR_DEBT\.json$|scripts/frontend_colour_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
 # pytest belongs in the CI test job, not in pre-commit hooks.
 # Running the full test suite on every commit is too slow and fails in
 # environments where test dependencies are not installed.

@@ -32,6 +32,7 @@ is always today's. Everything below is the shape; that command is the state.
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
 | Which spec capabilities are live, staged or planned? | `python scripts/backlog_report.py` · `ai/hub/capabilities.py` |
 | Which safety gates have been proven able to fail? | `python scripts/gate_evidence.py` · `docs/GATE_EVIDENCE.toml` |
+| Why does the light/dark toggle change nothing? | `python scripts/frontend_colour_ratchet.py --check` · `docs/FRONTEND_COLOUR_DEBT.json` |
 | How are the four specification groups organised? | `docs/ai/BACKLOG_GROUPS.md` |
 | What binds every group? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — T0, twelve Articles, INV-01…21 |
 | How do I recover the database? | `docs/runbooks/database-restore.md` |
@@ -48,8 +49,8 @@ is current.** Where they disagree, the script is right and the document is stale
 
 The ratcheted checks below run in `pre-commit`, so a regression blocks rather
 than accumulating: document registry, documentation freshness, Group 4 source
-preservation, volume-index drift, gate injection evidence, and stated-figure
-drift.
+preservation, volume-index drift, gate injection evidence, stated-figure drift,
+per-module coverage, and frontend colour literals.
 
 **They only block once the hook is installed.** Until 2026-09-09 nothing
 installed it, so on a fresh clone that sentence described something that was not

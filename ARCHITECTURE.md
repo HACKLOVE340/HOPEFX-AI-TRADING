@@ -172,6 +172,7 @@ this file. Each is a **command**, so its answer is current rather than a snapsho
 |---|---|
 | `python scripts/backlog_report.py` | What is left to build or fix, measured from the code |
 | `python scripts/gate_evidence.py` | Which safety gates have been proven able to fail |
+| `python scripts/frontend_colour_ratchet.py --check` | Hardcoded colour literals in `frontend/src`; the count may only fall |
 | `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
 | `python scripts/docs_registry.py --check` | Document tiers, owners and contested subjects |
 | `python scripts/docs_freshness.py` | Stale references and false claims in living documents |

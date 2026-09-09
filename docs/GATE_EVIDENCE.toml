@@ -187,3 +187,10 @@ injected = "A real hardcoded placeholder is still blocked, while exempt docstrin
 [baseline]
 # Gates with no injection evidence, as at adoption. May only fall.
 unproven_count = 0
+
+[[gate]]
+id = "frontend-colour-ratchet"
+kind = "pre_commit"
+runs = "scripts/frontend_colour_ratchet.py --check"
+evidence = "tests/unit/test_frontend_colour_ratchet.py"
+injected = "Three distinct regressions, each refused: an extra hex literal in a baselined file (20 -> 21 blocks with both counts named), a brand-new file carrying one literal (no baseline entry blocks), and a file driven to zero while its baseline line remains (blocks with 'delete the line'). Also proven against the real tree rather than only a fixture: appending '#abcdef' to frontend/src/pages/NotFound.tsx took the total 8021 -> 8022 and the gate blocked naming that file; restoring it returned the gate to green. A sanity floor test asserts the recorded total exceeds 5000, so a glob or regex that stops matching reads as a broken counter rather than as 8021 clean files"
