@@ -4517,8 +4517,24 @@ async def init_decision_engine(s: Any) -> Any:
             try:
                 from risk.gatekeeper import Gatekeeper
 
+                # `data_orchestrator` is assigned nowhere in this codebase.
+                # core/startup_helpers.py stores the live one as
+                # `data_layer_orchestrator`, one word away, so this read always
+                # produced None and the Gatekeeper ran unwired — and because a
+                # missing orchestrator used to score a perfect 1.0 rather than
+                # raising, nothing ever surfaced it.
+                _gk_orch = (
+                    getattr(s, "data_layer_orchestrator", None)
+                    or getattr(s, "data_orchestrator", None)
+                    or getattr(s, "orchestrator", None)
+                )
+                if _gk_orch is None:
+                    logger.warning(
+                        "init_decision_engine: no data-layer orchestrator on app_state — the "
+                        "Gatekeeper's data-quality gate will block every signal until one is wired"
+                    )
                 gatekeeper = Gatekeeper(
-                    orchestrator=getattr(s, "data_orchestrator", None),
+                    orchestrator=_gk_orch,
                     risk_manager=getattr(s, "risk_manager", None),
                 )
                 logger.info("init_decision_engine: built Gatekeeper inline")

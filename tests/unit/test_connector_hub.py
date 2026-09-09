@@ -23,6 +23,7 @@ Covered modules
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
@@ -309,6 +310,27 @@ class TestGatekeeperChecks:
         gk._running = True
         gk._pass_count = 0
         gk._block_count = 0
+
+        # A hand-built Gatekeeper has no _orch, and a missing orchestrator now
+        # fails the data-quality check closed instead of scoring a perfect 1.0.
+        # These tests are about the kill switch, drawdown and confidence gates,
+        # so give them a feed that reports healthy rather than letting them ride
+        # on the fail-open that used to make "no data source" mean "perfect".
+        class _OkOrch:
+            def get_latest_tick(self, symbol: str = "XAU_USD"):
+                tick = SimpleNamespace(confidence=0.95)
+                return tick
+
+            def is_blackout_window(self) -> bool:
+                return False
+
+            def get_macro_impact_score(self) -> float:
+                return 0.0
+
+            def get_ml_features(self) -> dict:
+                return {"news_sentiment_score": 0.0, "macro_impact_score": 0.0}
+
+        gk._orch = _OkOrch()
         return gk
 
     def _signal(self, confidence=0.65, direction="BUY"):
@@ -357,6 +379,11 @@ class TestGatekeeperChecks:
 
     def test_news_blackout_blocks(self):
         gk = self._make_gk()
+        # _get_blackout() treats the orchestrator as authoritative and only
+        # falls back to the local calendar when none is wired. The stub added
+        # for the data-quality gate reports "no blackout", so this test — which
+        # drives the calendar — has to route through the same authority.
+        gk._orch.is_blackout_window = lambda: True
         # Inject a news event happening right now
         gk._calendar._events = [datetime.now(UTC)]
         failures = gk._run_checks(self._signal())

@@ -27,6 +27,30 @@ UTC = timezone.utc
 # ---------------------------------------------------------------------------
 
 
+class _OkOrch:
+    """An orchestrator reporting a healthy tick.
+
+    Tests that mean "the feed is fine" now have to say so. A bare Gatekeeper
+    used to score data quality 1.0, so "no data source at all" read as "perfect
+    data" and every check below it passed; `_get_data_quality_from_orch()` now
+    fails closed on a missing orchestrator.
+    """
+
+    def get_latest_tick(self, symbol: str = "XAU_USD"):
+        tick = MagicMock()
+        tick.confidence = 0.95
+        return tick
+
+    def is_blackout_window(self) -> bool:
+        return False
+
+    def get_macro_impact_score(self) -> float:
+        return 0.0
+
+    def get_ml_features(self) -> dict:
+        return {"news_sentiment_score": 0.0, "macro_impact_score": 0.0}
+
+
 def _make_gk(**kwargs):
     from risk.gatekeeper import Gatekeeper
 
@@ -552,9 +576,17 @@ class TestGatekeeperOrchestratorWiring:
         gk = _make_gk(orchestrator=orch)
         assert gk._get_data_quality_from_orch() == pytest.approx(0.95)
 
-    def test_data_quality_fallback_when_no_orch(self):
-        gk = _make_gk()
-        assert gk._get_data_quality_from_orch() == pytest.approx(1.0)
+    def test_no_orchestrator_fails_closed_like_every_other_unmeasured_state(self):
+        """This asserted 1.0 — three lines above a test commented "Fail-closed".
+
+        The file pinned fail-closed for an exception and fail-open for a
+        missing orchestrator, in adjacent tests, and the contradiction went
+        unnoticed because a perfect score raises nothing. An absent
+        orchestrator is the least measured state there is.
+        """
+        from risk.gatekeeper import _MIN_DATA_QUALITY
+
+        assert _make_gk()._get_data_quality_from_orch() < _MIN_DATA_QUALITY
 
     def test_data_quality_fallback_on_exception(self):
         # Fail-closed: exception from orchestrator returns 0.0 to block the trade.
@@ -698,7 +730,7 @@ class TestRunChecksUnified:
     def test_dict_signal_passes(self):
         from risk.gatekeeper import Gatekeeper
 
-        gk = Gatekeeper()
+        gk = Gatekeeper(orchestrator=_OkOrch())
         result = gk._run_checks({"confidence": 0.80, "spread": 0.50})
         assert result == []
 
@@ -733,7 +765,7 @@ class TestRunChecksUnified:
 class TestOnBusSignal:
     @pytest.mark.asyncio
     async def test_on_bus_signal_pass_publishes_order(self):
-        gk = _make_gk()
+        gk = _make_gk(orchestrator=_OkOrch())
         sig = {
             "confidence": 0.80,
             "spread": 0.50,
@@ -789,7 +821,7 @@ class TestOnBusSignal:
 class TestSignalConsumer:
     @pytest.mark.asyncio
     async def test_signal_consumer_processes_signal(self):
-        gk = _make_gk()
+        gk = _make_gk(orchestrator=_OkOrch())
         gk._running = True
         sig = {"confidence": 0.80, "spread": 0.50, "symbol": "XAU_USD", "direction": "long", "mid": 1950.0}
 

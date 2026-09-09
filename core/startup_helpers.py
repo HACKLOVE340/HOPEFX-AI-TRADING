@@ -124,6 +124,25 @@ async def start_data_layer_orchestrator(state) -> None:
 
             await asyncio.wait_for(orchestrator.start(), timeout=orch_timeout)
             state.data_layer_orchestrator = orchestrator
+
+            # Back-fill consumers built before this point.
+            #
+            # The component registry runs init_decision_engine — which builds
+            # the Gatekeeper — before startup_event reaches this helper, so the
+            # Gatekeeper is constructed while no orchestrator exists yet. It
+            # then had no data source for the life of the process, and because
+            # a missing orchestrator used to score data quality a perfect 1.0
+            # rather than raising, nothing ever surfaced it. The reader now
+            # fails closed, which turns the silent hole into a blocked signal —
+            # correct, but still not a working gate. This connects it.
+            for _holder in (state, getattr(state, "decision_engine", None)):
+                _gk = getattr(_holder, "gatekeeper", None) or getattr(_holder, "_gate", None)
+                if _gk is not None and getattr(_gk, "_orch", None) is None:
+                    _gk._orch = orchestrator
+                    logger.info(
+                        "Data layer: attached orchestrator to %s built before it existed",
+                        type(_gk).__name__,
+                    )
             logger.info("Data layer orchestrator started (attempt %d/%d)", attempt, attempts)
             return
         except TimeoutError:

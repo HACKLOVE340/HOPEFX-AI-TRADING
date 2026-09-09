@@ -1252,6 +1252,93 @@ fail against the pre-fix tree, including one asserting the gate does not raise
 on `None`. 2300 pass across the risk/gatekeeper/sizing/invariant slice.
 
 
+## §E17 — The Gatekeeper had no data source, and scored that perfect (2026-09-09)
+
+§E16 ended on "grep the expression, not the symptom". Doing that found
+`getattr(signal, "data_quality", 1.0)` a third time, in `risk/gatekeeper.py` —
+and pulling the thread found three defects stacked, each hiding the next.
+
+### 1. The fail-closed reader had a fail-open branch
+
+`_get_data_quality_from_orch()` exists to be fail-closed and says so in its own
+comment. It returns `0.0` when the tick read raises, and `0.0` when there is no
+tick. Then:
+
+```python
+if getattr(self, "_orch", None) is None:
+    return 1.0          # the one unmeasured state that does not block
+```
+
+An absent orchestrator is the *least* measured state there is, and it was the
+only one scored perfect.
+
+### 2. Nothing assigned the attribute the factory read
+
+Measured on a booted instance:
+
+```
+gatekeeper = Gatekeeper
+  gk._orch = None
+  gk._get_data_quality_from_orch() -> 1.0
+```
+
+`core/startup_factories.py` built it with
+`orchestrator=getattr(s, "data_orchestrator", None)`. **`data_orchestrator` is
+assigned nowhere in the codebase** — the live orchestrator is stored by
+`core/startup_helpers.py` as `data_layer_orchestrator`. One word apart, and
+invisible because a missing orchestrator produced a perfect score rather than
+an error.
+
+`_run_checks_on_dict` — the event-bus path (`bus.subscribe(CH_SIGNAL)`) — calls
+that reader directly, so gate step 5 compared `1.0 < 0.40` forever. Driven in a
+test, the gate returned `set()`: no failures for a signal with no measurable
+data quality.
+
+### 3. Fixing the name was not enough — the orchestrator did not exist yet
+
+With the name corrected, `gk._orch` was *still* None. The component registry
+runs `init_decision_engine`, which builds the Gatekeeper, before
+`startup_event` reaches `start_data_layer_orchestrator`. The Gatekeeper is
+constructed while no orchestrator exists.
+
+At that point the gate was fail-closed with nothing to measure — correct, and
+still not a working gate, because it would block every signal.
+`start_data_layer_orchestrator` now back-fills consumers built before it.
+
+Measured after all three fixes:
+
+```
+app_state.data_layer_orchestrator = MarketDataOrchestrator
+gatekeeper = Gatekeeper
+  gk._orch = MarketDataOrchestrator      ← wired
+  gk._get_data_quality_from_orch() -> 0.0 ← no gold feed in the sandbox: blocks
+```
+
+### A fourth test asserting the defect
+
+```python
+def test_data_quality_fallback_when_no_orch(self):
+    gk = _make_gk()
+    assert gk._get_data_quality_from_orch() == pytest.approx(1.0)
+```
+
+Three lines above `test_data_quality_fallback_on_exception`, commented
+*"Fail-closed: exception from orchestrator returns 0.0 to block the trade"*.
+The same file pinned fail-closed for an exception and fail-open for a missing
+orchestrator, in adjacent tests, and the contradiction went unnoticed — because
+a perfect score raises nothing. Four other tests built bare Gatekeepers and
+expected a clean pass; they now supply a feed that reports healthy, so they test
+the confidence and spread gates they claim to rather than riding on the
+fail-open.
+
+### Evidence
+
+`tests/unit/test_gatekeeper_data_quality_fail_closed.py` — 9 tests, 3 failing
+against the pre-fix tree, plus one `slow` test proving the late-bind (it fails
+when the back-fill is reverted). 4272 pass across the
+gatekeeper/risk/startup/decision/execution/connector/data-layer slice.
+
+
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
 The owner supplied the full Volumes I–XX document. The earlier source was a table
