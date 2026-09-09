@@ -42,6 +42,7 @@ Usage (called by pre-commit framework)
 from __future__ import annotations
 
 import os
+import re
 import subprocess  # nosec B404 — pytest subprocess, fixed args
 import sys
 from dataclasses import dataclass
@@ -119,14 +120,18 @@ def _is_excluded(path: Path) -> bool:
 
 
 def _find_test_file(module_path: Path) -> Path | None:
-    """
-    Find the corresponding test file for a module.
+    """The name-matched test file, or None. Kept because `--adopt` reads it.
 
     Search order:
     1. tests/unit/test_{module_name}.py
     2. tests/test_{module_name}.py
     3. tests/unit/test_{parent}_{module_name}.py
     """
+    files = _name_matched(module_path)
+    return files[0] if files else None
+
+
+def _name_matched(module_path: Path) -> list[Path]:
     name = module_path.stem
     parent = module_path.parent.name
 
@@ -137,10 +142,71 @@ def _find_test_file(module_path: Path) -> Path | None:
         Path("tests") / f"test_{parent}_{name}.py",
         Path("tests") / "unit" / f"test_{parent}.py",
     ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
+    return [c for c in candidates if c.exists()]
+
+
+#: Cheap substrings that mean "this file might import that module".
+#:
+#: A full AST parse of every test file per module would be correct and slow; the
+#: import forms below are the ones this repository actually writes, and the cost
+#: of a false positive is one extra test file in the run.
+def _imports_module(text: str, module_path: Path) -> bool:
+    """Does this test file import that module?
+
+    Three forms, and the third is the one the first version missed.
+
+    ``from ai.ledger import decisions`` is how modules in a package are
+    ordinarily imported, and matching only the dotted-module forms meant such a
+    module found NO test files and was skipped silently as "new, not yet
+    tested" — while carrying 44 tests. That is the quietest way a coverage gate
+    can fail, so it is worth the extra check.
+
+    The package form is matched per line with the stem as a whole word, not as a
+    blunt substring: ``from ai.ledger import`` on its own would pull every test
+    touching any module in the package into every other module's run.
+    """
+    posix = str(module_path).replace("\\", "/").removesuffix(".py")
+    dotted = posix.replace("/", ".")
+    if f"from {dotted} import" in text or f"import {dotted}" in text or f"{dotted}." in text:
+        return True
+
+    package, _, stem = posix.rpartition("/")
+    if not package:
+        return False
+    prefix = f"from {package.replace('/', '.')} import "
+    pattern = re.compile(rf"\b{re.escape(stem)}\b")
+    return any(prefix in line and pattern.search(line.split(prefix, 1)[1]) for line in text.splitlines())
+
+
+def _find_test_files(module_path: Path) -> list[Path]:
+    """Every test file that exercises this module, not just the name match.
+
+    `_find_test_file` resolved `risk/manager.py` to `tests/unit/test_risk_manager.py`
+    and stopped there. That one file covers 52% of it; the whole suite covers
+    89.65%, the figure `.coveragerc` records. So the gate was blocking the
+    repository's most heavily tested money module for being under-tested — and a
+    gate that refuses correct code is one people bypass, which ends with
+    `SKIP_COVERAGE_GATE=1` and the whole thing switched off again.
+
+    Found by reading imports rather than guessing from a filename: a naming
+    convention describes what somebody remembered to call a file, and an import
+    describes what the test actually loads.
+    """
+    tests = Path("tests")
+    if not tests.exists():
+        return []
+
+    found = list(_name_matched(module_path))
+    for candidate in sorted(tests.rglob("test_*.py")):
+        if candidate in found:
+            continue
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if _imports_module(text, module_path):
+            found.append(candidate)
+    return found
 
 
 def _coverage_target(module_path: Path) -> str:
@@ -171,13 +237,13 @@ def _coverage_target(module_path: Path) -> str:
     return "."
 
 
-def _coverage_command(module_path: Path, test_path: Path) -> list[str]:
+def _coverage_command(module_path: Path, test_paths: list[Path]) -> list[str]:
     """The pytest invocation the gate runs. Extracted so it can be asserted."""
     return [
         sys.executable,
         "-m",
         "pytest",
-        str(test_path),
+        *(str(p) for p in test_paths),
         f"--cov={_coverage_target(module_path)}",
         # NOT `:skip-covered` — a module at 100% would be omitted from the
         # report, and an absent row is indistinguishable from unmeasured, so
@@ -220,14 +286,14 @@ def _parse_module_coverage(output: str, module_path: Path) -> float | None:
     return None
 
 
-def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str]:
+def _run_coverage(module_path: Path, test_paths: list[Path]) -> tuple[float | None, str]:
     """
     Run pytest with coverage for a single module/test pair.
 
     Returns (coverage_pct, output_text); coverage_pct is None when the module's
     own row is absent from the report.
     """
-    cmd = _coverage_command(module_path, test_path)
+    cmd = _coverage_command(module_path, test_paths)
 
     try:
         result = subprocess.run(  # nosec B603 — fixed args, no shell
@@ -235,7 +301,7 @@ def _run_coverage(module_path: Path, test_path: Path) -> tuple[float | None, str
             check=False,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=600,
             env={**os.environ, "CI_FAST": "1"},
         )
         output = result.stdout + result.stderr
@@ -331,13 +397,14 @@ def main(argv: list[str]) -> int:
         if path.name.startswith("test_") or "tests/" in str(path):
             continue
 
-        test_file = _find_test_file(path)
-        if test_file is None:
+        test_files = _find_test_files(path)
+        if not test_files:
             # No test file found — skip silently (new module, not yet tested)
             continue
+        test_file = test_files[0]
 
         checked += 1
-        coverage_pct, output = _run_coverage(path, test_file)
+        coverage_pct, output = _run_coverage(path, test_files)
         verdict = _judge(path, test_file, coverage_pct, recorded=str(path).replace("\\", "/") in _load_baseline())
 
         if verdict.ok:
@@ -387,14 +454,14 @@ def adopt() -> int:
         for f in listed
         if not _is_excluded(Path(f)) and not Path(f).name.startswith("test_") and "tests/" not in f
     ]
-    candidates = [p for p in candidates if _find_test_file(p) is not None]
+    candidates = [p for p in candidates if _find_test_files(p)]
 
     print(f"measuring {len(candidates)} modules — this takes a while", flush=True)
     unmeasurable: list[str] = []
     for i, module in enumerate(candidates, 1):
-        test_file = _find_test_file(module)
-        assert test_file is not None  # nosec B101 — filtered above
-        pct, _ = _run_coverage(module, test_file)
+        test_files = _find_test_files(module)
+        assert test_files  # nosec B101 — filtered above
+        pct, _ = _run_coverage(module, test_files)
         if pct is None:
             unmeasurable.append(str(module).replace("\\", "/"))
         if i % 50 == 0:

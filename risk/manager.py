@@ -766,6 +766,7 @@ class RiskManager:
         """
         if reason:
             logger.warning("RiskManager: zero-size — %s", reason)
+            self._record_refusal(symbol, direction, lineage_id, reason)
         result = PositionSizingResult(
             symbol=symbol,
             direction=direction,
@@ -779,6 +780,42 @@ class RiskManager:
         if reason:
             result._halt_reason_override = reason
         return result
+
+    def _record_refusal(self, symbol: str, direction: str, lineage_id: str, reason: str) -> None:
+        """Put this refusal in the decision ledger (Group 3 Ch 7).
+
+        Refusals are first-class entries there, not absences: a ledger of
+        actions taken cannot tell a system that was never asked from one that
+        refused, and on this platform the refusals ARE the evidence that
+        governance worked. Until now the only record of one was a WARNING line.
+
+        **Recording must never change what this path decides.** A ledger write
+        that raised would turn a refusal into a crash — strictly worse than the
+        defect it documents — so it is wrapped. Wrapped LOUDLY: `except
+        Exception: pass` on a governance path is how F248's alert failures went
+        unnoticed for as long as they did. The ledger is a record, not a
+        control; losing an entry must not stop the refusal, and must not be
+        silent either.
+        """
+        try:
+            from ai.ledger import decisions
+
+            decisions.refuse(
+                actor="risk.manager",
+                actor_kind="system",
+                authority_tier="execute",
+                context=f"size a {direction} position in {symbol}",
+                options=("size the position", "refuse"),
+                by=reason,
+                evidence={"symbol": symbol, "direction": direction, "lineage_id": lineage_id},
+            )
+        except Exception as exc:  # pragma: no cover - exercised by an injected failure
+            logger.error(
+                "RiskManager: the refusal %r was NOT recorded in the decision ledger: %s. "
+                "The trade is still refused; the governance record is missing.",
+                reason,
+                exc,
+            )
 
     def _compute_stop_take(
         self,

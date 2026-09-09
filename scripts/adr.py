@@ -321,28 +321,41 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Architecture Decision Records — Group 3 Chapter 6.")
     parser.add_argument("--check", action="store_true", help="validate every record; non-zero exit on a problem")
     parser.add_argument("--list", action="store_true", help="what has been decided")
-    parser.add_argument("new", nargs="?", help="start the next record with this title")
+    # `new` and its title are two positionals, not one. The first version took
+    # a single `new` positional, so the documented `adr.py new "Title"` failed
+    # with "unrecognized arguments" — and a tool whose documented invocation does
+    # not work teaches people it is broken, which sends them back to recording
+    # decisions in commit messages.
+    parser.add_argument("command", nargs="?", choices=["new"], help="start the next record")
+    parser.add_argument("title", nargs="*", help="the decision's title")
     args = parser.parse_args(argv)
 
-    if args.new:
-        path = create(args.new)
-        print(f"wrote {path.relative_to(ROOT)}")
+    if args.command == "new":
+        title = " ".join(args.title).strip()
+        if not title:
+            parser.error('a title is required: adr.py new "Pin the interpreter"')
+        path = create(title, DECISIONS)
+        try:
+            shown = path.relative_to(ROOT)
+        except ValueError:
+            shown = path
+        print(f"wrote {shown}")
         print("Fill in every section. Two options minimum, or it is not a decision.")
         return 0
 
     if args.list:
-        for record in records():
+        for record in records(DECISIONS):
             print(f"  {record.number:04d}  {record.status:<22}  {record.title}")
         return 0
 
-    problems = validate_directory() + immutability_problems()
+    problems = validate_directory(DECISIONS) + immutability_problems(DECISIONS)
     for problem in problems:
         try:
             name = problem.path.relative_to(ROOT)
         except ValueError:
             name = problem.path
         print(f"FAIL  {name}: {problem.message}", file=sys.stderr)
-    total = len(records())
+    total = len(records(DECISIONS))
     if problems:
         print(f"\nadr: {len(problems)} problem(s) across {total} record(s)", file=sys.stderr)
         return 1

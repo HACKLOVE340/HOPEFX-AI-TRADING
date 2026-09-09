@@ -69,7 +69,7 @@ def hook():
 
 class TestItAsksCoverageForSomethingItCanResolve:
     def test_the_command_targets_a_package_not_a_dotted_module(self, hook) -> None:
-        cmd = hook._coverage_command(pathlib.Path("risk/manager.py"), pathlib.Path("tests/unit/test_risk_manager.py"))
+        cmd = hook._coverage_command(pathlib.Path("risk/manager.py"), [pathlib.Path("tests/unit/test_risk_manager.py")])
         cov_args = [a for a in cmd if a.startswith("--cov=")]
         assert cov_args == ["--cov=risk"], (
             f"--cov must name the package; a dotted module makes coverage double-load numpy. Got {cov_args}"
@@ -77,7 +77,7 @@ class TestItAsksCoverageForSomethingItCanResolve:
 
     def test_a_nested_module_still_targets_its_top_level_package(self, hook) -> None:
         cmd = hook._coverage_command(
-            pathlib.Path("api/superadmin/ml_ai.py"), pathlib.Path("tests/unit/test_superadmin.py")
+            pathlib.Path("api/superadmin/ml_ai.py"), [pathlib.Path("tests/unit/test_superadmin.py")]
         )
         assert "--cov=api" in cmd
 
@@ -85,7 +85,7 @@ class TestItAsksCoverageForSomethingItCanResolve:
         # .coveragerc sets fail_under=70 for the whole project. The hook judges a
         # single module against its own floor, so the global one must not turn a
         # successful measurement into a non-zero exit the parser reads as failure.
-        cmd = hook._coverage_command(pathlib.Path("risk/manager.py"), pathlib.Path("tests/unit/test_risk_manager.py"))
+        cmd = hook._coverage_command(pathlib.Path("risk/manager.py"), [pathlib.Path("tests/unit/test_risk_manager.py")])
         assert "--cov-fail-under=0" in cmd
 
 
@@ -112,13 +112,67 @@ class TestItReadsTheModulesOwnNumber:
         assert hook._parse_module_coverage(report, pathlib.Path("risk/stress_test.py")) == 0.0
 
 
+class TestItMeasuresEveryTestThatExercisesTheModule:
+    """One name-matched test file is not the module's test suite.
+
+    `_find_test_file` resolved `risk/manager.py` to `tests/unit/test_risk_manager.py`
+    and stopped. That file covers 52% of it; the whole suite covers 89.65%, which
+    is the figure `.coveragerc` records. The gate was therefore blocking the
+    repository's most heavily tested money module for being under-tested.
+
+    That is worse than a false positive. A gate that refuses correct code is one
+    people bypass, and `SKIP_COVERAGE_GATE=1` is documented — so this defect ends
+    with the gate switched off, which is exactly what §E20 repaired it from.
+
+    The fix is to measure what actually exercises the module: every test file
+    that imports it, found by reading the imports rather than by guessing from a
+    filename.
+    """
+
+    def test_it_finds_more_than_the_name_match(self, hook) -> None:
+        found = hook._find_test_files(pathlib.Path("risk/manager.py"))
+        names = {p.name for p in found}
+        assert "test_risk_manager.py" in names, "the name match must still be included"
+        assert len(found) > 1, f"only found {names}; risk/manager.py is imported by many test files"
+
+    def test_every_file_it_returns_exists(self, hook) -> None:
+        for path in hook._find_test_files(pathlib.Path("risk/manager.py")):
+            assert (REPO / path).exists(), path
+
+    def test_it_finds_the_tests_that_import_the_module(self, hook) -> None:
+        names = {p.name for p in hook._find_test_files(pathlib.Path("risk/manager.py"))}
+        # Written this session, and each imports risk.manager directly.
+        assert "test_risk_refusals_reach_the_ledger.py" in names
+
+    def test_it_finds_a_from_package_import_module(self, hook) -> None:
+        """`from ai.ledger import decisions` is the common form and was missed.
+
+        The first matcher only looked for `from ai.ledger.decisions import`,
+        `import ai.ledger.decisions` and `ai.ledger.decisions.` — so a module
+        imported the ordinary way found no tests at all and was SKIPPED
+        SILENTLY, which is the quietest possible failure for a coverage gate:
+        the module reads as "new, not yet tested" while carrying 44 tests.
+        """
+        names = {p.name for p in hook._find_test_files(pathlib.Path("ai/ledger/decisions.py"))}
+        assert "test_decision_ledger.py" in names, names
+
+    def test_a_module_nothing_imports_returns_nothing(self, hook) -> None:
+        assert hook._find_test_files(pathlib.Path("no/such/module.py")) == []
+
+    def test_the_command_covers_every_file_found(self, hook) -> None:
+        files = hook._find_test_files(pathlib.Path("risk/manager.py"))
+        cmd = hook._coverage_command(pathlib.Path("risk/manager.py"), files)
+        for path in files:
+            assert str(path) in cmd
+
+
 class TestItActuallyRuns:
     """The point of the exercise — end to end, against the real tree."""
 
     @pytest.mark.slow
     def test_it_measures_risk_manager_without_an_import_error(self, hook) -> None:
         pct, output = hook._run_coverage(
-            pathlib.Path("risk/manager.py"), pathlib.Path("tests/unit/test_risk_manager.py")
+            pathlib.Path("risk/manager.py"), [pathlib.Path("tests/unit/test_risk_manager.py")]
         )
         assert "cannot load module more than once" not in output, "the numpy double-load is back:\n" + output[-2000:]
         assert pct is not None, "coverage still could not be measured:\n" + output[-2000:]

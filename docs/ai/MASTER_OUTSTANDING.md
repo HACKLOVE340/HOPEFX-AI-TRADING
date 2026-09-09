@@ -127,7 +127,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | 10 | Injection evidence as a traceability link | Group 3 Ch 13 |
 | ~~11~~ | ~~ADR system, back-filling the eight known decisions~~ | **DONE 2026-09-09 — see §E22.** `docs/decisions/`, nine records, gated in pre-commit |
 | 12 | Failure memory with the five questions | Group 3 Ch 8 — seven lessons currently live only in a transcript |
-| 13 | **Decision Governance** — the *Registry* half is done (§E22); the **Decision Ledger** carrying expected outcome, actual outcome and lessons remains | Group 4 Ch 9 · Group 3 Ch 7-8 · Group 2 Ch 6 |
+| ~~13~~ | ~~**Decision Governance** — Architecture Decision Registry and Decision Ledger carrying *expected outcome, actual outcome, lessons*~~ | **DONE 2026-09-09 — §E22 (registry) and §E23 (ledger).** `ai/ledger/`, wired to the money path's refusals. Group 2 Ch 6's change records remain separate and open |
 | ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
 | ~~15~~ | ~~**`risk/manager.py`'s 1.0 default for unmeasured data quality**~~ | Group 2 Ch 34 · INV-14 — **DONE 2026-09-09, see §E12** |
 | ~~16~~ | ~~`trader_full.py` builds a RiskManager with no orchestrator, so it now refuses every size~~ **DONE 2026-09-09.** Wired in `RiskManager.setup()` — the real construction site, not the line §E12 named |
@@ -1994,3 +1994,103 @@ The **Registry** half is done. The **Decision Ledger** (Group 3 Ch 7) and
 prediction so an observed outcome has something to be compared against.
 That is the half that makes the platform experienced rather than merely
 knowledgeable, and it is still open.
+
+## §E23 — The ledger, and the caller that keeps it from being scenery (2026-09-09)
+
+§E22 built the Architecture Decision *Registry* — design decisions by humans.
+This is the other half of ranked item 13: Group 3 Chapter 7's ledger of
+*operational* decisions by the system, and Chapter 8's outcome linkage.
+
+### Why a fourth recorder, when three already exist
+
+`ai/gateway/audit.py` records model calls, `ai/improve/proposal.py` records
+AI-proposed changes, pull requests record approvals — and the spec's diagnosis
+is that this is precisely why nobody can answer "what did the platform decide
+today?". The risk of getting it wrong was making that four unanswerable
+questions instead of three, so `ai/ledger/` **consumes** rather than restates:
+authority tiers imported from `ai/policy/roles.py`, calibration delegated to
+`ai/core/calibration.py`, credential screening from `ai/guardrails/output.py`.
+Recorded as ADR 0010, including the failure mode — if a later change has the
+ledger keeping its own tier list, this decision has been undone in substance
+while the file still exists.
+
+### The three properties that make it worth having
+
+**Refusals are entries, not absences.** A ledger of actions *taken* cannot tell
+a system that was never asked from one that refused, and on this platform the
+refusals are the evidence that governance worked. A refusal must name the
+control that produced it, because Chapter 7's own KPI is refusals recorded
+versus refusals observed — and "something said no" cannot be checked against a
+control's logs.
+
+**A prediction is required.** Chapter 8 makes it load-bearing: without a stated
+expectation an observed outcome has nothing to be compared against and learning
+degrades into narrative. A decision cannot be recorded without one; a refusal
+needs none, because nothing happened.
+
+**Unmeasured stays unmeasured.** Confidence is `None` when nobody stated one,
+never 0.5, and its calibration class is `None` with it. A governance record is
+the worst possible place to reintroduce the defect §E12 through §E21 kept
+finding.
+
+### Two rules deliberately differ from the ADR gate
+
+* **One option is allowed here.** An ADR with one option is justification
+  written afterwards. An automated router legitimately has one candidate when
+  the others are unavailable, and demanding a second would make the ledger
+  describe a choice nobody had.
+* **`held` must be stated.** Accuracy is never inferred from prose. Comparing a
+  free-text prediction against a free-text observation would manufacture exactly
+  the unmeasured figure this work has been removing; what the module guarantees
+  is that the question was *asked*.
+
+### The caller, because a ledger nobody writes to is scenery
+
+Building this without one would have committed the F176 shape inside the module
+meant to record it — Chapter 7's KPI is ledger coverage, and a schema with no
+callers has zero coverage while every unit test passes.
+
+`risk/manager.py::_zero_sizing` is the first caller and not an arbitrary one: it
+is the single funnel every sizing refusal passes through, and those refusals —
+`data_quality:unmeasured` above all — are this repository's clearest evidence
+that a gate did its job. Until now the only record of one was a WARNING line.
+
+**Recording never changes what the money path decides.** A ledger write that
+raised would turn a refusal into a crash, strictly worse than the defect it
+documents. So it is wrapped, and wrapped at ERROR rather than silently: F248's
+alert failures went unnoticed for as long as they did because a handler swallowed
+them. `test_a_broken_ledger_does_not_break_a_refusal` injects a raising ledger
+and asserts the refusal still happens; the test that the refusal happens at all
+is asserted *first*, so a wiring bug cannot hide behind it.
+
+### And it gave calibration the caller it never had
+
+`ai/core/calibration.py` has `record()` and `resolve()`. Nothing called
+`resolve()`, so every stated confidence stayed unscored and `assess()` had
+nothing to assess — a measurement apparatus with no inputs, which reads as
+working. `outcomes.observe()` closes that loop.
+
+### One defect in the tooling shipped an hour earlier
+
+`adr.py new "Title"` — the invocation the README and the module docstring both
+give — failed with *unrecognized arguments*: `new` was a single positional and
+the title had nowhere to go. Found by running it. A tool whose documented
+invocation does not work teaches people it is broken, and sends them back to
+recording decisions in commit messages, which is the thing §E22 exists to stop.
+Fixed, with tests that run the documented command.
+
+### Measured
+
+    pytest -k "risk or ledger or calibration"    1988 passed
+    test_decision_ledger.py                      24
+    test_ledger_outcomes.py                      20
+    test_risk_refusals_reach_the_ledger.py       8   (5 fail on the pre-wiring tree)
+    adr.py --check                               10 records, all well formed
+    docs_registry / docs_freshness / doc_metrics 0 blocking · 0 drifted
+
+### What is still open from item 13
+
+Group 2 Chapter 6's **change records carrying an expected effect** — the same
+prediction field one layer down, attached to a deployment rather than a
+decision. Ranked item 5, still open, and now the only part of Decision
+Governance that is not built.

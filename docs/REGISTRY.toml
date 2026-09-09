@@ -1373,6 +1373,13 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
+path = "docs/decisions/0010-where-the-decision-ledger-lives-and-why-it-is-not-a-second-audit-log.md"
+tier = "T3"
+subject = "decision-0010"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/decisions/README.md"
 tier = "T2"
 subject = "decision-records"

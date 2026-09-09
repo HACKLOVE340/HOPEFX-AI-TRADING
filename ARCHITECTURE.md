@@ -39,6 +39,8 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `scripts/predict_offline.py` | Run the model on that cached series with no market feed. Defaults to `CLEAN_SINCE` (2020+); `--full-history` opts into the pre-2020 bars |
 | `scripts/clamp_ohlc.py` | Reconstruct impossible OHLC bars into a *separate* file with a provenance sidecar recording every edit. Never overwrites the source |
 | `scripts/adr.py` | Architecture Decision Records (Group 3 Ch 6) — numbered, immutable, two-options-minimum. `--check` runs in pre-commit; immutability is enforced against git |
+| `ai/ledger/decisions.py` | The Decision Ledger (Group 3 Ch 7) — one schema for every actor's operational decisions. **Refusals are entries, not absences**, and each names the control that refused |
+| `ai/ledger/outcomes.py` | Outcome and failure memory (Group 3 Ch 8) — attaches what actually happened to a stated prediction, and feeds `ai/core/calibration.py` the `resolve()` it never had |
 | `risk/manager.py` | Pre-trade gate, GARCH VaR, CVaR, Kelly sizing, kill switch, prop firm enforcement |
 | `execution/oms.py` | OMS: 9 order states, GTC/IOC/FOK/GTD/DAY, OCO/bracket |
 | `execution/smart_router.py` | Microstructure-aware broker routing with OFI alignment and circuit breakers |

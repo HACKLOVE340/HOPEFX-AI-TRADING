@@ -197,6 +197,46 @@ class TestNumbering:
         assert adr.next_number(tmp_path / "docs" / "decisions") == 1
 
 
+class TestTheCommandLineTheDocsPromise:
+    """`adr.py new "Title"` is what the README and the module docstring tell a
+    reader to run. The first version accepted `new` as a single positional and
+    rejected the title as an unrecognised argument — a tool whose documented
+    invocation does not work teaches people it is broken, and they go back to
+    writing decisions in commit messages.
+    """
+
+    def test_new_accepts_a_title(self, adr, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(adr, "DECISIONS", tmp_path / "decisions")
+        assert adr.main(["new", "Pin the interpreter"]) == 0
+        written = list((tmp_path / "decisions").glob("*.md"))
+        assert len(written) == 1
+        assert written[0].name == "0001-pin-the-interpreter.md"
+
+    def test_a_second_record_takes_the_next_number(self, adr, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(adr, "DECISIONS", tmp_path / "decisions")
+        adr.main(["new", "First"])
+        adr.main(["new", "Second"])
+        assert sorted(p.name for p in (tmp_path / "decisions").glob("*.md")) == [
+            "0001-first.md",
+            "0002-second.md",
+        ]
+
+    def test_the_template_it_writes_is_not_yet_valid(self, adr, tmp_path, monkeypatch) -> None:
+        """Deliberate. A template that passed the gate unedited would let an
+        empty record ship, and the placeholders are what the author replaces."""
+        monkeypatch.setattr(adr, "DECISIONS", tmp_path / "decisions")
+        adr.main(["new", "Something"])
+        # Two options are present in the template, so it is the placeholders in
+        # the other sections that must still be filled in by a human.
+        text = (tmp_path / "decisions" / "0001-something.md").read_text(encoding="utf-8")
+        assert "<What forced a decision" in text
+
+    def test_check_and_list_still_work(self, adr, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(adr, "DECISIONS", tmp_path / "decisions")
+        (tmp_path / "decisions").mkdir()
+        assert adr.main(["--list"]) == 0
+
+
 class TestTheRepositorysOwnRecords:
     """The gate, pointed at the real tree."""
 
