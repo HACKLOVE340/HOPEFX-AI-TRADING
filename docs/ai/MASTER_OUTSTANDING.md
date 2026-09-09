@@ -131,6 +131,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
 | ~~15~~ | ~~**`risk/manager.py`'s 1.0 default for unmeasured data quality**~~ | Group 2 Ch 34 · INV-14 — **DONE 2026-09-09, see §E12** |
 | 16 | `trader_full.py:677` builds a RiskManager with no orchestrator, so it now refuses every size | Not a deployed entry point; wire it to the orchestrator or have it assert its own data quality |
+| 18 | `accuracy_7d` on `/ml/status` is training-time OOS accuracy, not a 7-day rolling figure | Renaming a published API field is a contract change — see §E13 |
 | 17 | `RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()` | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
 
 **Item 14 was found while building Phase R1, deliberately left alone, and is now
@@ -950,6 +951,96 @@ pre-fix `risk/manager.py`, 12 fail. The 16 existing tests that had to change
 were all asserting the fail-open: they built a RiskManager with no orchestrator
 and expected a sized position. They now pass `data_quality=1.0` explicitly, so
 the assumption is stated in the test rather than supplied by a default.
+
+
+## §E13 — The drift score that could not report a broken monitor (2026-09-09)
+
+Fifth in the family, and the first one **found by running the application
+rather than reading it**. §E9–§E12 came out of code review and registry
+screens. This one came out of a booted server answering a real request.
+
+`GET /api/superadmin/ml/status` on a live instance returned:
+
+```json
+{"status":"healthy","active_model":"advanced_oos_v1",
+ "predictions_today":0,"accuracy_7d":57.34,"drift_score":0.0}
+```
+
+A drift score of **0.0 — no drift** from a monitor that had never seen a
+prediction, on the same line as `predictions_today: 0`.
+
+### The defect
+
+`api/superadmin/ml_ai.py::_live_drift_score()` returned a hardcoded `0.0` in
+four cases: no Redis client, no `ml:drift:status` key, a malformed payload, or
+any exception — the last logged at `logger.debug`, which is off in production.
+A fifth followed from `.get("drift_score", 0.0)`: a status document that
+carried no score at all became a measured zero.
+
+`0.0` is the **best** value on this scale, so "the monitor is down" and
+"measured, healthy" were the same reading. `DriftBar` paints below 0.1 green,
+so an unreachable monitor rendered as a green **0.000** beside every model.
+
+The function's own docstring said it existed *"so the dashboard never shows a
+hardcoded zero while real drift exists"* — while being the hardcoded zero. It
+was written to fix a worse version (every row literally `0.0`), and fixed the
+rows without fixing the fallback.
+
+### The test asserted it, again
+
+`tests/unit/test_ml_drift_wiring.py` pinned the defect as the requirement, the
+third time in this audit that a green suite has described one:
+
+```python
+def test_live_drift_score_defaults_zero_when_unavailable(...):
+    assert ml_ai._live_drift_score() == 0.0
+
+def test_live_drift_score_never_raises(...):
+    assert ml_ai._live_drift_score() == 0.0  # best-effort, swallows errors
+```
+
+"Never raises" was right and is kept. The value it fell back to was not.
+
+### What changed
+
+`_live_drift_score() -> float | None` returns `None` when it could not measure,
+and logs at WARNING rather than DEBUG. Both endpoints carry a `drift_state`:
+
+| state | meaning |
+|---|---|
+| `measured` | a real reading, including a genuine 0.0 |
+| `unmeasured` | the monitor could not be read |
+| `not_serving` | a staged or retired version, which nothing measures |
+
+`/ml/models` rows for non-serving versions previously sent `0.0` under a
+comment saying that was correct. Not serving is not zero drift, and the bar
+painted it green either way.
+
+The frontend moved with it: `drift_score` is `number | null`, `DriftBar`
+renders "— not measured" / "— not serving" in grey with an explanatory title
+instead of a bar, and the summary tile reads "not measured". Without that a
+`null` would have crashed `.toFixed(3)`.
+
+Two neighbours in the same handler, fixed in the same pass: `get_ml_status`
+swallowed an InferenceEngine failure at DEBUG while reporting every figure at
+its zero default, and `list_ml_models` did the same for a registry failure and
+a directory-scan failure. All three now log at WARNING and say what the reader
+is looking at instead.
+
+### Not fixed here, recorded instead
+
+`accuracy_7d` is the active model's **training-time out-of-sample** accuracy,
+not a 7-day rolling live figure — nothing computes one. The UI label ("OOS
+ACCURACY") is honest; the API field name is not. Documented in the endpoint
+docstring and the frontend interface rather than renamed, because renaming a
+published field is a contract change. Tracked in §B.
+
+### Evidence
+
+`tests/unit/test_ml_drift_wiring.py` — 12 tests, 10 of which fail against the
+pre-fix handler (watched, via git stash). Confirmed end to end on a booted
+server: `{"drift_score":null,"drift_state":"unmeasured"}`, and the superadmin
+console renders "Drift Score — not measured".
 
 
 ## §F — What the complete Group 4 source changed (2026-09-08)

@@ -25,7 +25,25 @@ const AccuracyBar: React.FC<{ value: number }> = ({ value }) => {
   );
 };
 
-const DriftBar: React.FC<{ value: number }> = ({ value }) => {
+/** Drift, or the honest absence of it.
+ *
+ *  `value` was `number` and this rendered `value.toFixed(3)` directly. The API
+ *  sent 0.0 whenever it could not read the drift monitor, so an unreachable
+ *  monitor painted a green 0.000 next to a healthy model. The API now sends
+ *  null with a state, and this renders that state rather than inventing a bar.
+ */
+const DriftBar: React.FC<{ value: number | null; state?: string }> = ({ value, state }) => {
+  if (value === null || value === undefined) {
+    const label = state === 'not_serving' ? 'not serving' : 'not measured';
+    const title = state === 'not_serving'
+      ? 'This version is not serving inference, so no drift is measured for it.'
+      : 'The drift monitor could not be read — this is not a reading of zero drift.';
+    return (
+      <span title={title} style={{ fontSize: 12, fontWeight: 600, color: '#64748b', fontStyle: 'italic' }}>
+        — {label}
+      </span>
+    );
+  }
   const color = value < 0.1 ? '#4ade80' : value < 0.3 ? '#fbbf24' : '#f87171';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -51,8 +69,12 @@ interface MLStatus {
   active_model: string;
   inference_latency_ms: number;
   predictions_today: number;
+  /** The active model's training-time out-of-sample accuracy, despite the
+   *  name — nothing computes a 7-day rolling figure yet. Labelled "OOS
+   *  ACCURACY" below so the display does not repeat the field name's claim. */
   accuracy_7d: number;
-  drift_score: number;
+  drift_score: number | null;
+  drift_state?: 'measured' | 'unmeasured' | 'not_serving';
 }
 
 const MLAISection: React.FC = () => {
@@ -152,7 +174,10 @@ const MLAISection: React.FC = () => {
             { label: 'Latency',          value: `${mlStatus.inference_latency_ms.toFixed(0)}ms`, color: mlStatus.inference_latency_ms < 50 ? '#4ade80' : '#fbbf24', icon: '⚡' },
             { label: 'Predictions Today', value: mlStatus.predictions_today.toLocaleString(),    color: '#60a5fa', icon: '📊' },
             { label: '7-Day Accuracy',   value: `${mlStatus.accuracy_7d.toFixed(1)}%`,           color: mlStatus.accuracy_7d >= 65 ? '#4ade80' : '#f87171', icon: '🎯' },
-            { label: 'Drift Score',      value: mlStatus.drift_score.toFixed(3),                 color: mlStatus.drift_score < 0.1 ? '#4ade80' : mlStatus.drift_score < 0.3 ? '#fbbf24' : '#f87171', icon: '📈' },
+            // Never renders a number the backend did not measure: an
+            // unreachable drift monitor reads "not measured", in grey, not a
+            // green 0.000.
+            { label: 'Drift Score',      value: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? 'not measured' : mlStatus.drift_score.toFixed(3), color: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? '#64748b' : mlStatus.drift_score < 0.1 ? '#4ade80' : mlStatus.drift_score < 0.3 ? '#fbbf24' : '#f87171', icon: '📈' },
           ].map(m => (
             <div key={m.label}>
               <div style={{ fontSize: 11, color: '#475569', marginBottom: 3 }}>{m.icon} {m.label}</div>
@@ -241,7 +266,7 @@ const MLAISection: React.FC = () => {
                   </td>
                   <td style={{ padding: '12px 12px' }}><StatusBadge status={m.status} size="sm" /></td>
                   <td style={{ padding: '12px 12px', minWidth: 120 }}><AccuracyBar value={m.accuracy} /></td>
-                  <td style={{ padding: '12px 12px', minWidth: 120 }}><DriftBar value={m.drift_score} /></td>
+                  <td style={{ padding: '12px 12px', minWidth: 120 }}><DriftBar value={m.drift_score} state={m.drift_state} /></td>
                   <td style={{ padding: '12px 12px', color: '#94a3b8' }}>{m.predictions_today.toLocaleString()}</td>
                   <td style={{ padding: '12px 12px', color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(m.last_trained)}</td>
                   <td style={{ padding: '12px 12px' }}>

@@ -24,12 +24,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _live_drift_score() -> float:
+def _live_drift_score() -> float | None:
     """Read the current feature-drift score from the drift monitor (Redis).
 
-    Returns 0.0 when the monitor is not running / Redis is unavailable. This is
-    the single source of truth for drift used by both /ml/status and /ml/models,
-    so the dashboard never shows a hardcoded zero while real drift exists.
+    Returns ``None`` when drift could not be measured — no Redis client, no
+    ``ml:drift:status`` key (the monitor has never run), a malformed payload, a
+    payload with no ``drift_score``, or a non-numeric one.
+
+    ``None``, not ``0.0``. This returned 0.0 for every one of those cases, and
+    0.0 is the *best* value on this scale, so "the monitor is down" rendered as
+    a green 0.000 beside a healthy model. The docstring here used to say the
+    helper existed "so the dashboard never shows a hardcoded zero while real
+    drift exists" — while being the hardcoded zero. Found by running the app:
+    a booted server answered ``GET /ml/status`` with ``drift_score: 0.0`` and
+    ``predictions_today: 0``, a no-drift verdict from a monitor that had never
+    seen a prediction.
+
+    Rule 2: an unmeasured value is absent, never best case. Callers must render
+    absence as absence — see the ``drift_state`` field on ``/ml/status`` and
+    ``/ml/models``.
+
+    Still never raises: that part of the old contract was right.
     """
     try:
         import json as _json
@@ -37,13 +52,24 @@ def _live_drift_score() -> float:
         from cache.redis_client import get_sync_redis_client
 
         rc = get_sync_redis_client()
-        if rc:
-            raw = rc.get("ml:drift:status")
-            if raw:
-                return float(_json.loads(raw).get("drift_score", 0.0))
-    except Exception as exc:  # best-effort; drift is informational
-        logger.debug("_live_drift_score: %s", exc)
-    return 0.0
+        if not rc:
+            logger.warning("drift score unmeasured: no Redis client — the drift monitor cannot be read")
+            return None
+        raw = rc.get("ml:drift:status")
+        if not raw:
+            logger.warning("drift score unmeasured: ml:drift:status is empty — the drift monitor has not reported")
+            return None
+        score = _json.loads(raw).get("drift_score")
+        if score is None:
+            logger.warning("drift score unmeasured: ml:drift:status carries no drift_score field")
+            return None
+        return float(score)
+    except Exception as exc:
+        # WARNING, not DEBUG. DEBUG is off in production, which is how four
+        # alert call sites in this repository failed silently for months
+        # (F248). A drift monitor that cannot be read is an operational fact.
+        logger.warning("drift score unmeasured: could not read the drift monitor (%s)", exc)
+        return None
 
 
 # ── ML / AI ───────────────────────────────────────────────────────────────────
@@ -58,8 +84,17 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
       active_model         — name/id of the currently loaded model
       inference_latency_ms — most recent predict() wall-clock time in ms
       predictions_today    — total predict() calls since process start
-      accuracy_7d          — OOS accuracy from the active model (0–100 scale)
-      drift_score          — feature drift score (0.0 = no drift)
+      accuracy_7d          — the ACTIVE MODEL'S OUT-OF-SAMPLE accuracy from
+                             training (0–100 scale). Despite the name this is
+                             not a 7-day rolling live accuracy; nothing
+                             computes one yet. The UI labels it "OOS ACCURACY",
+                             which is honest — the field name is the part that
+                             lies, and renaming it is tracked separately.
+      drift_score          — feature drift score, or null when drift could not
+                             be measured. Read drift_state before this value.
+      drift_state          — "measured" | "unmeasured". 0.0 is the best value
+                             on the drift scale, so a number alone cannot carry
+                             "the monitor is down"; this field does.
     """
     result: dict = {
         "status": "unavailable",
@@ -67,7 +102,8 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
         "inference_latency_ms": 0.0,
         "predictions_today": 0,
         "accuracy_7d": 0.0,
-        "drift_score": 0.0,
+        "drift_score": None,
+        "drift_state": "unmeasured",
     }
 
     # ── Primary: InferenceEngine.health() ─────────────────────────────────────
@@ -95,10 +131,15 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
         result["accuracy_7d"] = round(oos_acc * 100 if oos_acc <= 1.0 else oos_acc, 2)
 
     except Exception as exc:
-        logger.debug("get_ml_status: inference engine unavailable: %s", exc)
+        # WARNING, not DEBUG: this leaves every figure below at its default and
+        # the status at "unavailable". An operator reading a dashboard of zeros
+        # needs to be able to find out why.
+        logger.warning("get_ml_status: inference engine unavailable (%s) — reporting defaults", exc)
 
     # ── Drift score from drift monitor (shared source of truth) ───────────────
-    result["drift_score"] = round(_live_drift_score(), 4)
+    drift = _live_drift_score()
+    result["drift_score"] = None if drift is None else round(drift, 4)
+    result["drift_state"] = "unmeasured" if drift is None else "measured"
 
     return result
 
@@ -161,14 +202,24 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
                     "accuracy": round((lambda a: a * 100 if a <= 1.0 else a)(float(info.get("oos_accuracy", 0.0))), 2),
                     "last_trained": info.get("registered_at", _utcnow().isoformat()),
                     "predictions_today": preds_today,
-                    # Only the serving (active) model has a live drift score;
-                    # staged/retired versions are not serving, so 0.0 is correct.
-                    "drift_score": round(active_drift, 4) if name == active_version else 0.0,
+                    # Only the serving (active) model has a live drift score.
+                    # Staged and retired versions are not serving, so no drift
+                    # has been measured for them — which is not the same as
+                    # having measured zero drift. This row used to send 0.0 for
+                    # both cases and the DriftBar painted it green.
+                    "drift_score": (None if active_drift is None else round(active_drift, 4))
+                    if name == active_version
+                    else None,
+                    "drift_state": (
+                        ("unmeasured" if active_drift is None else "measured")
+                        if name == active_version
+                        else "not_serving"
+                    ),
                     "deployed_at": info.get("promoted_at"),
                 }
             )
     except Exception as exc:
-        logger.debug("list_ml_models: registry unavailable: %s", exc)
+        logger.warning("list_ml_models: registry unavailable (%s) — falling back to a directory scan", exc)
 
     # ── Fallback: scan saved_models/ directory for .pkl files ─────────────────
     if not models:
@@ -186,12 +237,15 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
                         "accuracy": 0.0,
                         "last_trained": _utcnow().replace(second=0, microsecond=0).isoformat(),
                         "predictions_today": 0,
-                        "drift_score": 0.0,
+                        # A .pkl found by scanning a directory has no drift
+                        # measurement behind it at all.
+                        "drift_score": None,
+                        "drift_state": "unmeasured",
                         "deployed_at": None,
                     }
                 )
         except Exception as exc:
-            logger.debug("list_ml_models: saved_models scan failed: %s", exc)
+            logger.warning("list_ml_models: saved_models scan failed (%s) — the model list will be empty", exc)
 
     # ── Cross-entry integrity ────────────────────────────────────────────────
     #

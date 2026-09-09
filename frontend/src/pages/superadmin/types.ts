@@ -86,7 +86,12 @@ export interface MLModel {
   accuracy: number;
   last_trained: string;
   predictions_today: number;
-  drift_score: number;
+  /** null when drift was not measured. 0.0 is the BEST value on this scale, so
+   *  a number alone cannot carry "the monitor is down" — read drift_state. */
+  drift_score: number | null;
+  /** "measured" — a real reading. "unmeasured" — the drift monitor could not be
+   *  read. "not_serving" — a staged/retired version, which nothing measures. */
+  drift_state?: 'measured' | 'unmeasured' | 'not_serving';
   deployed_at: string | null;
   /** Other registry entries pointing at the identical artifact. The VERSION
    *  column is sha256[:8], so these rows are indistinguishable without it. */
