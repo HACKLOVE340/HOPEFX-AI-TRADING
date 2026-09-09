@@ -152,6 +152,16 @@ async function phaseTwo() {
   let shot = null;
   try {
     await page.goto(`http://127.0.0.1:${PORT + 1}/proof/camera.html`, { waitUntil: 'load' });
+
+    // Hide the page part-way through by putting another tab in front of it.
+    // The owner asked for camera gestures to keep working in the background,
+    // and requestAnimationFrame does not fire in a hidden tab — so the only
+    // honest test of that claim is to actually hide it.
+    await page.waitForTimeout(3000);
+    const other = await context.newPage();
+    await other.goto('about:blank');
+    await other.bringToFront();
+
     await page.waitForFunction(() => window.__proof !== undefined, null, { timeout: 180000 });
     result = await page.evaluate(() => window.__proof);
     shot = await capture(page, 'camera.png');
@@ -176,13 +186,38 @@ async function phaseTwo() {
   if (!result?.recognised?.includes('swipe_left')) {
     failures.push(`expected a mirrored swipe_left, got ${JSON.stringify(result?.recognised)}`);
   }
+  // The background requirement, split into what this container can prove and
+  // what it cannot.
+  //
+  // PROVEN: the loop is Worker-driven. That is the property that makes hidden-
+  // tab operation possible, because a dedicated Worker's timers are not
+  // throttled the way a hidden document's are, and because rAF — which stops
+  // firing entirely in a hidden tab — is not used at all.
+  //
+  // NOT PROVEN HERE: that frames keep arriving with the tab actually hidden.
+  // Headless Chromium reports every page `visible`; `bringToFront()` on another
+  // tab does not change it, and there is no CDP override
+  // (`Emulation.setPageVisibilityOverride` does not exist; `Page.setWebLifecycleState`
+  // leaves visibilityState alone). So this asserts the mechanism and REPORTS the
+  // hidden-frame count rather than requiring it — an assertion that can only
+  // pass vacuously is worse than none.
+  if (result?.tickerKind !== 'worker') {
+    failures.push(`expected a worker-driven loop, got ${result?.tickerKind} (throttled when hidden)`);
+  }
 
   if (failures.length > 0) {
     console.error('\nPHASE 2 FAILED');
     for (const failure of failures) console.error(`  ${failure}`);
     process.exit(1);
   }
-  console.log('\nPHASE 2 PASSED: getUserMedia -> HandDetector -> HandGestureSource -> recogniseGesture = swipe_left.');
+  console.log(
+    '\nPHASE 2 PASSED: getUserMedia -> HandDetector -> HandGestureSource -> recogniseGesture = swipe_left,' +
+      `\n  on a ${result.tickerKind}-driven loop (never requestAnimationFrame, which stops in a hidden tab).`,
+  );
+  console.log(
+    `  Visibility observed: ${JSON.stringify(result.visibilitySeen)} — headless Chromium reports every page` +
+      '\n  visible, so hidden-tab operation is REASONED from the Worker timer, not executed here.',
+  );
 }
 
 await main();

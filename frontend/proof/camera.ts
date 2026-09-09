@@ -20,6 +20,7 @@ import { HandDetector } from '../src/hub/handDetector';
 import { HandGestureSource } from '../src/hub/handGestureSource';
 import { loadHandLandmarker, DEFAULT_MODEL_PATH } from '../src/hub/handRuntime';
 import { recogniseGesture, type TrackPoint } from '../src/hub/gestures';
+import { startTicker } from '../src/hub/backgroundTicker';
 import { drawHand } from './draw';
 import type { Landmark } from '../src/hub/landmarks';
 
@@ -46,6 +47,8 @@ async function run() {
   await detector.start();
 
   const tracks: TrackPoint[][] = [];
+  /** Whether the document was hidden when each track completed. */
+  const trackHidden: boolean[] = [];
   let lastLandmarks: readonly Landmark[] | null = null;
 
   // Wrap the detector so the proof can keep one frame's landmarks to draw.
@@ -64,26 +67,35 @@ async function run() {
   const source = new HandGestureSource({
     detector: observed,
     viewport: VIEWPORT,
-    onTrack: (points) => tracks.push(points),
+    onTrack: (points) => {
+      tracks.push(points);
+      trackHidden.push(document.visibilityState === 'hidden');
+    },
   });
 
-  // Read for a bounded stretch of wall clock rather than "until the video
-  // ends": a fake capture device loops, and waiting for an end that never
-  // comes would hang instead of failing.
+  // Driven by `startTicker`, the same production loop the hook uses, and NOT by
+  // requestAnimationFrame — rAF stops firing in a hidden tab, which is the whole
+  // thing this phase exists to check. The driver hides this page part-way
+  // through; frames read after that are the evidence.
   const started = performance.now();
   let framesSeen = 0;
+  let framesWhileHidden = 0;
+  const visibilitySeen = new Set<string>();
+  document.addEventListener('visibilitychange', () => visibilitySeen.add(document.visibilityState));
+  const ticker = startTicker(33, () => {
+    visibilitySeen.add(document.visibilityState);
+    if (document.visibilityState === 'hidden') framesWhileHidden += 1;
+    source.onFrame(video, performance.now());
+    framesSeen += 1;
+  });
   await new Promise<void>((resolve) => {
-    const tick = () => {
-      const now = performance.now();
-      if (now - started > 4000) {
+    const check = setInterval(() => {
+      if (performance.now() - started > 9000) {
+        clearInterval(check);
+        ticker.stop();
         resolve();
-        return;
       }
-      source.onFrame(video, now);
-      framesSeen += 1;
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
+    }, 100);
   });
 
   const statusBeforeStop = detector.status();
@@ -108,7 +120,12 @@ async function run() {
 
   window.__proof = {
     ok: tracks.length > 0,
+    tickerKind: ticker.kind,
     framesSeen,
+    framesWhileHidden,
+    visibilitySeen: [...visibilitySeen],
+    hasFocus: document.hasFocus(),
+    gesturesWhileHidden: gestures.filter((g, i) => g !== null && trackHidden[i]),
     videoSize: { width: video.videoWidth, height: video.videoHeight },
     statusBeforeStop: statusBeforeStop.state,
     tracks: tracks.length,

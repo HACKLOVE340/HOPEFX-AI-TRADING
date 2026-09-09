@@ -1842,5 +1842,59 @@ dead-control shape this registry exists to catch, and is the same reason Phase I
 refused to call these rows live for pointer input.
 
 So the position moved from *blocked on something unverifiable* to *one decision
-from live, with the code proven by execution* — and §4's `arch.layer_a.presence`
-roll-up moves with them, because it is derived.
+from live, with the code proven by execution*.
+
+### The owner decided, and it is built — 233/233
+
+**Opt-in toggle, off by default.** Shipped as the "Hands" control in
+`PresenceStage`, beside Talk / Stop / Aloud, with the status reason on its
+tooltip so an operator whose gesture does nothing learns which of the four
+absences it is.
+
+`useHandGestures` opens nothing while it is off — not "opens and closes", not
+"prompts and is refused". `hub_camera_toggle_is_off_by_default.test.tsx` asserts
+that rendering the stage never calls `getUserMedia`, because "off by default" is
+exactly the property that survives review and dies to a later one-line change.
+Every camera track is stopped on disable and on unmount: the hardware light
+going out is how the operator knows it stopped.
+
+The pointer and the camera now go through **one** `applyGesture`. Two rules for
+what a swipe is would eventually disagree, and an operator could not be told
+which one their console was using.
+
+    233 rows · 233 live · 0 staged · 0 planned · 233/233 evidence resolves
+
+§4's `arch.layer_a.presence` moved by itself, which is the derivation working:
+nothing typed it live, the layers beneath it closed and it followed.
+
+### "The camera should be able to work in background as well"
+
+Owner's request, mid-build, and it caught a defect that was already written.
+
+The loop was `requestAnimationFrame` — the obvious choice for anything reading
+video, and wrong here: **browsers stop firing rAF entirely in a hidden tab.**
+Switch tabs and the camera stays open, the hardware light stays on, and not one
+frame is read. A control that looks alive and does nothing, shipped into the
+exact feature where the operator can see it is watching them.
+
+`hub/backgroundTicker.ts` drives the loop from a dedicated Worker instead. A
+hidden document's timers are throttled to roughly one a second — too slow for a
+500ms swipe — and a Worker's are not. There is no `visibilitychange` handling
+anywhere, deliberately: a loop that switches strategy on visibility has a second
+path that only runs when nobody is looking at it. A Worker that cannot be built
+(a CSP without `blob:`) falls back to `setInterval` and *reports* that it did,
+because a throttled loop beats no loop and pretending they are equivalent does
+not.
+
+**What is proven and what is not**, kept apart:
+
+* **Proven by execution** — the loop is Worker-driven (`tickerKind: "worker"` in
+  the phase 2 transcript), and `startTicker` never touches rAF (unit-asserted
+  with a spy).
+* **Not proven here** — that frames keep arriving with the tab genuinely hidden.
+  Headless Chromium reports every page `visible`; `bringToFront()` on another tab
+  does not change it, and there is no CDP override — `Emulation.setPageVisibilityOverride`
+  does not exist, and `Page.setWebLifecycleState` leaves `visibilityState` alone.
+  Both were tried. The proof therefore asserts the mechanism and *reports* the
+  hidden-frame count rather than requiring it: an assertion that can only pass
+  vacuously is worse than none.

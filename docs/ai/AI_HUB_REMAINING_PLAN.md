@@ -9,6 +9,10 @@ somebody said so.
 At the time of writing: **230 capabilities · 223 live · 7 staged · 0 planned ·
 230/230 evidence resolved · 0 discrepancies · 97% built.**
 
+> **As of 2026-09-09 that is 233 rows · 233 live · 0 staged · 0 planned ·
+> 233/233 evidence resolves · 0 discrepancies.** Every number in this document
+> is a snapshot; `python scripts/backlog_report.py` is the state.
+
 That live count went **down** by one, and the percentage with it. §4's four
 layer roll-ups stopped being typed and started being derived, and the
 derivation found `arch.layer_c.workforce` claiming `live` with two of its
@@ -1706,9 +1710,15 @@ E and F had made live, and a stale plan is one a reader trusts.
 
 | § | Row | State |
 |---|---|---|
-| 4 | Presence layer — identity, voice, animation, spatial state | staged (derived) |
-| 18 | Gesture recognition | staged — **built and proven; awaiting an owner decision** |
-| 18 | Pointing and object reference | staged — **built and proven; awaiting an owner decision** |
+| ~~4~~ | ~~Presence layer — identity, voice, animation, spatial state~~ | **live** — derived; moved on its own when §18 closed |
+| ~~18~~ | ~~Gesture recognition~~ | **live 2026-09-09** — `hub/handDetector.ts`, proven by `npm run prove:hands` |
+| ~~18~~ | ~~Pointing and object reference~~ | **live 2026-09-09** — `pointingPoint` → `pointingAt`, mirrored |
+
+**Phase H is closed. `python scripts/backlog_report.py` reports 233 rows · 233
+live · 0 staged · 0 planned · 233/233 evidence resolves · 0 discrepancies.**
+
+§4's roll-up moving by itself is the derivation working: nothing typed it live,
+the layers beneath it closed and it followed.
 
 ### Every row I called blocked was buildable
 
@@ -1738,12 +1748,11 @@ this hardware* as *unbuildable*.
   detector and the whole chain — getUserMedia → `HandDetector` →
   `HandGestureSource` → `recogniseGesture` — and gets a mirrored `swipe_left`.
 
-  The rows stay **staged** for a different and honest reason: nothing an
-  operator can reach turns this on. Whether a trading console may watch its
-  operator through a webcam is the owner's decision, not an implementation
-  detail, and marking a capability live that nothing can reach is the
-  dead-control shape this registry exists to catch. **This is now the only
-  thing between §18 and 233/233, and it is a decision rather than work.**
+  The rows then stayed **staged** for one honest reason — nothing an operator
+  could reach turned it on, and whether a trading console may watch its operator
+  through a webcam is not an implementation detail. **The owner decided on
+  2026-09-09: an opt-in toggle, off by default.** Built as the "Hands" control in
+  `PresenceStage`, beside Talk / Stop / Aloud, and both rows are now live.
 * §4's `arch.layer_a.presence` is a **derived roll-up** — `layer_state()`
   computes it from its constituents, so it moves on its own and cannot be typed
   live early. The workforce and environment layers moved by themselves when §26

@@ -1389,40 +1389,35 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "18",
         "A",
         "Gesture recognition",
-        "staged",
-        "frontend/src/hub/gestures.ts:recogniseGesture",
-        'STAGED, and the reason changed on 2026-09-09. It was "a deployed model, and no '
-        'camera to execute it against" \u2014 shipping a runtime plus an 8MB model into a '
-        "money-moving platform without running either once. That is now measurably false: "
-        "`npm run prove:hands` runs the real MediaPipe detector in real Chromium against "
-        "MediaPipe's own photograph of a hand, model served from THIS ORIGIN, and reads 21 "
-        "landmarks; phase 2 drives the whole chain \u2014 getUserMedia \u2192 HandDetector \u2192 "
-        "HandGestureSource \u2192 recogniseGesture \u2014 off a fake camera device and gets a "
-        "mirrored swipe_left. hub/handDetector.ts, hub/handGestureSource.ts and "
-        "scripts/fetch_hand_model.py are the built pieces. What is missing now is ONE thing "
-        "and it is not technical: no operator-visible control turns this on, because whether "
-        "a trading console may watch its operator through a webcam is the owner's decision, "
-        "not an implementation detail. Marking it live on a capability nothing can reach "
-        "would be the dead-control shape this registry exists to catch \u2014 the same reason "
-        "Phase I3 refused to call it live for pointer input.",
+        "live",
+        "frontend/src/hub/handDetector.ts:HandDetector",
+        "LIVE 2026-09-09, and the road here is worth keeping. It was staged for two "
+        'phases on "there is no camera in the environment this was built in" \u2014 sound '
+        "reasoning on a premise nobody re-checked. Chromium serves a video file as a "
+        "webcam. `npm run prove:hands` runs the real MediaPipe detector in real Chromium "
+        "against MediaPipe's own photograph of a hand, model served from THIS ORIGIN, and "
+        "reads 21 landmarks; phase 2 drives getUserMedia \u2192 HandDetector \u2192 "
+        "HandGestureSource \u2192 recogniseGesture off a fake camera and gets a mirrored "
+        'swipe_left. The operator-visible control is the "Hands" toggle in PresenceStage, '
+        "OFF by default on the owner's decision \u2014 a console that opened a webcam because "
+        "a page loaded would be watching somebody who never asked. The loop is Worker-driven "
+        "(hub/backgroundTicker.ts), never requestAnimationFrame, because rAF stops firing in "
+        "a hidden tab and the camera light would have stayed on while nothing was read.",
     ),
     _c(
         "vision.pointing",
         "18",
         "A",
         "Pointing and object reference",
-        "staged",
-        "frontend/src/hub/gestures.ts:pointingAt",
-        "STAGED for the same reason as vision.gesture, and it changed the same way: the "
-        "model is deployed by scripts/fetch_hand_model.py and the detector is proven by "
-        "execution, not by reading. `npm run prove:hands` phase 1 takes the index fingertip "
-        "through pointingPoint into pointingAt against a measured scene and gets a named "
-        "panel back. pointingPoint stays MIRRORED because a front camera shows a reflection "
-        "and a console following the raw coordinate would move focus the opposite way from "
-        "the gesture \u2014 phase 2 checks that by expecting swipe_left from a hand travelling "
-        "left to right. The OBJECT REFERENCE half was already wired: see input.pointing_resolves. "
-        "What remains is the operator-visible control, which is an owner decision about "
-        "webcams in a trading console rather than code.",
+        "live",
+        "frontend/src/hub/landmarks.ts:pointingPoint",
+        "LIVE 2026-09-09 alongside vision.gesture. `npm run prove:hands` phase 1 takes the "
+        "index fingertip through pointingPoint into pointingAt against a measured scene and "
+        "gets a named panel back. pointingPoint stays MIRRORED because a front camera shows "
+        "a reflection and a console following the raw coordinate would move focus the "
+        "opposite way from the gesture \u2014 phase 2 checks exactly that by expecting "
+        "swipe_left from a hand travelling left to right. The object-reference half was "
+        "already wired: see input.pointing_resolves.",
     ),
     _c(
         "input.landmark_adapter",

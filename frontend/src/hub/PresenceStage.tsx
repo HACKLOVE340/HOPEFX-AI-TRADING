@@ -25,12 +25,13 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Mic, Minimize2, Send, Square, Volume2, VolumeX, X } from 'lucide-react';
+import { Hand, Mic, Minimize2, Send, Square, Volume2, VolumeX, X } from 'lucide-react';
 
 import { PresenceCore } from './PresenceCore';
 import { useRovingFocus } from './useRovingFocus';
 import { sceneFrom, type Measurement } from './sceneFrom';
 import { appendPoint, pointingAt, recogniseGesture, type TrackPoint } from './gestures';
+import { useHandGestures } from './useHandGestures';
 import { useFrameBudget } from './useFrameBudget';
 import type { SceneGraph } from './sceneGraph';
 import type { Presence } from './presence';
@@ -259,13 +260,13 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
     });
   }, []);
 
-  const onGesture = useCallback(
-    (event: React.PointerEvent) => {
-      const points = track.current;
-      track.current = null;
-      if (points === null) return;
-      appendPoint(points, { x: event.clientX, y: event.clientY, t: performance.now() - trackStart.current });
-
+  /**
+   * What a completed track means. Extracted so the CAMERA and the POINTER go
+   * through the same rule rather than two that would eventually disagree —
+   * `handGestureSource.ts` makes the same argument about its own thresholds.
+   */
+  const applyGesture = useCallback(
+    (points: readonly TrackPoint[]) => {
       const gesture = recogniseGesture(points);
       // Null is the common case and the safe one: a movement that is not
       // clearly anything does nothing at all.
@@ -298,6 +299,27 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
     },
     [onPinSurface, shownFocus],
   );
+
+  const onGesture = useCallback(
+    (event: React.PointerEvent) => {
+      const points = track.current;
+      track.current = null;
+      if (points === null) return;
+      appendPoint(points, { x: event.clientX, y: event.clientY, t: performance.now() - trackStart.current });
+      applyGesture(points);
+    },
+    [applyGesture],
+  );
+
+  /**
+   * §18 camera gestures. **Off by default** — owner's decision, 2026-09-09.
+   *
+   * A trading console that opened a webcam because a page loaded would be
+   * watching an operator who never asked. `useHandGestures` opens nothing while
+   * this is false, and releases every camera track the moment it goes back.
+   */
+  const [handsOn, setHandsOn] = useState(false);
+  const hands = useHandGestures({ enabled: handsOn, onTrack: applyGesture });
 
   /**
    * §26. What the machine can currently afford, measured rather than assumed.
@@ -688,6 +710,18 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
         <button type="button" onClick={onToggleMute} aria-pressed={muted} style={control}>
           {muted ? <VolumeX size={13} aria-hidden /> : <Volume2 size={13} aria-hidden />}
           {muted ? 'Muted' : 'Aloud'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setHandsOn((on) => !on)}
+          aria-pressed={handsOn}
+          // The status reason, verbatim. An operator whose hand gesture does
+          // nothing needs to know WHICH of the four absences it is; "not
+          // working" sends them to look for a fault that is not there.
+          title={handsOn ? hands.status.reason || 'Reading hand position from the camera.' : 'Use the camera for hand gestures'}
+          style={{ ...control, borderColor: handsOn ? C.core : C.edge2 }}
+        >
+          <Hand size={13} aria-hidden /> {handsOn ? 'Hands on' : 'Hands'}
         </button>
       </form>
     </div>
