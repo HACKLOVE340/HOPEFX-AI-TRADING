@@ -2048,7 +2048,7 @@ of the whole specification.
 | 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
 | 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
 | 5 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |
-| 6 | Change records with expected effect | 6 | High | Blocks Group 1 §16, §21, §32 |
+| ~~6~~ | ~~Change records with expected effect~~ | 6 | **DONE 2026-09-09 — §E24** | `deployment/change_records.py`, generated from git with the risk tier derived from path prefixes (Ch 1's register does not exist yet — ADR 0011 says so rather than implying it). An `Expected-Effect:` commit trailer is checked at `commit-msg`; **advisory, not blocking**, on the owner's decision (ADR 0012), with `CHANGE_RECORD_ENFORCE=1` to enforce and `--report` to measure the KPI — which read 20% (1 of 5) at adoption. Group 1 §16, §21 and §32 are unblocked |
 | 7 | Authority Tiers 0 and 3 | 10 | High | Group 1's premise needs an observe-only tier |
 | 8 | Stated degradation order, with the trading path excluded from it | 34 | High | Article IX is enforced in four places with no stated order of what is shed first |
 | 9 | Progressive delivery + automated rollback | 5 | High | A bad release reaches everyone at once |

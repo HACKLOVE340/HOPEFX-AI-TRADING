@@ -1332,13 +1332,13 @@ missing decision record against a stale link hides the first.
 | ~~3~~ | ~~Referential freshness check~~ | 15 | **DONE** — Phase G3-2 | Two layers, not one: referential would have caught none of the three known errors |
 | ~~4~~ | ~~Caller check on the capability registry~~ | 13, 14 | **DONE** — Phase G3-3 | 154 rows screened, 37 flagged; a screen, not a verdict |
 | 5 | Injection evidence as a traceability link | 13 | High | Five tests that could not fail, in one session |
-| 6 | ADR system + back-fill the eight known decisions | 6 | High | Each is already cited as precedent with no citable record |
-| 7 | Failure memory with the five questions | 8 | High | Seven lessons currently exist only in a transcript |
+| ~~6~~ | ~~ADR system + back-fill the eight known decisions~~ | 6 | **DONE 2026-09-09 — §E22** | `docs/decisions/` + `scripts/adr.py`, gated in pre-commit. Twelve records, not eight: 0007 → 0009 is a decision this repository genuinely reversed, which is the chapter's argument in one file pair |
+| ~~7~~ | ~~Failure memory with the five questions~~ | 8 | **DONE 2026-09-09 — §E23** | `ai/ledger/outcomes.py::record_failure`. All five required; the refusal quotes WHY each is required rather than naming a field, and 'how was it detected' says that a failure found by a customer and one found by a test are the same failure with different lessons |
 | 8 | Root/docs duplicate contracts resolved | 1, 3 | Medium | `CONTRIBUTING`, `DEPLOYMENT` diverged |
-| 9 | Outcome memory linkage | 8 | Medium | Needs Group 2 Ch 6 change records first |
+| ~~9~~ | ~~Outcome memory linkage~~ | 8 | **DONE 2026-09-09 — §E23** | `outcomes.observe()` attaches an observed effect to a stated prediction, once and never revised, and gave `ai/core/calibration.py` the `resolve()` caller it had never had |
 | 10 | Backlog item records + duplicate detection | 11 | Medium | Manual coverage mapping is not repeatable |
 | 11 | Idea relationship graph | 12 | Medium | Would have unblocked the delegation bound automatically |
-| 12 | Decision ledger unification | 7 | Medium | Three partial ledgers today |
+| ~~12~~ | ~~Decision ledger unification~~ | 7 | **DONE 2026-09-09 — §E23** | `ai/ledger/decisions.py`: one schema for every actor, refusals as first-class entries naming the control that refused. Wired to `risk/manager.py::_zero_sizing`, so it has coverage rather than only a schema |
 | 13 | Semantic search with provenance | 16 | Low | Registry lookup covers the common case first |
 | 14 | Tier the six dated audits, archive completed plans | 1, 4 | Low | Cheap, and clears the category confusion |
 
