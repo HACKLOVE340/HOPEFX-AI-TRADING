@@ -20,6 +20,69 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+# ── Modules with no production caller, each with the reason it stays ──────────
+#
+# Same idiom as gate-g's KNOWN_VIOLATIONS: a recorded debt, not an off-switch.
+# Anything NOT listed here still fails the gate, so a newly orphaned file blocks
+# the build. A reason is mandatory — `scripts/ci/` has a test asserting every
+# entry carries one, and asserting that no entry has quietly become wired.
+#
+# This gate reported zero for its whole life until 2026-09-09, when three
+# stacked defects in its own detection were fixed (single-file guarded packages
+# were skipped, bare-package imports were not resolved, and every mirrored test
+# file was excluded by a substring match). Turning it on surfaced these twelve
+# at once. They are triaged, not silenced — the owner's standing instruction is
+# that nothing is deleted, so each is recorded with what replaced it or why it
+# has no caller yet.
+KNOWN_UNWIRED: dict[str, str] = {
+    # ── Superseded: something else does this job now ──────────────────────────
+    "brokers/oanda_ws.py": (
+        "Tombstone. Its own docstring says REMOVED — OANDAStreamAdapter moved to "
+        "data_feed.NuclearStreamer. Kept so an old import fails loudly with a "
+        "pointer rather than an opaque ModuleNotFoundError."
+    ),
+    "core/tenancy.py": (
+        "Superseded. Written because /api/trading/orders, /balance and portfolio "
+        "did not filter rows by owner. Verified 2026-09-09: all three now resolve "
+        "per-user broker accounts via _resolve_account(user.sub) and "
+        "_user_broker_call(user.sub, ...), so the leak it targeted is closed by a "
+        "different mechanism. Not a live security gap."
+    ),
+    "risk/risk_manager.py": (
+        "Backwards-compatibility shim re-exporting risk.manager. 63 lines, kept "
+        "so external or older imports keep resolving."
+    ),
+    # ── Alternative entry points, reachable by hand, not deployed ─────────────
+    "execution/execution.py": (
+        "Alternative startup wiring, like trader_full.py. The container runs "
+        "app.py and run.py uses HopeFXEngine, so nothing imports this — it is "
+        "invoked directly when someone wants the standalone execution system."
+    ),
+    # ── Hardware or environment gated ─────────────────────────────────────────
+    "core/acceleration/gpu_engine.py": (
+        "Requires CUDA. Already omitted from coverage for the same reason "
+        "(.coveragerc). Imported only when a GPU is present."
+    ),
+    "brokers/mt5_zmq_bridge.py": (
+        "ZeroMQ bridge to MetaTrader 5, which is Windows-only. The MT5 SDK is "
+        "not installable in CI or on the Linux VPS, so nothing imports it there."
+    ),
+    # ── Type and utility libraries used by tests and future callers ───────────
+    "core/domain_models.py": (
+        "Pydantic v2 domain models (Signal, Position, Account...). Production "
+        "code duck-types these objects via getattr rather than importing the "
+        "classes, so the library has no import edge despite being the schema "
+        "those objects are built to."
+    ),
+    # ── Built, not yet wired. Each needs a decision, not deletion ─────────────
+    "risk/analytics.py": "Quantitative risk analytics engine; risk/advanced_analytics.py is the wired one.",
+    "risk/position_sizing.py": "ATR/fixed-risk/Kelly sizing; risk/manager.py carries the sizing that runs.",
+    "core/circuit_breaker.py": "Broker-API circuit breaker; utils/fault_guard.py is the wired one.",
+    "risk/compliance/prop_engine.py": "Prop-firm compliance engine; prop_firm_mode.json config is read elsewhere.",
+    "brokers/prop_firms/all_brokers.py": "Prop-firm broker adapters, 1301 lines, no current caller.",
+}
+
+
 # Packages where dead files are a real risk (unused execution/risk code)
 GUARDED_PACKAGES: frozenset[str] = frozenset(
     {
@@ -180,6 +243,16 @@ def main() -> int:
             is_live = mod in exact_imports or any(mod.startswith(bp + ".") for bp in bare_packages)
             if not is_live:
                 dead.append(str(py_file.relative_to(REPO_ROOT)))
+
+    known = [d for d in dead if d in KNOWN_UNWIRED]
+    dead = [d for d in dead if d not in KNOWN_UNWIRED]
+
+    if known:
+        print(f"Gate E: {len(known)} recorded unwired module(s) — reason on each, not silenced:")
+        for path in sorted(known):
+            print(f"  · {path}")
+            print(f"      {KNOWN_UNWIRED[path]}")
+        print()
 
     if dead:
         print(f"Gate E FAILED — {len(dead)} potentially dead file(s) in guarded packages:")

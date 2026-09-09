@@ -1477,6 +1477,71 @@ per-manifest and including `requirements-dev.txt` / `requirements-optional.txt`
 separately.
 
 
+## §E20 — Twelve orphans, triaged rather than silenced (2026-09-09)
+
+Gate E reported zero dead files for its whole life. §E3–§E12 fixed three stacked
+defects in its own detection — single-file guarded packages skipped,
+bare-package imports unresolved, and a substring match excluding every mirrored
+test file — and it immediately failed CI with twelve unreferenced modules,
+5,178 lines between them.
+
+That failure is the gate working. Resolving it is the work that follows.
+
+### The triage
+
+Deleting is not an option, and wiring twelve modules blind would be worse than
+leaving them: several are alternates for something already running. Each is
+recorded in `KNOWN_UNWIRED` with the reason it stays.
+
+| module | why it has no caller |
+|---|---|
+| `brokers/oanda_ws.py` | Tombstone — its own docstring says REMOVED; streaming moved to `data_feed.NuclearStreamer` |
+| `core/tenancy.py` | **Superseded, verified** — see below |
+| `risk/risk_manager.py` | 63-line backwards-compatibility shim re-exporting `risk.manager` |
+| `execution/execution.py` | Alternative startup wiring, like `trader_full.py`; invoked by hand, not imported |
+| `core/acceleration/gpu_engine.py` | Requires CUDA; already omitted from coverage for the same reason |
+| `brokers/mt5_zmq_bridge.py` | MetaTrader 5 is Windows-only; the SDK will not install in CI or on the Linux VPS |
+| `core/domain_models.py` | Pydantic schema; production duck-types these objects via `getattr` rather than importing the classes |
+| `risk/analytics.py` | `risk/advanced_analytics.py` is the wired one |
+| `risk/position_sizing.py` | `risk/manager.py` carries the sizing that runs |
+| `core/circuit_breaker.py` | `utils/fault_guard.py` is the wired one |
+| `risk/compliance/prop_engine.py` | Prop-firm config is read elsewhere |
+| `brokers/prop_firms/all_brokers.py` | 1301 lines of prop-firm adapters, no current caller |
+
+### The one that looked like a security hole
+
+`core/tenancy.py` exists because — in its own words — *"the filters added
+afterwards landed on some endpoints and not others: `GET /api/trading/positions`
+filtered, `GET /api/trading/orders` did not, `/balance` did not,
+`api/portfolio.py` did not, and the WebSocket account broadcaster pushed one
+account's equity to every subscriber."*
+
+A module written to close a multi-tenant data leak, imported by nothing, is
+alarming. Checked rather than assumed: all three named endpoints filter today
+via `_resolve_account(user.sub)` and `_user_broker_call(user.sub, ...)`. A
+different mechanism — per-user broker accounts — closed the leak, which is why
+`tenancy.py` never acquired a caller. **Not a live gap.**
+
+### Keeping the list a debt and not a graveyard
+
+An allowlist with no pressure on it becomes an off-switch — the lesson from
+gate-g, whose line-keyed entries taught people to bump numbers. Three properties
+are pinned by test:
+
+1. every entry carries a substantial, non-placeholder reason;
+2. no entry has since been wired (a module that gained a caller must leave);
+3. every listed file still exists.
+
+And the one that matters most: an orphan **not** in the registry still fails the
+gate, proven by mirroring a tree with an unimported module and watching it exit 1.
+
+### Evidence
+
+`tests/unit/test_gate_e_known_unwired_is_a_debt_not_an_offswitch.py` — 6 tests.
+`python scripts/ci/gate_e_dead_files.py` now exits 0, printing all twelve with
+their reasons rather than hiding them.
+
+
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
 The owner supplied the full Volumes I–XX document. The earlier source was a table
