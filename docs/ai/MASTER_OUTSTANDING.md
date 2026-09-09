@@ -716,6 +716,66 @@ neither of the first two.
   itself and asserts a task is scheduled — and asserts that with no tool bus it
   schedules nothing rather than reporting a clean sweep it never ran.
 
+## §E10 — The model quality gate got its caller (2026-09-09)
+
+`ml/model_quality_gate.py` is well built — `require_pass()` raises rather than
+returning a falsy result, `evaluate()` treats a missing score as a **failure**
+rather than a zero, every refusal carries a reason code — and it was invoked by
+nothing outside its own tests. A fail-closed gate nobody calls is worse than no
+gate: it reads to a reviewer as though model quality is checked.
+
+### It was aimed at the wrong place first
+
+The obvious guess is `ml/model_registry.py::promote()`. Wrong, and the module
+says so: it exists to be consulted *"before a candidate reaches paper or live
+execution"*. That is the **inference** path. Registry promotion already has its
+own gate (OOS accuracy, p-value, Sharpe, PnL reconciliation); this one asks
+whether a *prediction* can be trusted right now.
+
+### The three signals already existed, judged by hand
+
+`predict()` was already making all three judgements inline, as strings in the
+evidence blob, against a bare `0.3`:
+
+    "calibration_state":  "isotonic" if self._calibrator is not None else "raw",
+    "drift_state":        "detected" if drift else "clear_or_unavailable",
+    "data_quality_state": "valid" if data_quality >= 0.3 else "degraded",
+
+— and `data_quality` was computed under a comment reading *"for downstream
+gating"*, then used only to set a Prometheus gauge. Nothing gated on it.
+
+So the wiring replaces three hand-rolled judgements with the component built to
+make them. **Every threshold is a value the file already used**
+(`_DRIFT_Z_THRESHOLD`, and the `0.3`, now named `_MIN_DATA_QUALITY`). None is
+invented — a gate configured with numbers nobody chose fails at a boundary
+nobody agreed to.
+
+Blocking is opt-in (`MODEL_QUALITY_BLOCK`, default false), the same shape as
+`DRIFT_BLOCK`. Wiring a gate in must not silently change when this system
+declines to trade. When it *is* enabled it raises `RuntimeError` specifically,
+which `HOPEFXDecisionEngine._phase2_ml` treats as a hard ML filter rather than
+falling back to non-ML confidence — a quality refusal must not degrade into
+"trade on less information". An unevaluable gate raises too: not a passed gate.
+
+### Two findings this surfaced, neither fixed here
+
+1. **Every prediction today is uncalibrated.**
+   `ml/saved_models/isotonic_calibrator.pkl` does not exist, so `_calibrate()`
+   silently returns the raw probability. Nothing said so before; the gate now
+   scores it 0.0 and records `calibration_state: "raw"`. `_MIN_CALIBRATION`
+   defaults to 0.0, so this is tolerated and *visible* rather than enforced —
+   raising it to 1.0 would refuse every prediction in the current deployment.
+   Training records no Brier or ECE score, so there is no honest calibration
+   *error* to read; the score is a presence signal and is documented as one.
+
+2. **`risk/manager.py::_get_data_quality` defaults to 1.0 when it cannot
+   measure.** `return getattr(signal, "data_quality", 1.0)` — and
+   `calculate_position_size` then gates on `data_quality < _MIN_DATA_QUALITY`.
+   An unmeasured feed therefore sizes as though quality were perfect, in the
+   money path. Same shape as the 1.0 default this phase removed from
+   `predict()`, one module over, and it is **not** changed here: it moves
+   position sizing, which is the owner's call. Tracked in §B.
+
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
 The owner supplied the full Volumes I–XX document. The earlier source was a table

@@ -117,6 +117,27 @@ _STALE_MODEL_BLOCK: bool = os.getenv("STALE_MODEL_BLOCK", "true").lower() == "tr
 # Default: 4.0 (warn only).  Set DRIFT_BLOCK=true to block on drift.
 _DRIFT_Z_THRESHOLD = float(os.getenv("DRIFT_Z_THRESHOLD", "4.0"))
 _DRIFT_BLOCK = os.getenv("DRIFT_BLOCK", "false").lower() == "true"
+
+# ── Model quality gate ────────────────────────────────────────────────────────
+# `ml/model_quality_gate.py` is consulted on every predict(). It was built
+# fail-closed, tested, and called by nothing — while predict() made the same
+# three judgements inline, as strings in the evidence blob, against a bare
+# 0.3 literal. These are that literal and its siblings, named once so the
+# boundary has a single definition rather than one per read site.
+#
+# The floor below is the value predict() already used to call data quality
+# "valid" rather than "degraded"; the drift ceiling is _DRIFT_Z_THRESHOLD, the
+# constant the drift guard already enforces. Neither is a new number.
+_MIN_DATA_QUALITY = float(os.getenv("MIN_DATA_QUALITY", "0.3"))
+# 1.0 requires a fitted isotonic calibrator; 0.0 tolerates a raw probability,
+# which is the current deployment's actual state — isotonic_calibrator.pkl is
+# absent, so every prediction today is served uncalibrated. Defaulting to 0.0
+# keeps that tolerated and *recorded* rather than silently unnoticed.
+_MIN_CALIBRATION = float(os.getenv("MIN_CALIBRATION", "0.0"))
+# Advisory by default, exactly like _DRIFT_BLOCK. Wiring a gate in must not
+# silently change when this system declines to trade; that is the owner's
+# decision, and it is tracked with the DRIFT_BLOCK default.
+_MODEL_QUALITY_BLOCK = os.getenv("MODEL_QUALITY_BLOCK", "false").lower() == "true"
 # Rolling window of recent feature vectors for drift detection
 _DRIFT_WINDOW = int(os.getenv("DRIFT_WINDOW", "50"))
 # Fraction of the live feature vector that must be present in the training
@@ -836,6 +857,72 @@ class InferenceEngine:
             self._drift_scope_warned = True
         return fallback
 
+    def _model_quality_gate(self):
+        """The gate, configured from the constants this file already enforced.
+
+        Built per call rather than cached: the thresholds are module-level and
+        a test that monkeypatches one must not be defeated by an instance that
+        captured the old value at construction time.
+        """
+        from ml.model_quality_gate import ModelQualityGate
+
+        return ModelQualityGate(
+            minimum_calibration=_MIN_CALIBRATION,
+            maximum_drift=_DRIFT_Z_THRESHOLD,
+            minimum_data_quality=_MIN_DATA_QUALITY,
+        )
+
+    def _evaluate_model_quality(self, *, drift_z: float | None, data_quality: float | None):
+        """Score this prediction's calibration, drift and data quality.
+
+        Returns the snapshot, or ``None`` if the gate could not be evaluated at
+        all — which is NOT the same as a pass, and `_enforce_model_quality`
+        treats it accordingly.
+
+        `drift_z` is passed through as ``None`` when drift was never measured.
+        Substituting 0.0 there would report "no drift" for a guard that did not
+        run, which is Rule 2's unmeasured-is-absent-never-zero, and the gate
+        already fails closed on a missing score.
+
+        Calibration is a *presence* signal, not a calibration error: 1.0 when a
+        fitted isotonic calibrator is loaded, 0.0 when predictions are served
+        from the raw probability. Nothing in training records a Brier or ECE
+        score today, so there is no honest number to read; this says which of
+        the two states the engine is in and no more. When training starts
+        recording one, this is the line to change.
+        """
+        try:
+            calibration_score = 1.0 if getattr(self, "_calibrator", None) is not None else 0.0
+            return self._model_quality_gate().evaluate(
+                calibration_score=calibration_score,
+                drift_score=drift_z,
+                data_quality_score=data_quality,
+            )
+        except Exception:
+            # Logged at ERROR, not debug: this is a safety control failing to
+            # evaluate, and a handler that whispers is how the last one stayed
+            # invisible. The caller decides what an unevaluable gate means.
+            logger.error("InferenceEngine: model quality gate could not be evaluated", exc_info=True)
+            return None
+
+    def _enforce_model_quality(self, snapshot) -> None:
+        """Refuse the prediction when the gate says so and blocking is enabled.
+
+        Raises ``RuntimeError`` specifically: `HOPEFXDecisionEngine._phase2_ml`
+        treats that type as a hard ML filter and declines the trade, where any
+        other exception falls back to the brain's non-ML confidence. A quality
+        refusal must not degrade into "trade on less information".
+        """
+        if not _MODEL_QUALITY_BLOCK:
+            return
+        if snapshot is None:
+            raise RuntimeError(
+                "model quality gate could not be evaluated and MODEL_QUALITY_BLOCK=true — "
+                "an unmeasured gate is not a passed gate"
+            )
+        if not snapshot.passed:
+            raise RuntimeError("model quality gate failed: " + ", ".join(snapshot.reason_codes))
+
     def _check_feature_drift(self, X_row: pd.DataFrame | None) -> bool:
         """
         Detect feature distribution drift using z-score comparison.
@@ -1294,7 +1381,12 @@ class InferenceEngine:
         )
 
         # Data quality from orchestrator (for downstream gating)
-        data_quality = 1.0
+        #
+        # `data_quality` stays None when the orchestrator has no tick to speak
+        # for. It used to default to 1.0 — a perfect score for a measurement
+        # that never happened, handed straight to the gauge and, once this gate
+        # was wired, to the gate. Rule 2: unmeasured is absent, never best case.
+        data_quality: float | None = None
         try:
             from data_layer.orchestrator import orchestrator
 
@@ -1304,11 +1396,27 @@ class InferenceEngine:
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
 
+        # ── Model quality gate ────────────────────────────────────────────────
+        # Consulted here rather than at registry promotion: the gate's own
+        # docstring scopes it to "before a candidate reaches paper or live
+        # execution", and this is that point. Advisory unless
+        # MODEL_QUALITY_BLOCK=true, in which case it raises RuntimeError, which
+        # HOPEFXDecisionEngine._phase2_ml treats as a hard ML filter.
+        quality = self._evaluate_model_quality(
+            drift_z=getattr(self, "_drift_z_max", None),
+            data_quality=data_quality,
+        )
+        self._enforce_model_quality(quality)
+
         # ── Prometheus instrumentation ────────────────────────────────────────
         _PROM.predict_total.labels(symbol=sym_label, direction=direction).inc()
         _PROM.predict_latency.labels(symbol=sym_label).observe(latency_ms / 1000.0)
         _PROM.confidence_gauge.labels(symbol=sym_label).set(float(confidence))
-        _PROM.data_quality_gauge.labels(symbol=sym_label).set(data_quality)
+        # Only reported when actually measured. A gauge that reads 1.0 because
+        # nothing was measured is the dashboard telling you the feed is perfect
+        # while it is silent.
+        if data_quality is not None:
+            _PROM.data_quality_gauge.labels(symbol=sym_label).set(data_quality)
         if model_version and model_version != "fallback":
             _PROM.model_version_info.labels(model_id=model_version).set(1)
         if model_version == "fallback":
@@ -1323,9 +1431,16 @@ class InferenceEngine:
             "feature_schema_hash": feature_schema_hash,
             "data_snapshot_at": datetime.now(UTC).isoformat(),
             "regime": "unknown",
+            # These three used to be judged inline here, against a bare 0.3.
+            # They are now the model quality gate's verdict, so the evidence
+            # blob and the gate cannot disagree about the same prediction.
+            # `unmeasured` is a third state the string form could not express:
+            # it previously read "valid" for a data quality nobody measured.
             "calibration_state": "isotonic" if self._calibrator is not None else "raw",
-            "drift_state": "detected" if drift else "clear_or_unavailable",
-            "data_quality_state": "valid" if data_quality >= 0.3 else "degraded",
+            "drift_state": ("clear" if quality.drift_ok else "detected") if quality else "unmeasured",
+            "data_quality_state": ("valid" if quality.data_quality_ok else "degraded") if quality else "unmeasured",
+            "model_quality_passed": bool(quality.passed) if quality else None,
+            "model_quality_reasons": list(quality.reason_codes) if quality else [],
         }
         evidence_hash = hashlib.sha256(
             json.dumps(evidence_payload, sort_keys=True, separators=(",", ":")).encode()
@@ -1346,7 +1461,9 @@ class InferenceEngine:
             "dl_nudge": round(dl_nudge, 4),
             "sentiment_score": self._last_sentiment_score,
             "macro_impact": self._last_macro_impact,
-            "data_quality": round(data_quality, 4),
+            # None when the orchestrator had no tick — reported as unmeasured
+            # rather than as a perfect 1.0 nobody measured.
+            "data_quality": round(data_quality, 4) if data_quality is not None else None,
             "is_safe": self.is_safe_to_trade(),
             "decision_id": decision_id,
             "evidence_hash": evidence_hash,
