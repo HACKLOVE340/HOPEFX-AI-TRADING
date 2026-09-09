@@ -28,6 +28,8 @@ import { useRefreshPlan } from '../hooks/usePlan';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { PLAN_COLORS } from '../lib/subscription';
 import { extractApiError } from '../lib/utils';
+import { useDataFreshness } from '../hooks/useDataFreshness';
+import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,7 +87,18 @@ const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: str
   USDT: { name: 'Tether',   color: '#26a17b', icon: '₮', networks: ['TRC20', 'ERC20', 'BEP20'] },
 };
 
-const POLL_INTERVAL_MS = 5000;
+/** Status-poll cadence. Exported so a test advances real time by the real
+  * interval rather than a guessed one that silently stops matching. */
+export const POLL_INTERVAL_MS = 5000;
+
+/**
+ * Consecutive failed status polls before the page admits it has lost contact.
+ *
+ * Not 1: a single dropped request is normal and saying so on every blip trains
+ * the customer to ignore the notice. Not 10 either — at this cadence that is
+ * most of a minute of a page claiming to watch for money it cannot see.
+ */
+export const POLL_FAILURES_BEFORE_DEGRADED = 3;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -232,6 +245,10 @@ const CryptoCheckout: React.FC = () => {
   const [addressError, setAddressError]     = useState<string | null>(null);
   const [copied, setCopied]                 = useState(false);
   const [paymentStatus, setPaymentStatus]   = useState<PaymentStatus | null>(null);
+  // The status poll may fail without the payment failing, so it degrades
+  // rather than stopping — but it must say so. See POLL_FAILURES_BEFORE_DEGRADED.
+  const statusFreshness = useDataFreshness('payment status');
+  const pollFailures = useRef(0);
   const [liveRates, setLiveRates]           = useState<Record<CryptoOption, number>>({ BTC: 0, ETH: 0, USDT: 1 });
   const [ratesErr, setRatesErr]             = useState<string | null>(null);
   const [flwLoading, setFlwLoading]         = useState(false);
@@ -318,6 +335,8 @@ const CryptoCheckout: React.FC = () => {
     pollRef.current = setInterval(async () => {
       try {
         const res = await api.get<PaymentStatus>('/payments/crypto/status/' + paymentId);
+        pollFailures.current = 0;
+        statusFreshness.markOk();
         setPaymentStatus(res.data);
         if (res.data.status === 'complete') {
           clearInterval(pollRef.current!);
@@ -334,10 +353,19 @@ const CryptoCheckout: React.FC = () => {
           setStep('select');
         }
       } catch {
-        // Non-fatal — keep polling
+        // Keep polling — a failed status read is not a failed payment, and the
+        // customer may already have sent funds. But do not keep the failure to
+        // ourselves: this screen states a confirmation count and the sentence
+        // "This page polls automatically every N seconds", and neither is true
+        // once the endpoint has stopped answering. Silently substituting the
+        // last known state is the F1-01 defect (see hooks/useDataFreshness).
+        pollFailures.current += 1;
+        if (pollFailures.current >= POLL_FAILURES_BEFORE_DEGRADED) {
+          statusFreshness.markFailed('payment status');
+        }
       }
     }, POLL_INTERVAL_MS);
-  }, [refreshPlan]);
+  }, [refreshPlan, statusFreshness]);
 
   const handleConfirmSent = () => {
     if (!depositInfo) return;
@@ -554,6 +582,11 @@ const CryptoCheckout: React.FC = () => {
     return (
       <div className="page-content">
         <PageHeader title="Confirming Payment" breadcrumbs={breadcrumbs} />
+        <StaleDataNotice
+          failed={statusFreshness.failed}
+          what="payment status"
+          className="mb-4"
+        />
         <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
           <div style={{ fontSize: 18, fontWeight: 600, color: '#f8fafc', marginBottom: 8 }}>
@@ -574,7 +607,12 @@ const CryptoCheckout: React.FC = () => {
           </div>
           <div style={{ fontSize: 13, color: '#64748b' }}>
             This typically takes {selectedCrypto === 'BTC' ? '30–60 minutes' : '2–5 minutes'}.
-            This page polls automatically every {POLL_INTERVAL_MS / 1000} seconds.
+            {/* Only claim the poll is working while it is. Saying "polls
+                automatically" under a dead connection is the sentence that made
+                this screen indistinguishable from a healthy one. */}
+            {statusFreshness.failed
+              ? ' Still retrying every ' + POLL_INTERVAL_MS / 1000 + ' seconds — the count above is the last one we could read.'
+              : ' This page polls automatically every ' + POLL_INTERVAL_MS / 1000 + ' seconds.'}
           </div>
         </div>
       </div>
