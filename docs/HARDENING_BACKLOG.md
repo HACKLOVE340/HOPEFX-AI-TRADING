@@ -1167,8 +1167,12 @@ path and on none of the others.**
 | ID | Sev | Issue | Location |
 |----|-----|-------|----------|
 | S5-01 | HIGH | The "never trade on a stale tick" invariant never executes on the decision-engine path | `risk/manager.py:352-359`, `invariants/enforcement.py:336-344` |
-| S5-02 | HIGH | Tick `quality` is frozen at ingest — a stalled feed's last tick stays `GOOD` forever | `types.py:106-112`, `feeds/gold/manager.py:431-438` |
-| S5-03 | MEDIUM | The consensus tick is returned with no validity or age check at all | `feeds/gold/manager.py:431-432` |
+| ~~S5-02~~ | HIGH | ~~Tick `quality` is frozen at ingest — a stalled feed's last tick stays `GOOD` forever~~ **FIXED** — `is_valid()` bounds age | `data_layer/types.py:143` |
+| ~~S5-03~~ | MEDIUM | ~~The consensus tick is returned with no validity or age check at all~~ **FIXED** — the consensus branch checks `is_valid()` | `data_layer/feeds/gold/manager.py:424` |
+
+Paths in this table predate the move of `feeds/`, `types.py` and the gold
+manager under `data_layer/`. Read the code before treating any row as current;
+a row here saying "open" is not evidence that it is.
 
 ### S5-01 — The staleness invariant cannot fire (HIGH)
 
@@ -1218,7 +1222,25 @@ the orchestrator tick that produced `tick_mid`, and accept `datetime` in the
 enforcement comprehension. Add a test that a signal with a 60-second-old tick is
 refused when `HOPEFX_INVARIANT_MODE=enforce`.
 
-### S5-02 — Tick quality is a snapshot, not a live property (HIGH)
+### S5-02 — Tick quality is a snapshot, not a live property (HIGH) — FIXED
+
+> **Both fixed.** `GoldTick.is_valid(max_age_s=None)` (`data_layer/types.py:143`)
+> now bounds age with `DQE_STALE_THRESHOLD_S` — the same threshold the
+> orchestrator's Redis gate applies, so there is one staleness rule rather than
+> one per read path — and `GoldFeedManager.get_latest_tick`
+> (`data_layer/feeds/gold/manager.py:424`) checks it on the default consensus
+> branch, logging a warning instead of serving. Proven by
+> `tests/unit/test_tick_staleness_enforced.py` (8 tests) and by execution: a
+> tick graded `GOOD` with confidence 0.99 reports `is_valid() is False` at 31s,
+> and the consensus branch declines to serve it.
+>
+> This note exists because the entries below still read as open, and on
+> 2026-09-09 that cost something: MASTER_OUTSTANDING §E12 was written asserting
+> "S5-02 and S5-03 (both open)" straight from this document, without checking
+> the code. It overstated a live hole in the money path in a commit message, a
+> published page, and a report to the owner. The paragraphs below are kept as
+> the historical record of the defect; this banner is the current state.
+
 
 `GoldTick.is_valid()` (`types.py:106-112`) treats a tick as valid when
 `quality not in (REJECTED, STALE)` and the prices are sane. `quality` is
@@ -1247,7 +1269,7 @@ this class measures age.
 `DQE_STALE_THRESHOLD_S` the orchestrator already reads at
 `orchestrator.py:731`.
 
-### S5-03 — The consensus path skips even the validity check (MEDIUM)
+### S5-03 — The consensus path skips even the validity check (MEDIUM) — FIXED
 
 `feeds/gold/manager.py:431-432`, the first two lines of `get_latest_tick` and
 the default branch (`prefer_consensus=True`):

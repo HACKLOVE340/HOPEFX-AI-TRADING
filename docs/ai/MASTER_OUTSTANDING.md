@@ -777,7 +777,8 @@ falling back to non-ML confidence — a quality refusal must not degrade into
    `_measured_data_quality()`, which returns `None` when nothing measured the
    feed, and refuses. Evidence:
    `tests/unit/test_risk_data_quality_is_measured.py` (21 tests; 13 fail
-   against the pre-fix tree).
+   against the pre-fix tree). See the correction in §E12 — an earlier version
+   of that section wrongly reported S5-02/S5-03 as still open.
 
 ## §E11 — advanced_ai.py: superseded, kept, pinned (2026-09-09)
 
@@ -929,20 +930,47 @@ refuse every size. It is **not** a deployed entry point (`run.py` uses
 `reason="data_quality:unmeasured"`. Wiring it to the orchestrator, or having it
 assert its own quality, is tracked in §B.
 
-### What this does NOT close
+### What this does NOT close — CORRECTED 2026-09-09
 
-The gate now refuses when **no** tick can be produced. It still trusts the
-confidence on a tick it *does* get, and that confidence is recorded at ingest
-and never re-measured. `docs/HARDENING_BACKLOG.md` S5-02 and S5-03 (both open)
-describe the consequence: with Redis down, `orchestrator.get_latest_tick()`
-falls through to the in-memory consensus tick, which carries no age check, so an
-arbitrarily old tick is served with the high confidence it was graded with when
-it arrived. That path passes the data-quality gate before and after this change.
+**The paragraph that stood here was wrong, and wrong in the direction that
+matters: it reported an open hole in the money path that had already been
+closed.** It read:
 
-So: "the feed is gone" is now caught; "the feed stopped and nobody noticed" is
-not. Closing the second one belongs in `feeds/gold/manager.py` and
-`data_layer/orchestrator.py` — making staleness a property of the read rather
-than of the ingest — not here.
+> `docs/HARDENING_BACKLOG.md` S5-02 and S5-03 (both open) describe the
+> consequence: with Redis down, `orchestrator.get_latest_tick()` falls through
+> to the in-memory consensus tick, which carries no age check […] "the feed is
+> gone" is now caught; "the feed stopped and nobody noticed" is not.
+
+S5-02 and S5-03 were fixed before this phase began. `GoldTick.is_valid()`
+(`data_layer/types.py:143`) bounds age with `DQE_STALE_THRESHOLD_S` — explicitly
+"so there is one staleness rule rather than one per read path" — and
+`GoldFeedManager.get_latest_tick()` (`data_layer/feeds/gold/manager.py:424`)
+checks it on the default consensus branch, warning instead of serving.
+`tests/unit/test_tick_staleness_enforced.py` (8 tests) has been green
+throughout.
+
+Measured rather than read: a tick graded `GOOD` with confidence 0.99 reports
+`is_valid() is False` at 31 s, and the consensus branch declines to serve it.
+
+**The two fixes compose, which is the part the wrong paragraph obscured.** A
+stalled feed now fails at the read (`is_valid()` → the manager returns nothing),
+so the orchestrator returns `None`, so `_measured_data_quality()` returns `None`,
+so `size_order()` refuses with `data_quality:unmeasured`. "The feed stopped and
+nobody noticed" ends in a refusal, not a trade.
+
+**How the error happened, because the mechanism matters more than the
+correction.** The claim was taken from `docs/HARDENING_BACKLOG.md`, where those
+entries still read as open, and was never checked against the code. That is the
+exact failure this repository's own rule exists to prevent — *"if a document and
+a script disagree, the script is right"* — committed while fixing a defect of
+the same family, and it reached a commit message, a published page and a report
+to the owner before anyone ran it. `HARDENING_BACKLOG.md` now carries a FIXED
+banner on both entries and a warning that its paths predate the move under
+`data_layer/`.
+
+What genuinely remains open here is narrower: `_get_data_quality()` still
+reports a 1.0 fallback into `RiskAssessment.data_quality` (§B item 17), and
+`trader_full.py` still builds a RiskManager with no orchestrator (§B item 16).
 
 ### Evidence
 
