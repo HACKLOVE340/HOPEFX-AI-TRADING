@@ -35,6 +35,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import math
 import logging
 import os
 import time
@@ -434,6 +435,49 @@ class InferenceEngine:
         except Exception as exc:
             logger.debug("Calibrator load failed: %s", exc)
             return None
+
+    #: Where training writes the measured calibration of the deployed model.
+    CALIBRATION_REPORT_FILE = "calibration_report.json"
+
+    def _recorded_calibration_score(self) -> float | None:
+        """The calibration score training measured, or ``None`` if it did not.
+
+        `ml/calibration_metrics.py` computes 1 - ECE on held-out predictions and
+        training writes it to ``saved_models/calibration_report.json``. This
+        reads it back.
+
+        ``None`` means nobody measured — which is NOT a pass. This used to be
+        ``1.0 if self._calibrator is not None else 0.0``, i.e. whether a pickle
+        had loaded: a badly-fitted calibrator scored a perfect 1.0 and cleared
+        any threshold, and a well-calibrated raw model scored 0.0 and failed
+        every threshold above zero. `ModelQualityGate.evaluate` already fails
+        closed on a missing score, so absence stays absent.
+
+        A report flagged `single_class` is treated as absent too: Brier is
+        computable on one-class held-out data, but it says nothing about
+        whether a 70% forecast happens 70% of the time.
+        """
+        path = _saved(self.CALIBRATION_REPORT_FILE)
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            # ERROR, not debug: this is a safety-gate input failing to load, and
+            # the caller cannot tell a broken file from an unmeasured model
+            # unless someone says so.
+            logger.error("InferenceEngine: calibration report unreadable at %s: %s", path, exc)
+            return None
+
+        if payload.get("single_class"):
+            logger.warning("InferenceEngine: calibration report is single-class — treating as unmeasured")
+            return None
+
+        score = payload.get("calibration_score")
+        if not isinstance(score, (int, float)) or not math.isfinite(float(score)):
+            logger.error("InferenceEngine: calibration_score missing or non-finite in %s", path)
+            return None
+        return float(score)
 
     # ── Feature building ──────────────────────────────────────────────────────
 
@@ -884,15 +928,21 @@ class InferenceEngine:
         run, which is Rule 2's unmeasured-is-absent-never-zero, and the gate
         already fails closed on a missing score.
 
-        Calibration is a *presence* signal, not a calibration error: 1.0 when a
-        fitted isotonic calibrator is loaded, 0.0 when predictions are served
-        from the raw probability. Nothing in training records a Brier or ECE
-        score today, so there is no honest number to read; this says which of
-        the two states the engine is in and no more. When training starts
-        recording one, this is the line to change.
+        Calibration is now the number training measured — 1 - ECE on held-out
+        predictions, via `ml/calibration_metrics.py`, read from
+        ``saved_models/calibration_report.json``.
+
+        It used to be a *presence* signal: 1.0 if an isotonic calibrator object
+        had loaded, 0.0 otherwise. That measured whether a file existed, so a
+        badly-fitted calibrator passed any threshold and a well-calibrated raw
+        model failed every threshold above zero.
+
+        When no report exists, the score is ``None`` — unmeasured, not passed.
+        The gate fails closed on a missing score, which is the behaviour this
+        depends on rather than working around.
         """
         try:
-            calibration_score = 1.0 if getattr(self, "_calibrator", None) is not None else 0.0
+            calibration_score = self._recorded_calibration_score()
             return self._model_quality_gate().evaluate(
                 calibration_score=calibration_score,
                 drift_score=drift_z,

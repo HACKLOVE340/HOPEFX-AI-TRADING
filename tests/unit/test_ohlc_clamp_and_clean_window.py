@@ -175,9 +175,7 @@ class TestTheCleanWindowIsRecordedAndUsable:
         from ml.cached_series import CLEAN_SINCE, load_cached_daily
 
         series = load_cached_daily("XAUUSD", since=CLEAN_SINCE["XAUUSD"])
-        assert series.integrity.malformed == 0, (
-            f"the window advertised as clean is not: {series.integrity.summary()}"
-        )
+        assert series.integrity.malformed == 0, f"the window advertised as clean is not: {series.integrity.summary()}"
 
     def test_the_full_history_is_still_reachable_on_request(self):
         from ml.cached_series import load_cached_daily

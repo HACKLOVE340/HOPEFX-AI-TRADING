@@ -434,13 +434,30 @@ class BacktestEngine:
         self.max_drawdown = 0.0
         self.max_drawdown_duration = 0
 
-        # Initialise look-ahead bias guard for this backtest run
+        # Look-ahead protection for this run.
+        #
+        # This engine's live defence is the `no_lookahead_context` wrapping the
+        # strategy call below, which blocks shift(-N) inside feature
+        # computation. The FeatureTimestampGuard was constructed here into a
+        # local that nothing read — a control that existed and never ran.
+        #
+        # It is kept and made reachable rather than deleted: a strategy or
+        # feature builder that wants per-feature timestamp validation can now
+        # call `engine.feature_guard.validate(...)`, and `lookahead_protection`
+        # records what was actually in force. "not_run" until this point, so a
+        # report taken before a run cannot read as protected.
+        self.feature_guard = None
+        self.lookahead_protection = "no_lookahead_context"
         try:
             from risk.lookahead_guard import FeatureTimestampGuard
 
-            _feat_guard = FeatureTimestampGuard(strict=True)
-        except ImportError:
-            _feat_guard = None
+            self.feature_guard = FeatureTimestampGuard(strict=True)
+            self.lookahead_protection = "no_lookahead_context+feature_guard"
+        except ImportError as _fg_exc:
+            logger.warning(
+                "FeatureTimestampGuard unavailable (%s) — this run is protected by no_lookahead_context only",
+                _fg_exc,
+            )
 
         # Get data iterator
         data_iterator = self.data_handler.get_data(start_date, end_date, self.symbols)

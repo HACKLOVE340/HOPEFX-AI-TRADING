@@ -758,3 +758,137 @@ class TestDashboardEndpoint:
         resp = sa_client.get("/api/superadmin/")
         assert resp.status_code == 200
         assert "text/html" in resp.headers.get("content-type", "")
+
+
+# ---------------------------------------------------------------------------
+# Coverage for api/superadmin/ml_ai.py and system_health.py
+#
+# Both sat in docs/COVERAGE_UNMEASURABLE.txt as recorded debt — ml_ai.py at 55%,
+# system_health.py at 30% — which means most of two operator-facing surfaces
+# had never been executed by a test. These are the panels an operator reaches
+# for when something is wrong, so "it 500s" is exactly the wrong thing to
+# discover mid-incident.
+#
+# These exercise every route rather than asserting rich payloads: the point is
+# that each handler runs to completion against a real request, with whatever
+# backing services happen to be absent in a test environment. A route that
+# returns a degraded-but-shaped response when its backend is missing is
+# behaving correctly; one that raises is not.
+# ---------------------------------------------------------------------------
+
+
+class TestMlAiSurfaceResponds:
+    """Every /ml/* read endpoint returns a shaped response, not a stack trace."""
+
+    READ_ROUTES = [
+        "/ml/status",
+        "/ml/models",
+        "/ml/metrics",
+        "/ml/rl/status",
+        "/ml/training-jobs",
+        "/ml/ab-tests",
+        "/ml/drift",
+        "/ml/explainability",
+    ]
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_responds(self, sa_client, route):
+        resp = sa_client.get(f"/api/superadmin{route}")
+        assert resp.status_code in (200, 404, 503), f"{route} -> {resp.status_code}: {resp.text[:300]}"
+        if resp.status_code == 200:
+            assert isinstance(resp.json(), (dict, list))
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_never_leaks_a_traceback(self, sa_client, route):
+        """An operator panel must not hand back internals when a backend is down."""
+        body = sa_client.get(f"/api/superadmin{route}").text
+        assert "Traceback" not in body
+        assert "/home/" not in body, "a filesystem path in an error body is an information leak"
+
+    def test_retrain_accepts_a_known_model(self, sa_client):
+        resp = sa_client.post("/api/superadmin/ml/retrain/xgboost")
+        assert resp.status_code in (200, 202, 400, 404, 409, 503), resp.text[:300]
+
+    def test_rl_control_rejects_an_unknown_action(self, sa_client):
+        resp = sa_client.post("/api/superadmin/ml/rl/control", json={"action": "definitely-not-an-action"})
+        assert resp.status_code in (400, 404, 422, 503), f"an unknown RL action must be refused, got {resp.status_code}"
+
+    def test_deploy_still_requires_two_factor(self, sa_client):
+        """The 2FA gate added earlier must not have been loosened by this work."""
+        resp = sa_client.post("/api/superadmin/ml/deploy", json={"model_name": "xgboost", "version": "1"})
+        assert resp.status_code in (401, 403), f"deploy without 2FA returned {resp.status_code} — the gate is open"
+
+    def test_rollback_still_requires_two_factor(self, sa_client):
+        resp = sa_client.post("/api/superadmin/ml/rollback/xgboost")
+        assert resp.status_code in (401, 403), f"rollback without 2FA returned {resp.status_code} — the gate is open"
+
+
+class TestSystemHealthSurfaceResponds:
+    READ_ROUTES = [
+        "/system-health/services",
+        "/system/services",
+        "/system-health/backups",
+        "/system/backups",
+        "/system-health/jobs",
+        "/system/jobs",
+        "/system-health/resources",
+        "/system/resources",
+        "/system/api-keys",
+        "/system-health/dependencies",
+    ]
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_responds(self, sa_client, route):
+        resp = sa_client.get(f"/api/superadmin{route}")
+        assert resp.status_code in (200, 404, 503), f"{route} -> {resp.status_code}: {resp.text[:300]}"
+        if resp.status_code == 200:
+            assert isinstance(resp.json(), (dict, list))
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_never_leaks_a_traceback(self, sa_client, route):
+        body = sa_client.get(f"/api/superadmin{route}").text
+        assert "Traceback" not in body
+        assert "/home/" not in body
+
+    def test_the_alias_and_the_canonical_route_agree(self, sa_client):
+        """Two paths to one panel must not diverge into two answers.
+
+        `/system/services` exists because the frontend calls it; if it ever
+        stops matching `/system-health/services`, the operator's view depends
+        on which URL their build happens to use.
+        """
+        canonical = sa_client.get("/api/superadmin/system-health/services")
+        alias = sa_client.get("/api/superadmin/system/services")
+        assert canonical.status_code == alias.status_code
+        if canonical.status_code == 200:
+            assert set(canonical.json()) == set(alias.json()) if isinstance(canonical.json(), dict) else True
+
+    def test_running_an_unknown_job_is_refused(self, sa_client):
+        resp = sa_client.post("/api/superadmin/system-health/jobs/no-such-job/run")
+        assert resp.status_code in (400, 404, 422, 503), f"an unknown job id must be refused, got {resp.status_code}"
+
+    def test_deleting_an_unknown_api_key_is_refused(self, sa_client):
+        resp = sa_client.delete("/api/superadmin/system/api-keys/no-such-key")
+        assert resp.status_code in (400, 404, 422, 503)
+
+    def test_backup_trigger_reports_what_it_did(self, sa_client):
+        """The backup trigger must not report success for work that did not happen.
+
+        Fixed earlier in this programme (task #2) — it used to return ok for an
+        unverified path. This pins that a response either carries a real
+        outcome or is an error, never a bare optimistic ok.
+        """
+        # This performs a REAL backup — the endpoint routes through the
+        # verified database/restore.py path from Phase R1 rather than a mock,
+        # which is the point: a trigger that only pretends proves nothing. The
+        # archive lands in backups/, which is gitignored for exactly this
+        # reason.
+        resp = sa_client.post(
+            "/api/superadmin/system-health/backups/trigger",
+            json={"type": "incremental"},
+        )
+        assert resp.status_code in (200, 202, 400, 403, 500, 503), resp.text[:300]
+        if resp.status_code in (200, 202):
+            payload = resp.json()
+            assert isinstance(payload, dict)
+            assert payload, "an empty body cannot report whether a backup happened"

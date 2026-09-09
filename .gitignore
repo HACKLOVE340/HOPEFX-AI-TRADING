@@ -340,3 +340,9 @@ frontend/public/vendor/
 # raw frames, rebuilt on demand rather than carried in the history.
 frontend/proof/swipe.y4m
 frontend/proof/shots/
+
+# Runtime backup output. Nothing here is source: database/restore.py and the
+# superadmin backup trigger write real archives into it, including from the
+# test that exercises that endpoint, and a committed .db.gz is both noise and
+# a potential data leak.
+backups/

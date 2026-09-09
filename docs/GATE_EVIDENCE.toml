@@ -194,3 +194,10 @@ kind = "pre_commit"
 runs = "scripts/frontend_colour_ratchet.py --check"
 evidence = "tests/unit/test_frontend_colour_ratchet.py"
 injected = "Three distinct regressions, each refused: an extra hex literal in a baselined file (20 -> 21 blocks with both counts named), a brand-new file carrying one literal (no baseline entry blocks), and a file driven to zero while its baseline line remains (blocks with 'delete the line'). Also proven against the real tree rather than only a fixture: appending '#abcdef' to frontend/src/pages/NotFound.tsx took the total 8021 -> 8022 and the gate blocked naming that file; restoring it returned the gate to green. A sanity floor test asserts the recorded total exceeds 5000, so a glob or regex that stops matching reads as a broken counter rather than as 8021 clean files"
+
+[[gate]]
+id = "gate_chroma_embedded_only"
+kind = "ci_gate"
+runs = "scripts/ci/gate_chroma_embedded_only.py"
+evidence = "tests/unit/test_gate_chroma_embedded_only.py"
+injected = "Six distinct ways the CVE acceptance could stop holding, each refused: chromadb.HttpClient(host=...), chromadb.AsyncHttpClient(...), a chroma service in a compose file, uvicorn chromadb.app in a Dockerfile, Settings(chroma_server_host=...), and CHROMA_SERVER_HOST in an env file. Three negative cases prove it does not cry wolf: a docstring and a comment naming HttpClient are not violations (the AST is parsed, not grepped — the analyzer already had a rule that read prose as source, F255), an unrelated library HttpClient is not flagged, and the real repository passes. Fail-closed is proven too: an empty directory exits 1, because a scan that read nothing must not certify a tree it never looked at"

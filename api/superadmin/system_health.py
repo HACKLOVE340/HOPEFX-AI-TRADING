@@ -28,7 +28,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
@@ -400,27 +400,42 @@ async def run_job_now(
     job_id: str,
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    # Try APScheduler
+    # This endpoint used to end in an unconditional:
+    #
+    #     return {"ok": True, ..., "note": "Scheduler not available — job queued"}
+    #
+    # which was reached both when the scheduler was missing AND when it was
+    # present but had no such job. Nothing queued anything in either case, so an
+    # operator triggering a job during an incident got `ok: true` for work that
+    # did not happen — and a note blaming a scheduler that was running fine.
+    # An unknown job is now a 404 and an unreachable scheduler is a 503.
+    scheduler_reachable = False
     try:
         from api.admin import app_state
 
-        if app_state and hasattr(app_state, "scheduler"):
+        if app_state and hasattr(app_state, "scheduler") and app_state.scheduler is not None:
             sched = app_state.scheduler
+            scheduler_reachable = True
             job = sched.get_job(job_id)
-            if job:
+            if job is not None:
                 job.modify(next_run_time=_utcnow())
-                _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
+                _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "triggered"})
                 return {"ok": True, "job_id": job_id, "triggered_at": _utcnow().isoformat()}
     except Exception as exc:
-        logger.warning("Job run now: %s", exc)
+        # ERROR, not warning: an operator asked for a job to run and it did not.
+        logger.error("Job run now failed for %s: %s", job_id, exc, exc_info=True)
+        _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "error"})
+        raise HTTPException(status_code=503, detail=f"Scheduler error: {safe_error(exc)}") from exc
 
-    _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
-    return {
-        "ok": True,
-        "job_id": job_id,
-        "triggered_at": _utcnow().isoformat(),
-        "note": "Scheduler not available — job queued",
-    }
+    if scheduler_reachable:
+        _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "unknown_job"})
+        raise HTTPException(status_code=404, detail=f"No scheduled job with id {job_id!r}")
+
+    _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "scheduler_unavailable"})
+    raise HTTPException(
+        status_code=503,
+        detail="Scheduler is not available — the job was NOT queued. Nothing has been scheduled.",
+    )
 
 
 @router.get("/system-health/resources")
@@ -518,23 +533,55 @@ async def revoke_system_api_key(
 ) -> dict:
     import json
 
+    # "I revoked that key" is a claim that has to be true. This used to return
+    # {"ok": True} unconditionally: the match loop could touch nothing (unknown
+    # key_id) and the whole block was skipped when Redis was absent (`if rc:`),
+    # yet both paths fell through to the same success. An operator revoking a
+    # leaked credential mid-incident was told it was done when no store had
+    # been written and no key had changed.
     try:
         from cache.redis_client import get_sync_redis_client
 
         rc = get_sync_redis_client()
-        if rc:
-            raw = rc.get("superadmin:security_infra:api_keys")
-            keys = json.loads(raw) if raw else []
-            for k in keys:
-                if k.get("key_id") == key_id:
-                    k["status"] = "revoked"
-                    k["revoked_at"] = _utcnow().isoformat()
-                    k["revoked_by"] = user.sub
-            rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
-        return {"ok": False, "error": safe_error(exc)}
-    _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id})
-    return {"ok": True}
+        logger.error("API key revoke: key store unreachable: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Key store unreachable — key {key_id!r} was NOT revoked: {safe_error(exc)}",
+        ) from exc
+
+    if rc is None:
+        logger.error("API key revoke: no key store configured; %s NOT revoked", key_id)
+        raise HTTPException(
+            status_code=503,
+            detail=f"No key store configured — key {key_id!r} was NOT revoked.",
+        )
+
+    try:
+        raw = rc.get("superadmin:security_infra:api_keys")
+        keys = json.loads(raw) if raw else []
+        revoked = 0
+        for k in keys:
+            if k.get("key_id") == key_id:
+                k["status"] = "revoked"
+                k["revoked_at"] = _utcnow().isoformat()
+                k["revoked_by"] = user.sub
+                revoked += 1
+        if revoked == 0:
+            _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id, "outcome": "not_found"})
+            raise HTTPException(status_code=404, detail=f"No API key with id {key_id!r}")
+        rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("API key revoke failed for %s: %s", key_id, exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Key {key_id!r} was NOT revoked: {safe_error(exc)}",
+        ) from exc
+
+    _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id, "outcome": "revoked", "count": revoked})
+    return {"ok": True, "key_id": key_id, "revoked": revoked}
 
 
 @router.get("/system-health/dependencies")

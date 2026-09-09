@@ -75,9 +75,7 @@ def _signal():
 class TestTheReportDistinguishesUnmeasuredFromPerfect:
     def test_an_unmeasured_feed_reports_none_not_one(self) -> None:
         assessment = _rm(orch=_Orch(tick=None)).assess(_signal())
-        assert assessment.data_quality is None, (
-            "the risk report claims a data-quality figure that nothing measured"
-        )
+        assert assessment.data_quality is None, "the risk report claims a data-quality figure that nothing measured"
 
     def test_no_orchestrator_reports_none(self) -> None:
         assert _rm(orch=None).assess(_signal()).data_quality is None
@@ -111,9 +109,7 @@ class TestAssessHasItsOwnGateWithTheSameHole:
     def test_an_unmeasured_feed_is_rejected_by_name(self) -> None:
         assessment = _rm(orch=_Orch(tick=None)).assess(_signal())
         assert assessment.approved is False
-        assert "data_quality" in assessment.reason, (
-            f"the rejection does not name data quality: {assessment.reason!r}"
-        )
+        assert "data_quality" in assessment.reason, f"the rejection does not name data quality: {assessment.reason!r}"
         assert "unmeasured" in assessment.reason
 
     def test_a_measured_poor_feed_keeps_reporting_its_number(self) -> None:

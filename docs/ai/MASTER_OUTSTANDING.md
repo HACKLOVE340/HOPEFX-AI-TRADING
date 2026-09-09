@@ -137,7 +137,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 26 gates · **26 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 27 gates · **27 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -2013,7 +2013,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      26 gates · 26 proven able to fail · 0 unproven
+    gate_evidence.py      27 gates · 27 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2215,7 +2215,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              26 gates · 26 proven · 0 unproven
+    gate_evidence.py                              27 gates · 27 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -2282,7 +2282,7 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
     backend tests        21,732 pass · 0 fail · 30 skipped
     frontend tests        2,645 pass · 0 fail  (136 files)
     CI gates                 14 of 14 pass
-    gate evidence            26 gates · 26 proven able to fail · 0 unproven
+    gate evidence            27 gates · 27 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -2401,7 +2401,7 @@ that one fact:
 
 **Closed this session:** `scripts/frontend_colour_ratchet.py` +
 `docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
-`GATE_EVIDENCE.toml` (26 gates, 26 proven). The count may now only fall. The
+`GATE_EVIDENCE.toml` (27 gates, 27 proven). The count may now only fall. The
 codemod that would actually revive the three features is **owner's call** — see
 §A.
 
@@ -2450,3 +2450,208 @@ shape.** That is one grep, and it would have caught every item above at the
 time it was introduced rather than today.
 
 Report: https://claude.ai/code/artifact/dffb0262-46cc-48bb-acf8-e9ce45077d9d
+
+---
+
+## §E27 — Money that did not conserve, and a backtest that could see tomorrow (2026-09-10)
+
+Two money defects and one backtest defect, each reproduced by execution before
+it was touched and re-run after.
+
+### The sub-account transfer created and destroyed money
+
+`api/accounts.py` computed each side of a movement with its own `round(x, 2)`:
+
+    new_src_bal = round(src_bal - req.amount, 2)
+    new_dst_bal = round(dst_bal + req.amount, 2)
+
+Two independent roundings of two independent floats, so the two results were
+under no obligation to sum to what went in. Measured:
+
+    src=10.125 dst=20.125 amt=5.00  ->  30.250 becomes 30.240   a cent destroyed
+    src=33.335 dst=66.665 amt=1.00  -> 100.000 becomes 100.010   a cent created
+
+`round` is also ROUND_HALF_EVEN, the wrong tie-break for money. Sub-cent
+balances are reachable: `initial_balance` is a plain float with no cent
+constraint. This violates "No Hidden Capital" in `invariants/constitution.py`.
+
+Fixed: `Decimal(str(...))` at the boundary, the amount quantised **once** with
+ROUND_HALF_UP, and that same Decimal applied to both sides with no second
+rounding — so conservation holds by construction. A reconciliation check now
+**refuses the write** if the totals ever disagree; it is unreachable today and
+exists to catch a future edit that reintroduces a `round()`. The response
+reports what moved, not what was asked for.
+
+### Two marketplaces split revenue the same way, and disagreed with each other
+
+Counting the other places with the same shape — the rule §E26 produced — found
+`social/marketplace.py:92` and `monetization/marketplace.py:1029`. Both split a
+purchase with two independent roundings, and on the same sale they disagreed:
+
+    price=12.575  ->  social 12.570 (-0.005)   monetization 12.580 (+0.005)
+
+Both now route through one quantise-then-subtract rule, with a test pinning
+that they agree — a creator's payout must not depend on which code path sold
+the strategy.
+
+**A correction worth recording:** the first version of that test asserted
+`fee + payout == price` and failed against a *correct* implementation. A
+sub-cent price cannot be charged, so the split has nothing to conserve against;
+what must hold is that it sums to the **charged** amount. The test was wrong,
+not the fix, and the reasoning sits in the file rather than the assertion being
+quietly relaxed. This differs from the transfer deliberately: there the
+sub-cent values are stored balances, which are real and must not be restated.
+
+### The backtester handed every strategy the complete future
+
+`backtesting/engine_config.py` — the canonical engine — built its price
+snapshot correctly, masked `df["timestamp"] <= timestamp`, and then called:
+
+    strategy.generate_signals(timestamp=timestamp, prices=current_prices, data=all_data)
+
+`all_data` is every symbol's **complete** frame, future bars included. Thirty
+lines above, the engine constructed the control designed to catch exactly this:
+
+    # Initialise the BacktestBarGuard to catch any strategy that tries to
+    # peek at future bars during the simulation loop.
+    _bar_guard = BacktestBarGuard(_all_ts)
+    logger.debug("BacktestBarGuard active: %d timestamps", len(_all_ts))
+
+`_bar_guard` was never referenced again — F176, a control that exists, reads
+correctly, logs that it is active, and never runs. Its failure path logged at
+DEBUG, so a run that could not even build the guard looked identical to one
+that could.
+
+Measured over 120 bars, with harness liveness asserted first (the first two
+harnesses were themselves broken — one never awaited the coroutine, one let the
+engine load its own empty data, and each reported zero peeks while exercising
+nothing):
+
+    engine actually ran       : True        strategy was called: 120 times
+    read a FUTURE bar         : 119 of 120
+    first peek                : at 2024-01-01 00:00 it read close=1997.94
+                                from a bar that had not happened
+    guard raised              : NO
+
+After: **0 of 120**, with the strategy still called 120 times.
+
+Fixed structurally rather than by trusting strategies: the engine now slices
+each symbol to `timestamp` and passes that view, so there is no future to read.
+The slice is a `searchsorted` plus an `.iloc` view, which also replaced an
+O(bars x rows) boolean mask per symbol per bar. The guard is kept as the second
+line, `lookahead_protection` records which defence was in force (`"not_run"`
+until a run sets it — an unmeasured value is absent, never best-case), and the
+build failure now logs at WARNING.
+
+`backtesting/engine.py` had the same dead-construction shape with
+`FeatureTimestampGuard`, though its `no_lookahead_context` around the strategy
+call is a real live defence. The guard is now reachable as
+`engine.feature_guard` rather than a local that nothing read. `enhanced_engine.py`
+passes one tick at a time and `multi_symbol_backtest.py` has no strategy
+callback, so neither had the hole — checked rather than assumed.
+
+**Why this ranks above the rest of the backlog:** look-ahead is the one backtest
+defect that makes every other number meaningless, because a strategy that can
+see the next bar can be arbitrarily profitable. Every backtest run before this
+commit was capable of it, whether or not any strategy took the opportunity.
+
+---
+
+## §E28 — Three controls that could not fail, and a regression I shipped (2026-09-10)
+
+### The ChromaDB CVE acceptance was prose
+
+`.trivyignore.yaml` suppresses four chromadb CVEs — CVE-2026-45829, 45830,
+45831, 45833, two of them **pre-authentication code injection** — on one stated
+ground: this platform runs the embedded `PersistentClient` only, so there is no
+listener and no pre-auth request path. The acceptance says so itself:
+
+    This acceptance stops holding the moment anyone runs chroma as a server or
+    points the client at a remote host.
+
+Nothing was checking that. The suppression was true when written and one line
+in an unrelated pull request away from being false, with the CVEs staying
+suppressed either way.
+
+**Closed:** `scripts/ci/gate_chroma_embedded_only.py`, a CI job, and the 27th
+row in `GATE_EVIDENCE.toml`. Six injected violations are each refused —
+`HttpClient`, `AsyncHttpClient`, a chroma compose service, `uvicorn
+chromadb.app`, `Settings(chroma_server_host=…)`, `CHROMA_SERVER_HOST` in an env
+file — and three negative cases prove it does not cry wolf. Python is parsed
+with the AST rather than grepped, because a comment describing the ban is not a
+violation and the repository has already had a checker that read prose as
+source (F255). It fails closed: scanning zero files exits 1.
+
+### Calibration was measuring whether a file existed
+
+`ml/inference_engine.py` fed `ModelQualityGate` this:
+
+    calibration_score = 1.0 if self._calibrator is not None else 0.0
+
+A loaded-but-badly-fitted isotonic calibrator scored a perfect 1.0 and cleared
+any `MIN_CALIBRATION`; a well-calibrated raw model scored 0.0 and failed every
+threshold above zero. The engine's own docstring said as much and named the
+fix.
+
+**Closed:** `ml/calibration_metrics.py` computes Brier and Expected Calibration
+Error on held-out predictions and reports `calibration_score = 1 - ECE`, the
+[0, 1] form the gate already takes. `ml/train_advanced.py` measures it on the
+OOS set it already has — `proba` against `y_oos` — and writes
+`saved_models/calibration_report.json`; the engine reads it back. Proven end to
+end by execution:
+
+    no report on disk    -> None    (unmeasured; the gate fails closed)
+    calibrated model     -> 1.0000  (ECE=0.0000)
+    says 98%, right half -> 0.5200  (ECE=0.4800)
+
+Under the old code both models scored 1.0. Every unmeasurable path returns
+`None`, never a flattering default: too few samples, nothing finite after
+dropping NaNs, or single-class held-out data. A training run that cannot
+measure deletes the report rather than writing a placeholder.
+
+### Two operator endpoints reported success for work that did not happen
+
+Found by raising coverage on the two superadmin modules (#13) — `ml_ai.py` 55%
+and `system_health.py` 30%, i.e. most of two operator-facing surfaces had never
+been executed by a test. Writing the tests found three live defects:
+
+* **`POST /system-health/jobs/{id}/run` returned 200 for a job that does not
+  exist**, with the note "Scheduler not available — job queued". Nothing queued
+  anything, and the note blamed a scheduler that was running fine. Now 404 for
+  an unknown job, 503 when the scheduler is genuinely unreachable, and the
+  message says plainly that nothing was scheduled.
+* **`DELETE /system/api-keys/{id}` returned `{"ok": true}` for a key it never
+  touched** — and also when Redis was absent entirely, because the whole block
+  sat behind `if rc:` and fell through to the same success. "I revoked that
+  key" is a security claim that has to be true. Now 404 when no key matched,
+  503 when the store is unreachable, and the count of keys actually revoked is
+  returned.
+* **`GET /ml/rl/status` leaked the absolute server path** —
+  `/home/<user>/HOPEFX-AI-TRADING/ml/saved_models/rl` — naming the deployment
+  account, install root and directory layout in an API response. Now
+  repo-relative.
+
+Coverage after: `ml_ai.py` 55% → 62%, `system_health.py` 30% → 70%. Both remain
+recorded debt with better numbers rather than being declared done.
+
+### A regression I shipped, found by the baseline run
+
+Commit `a4eec54` (the F120 Sortino completion) changed
+`risk.advanced_analytics.calculate_sortino_ratio` to return a finite 0.0
+instead of `inf`, and updated the test asserting the old behaviour in
+`tests/unit/test_advanced_risk_analytics.py`. A **second** file,
+`tests/unit/test_risk_advanced_analytics_cov.py`, asserted the same thing and
+was missed, so the branch shipped red and stayed red until a clean-worktree
+baseline run surfaced it.
+
+That is the same shape as the defect the commit was fixing — a change applied
+at one of two sites — and it is recorded here rather than quietly corrected,
+because the rule §E26 produced ("count the other places with the same shape")
+evidently applies to tests as well as to code. Fixed, and a repository-wide
+grep confirms no other test asserts the old `inf`.
+
+**Method note.** The working tree showed six failures and the clean HEAD
+baseline showed one, with the two sets disjoint and every one of the six
+passing in isolation. Diffing failure *sets* rather than counts is what
+separated one real regression from five order-dependent flakes; comparing the
+counts alone would have suggested the changes broke five things.

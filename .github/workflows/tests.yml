@@ -861,6 +861,26 @@ jobs:
       - name: Run Gate L
         run: python scripts/ci/gate_l_safety_invariants.py
 
+  gate-chroma-embedded-only:
+    # .trivyignore.yaml suppresses four chromadb CVEs — two pre-auth code
+    # injection — on the stated ground that this platform runs the embedded
+    # client only. Nothing checked that. This gate does; if it fails, the
+    # suppression has become untrue and the answer is not to extend its date.
+    name: Gate — ChromaDB stays embedded (keeps the CVE acceptance true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Run the chroma embedded-only gate
+        run: python scripts/ci/gate_chroma_embedded_only.py
+
   gate-m-ml-edge:
     name: Gate M — ML edge regression (ML must beat the rule baseline)
     runs-on: ubuntu-latest

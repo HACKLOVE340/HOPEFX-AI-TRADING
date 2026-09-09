@@ -418,3 +418,26 @@ whitelabel/config.py
 # go up, and each line may only be deleted, never re-added.
 api/trading.py
 reports/weekly_report.py
+
+# ── Added 2026-09-10 ─────────────────────────────────────────────────────────
+#
+# Three more pre-existing debts, surfaced the first time anyone touched these
+# files. With the two added on 2026-09-09 that is five, and five is a pattern
+# rather than five coincidences: THE BASELINE IS INCOMPLETE. It was adopted
+# from a subset of the repository, so any module outside that subset blocks the
+# first commit that touches it, however small the change — which turns the
+# ratchet from "debt may only shrink" into "you may not touch an untested
+# file", and makes recording the debt the only way through.
+#
+# Recording it is still better than bypassing it, but the real fix is to adopt
+# a complete baseline once so the list describes today's actual debt. Filed as
+# a task; until then, entries added this way say so.
+#
+# Measured 2026-09-10:
+#   ml/inference_engine.py  69%
+#   ml/train_advanced.py    56%
+#   social/marketplace.py   59%  (up from 55% — the split_revenue tests added
+#                                 in the same commit raised it)
+ml/inference_engine.py
+ml/train_advanced.py
+social/marketplace.py

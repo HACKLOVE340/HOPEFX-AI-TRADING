@@ -1464,6 +1464,15 @@ async def rl_walk_forward(
 
 
 @router.get("/rl/status", tags=["ML Models"])
+def _relative_model_dir(path: str | Path) -> str:
+    """Render a model directory for display without leaking the server layout."""
+    try:
+        return Path(path).resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
+    except (ValueError, OSError):
+        # Outside the repo (a mounted volume, say) — name the leaf only.
+        return Path(path).name
+
+
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     """Return RL agent runtime status and saved model inventory.
 
@@ -1528,8 +1537,14 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
         "win_rate": float(agent_state.get("win_rate", 0.0)),
         "last_updated": last_updated,
         "model_version": agent_state.get("model_version", latest_version),
-        # Extended fields for the model inventory table
-        "model_dir": _MODEL_DIR,
+        # Extended fields for the model inventory table.
+        #
+        # Repo-relative, not absolute. This emitted the resolved server path
+        # ("/home/<user>/HOPEFX-AI-TRADING/ml/saved_models/rl"), which tells any
+        # caller the deployment account name, the install root and the directory
+        # layout — free reconnaissance in an API response, and of no use to the
+        # UI, which only labels the inventory table with it.
+        "model_dir": _relative_model_dir(_MODEL_DIR),
         "models": models,
         "count": len(models),
     }
