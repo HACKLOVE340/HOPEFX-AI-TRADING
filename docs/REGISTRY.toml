@@ -1309,6 +1309,77 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/decisions/0001-pin-python-to-3-12.md"
+tier = "T3"
+subject = "decision-0001"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0002-commit-model-artefacts-and-the-built-dashboard.md"
+tier = "T3"
+subject = "decision-0002"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0003-prop-firm-config-is-tracked-with-placeholders.md"
+tier = "T3"
+subject = "decision-0003"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0004-delegation-is-bounded-three-ways.md"
+tier = "T3"
+subject = "decision-0004"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0005-a-grant-crosses-the-process-boundary.md"
+tier = "T3"
+subject = "decision-0005"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0006-3d-is-not-webgl-and-must-earn-its-place.md"
+tier = "T3"
+subject = "decision-0006"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0007-the-landmark-model-is-not-vendored.md"
+tier = "T3"
+subject = "decision-0007"
+owner = "hacklove340"
+state = "superseded"
+superseded_by = "docs/decisions/0009-the-camera-was-there-all-along.md"
+
+[[document]]
+path = "docs/decisions/0008-operational-intelligence-stays-in-group-1.md"
+tier = "T3"
+subject = "decision-0008"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0009-the-camera-was-there-all-along.md"
+tier = "T3"
+subject = "decision-0009"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/README.md"
+tier = "T2"
+subject = "decision-records"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/index.md"
 tier = "T2"
 subject = "index"

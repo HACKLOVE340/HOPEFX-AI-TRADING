@@ -103,7 +103,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 23 gates · **23 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 24 gates · **24 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -125,9 +125,9 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | 8 | Progressive delivery and automated rollback | Group 2 Ch 5 |
 | 9 | Package ownership register with enforced edges | Group 2 Ch 1 · INV-01 |
 | 10 | Injection evidence as a traceability link | Group 3 Ch 13 |
-| 11 | ADR system, back-filling the eight known decisions | Group 3 Ch 6 |
+| ~~11~~ | ~~ADR system, back-filling the eight known decisions~~ | **DONE 2026-09-09 — see §E22.** `docs/decisions/`, nine records, gated in pre-commit |
 | 12 | Failure memory with the five questions | Group 3 Ch 8 — seven lessons currently live only in a transcript |
-| 13 | **Decision Governance** — Architecture Decision Registry and Decision Ledger carrying *expected outcome, actual outcome, lessons* | Group 4 Ch 9 · Group 3 Ch 6 · Group 2 Ch 6 |
+| 13 | **Decision Governance** — the *Registry* half is done (§E22); the **Decision Ledger** carrying expected outcome, actual outcome and lessons remains | Group 4 Ch 9 · Group 3 Ch 7-8 · Group 2 Ch 6 |
 | ~~14~~ | ~~**The second, unverified backup path**~~ | Group 2 Ch 9 |
 | ~~15~~ | ~~**`risk/manager.py`'s 1.0 default for unmeasured data quality**~~ | Group 2 Ch 34 · INV-14 — **DONE 2026-09-09, see §E12** |
 | ~~16~~ | ~~`trader_full.py` builds a RiskManager with no orchestrator, so it now refuses every size~~ **DONE 2026-09-09.** Wired in `RiskManager.setup()` — the real construction site, not the line §E12 named |
@@ -1898,3 +1898,99 @@ not.
   Both were tried. The proof therefore asserts the mechanism and *reports* the
   hidden-frame count rather than requiring it: an assertion that can only pass
   vacuously is worse than none.
+
+## §E22 — Decisions get numbers, and the ratchet that proves gates work was one command from broken (2026-09-09)
+
+Group 3 Chapter 6 opens with "Nothing in the repository implements ADRs", and
+names the cost precisely: **re-litigation**. A decision whose reasoning is not
+recorded is re-argued whenever someone new meets it, and sometimes reversed by
+someone who does not know what it was protecting.
+
+This session produced two of exactly that, which is why it was built now:
+
+* §E20 corrected §E5's "verified by execution" claim — written in the very phase
+  that made the check fail, and never re-checked.
+* §E21 reversed a two-phase-old conclusion whose premise ("there is no camera
+  here") nobody had re-examined.
+
+Both were recoverable only because the reasoning had been written down
+*somewhere*. `docs/ai/AI_HUB_DECISIONS.md` is that somewhere, and Group 3 names
+its three limits exactly: it cannot be pointed at from a code comment, it cannot
+be superseded in part, and it grows without bound.
+
+### Nine records, and one real supersede chain
+
+`docs/decisions/`, numbered and immutable, plus `scripts/adr.py`
+(`--list`, `--check`, `new "Title"`). The spec named eight decisions to
+back-fill; there are nine, because **0007 → 0009 is a decision this repository
+genuinely reversed**: "ship everything except the model, there is no camera
+here" superseded by "fetch it at deploy time, Chromium serves a video file as a
+webcam".
+
+That chain is the argument for the whole chapter in one file pair. The old
+record is not edited and not deleted — it keeps its reasoning, gains a status,
+and points at what replaced it.
+
+### What is enforced, and the defect behind each rule
+
+| Rule | Why |
+|---|---|
+| Two options minimum | One option is justification written after the fact |
+| Every section, none empty | An empty heading is what a template leaves behind, and it passes a naive check |
+| Immutable once accepted | A record that can be rewritten records what we *currently believe* we decided |
+| A supersede must resolve | `superseded by 0042` pointing at nothing tells a reader their answer exists somewhere |
+| Gapless numbering | So `see 0007` is stable for ever, and a gap cannot hide a deleted record |
+
+Immutability is checked against **git**, not a hash manifest: a manifest is a
+second file to edit, and the history is already authoritative. The one permitted
+edit is a status becoming `superseded by NNNN` — proven both ways by execution,
+a content change exiting 1 and a status-only change exiting 0.
+
+### Adding the gate broke two other gates, and both were right to break
+
+**The gate ledger refused it immediately.** `adr-check` appeared as a 24th gate
+with no row in `GATE_EVIDENCE.toml`: *"A new gate ships with evidence it can
+fail, or it is treated as absent (Rule 1)."* Exactly the intended behaviour, on
+the first new gate since the ratchet reached zero.
+
+**Then `--generate` corrupted the ledger.** The documented way to add a row
+interpolated human-written text straight into a TOML basic string:
+
+    f'injected = "{prior.injected}"'
+
+`gate_d_model_accuracy`'s row contains a quoted phrase, so regenerating produced
+TOML that would not parse, and every subsequent `--check` died before reporting
+anything. **The ratchet that proves every other gate can fail was one documented
+command away from being silently disabled** — and a backslash would have been
+worse than a quote, parsing as an escape sequence and quietly altering the
+recorded evidence rather than failing loudly.
+
+Fixed with a real escaper and a round-trip test that regenerates the *committed*
+ledger and re-parses it, so the tool can no longer write something it cannot
+read. Found only because adding a gate is the operation that exercises it.
+
+**And the freshness checker started calling a naming rule a stale path.** Group 3
+writes `docs/decisions/NNNN-short-title.md` as a pattern; the moment
+`docs/decisions/` existed, the checker resolved it and blocked. A false positive
+that arrives precisely when the specified thing gets built is the worst timing
+for a gate people can silence, so paths containing a template token are now
+recognised as patterns.
+
+### Measured after
+
+    adr.py --check        9 records, all well formed
+    gate_evidence.py      24 gates · 24 proven able to fail · 0 unproven
+    docs_registry.py      0 blocking (all nine registered T3, owned)
+    docs_freshness.py     0 blocking · doc_metrics 0 drifted
+
+The stated gate figure in §B0 moved 23 → 24 in the same commit, because a
+document carrying a number that stopped being true is worse than no document.
+
+### What remains of item 13
+
+The **Registry** half is done. The **Decision Ledger** (Group 3 Ch 7) and
+**outcome memory** (Ch 8) are not: an append-only record of decisions made by
+*automated* actors, with refusals as first-class entries, and a stated
+prediction so an observed outcome has something to be compared against.
+That is the half that makes the platform experienced rather than merely
+knowledgeable, and it is still open.

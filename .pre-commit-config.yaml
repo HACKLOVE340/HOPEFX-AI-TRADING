@@ -163,6 +163,16 @@ repos:
         # Coverage gate is slower than other hooks — run last
         stages: [pre-commit]
 
+      - id: adr-check
+        name: Decision records (Group 3 Ch 6)
+        # system, not python: it shells out to git to enforce immutability, and
+        # an isolated venv has neither the repository nor its history.
+        language: system
+        entry: python scripts/adr.py --check
+        files: ^docs/decisions/
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: check-secrets
         name: Block plaintext credentials
         language: script

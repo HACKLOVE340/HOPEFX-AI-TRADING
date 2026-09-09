@@ -231,6 +231,14 @@ def check_document(path: Path, repo: Path) -> list[Finding]:
             parent = target.parent
             if not _inside(parent, repo):
                 continue
+            if _is_a_template(candidate):
+                # `docs/decisions/NNNN-short-title.md` is a NAMING RULE, not a
+                # reference. Group 3 Chapter 6 writes it that way on purpose, and
+                # the moment docs/decisions/ existed this checker started calling
+                # the rule a stale path — a false positive that arrives exactly
+                # when the thing being specified gets built, which is the worst
+                # possible timing for a gate people can silence.
+                continue
             if _is_ignored(candidate, repo):
                 # A path git itself refuses to track is a runtime-generated
                 # artefact by construction — data/oanda_paper_start.json and
@@ -295,6 +303,18 @@ def check_document(path: Path, repo: Path) -> list[Finding]:
                         )
                     )
     return findings
+
+
+#: Tokens that mark a path as a pattern rather than a reference.
+#:
+#: `NNNN` and `X.Y` are the conventional stand-ins for "a number goes here";
+#: angle and curly brackets are the conventional stand-ins for everything else.
+#: A path containing one of these was never meant to resolve.
+_TEMPLATE_TOKENS: Final[tuple[str, ...]] = ("NNNN", "<", ">", "{", "}", "*", "$")
+
+
+def _is_a_template(candidate: str) -> bool:
+    return any(token in candidate for token in _TEMPLATE_TOKENS)
 
 
 def _is_ignored(relative: str, repo: Path) -> bool:

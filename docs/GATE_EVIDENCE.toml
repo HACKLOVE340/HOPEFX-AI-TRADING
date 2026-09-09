@@ -108,6 +108,13 @@ evidence = "tests/unit/test_gate_m_ml_edge_injections.py"
 injected = "A missing dataset now fails instead of exiting 0 (the defect found here), malformed thresholds are refused, and unreachable accuracy and lift floors fail against the real A/B"
 
 [[gate]]
+id = "adr-check"
+kind = "precommit_hook"
+runs = "scripts/adr.py"
+evidence = "tests/unit/test_adr_gate_injections.py"
+injected = "A one-option record, a missing section, an empty section, a supersede pointing at 0099, a numbering gap, and an unreferenceable filename — each refused, with the clean case asserted first so a gate that refused everything could not pass as one that works. Immutability is injected against a real throwaway git repository rather than a mock: an accepted record is committed, then edited, and the gate notices; a status-only change to `superseded by NNNN` is permitted, because a rule that forbids the correct action is one people route around."
+
+[[gate]]
 id = "check-secrets"
 kind = "precommit_hook"
 runs = "scripts/check_secrets.sh"

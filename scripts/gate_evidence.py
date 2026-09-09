@@ -229,6 +229,27 @@ def check(
     return report
 
 
+def toml_string(value: str) -> str:
+    """Render *value* as a TOML basic string that reads back unchanged.
+
+    The fields below are written by humans and preserved across regeneration,
+    and they were preserved by interpolation:
+
+        f'injected = "{prior.injected}"'
+
+    `gate_d_model_accuracy`'s note contains a quoted phrase, so regenerating the
+    ledger produced TOML that would not parse — and this ledger is the Rule 1
+    ratchet, so one run of the documented `--generate` disabled the check that
+    proves every other gate can fail. A backslash was worse than a quote: it
+    parsed, as an escape sequence, silently altering the recorded evidence.
+
+    Backslash first, or the escapes this adds get escaped again.
+    """
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = escaped.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    return f'"{escaped}"'
+
+
 def generate(repo: Path | None = None, ledger: Path | None = None) -> str:
     """Rewrite the ledger, preserving every human-written field."""
     repo = repo or REPO
@@ -256,14 +277,14 @@ def generate(repo: Path | None = None, ledger: Path | None = None) -> str:
             unproven += 1
         lines += [
             "[[gate]]",
-            f'id = "{gate.id}"',
-            f'kind = "{gate.kind}"',
-            f'runs = "{gate.runs}"',
-            f'evidence = "{prior.evidence}"',
-            f'injected = "{prior.injected}"',
+            f"id = {toml_string(gate.id)}",
+            f"kind = {toml_string(gate.kind)}",
+            f"runs = {toml_string(gate.runs)}",
+            f"evidence = {toml_string(prior.evidence)}",
+            f"injected = {toml_string(prior.injected)}",
         ]
         if prior.note:
-            lines.append(f'note = "{prior.note}"')
+            lines.append(f"note = {toml_string(prior.note)}")
         lines.append("")
 
     lines += [

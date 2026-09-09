@@ -37,6 +37,7 @@ is always today's. Everything below is the shape; that command is the state.
 | How do I run the model without a market feed? | `python scripts/predict_offline.py` · `ml/cached_series.py` |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
+| Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |
 
 **Every number in those documents is a snapshot; every number the scripts print
 is current.** Where they disagree, the script is right and the document is stale
