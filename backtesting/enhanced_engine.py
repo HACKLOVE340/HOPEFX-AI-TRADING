@@ -1532,15 +1532,21 @@ def _compute_drawdown_series(
 
 
 def _calculate_sortino(returns: "np.ndarray", target: float = 0.0) -> float:
-    """Sortino ratio: excess return over target divided by downside deviation."""
+    """Sortino ratio: excess return over target divided by downside deviation.
+
+    The denominator was ``np.std(arr[arr < target])`` — the dispersion among the
+    losses rather than the shortfall of the series. F120 named that defect and
+    fixed it in ``backtesting/engine_config.py``; this engine kept a copy, so it
+    reported +inf whenever the losses were all the same size. Both engines now
+    share ``analytics.ratios.downside_deviation``.
+    """
+    from analytics.ratios import downside_deviation
+
     arr = np.asarray(returns, dtype=float)
     arr = arr[np.isfinite(arr)]  # drop NaN/inf before any calculation
     if len(arr) == 0:
         return 0.0
-    downside = arr[arr < target]
-    if len(downside) == 0:
-        return 0.0
-    downside_std = float(np.std(downside))
+    downside_std = downside_deviation(arr, target=target)
     return float((np.mean(arr) - target) / downside_std) if downside_std > 0 else 0.0
 
 

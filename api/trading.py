@@ -2170,6 +2170,8 @@ async def get_account(
       cvar_95, kill_switch, unrealized_pnl, currency, account_id
     """
     import math as _math
+
+    from analytics.ratios import downside_deviation as _downside_deviation
     import os as _os
 
     # ── Broker account info ───────────────────────────────────────────────────
@@ -2245,11 +2247,14 @@ async def get_account(
                             var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
                             std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
                             _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
-                            neg_rets = [r for r in rets if r < 0]
-                            if neg_rets:
-                                down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
-                                down_std = _math.sqrt(down_var)
-                                _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                            # Downside deviation divides the summed shortfall by
+                            # ALL periods, not just the losing ones — dividing by
+                            # len(neg_rets) is a different statistic and read
+                            # ~30% high on the negatively skewed shape strategies
+                            # produce (F120). Shared with every other Sortino in
+                            # the repository via analytics.ratios.
+                            down_std = _downside_deviation(rets)
+                            _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
                             sorted_rets = sorted(rets)
                             cutoff = max(1, int(len(sorted_rets) * 0.05))
                             _cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
@@ -2433,12 +2438,13 @@ async def get_account(
                         std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
                         sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
 
-                        # Sortino (downside deviation only)
-                        neg_rets = [r for r in rets if r < 0]
-                        if neg_rets:
-                            down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
-                            down_std = _math.sqrt(down_var)
-                            sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                        # Sortino: RMS shortfall below zero over ALL periods.
+                        # Dividing by len(neg_rets) instead is a different
+                        # statistic and read ~30% high on negatively skewed
+                        # returns (F120); shared now via analytics.ratios so the
+                        # dashboard and the backtester cannot disagree.
+                        down_std = _downside_deviation(rets)
+                        sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
 
                         # CVaR 95% (average of worst 5% returns)
                         sorted_rets = sorted(rets)

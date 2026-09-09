@@ -60,6 +60,8 @@ from pathlib import Path
 
 import numpy as np
 
+from analytics.ratios import downside_deviation
+
 logger = logging.getLogger(__name__)
 
 # ── Data source constants ─────────────────────────────────────────────────────
@@ -152,10 +154,10 @@ def _sortino(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
     if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
-    downside = returns[returns < 0]
-    if len(downside) == 0:
-        return None
-    downside_std = float(np.std(downside, ddof=1))
+    # RMS shortfall below zero over ALL periods, not the sample standard
+    # deviation of the losses about their own mean — a different centre, a
+    # different N, and a different statistic (F120, see analytics.ratios).
+    downside_std = downside_deviation(returns)
     if downside_std < 1e-10:
         return None
     return round(mu / downside_std * math.sqrt(periods_per_year), 3)

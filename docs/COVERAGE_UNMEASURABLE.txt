@@ -356,7 +356,6 @@ portfolio/pms.py
 portfolio/rebalancer.py
 portfolio/strategy_allocator.py
 risk/__init__.py
-risk/advanced_analytics.py
 risk/analytics.py
 risk/gatekeeper.py
 risk/orchestrator.py
@@ -404,3 +403,18 @@ strategies/strategy_brain.py
 utils/config.py
 utils/database.py
 whitelabel/config.py
+
+# ── Added 2026-09-09, when the Sortino denominator was unified ───────────────
+#
+# Both entries below are PRE-EXISTING debt, not new untested code. They were
+# absent from the 361-line baseline and blocked a six-line correctness fix in
+# each file. The claim that they were "newly discoverable" was checked against
+# the old gate and is false — it found their tests too — so why they were never
+# adopted is not established, and this note does not invent a reason.
+#
+# What is measured: api/trading.py 47%, reports/weekly_report.py 56% (raised
+# from 51% by the Sortino tests that shipped with that fix). Both are recorded
+# rather than bypassed, so the ratchet keeps its meaning: these numbers may only
+# go up, and each line may only be deleted, never re-added.
+api/trading.py
+reports/weekly_report.py

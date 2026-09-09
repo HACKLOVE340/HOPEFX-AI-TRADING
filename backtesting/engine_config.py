@@ -943,30 +943,16 @@ class BacktestEngine:
     def _downside_deviation(returns, target: float = 0.0) -> float:
         """Root-mean-square shortfall below *target*, over ALL periods.
 
-        This is the Sortino denominator. Both engines used
-        ``returns[returns < 0].std()`` — the dispersion *among the losses*,
-        about the mean loss, over only the losing periods: a different centre,
-        a different N, and a different statistic. Measured against the textbook
-        definition the bias flips sign with the shape of the distribution
-        (1.13x high on symmetric returns, 0.71x low on the negatively skewed
-        shape strategies actually produce), so the reported figure was not
-        Sortino at all rather than wrong in one direction (F120).
-
-        A steadily-losing strategy makes the old form's failure plain: identical
-        losses have a standard deviation of zero, so the denominator vanished
-        for exactly the return series a downside measure exists to penalise.
+        Retained under its original name because this is where F120 was fixed
+        and callers reference it, but the definition now lives in
+        ``analytics.ratios`` so the five other modules that compute a Sortino
+        share it rather than each keeping their own. See that module for why
+        ``returns[returns < 0].std()`` is not a biased Sortino but a different
+        statistic.
         """
-        import numpy as _np
+        from analytics.ratios import downside_deviation
 
-        arr = _np.asarray(returns, dtype=float)
-        # Drop non-finite values rather than zero-filling them: a bar with no
-        # return is an absent observation, and counting it as a zero shortfall
-        # would understate the downside over a series with gaps. np.mean over a
-        # NaN returns NaN, which would propagate silently into the Sortino.
-        arr = arr[_np.isfinite(arr)]
-        if arr.size == 0:
-            return 0.0
-        return float(_np.sqrt(_np.mean(_np.minimum(arr - target, 0.0) ** 2)))
+        return downside_deviation(returns, target=target)
 
     def _annualised_return(self, total_return: float, n_bars: int) -> float:
         """Annualise a total return over *n_bars* bars.

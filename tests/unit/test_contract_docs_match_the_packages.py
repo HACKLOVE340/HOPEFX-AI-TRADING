@@ -119,6 +119,15 @@ def test_claude_md_carries_the_replacement_facts():
     for package in ("data_layer/", "data/", "market_data/"):
         assert package in text, f"CLAUDE.md does not mention {package}"
     assert "real_time_price_engine.py" in text, "CLAUDE.md does not say what `data/` actually holds"
-    assert re.search(r"boundary.*not documented|not documented.*boundary", text, re.IGNORECASE | re.DOTALL), (
-        "CLAUDE.md does not tell the reader the boundary between the three packages is undefined (F217)"
+    # This asserted that CLAUDE.md still says the boundary is "not documented".
+    # ADR 0013 decided it on 2026-09-09 and CLAUDE.md was updated in the same
+    # commit, so the assertion outlived the fact it was guarding and began
+    # demanding that the file re-state a question the owner had answered.
+    # What must hold now is that the decision is named and reachable.
+    assert re.search(r"boundary is now decided", text, re.IGNORECASE), (
+        "CLAUDE.md does not tell the reader the data/ | data_layer/ | market_data/ boundary is decided"
+    )
+    assert "ADR 0013" in text, "CLAUDE.md states the boundary without citing the decision that set it"
+    assert re.search(r"does \*\*not\*\* authorise moving existing code", text), (
+        "CLAUDE.md does not warn that the decided boundary is a rule for new code, not a refactor mandate"
     )

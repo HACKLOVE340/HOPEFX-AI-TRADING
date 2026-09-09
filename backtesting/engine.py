@@ -745,11 +745,16 @@ class BacktestEngine:
         excess_return = annualized_return - risk_free_rate
         sharpe_ratio = excess_return / volatility if volatility > 0 else 0
 
-        # Sortino (downside deviation only)
-        downside_returns = equity_df["daily_return"][equity_df["daily_return"] < 0]
-        downside_dev = (
-            float(np.nan_to_num(downside_returns.std(), nan=0.0)) * np.sqrt(252) if len(downside_returns) > 0 else 0
-        )
+        # Sortino: RMS shortfall below zero over ALL bars, annualised. This was
+        # `equity_df["daily_return"][... < 0].std()` — the dispersion among the
+        # losing days about the mean losing day, over the losing days only, and
+        # via pandas' ddof=1 rather than the ddof=0 the Sharpe above it uses.
+        # F120 named that defect and fixed it in engine_config.py; this engine
+        # kept a copy, so a run of identical daily losses gave a zero
+        # denominator and a Sortino of 0 for a steadily-losing strategy.
+        from analytics.ratios import downside_deviation
+
+        downside_dev = downside_deviation(equity_df["daily_return"].to_numpy()) * np.sqrt(252)
         sortino_ratio = excess_return / downside_dev if downside_dev > 0 else 0
 
         # Calmar (return / max drawdown)

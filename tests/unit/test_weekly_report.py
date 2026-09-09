@@ -454,3 +454,59 @@ class TestWeeklyReportGenerator:
         )
         assert "XAUUSD" in report.symbols_traded
         assert "EURUSD" in report.symbols_traded
+
+
+# ── Sortino denominator (F120 completion) ─────────────────────────────────────
+
+
+class TestWeeklyReportSortino:
+    """`_sortino` used `np.std(returns[returns < 0], ddof=1)`.
+
+    That is the sample dispersion *among* the losses about the mean loss, over
+    the losing weeks only — not the shortfall of the series below its target.
+    The weekly report is emailed, so the figure left the building.
+    """
+
+    @staticmethod
+    def _sortino(returns):
+        import numpy as np
+
+        from reports.weekly_report import _sortino
+
+        return _sortino(np.asarray(returns, dtype=float))
+
+    def test_identical_losses_are_scored_not_discarded(self):
+        """Five gains and five identical losses must yield a real ratio.
+
+        Identical losses have zero dispersion among them, so the old form hit
+        `downside_std < 1e-10` and returned None — the same value the function
+        returns for "not enough data". A steadily-losing strategy vanished from
+        the report instead of appearing in it.
+        """
+        import math
+
+        result = self._sortino([0.02] * 5 + [-0.01] * 5)
+        assert result is not None, "a series with real losses must produce a ratio"
+        assert math.isfinite(result)
+        # denominator = sqrt(5 * 0.01**2 / 10) = 0.01/sqrt(2); mean = 0.005
+        expected = round(0.005 / (0.01 / math.sqrt(2)) * math.sqrt(252), 3)
+        assert result == expected
+
+    def test_all_positive_returns_has_no_shortfall(self):
+        assert self._sortino([0.01] * 10) is None
+
+    def test_too_few_observations_returns_none(self):
+        assert self._sortino([0.01, -0.01, 0.02, -0.02]) is None
+
+    def test_denominator_counts_every_period_not_just_the_losers(self):
+        """One loss among many flat weeks is a small shortfall, not a big one."""
+        import math
+
+        from analytics.ratios import downside_deviation
+
+        series = [0.0] * 19 + [-0.10]
+        expected_dd = downside_deviation(series)
+        assert expected_dd == pytest.approx(0.10 / math.sqrt(20), rel=1e-12)
+        # The old form took std of a single-element array with ddof=1 -> nan,
+        # so this series produced no Sortino at all.
+        assert self._sortino(series) is not None

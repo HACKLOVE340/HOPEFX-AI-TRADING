@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, Query
 from api.auth import TokenPayload
 from ._shared import _audit_payload, _require_superadmin, _utcnow, _log_superadmin_action
 from api.error_details import safe_error
+from analytics.ratios import downside_deviation
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -339,11 +340,16 @@ async def get_var_metrics(
                 # Ratios
                 mean_r = float(np.nan_to_num(returns.mean()))
                 std_r = float(np.nan_to_num(returns.std())) or 1.0
-                downside_vals = returns[returns < 0]
-                downside = float(np.nan_to_num(downside_vals.std())) if len(downside_vals) > 0 else 1.0
-                downside = downside or 1.0
+                # Downside deviation: RMS shortfall below zero over ALL periods.
+                # This was `returns[returns < 0].std()` (F120) with a second
+                # defect on top: `downside = downside or 1.0` substituted a
+                # denominator of 1.0 whenever the real one was zero, so a series
+                # with no losses — or with identical losses, whose dispersion is
+                # zero — reported `mean_r * sqrt(252)` as a Sortino ratio. That
+                # is a fabricated number, not a fallback.
+                downside = downside_deviation(returns)
                 sharpe = mean_r / std_r * (252**0.5)
-                sortino = mean_r / downside * (252**0.5)
+                sortino = mean_r / downside * (252**0.5) if downside > 1e-12 else 0.0
                 calmar = mean_r / abs(max_dd) if max_dd != 0 else 0.0
 
                 metrics.update(
