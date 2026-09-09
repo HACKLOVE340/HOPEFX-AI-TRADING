@@ -193,7 +193,22 @@ is the baseline, new violations block, and the baseline may only fall.
 
 **The caller sweep is a screen, not a verdict.** Symbol matching misses aliases
 and dynamic lookup, so each of the 37 is one row to *inspect*, not one defect to
-fix. The three `arch.layer_*` rows at `prod=0` are the ones to look at first.
+fix. The three `arch.layer_*` rows at `prod=0` were named here as the ones to
+look at first. **They have now been inspected, and they are false positives** —
+their locator is `layer_state`, the §4 roll-up helper, which *is* called, at
+`ai/hub/capabilities.py:2667`, inside the module that defines it. The screen
+reports `prod=0 any=1` because it looks for callers outside the defining file.
+Nothing is dead there; the rows stay flagged and the count stays 37 because the
+screen is behaving as documented.
+
+**Inspecting them did find a real gap next door, and it is now closed.** The
+`arch.layer_b.intelligence` row cites `ai.agent.loop` as its evidence, and that
+module — the Think → Execute → Monitor → Improve loop — had no caller anywhere
+outside `ai/agent/` and its own tests. The registry could not see it:
+`verify()` asks whether the evidence *resolves*, not whether anything *runs*.
+`ai/agent/sweep.py` and `init_ai_agent_sweep` are now that caller — a scheduled,
+read-only health sweep, which is the caller the loop's own docstring was
+written for. See §E9.
 
 ## §D — Staged, not live
 
@@ -642,6 +657,64 @@ should. Nothing here says the tree is clean: gate E's fix surfaced 12
 dead-file candidates and gate G's surfaced 7 recorded import violations,
 all still open. The ratchet's job was to make the controls trustworthy;
 using them is the next job.
+
+## §E9 — The agentic loop got its caller (2026-09-09)
+
+Not a gate phase. `ai/agent/loop.py` implements spec §2's `agent/` — Think →
+Execute → Monitor → Improve — and `ai/hub/capabilities.py` cites `ai.agent.loop`
+as the evidence that `arch.layer_b.intelligence` is **live**. Measured, nothing
+outside `ai/agent/` and its own tests imported it.
+
+**The registry is not able to catch this, by construction.** `verify()` resolves
+an evidence locator: it imports the module and checks the attribute exists. That
+is a real check and it is the one F176 was about. But "the evidence resolves"
+and "something calls it" are different claims, and only the first is measured.
+`scripts/capability_callers.py` exists for the second, which is why it is kept
+as a separate screen.
+
+### What was built
+
+`ai/agent/sweep.py` — a deterministic health sweep — and
+`init_ai_agent_sweep`, registered in `core/startup_factories.py` beside
+`ai_awareness` with the same `required=False`. It is the caller the loop's own
+docstring named: *"A deterministic planner is what the tests drive and what a
+scheduled health sweep wants."* A model-driven planner is the same interface and
+can replace it; doing the deterministic one first means the wiring is proven
+before a language model is near the tool bus.
+
+### The filter that looked obvious and was wrong
+
+The first design chose any permitted action whose handler needs no arguments.
+Measured against the live registry, **every** READ_ONLY handler defaults all of
+its parameters — so that rule admits `markets_execution.shadow_place_order`,
+`platform_engineering.run_tests`, `research_intelligence.run_backtest` and
+`walk_forward_validate`. On a 15-minute timer that is shadow orders in the audit
+trail every interval, and a backtest and the test suite running on the box that
+executes trades.
+
+So the sweep names the health checks it wants and **intersects them with
+`context.permitted`**, the allowlist the loop computed from the department's own
+registry. The intersection is what makes a named set safe: it can only narrow
+what the loop already allowed. A renamed check means the sweep calls one thing
+fewer — the direction an error here has to fail in. `test_it_never_calls_order_
+shaped_or_expensive_tools` pins it across every department.
+
+### Three narrowings, none of them removed
+
+The loop refuses anything outside `permitted_actions(department)` before the bus
+is reached; the bus consults the permission registry and `enforce_agent_action`
+after that; the sweep narrows once more. This change adds the third and touches
+neither of the first two.
+
+### Two test-methodology corrections, recorded
+
+* The caller assertion first searched for the substring `run_loop` and **passed
+  before anything was wired** — `hopefx_engine.py` and `nuclear/nuclear_agent.py`
+  each define an unrelated `run_loop`/`_run_loop`. It now parses imports with
+  `ast`. A text match tests how code is written, not what it imports.
+* Registration is not execution, so the suite drives `init_ai_agent_sweep`
+  itself and asserts a task is scheduled — and asserts that with no tool bus it
+  schedules nothing rather than reporting a clean sweep it never ran.
 
 ## §F — What the complete Group 4 source changed (2026-09-08)
 

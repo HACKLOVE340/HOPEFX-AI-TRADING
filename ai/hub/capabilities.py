@@ -158,7 +158,11 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "Intelligence layer — conversation, planning, reasoning, memory",
         "live",
         "ai.agent.loop",
-        "Agentic loop and synthesis stage are built and tested.",
+        "Agentic loop and synthesis stage are built and tested, and now called: "
+        "ai/agent/sweep.py runs it as a scheduled read-only health sweep, "
+        "registered as init_ai_agent_sweep. Until that existed the loop had no "
+        "caller outside its own tests — which this row could not show, because "
+        "verify() asks whether the evidence resolves, not whether it runs.",
     ),
     _c(
         "arch.layer_c.workforce",

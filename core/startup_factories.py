@@ -808,6 +808,68 @@ async def init_ai_awareness(s: Any) -> Any:
     return task
 
 
+async def init_ai_agent_sweep(s: Any) -> Any:
+    """Schedule the agentic loop's health sweep. Spec §2's `agent/`, wired.
+
+    `ai/agent/loop.py` was built, tested and documented, and called by nothing
+    outside its own tests — while `ai/hub/capabilities.py` cited it as the
+    evidence that `arch.layer_b.intelligence` is live. The registry could not
+    see the gap: `verify()` asks whether the module imports and the symbol
+    exists, not whether anything runs it. This factory is the caller that makes
+    the claim true.
+
+    Deterministic planner, read-only actions only, and the loop's own bounds —
+    it refuses anything outside `permitted_actions(department)` before the bus
+    is reached, and the bus consults the permission registry and
+    `enforce_agent_action` again after that. The sweep narrows once more on top
+    of both: only named health checks, never `run_tests`, `run_backtest` or
+    `shadow_place_order`, all of which the registry would otherwise permit
+    because every read-only handler defaults its arguments.
+
+    Background task, like `init_ai_awareness` — a slow department must never
+    delay the trading engine. The interval is deliberately loose: this notices
+    a condition, it does not poll.
+    """
+    from ai.agent.sweep import run_health_sweep
+    from api.admin import log_activity
+
+    bus = getattr(s, "ai_tool_bus", None)
+    if bus is None:
+        # No bus means the departments factory did not build one. Running a
+        # sweep against nothing would report a clean pass it never measured.
+        log_activity("AI agent sweep not started — no tool bus on app state")
+        return None
+
+    interval_s = float(os.getenv("AI_AGENT_SWEEP_INTERVAL_S", "") or 900.0)
+    departments = [d.strip() for d in (os.getenv("AI_AGENT_SWEEP_DEPARTMENTS", "") or "system_ops").split(",")]
+    departments = [d for d in departments if d]
+
+    async def _loop() -> None:
+        while True:
+            for department in departments:
+                try:
+                    run = await asyncio.to_thread(run_health_sweep, bus=bus, operator="system", department=department)
+                    logger.info(
+                        "AI agent sweep %s: %s, %d tool call(s) — %s",
+                        department,
+                        "completed" if run.completed else "stopped",
+                        run.tool_calls,
+                        run.stopped_reason,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    # One department's sweep failing must not stop the others,
+                    # nor end the schedule.
+                    logger.exception("AI agent sweep failed for %s; the schedule continues", department)
+            await asyncio.sleep(interval_s)
+
+    task = asyncio.create_task(_loop())
+    s.background_tasks.append(task)
+    log_activity(f"AI agent sweep started — departments={departments}, every {interval_s:.0f}s")
+    return task
+
+
 async def init_ai_memory(s: Any) -> Any:
     """Give department memory a store that outlives the process.
 
@@ -3336,6 +3398,15 @@ def build_component_registry(app, feature_flags):
         .register(
             "ai_awareness",
             F.init_ai_awareness,
+            required=False,
+            deps=["ai_memory", "ai_departments"],
+        )
+        # The agentic loop's caller. required=False for the same reason as the
+        # rest of Cluster A: a health sweep failing to start must never stop
+        # the trading platform from starting.
+        .register(
+            "ai_agent_sweep",
+            F.init_ai_agent_sweep,
             required=False,
             deps=["ai_memory", "ai_departments"],
         )
