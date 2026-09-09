@@ -78,14 +78,92 @@ class TestTheTrailerParserRefusesWhatItShould:
         assert cr.expected_effect("Fix\n\nExpected-Effect: latency drops\n") == "latency drops"
 
 
-class TestTheCommandLineRefuses:
-    def test_a_core_change_with_no_trailer_exits_non_zero(self, tmp_path, monkeypatch) -> None:
-        """End to end through `main`, which is what the hook actually runs."""
+class TestItWarnsByDefaultAndEnforcesOnRequest:
+    """The owner chose warn over block on 2026-09-09 (ADR 0012).
+
+    The concern with warning is real and stated in that record: a gate that only
+    warns is a gate people learn to scroll past. Three things keep this one
+    honest rather than decorative, and each is asserted here:
+
+    * the warning is loud and names the exact trailer to add, so acting on it is
+      cheaper than ignoring it;
+    * `CHANGE_RECORD_ENFORCE=1` turns it into a block with no code change, so
+      the decision can be revisited by configuration;
+    * `--report` measures the real KPI over a range, so "how often is a
+      prediction actually stated" is a number somebody can look at rather than a
+      claim. A warning whose effect is never measured is the thing the concern
+      is about.
+    """
+
+    def test_by_default_a_missing_prediction_warns_rather_than_blocks(self, tmp_path, monkeypatch) -> None:
         message = tmp_path / "COMMIT_EDITMSG"
         message.write_text("Change the risk manager\n", encoding="utf-8")
         monkeypatch.setattr(cr, "_git", lambda *args: "risk/manager.py\n")
+        monkeypatch.delenv("CHANGE_RECORD_ENFORCE", raising=False)
+        assert cr.main(["--check-message", str(message)]) == 0
+
+    def test_the_warning_says_what_to_add(self, tmp_path, monkeypatch, capsys) -> None:
+        message = tmp_path / "COMMIT_EDITMSG"
+        message.write_text("Change the risk manager\n", encoding="utf-8")
+        monkeypatch.setattr(cr, "_git", lambda *args: "risk/manager.py\n")
+        monkeypatch.delenv("CHANGE_RECORD_ENFORCE", raising=False)
+        cr.main(["--check-message", str(message)])
+        text = capsys.readouterr().err
+        assert "Expected-Effect:" in text
+        assert "WARN" in text.upper()
+
+    def test_the_warning_names_the_switch_that_enforces_it(self, tmp_path, monkeypatch, capsys) -> None:
+        # Otherwise the only way to find it is reading this module.
+        message = tmp_path / "COMMIT_EDITMSG"
+        message.write_text("Change the risk manager\n", encoding="utf-8")
+        monkeypatch.setattr(cr, "_git", lambda *args: "risk/manager.py\n")
+        monkeypatch.delenv("CHANGE_RECORD_ENFORCE", raising=False)
+        cr.main(["--check-message", str(message)])
+        assert "CHANGE_RECORD_ENFORCE" in capsys.readouterr().err
+
+    def test_enforcement_blocks(self, tmp_path, monkeypatch) -> None:
+        message = tmp_path / "COMMIT_EDITMSG"
+        message.write_text("Change the risk manager\n", encoding="utf-8")
+        monkeypatch.setattr(cr, "_git", lambda *args: "risk/manager.py\n")
+        monkeypatch.setenv("CHANGE_RECORD_ENFORCE", "1")
         assert cr.main(["--check-message", str(message)]) == 1
 
+    def test_enforcement_does_not_block_a_compliant_change(self, tmp_path, monkeypatch) -> None:
+        message = tmp_path / "COMMIT_EDITMSG"
+        message.write_text("Change it\n\nExpected-Effect: refusals fall to zero\n", encoding="utf-8")
+        monkeypatch.setattr(cr, "_git", lambda *args: "risk/manager.py\n")
+        monkeypatch.setenv("CHANGE_RECORD_ENFORCE", "1")
+        assert cr.main(["--check-message", str(message)]) == 0
+
+    def test_validate_itself_still_reports_the_problem(self) -> None:
+        """Warn-or-block is a decision about the EXIT CODE, not about the truth.
+
+        `validate()` keeps returning the problem either way, so `--report` and
+        any future consumer measure what is actually missing rather than what
+        the current exit policy happens to surface.
+        """
+        assert cr.validate(_record(("risk/manager.py",), None))
+
+
+class TestTheKpiIsMeasured:
+    """Chapter 6's KPI: change records with a stated expected effect, target
+    100% of core-tier. Warning instead of blocking makes that number fall below
+    100 — which is fine, and only fine if the number is visible."""
+
+    def test_it_reports_a_coverage_figure(self, monkeypatch) -> None:
+        report = cr.coverage_report("HEAD~5..HEAD")
+        assert set(report) >= {"changes", "needing_prediction", "with_prediction", "coverage"}
+        assert report["changes"] >= 1
+
+    def test_coverage_is_none_when_nothing_needed_one(self, monkeypatch) -> None:
+        # Rule 2: no core-tier changes in the range means the KPI is UNDEFINED,
+        # not 100%. A perfect score from an empty denominator is the oldest
+        # fabricated metric there is.
+        monkeypatch.setattr(cr, "_commits_in", lambda _r: [("abc", "Tidy docs", ("docs/x.md",))])
+        assert cr.coverage_report("x..y")["coverage"] is None
+
+
+class TestTheCommandLineRefuses:
     def test_the_same_change_with_a_trailer_passes(self, tmp_path, monkeypatch) -> None:
         message = tmp_path / "COMMIT_EDITMSG"
         message.write_text(

@@ -1387,6 +1387,13 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
+path = "docs/decisions/0012-the-change-record-gate-warns-rather-than-blocks.md"
+tier = "T3"
+subject = "decision-0012"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/decisions/README.md"
 tier = "T2"
 subject = "decision-records"

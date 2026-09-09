@@ -40,6 +40,28 @@ delivered, which is exactly the shape §E20 had to correct in §E5: a document
 claiming a measurement nobody took. When Chapter 1 lands, this table is what it
 replaces.
 
+## Advisory by default, enforcing on request
+
+The owner chose **warn over block** on 2026-09-09 (ADR 0012). A missing
+prediction prints a warning and the commit proceeds; `CHANGE_RECORD_ENFORCE=1`
+turns the same finding into a non-zero exit, so the policy is configuration
+rather than a code change.
+
+The obvious objection is that a gate which only warns is a gate people learn to
+scroll past, and it is a fair one. Three things answer it, and all three are
+asserted in `tests/unit/test_change_record_gate_injections.py`:
+
+* the warning names the exact trailer to add, so acting on it is cheaper than
+  ignoring it;
+* it names `CHANGE_RECORD_ENFORCE`, so the switch is discoverable without
+  reading this file;
+* `--report` measures the real KPI over a range. A warning whose effect is never
+  measured is precisely the thing the objection is about, and this is what turns
+  "are people writing predictions?" from an opinion into a number.
+
+`validate()` is unchanged by the policy: it reports the problem either way. The
+decision is about the exit code, never about the truth.
+
 ## Unknown is not safe
 
 A path matching no known prefix is `unknown`, never `presentation`, and an
@@ -53,6 +75,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import os
 import re
 import subprocess  # nosec B404 — git, fixed args
 import sys
@@ -65,6 +88,17 @@ ROOT = Path(__file__).resolve().parent.parent
 #: Where the tier comes from. Named so a reader is not left to assume it is
 #: Chapter 1's register, which does not exist yet.
 TIER_SOURCE: Final[str] = "path-prefix"
+
+#: Set to "1" to make a missing prediction fail the commit instead of warning.
+#:
+#: Advisory by default, on the owner's decision (ADR 0012). Named in the warning
+#: itself so the switch is discoverable without reading this file.
+ENFORCE_ENV: Final[str] = "CHANGE_RECORD_ENFORCE"
+
+
+def enforcing() -> bool:
+    return os.getenv(ENFORCE_ENV, "").strip() == "1"
+
 
 #: Ordered most severe first. `unknown` sits ABOVE presentation deliberately:
 #: see the module docstring.
@@ -308,6 +342,47 @@ def from_git(ref_range: str = "HEAD~1..HEAD") -> ChangeRecord:
     )
 
 
+def _commits_in(ref_range: str) -> list[tuple[str, str, tuple[str, ...]]]:
+    """(sha, message, paths) for each commit in the range. Newest first."""
+    out: list[tuple[str, str, tuple[str, ...]]] = []
+    for sha in (line for line in _git("rev-list", ref_range).split() if line):
+        message = _git("log", "-1", "--pretty=%B", sha)
+        paths = tuple(sorted(p for p in _git("show", "--name-only", "--pretty=format:", sha).splitlines() if p.strip()))
+        out.append((sha, message, paths))
+    return out
+
+
+def coverage_report(ref_range: str = "HEAD~20..HEAD") -> dict[str, Any]:
+    """Chapter 6's KPI, measured: how many changes that needed a prediction have one.
+
+    `coverage` is **None** when nothing in the range needed one. A perfect score
+    from an empty denominator is the oldest fabricated metric there is, and this
+    module refuses to report one — the same rule the risk gate applies to data
+    quality and the ledger applies to confidence.
+    """
+    rows = _commits_in(ref_range)
+    needing = 0
+    stated = 0
+    missing: list[dict[str, str]] = []
+    for sha, message, paths in rows:
+        tier = tier_for_paths(paths)
+        if not requires_expected_effect(tier):
+            continue
+        needing += 1
+        if (expected_effect(message) or "").strip():
+            stated += 1
+        else:
+            missing.append({"commit": sha[:12], "tier": tier, "subject": message.splitlines()[0] if message else ""})
+    return {
+        "range": ref_range,
+        "changes": len(rows),
+        "needing_prediction": needing,
+        "with_prediction": stated,
+        "coverage": (stated / needing) if needing else None,
+        "missing": missing,
+    }
+
+
 def observe(record: ChangeRecord, *, observed: str, held: bool) -> ChangeRecord:
     """Attach what the telemetry showed after the deploy."""
     if record.observed_effect is not None:
@@ -355,9 +430,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check-message",
         default=None,
-        help="path to a commit message; validate the staged change against it (commit-msg hook)",
+        help="path to a commit message; check the staged change against it (commit-msg hook)",
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="measure Chapter 6's KPI over --range: how many changes that needed a prediction have one",
     )
     args = parser.parse_args(argv)
+
+    if args.report:
+        report = coverage_report(args.range)
+        print(f"range               {report['range']}")
+        print(f"changes             {report['changes']}")
+        print(f"needing a prediction {report['needing_prediction']}")
+        print(f"with one            {report['with_prediction']}")
+        if report["coverage"] is None:
+            # Not 100%. Nothing in this range needed a prediction, so the KPI is
+            # undefined, and a perfect score from an empty denominator is a
+            # fabricated measurement.
+            print("coverage            — undefined: no change in this range needed a prediction")
+        else:
+            print(f"coverage            {report['coverage'] * 100:.0f}%   (Ch 6 target: 100% of core-tier)")
+        for row in report["missing"]:
+            print(f"  no prediction  {row['commit']}  [{row['tier']}]  {row['subject'][:60]}")
+        return 0
 
     if args.check_message:
         message = Path(args.check_message).read_text(encoding="utf-8")
@@ -373,19 +470,33 @@ def main(argv: list[str] | None = None) -> int:
     else:
         record = from_git(args.range)
 
-    _report(record)
     problems = validate(record)
+    if not problems:
+        if not args.check_message:
+            _report(record)
+        return 0
+
+    # Advisory by default (ADR 0012). The finding is identical either way; only
+    # the exit code differs.
+    label = "FAIL" if enforcing() else "WARN"
+    _report(record)
     for problem in problems:
-        print(f"\nFAIL  {problem}", file=sys.stderr)
-    if problems:
-        print(
-            "\nAdd a trailer to the commit message, for example:\n"
-            "\n    Expected-Effect: refused trades fall to zero within one session\n"
-            "\nIt is the only field here a machine cannot derive, and the only one that makes the\n"
-            "record evaluable afterwards.",
-            file=sys.stderr,
-        )
+        print(f"\n{label}  {problem}", file=sys.stderr)
+    print(
+        "\nAdd a trailer to the commit message, for example:\n"
+        "\n    Expected-Effect: refused trades fall to zero within one session\n"
+        "\nIt is the only field here a machine cannot derive, and the only one that makes the\n"
+        "record evaluable afterwards.",
+        file=sys.stderr,
+    )
+    if enforcing():
         return 1
+    print(
+        f"\nThis is a WARNING, not a block: the commit will proceed. Set {ENFORCE_ENV}=1 to make it "
+        "fail instead.\nMeasure how often it is being acted on with:  "
+        "python -m deployment.change_records --report --range HEAD~20..HEAD",
+        file=sys.stderr,
+    )
     return 0
 
 

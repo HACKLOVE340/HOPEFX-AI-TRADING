@@ -2198,3 +2198,38 @@ modification frequency per package) and §32 (outcome memory).
 **Decision Governance is now complete**: ADRs for human design decisions, the
 ledger for automated operational ones, change records for deployments, and one
 prediction field running through all three.
+
+### The owner chose warn over block, and the KPI is measured rather than met
+
+Asked directly, the owner chose **warn** (ADR 0012). Implemented literally,
+Chapter 6's 100% target would have refused 4 of this session's last 12 commits —
+a real change to how the only committer commits, and the kind of interruption
+that ends in a bypass. §E20 is this repository's own example of a gate switched
+off rather than satisfied.
+
+The objection to warning is real and the record does not pretend otherwise: a
+gate that only warns is one people learn to scroll past. Three things answer it,
+each asserted in the injection suite:
+
+* the warning names the exact trailer to add, so acting is cheaper than ignoring;
+* `CHANGE_RECORD_ENFORCE=1` blocks with no code change, so the policy is
+  configuration and can be turned on in CI, on one branch, or permanently;
+* `--report` measures the KPI, because **a warning whose effect is never measured
+  is precisely what the objection is about**.
+
+`validate()` is unaffected by the policy. It reports the problem either way — the
+decision is about the exit code, never about the truth.
+
+The first measurement, over this session's own commits:
+
+    changes 12 · needing a prediction 5 · with one 1 · coverage 20%
+
+A real starting number rather than a target met by force. `coverage` is **None**
+when nothing in a range needed a prediction — a perfect score from an empty
+denominator is the oldest fabricated metric there is, and this module refuses to
+report one, the same rule the risk gate applies to data quality and the ledger to
+confidence.
+
+`docs/GATE_EVIDENCE.toml` now carries the caveat that this is the one gate in the
+ledger that does not block by default. Twenty-five gates counted as blocking when
+one is advisory would be the same fabrication the ledger exists to prevent.

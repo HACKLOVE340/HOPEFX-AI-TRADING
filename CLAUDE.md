@@ -39,7 +39,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |
 | What did the platform decide today, and what did it refuse? | `ai/ledger/decisions.py::summary()` · refusals are first-class entries |
-| What was this release *for*? | `python -m deployment.change_records --range <ref>` · an `Expected-Effect:` trailer is required for trading-path changes |
+| What was this release *for*? | `python -m deployment.change_records --report` · trading-path commits should carry an `Expected-Effect:` trailer — a warning, not a block |
 
 **Every number in those documents is a snapshot; every number the scripts print
 is current.** Where they disagree, the script is right and the document is stale
