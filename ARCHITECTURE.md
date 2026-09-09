@@ -35,6 +35,9 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `core/startup_factories.py` | Component factory functions wired into FastAPI startup sequence |
 | `ml/inference_engine.py` | Live inference: feature build → stale check → drift check → predict |
 | `ml/train_advanced.py` | Offline training: XGBoost + LightGBM + RF + ET stacking, walk-forward CV |
+| `ml/cached_series.py` | The committed daily CSVs, loaded with their age and OHLC integrity attached. Returns `CachedSeries`, never a bare DataFrame — deliberately **not** wired into the live path, so cached history cannot satisfy a freshness check |
+| `scripts/predict_offline.py` | Run the model on that cached series with no market feed. Defaults to `CLEAN_SINCE` (2020+); `--full-history` opts into the pre-2020 bars |
+| `scripts/clamp_ohlc.py` | Reconstruct impossible OHLC bars into a *separate* file with a provenance sidecar recording every edit. Never overwrites the source |
 | `risk/manager.py` | Pre-trade gate, GARCH VaR, CVaR, Kelly sizing, kill switch, prop firm enforcement |
 | `execution/oms.py` | OMS: 9 order states, GTC/IOC/FOK/GTD/DAY, OCO/bracket |
 | `execution/smart_router.py` | Microstructure-aware broker routing with OFI alignment and circuit breakers |

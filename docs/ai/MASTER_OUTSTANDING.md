@@ -133,6 +133,8 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | ~~16~~ | ~~`trader_full.py` builds a RiskManager with no orchestrator, so it now refuses every size~~ **DONE 2026-09-09.** Wired in `RiskManager.setup()` — the real construction site, not the line §E12 named |
 | ~~19~~ | ~~**441 malformed OHLC bars in `data/XAUUSD_40Y.csv`**~~ | **Owner chose clamp + restrict, DONE 2026-09-09 — see §E18.** Re-sourcing 2000–2019 from a vendor remains open and needs network access |
 | 18 | `accuracy_7d` on `/ml/status` is training-time OOS accuracy, not a 7-day rolling figure | Renaming a published API field is a contract change — see §E13 |
+| ~~20~~ | ~~**The per-module coverage gate had never taken a measurement**~~ | **DONE 2026-09-09 — see §E20.** `--cov=<dotted.module>` double-loaded numpy for every module in the repository; the 361-entry record is an artefact of that, not a census of untested modules |
+| 21 | **No pre-commit hook is installed under `.git/hooks/`, so no ratcheted check runs automatically** | Document registry, doc freshness, Group 4 preservation, volume index, gate evidence, doc metrics and the coverage gate all run only for someone who remembers `pre-commit run --all-files`. `scripts/bootstrap_dev.py` does not install them and no CI job runs them — see §E20 |
 | ~~17~~ | ~~`RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()`~~ **DONE 2026-09-09 — and it was a second live gate, not just a report. See §E16** | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
 
 **Item 14 was found while building Phase R1, deliberately left alone, and is now
@@ -195,6 +197,16 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
+| Modules with recorded coverage debt | 361 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+
+**The 361 is not 361 untested modules.** Every entry was recorded because
+measurement returned `None`, and until §E20 measurement returned `None` for
+*everything* — so the list is a census of one broken invocation. It is kept
+rather than deleted because it is now the ratchet that lets the repaired gate
+bite without blocking every commit that touches any of those files: a recorded
+module reports its real number without blocking, and blocks the moment it clears
+the floor and stops needing the entry. The honest count of under-covered modules
+will be whatever `--adopt` measures; nobody has spent the two hours yet.
 
 **The caller sweep is a screen, not a verdict.** Symbol matching misses aliases
 and dynamic lookup, so each of the 37 is one row to *inspect*, not one defect to
@@ -378,6 +390,25 @@ measured set.
 **This is now the largest single piece of recorded debt in the repository**, and
 it is the honest reading of what the coverage gate was hiding. Paying it down is
 one module at a time: make the test file import the module it is named for.
+
+> **Correction, 2026-09-09 (§E20).** Two claims in this section are false, and
+> both are the kind this document exists to prevent.
+>
+> "361 modules resolve to a test file that never imports them" was never
+> measured. The gate could not measure *anything* — `--cov=<dotted.module>`
+> made coverage re-import numpy's C extension in a process that had already
+> imported it, so every module in the repository returned `None`. The 361 is a
+> census of one broken invocation, not of 361 untested modules.
+>
+> "Verified by execution — a baselined module at 25% still fails" describes a
+> comparison the gate had no means to make. It reads as evidence and is not.
+> Written in the same phase that made unmeasurable modules fail, which is
+> exactly when a claim of verification is least likely to be re-checked.
+>
+> `database/backup.py` at 95% and `database/restore.py` at 95% stand — those
+> were measured with the full suite, not through this gate.
+>
+> §E20 repairs the invocation and re-reads the list as recorded coverage debt.
 
 ## §E6 — Phase R6 (2026-09-08)
 
@@ -1571,3 +1602,135 @@ Recorded in full at Group 4 Chapter 12. Four have real enforcement. Two do not:
   and failure memory are specified and unbuilt. This is §B2 items 12–14.
 
 Claiming six-for-six would be exactly the assertion Article II forbids.
+
+## §E20 — The coverage gate had never measured anything (2026-09-09)
+
+Found the way §E13 and §E14 were: by running the thing rather than reading it.
+The gate had a test suite, an injection suite, a ratchet file and a 361-module
+debt record. What it did not have was a single successful measurement, in its
+entire life.
+
+```
+pytest <test> --cov=risk.manager --cov-config=.coveragerc
+    numpy/_core/multiarray.py:11: in <module>
+        from . import _multiarray_umath, overrides
+    ImportError: cannot load module more than once per process
+```
+
+Every module in scope imports numpy transitively through `tests/conftest.py`, so
+the failure was total. The gate reported it as
+
+> coverage could not be measured (test: …) — the test may not import the module,
+> or may fail to collect
+
+which blames the test file, and whose natural next move is `SKIP_COVERAGE_GATE=1`.
+A gate that cannot run *and* misattributes why is worse than no gate: it teaches
+the bypass.
+
+### The cause, isolated by bisecting rather than reading
+
+| invocation | result |
+|---|---|
+| `pytest <test>` | works |
+| `pytest <test> --cov=risk.manager` | ImportError — dotted **module** |
+| `pytest <test> --cov=risk` | works — **package** |
+| `pytest <test> --cov=risk/manager.py` | no error, collects nothing (`.coveragerc` `source` wins) |
+
+Nothing to do with numpy being broken; it imports fine under `coverage run`
+alone. Resolving a dotted *module* name makes coverage import the module itself.
+A package name resolves as a directory and imports nothing.
+
+The gate now measures the top-level package and reads the module's own row out of
+the report. `TOTAL` is deliberately **not** a fallback: under a package-wide
+`--cov` it is the package's number, and reporting it as the module's would be a
+fabricated measurement of precisely the kind this gate exists to catch.
+
+### Three real numbers, where there had been none
+
+```
+DEBT risk/gatekeeper.py:      21% < 80%   (recorded)
+DEBT api/superadmin/ml_ai.py: 48% < 80%   (recorded)
+FAIL risk/manager.py:         43% < 80%   (not recorded — blocks)
+```
+
+One figure needs stating so nobody reads it as a collapse: `risk/manager.py`
+measures 43% here and 89.65% in `.coveragerc`'s recorded figure. Both are right —
+this gate runs one test file, that figure runs the whole suite. Quoting the
+gate's number as the module's coverage understates it by 46 points, so the
+module docstring now says so.
+
+### Repairing it was the easy half
+
+`docs/COVERAGE_UNMEASURABLE.txt` records 361 modules, and — see the correction
+now attached to §E5 — every entry is an artefact of the broken invocation. Fixing
+the invocation without touching the list would swing the gate from passing
+everything to blocking every commit that touches any of 361 files, and a gate
+that blocks work people must do gets switched off. That is the same outcome by a
+different route.
+
+So the record became a ratchet with pressure in both directions, the shape the
+document registry and gate-evidence ledger already use:
+
+| state | outcome |
+|---|---|
+| recorded, under the floor | **DEBT** — real number on stderr, does not block |
+| recorded, at or above the floor | **BLOCKS** — delete the line |
+| not recorded, under the floor | blocks |
+| not recorded, unmeasurable | blocks |
+
+The second row is the tooth. Without it this is an allowlist, and an allowlist
+under no pressure is how a ratchet stops being one. `--adopt` now preserves the
+file's header rather than rewriting it, so regenerating cannot quietly revert the
+record's meaning to the pre-repair wording.
+
+`risk/manager.py` is deliberately **not** added to the record. It blocked before
+this change and blocks after, so nothing regressed — and putting the pre-trade
+gate, VaR/CVaR and Kelly sizing on a debt list to make a commit go through is the
+one move this entire exercise argues against.
+
+### What the same run turned up
+
+`pytest -m "not slow and not e2e"` finished **6 failed, 21539 passed**. All six
+are closed, and none by editing a test until it went quiet.
+
+**Four were one defect.** `ml/cached_series.py::_check_integrity` judged whether a
+bar was possible with three comparisons, and every comparison against NaN is
+False — so a bar with a missing high satisfied all three and was counted sound.
+The report then said "no OHLC violations" about a series that cannot be used for
+anything. The whole point of that module is that a caller cannot tell a good
+series from a bad one by looking at a DataFrame, so an integrity report that
+clears bad data is not a weak measurement but a fabricated one.
+
+Caught by the repository's own analyzer (`security/code_analyzer.py`, category
+`nan_leak`) — the four failing tests were its zero-findings gates, and all four
+were right to fail. Fixed by masking every comparison with a finiteness check
+first, the order every predicate in `invariants/` uses. NaN bars are counted
+separately as `non_finite`, because a missing value contradicts nothing and
+folding it into `high_below_low` would put a violation in the record that the
+data does not contain. Measured against the real file: `XAUUSD_40Y.csv` has **0**
+non-finite bars, so §E15's and §E18's 441/6415 figure is unchanged.
+
+**One was a test encoding the defect §E12 removed.**
+`test_full_trading_cycle` built a RiskManager with no orchestrator and expected a
+$20,000 position — which passed only because unmeasured data quality scored a
+perfect 1.0. It has a data layer now, and the refusal it used to contradict is
+held beside it by `test_the_cycle_refuses_without_a_data_layer`, so the wiring
+cannot be mistaken for working around a red light.
+
+**One was surface, not substance.** Two injection tests asserted the gate's old
+wording. Both requirements still hold and are asserted more directly: an operator
+must still be able to tell "coverage is low" from "coverage is unknown", and that
+distinction is now *stronger* — a module its test never imports reports 0.00%,
+which is a measurement, and calling it unknown would be the same Rule 2 error
+pointed the other way.
+
+### Recorded, not fixed — the hooks are not installed
+
+No pre-commit hook is installed under `.git/hooks/` in this container. Every ratcheted check
+CLAUDE.md leans on — document registry, doc freshness, Group 4 preservation,
+volume index, gate evidence, doc metrics, and this coverage gate — runs only for
+someone who remembers `pre-commit run --all-files` by hand. `scripts/bootstrap_dev.py`
+does not install them, and no CI job runs them. Configured, accurate, never
+invoked: the §E9–§E12 shape, applied to the machinery that is supposed to catch
+that shape. Needs an owner decision on `pre-commit install` at bootstrap, a CI
+job, or both.

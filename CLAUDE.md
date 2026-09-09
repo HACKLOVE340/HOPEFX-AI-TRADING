@@ -34,6 +34,8 @@ is always today's. Everything below is the shape; that command is the state.
 | How are the four specification groups organised? | `docs/ai/BACKLOG_GROUPS.md` |
 | What binds every group? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — T0, twelve Articles, INV-01…21 |
 | How do I recover the database? | `docs/runbooks/database-restore.md` |
+| How do I run the model without a market feed? | `python scripts/predict_offline.py` · `ml/cached_series.py` |
+| Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 
 **Every number in those documents is a snapshot; every number the scripts print
