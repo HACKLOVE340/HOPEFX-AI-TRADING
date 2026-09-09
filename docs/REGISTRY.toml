@@ -547,6 +547,13 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/ai/PROGRAMME_PLAN.md"
+tier = "T2"
+subject = "programme_plan"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/ai/specs/GROUP1_advanced_intelligence_architecture.txt"
 tier = "T1"
 subject = "group1_advanced_intelligence_architecture"

@@ -29,6 +29,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Question | Where it is answered |
 |---|---|
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
+| What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
 | Which spec capabilities are live, staged or planned? | `python scripts/backlog_report.py` · `ai/hub/capabilities.py` |
 | Which safety gates have been proven able to fail? | `python scripts/gate_evidence.py` · `docs/GATE_EVIDENCE.toml` |
 | How are the four specification groups organised? | `docs/ai/BACKLOG_GROUPS.md` |

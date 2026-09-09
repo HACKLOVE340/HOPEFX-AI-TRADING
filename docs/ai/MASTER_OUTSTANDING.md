@@ -2233,3 +2233,87 @@ confidence.
 `docs/GATE_EVIDENCE.toml` now carries the caveat that this is the one gate in the
 ledger that does not block by default. Twenty-five gates counted as blocking when
 one is advisory would be the same fabrication the ledger exists to prevent.
+
+## §E25 — The platform audit, and what it found (2026-09-09)
+
+A full audit, measured rather than reviewed: 708,885 lines of Python across
+1,882 files and 124,027 of TypeScript across 444 are more than anyone reads in
+a session, and this repository carries enough instrumentation that reading the
+gauges is the better audit. The sequence and effort estimates it produced live
+in **`docs/ai/PROGRAMME_PLAN.md`**, which is living rather than dated — Group 3
+item 14 is *tier the six dated audits*, and a seventh would grow the debt.
+
+### What the instruments said
+
+    backend tests        21,732 pass · 0 fail · 30 skipped
+    frontend tests        2,640 pass · 0 fail  (135 files)
+    CI gates                 14 of 14 pass
+    gate evidence            25 gates · 25 proven able to fail · 0 unproven
+    security analyzer         0 findings
+    invariant predicates    339 across 34 modules
+    spec capabilities       233 rows · 233 live · 0 staged
+    decision records         12, all well formed
+    stated figures           16 · 0 drifted
+    npm advisories            0  (frontend and dashboard)
+    python advisories         6  across 3 packages
+    TODO/FIXME markers        4  in 708k lines
+
+### Three advisories, assessed for reachability rather than listed
+
+None has a fix version. A CVE in a package nothing calls is a different problem
+from one in the money path, so each was traced to a caller.
+
+**`ecdsa` 0.19.2 — Minerva timing attack (P1, reachable).** Leaks the P-256
+nonce and from it the private key; key generation, signing and ECDH all
+affected. Pulled in by `hdwallet`, which `payments/crypto/address_generator.py`,
+`payments/crypto/bitcoin.py` and `api/billing.py` use for BIP44/BIP84
+derivation. That is the money path. Narrow in practice — the attack needs timing
+observed across many derivations — but with no upgrade to take it is a decision
+rather than a patch: accept with a recorded reason, move derivation off the
+request path, or replace `hdwallet`.
+
+**`chromadb` 1.5.9 — four CVEs including pre-auth RCE (P2, NOT reachable).**
+Every one targets the ChromaDB **HTTP server**: the `/api/v2/tenants/…`
+endpoints, cross-tenant authorization, `SimpleRBACAuthorizationProvider`.
+`research/vector_store.py` constructs `chromadb.PersistentClient(path=…)` — an
+embedded client — and no compose, k8s or helm manifest starts a Chroma service.
+It is genuinely used (`brain/llm_agent.py`, `ml/rl_agent.py`,
+`ml/signal_scorer.py`), so removal is not free. The control that keeps this
+assessment true rather than turning it into folklore is a gate asserting no
+`HttpClient` and no server.
+
+**`nltk` 3.10.3 — model-path sandbox bypass (P2).** Caller-controlled model
+paths escape the enforced root. Reached through `textblob` in
+`news/sentiment.py`, where the paths are TextBlob's own corpora rather than
+caller-controlled, so the precondition does not hold.
+
+### The caller screen's 38 rows are mostly the screen working
+
+34 of the 38 show `prod=1` — one production reference, which is the definition
+site. Only the four §4 roll-ups show `prod=0`, and those were already
+established as false positives: `layer_state` is called inside the module that
+defines it. The screen is behaving exactly as its own output says it does. What
+it lacks is not a fix but a narrower question, and the package register supplies
+one.
+
+### The finding that shapes the plan
+
+**Six of the eleven outstanding constitutional invariants close from one build.**
+INV-01 (purpose), INV-02 (inputs and outputs), INV-03 (owner — the only NEW
+one), INV-04 (KPIs), INV-07 (versioning and lifecycle) and INV-14 (retirement
+dependencies) are all per-subsystem declarations, which is what Group 2 Chapter
+1's **package ownership register** is. It also retires ADR 0011's compromise,
+gives the 197 unowned documents an owner to follow, turns the caller screen's
+"inspect this" into "ask this person", and is the input Group 2 item 18 (debt
+budget) and item 22 (`data/` ÷ `data_layer/`) both need.
+
+Nothing else outstanding has that shape, which is why it is Phase 1 and why the
+plan is ordered by dependency rather than by size.
+
+### The estimate
+
+**≈ 25.5 sessions of build, plus 2.5 blocked on owner decisions — call it 28**,
+where a session is one complete slice: failing test, implementation, evidence,
+documentation, commit. Phases 3 to 5 touch the trading path and telemetry and
+carry ±50%; the governance phases ±20%. The full breakdown, per phase and per
+item, is in the programme plan.
