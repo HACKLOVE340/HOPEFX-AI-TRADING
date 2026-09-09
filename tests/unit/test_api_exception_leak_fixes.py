@@ -391,11 +391,24 @@ class TestSuperadminUsersErrorsNotLeaked:
 class TestSuperadminMlAiErrorsNotLeaked:
     @pytest.fixture()
     def client(self) -> TestClient:
-        from api.superadmin.ml_ai import router as ml_router, _require_superadmin
+        """A client authorised past *both* gates, so the error path is reachable.
+
+        ``/ml/deploy`` and ``/ml/rollback`` moved from ``_require_superadmin``
+        to ``require_superadmin_2fa`` when step-up auth was added to the
+        model-mutating endpoints. Overriding only the first left these tests
+        getting 403 and asserting a leak check that never ran — the same shape
+        as the defects this file exists to catch. Both are overridden here so
+        the request reaches the handler and the scrubbing is actually
+        exercised; the 2FA gate itself is proven separately by
+        ``tests/unit/test_superadmin.py::test_deploy_model_403_without_2fa``
+        and ``::test_rollback_model_403_without_2fa``.
+        """
+        from api.superadmin.ml_ai import router as ml_router, _require_superadmin, require_superadmin_2fa
 
         app = FastAPI()
         _user = TokenPayload(sub="superadmin-001", role="superadmin")
         app.dependency_overrides[_require_superadmin] = lambda: _user
+        app.dependency_overrides[require_superadmin_2fa] = lambda: _user
         app.include_router(ml_router)
         return TestClient(app, raise_server_exceptions=False)
 

@@ -494,21 +494,14 @@ class TestSuperadminSecurityInfraFixes:
 
 
 class TestSuperadminSystemHealthFixes:
-    def test_pg_dump_subprocess_has_check_false(self):
-        """pg_dump must pass explicit check=False (PLW1510), and must not block the loop.
-
-        Resolved via AST rather than string scraping: the call is now
-        ``asyncio.to_thread(subprocess.run, ["pg_dump", ...], check=False)``,
-        so an earlier version that searched backwards for the literal
-        ``subprocess.run(`` no longer matched anything. The AST form survives
-        both shapes and any future re-wrapping.
-        """
+    @staticmethod
+    def _pg_dump_calls(module: str):
+        """Every call in *module* whose first list argument starts with "pg_dump"."""
         import ast
 
-        tree = ast.parse(_source("api/superadmin/system_health.py"))
-        pg_dump_calls = [
+        return [
             n
-            for n in ast.walk(tree)
+            for n in ast.walk(ast.parse(_source(module)))
             if isinstance(n, ast.Call)
             and any(
                 isinstance(a, ast.List)
@@ -518,19 +511,48 @@ class TestSuperadminSystemHealthFixes:
                 for a in n.args
             )
         ]
-        assert len(pg_dump_calls) == 1, f"expected exactly one pg_dump call, found {len(pg_dump_calls)}"
-        call = pg_dump_calls[0]
 
-        kwargs = {k.arg: k.value for k in call.keywords if k.arg}
-        assert "check" in kwargs, "pg_dump call must pass explicit check="
-        assert kwargs["check"].value is False, "pg_dump call must pass check=False"
+    def test_system_health_does_not_shell_out_to_pg_dump(self):
+        """The endpoint delegates to the verified backup path instead of reimplementing it.
 
-        # pg_dump has timeout=60; run inline it would stall the event loop for
-        # up to a minute, so it must be dispatched off the loop.
-        assert ast.unparse(call.func) == "asyncio.to_thread", (
-            "pg_dump must be dispatched via asyncio.to_thread, not called inline in an async route"
+        This test originally pinned ``check=False`` on a ``pg_dump``
+        ``subprocess.run`` inside ``trigger_backup``. That call is gone: the
+        endpoint now calls ``database.backup.run_backup()`` and
+        ``database.restore.verify_backup()``, the same path Phase R1 proved by
+        round trip, so a backup that writes but does not restore is reported as
+        a failure rather than a success (MASTER_OUTSTANDING §B2 item 14).
+
+        The assertion is inverted rather than deleted, because the risk it
+        guarded is still real: if anybody reintroduces an ad-hoc dump here, the
+        next test catches it.
+        """
+        assert self._pg_dump_calls("api/superadmin/system_health.py") == [], (
+            "system_health.py is shelling out to pg_dump again — it should call "
+            "database.backup.run_backup(), which verifies the artefact before reporting success"
         )
-        assert ast.unparse(call.args[0]) == "subprocess.run"
+
+    def test_trigger_backup_uses_the_verified_path_off_the_event_loop(self):
+        src = _source("api/superadmin/system_health.py")
+        assert "from database.backup import run_backup" in src, "trigger_backup must use the verified backup path"
+        assert "from database.restore import verify_backup" in src, (
+            "trigger_backup must verify the artefact before reporting success"
+        )
+        # Both are blocking; neither may run on the event loop.
+        assert "asyncio.to_thread(run_backup)" in src
+        assert "asyncio.to_thread(verify_backup, backup_path)" in src
+
+    def test_a_reintroduced_pg_dump_would_still_have_to_pass_check_false(self):
+        """The original ratchet, kept alive for the case it was written for."""
+        for call in self._pg_dump_calls("api/superadmin/system_health.py"):
+            kwargs = {k.arg: k.value for k in call.keywords if k.arg}
+            assert "check" in kwargs, "pg_dump call must pass explicit check="
+            assert kwargs["check"].value is False, "pg_dump call must pass check=False"
+            # pg_dump has timeout=60; run inline it would stall the event loop
+            # for up to a minute, so it must be dispatched off the loop.
+            assert ast.unparse(call.func) == "asyncio.to_thread", (
+                "pg_dump must be dispatched via asyncio.to_thread, not called inline in an async route"
+            )
+            assert ast.unparse(call.args[0]) == "subprocess.run"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
