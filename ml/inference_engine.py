@@ -1110,6 +1110,32 @@ class InferenceEngine:
         self._predict_count += 1
         sym_label = symbol or "unknown"
 
+        def _abstain(result: dict, reason: str, detail: str = "") -> dict:
+            """Record an abstention once, where every consumer can see it.
+
+            Each of these paths used to do three separate things: increment the
+            Prometheus counter with a `reason` label, log at DEBUG (off in
+            production), and return a result carrying no reason at all. So the
+            cause was recorded in a metric label and nowhere the caller could
+            read it — HOPEFXDecisionEngine, core/signal_engine.py and the
+            dashboards all saw a flat neutral with no explanation, and the only
+            way to find out why was to read it back out of the metrics registry.
+
+            A neutral signal is the system declining to trade. An operator who
+            cannot tell a short data window from a drifting model from a stale
+            artifact cannot act on it.
+            """
+            result["reason"] = reason
+            result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            _PROM.fallback_total.labels(symbol=sym_label, reason=reason).inc()
+            logger.info(
+                "InferenceEngine: abstaining for %s — %s%s",
+                sym_label,
+                reason,
+                f" ({detail})" if detail else "",
+            )
+            return result
+
         last_close = float(ohlcv["close"].iloc[-1]) if "close" in ohlcv.columns else 0.0
         base_result = {
             "direction": "neutral",
@@ -1126,9 +1152,7 @@ class InferenceEngine:
         }
 
         if len(ohlcv) < _MIN_BARS:
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
-            _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_bars").inc()
-            return base_result
+            return _abstain(base_result, "insufficient_bars", f"{len(ohlcv)} < {_MIN_BARS}")
 
         # Step 0: Timeframe alignment — resample intraday bars to daily when
         # the model was trained on daily data (INFERENCE_TIMEFRAME=daily, default).
@@ -1146,10 +1170,12 @@ class InferenceEngine:
                         len(ohlcv),
                         sym_label,
                     )
-                    base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
                     base_result["direction"] = "neutral"
-                    _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_daily_bars").inc()
-                    return base_result
+                    return _abstain(
+                        base_result,
+                        "insufficient_daily_bars",
+                        f"{len(ohlcv)} intraday bars resampled to too few daily",
+                    )
                 logger.debug(
                     "InferenceEngine: resampled %d intraday → %d daily bars for %s",
                     len(ohlcv),
@@ -1172,10 +1198,8 @@ class InferenceEngine:
         # Step 3: Build features
         X = self._build_features(ohlcv, macro_df, mtf_df, symbol)
         if X is None:
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
-            return base_result
+            return _abstain(base_result, "feature_build_failed")
 
         # Step 3-validation: Block NaN/Inf/label-leakage in feature matrix
         # before it reaches the model. A NaN in features causes silent
@@ -1190,12 +1214,10 @@ class InferenceEngine:
                 sym_label,
                 _val_exc,
             )
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             base_result["fallback"] = True
             base_result["validation_error"] = str(_val_exc)
             self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_validation_failed").inc()
-            return base_result
+            return _abstain(base_result, "feature_validation_failed", str(_val_exc)[:120])
 
         # Step 3a: Stale model detection
         # Check whether the model file is older than MODEL_MAX_AGE_DAYS.
@@ -1210,7 +1232,15 @@ class InferenceEngine:
             base_result["stale_model"] = True
             base_result["model_age_days"] = self._model_age_days
             self._fallback_count += 1
+            base_result["reason"] = "stale_model"
             _PROM.fallback_total.labels(symbol=sym_label, reason="stale_model").inc()
+            logger.warning(
+                "InferenceEngine: model for %s is %.1f days old (max %.0f) — %s",
+                sym_label,
+                self._model_age_days,
+                _MODEL_MAX_AGE_DAYS,
+                "blocking" if _STALE_MODEL_BLOCK else "abstaining",
+            )
             if _STALE_MODEL_BLOCK:
                 raise RuntimeError(
                     f"STALE MODEL BLOCKED: {sym_label} model is {self._model_age_days:.1f} days old "
@@ -1303,13 +1333,11 @@ class InferenceEngine:
             )
         )
         if drift and _DRIFT_BLOCK:
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             base_result["model_version"] = "drift_blocked"
             base_result["feature_drift"] = True
             base_result["drift_z_max"] = self._drift_z_max
             self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
-            return base_result
+            return _abstain(base_result, "feature_drift", f"z_max={self._drift_z_max}")
 
         # Step 5: Online learner blend
         # SklearnOnlineLearner.predict_proba() accepts the raw OHLCV DataFrame
@@ -1419,8 +1447,11 @@ class InferenceEngine:
             _PROM.data_quality_gauge.labels(symbol=sym_label).set(data_quality)
         if model_version and model_version != "fallback":
             _PROM.model_version_info.labels(model_id=model_version).set(1)
+        served_reason = ""
         if model_version == "fallback":
+            served_reason = "model_fallback"
             _PROM.fallback_total.labels(symbol=sym_label, reason="model_fallback").inc()
+            logger.info("InferenceEngine: abstaining for %s — model_fallback", sym_label)
 
         decision_id = f"{sym_label}:{self._predict_count}:{time.time_ns()}"
         feature_schema_hash = hashlib.sha256(json.dumps(list(X.columns), separators=(",", ":")).encode()).hexdigest()
@@ -1455,6 +1486,10 @@ class InferenceEngine:
             "last_close": last_close,
             "latency_ms": round(latency_ms, 2),
             "fallback": model_version == "fallback",
+            # Empty on a served prediction; the abstention cause otherwise. It
+            # used to exist only as a Prometheus label, so a caller saw a flat
+            # neutral and could not tell a short window from a drifting model.
+            "reason": served_reason,
             "macro_active": macro_active,
             "mtf_active": mtf_active,
             "online_active": online_active,

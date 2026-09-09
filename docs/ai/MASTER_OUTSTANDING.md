@@ -1071,6 +1071,67 @@ server: `{"drift_score":null,"drift_state":"unmeasured"}`, and the superadmin
 console renders "Drift Score — not measured".
 
 
+## §E14 — The model abstained and would not say why (2026-09-09)
+
+Found the same way as §E13 — by running it. The owner asked to see the AI run,
+so it was handed a 300-bar hourly XAUUSD window. It answered:
+
+```json
+{"direction":"neutral","probability":0.5,"confidence":0.0,
+ "model_version":"fallback","fallback":true}
+```
+
+and nothing else. Nothing in the logs at INFO or WARNING either.
+
+**The abstention was correct.** 300 hourly bars resample to roughly 12 daily,
+below `_MIN_BARS`, and the model is trained on daily data — so it refused
+rather than guessing. That is the behaviour anyone would want.
+
+The defect is that the reason existed and went somewhere no caller can read.
+Every abstention path did three things:
+
+```python
+_PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_daily_bars").inc()
+logger.debug(...)          # DEBUG is off in production
+return base_result         # carries no reason
+```
+
+The cause lived in a Prometheus label. `HOPEFXDecisionEngine`,
+`core/signal_engine.py` and the dashboards — every real consumer of
+`predict()` — saw a flat neutral with no explanation. Diagnosing this at all
+meant reading the value back out of the metrics registry by hand.
+
+Ten paths behaved that way: `insufficient_bars`, `insufficient_daily_bars`,
+`feature_build_failed`, `feature_validation_failed`, `stale_model`,
+`feature_drift`, `model_fallback`, `reduced_feature_set`, `nan_features`,
+`all_zero_features`. A neutral signal is the system declining to trade; an
+operator who cannot tell a short data window from a drifting model from a stale
+artifact cannot act on it.
+
+### What changed
+
+A single `_abstain(result, reason, detail)` helper inside `predict()` now
+records the abstention once, in all three places at once — the returned
+`reason`, the Prometheus counter, and a log line at INFO with the specifics.
+One call site, so the metric and the payload cannot drift apart. `stale_model`
+keeps its own branch shape because it may raise, and gained the reason and a
+WARNING; the served-prediction path carries `reason: ""`.
+
+The same run also confirms the §E12 fix from the other direction: the evidence
+payload reports `data_quality: null` rather than a fabricated 1.0.
+
+### Evidence
+
+`tests/unit/test_inference_abstention_says_why.py` — 6 tests, 5 of which fail
+against the pre-fix engine. Re-running the AI now prints:
+
+```
+INFO ml.inference_engine: InferenceEngine: abstaining for XAU_USD —
+  insufficient_daily_bars (300 intraday bars resampled to too few daily)
+reason  'insufficient_daily_bars'
+```
+
+
 ## §F — What the complete Group 4 source changed (2026-09-08)
 
 The owner supplied the full Volumes I–XX document. The earlier source was a table
