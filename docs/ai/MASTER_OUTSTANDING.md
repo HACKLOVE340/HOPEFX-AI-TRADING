@@ -54,7 +54,11 @@ integration suite. `celery_app.database_backup` now verifies what it wrote.
 Those two answers decide whether PITR gets built. Everything else in this item is
 done and tested.
 
-### A2. `data/` ÷ `data_layer/` — where does new market-data code go?
+### ~~A2. `data/` ÷ `data_layer/` — where does new market-data code go?~~ · **DECIDED 2026-09-09 — ADR 0013**
+
+> Split by role, as a rule rather than a refactor: `data/` owns streaming and
+> serving, `data_layer/` owns access, `market_data/` owns broker-side feeds.
+> No code moves. The reasoning below is kept as the record of why it was open.
 
 **The measurement.** `data_layer/` is 19,610 LOC with 86 production importers;
 `data/` is 6,259 LOC with 20; `market_data/` is 4,031 with 6. All three are live.
@@ -69,7 +73,10 @@ guarantees the split widens.
 **Recommendation:** decide it as a one-paragraph ADR, not a refactor. The
 refactor can wait; the rule cannot.
 
-### A3. Nightly `slow` and `e2e` runs — pay the CI minutes or not?
+### ~~A3. Nightly `slow` and `e2e` runs — pay the CI minutes or not?~~ · **DECIDED 2026-09-09 — ADR 0014**
+
+> Nightly, not per-PR. Measured: **209 tests** carry those markers and have
+> never gated anything. The reasoning below is kept as the record.
 
 **The measurement.** Both markers are skipped in CI, always. Process isolation
 (`ai/jobs/isolation.py`) is specified in detail and **exercised by nothing that

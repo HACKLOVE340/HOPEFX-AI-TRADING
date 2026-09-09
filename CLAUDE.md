@@ -123,9 +123,24 @@ across two packages (F216). The measured reality:
 | `data/` | 6,259 | 20 | Live **streaming and serving**: `real_time_price_engine.py`, `scheduler.py`, `depth_of_market.py`, `tick_feed.py`, `time_and_sales.py`, `streaming.py`, `feeds/macro.py`. Constructed in `core/startup_factories.py`, mounts three HTTP routers via `core/router_registry.py`, and `ml/training.py` reads its macro feed. |
 | `market_data/` | 4,031 | 6 | Broker-side feeds, e.g. `mt5_live_feed.py`. |
 
-**The boundary between them is not documented anywhere, and this file does not
-invent one** (F217). Until it is agreed, extend the package a module already
-lives in rather than moving code between them, and say which you chose in the PR.
+**The boundary is now decided — ADR 0013, 2026-09-09.** It is a rule, not a
+refactor, and it describes what the code already does:
+
+* **`data/`** — live streaming and serving. The price engine, scheduler,
+  depth-of-market, tick feed, time-and-sales, streaming, macro feed.
+* **`data_layer/`** — market-data **access**. Orchestrator, tick store, feed
+  adapters. The canonical public surface.
+* **`market_data/`** — broker-side feeds.
+
+This paragraph previously said the boundary was documented nowhere and that this
+file would not invent one (F217). That was right at the time — inventing a
+boundary without the owner is how a guess becomes a convention — and it left the
+defect class live, so contributors kept splitting one subsystem across two
+packages.
+
+It does **not** authorise moving existing code across the line. A module on the
+wrong side stays there until there is a reason beyond tidiness: the 106
+production importers are the cost, and they have not changed.
 
 ---
 

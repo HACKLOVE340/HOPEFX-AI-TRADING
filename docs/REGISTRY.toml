@@ -1401,6 +1401,34 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
+path = "docs/decisions/0013-data-owns-streaming-data-layer-owns-access.md"
+tier = "T3"
+subject = "decision-0013"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0014-slow-and-e2e-tests-run-nightly.md"
+tier = "T3"
+subject = "decision-0014"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0015-adopt-embedding-based-news-sentiment.md"
+tier = "T3"
+subject = "decision-0015"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0016-root-documents-are-authoritative.md"
+tier = "T3"
+subject = "decision-0016"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/decisions/README.md"
 tier = "T2"
 subject = "decision-records"

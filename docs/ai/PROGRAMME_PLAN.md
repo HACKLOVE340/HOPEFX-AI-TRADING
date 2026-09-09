@@ -200,20 +200,30 @@ what is shed first, which is the defect this phase exists to close.
 | G2-20 | API versioning and deprecation policy | 0.5 |
 | G2-21 | Retention and classification policy | 0.5 |
 
-### Blocked on a decision — 2.5 sessions once unblocked
+### Phase 8 — the four that were blocked · 3 sessions
 
-| # | Item | Waiting on | Sessions |
+**All four decided on 2026-09-09.** Nothing in the programme now waits on the
+owner. Each carries its decision record.
+
+| # | Item | Decision | Sessions |
 |---|---|---|---:|
-| G2-22 | `data/` ÷ `data_layer/` boundary | **A2** | 0.5 |
-| G2-14 | Nightly `slow` / `e2e` run | **A3** | 0.5 |
-| G3-13 | Semantic search with provenance | **#17 FAISS** | 1 |
-| G3-8 | Root/`docs` duplicate contracts | which of each pair is authoritative | 0.5 |
+| G2-22 | `data/` ÷ `data_layer/` boundary | **ADR 0013** — split by role, no code moves | 0.5 |
+| G2-14 | Nightly `slow` / `e2e` run | **ADR 0014** — nightly, not per-PR (209 tests) | 0.5 |
+| G3-8 | Root/`docs` duplicate contracts | **ADR 0016** — root wins; ARCHITECTURE re-subjected | 0.5 |
+| G3-13 | Semantic search with provenance | **ADR 0015** — adopt embeddings, `faiss-cpu`, no torch unless measured | 1.5 |
+
+G3-13 grew from 1 session to 1.5: ADR 0015 adopts the feature over a
+recommendation against it, and the two constraints that bound the cost —
+CPU-only index, and an embedder evaluated before reaching for `torch` — are work
+that a plain `pip install sentence-transformers` would not have been.
 
 ---
 
 ## 5. How long
 
-**≈ 25.5 sessions of build, plus 2.5 blocked on your decisions — call it 28.**
+**≈ 28.5 sessions.** Nothing waits on a decision any more — all four were made
+on 2026-09-09. The figure moved from 28 because ADR 0015's constraints add half a
+session to G3-13.
 
 What that means in calendar time depends entirely on how much of it runs in
 sessions like today's. For reference, today closed ten slices: the coverage-gate
@@ -236,17 +246,28 @@ sessions sit behind them.
 
 ---
 
-## 6. Your decisions, and what each one costs to leave open
+## 6. Your decisions — all four made
 
-| Decision | Blocks | Cost of not deciding |
+Taken on 2026-09-09. Three matched the recommendation; one was overruled, which
+is recorded as such rather than smoothed over.
+
+| Decision | Chosen | Record |
 |---|---|---|
-| **A2** `data/` ÷ `data_layer/` boundary | G2-22 | Already caused a defect class: contributors split one subsystem across two packages. A one-paragraph ADR, not a refactor |
-| **A3** Nightly `slow`/`e2e` | G2-14 | Both markers are skipped in CI always, so that tier of tests protects nothing today |
-| **#17** FAISS RAG news sentiment | G3-13 | Semantic search stays keyword-based; not urgent |
-| **#6** `DRIFT_BLOCK` default | — | A drift monitor that does not block by default. Standalone; decide any time |
-| Root/`docs` authority | G3-8 | Three subjects claimed twice. I fixed the contradictions inside them; picking the authoritative copy is yours |
+| **A2** `data/` ÷ `data_layer/` | Split by role, as a rule. No code moves | ADR 0013 |
+| **A3** Nightly `slow`/`e2e` | Nightly, not per-PR. 209 tests that gated nothing | ADR 0014 |
+| **#17** Embedding news sentiment | **Adopt** — against the recommendation to decline | ADR 0015 |
+| Doc authority | Root wins for contributing and deployment; ARCHITECTURE re-subjected | ADR 0016 |
 
----
+**On #17.** The recommendation was to decline: `faiss` is absent, the usual path
+pulls `torch`, and `requirements.txt` already pins around torch to avoid
+accidental GPU builds. The owner adopted it anyway, knowing that. ADR 0015 keeps
+the objection visible and turns it into two constraints — `faiss-cpu` only, and
+an embedder measured before `torch` is accepted — so the cost stays bounded
+rather than arriving by default.
+
+**Still open, blocking nothing:** `DRIFT_BLOCK`'s default (task #6), and the two
+findings this audit raised — the `ecdsa` advisory in the payments path (#26) and
+gating ChromaDB to embedded use (#27).
 
 ## 7. Standing debt — shrinks, never finishes
 
