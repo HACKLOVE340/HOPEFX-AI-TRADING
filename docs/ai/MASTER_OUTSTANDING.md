@@ -133,7 +133,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | 16 | `trader_full.py:677` builds a RiskManager with no orchestrator, so it now refuses every size | Not a deployed entry point; wire it to the orchestrator or have it assert its own data quality |
 | 19 | **441 malformed OHLC bars in `data/XAUUSD_40Y.csv`** (6.9%, all pre-2020) | Owner decision — re-source, clamp, restrict training to 2020+, or accept. Each changes what the models train on. See §E15 |
 | 18 | `accuracy_7d` on `/ml/status` is training-time OOS accuracy, not a 7-day rolling figure | Renaming a published API field is a contract change — see §E13 |
-| 17 | `RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()` | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
+| ~~17~~ | ~~`RiskAssessment.data_quality` still reports a 1.0 fallback via `_get_data_quality()`~~ **DONE 2026-09-09 — and it was a second live gate, not just a report. See §E16** | Reporting only — the *gate* is fixed (§E12). Narrowing the reported record means widening the type to `float \| None` and updating its consumers |
 
 **Item 14 was found while building Phase R1, deliberately left alone, and is now
 DONE (2026-09-08).** `trigger_backup` no longer reimplements `pg_dump`/`shutil`
@@ -1198,6 +1198,58 @@ an abstention. `scripts/predict_offline.py` prints the whole chain: provenance,
 the staleness warning, the 48% macro feature imputation the engine reports for
 itself, the decision, and `data_quality: None` — unmeasured, which offline is
 the honest answer.
+
+
+## §E16 — The same gate, one method over (2026-09-09)
+
+§B item 17 was filed as a reporting problem: `RiskAssessment.data_quality`
+defaulted to 1.0, so a risk record produced with the feed down claimed flawless
+data. Fixing it found that `assess()` carries its **own** data-quality gate,
+which §E12 missed:
+
+```python
+data_quality = self._get_data_quality(signal)   # 1.0 fallback
+...
+if data_quality < _MIN_DATA_QUALITY:            # cannot fire on an unmeasured feed
+```
+
+Identical to the defect §E12 closed in `size_order()`, in the method next to it.
+§E12 fixed one call site and left the other, because the finding had been framed
+around sizing.
+
+**The trade was still refused** — `assess()` calls `size_order()`, which does
+refuse — so this was not an open path to a bad trade. What it produced was a
+rejection that lied about itself: `reason: "zero_size"` and
+`data_quality: 1.0`, naming neither the cause nor the truth. An operator reading
+that cannot tell a dead feed from an ordinary zero-size result, and those need
+different responses.
+
+### What changed
+
+* `RiskAssessment.data_quality` is `float | None`, defaulting to `None`.
+* `_rejected_assessment()` no longer defaults it to 1.0.
+* `assess()` gates on `_measured_data_quality()` and rejects an unmeasured feed
+  as `data_quality:unmeasured`, with its own branch — `None < 0.40` is a
+  `TypeError`, so widening the type without widening the comparison would have
+  traded a silent hole for a crash in the money path.
+
+Blast radius checked first: nothing outside `risk/manager.py` reads the field.
+`api/graphql_schema.py` builds a different assessment shape and never touches
+it, so no external consumer depended on the old type.
+
+### The lesson worth keeping
+
+A defect found at one call site is a defect *shape*, not a location. §E12's
+write-up named `getattr(signal, "data_quality", 1.0)` and traced it to
+`size_order()`; the same expression was two methods away, reached by
+`_get_data_quality()`, and nothing in that phase went looking. Grep the
+expression, not the symptom.
+
+### Evidence
+
+`tests/unit/test_risk_assessment_reports_unmeasured.py` — 11 tests, 5 of which
+fail against the pre-fix tree, including one asserting the gate does not raise
+on `None`. 2300 pass across the risk/gatekeeper/sizing/invariant slice.
 
 
 ## §F — What the complete Group 4 source changed (2026-09-08)

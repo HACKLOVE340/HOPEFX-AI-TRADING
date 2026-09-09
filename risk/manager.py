@@ -227,7 +227,11 @@ class RiskAssessment:
     risk_level: str  # RiskLevel constant
     reason: str  # human-readable approval/rejection reason
     sizing: PositionSizingResult | None = None
-    data_quality: float = 1.0
+    #: The measured data quality, or None when nothing measured it. This
+    #: defaulted to 1.0 — so an assessment built with the feed down reported
+    #: flawless data beside a decision that had nothing to look at. Rule 2: an
+    #: unmeasured value is absent, never best case.
+    data_quality: float | None = None
     sentiment_score: float = 0.0
     impact_score: float = 0.0
     drawdown_pct: float = 0.0
@@ -645,7 +649,7 @@ class RiskManager:
         signal,
         reason: str,
         risk_level: str,
-        data_quality: float = 1.0,
+        data_quality: float | None = None,
         sentiment_score: float = 0.0,
         impact_score: float = 0.0,
     ) -> RiskAssessment:
@@ -672,7 +676,14 @@ class RiskManager:
         Returns RiskAssessment with approved=True/False and full context.
         Consumed by Gatekeeper and execution pipeline.
         """
-        data_quality = self._get_data_quality(signal)
+        # The *measured* value, not the reported one. This read
+        # _get_data_quality(), whose 1.0 fallback made the gate below unable to
+        # fire on an unmeasured feed — the same defect §E12 closed in
+        # size_order(), which that phase missed one method over. The trade was
+        # still refused (assess() calls size_order(), which does refuse), but
+        # the assessment reported reason="zero_size" and data_quality=1.0,
+        # naming neither the cause nor the truth.
+        data_quality = self._measured_data_quality(signal)
         features = self._get_orchestrator_features(signal)
         sentiment_score = float(features.get("news_sentiment_score", 0.0))
         impact_score = float(features.get("macro_impact_score", 0.0))
@@ -693,6 +704,18 @@ class RiskManager:
                 reason=f"daily_dd:{self._state.daily_drawdown * 100:.2f}%",
                 risk_level=RiskLevel.CRITICAL,
                 data_quality=data_quality,
+            )
+
+        if data_quality is None:
+            # `None < _MIN_DATA_QUALITY` is a TypeError, so absence needs its
+            # own branch rather than falling into the numeric comparison.
+            return self._rejected_assessment(
+                signal,
+                reason="data_quality:unmeasured",
+                risk_level=RiskLevel.HIGH,
+                data_quality=None,
+                sentiment_score=sentiment_score,
+                impact_score=impact_score,
             )
 
         if data_quality < _MIN_DATA_QUALITY:
