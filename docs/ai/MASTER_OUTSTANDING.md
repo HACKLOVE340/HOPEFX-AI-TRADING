@@ -137,7 +137,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 27 gates · **27 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 28 gates · **28 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -2013,7 +2013,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      27 gates · 27 proven able to fail · 0 unproven
+    gate_evidence.py      28 gates · 28 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2215,7 +2215,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              27 gates · 27 proven · 0 unproven
+    gate_evidence.py                              28 gates · 28 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -2282,7 +2282,7 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
     backend tests        21,732 pass · 0 fail · 30 skipped
     frontend tests        2,645 pass · 0 fail  (136 files)
     CI gates                 14 of 14 pass
-    gate evidence            27 gates · 27 proven able to fail · 0 unproven
+    gate evidence            28 gates · 28 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -2401,7 +2401,7 @@ that one fact:
 
 **Closed this session:** `scripts/frontend_colour_ratchet.py` +
 `docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
-`GATE_EVIDENCE.toml` (27 gates, 27 proven). The count may now only fall. The
+`GATE_EVIDENCE.toml` (28 gates, 28 proven). The count may now only fall. The
 codemod that would actually revive the three features is **owner's call** — see
 §A.
 
@@ -4370,7 +4370,7 @@ run, not a recollection.
 | Group 2 platform gaps | 19 outstanding (3 struck through) |
 | Group 3 knowledge gaps | 6 outstanding (8 struck through) |
 | Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
-| Safety gates | 27 gates · 27 proven able to fail · **0 unproven** |
+| Safety gates | 28 gates · 28 proven able to fail · **0 unproven** |
 | Coverage debt | 365 modules recorded |
 | Owner decisions | §A1 (RPO/RTO), §A4, §A5, plus three opened this session |
 
@@ -4888,3 +4888,95 @@ Worth recording together, because they are one habit:
 Each was a search that could match something other than what I meant. The same
 shape as the harness bugs in §E46, §E47 and §E50, on the reading side rather
 than the writing side.
+
+---
+
+## §E52 — The AI OS specification, mapped against what this repository actually enforces (2026-09-10)
+
+The owner supplied `MASTER_AI_OPERATING_SYSTEM_CCAM_DERIVED_ARCHITECTURE_SPECIFICATION_v1.0`
+with a directive that begins *"Do not treat this document as permission to
+replace, bypass, weaken, disable, or ignore anything that already exists"* and
+*"First inspect and understand the existing system."*
+
+So the first deliverable is not code. It is an answer to the question the
+directive implies: **of the 26 invariants the specification names in its §30,
+which does this platform already enforce?**
+
+### The answer
+
+    26 AOS invariants · 2 covered · 13 partial · 11 absent
+
+`docs/ai/specs/AOS_INVARIANT_REGISTER.toml` carries the map, one row per
+invariant, each naming the predicates or mechanism that enforce it and — where
+they do not — stating the gap. The two covered are `AOS-GOV-070` (No
+Self-Elevation → `verify_no_privilege_escalation`) and `AOS-API-001`
+(executable/API/documentation reconciliation → the API doc generator plus the
+test that fails when the committed file drifts).
+
+**This is a map, not a plan.** Several of the eleven absent rows are meaningful
+only once the AI OS has planes this repository does not have. Which of them to
+build is the owner's call, and nothing here presumes it.
+
+### Why it is a TOML file with a checker, and not a document
+
+A prose conformance map is a claim that was true once. Rename a predicate and
+every row naming it keeps reading as coverage; the map cannot tell you it has
+gone stale. That is F255 — a checker that reads prose is not reading code.
+
+`scripts/aos_conformance.py` resolves every claim instead of reading it: each
+name in `predicates` must exist in `invariants.registry.discover_predicates()`,
+each path in `mechanism` must exist on disk, `COVERED` must carry one of those
+two, `ABSENT` may carry neither, and `PARTIAL`/`ABSENT` must say what is
+missing. It runs in `pre-commit`, triggered by the register, by the script, and
+by **any change under `invariants/`** — because a rename there is precisely
+what turns a row into fiction.
+
+Its positive control refuses (exit 2, not a finding) when the registry
+discovers no predicates at all. Without it, an `invariants` package that failed
+to import would make every row resolve identically and the run would still
+print a total.
+
+### One row was already fiction, and the checker is why it is not now
+
+`AOS-API-001` was written as `COVERED` naming `verify_platform_identity`. That
+predicate is real — and it asserts the platform gained no *undeclared
+capabilities*, which is a different claim entirely from API/documentation
+reconciliation. It would have resolved green forever while describing something
+the repository does not do. The row now names the generator and the test that
+actually enforce it, and the register grew a `mechanism` field so a control
+enforced by a script rather than a predicate can be stated honestly instead of
+borrowing a predicate that fits the schema.
+
+### `verify_dual_control` is two different predicates
+
+Mapping the register surfaced a name collision. `invariants/assurance.py`
+defines `verify_dual_control(action_sensitive, distinct_approvers)` under **No
+Loss Of Human Control**; `invariants/governance.py` defines
+`verify_dual_control(approvals, required)` under **No Unauthorized Capital
+Movement**. Different signatures, different constitutional rules, same name.
+
+Python keeps them apart by module. A register naming predicates as bare strings
+cannot, and the first version of the checker flattened the inventory into a set
+— which is also why it reported 338 predicates where CLAUDE.md and the
+invariants skill both say 339. Both numbers were right: 339 definitions, 338
+distinct names.
+
+The inventory is now kept as `name -> [modules]`. A bare name defined in more
+than one module resolves, but is reported as a note asking the row to qualify
+it; a qualified name (`governance.verify_dual_control`) is checked against that
+module. Neither predicate has a production caller today — only tests — so
+nothing is mis-wired. It is a trap for the next person who greps.
+
+### Documentation that can no longer drift
+
+`scripts/doc_metrics.py` now measures the four AOS figures, so a document
+stating them is checked against the register on every commit. Each pattern
+requires the separator the report line uses (`2 covered · 13 partial`), because
+"covered", "partial" and "absent" are ordinary English — the same narrowing
+`gates_total` needed after it read "8 gates left" as a total.
+
+Adding the gate took the evidence ledger 27 → 28, which made six lines of this
+document stale in the same commit. Those are corrected. Three tests in
+`test_doc_metrics.py` were also filtering drift by metric across the whole
+repository rather than by their own fixture, so real drift anywhere made them
+red under a name that said the opposite; they are scoped now.

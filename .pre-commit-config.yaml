@@ -259,7 +259,7 @@ repos:
         name: Documents state the measured figures
         language: system
         entry: python scripts/doc_metrics.py --check
-        files: '^(docs/.*\.(md|toml)$|[A-Z_-]+\.md$|scripts/(gate_evidence|group4_preservation|docs_registry|doc_metrics)\.py$)'
+        files: '^(docs/.*\.(md|toml)$|[A-Z_-]+\.md$|scripts/(gate_evidence|group4_preservation|docs_registry|doc_metrics|aos_conformance)\.py$)'
         pass_filenames: false
         stages: [pre-commit]
 
@@ -276,6 +276,19 @@ repos:
         language: system
         entry: python scripts/frontend_colour_ratchet.py --check
         files: '^(frontend/src/.*\.(tsx?|jsx?|css)$|docs/FRONTEND_COLOUR_DEBT\.json$|scripts/frontend_colour_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The AOS specification's §30 register maps 26 named invariants onto what
+      # this repository enforces. Every claim in it names a live predicate or a
+      # file on disk, so a rename anywhere under invariants/ can turn a row into
+      # fiction that still reads as coverage. That is why invariants/*.py is in
+      # the trigger set and not just the register itself.
+      - id: aos-conformance
+        name: AOS invariant register resolves against live predicates
+        language: system
+        entry: python scripts/aos_conformance.py --check
+        files: '^(docs/ai/specs/AOS_INVARIANT_REGISTER\.toml|scripts/aos_conformance\.py|invariants/.*\.py)$'
         pass_filenames: false
         stages: [pre-commit]
 

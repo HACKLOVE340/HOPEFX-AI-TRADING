@@ -109,6 +109,15 @@ CLAIMS: Final[tuple[Claim, ...]] = (
         "scripts/docs_registry.py",
     ),
     Claim("documents_unowned", re.compile(r"(\d+)\s+unowned\b"), "scripts/docs_registry.py"),
+    # AOS §30 conformance. "covered", "partial" and "absent" are ordinary English,
+    # so each pattern requires the separator the register's own report line uses
+    # (`2 covered · 13 partial · 11 absent`). Without that anchor, "coverage is
+    # partial in three modules" reads as a stated figure — the same trap the
+    # gates_total pattern had to be narrowed out of.
+    Claim("aos_entries", re.compile(r"(\d+)\s+AOS\s+invariants\b"), "scripts/aos_conformance.py"),
+    Claim("aos_covered", re.compile(r"(\d+)\s+covered\s*(?:·|,|\))"), "scripts/aos_conformance.py"),
+    Claim("aos_partial", re.compile(r"(\d+)\s+partial\s*(?:·|,|\))"), "scripts/aos_conformance.py"),
+    Claim("aos_absent", re.compile(r"(\d+)\s+absent\s*(?:·|,|\))"), "scripts/aos_conformance.py"),
 )
 
 #: Living documents only. Dated audits and archives are point-in-time records —
@@ -143,9 +152,11 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         gates = gate_check(repo=repo)
         preservation = preservation_check()
 
+        from scripts.aos_conformance import check as aos_check
         from scripts.docs_registry import load as registry_load
 
         entries, _ = registry_load()
+        aos = aos_check()
     except Exception as exc:  # pragma: no cover - an unreadable source is the finding
         raise MetricsBroken(f"a measurement could not be taken: {exc}") from exc
 
@@ -156,6 +167,10 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         "source_titles": preservation.titles_checked,
         "documents_registered": len(entries),
         "documents_unowned": sum(1 for e in entries if not e.owner.strip()),
+        "aos_entries": aos.entries,
+        "aos_covered": aos.covered,
+        "aos_partial": aos.partial,
+        "aos_absent": aos.absent,
     }
 
 

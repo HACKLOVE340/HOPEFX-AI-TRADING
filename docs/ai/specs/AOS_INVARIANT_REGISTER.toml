@@ -1,0 +1,269 @@
+# AOS Master Invariant Register — conformance map
+#
+# Source: MASTER_AI_OPERATING_SYSTEM_CCAM_DERIVED_ARCHITECTURE_SPECIFICATION_v1.0,
+# section 30 "Master Invariant Register" (26 entries, extracted verbatim).
+#
+# This file maps each AOS-* invariant onto what THIS repository already
+# enforces. It exists because the specification's own §32 directive says to
+# inspect and preserve before extending, and its §1 rules say never to mark an
+# item VERIFIED without direct evidence.
+#
+# STATUS VOCABULARY — the spec's own labels (§1), narrowed to this map:
+#
+#   COVERED   a live predicate in `invariants/` enforces this invariant's
+#             substance. `predicates` names them; the checker RESOLVES every
+#             name against the registry and fails if one does not exist, so a
+#             claim here cannot rot into fiction.
+#   PARTIAL   something adjacent exists and is named, but it does not enforce
+#             the invariant as stated. The `gap` field says what is missing.
+#             This is the honest label for "related predicate, different claim".
+#   ABSENT    nothing in the repository enforces this. Not a criticism of the
+#             repository — most of these are AI-OS concepts the trading
+#             platform never needed.
+#
+# `scripts/aos_conformance.py` is the checker. `docs/ai/specs/` is where the
+# Group 4 constitution already lives, so this sits beside it deliberately.
+#
+# WHAT THIS FILE IS NOT: it is not an implementation plan and not a claim that
+# ABSENT entries should all be built. Several are meaningful only once the AI
+# OS has planes this repository does not yet have.
+
+[meta]
+spec = "MASTER_AI_OPERATING_SYSTEM_CCAM_DERIVED_ARCHITECTURE_SPECIFICATION_v1.0"
+section = "30. Master Invariant Register"
+entries = 26
+mapped_on = "2026-09-10"
+existing_predicate_count_at_mapping = 339
+
+# ── Governance and authority ─────────────────────────────────────────────────
+
+[AOS-GOV-141]
+title = "Representation Never Grants Authority"
+status = "ABSENT"
+predicates = []
+gap = """The spec calls this the non-negotiable principle: UI, voice, skills, agents, MCP
+tools, API routes, config, docs, metrics and test results may REQUEST an operation and none
+is authoritative merely by existing. The repository enforces authority per call site
+(`enforce_pre_trade`, `enforce_agent_action`) but has no predicate asserting that a
+representation surface is not itself a grant."""
+
+[AOS-GOV-075]
+title = "Delegation Does Not Transfer Authority"
+status = "PARTIAL"
+predicates = ["verify_no_circular_delegation"]
+gap = """`verify_no_circular_delegation` prevents delegation CYCLES. It says nothing about
+whether authority moves along a delegation edge. The invariant as stated needs a predicate
+over (delegator_scope, delegatee_scope, action_scope)."""
+
+[AOS-GOV-070]
+title = "No Self-Elevation"
+status = "COVERED"
+predicates = ["verify_no_privilege_escalation"]
+gap = ""
+note = """`verify_no_privilege_escalation(granted_role_level, authorized_level)` refuses a
+grant above what was authorized. That is this invariant."""
+
+[AOS-AGENT-025]
+title = "Child Authority Is a Subset of Parent-Authorized Scope"
+status = "PARTIAL"
+predicates = ["verify_least_privilege", "verify_agent_authority"]
+gap = """`verify_least_privilege` compares granted vs NEEDED scopes for one principal;
+`verify_agent_authority` compares action risk to an authority level. Neither expresses the
+parent→child monotonicity the spec requires (child ⊆ parent-authorized)."""
+
+[AOS-PRESENCE-001]
+title = "Presence Is Not Authority"
+status = "PARTIAL"
+predicates = ["verify_human_supremacy", "verify_human_control", "verify_human_can_stop"]
+gap = """These assert humans retain control over the system. The AOS invariant is narrower and
+different: a PRESENCE surface (hologram, voice, camera, gesture) must not be able to authorize.
+The repository has no presence layer yet, so this is absent by absence of subject."""
+
+# ── Execution and capability ─────────────────────────────────────────────────
+
+[AOS-EXEC-048]
+title = "Execution Requires Preview/Admission Pipeline"
+status = "PARTIAL"
+predicates = ["verify_pre_trade_gate", "verify_human_approval", "verify_tool_allowed"]
+gap = """The trading path has a real pre-trade gate and an approval predicate. The spec's
+pipeline is broader — Intent → Preview → Admission → Authorization → Resource Admission →
+Execution → Observation → Outcome Verification → Audit Receipt — and there is no predicate
+asserting an execution passed those stages in order."""
+
+[AOS-COG-075]
+title = "Canonical Intent Identity"
+status = "ABSENT"
+predicates = []
+gap = """The spec defines a canonical `Intent` record (id, actor, mission, task, capability,
+target, scope, parameters, consequence_class, requested_at, expires_at, policy_version,
+approval_reference) onto which voice/UI/API/MCP/CLI/agent all converge. No such type exists."""
+
+[AOS-CAP-069]
+title = "One Capability, Many Protocol Projections"
+status = "PARTIAL"
+predicates = ["verify_platform_identity"]
+gap = """`ai/hub/capabilities.py` IS a single canonical capability registry (233 rows), which is
+the substance of this invariant. What is missing is a predicate asserting transport-neutral
+identity — that an HTTP route, an MCP tool and a skill naming the same capability resolve to
+one id."""
+
+[AOS-CAP-070]
+title = "Capability Metadata Compilation"
+status = "ABSENT"
+predicates = []
+gap = """The spec requires generated capability metadata to be a COMPILED artifact from a
+canonical source, never hand-edited. `docs/API_ENDPOINTS.md` is generated this way and has a
+drift test, which is the same pattern — but there is no capability-metadata compiler and no
+predicate over one."""
+
+[AOS-SEC-124]
+title = "Capability Compiler Integrity"
+status = "ABSENT"
+predicates = []
+gap = "Depends on AOS-CAP-070. No compiler exists, so no integrity predicate over one."
+
+[AOS-EVAL-089]
+title = "Capability-Specific Readiness Vector"
+status = "ABSENT"
+predicates = []
+gap = """The spec requires readiness to be a per-capability VECTOR rather than one boolean.
+`scripts/backlog_report.py` reports live/staged/planned per capability, which is adjacent, but
+there is no readiness vector and no predicate over one."""
+
+# ── Evidence ─────────────────────────────────────────────────────────────────
+
+[AOS-EVID-044]
+title = "Hook Success Is Not Evidence Acceptance"
+status = "ABSENT"
+predicates = []
+gap = """This is the exact defect class §E50 found in `compliance/auditor.py`: a scheduled
+write whose failure was discarded, and a verifier that read its own memory. The behaviour is
+now fixed and tested, but there is no PREDICATE asserting the general rule."""
+related_evidence = "docs/ai/MASTER_OUTSTANDING.md §E50; tests/unit/test_audit_persistence_failures_are_visible.py"
+
+[AOS-EVID-046]
+title = "Alert Evidence Ladder"
+status = "ABSENT"
+predicates = []
+gap = """Spec §17: alert firing, notification delivery and external acceptance are distinct
+stages. `verify_notification_delivered` exists but collapses the ladder into one boolean."""
+
+[AOS-EVID-047]
+title = "Multi-Clock Alert Semantics"
+status = "ABSENT"
+predicates = []
+gap = "No predicate distinguishes event time, ingest time, delivery time and acknowledgement time."
+
+[AOS-EVID-013]
+title = "Temporal Order Is Not Causal Order"
+status = "PARTIAL"
+predicates = ["verify_causal_order", "verify_timestamp_monotonic", "verify_no_future_event"]
+gap = """`verify_causal_order` asserts cause PRECEDES effect — a necessary condition. The AOS
+invariant is the converse warning: precedence must not be taken as evidence of causation. No
+predicate expresses that, and the two are easy to confuse."""
+
+[AOS-EVID-016]
+title = "Propagation Is Not Causation"
+status = "ABSENT"
+predicates = []
+gap = "No predicate over propagation edges vs causal claims."
+
+[AOS-EVID-028]
+title = "Epistemic Monotonicity Requires Evidence"
+status = "ABSENT"
+predicates = []
+gap = """A record must not move from unknown/inferred toward observed/verified without new
+evidence. `verify_data_provenance` records whether a source was verified; it does not guard
+the transition."""
+
+# ── State ────────────────────────────────────────────────────────────────────
+
+[AOS-STATE-019]
+title = "Unknown Must Remain Unknown"
+status = "PARTIAL"
+predicates = ["verify_data_provenance", "verify_context_freshness", "verify_data_freshness"]
+gap = """This repository already treats it as a STANDING RULE — "an unmeasured value is
+absent, never best-case" (Rule 2), enforced case by case: `RiskAssessment.data_quality` is
+`float | None`, `_live_drift_score` refuses to report 0.0 when it cannot measure, and
+`verify_persisted_integrity` returns None for an empty log. What is missing is a predicate
+that states the rule generally rather than 3 enforcement sites."""
+related_evidence = "MASTER_OUTSTANDING §E23, §E19, §E50"
+
+[AOS-STATE-030]
+title = "Timestamp Semantics Must Be Declared Per Consumer"
+status = "ABSENT"
+predicates = []
+gap = "No predicate asserts a timestamp field declares which clock it came from."
+
+[AOS-COG-077]
+title = "Cognitive Subsystems Are Downstream of Authoritative State"
+status = "PARTIAL"
+predicates = ["verify_no_shadow_objective", "verify_goal_alignment"]
+gap = """Adjacent: these guard the AI's objectives. The invariant is architectural — a
+cognitive subsystem must read canonical state rather than become a second source of truth.
+`data_layer.orchestrator` is the canonical surface and gate-g enforces it for imports, but no
+predicate expresses the general rule."""
+
+# ── Contracts, release, verification ─────────────────────────────────────────
+
+[AOS-API-001]
+title = "Executable/API/Documentation Contract Reconciliation"
+status = "COVERED"
+predicates = []
+mechanism = ["scripts/api_documentation_generator.py", "tests/unit/test_api_endpoint_doc_is_generated.py"]
+gap = ""
+note = """Enforced by mechanism, not by a predicate. `scripts/api_documentation_generator.py`
+regenerates `docs/API_ENDPOINTS.md` from the live routers and
+`tests/unit/test_api_endpoint_doc_is_generated.py` fails when the committed file differs from
+what the generator produces. That is this invariant, running.
+
+This row named `verify_platform_identity` until the checker went in. That predicate is real,
+but it asserts the platform gained no UNDECLARED CAPABILITIES — a different claim entirely.
+Naming it here would have made the row resolve green while describing something the
+repository does not do, which is the exact rot this register exists to prevent."""
+
+[AOS-REL-039]
+title = "Release Identity Requires Version + Revision + Artifact Digest"
+status = "PARTIAL"
+predicates = ["verify_artifact_signed", "verify_model_signed", "verify_storage_checksum"]
+gap = """Model artifacts are checksum-verified in CI and `deployment/change_records.py` binds a
+change to a commit. No predicate asserts the three-part release identity together."""
+
+[AOS-REL-040]
+title = "Release Eligibility Is a Policy Decision, Not a CI Boolean"
+status = "PARTIAL"
+predicates = ["verify_deployment_gates"]
+gap = """`verify_deployment_gates` checks gates passed. The invariant is that passing them is
+necessary and not sufficient — eligibility is a policy decision. Not expressible as the
+current predicate."""
+
+[AOS-EVAL-087]
+title = "Verification Result and Enforcement Mode Are Orthogonal"
+status = "PARTIAL"
+predicates = ["verify_invariant_coverage", "verify_invariant_engine_healthy"]
+gap = """The repository HAS the orthogonality in its enforcement layer —
+`HOPEFX_INVARIANT_MODE` (off/monitor/enforce) is independent of a predicate's severity, and
+`EnforcementResult` carries `allowed`, `should_halt` and `mode` separately. What is missing is
+the spec's result vocabulary (pass|fail|inconclusive|skipped|not_run) crossed with enforcement
+class (informational|advisory|blocking|release_gating|production_gating), and a predicate that
+an advisory failure is never reported as a blocking one."""
+
+[AOS-SELF-010]
+title = "Self-Modification Requires Version-Coherent Knowledge"
+status = "PARTIAL"
+predicates = ["verify_constitution_version", "verify_compliance_current", "verify_prompt_version"]
+gap = """Version coherence is checked for the constitution, compliance rules and prompts. The
+self-improvement path (`ai/improve/`) has no predicate binding a proposed patch to the
+knowledge version it was derived from."""
+
+# ── Failure isolation ────────────────────────────────────────────────────────
+
+[AOS-FAIL-011]
+title = "Secondary Intelligence Failure Must Not Corrupt Primary Ingestion"
+status = "PARTIAL"
+predicates = ["verify_no_event_loss", "verify_no_partial_commit", "verify_exactly_once"]
+gap = """Ingestion integrity is guarded. The invariant is specifically that a FAILING
+SECONDARY consumer (analytics, cognition, enrichment) must not damage the primary path. The
+`_observe_feed_health` bookkeeping in `data_layer/orchestrator.py` is written to this rule
+("must not be able to break the price path"), which makes it an ARCHITECTURAL INFERENCE that
+the principle is understood — but no predicate states it."""

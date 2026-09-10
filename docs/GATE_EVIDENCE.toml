@@ -201,3 +201,10 @@ kind = "ci_gate"
 runs = "scripts/ci/gate_chroma_embedded_only.py"
 evidence = "tests/unit/test_gate_chroma_embedded_only.py"
 injected = "Six distinct ways the CVE acceptance could stop holding, each refused: chromadb.HttpClient(host=...), chromadb.AsyncHttpClient(...), a chroma service in a compose file, uvicorn chromadb.app in a Dockerfile, Settings(chroma_server_host=...), and CHROMA_SERVER_HOST in an env file. Three negative cases prove it does not cry wolf: a docstring and a comment naming HttpClient are not violations (the AST is parsed, not grepped — the analyzer already had a rule that read prose as source, F255), an unrelated library HttpClient is not flagged, and the real repository passes. Fail-closed is proven too: an empty directory exits 1, because a scan that read nothing must not certify a tree it never looked at"
+
+[[gate]]
+id = "aos-conformance"
+kind = "pre_commit"
+runs = "scripts/aos_conformance.py --check"
+evidence = "tests/unit/test_aos_conformance.py"
+injected = "Seven ways a register row can claim more than the repository has, each refused: a predicate name no module defines, COVERED with no evidence at all, COVERED that also states a gap, PARTIAL with no gap, ABSENT that names a predicate, an unknown status string, and a mechanism path that is not on disk. Each rule was then neutralised one at a time (`if <cond>:` -> `if False:`) and exactly one test went red for each — no rule is untested and no test is a passenger. Four refusals are proven separately (exit 2, not a finding): a missing register, a register with no entries, a meta.entries count that disagrees with the rows, and — the positive control, F255 — a registry that discovers no predicates at all, which would otherwise let every row resolve identically against nothing"

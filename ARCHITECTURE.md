@@ -178,9 +178,12 @@ this file. Each is a **command**, so its answer is current rather than a snapsho
 | `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
 | `python scripts/docs_registry.py --check` | Document tiers, owners and contested subjects |
 | `python scripts/docs_freshness.py` | Stale references and false claims in living documents |
+| `python scripts/aos_conformance.py` | Which AI OS specification invariants this repository enforces, resolved against live predicates |
 
-All five run in `pre-commit` and are **ratcheted**: recorded debt may shrink,
-never grow. `docs/ai/specs/GROUP4_CONSTITUTION.md` is T0 — above these documents
+All but `backlog_report.py` run in `pre-commit` and are **ratcheted**: recorded
+debt may shrink, never grow. (This said "all five" while listing six commands —
+true, since `backlog_report.py` is a report rather than a gate, but a reader had
+to count to find that out.) `docs/ai/specs/GROUP4_CONSTITUTION.md` is T0 — above these documents
 and, on its twelve Articles, above code.
 
 ---

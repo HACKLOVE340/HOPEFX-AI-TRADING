@@ -122,7 +122,10 @@ class TestACountOfWhatRemainsIsNotATotal:
     def test_a_remaining_count_is_not_read_as_a_total(self, tmp_path: Path, sentence: str) -> None:
         doc = tmp_path / "PROSE.md"
         doc.write_text(sentence + "\n", encoding="utf-8")
-        drift = [d for d in check(extra_documents=[doc]).drift if d.metric == "gates_total"]
+        # Scoped to this fixture. Filtering on the metric alone made these three
+        # go red for any stale figure anywhere in docs/ — a true finding, but
+        # reported under a name that says the opposite of what happened.
+        drift = [d for d in check(extra_documents=[doc]).drift if d.path == doc and d.metric == "gates_total"]
         assert not drift, f"{sentence!r} was read as a total: {drift}"
 
 
@@ -130,3 +133,48 @@ class TestItRefusesRatherThanReportingClean:
     def test_an_unmeasurable_repository_raises(self, tmp_path: Path) -> None:
         with pytest.raises(MetricsBroken):
             check(repo=tmp_path)
+
+
+class TestTheAOSConformanceFiguresAreRatcheted:
+    """`docs/ai/specs/AOS_INVARIANT_REGISTER.toml` maps the AOS specification's
+    §30 onto this repository, and the three totals it produces — covered,
+    partial, absent — are exactly the kind of figure a document states once and
+    then carries forever. `scripts/aos_conformance.py` keeps the register from
+    lying about predicates; this keeps the documents from lying about the
+    register."""
+
+    def test_the_aos_metrics_are_measured(self) -> None:
+        m = measure()
+        for name in ("aos_entries", "aos_covered", "aos_partial", "aos_absent"):
+            assert name in m, f"{name} has no measurement"
+        assert m["aos_covered"] + m["aos_partial"] + m["aos_absent"] == m["aos_entries"]
+
+    @pytest.mark.parametrize(
+        ("shape", "metric"),
+        [
+            ("26 AOS invariants", "aos_entries"),
+            ("2 covered · 13 partial", "aos_covered"),
+            ("13 partial, 11 absent", "aos_partial"),
+            ("11 absent)", "aos_absent"),
+        ],
+    )
+    def test_a_stale_aos_figure_is_reported(self, tmp_path: Path, shape: str, metric: str) -> None:
+        measured = measure()[metric]
+        stale = shape.replace(shape.split()[0], str(measured + 7), 1)
+        doc = tmp_path / "AOS_SHAPE.md"
+        doc.write_text(stale + "\n", encoding="utf-8")
+        assert [d for d in check(extra_documents=[doc]).drift if d.metric == metric], stale
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "The owner was absent for the review.",
+            "Coverage is partial in three modules.",
+            "All 26 endpoints are covered by tests.",
+        ],
+    )
+    def test_ordinary_prose_is_not_read_as_an_aos_figure(self, tmp_path: Path, sentence: str) -> None:
+        doc = tmp_path / "AOS_PROSE.md"
+        doc.write_text(sentence + "\n", encoding="utf-8")
+        drift = [d for d in check(extra_documents=[doc]).drift if d.metric.startswith("aos_")]
+        assert not drift, f"{sentence!r} was read as an AOS figure: {drift}"
