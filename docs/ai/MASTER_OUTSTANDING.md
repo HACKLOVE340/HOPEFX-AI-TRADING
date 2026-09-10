@@ -2755,3 +2755,72 @@ Proven by execution on the real orchestrator method, not only in tests:
   records outages without holding work. That is the next step and is named
   rather than implied.
 * The frontend does not read `/feed-status` yet — §E26 item 2.
+
+---
+
+## §E30 — The emergency halt reported success for a halt that did not happen (2026-09-10)
+
+`POST /superadmin/nuclear/halt` is the control of last resort — the thing a
+superadmin reaches for when the platform must stop trading now. It ended in an
+unconditional:
+
+    return {"ok": True, "kill_switch_active": True, "reason": reason}
+
+**Four separate paths reached that line having halted nothing:**
+
+| Path | What happened | Why it was invisible |
+|---|---|---|
+| No kill switch resolved | `if ks is not None:` skipped the entire activation block | Response still said `kill_switch_active: True` |
+| Activation raised | `except` logged at ERROR, then fell through | The ERROR was correct; the response was not |
+| Cross-pod propagation failed | `except Exception: pass` on the Redis write every other pod reads | **The local halt worked, so nothing looked wrong** — the rest of the fleet kept trading |
+| No Redis client at all | `if rc:` skipped it | Silent |
+
+The third is the dangerous one. An operator hits emergency stop during an
+incident, this pod halts, Redis is down, every other pod keeps filling orders,
+and the response is a green tick.
+
+On top of that the halt banner was fired as a bare
+`asyncio.create_task(...)` whose result nobody held. The event loop keeps only a
+**weak** reference to a task, so CPython may collect it before it sends — and
+the failure path logged at `logger.debug`, which is off in production. A halt
+nobody was told about left no trace. That is `hopefx-dead-controls` sub-shape 4
+verbatim, and the same family as F248.
+
+### What it does now
+
+Each leg reports its own outcome and the response carries them:
+
+    everything works            HTTP 200  ok=True   legs={local: activated, propagation: written, broadcast: sent}
+    redis down (fleet trading)  HTTP 200  ok=False  legs={local: activated, propagation: failed: ConnectionError, ...}
+                                  ! The halt did NOT propagate to other pods. Halt them
+                                    directly before assuming trading has stopped.
+    switch wedged               HTTP 200  ok=False  legs={local: failed: RuntimeError, propagation: written, ...}
+    no switch, redis ok         HTTP 200  ok=False  legs={local: no_switch, propagation: written, ...}
+    NOTHING halted              HTTP 500  "EMERGENCY HALT FAILED — nothing was halted.
+                                           Stop trading manually."
+
+`ok` is true only when both the local switch and the cross-pod propagation
+succeeded. `kill_switch_active` is true when *anything* was halted, so a partial
+halt is neither a lie nor a false alarm. Total failure is a **500** — a 200
+there would be the worst possible answer.
+
+The broadcast is now awaited with a 2s timeout through
+`_broadcast_or_report()`, which holds a strong reference in `_BACKGROUND_TASKS`,
+returns a delivery status, and logs failures at ERROR naming what nobody was
+told. `nuclear_resume` is held to the identical standard: a resume that clears
+this pod but not Redis leaves the fleet halted while the operator believes
+trading is back, and they find out from a fill that never arrives.
+
+### Method note
+
+Twelve tests, nine red before the fix (the three that passed were the
+happy-path ones — the machinery worked, the *reporting* was the defect). Before
+committing, the neighbouring suite `test_superadmin_nuclear_controls_resolution.py`
+was run deliberately to check whether it encoded the old behaviour. It did not.
+
+That check happened **first** this time. Three earlier commits in this
+programme changed a behaviour and were caught later by a full run or a baseline
+because a second test file asserted the old contract — the Sortino `inf` (two
+files), the calibration presence signal (three tests), and the generated API
+doc. Looking before changing costs one command; finding out afterwards costs a
+red branch.
