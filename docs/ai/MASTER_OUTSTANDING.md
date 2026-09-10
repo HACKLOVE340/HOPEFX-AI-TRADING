@@ -3988,3 +3988,105 @@ queue is live, both consoles are built, and the chain is proven as a system.
 
 The only outstanding item is **`api/ws_live.py` at 35%** — recorded debt under
 ADR 0017, §A6 option 2.
+
+---
+
+## §E44 — ws_live 32% → 48%, a wrong-side stop, and a ceiling that is not 80% (2026-09-10)
+
+§A6 option 2, attempted. `tests/unit/test_ws_live_behaviour.py` — 53 tests
+against the live socket's origin check, auth handshake, ATR stop-loss maths,
+private-channel routing, broadcaster restart, and the three other endpoints'
+auth. The module went from **32.11%** to **48%**.
+
+**The debt entry stays.** 80% is not reachable by testing alone, and that is
+measured rather than estimated. See below.
+
+### The defect: a stop on the wrong side of the price
+
+`_compute_atr_sl_tp` — 53 statements of money maths that had **never executed
+once** — decided long or short with:
+
+    is_long = direction in ("long", "buy")
+
+Anything else was treated as a short. `"LONG"` or `"BUY"` therefore returned
+`sl = 2030.0` against a `mid` of `2000.0`: a stop **above** a long entry, which
+does not protect the position, it closes it.
+
+Today's only caller lower-cases and maps to exactly `"long"`/`"short"` before
+calling, so the hazard was not reachable — but the function is module-level with
+a permissive signature, and the next caller need not be so careful. It now
+normalises case and whitespace, which cannot change behaviour for the two
+strings that reach it today. Three parametrised tests pin it.
+
+Also verified for the first time: the percentage fallback really is 1% of mid,
+the multipliers really are re-read from `SL_ATR_MULT`/`TP_ATR_MULT` at call
+time as documented, the CSV tier really does produce a different level from the
+fallback, and a malformed CSV falls through instead of taking the signal
+broadcaster down.
+
+### Why 80% is not reachable by testing
+
+Three harnesses for the broadcaster loops had to be **killed**:
+
+1. a patched `asyncio.sleep` raising `CancelledError` after N calls — but
+   `ws_live.asyncio` *is* the global asyncio module, so the patch replaced sleep
+   for the whole process, pytest-asyncio included;
+2. the same patch yielding instead of raising — every broadcaster became a spin
+   loop that outran the canceller;
+3. real sleeps, `wait_for`, and a cancel — still hung, because something inside
+   the loops blocks in a way cancellation does not interrupt.
+
+The same shape holds for the three endpoints' **post-auth** paths: an
+authenticated admin on `/ws/audit-events` enters a polling loop that
+`wait_for` cannot interrupt either. Their auth and refusal paths are fully
+covered; their loops are not.
+
+Measured against the AST:
+
+| Region | Statements | Testable in-process |
+|---|---:|---|
+| 7 broadcaster `while True` loops | ~269 | no |
+| 3 endpoint post-auth loops | ~217 | no |
+| module total (coverage-counted) | 1,104 | — |
+
+Ceiling with both excluded: **~56%**. Even excluding only the broadcasters, and
+assuming every other line were covered: **75.6%**. Neither reaches 80%.
+
+A test that faked the event bus, Redis and the price feed to walk those loops
+would prove the fakes work. That is the coverage theatre this repository already
+has a name for, and it is worth less than the honest number.
+
+### What would reach 80%, and why it was not done
+
+Extract each loop body into a callable unit so the `while True` shell is three
+lines and the body is testable:
+
+    async def _tick_once() -> None: ...        # testable
+    async def _eventbus_tick_broadcaster():
+        while True:
+            await _tick_once()
+            await asyncio.sleep(_INTERVAL)
+
+Mechanical, and behaviour-preserving in principle. It is also a structural
+change to seven loops in the live WebSocket surface of a money-moving system,
+verifiable here only by unit test — there is no real feed in this environment.
+That is a **different decision** from the one taken in §A6, so it is filed
+rather than assumed.
+
+**Deleting the entry at 48% would be actively harmful**: the gate's rule is that
+an unrecorded module below the floor *blocks*, so removing the line puts
+`api/ws_live.py` back to blocking every commit that touches it — the state §A6
+was created to escape. The line goes when the number clears 80%, and the gate
+enforces that itself: a recorded module at or above the floor blocks with one
+instruction, *delete this line*.
+
+### §A6 option 2 — restated for the owner
+
+* **Do the extraction.** ~7 loops, mechanical, unlocks ~269 statements and, with
+  the endpoint loops, 80%. Cost: a structural change to the live socket,
+  unverifiable here against a real feed.
+* **Leave it at 48%** with the entry recorded and this section as its reason.
+  Cost: the module keeps recorded debt, and the loops stay unexercised.
+
+I did not choose between these. The first is a live-surface refactor and the
+owner said "raise past 80%", not "restructure the broadcasters".

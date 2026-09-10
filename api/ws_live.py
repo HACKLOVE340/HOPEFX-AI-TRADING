@@ -1074,7 +1074,15 @@ def _compute_atr_sl_tp(
     if atr is None or atr <= 0:
         atr = mid * 0.01  # 1% percentage fallback
 
-    is_long = direction in ("long", "buy")
+    # Normalised, not compared raw. The bare `direction in ("long", "buy")`
+    # treated ANY other string as a short, so "LONG" or "BUY" would have put
+    # the stop ABOVE a long entry — a stop that closes the position instead of
+    # protecting it. Today's only caller (`_eventbus_signal_broadcaster`)
+    # lower-cases and maps to exactly "long"/"short" first, so the hazard was
+    # not reachable; this function's signature is public and permissive, and
+    # the next caller need not be so careful. Behaviour for "long"/"short" is
+    # unchanged by construction.
+    is_long = direction.strip().lower() in ("long", "buy") if isinstance(direction, str) else False
     if is_long:
         return round(mid - atr * sl_mult, 5), round(mid + atr * tp_mult, 5)
     return round(mid + atr * sl_mult, 5), round(mid - atr * tp_mult, 5)

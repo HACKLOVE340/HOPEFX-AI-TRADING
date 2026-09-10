@@ -488,5 +488,21 @@ social/marketplace.py
 #   3. measured 2026-09-10: api/ws_live.py 34% -> 35%;
 #   4. owner agreed (§A6 option 1).
 #
-# Removing this entry is filed work, not a wish: see §A6 option 2.
+# UPDATED 2026-09-10 — §A6 option 2 was attempted. 35% -> 48% via 53
+# behavioural tests (origin check, auth handshake, ATR stop-loss maths, private
+# channel routing, broadcaster restart, three endpoints' auth). One real defect
+# fixed on the way: `_compute_atr_sl_tp` treated any direction string outside
+# ("long","buy") as a SHORT, so "LONG" or "BUY" put the stop above a long entry.
+#
+# The entry STAYS, and 80% is not reachable by testing alone — measured, not
+# estimated. Seven broadcaster `while True` loops (~269 statements) and three
+# endpoint post-auth loops (~217) block uninterruptibly in-process: three
+# separate harnesses had to be killed, including one using only real sleeps,
+# `wait_for` and a cancel. Ceiling with both excluded is ~56%.
+#
+# Reaching 80% needs the loop BODIES extracted into callable units so the
+# `while True` shell is three lines — a structural change to the live socket,
+# and a different decision from the one taken in §A6. Filed there, not assumed
+# here. Deleting this line at 48% would make the module block every commit that
+# touches it again, which is the state §A6 escaped.
 api/ws_live.py
