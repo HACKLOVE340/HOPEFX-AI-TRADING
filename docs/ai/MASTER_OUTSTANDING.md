@@ -4594,3 +4594,142 @@ was being counted too.
 
 Every remaining row is one to inspect. None is a wolf the reader has to learn
 to ignore.
+
+---
+
+## §E49 — The omit list was an accumulation, not a policy (2026-09-10)
+
+Two exclusions had been found false under the same wording, each by accident —
+`core/router_registry.py` (§E37) and `core/startup_factories.py` (§E47). A
+third look, this time at every entry rather than the one a commit happened to
+touch, found the pattern rather than the instances.
+
+**18 of 23 concrete entries had unit tests importing them.**
+
+| Module | Unit tests importing it | Stated reason |
+|---|---:|---|
+| `execution/engine.py` | 11 | measured-number comment (an earlier, partial fix) |
+| `brokers/oanda.py` | 7 | "live-only — require real credentials" |
+| `execution/fix_adapter.py` | 6 | measured-number comment |
+| `execution/fix_router.py` | 5 | measured-number comment |
+| `core/middleware.py` | 5 | "FastAPI-wired, covered by API integration tests" |
+| `core/decision/HOPEFXDecisionEngine.py` | 4 | "requires full app wiring; covered by integration tests" |
+| `brokers/oanda_stream.py`, `execution/hopefx_engine.py`, `core/page_routes.py` | 3 each | as above |
+| `brokers/oanda_ws.py`, `execution/execution.py`, `core/risk/advanced_engine.py` | 2 each | as above |
+| `brokers/interactive_brokers.py`, `ml/advanced_ai.py`, `execution/legacy.py`, `execution/_prom_metrics.py`, `core/health.py`, `core/acceleration/__init__.py` | 1 each | as above |
+
+That set is the order path, the central decision pipeline, a risk engine, and
+the broker for the next live-trading milestone. **The code that moves the money,
+with a coverage figure nobody could see.**
+
+The list was not a policy anyone maintained. It was an accumulation, each entry
+inheriting a justification written for a different file. ADR 0018 records the
+rule that replaces it: **a module unit tests import may not be excluded.**
+
+### What survives, and why it can be trusted
+
+Four entries remain, each with a reason that is a property of the machine or of
+the module's dependencies rather than a claim about the test suite:
+
+    core/acceleration/gpu_engine.py   CUDA hardware, absent in CI
+    ml/rl_agent.py                    heavy optional deps, no unit importer
+    core/background_tasks.py          no unit importer
+    core/email_webhook.py             no unit importer
+
+`tests/unit/test_coveragerc_exclusions_are_honest.py` re-checks all four on
+**every run**, so the reason cannot expire unnoticed. An allowlist nobody
+re-checks becomes a permission list. Both directions are counterfactually
+proven: re-adding `execution/fix_adapter.py` turns the gate red, and making a
+unit test import `gpu_engine` turns its allowlist entry red.
+
+### Two entries the first pass got wrong, and how
+
+* `core/acceleration/__init__.py` was excluded as "hardware-dependent". It is
+  not: `tests/unit/test_core_acceleration.py` imports it without a GPU, because
+  the package init guards on `HAS_TORCH`. The exclusion was inherited from the
+  file beside it.
+* `core/metrics.py` reached my own DELIBERATE list on the first pass, because
+  no test contains `import core.metrics`. One contains
+  `patch("core.metrics.SHARPE_N_TRADES")` — and patching by string imports the
+  module. An import statement is not the only way a test reaches code, and the
+  gate checks that form now.
+
+### The superseded improvement, and why it was not enough
+
+An earlier pass had already replaced the false justification on `execution/*`
+with the modules' **measured** coverage, written into a `.coveragerc` comment,
+and left the instruction "do not re-add a justification that names a test suite
+without checking that the suite exists". That was right, and this builds on it.
+
+Its limit is mechanical: a number in a comment has no pressure behind it. Five
+of the six figures in that comment were already stale. The debt list does what
+the comment cannot — the gate reads it, reports the current figure on every
+commit that touches the module, and blocks with one instruction the moment one
+reaches 80%.
+
+### The numbers the lift made visible
+
+Measured by `scripts/pre_commit_coverage.py` itself, so each figure is what the
+gate will report rather than a number from a different kind of run.
+
+| Module | Coverage |
+|---|---:|
+| `brokers/oanda_ws.py` | **100%** |
+| `execution/engine.py` | 77% |
+| `execution/_prom_metrics.py` | 75% |
+| `brokers/oanda.py` | 73% |
+| `brokers/interactive_brokers.py` | 69% |
+| `core/middleware.py` | 67% |
+| `execution/legacy.py`, `core/decision/HOPEFXDecisionEngine.py` | 66% |
+| `brokers/oanda_stream.py` | 64% |
+| `execution/hopefx_engine.py` | 63% |
+| `core/page_routes.py` | 58% |
+| `execution/fix_router.py` | 57% |
+| `execution/fix_adapter.py` | 35% |
+| `core/metrics.py` | 33% |
+| `core/risk/advanced_engine.py` | 27% |
+| `execution/execution.py` | 18% |
+| `core/health.py` | **0%** |
+
+Three things in that table were not visible from anywhere before.
+
+**Fourteen of them were already recorded as debt.** They sat in
+`COVERAGE_UNMEASURABLE.txt` *and* in `.coveragerc`'s omit at the same time, so
+the entry could never be acted on: the gate cannot report a figure for a module
+it may not measure, and the line described nothing. Belt and braces, where the
+belt made the braces unreachable.
+
+**One had earned its way off and nobody could tell.** `brokers/oanda_ws.py`
+measures **100%** — excluded, recorded as debt, and fully covered. The gate
+demanded its line be deleted the instant it could see it. An exclusion hides a
+success exactly as well as it hides a failure, and this is the case that shows
+it, because there was nothing to fix and no way to find out.
+
+**`core/health.py` measures 0%.** A health endpoint with no test executing it,
+excluded as "covered by API integration tests".
+
+Only **two** needed a new line: `execution/engine.py` at 77% — three points off
+the floor and the cheapest win in the file — and
+`core/decision/HOPEFXDecisionEngine.py` at 66%, the central 5-phase pipeline
+CLAUDE.md names as a key entry point.
+
+### And a CI gate that has been measuring a curated subset
+
+`.github/workflows/ci.yml` runs:
+
+    coverage report --rcfile=.coveragerc --include="execution/*" --fail-under=80
+
+The omit applies at collection, so the coverage data had no rows for
+`execution/execution.py`, `hopefx_engine.py`, `fix_adapter.py`, `fix_router.py`,
+`legacy.py`, `_prom_metrics.py` or `engine.py` — most of the package.
+**"execution/ ≥ 80%" was a true statement about whatever was left.**
+
+This is the same defect an earlier pass already fixed for `risk/`, and the test
+that pins it (`test_the_risk_core_is_measured`) exists because of that fix. For
+`risk/` it worked out — those files measure 82–89%. For `execution/` it does
+not: the package's real figures are the table above.
+
+**Not decided here.** Changing the floor on a money-path gate is the owner's
+call, and the options — ratchet it to today's measured number, hold at 80 and
+accept red CI, or scope it to a named list — trade differently. Filed. What is
+not optional is that the number changed, and it is visible rather than quiet.

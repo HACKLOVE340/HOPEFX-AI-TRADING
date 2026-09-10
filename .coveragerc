@@ -64,14 +64,20 @@ omit =
     */setup.py
     */conftest.py
     */__pycache__/*
-    # Live-only broker files — require real credentials, excluded from unit coverage
-    brokers/oanda.py
-    brokers/oanda_stream.py
-    brokers/oanda_ws.py
-    brokers/interactive_brokers.py
-    # Optional ML modules with heavy external deps
+    # The four broker files here were excluded as "live-only — require real
+    # credentials". Not true of the unit suite: seven unit tests import
+    # brokers/oanda.py, three brokers/oanda_stream.py, two brokers/oanda_ws.py
+    # and one brokers/interactive_brokers.py, all without credentials. Live
+    # OANDA is the next milestone (CLAUDE.md), so this is the coverage figure
+    # for the code about to move real money — hidden. Lifted 2026-09-10 (§E49).
+    #
+    # ml/advanced_ai.py was excluded as "heavy external deps"; a unit test
+    # imports it (it is the module pinned out of production as superseded).
+    # Lifted with them.
+    #
+    # ml/rl_agent.py stays: no unit test imports it, verified rather than
+    # asserted, and re-checked on every run.
     ml/rl_agent.py
-    ml/advanced_ai.py
     # Whitelabel customisations are not part of the core test suite
     whitelabel/*
     # ── F105 ──────────────────────────────────────────────────────────────────
@@ -92,44 +98,36 @@ omit =
     # "risk/ >= 80%" was a true statement about the two thirds of risk/ that is
     # not the dangerous part. They are measured now.
     #
-    # The execution files below stay omitted, but not for the reason previously
-    # given. No integration test references execution/engine.py or
-    # core/decision/HOPEFXDecisionEngine.py at all (grep of tests/integration/:
-    # zero files), so "covered by integration tests" was not true of them
-    # either. What is true is their measured unit coverage, recorded here so the
-    # exclusion is a known debt rather than a claim:
+    # The execution files used to sit here with their measured coverage written
+    # in this comment. That was already an improvement on the false "covered by
+    # integration tests" it replaced — but a number in a comment has no
+    # pressure behind it. It goes stale silently, and nothing blocks when the
+    # module clears the floor.
     #
-    #     execution/engine.py                     76.11%
-    #     core/decision/HOPEFXDecisionEngine.py   64.71%
-    #     execution/hopefx_engine.py              63.05%
-    #     execution/fix_adapter.py                35.00%
-    #     execution/execution.py                  17.75%
+    # They are LIFTED 2026-09-10 (§E49) and recorded in
+    # docs/COVERAGE_UNMEASURABLE.txt instead, where the gate reads them, reports
+    # the current figure on every commit that touches them, and BLOCKS with one
+    # instruction the moment one reaches 80%. Same for
+    # core/decision/HOPEFXDecisionEngine.py and the FastAPI-wired core modules
+    # that unit tests demonstrably import.
     #
-    # engine.py is close enough that testing it is the way to remove it from
-    # this list; the others are genuinely thin. Do not re-add a justification
-    # that names a test suite without checking that the suite exists.
-    execution/execution.py
-    execution/hopefx_engine.py
-    execution/fix_adapter.py
-    execution/fix_router.py
-    execution/legacy.py
-    execution/_prom_metrics.py
-    execution/engine.py
-    # core/ modules excluded from unit coverage:
+    # The rule this list now follows, enforced by
+    # tests/unit/test_coveragerc_exclusions_are_honest.py: a module that unit
+    # tests import may not be excluded. Three exclusions had already been found
+    # false under a justification naming a test suite that does not cover them
+    # — router_registry (§E37), startup_factories (§E47), and then 18 of the 23
+    # concrete entries at once (§E49). It was not a policy; it was an
+    # accumulation.
+    # core/ modules excluded from unit coverage. Each reason below is a property
+    # of the MACHINE or of the module's dependencies — never a claim about the
+    # test suite, which is the claim that kept turning out false.
     # GPU engine requires CUDA hardware — untestable in CI without GPU
     core/acceleration/gpu_engine.py
-    # GPU inference package init — wraps gpu_engine, hardware-dependent
-    core/acceleration/__init__.py
-    # Decision engine requires full app wiring (brain+risk+executor+bus)
-    # covered by integration tests
-    core/decision/HOPEFXDecisionEngine.py
-    # Background tasks, health, metrics, middleware, page_routes are
-    # FastAPI-wired and covered by API integration tests
+    # Background tasks and the email webhook: no unit test imports either,
+    # verified rather than asserted (see DELIBERATE in
+    # tests/unit/test_coveragerc_exclusions_are_honest.py, which re-checks that
+    # on every run so the reason cannot expire unnoticed).
     core/background_tasks.py
-    core/health.py
-    core/metrics.py
-    core/middleware.py
-    core/page_routes.py
     core/email_webhook.py
     # `core/router_registry.py` used to sit here under "requires full app
     # context; covered by integration/e2e tests, not unit tests". It was false:
@@ -148,9 +146,10 @@ omit =
     # between them. Lifted 2026-09-10 (§E47). An exclusion is not a
     # measurement, and a module nothing may measure is a module nothing can
     # ratchet.
-    # Advanced risk engine (Monte Carlo/GARCH) requires live risk bus wiring;
-    # covered by integration tests
-    core/risk/advanced_engine.py
+    # core/risk/advanced_engine.py was excluded as "requires live risk bus
+    # wiring; covered by integration tests". Two unit tests import it directly.
+    # Lifted 2026-09-10 (§E49) — and it is risk code, which is the last place a
+    # coverage figure should be invisible.
 
 [report]
 precision = 2

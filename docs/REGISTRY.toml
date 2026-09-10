@@ -1436,6 +1436,13 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
+path = "docs/decisions/0018-a-module-unit-tests-import-may-not-be-excluded-from-coverage.md"
+tier = "T3"
+subject = "decision-0018"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/decisions/README.md"
 tier = "T2"
 subject = "decision-records"

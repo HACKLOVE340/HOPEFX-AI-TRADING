@@ -229,7 +229,6 @@ brokers/oanda.py
 brokers/oanda_broker.py
 brokers/oanda_paper_clock.py
 brokers/oanda_stream.py
-brokers/oanda_ws.py
 brokers/ohlcv_store.py
 brokers/prop_firms/__init__.py
 brokers/prop_firms/ftmo.py
@@ -527,3 +526,48 @@ social/marketplace.py
 #
 # It goes when it clears 80%, and the gate will block until the line is deleted.
 core/startup_factories.py
+
+# ── Added 2026-09-10 — two of nineteen lifted exclusions needed a new line ────
+#
+# `.coveragerc`'s omit list hid 18 of its 23 concrete entries behind a
+# justification naming a test suite that does not cover them, while unit tests
+# demonstrably import them (§E49, ADR 0018). Lifting them measured every one.
+#
+# FOURTEEN were ALREADY RECORDED HERE. They were excluded AND in the debt list
+# at the same time, so the entry could never be acted on: the gate cannot
+# report a figure for a module it may not measure, so the line sat here
+# describing nothing. Those fourteen simply become live now.
+#
+# ONE had earned its way off and nobody could tell: `brokers/oanda_ws.py`
+# measures 100%. It was excluded, recorded as debt, and fully covered. Its line
+# is deleted above, which is what the gate demanded the moment it could see it.
+# An exclusion hides a success exactly as well as it hides a failure.
+#
+# TWO were in neither place, and are added here:
+#
+#     execution/engine.py                      77%   (3 points off the floor)
+#     core/decision/HOPEFXDecisionEngine.py    66%
+#
+# `execution/engine.py` at 77% is the closest thing in this file to a free win.
+# `HOPEFXDecisionEngine.py` is the central 5-phase decision pipeline CLAUDE.md
+# names as a key entry point.
+#
+# ADR 0017's four conditions:
+#   1. already below the floor — each was UNMEASURABLE before this commit, so
+#      its first measurement with the omit lifted IS its pre-existing number;
+#      no code changed here, only `.coveragerc`;
+#   2. not lowered — nothing was edited that could lower it;
+#   3. measured 2026-09-10 by `scripts/pre_commit_coverage.py` itself, so each
+#      entry states what the gate will state;
+#   4. ADR 0018 decides the rule, ADR 0017 governs the recording.
+#
+# For the record, the other seventeen figures the lift made visible:
+#     execution/_prom_metrics.py 75% · brokers/oanda.py 73% ·
+#     brokers/interactive_brokers.py 69% · core/middleware.py 67% ·
+#     execution/legacy.py 66% · brokers/oanda_stream.py 64% ·
+#     execution/hopefx_engine.py 63% · core/page_routes.py 58% ·
+#     execution/fix_router.py 57% · execution/fix_adapter.py 35% ·
+#     core/metrics.py 33% · core/risk/advanced_engine.py 27% ·
+#     execution/execution.py 18% · core/health.py 0%
+core/decision/HOPEFXDecisionEngine.py
+execution/engine.py
