@@ -37,6 +37,7 @@ import {
   Globe,
   GraduationCap,
   Handshake,
+  Headphones,
   HeartPulse,
   IdCard,
   LayoutDashboard,
@@ -179,6 +180,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/observability', label: 'Observability', icon: SatelliteDish, group: 'admin', adminOnly: true },
   { path: '/ml-ops',        label: 'ML-Ops',        icon: Boxes, group: 'admin', adminOnly: true },
   { path: '/ai-core',       label: 'AI Core',       icon: Brain, group: 'admin', adminOnly: true },
+  { path: '/support-console', label: 'Support Console', icon: Headphones, group: 'admin', adminOnly: true },
   { path: '/whitelabel', label: 'Whitelabel',      icon: Tag, group: 'admin', adminOnly: true },
 
   // ── Super Admin (superadmin only) ─────────────────────────────────────────

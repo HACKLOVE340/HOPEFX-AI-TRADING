@@ -21,6 +21,24 @@
     --sidebar-w:     224px;
     --sidebar-w-collapsed: 60px;
     --topbar-h:      56px;
+
+    /* ── Support desk semantics ────────────────────────────────────────────
+       Deliberately NOT --bull/--bear. On a trading platform green and red
+       mean price direction; an operator glancing at a red queue row must not
+       read "down". Waiting is amber, held-by-you is the accent, held-by-
+       someone-else is slate, resolved recedes, and red is reserved for the
+       escalation floor's own severity — where "urgent" is what it means.
+       Approved with the operator console, MASTER_OUTSTANDING §A7. */
+    --q-waiting:     #ffab00;
+    --q-mine:        #00d4ff;
+    --q-theirs:      #7c8db5;
+    --q-done:        #4a5a72;
+    --q-urgent:      #ff4d6d;
+    --q-urgent-bg:   #25000c;
+    --q-urgent-text: #ffc7d1;
+    --q-selected-bg: #0a1a24;
+    --q-accent-edge: #06404f;
+    --q-on-accent:   #04212b;
   }
 
   * {

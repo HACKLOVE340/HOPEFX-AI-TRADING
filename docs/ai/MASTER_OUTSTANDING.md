@@ -3548,9 +3548,28 @@ tests across the affected areas.
 
 ---
 
-## §A7 — Owner decision: approve the operator console before it is built
+## §A7 — APPROVED 2026-09-10: the operator console is built
 
-**Awaiting approval.** CLAUDE.md routes any major UI/UX change through
+**All four verdicts approved by the owner in conversation** — queue triage,
+claim→answer→resolve, the live channel, and the visual direction. Recorded here
+rather than in the prototype's own store: the store held no document, so the
+approval is the owner's direct statement, which is authority. Saying the store
+carried it would be a claim the evidence does not support.
+
+Built as `frontend/src/pages/SupportConsole.tsx` at `/support-console`,
+admin-gated, sidebar entry under Admin. See §E40 for what the build found.
+
+**The prototype is superseded.** It never entered the repository — it lived in a
+scratchpad and as a published artifact — so there was nothing in production to
+tear down, and a grep confirms no review controls, mock adapters or seed data
+reached the page. The artifact stays as the approval record and must not be
+linked as though it were the product.
+
+The original decision text follows, because the reasoning is what was approved.
+
+---
+
+**Was: awaiting approval.** CLAUDE.md routes any major UI/UX change through
 `flow-prototype` before production implementation, and that skill is explicit:
 *"If no approver is reachable, halt before production UI. Questions forbidden is
 not approval. No post-hoc approval."* So the console exists as a throwaway
@@ -3598,3 +3617,94 @@ simulated — the real one is `support_queue`, landed in §E39.
 The prototype is deleted, not absorbed: review controls, mock adapters and
 abandoned pathways do not reach production. The decision and its reasoning are
 recorded here.
+
+---
+
+## §E40 — The operator console, and an identity I guessed (2026-09-10)
+
+§A7 approved; this is the production build. `frontend/src/pages/SupportConsole.tsx`
+at `/support-console`, admin-gated through the same `adminOnly()` wrapper as
+`/ai-core`, with a sidebar entry in the Admin group.
+
+Three pieces: `supportApi` in `hooks/useApi.ts` (both surfaces, kept separate
+because the server gates them separately and a client that blurs them invites a
+button the server refuses), `hooks/useSupportQueue.ts` for the live channel, and
+the page.
+
+### The live source is a measurement, not a decoration
+
+`useSupportQueue` owns its **own** socket rather than joining the app-wide one.
+The app-wide connection subscribes for every signed-in user, and asking it to
+add a channel only admins may join would make the server refuse on every
+ordinary session — noise that trains people to ignore the refusal that matters.
+
+It reports one of three sources and never guesses: `live` (a frame arrived
+within 25s), `poll` (the socket is quiet or closed — React Query's interval is
+what is feeding the page), `refused` (the server said this role may not join).
+The subscribe reply is read for what it **granted**, not what was asked for,
+because §E39 made the server return refusals rather than dropping them.
+
+A socket that is open but silent is not feeding the page. Without the staleness
+timer the pill would read "live" for as long as the connection object survived —
+which is the whole failure this feature exists to prevent.
+
+### The finding: I derived the operator's identity by guessing
+
+The first version worked out "who am I" from the queue: *the first ticket
+someone holds must be mine*. A test caught it on the first run. A ticket held by
+`ops-ren` rendered as **"you"** — so the console showed another operator's work
+as this operator's, offered Release on it, and hid the holder's name in exactly
+the place it was needed.
+
+That is Rule 2 at its most expensive: an unmeasured value presented as the best
+case. It now comes from the authenticated session, `useStore(st => st.user?.id)`.
+
+Worth noting the shape, because it is the same one four counterfactuals have
+found in this programme: **the wrong value was indistinguishable from the right
+one in the common case.** With one held ticket, guessing works. It only breaks
+when a second operator exists — which is the entire point of a queue.
+
+### Five counterfactuals, all failing correctly
+
+| Break | Result |
+|---|---|
+| Live pill hardcoded to `live` | 2 failed |
+| Claim offered on a ticket another operator holds | 1 failed |
+| A failed queue request renders as an empty queue | 1 failed |
+| Escalation reason dropped from the row | 2 failed |
+| Composer enabled regardless of who holds it | 1 failed |
+
+Every rule the owner approved is load-bearing rather than decorative.
+
+### The colour ratchet blocked my own commit, and was right to
+
+§E27's ratchet refused the first version of the page: **25 hardcoded hex
+literals in a file with no baseline entry.** 8,046 against a baseline of 8,021.
+
+The fix is not an exemption. The queue semantics genuinely did not exist as
+tokens — waiting, held-by-you, held-by-someone-else, resolved, and the
+escalation red — so they were **added to `frontend/src/index.css`**, which is
+the one file the ratchet exempts because it is where tokens are defined. The
+page now carries **zero** colour literals and the count is back to exactly
+8,021 across 202 files.
+
+That makes this the rare page whose light theme and white-label branding
+actually work, which is the whole reason the ratchet exists. A gate that blocks
+the person who wrote it, on their own commit, and produces a better result than
+the version it refused, is a gate doing its job.
+
+`npx tsc --noEmit` clean, `npm run build` emits
+`static/assets/SupportConsole-*.js`, 151 tests green across the console, nav
+contract, route guards, page and API-contract suites. (A workbox globbing
+warning appeared in one build and did not reproduce in three subsequent runs,
+including on the clean tree — intermittent, and not introduced here.)
+
+### Still open
+
+* **`answer_question` is still called with no facts.** The department briefs are
+  written to answer from a FACTS block and nothing gathers one from the
+  departments' read-only actions. Unchanged by this work, and the last
+  substantial gap in the desk.
+* **No customer-facing ticket UI.** `supportApi` carries the customer half and
+  the endpoints exist; no page uses them yet, so customers still have no way in.
+* **`api/ws_live.py` at 35%** — recorded debt under ADR 0017, §A6 option 2.

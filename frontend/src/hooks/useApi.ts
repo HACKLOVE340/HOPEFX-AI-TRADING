@@ -467,6 +467,34 @@ export const mlApi = {
 // reads `scope` rather than the caller's role, so what it renders is what the
 // server actually returned.
 
+/**
+ * The support desk. Two surfaces, two roles — the customer's own thread and
+ * the operator queue — because the server gates them separately and a client
+ * that blurs them invites a button the server refuses.
+ */
+export const supportApi = {
+  // ── operator ──────────────────────────────────────────────────────────────
+  /** Tickets waiting on a person, oldest first. */
+  queue:   (unassignedOnly = false) =>
+    api.get('/support/queue', { params: { unassigned_only: unassignedOnly } }),
+  /** One queued ticket with its thread. */
+  thread:  (id: string) => api.get(`/support/queue/${id}`),
+  /** Take a ticket. 409 when another operator holds it — the detail names them. */
+  claim:   (id: string) => api.post(`/support/queue/${id}/claim`),
+  /** Put it back. Only the holder may. */
+  release: (id: string) => api.post(`/support/queue/${id}/release`),
+  /** Reply to the customer, on the record. */
+  reply:   (id: string, body: string) => api.post(`/support/queue/${id}/reply`, { body }),
+  /** Close it. A customer reply reopens it automatically. */
+  resolve: (id: string) => api.post(`/support/queue/${id}/resolve`),
+
+  // ── customer's own tickets ────────────────────────────────────────────────
+  myTickets: () => api.get('/support/tickets'),
+  myThread:  (id: string) => api.get(`/support/tickets/${id}`),
+  open:      (subject: string, body: string) => api.post('/support/tickets', { subject, body }),
+  say:       (id: string, body: string) => api.post(`/support/tickets/${id}/messages`, { body }),
+};
+
 export const aiCoreApi = {
   /** One request for the header — chain, reachability, spend and call counts. */
   summary:      ()               => api.get('/ai-core/summary'),
