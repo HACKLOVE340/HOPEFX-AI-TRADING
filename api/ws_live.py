@@ -884,126 +884,148 @@ def _make_tick(symbol: str) -> dict | None:
 _broadcast_task: asyncio.Task | None = None  # type: ignore[type-arg]
 
 
+#: How long the event-bus tick subscription waits without a message before it
+#: treats the channel as dead. Module-level since `_eventbus_tick_once` was
+#: extracted from the loop that used to own it (§E44).
+_EVENTBUS_STALE_TIMEOUT_S = 30  # seconds without a tick before giving up
+#: Reconnect backoff, indexed by attempt.
+_retry_delays = [5, 10, 20, 30, 60]
+
+
+async def _eventbus_tick_once(attempt: int) -> int:
+    """One pass of the event-bus tick subscription.
+
+    The whole loop body is a `try`, so it extracts wholesale (§E44). The
+    loop's own `continue`s became `return`s: this function IS one
+    iteration. Its sleeps live inside the retry paths in the body, which is
+    why the shell has none — a `return` here still reaches a sleep before
+    the next attempt.
+
+    `attempt` is the reconnect backoff counter. It is taken and RETURNED rather
+    than passed as state the body mutates: a parameter reassigned inside a
+    function does not persist, so the shell would have retried at delay[0]
+    forever and the backoff would have been silently flat.
+    """
+    try:
+        from core.event_bus import CH_TICK, bus
+
+        await bus.connect()
+        logger.info("WS live: connected to EventBus — streaming real ticks.")
+        attempt = 0  # successful connect resets backoff counter
+
+        # Wrap each message receive with a timeout so we detect a silent
+        # dead channel (connected but no publishers) within 30 s.
+        _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
+        async for msg in bus.subscribe(CH_TICK):
+            _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
+            if _manager.connection_count == 0:
+                continue
+            # Normalise to frontend PriceTick schema:
+            # { type: "price_tick", data: PriceTick }
+
+            # 1. Normalise symbol to slash format (XAU/USD, EUR/USD …)
+            raw_symbol = msg.get("symbol", "XAU/USD")
+            symbol = _to_slash(raw_symbol)
+
+            # 2. Resolve mid from bid+ask or price field
+            raw_bid = msg.get("bid")
+            raw_ask = msg.get("ask")
+            raw_price = msg.get("price") or msg.get("mid")
+
+            if raw_bid is not None and raw_ask is not None:
+                bid = float(raw_bid)
+                ask = float(raw_ask)
+                mid = (bid + ask) / 2.0
+            elif raw_price is not None:
+                # Derive bid/ask from price using per-symbol spread config
+                mid = float(raw_price)
+                cfg = _SYMBOLS.get(symbol, {})
+                half_spread = cfg.get("spread", mid * 0.0002) / 2
+                bid = round(mid - half_spread, 5)
+                ask = round(mid + half_spread, 5)
+            else:
+                # No usable price — skip this message
+                logger.debug("_eventbus_tick_broadcaster: no price in msg for %s, skipping", symbol)
+                continue
+
+            if mid <= 0:
+                continue
+
+            spread = round(ask - bid, 5)
+
+            # 3. Normalise timestamp to integer milliseconds
+            raw_ts = msg.get("timestamp") or msg.get("ts")
+            if raw_ts is None:
+                ts_ms = int(datetime.now(UTC).timestamp() * 1000)
+            elif isinstance(raw_ts, str):
+                # ISO string → ms
+                try:
+                    from datetime import datetime as _dt
+
+                    ts_ms = int(_dt.fromisoformat(raw_ts.replace("Z", "+00:00")).timestamp() * 1000)
+                except Exception:
+                    ts_ms = int(datetime.now(UTC).timestamp() * 1000)
+            elif isinstance(raw_ts, float) and raw_ts < 1e12:
+                # Unix seconds → ms
+                ts_ms = int(raw_ts * 1000)
+            else:
+                ts_ms = int(raw_ts)
+
+            # 4. Track previous mid for change_pct calculation (lock prevents
+            #    concurrent broadcaster tasks racing on the same symbol dict)
+            with _last_mid_lock:
+                prev = _last_mid.get(symbol, mid)
+                _last_mid[symbol] = mid
+            change = ((mid - prev) / prev * 100) if prev else 0.0
+
+            tick_data = {
+                "symbol": symbol,
+                "bid": round(bid, 5),
+                "ask": round(ask, 5),
+                "mid": round(mid, 5),
+                "spread": spread,
+                "timestamp": ts_ms,
+                "change_pct": round(change, 4),
+            }
+            tick = {"type": "price_tick", "data": tick_data}
+            await _manager.broadcast("prices", tick)
+            # Also write tick:{symbol} so ws_public.py Redis fallback chain is populated.
+            try:
+                from cache.redis_client import get_redis as _get_redis
+
+                _rc = await _get_redis()
+                if _rc is not None:
+                    await _rc.setex(f"tick:{symbol}", 60, json.dumps(tick_data))
+            except Exception:  # nosec B110 — non-fatal, fallback chain degrades gracefully  # noqa: S110
+                pass
+    except Exception as exc:
+        delay = _retry_delays[min(attempt, len(_retry_delays) - 1)]
+        logger.warning(
+            "WS live: EventBus tick stream failed (%s) — retrying in %ds (attempt %d).",
+            exc,
+            delay,
+            attempt + 1,
+        )
+        attempt += 1
+        # The backoff sleep must happen BEFORE returning, or the shell loops
+        # straight back into a reconnect and the delay this branch computed is
+        # never waited. The first version returned first; the repository's own
+        # unreachable-code gate caught it.
+        await asyncio.sleep(delay)
+        return attempt
+
+    # Every path returns an int. Without this the success path fell off the
+    # end returning None, and the next failure would index the backoff table
+    # with None — a TypeError inside the reconnect handler, which is the one
+    # place that must not raise.
+    return attempt
+
+
 async def _eventbus_tick_broadcaster() -> None:
-    """
-    Subscribe to hopefx:tick on the EventBus and forward every validated
-    tick to all WebSocket clients subscribed to the 'prices' channel.
-
-    Reconnects automatically with exponential backoff so a Redis blip does
-    not leave the feed permanently dead until the process is restarted.
-
-    If no tick arrives within _EVENTBUS_STALE_TIMEOUT_S seconds the broadcaster
-    raises RuntimeError so _price_broadcaster falls through to the yfinance
-    fallback — preventing a silent dead feed when the multi-source feed is not
-    publishing to Redis.
-    """
-    _EVENTBUS_STALE_TIMEOUT_S = 30  # seconds without a tick before giving up
-
-    _retry_delays = [5, 10, 20, 30, 60]
+    """Subscribe to the tick channel and fan out. Body in `_eventbus_tick_once`."""
     attempt = 0
     while True:
-        try:
-            from core.event_bus import CH_TICK, bus
-
-            await bus.connect()
-            logger.info("WS live: connected to EventBus — streaming real ticks.")
-            attempt = 0  # successful connect resets backoff counter
-
-            # Wrap each message receive with a timeout so we detect a silent
-            # dead channel (connected but no publishers) within 30 s.
-            _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
-            async for msg in bus.subscribe(CH_TICK):
-                _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
-                if _manager.connection_count == 0:
-                    continue
-                # Normalise to frontend PriceTick schema:
-                # { type: "price_tick", data: PriceTick }
-
-                # 1. Normalise symbol to slash format (XAU/USD, EUR/USD …)
-                raw_symbol = msg.get("symbol", "XAU/USD")
-                symbol = _to_slash(raw_symbol)
-
-                # 2. Resolve mid from bid+ask or price field
-                raw_bid = msg.get("bid")
-                raw_ask = msg.get("ask")
-                raw_price = msg.get("price") or msg.get("mid")
-
-                if raw_bid is not None and raw_ask is not None:
-                    bid = float(raw_bid)
-                    ask = float(raw_ask)
-                    mid = (bid + ask) / 2.0
-                elif raw_price is not None:
-                    # Derive bid/ask from price using per-symbol spread config
-                    mid = float(raw_price)
-                    cfg = _SYMBOLS.get(symbol, {})
-                    half_spread = cfg.get("spread", mid * 0.0002) / 2
-                    bid = round(mid - half_spread, 5)
-                    ask = round(mid + half_spread, 5)
-                else:
-                    # No usable price — skip this message
-                    logger.debug("_eventbus_tick_broadcaster: no price in msg for %s, skipping", symbol)
-                    continue
-
-                if mid <= 0:
-                    continue
-
-                spread = round(ask - bid, 5)
-
-                # 3. Normalise timestamp to integer milliseconds
-                raw_ts = msg.get("timestamp") or msg.get("ts")
-                if raw_ts is None:
-                    ts_ms = int(datetime.now(UTC).timestamp() * 1000)
-                elif isinstance(raw_ts, str):
-                    # ISO string → ms
-                    try:
-                        from datetime import datetime as _dt
-
-                        ts_ms = int(_dt.fromisoformat(raw_ts.replace("Z", "+00:00")).timestamp() * 1000)
-                    except Exception:
-                        ts_ms = int(datetime.now(UTC).timestamp() * 1000)
-                elif isinstance(raw_ts, float) and raw_ts < 1e12:
-                    # Unix seconds → ms
-                    ts_ms = int(raw_ts * 1000)
-                else:
-                    ts_ms = int(raw_ts)
-
-                # 4. Track previous mid for change_pct calculation (lock prevents
-                #    concurrent broadcaster tasks racing on the same symbol dict)
-                with _last_mid_lock:
-                    prev = _last_mid.get(symbol, mid)
-                    _last_mid[symbol] = mid
-                change = ((mid - prev) / prev * 100) if prev else 0.0
-
-                tick_data = {
-                    "symbol": symbol,
-                    "bid": round(bid, 5),
-                    "ask": round(ask, 5),
-                    "mid": round(mid, 5),
-                    "spread": spread,
-                    "timestamp": ts_ms,
-                    "change_pct": round(change, 4),
-                }
-                tick = {"type": "price_tick", "data": tick_data}
-                await _manager.broadcast("prices", tick)
-                # Also write tick:{symbol} so ws_public.py Redis fallback chain is populated.
-                try:
-                    from cache.redis_client import get_redis as _get_redis
-
-                    _rc = await _get_redis()
-                    if _rc is not None:
-                        await _rc.setex(f"tick:{symbol}", 60, json.dumps(tick_data))
-                except Exception:  # nosec B110 — non-fatal, fallback chain degrades gracefully  # noqa: S110
-                    pass
-        except Exception as exc:
-            delay = _retry_delays[min(attempt, len(_retry_delays) - 1)]
-            logger.warning(
-                "WS live: EventBus tick stream failed (%s) — retrying in %ds (attempt %d).",
-                exc,
-                delay,
-                attempt + 1,
-            )
-            attempt += 1
-            await asyncio.sleep(delay)
+        attempt = await _eventbus_tick_once(attempt)
 
 
 def _compute_atr_sl_tp(
@@ -1088,6 +1110,55 @@ def _compute_atr_sl_tp(
     return round(mid + atr * sl_mult, 5), round(mid - atr * tp_mult, 5)
 
 
+async def _signal_message_once(msg: dict) -> None:
+    """Handle ONE signal_event from the bus.
+
+    Extracted from `_eventbus_signal_broadcaster` (§E44). That function is
+    an `async for` over a live bus subscription: it never returns and
+    cannot be driven in-process, so everything it does — including the ATR
+    stop-loss computation — had never been executed by a test.
+
+    The loop's own `continue`s became `return`s. This function IS one
+    iteration, so returning ends it exactly as `continue` did.
+    """
+    if msg.get("type") != "signal_event":
+        return
+    if _manager.connection_count == 0:
+        return
+    # Normalise to the frontend WsMessage schema:
+    # { type: "signal", data: Signal }
+    direction_raw = (msg.get("direction") or "neutral").lower()
+    direction_fe = "long" if direction_raw == "buy" else "short" if direction_raw == "sell" else "neutral"
+    mid = msg.get("mid", 0.0)
+    symbol = msg.get("symbol", "XAU/USD")
+
+    # Use signal-engine-provided SL/TP when present; compute ATR-based
+    # levels only when the upstream signal did not supply them.
+    sl = msg.get("stop_loss")
+    tp = msg.get("take_profit")
+    if (sl is None or tp is None) and mid > 0 and direction_fe != "neutral":
+        computed_sl, computed_tp = _compute_atr_sl_tp(symbol, mid, direction_fe)
+        sl = sl if sl is not None else computed_sl
+        tp = tp if tp is not None else computed_tp
+
+    signal = {
+        "type": "signal",
+        "data": {
+            "id": f"sig_{msg.get('tick_seq', 0)}",
+            "symbol": symbol,
+            "direction": direction_fe,
+            "confidence": msg.get("confidence", 0.0),
+            "model": msg.get("model_version", "advanced_oos"),
+            "entry_price": mid,
+            "stop_loss": sl,
+            "take_profit": tp,
+            "generated_at": msg.get("timestamp", ""),
+            "status": "active",
+        },
+    }
+    await _manager.broadcast("signals", signal)
+
+
 async def _eventbus_signal_broadcaster() -> None:
     """
     Subscribe to hopefx:signal and forward signal_events to clients
@@ -1098,42 +1169,7 @@ async def _eventbus_signal_broadcaster() -> None:
 
         await bus.connect()
         async for msg in bus.subscribe(CH_SIGNAL):
-            if msg.get("type") != "signal_event":
-                continue
-            if _manager.connection_count == 0:
-                continue
-            # Normalise to the frontend WsMessage schema:
-            # { type: "signal", data: Signal }
-            direction_raw = (msg.get("direction") or "neutral").lower()
-            direction_fe = "long" if direction_raw == "buy" else "short" if direction_raw == "sell" else "neutral"
-            mid = msg.get("mid", 0.0)
-            symbol = msg.get("symbol", "XAU/USD")
-
-            # Use signal-engine-provided SL/TP when present; compute ATR-based
-            # levels only when the upstream signal did not supply them.
-            sl = msg.get("stop_loss")
-            tp = msg.get("take_profit")
-            if (sl is None or tp is None) and mid > 0 and direction_fe != "neutral":
-                computed_sl, computed_tp = _compute_atr_sl_tp(symbol, mid, direction_fe)
-                sl = sl if sl is not None else computed_sl
-                tp = tp if tp is not None else computed_tp
-
-            signal = {
-                "type": "signal",
-                "data": {
-                    "id": f"sig_{msg.get('tick_seq', 0)}",
-                    "symbol": symbol,
-                    "direction": direction_fe,
-                    "confidence": msg.get("confidence", 0.0),
-                    "model": msg.get("model_version", "advanced_oos"),
-                    "entry_price": mid,
-                    "stop_loss": sl,
-                    "take_profit": tp,
-                    "generated_at": msg.get("timestamp", ""),
-                    "status": "active",
-                },
-            }
-            await _manager.broadcast("signals", signal)
+            await _signal_message_once(msg)
     except Exception as exc:
         logger.warning("WS live: EventBus signal stream failed: %s", exc)
 
@@ -1161,79 +1197,78 @@ async def _broadcast_no_live_feed() -> None:
         await asyncio.sleep(_NO_FEED_INTERVAL)
 
 
+async def _price_live_only_once(no_feed_warned: set[str], startup_grace_until: float) -> None:
+    """One sweep of the live-only price fan-out.
+
+    `no_feed_warned` and `startup_grace_until` are owned by the shell and passed
+    in, because they carry state ACROSS iterations: the set remembers which
+    symbols have already been warned about, and re-creating it per call would
+    re-warn on every tick. Parameters rather than module globals so the two
+    price broadcasters cannot share one memo, and so a test can supply its own.
+    """
+    if _manager.connection_count == 0:
+        return
+    # Re-seed from broker on every cycle until we have prices
+    if not _prices_seeded:
+        _seed_from_broker()
+    any_live = False
+    for symbol in _broadcastable_symbols():
+        tick = _make_tick(symbol)
+        if tick is not None:
+            any_live = True
+            no_feed_warned.discard(symbol)
+            await _manager.broadcast("prices", tick)
+        else:
+            # Level 5: use yfinance cache to synthesize a tick so the
+            # no_live_feed banner is not shown when yfinance is working.
+            yf_price = _yf_last_prices.get(symbol)
+            if yf_price and yf_price > 0:
+                any_live = True
+                no_feed_warned.discard(symbol)
+                cfg = _SYMBOLS.get(symbol, {})
+                spread = cfg.get("spread", yf_price * 0.0002)
+                prev = _baseline_for(symbol, yf_price)
+                change_pct = ((yf_price - prev) / prev * 100) if prev > 0 else 0.0
+                await _manager.broadcast(
+                    "prices",
+                    {
+                        "type": "price_tick",
+                        "data": {
+                            "symbol": symbol,
+                            "bid": round(yf_price - spread / 2, 5),
+                            "ask": round(yf_price + spread / 2, 5),
+                            "mid": round(yf_price, 5),
+                            "spread": spread,
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                            "change_pct": round(change_pct, 4),
+                        },
+                    },
+                )
+            elif symbol not in no_feed_warned and asyncio.get_running_loop().time() > startup_grace_until:
+                # Only warn after the grace period so we don't flash the
+                # banner during the initial yfinance fetch.
+                no_feed_warned.add(symbol)
+                await _manager.broadcast(
+                    "prices",
+                    {
+                        "type": "no_live_feed",
+                        "symbol": symbol,
+                        "message": (f"No live price for {symbol}. Connect a broker in Settings."),
+                        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                    },
+                )
+    if not any_live:
+        # All symbols missing — slow down polling to avoid log spam
+        await asyncio.sleep(9)
+
+
 async def _price_broadcaster_live_only() -> None:
-    """
-    Poll live broker prices every second and broadcast real ticks.
-
-    Used as a direct-poll fallback when the EventBus is unavailable but
-    a broker is connected (e.g. paper broker with market_prices populated).
-
-    Before sending no_live_feed for a symbol, checks _yf_last_prices — if
-    yfinance has already fetched a price for that symbol we synthesize a tick
-    from it rather than triggering the banner.  no_live_feed is only sent when
-    both the broker AND yfinance have no price for a symbol.
-    """
+    """Body in `_price_live_only_once` so a test can reach it — see §E44. Sleep stays here."""
     _no_feed_warned: set[str] = set()
-    # Give yfinance time to complete its first fetch before we start warning.
-    # _yfinance_price_broadcaster runs concurrently and fetches immediately on
-    # startup; 20 s is enough headroom even on a slow connection.
     _startup_grace_until = asyncio.get_running_loop().time() + 20
     while True:
         await asyncio.sleep(1)
-        if _manager.connection_count == 0:
-            continue
-        # Re-seed from broker on every cycle until we have prices
-        if not _prices_seeded:
-            _seed_from_broker()
-        any_live = False
-        for symbol in _broadcastable_symbols():
-            tick = _make_tick(symbol)
-            if tick is not None:
-                any_live = True
-                _no_feed_warned.discard(symbol)
-                await _manager.broadcast("prices", tick)
-            else:
-                # Level 5: use yfinance cache to synthesize a tick so the
-                # no_live_feed banner is not shown when yfinance is working.
-                yf_price = _yf_last_prices.get(symbol)
-                if yf_price and yf_price > 0:
-                    any_live = True
-                    _no_feed_warned.discard(symbol)
-                    cfg = _SYMBOLS.get(symbol, {})
-                    spread = cfg.get("spread", yf_price * 0.0002)
-                    prev = _baseline_for(symbol, yf_price)
-                    change_pct = ((yf_price - prev) / prev * 100) if prev > 0 else 0.0
-                    await _manager.broadcast(
-                        "prices",
-                        {
-                            "type": "price_tick",
-                            "data": {
-                                "symbol": symbol,
-                                "bid": round(yf_price - spread / 2, 5),
-                                "ask": round(yf_price + spread / 2, 5),
-                                "mid": round(yf_price, 5),
-                                "spread": spread,
-                                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                                "change_pct": round(change_pct, 4),
-                            },
-                        },
-                    )
-                elif symbol not in _no_feed_warned and asyncio.get_running_loop().time() > _startup_grace_until:
-                    # Only warn after the grace period so we don't flash the
-                    # banner during the initial yfinance fetch.
-                    _no_feed_warned.add(symbol)
-                    await _manager.broadcast(
-                        "prices",
-                        {
-                            "type": "no_live_feed",
-                            "symbol": symbol,
-                            "message": (f"No live price for {symbol}. Connect a broker in Settings."),
-                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                        },
-                    )
-        if not any_live:
-            # All symbols missing — slow down polling to avoid log spam
-            await asyncio.sleep(9)
+        await _price_live_only_once(_no_feed_warned, _startup_grace_until)
 
 
 # Last-resort fallback only — the real feed (twelve_data / alpha_vantage /
@@ -1261,21 +1296,73 @@ _YF_SYMBOL_MAP: dict[str, str] = {
 _yf_last_prices: dict[str, float] = {}
 
 
-async def _yfinance_price_broadcaster() -> None:
-    """
-    Broadcast real market prices fetched from yfinance every 15 seconds.
-
-    Used when no broker or EventBus is available (API-only / dev mode).
-    Sends genuine price_tick messages — no synthetic or mock data.
-
-    Fetches immediately on startup (no initial sleep) so _yf_last_prices is
-    populated before _price_broadcaster_live_only's grace period expires.
-    """
+async def _yfinance_price_once() -> None:
     import time as _time
 
+    if _manager.connection_count == 0:
+        return
+    try:
+        import yfinance as _yf
+
+        tickers = list(_YF_SYMBOL_MAP.values())
+        data = await asyncio.wait_for(
+            asyncio.to_thread(
+                _yf.download,
+                tickers,
+                period="1d",
+                interval="1m",
+                progress=False,
+                auto_adjust=True,
+            ),
+            timeout=12.0,
+        )
+        now_ms = int(_time.time() * 1000)
+        for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items():
+            try:
+                if hasattr(data.columns, "levels"):
+                    col = ("Close", yf_ticker)
+                    if col not in data.columns:
+                        continue
+                    series = data[col].dropna()
+                else:
+                    series = data["Close"].dropna()
+                if series.empty:
+                    continue
+                price = float(series.iloc[-1])
+                if price <= 0:
+                    continue
+                cfg = _SYMBOLS.get(ws_sym, {"spread": price * 0.0002})
+                spread = cfg.get("spread", price * 0.0002)
+                prev = _yf_last_prices.get(ws_sym, price)
+                change_pct = ((price - prev) / prev * 100) if prev > 0 else 0.0
+                _yf_last_prices[ws_sym] = price
+                tick = {
+                    "type": "price_tick",
+                    "data": {
+                        "symbol": ws_sym,
+                        "bid": round(price - spread / 2, 5),
+                        "ask": round(price + spread / 2, 5),
+                        "mid": round(price, 5),
+                        "spread": spread,
+                        "timestamp": now_ms,
+                        "change_pct": round(change_pct, 4),
+                    },
+                }
+                await _manager.broadcast("prices", tick)
+            except Exception as _sym_exc:
+                logger.debug("yfinance tick for %s failed: %s", ws_sym, _sym_exc)
+    except Exception as exc:
+        logger.warning("yfinance price broadcaster error: %s", exc)
+
+
+async def _yfinance_price_broadcaster() -> None:
+    """Body in `_yfinance_price_once` so a test can reach it — see §E44.
+
+    The shell keeps the first-run/steady-state sleep choice, so the body's
+    early `return` cannot become a spin.
+    """
     _POLL_INTERVAL = 15  # seconds between yfinance fetches
     first_run = True
-
     while True:
         if first_run:
             first_run = False
@@ -1283,60 +1370,7 @@ async def _yfinance_price_broadcaster() -> None:
             await asyncio.sleep(0.5)
         else:
             await asyncio.sleep(_POLL_INTERVAL)
-        if _manager.connection_count == 0:
-            continue
-        try:
-            import yfinance as _yf
-
-            tickers = list(_YF_SYMBOL_MAP.values())
-            data = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _yf.download,
-                    tickers,
-                    period="1d",
-                    interval="1m",
-                    progress=False,
-                    auto_adjust=True,
-                ),
-                timeout=12.0,
-            )
-            now_ms = int(_time.time() * 1000)
-            for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items():
-                try:
-                    if hasattr(data.columns, "levels"):
-                        col = ("Close", yf_ticker)
-                        if col not in data.columns:
-                            continue
-                        series = data[col].dropna()
-                    else:
-                        series = data["Close"].dropna()
-                    if series.empty:
-                        continue
-                    price = float(series.iloc[-1])
-                    if price <= 0:
-                        continue
-                    cfg = _SYMBOLS.get(ws_sym, {"spread": price * 0.0002})
-                    spread = cfg.get("spread", price * 0.0002)
-                    prev = _yf_last_prices.get(ws_sym, price)
-                    change_pct = ((price - prev) / prev * 100) if prev > 0 else 0.0
-                    _yf_last_prices[ws_sym] = price
-                    tick = {
-                        "type": "price_tick",
-                        "data": {
-                            "symbol": ws_sym,
-                            "bid": round(price - spread / 2, 5),
-                            "ask": round(price + spread / 2, 5),
-                            "mid": round(price, 5),
-                            "spread": spread,
-                            "timestamp": now_ms,
-                            "change_pct": round(change_pct, 4),
-                        },
-                    }
-                    await _manager.broadcast("prices", tick)
-                except Exception as _sym_exc:
-                    logger.debug("yfinance tick for %s failed: %s", ws_sym, _sym_exc)
-        except Exception as exc:
-            logger.warning("yfinance price broadcaster error: %s", exc)
+        await _yfinance_price_once()
 
 
 async def _price_broadcaster() -> None:
@@ -1364,218 +1398,219 @@ async def _price_broadcaster() -> None:
     )
 
 
+async def _heartbeat_once() -> None:
+    if _manager.connection_count == 0:
+        return
+    dead: list[str] = []
+    for cid in list(_manager._connections.keys()):
+        await _manager.send(cid, {"type": "heartbeat"})
+        if cid not in _manager._connections:
+            # send() already called disconnect() on failure — skip
+            continue
+        misses = _manager.record_hb_miss(cid)
+        if misses > HEARTBEAT_MISS_LIMIT:
+            logger.info("WS closing stale connection %s (missed %d heartbeats)", cid, misses)
+            dead.append(cid)
+    for cid in dead:
+        ws = _manager._connections.get(cid)
+        if ws:
+            try:
+                await ws.close(code=1001, reason="heartbeat timeout")
+            except Exception as exc:
+                logger.debug(
+                    "_heartbeat_broadcaster: error closing stale connection %s: %s",
+                    cid,
+                    exc,
+                )
+        _manager.disconnect(cid)
+
+
 async def _heartbeat_broadcaster() -> None:
-    """
-    Send heartbeat every HEARTBEAT_INTERVAL_SECONDS to all connections.
-    Connections that miss HEARTBEAT_MISS_LIMIT consecutive heartbeats are closed.
+    """Send a heartbeat to every connection every HEARTBEAT_INTERVAL_SECONDS.
+
+    Body in `_heartbeat_once` so a test can call it — this shell blocks
+    uninterruptibly (§E44). The sleep stays here, which is what makes the
+    body's early `return` equivalent to the `continue` it replaced.
     """
     while True:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
-        if _manager.connection_count == 0:
-            continue
-        dead: list[str] = []
-        for cid in list(_manager._connections.keys()):
-            await _manager.send(cid, {"type": "heartbeat"})
-            if cid not in _manager._connections:
-                # send() already called disconnect() on failure — skip
-                continue
-            misses = _manager.record_hb_miss(cid)
-            if misses > HEARTBEAT_MISS_LIMIT:
-                logger.info("WS closing stale connection %s (missed %d heartbeats)", cid, misses)
-                dead.append(cid)
-        for cid in dead:
-            ws = _manager._connections.get(cid)
-            if ws:
-                try:
-                    await ws.close(code=1001, reason="heartbeat timeout")
-                except Exception as exc:
-                    logger.debug(
-                        "_heartbeat_broadcaster: error closing stale connection %s: %s",
-                        cid,
-                        exc,
-                    )
-            _manager.disconnect(cid)
+        await _heartbeat_once()
 
 
 _CHARTBOT_POLL_INTERVAL: float = float(os.getenv("WS_CHARTBOT_POLL_INTERVAL", "5"))
 
 
-async def _chartbot_broadcaster() -> None:
-    """
-    Poll data-layer endpoints every WS_CHARTBOT_POLL_INTERVAL seconds and
-    broadcast chart-bot specific message types to subscribed clients.
+async def _chartbot_once() -> None:
+    try:
+        from data_layer.orchestrator import orchestrator as _orch
 
-    Channels served:
-      microstructure  → { type: "microstructure",   data: MicrostructureSnapshot }
-      volume_delta    → { type: "volume_delta",      data: VolumeDeltaBar }
-      sentiment       → { type: "sentiment_update",  data: { signal: SentimentSignal, recent_articles: NewsArticle[] } }
-      risk            → { type: "risk_update",       data: RiskSnapshot }
-      equity          → { type: "equity_update",     data: EquitySnapshot }
-      news            → { type: "news_item",         data: NewsArticle }
-
-    SentimentSignal fields (from data_layer.sentiment.engine):
-      news_sentiment_score    : float  — EMA of article sentiment scores [-1, 1]
-      news_sentiment_momentum : float  — rate of change of sentiment EMA
-      news_article_count_1h   : float  — gold-relevant articles in last hour
-      news_bullish_ratio      : float  — fraction of recent articles that are bullish [0, 1]
-    """
-    while True:
-        await asyncio.sleep(_CHARTBOT_POLL_INTERVAL)
+        # ── microstructure + volume_delta ─────────────────────────────────
         try:
-            from data_layer.orchestrator import orchestrator as _orch
+            snap = _orch.get_microstructure_snapshot()
+            if snap is not None:
+                micro_data = {
+                    "timestamp": snap.timestamp.isoformat(),
+                    "bid": snap.bid,
+                    "ask": snap.ask,
+                    "spread": snap.spread,
+                    "spread_pct": snap.spread_pct,
+                    "volume_delta": snap.volume_delta,
+                    "cumulative_delta": snap.cumulative_delta,
+                    "buy_pressure": snap.buy_pressure,
+                    "sell_pressure": snap.sell_pressure,
+                    "order_flow_imbalance": snap.order_flow_imbalance,
+                    "trade_pressure": snap.trade_pressure,
+                    "vwap": snap.vwap,
+                    "tick_count": snap.tick_count,
+                }
+                await _manager.broadcast("microstructure", {"type": "microstructure", "data": micro_data})
+                await _manager.broadcast(
+                    "volume_delta",
+                    {
+                        "type": "volume_delta",
+                        "data": {
+                            "volume_delta": snap.volume_delta,
+                            "cumulative_delta": snap.cumulative_delta,
+                            "timestamp": snap.timestamp.isoformat(),
+                        },
+                    },
+                )
+        except Exception as _exc:
+            logger.debug("chartbot_broadcaster: microstructure error: %s", _exc)
 
-            # ── microstructure + volume_delta ─────────────────────────────────
-            try:
-                snap = _orch.get_microstructure_snapshot()
-                if snap is not None:
-                    micro_data = {
-                        "timestamp": snap.timestamp.isoformat(),
-                        "bid": snap.bid,
-                        "ask": snap.ask,
-                        "spread": snap.spread,
-                        "spread_pct": snap.spread_pct,
-                        "volume_delta": snap.volume_delta,
-                        "cumulative_delta": snap.cumulative_delta,
-                        "buy_pressure": snap.buy_pressure,
-                        "sell_pressure": snap.sell_pressure,
-                        "order_flow_imbalance": snap.order_flow_imbalance,
-                        "trade_pressure": snap.trade_pressure,
-                        "vwap": snap.vwap,
-                        "tick_count": snap.tick_count,
-                    }
-                    await _manager.broadcast("microstructure", {"type": "microstructure", "data": micro_data})
+        # ── sentiment ─────────────────────────────────────────────────────
+        try:
+            sentiment_snap = _orch.get_sentiment_snapshot()
+            if sentiment_snap is not None:
+                await _manager.broadcast(
+                    "sentiment",
+                    {"type": "sentiment_update", "data": sentiment_snap},
+                )
+                for article in (sentiment_snap.get("recent_articles") or [])[:3]:
+                    await _manager.broadcast("news", {"type": "news_item", "data": article})
+        except Exception as _exc:
+            logger.debug("chartbot_broadcaster: sentiment error: %s", _exc)
+
+        # ── risk snapshot ─────────────────────────────────────────────────
+        try:
+            from core.app_state import app_state as _app_state
+
+            rm = getattr(_app_state, "risk_manager", None) if _app_state else None
+            if rm is not None:
+                risk_data: dict = {}
+                for attr in ("daily_loss_pct", "max_drawdown_pct", "open_risk_pct", "kill_switch_active"):
+                    val = getattr(rm, attr, None)
+                    if val is not None:
+                        risk_data[attr] = val
+                if risk_data:
+                    await _manager.broadcast("risk", {"type": "risk_update", "data": risk_data})
+        except Exception as _exc:
+            logger.debug("chartbot_broadcaster: risk error: %s", _exc)
+
+        # ── equity snapshot ───────────────────────────────────────────────
+        try:
+            from core.app_state import app_state as _app_state
+
+            broker = getattr(_app_state, "broker", None) if _app_state else None
+            if broker is not None:
+                _acct_coro = broker.get_account_info()
+                acct = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
+                if acct:
                     await _manager.broadcast(
-                        "volume_delta",
+                        "equity",
                         {
-                            "type": "volume_delta",
+                            "type": "equity_update",
                             "data": {
-                                "volume_delta": snap.volume_delta,
-                                "cumulative_delta": snap.cumulative_delta,
-                                "timestamp": snap.timestamp.isoformat(),
+                                "balance": acct.get("balance", 0.0),
+                                "equity": acct.get("equity", 0.0),
+                                "unrealized_pnl": acct.get("unrealized_pnl", 0.0),
+                                "margin_used": acct.get("margin_used", 0.0),
+                                "timestamp": datetime.now(UTC).isoformat(),
                             },
                         },
                     )
-            except Exception as _exc:
-                logger.debug("chartbot_broadcaster: microstructure error: %s", _exc)
+        except Exception as _exc:
+            logger.debug("chartbot_broadcaster: equity error: %s", _exc)
 
-            # ── sentiment ─────────────────────────────────────────────────────
-            try:
-                sentiment_snap = _orch.get_sentiment_snapshot()
-                if sentiment_snap is not None:
+        # ── AI analysis broadcast (from Redis cache) ──────────────────────
+        # The /trading/ai-analysis REST endpoint caches its result in Redis
+        # under "ai_analysis:{symbol}". We broadcast it so chart-bot clients
+        # receive updates without polling.
+        try:
+            from cache.redis_client import get_sync_redis_client as _get_rc
+            import json as _json
+
+            _rc = _get_rc()
+            if _rc:
+                for _sym in ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"):
+                    _raw = _rc.get(f"ai_analysis:{_sym}")
+                    if _raw:
+                        _analysis = _json.loads(_raw)
+                        await _manager.broadcast(
+                            "prices",
+                            {"type": "ai_analysis", "data": _analysis},
+                        )
+        except Exception as _exc:
+            logger.debug("chartbot_broadcaster: ai_analysis error: %s", _exc)
+
+        # ── Pattern detection broadcast ───────────────────────────────────
+        try:
+            from cache.redis_client import get_sync_redis_client as _get_rc2
+            import json as _json2
+
+            _rc2 = _get_rc2()
+            if _rc2:
+                _praw = _rc2.get("chart_patterns:latest")
+                if _praw:
+                    _patterns = _json2.loads(_praw)
+                    for _pat in (_patterns if isinstance(_patterns, list) else [_patterns])[:3]:
+                        await _manager.broadcast(
+                            "patterns",
+                            {"type": "pattern_detected", "data": _pat},
+                        )
+        except Exception as _exc:
+            logger.debug("chartbot_broadcaster: patterns error: %s", _exc)
+
+        # ── Support/resistance level updates ──────────────────────────────
+        try:
+            from cache.redis_client import get_sync_redis_client as _get_rc3
+            import json as _json3
+
+            _rc3 = _get_rc3()
+            if _rc3:
+                _lraw = _rc3.get("sr_levels:latest")
+                if _lraw:
+                    _levels = _json3.loads(_lraw)
                     await _manager.broadcast(
-                        "sentiment",
-                        {"type": "sentiment_update", "data": sentiment_snap},
+                        "levels",
+                        {"type": "level_update", "data": _levels},
                     )
-                    for article in (sentiment_snap.get("recent_articles") or [])[:3]:
-                        await _manager.broadcast("news", {"type": "news_item", "data": article})
-            except Exception as _exc:
-                logger.debug("chartbot_broadcaster: sentiment error: %s", _exc)
+        except Exception as _exc:
+            logger.debug("chartbot_broadcaster: levels error: %s", _exc)
 
-            # ── risk snapshot ─────────────────────────────────────────────────
-            try:
-                from core.app_state import app_state as _app_state
+    except Exception as exc:
+        logger.debug("chartbot_broadcaster: outer error: %s", exc)
 
-                rm = getattr(_app_state, "risk_manager", None) if _app_state else None
-                if rm is not None:
-                    risk_data: dict = {}
-                    for attr in ("daily_loss_pct", "max_drawdown_pct", "open_risk_pct", "kill_switch_active"):
-                        val = getattr(rm, attr, None)
-                        if val is not None:
-                            risk_data[attr] = val
-                    if risk_data:
-                        await _manager.broadcast("risk", {"type": "risk_update", "data": risk_data})
-            except Exception as _exc:
-                logger.debug("chartbot_broadcaster: risk error: %s", _exc)
 
-            # ── equity snapshot ───────────────────────────────────────────────
-            try:
-                from core.app_state import app_state as _app_state
-
-                broker = getattr(_app_state, "broker", None) if _app_state else None
-                if broker is not None:
-                    _acct_coro = broker.get_account_info()
-                    acct = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
-                    if acct:
-                        await _manager.broadcast(
-                            "equity",
-                            {
-                                "type": "equity_update",
-                                "data": {
-                                    "balance": acct.get("balance", 0.0),
-                                    "equity": acct.get("equity", 0.0),
-                                    "unrealized_pnl": acct.get("unrealized_pnl", 0.0),
-                                    "margin_used": acct.get("margin_used", 0.0),
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                },
-                            },
-                        )
-            except Exception as _exc:
-                logger.debug("chartbot_broadcaster: equity error: %s", _exc)
-
-            # ── AI analysis broadcast (from Redis cache) ──────────────────────
-            # The /trading/ai-analysis REST endpoint caches its result in Redis
-            # under "ai_analysis:{symbol}". We broadcast it so chart-bot clients
-            # receive updates without polling.
-            try:
-                from cache.redis_client import get_sync_redis_client as _get_rc
-                import json as _json
-
-                _rc = _get_rc()
-                if _rc:
-                    for _sym in ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"):
-                        _raw = _rc.get(f"ai_analysis:{_sym}")
-                        if _raw:
-                            _analysis = _json.loads(_raw)
-                            await _manager.broadcast(
-                                "prices",
-                                {"type": "ai_analysis", "data": _analysis},
-                            )
-            except Exception as _exc:
-                logger.debug("chartbot_broadcaster: ai_analysis error: %s", _exc)
-
-            # ── Pattern detection broadcast ───────────────────────────────────
-            try:
-                from cache.redis_client import get_sync_redis_client as _get_rc2
-                import json as _json2
-
-                _rc2 = _get_rc2()
-                if _rc2:
-                    _praw = _rc2.get("chart_patterns:latest")
-                    if _praw:
-                        _patterns = _json2.loads(_praw)
-                        for _pat in (_patterns if isinstance(_patterns, list) else [_patterns])[:3]:
-                            await _manager.broadcast(
-                                "patterns",
-                                {"type": "pattern_detected", "data": _pat},
-                            )
-            except Exception as _exc:
-                logger.debug("chartbot_broadcaster: patterns error: %s", _exc)
-
-            # ── Support/resistance level updates ──────────────────────────────
-            try:
-                from cache.redis_client import get_sync_redis_client as _get_rc3
-                import json as _json3
-
-                _rc3 = _get_rc3()
-                if _rc3:
-                    _lraw = _rc3.get("sr_levels:latest")
-                    if _lraw:
-                        _levels = _json3.loads(_lraw)
-                        await _manager.broadcast(
-                            "levels",
-                            {"type": "level_update", "data": _levels},
-                        )
-            except Exception as _exc:
-                logger.debug("chartbot_broadcaster: levels error: %s", _exc)
-
-        except Exception as exc:
-            logger.debug("chartbot_broadcaster: outer error: %s", exc)
+async def _chartbot_broadcaster() -> None:
+    """Body in `_chartbot_once` so a test can reach it — see §E44. Sleep stays here."""
+    while True:
+        await asyncio.sleep(_CHARTBOT_POLL_INTERVAL)
+        await _chartbot_once()
 
 
 async def _build_account_message(broker: Any) -> dict | None:
     """Render one account's metrics in the AccountMetrics shape the frontend
     store expects. Returns None when the broker has nothing to report."""
     from core.app_state import app_state as _app_state  # type: ignore[import]
+
+    # A broker that is not there has nothing to report, which is exactly what
+    # the docstring promises this returns None for. Without this the call
+    # raised AttributeError. Its only caller checks `resolution.broker is None`
+    # first, so this was never reachable — but the contract said one thing and
+    # the code did another, and the next caller reads the contract.
+    if broker is None:
+        return None
 
     _acct_coro = broker.get_account_info()
     acct_raw = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
@@ -1632,49 +1667,42 @@ async def _build_account_message(broker: Any) -> dict | None:
     }
 
 
+async def _account_update_once() -> None:
+    if _manager.connection_count == 0:
+        return
+    try:
+        from core.account_registry import get_account_registry
+
+        registry = get_account_registry()
+        for user_id in _manager.connected_user_ids():
+            try:
+                resolution = await registry.resolve(user_id)
+                if resolution.broker is None:
+                    continue
+                if not resolution.isolated:
+                    # A live single-account venue: this is the deployment's
+                    # account, not this user's. Sending it would restate the
+                    # exact bug in a new place.
+                    continue
+                account_msg = await _build_account_message(resolution.broker)
+                if account_msg is None:
+                    continue
+                await _manager.send_to_user(user_id, "account", account_msg)
+            except Exception as per_user_exc:
+                logger.debug("account_update for user=%s: %s", user_id, per_user_exc)
+    except Exception as exc:
+        logger.debug("account_update_broadcaster: %s", exc)
+
+
 async def _account_update_broadcaster() -> None:
-    """
-    Push account_update messages to each connected user's own socket.
+    """Push each connected user their OWN account every _POLL_INTERVAL seconds.
 
-    This used to poll ``app_state.broker`` — the one global account — and
-    ``broadcast("account", …)`` the result to every subscriber, so each user was
-    shown somebody else's balance, equity and P&L as though it were their own.
-    The code said as much: *"BEFORE enabling multi-tenant accounts this MUST
-    become send_to_user(owner_id, …) so one user cannot receive another's
-    balance/PnL."* This is that change.
-
-    One account is now resolved per connected user via ``core.account_registry``
-    and delivered with ``send_to_user``. A user with no resolvable identity —
-    a connection still mid-handshake — is skipped rather than sent the shared
-    account.
+    Body in `_account_update_once` so a test can reach it (§E44).
     """
     _POLL_INTERVAL = 5  # seconds
     while True:
         await asyncio.sleep(_POLL_INTERVAL)
-        if _manager.connection_count == 0:
-            continue
-        try:
-            from core.account_registry import get_account_registry
-
-            registry = get_account_registry()
-            for user_id in _manager.connected_user_ids():
-                try:
-                    resolution = await registry.resolve(user_id)
-                    if resolution.broker is None:
-                        continue
-                    if not resolution.isolated:
-                        # A live single-account venue: this is the deployment's
-                        # account, not this user's. Sending it would restate the
-                        # exact bug in a new place.
-                        continue
-                    account_msg = await _build_account_message(resolution.broker)
-                    if account_msg is None:
-                        continue
-                    await _manager.send_to_user(user_id, "account", account_msg)
-                except Exception as per_user_exc:
-                    logger.debug("account_update for user=%s: %s", user_id, per_user_exc)
-        except Exception as exc:
-            logger.debug("account_update_broadcaster: %s", exc)
+        await _account_update_once()
 
 
 # Broadcaster specs at module level so the restart callback can look them up.
@@ -2056,6 +2084,80 @@ _NUCLEAR_POLL_INTERVAL = 2  # seconds between state snapshots
 
 
 @router.websocket("/ws/nuclear")
+def _get_nuclear_state() -> dict | None:
+    """The nuclear supervisor + risk orchestrator snapshot the dashboard reads.
+
+    Hoisted out of `ws_nuclear` (§E45). Nested inside that endpoint it was
+    unreachable from a test — the only way in was through a post-auth loop
+    that cannot be driven in-process — so the kill-switch state feed, which is
+    what tells an operator trading is paused, had never been exercised.
+    """
+    try:
+        from brain.nuclear_supervisor import get_nuclear_supervisor as _get_sup
+        from risk.orchestrator import risk_orchestrator as _orch_singleton
+
+        sup = _get_sup()
+        sup_status = sup.get_status() if sup else {}
+        orch_status = _orch_singleton.get_status() if _orch_singleton else {}
+        return {
+            "severity": sup_status.get("nuclear_level", 0),
+            "action": sup_status.get("action", "normal"),
+            "nuclear_level": sup_status.get("nuclear_level", 0),
+            "trading_paused": sup_status.get("trading_paused", False),
+            "rl_action": sup_status.get("rl_action", 0),
+            "rl_action_label": sup_status.get("rl_action_label", "NORMAL"),
+            "rl_agent_loaded": sup_status.get("rl_agent_loaded", False),
+            "confidence": sup_status.get("confidence", 0.0),
+            "raw_score": sup_status.get("raw_score", 0.0),
+            "matched_terms": sup_status.get("matched_terms", []),
+            "category_scores": sup_status.get("category_scores", {}),
+            "vol_factor": sup_status.get("vol_factor", 1.0),
+            "sentiment_factor": sup_status.get("sentiment_factor", 0.0),
+            "explanation": sup_status.get("explanation", ""),
+            "alert_active": sup_status.get("alert_active", False),
+            "historical_analog": sup_status.get("historical_analog"),
+            "cooldown_remaining": sup_status.get("cooldown_remaining", 0),
+            "event_count": sup_status.get("event_count", 0),
+            "hedge_active": orch_status.get("hedge_active", False),
+            "max_risk_fraction": orch_status.get("max_risk_fraction", 1.0),
+        }
+    except Exception as exc:
+        logger.debug("ws_nuclear: state fetch failed: %s", exc)
+        return None
+    try:
+        from brain.nuclear_supervisor import get_nuclear_supervisor as _get_sup
+        from risk.orchestrator import risk_orchestrator as _orch_singleton
+
+        sup = _get_sup()
+        sup_status = sup.get_status() if sup else {}
+        orch_status = _orch_singleton.get_status() if _orch_singleton else {}
+        return {
+            "severity": sup_status.get("nuclear_level", 0),
+            "action": sup_status.get("action", "normal"),
+            "nuclear_level": sup_status.get("nuclear_level", 0),
+            "trading_paused": sup_status.get("trading_paused", False),
+            "rl_action": sup_status.get("rl_action", 0),
+            "rl_action_label": sup_status.get("rl_action_label", "NORMAL"),
+            "rl_agent_loaded": sup_status.get("rl_agent_loaded", False),
+            "confidence": sup_status.get("confidence", 0.0),
+            "raw_score": sup_status.get("raw_score", 0.0),
+            "matched_terms": sup_status.get("matched_terms", []),
+            "category_scores": sup_status.get("category_scores", {}),
+            "vol_factor": sup_status.get("vol_factor", 1.0),
+            "sentiment_factor": sup_status.get("sentiment_factor", 0.0),
+            "explanation": sup_status.get("explanation", ""),
+            "alert_active": sup_status.get("alert_active", False),
+            "historical_analog": sup_status.get("historical_analog"),
+            "cooldown_remaining": sup_status.get("cooldown_remaining", 0),
+            "event_count": sup_status.get("event_count", 0),
+            "hedge_active": orch_status.get("hedge_active", False),
+            "max_risk_fraction": orch_status.get("max_risk_fraction", 1.0),
+        }
+    except Exception as exc:
+        logger.debug("ws_nuclear: state fetch failed: %s", exc)
+        return None
+
+
 async def ws_nuclear(websocket: WebSocket) -> None:
     """
     Nuclear dashboard real-time feed.
@@ -2135,40 +2237,6 @@ async def ws_nuclear(websocket: WebSocket) -> None:
             return True
         except Exception:
             return False
-
-    def _get_nuclear_state() -> dict | None:
-        try:
-            from brain.nuclear_supervisor import get_nuclear_supervisor as _get_sup
-            from risk.orchestrator import risk_orchestrator as _orch_singleton
-
-            sup = _get_sup()
-            sup_status = sup.get_status() if sup else {}
-            orch_status = _orch_singleton.get_status() if _orch_singleton else {}
-            return {
-                "severity": sup_status.get("nuclear_level", 0),
-                "action": sup_status.get("action", "normal"),
-                "nuclear_level": sup_status.get("nuclear_level", 0),
-                "trading_paused": sup_status.get("trading_paused", False),
-                "rl_action": sup_status.get("rl_action", 0),
-                "rl_action_label": sup_status.get("rl_action_label", "NORMAL"),
-                "rl_agent_loaded": sup_status.get("rl_agent_loaded", False),
-                "confidence": sup_status.get("confidence", 0.0),
-                "raw_score": sup_status.get("raw_score", 0.0),
-                "matched_terms": sup_status.get("matched_terms", []),
-                "category_scores": sup_status.get("category_scores", {}),
-                "vol_factor": sup_status.get("vol_factor", 1.0),
-                "sentiment_factor": sup_status.get("sentiment_factor", 0.0),
-                "explanation": sup_status.get("explanation", ""),
-                "alert_active": sup_status.get("alert_active", False),
-                "historical_analog": sup_status.get("historical_analog"),
-                "cooldown_remaining": sup_status.get("cooldown_remaining", 0),
-                "event_count": sup_status.get("event_count", 0),
-                "hedge_active": orch_status.get("hedge_active", False),
-                "max_risk_fraction": orch_status.get("max_risk_fraction", 1.0),
-            }
-        except Exception as exc:
-            logger.debug("ws_nuclear: state fetch failed: %s", exc)
-            return None
 
     try:
         while True:

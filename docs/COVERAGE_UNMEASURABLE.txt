@@ -488,6 +488,11 @@ social/marketplace.py
 #   3. measured 2026-09-10: api/ws_live.py 34% -> 35%;
 #   4. owner agreed (§A6 option 1).
 #
+# UPDATED 2026-09-10 (second pass, §E45) — the extraction was authorised and
+# done: seven broadcaster loop bodies are now callable, `_get_nuclear_state` is
+# hoisted out of `ws_nuclear`, and the module is at 70%. Still under the floor;
+# the remainder is the three endpoints' post-auth loops. See §E45.
+#
 # UPDATED 2026-09-10 — §A6 option 2 was attempted. 35% -> 48% via 53
 # behavioural tests (origin check, auth handshake, ATR stop-loss maths, private
 # channel routing, broadcaster restart, three endpoints' auth). One real defect
