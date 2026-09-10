@@ -30,9 +30,36 @@
 #     line. An entry that no longer describes anything is how a ratchet stops
 #     being one.
 #
-# So this list may only SHRINK, and it applies pressure in both directions.
+# So this list SHRINKS by default, and it applies pressure in both directions.
 # To remove an entry: raise that module's coverage past the floor, then delete
 # its line. Enforced by tests/unit/test_coverage_gate_ratchet.py.
+#
+# ## The one way it grows, and why that is not a loophole — ADR 0017
+#
+# This paragraph used to say "may only SHRINK" full stop. That stopped being
+# true on 2026-09-09, six entries ago, and the note further down already said
+# so — a header that contradicts its own file is the exact defect this
+# programme keeps removing, so it is corrected here rather than left to read
+# as a rule nobody follows.
+#
+# The baseline was adopted from a SUBSET of the repository. A module outside
+# that subset is not "new debt": it was already below the floor, unrecorded
+# only because the seed never looked at it. When someone touches such a file
+# the gate blocks their commit whatever the change, which turns the ratchet
+# from "debt may only shrink" into "you may not touch an untested file" — and
+# the documented escape from that is SKIP_COVERAGE_GATE=1, which is worse in
+# every way.
+#
+# So an entry may be ADDED only when all of these hold, and the entry says so:
+#
+#   1. the module was ALREADY below the floor before the change — proven on a
+#      clean tree or a worktree, not asserted;
+#   2. the change does not LOWER its coverage;
+#   3. the measured number is written down beside it; and
+#   4. the owner has agreed, or an ADR records the standing agreement.
+#
+# Growth under those four is recording pre-existing debt, not granting new
+# permission. Growth without them is an allowlist.
 #
 # Seeded statically — every module whose resolved test file never mentions it —
 # because measuring all 539 candidates takes about two hours. An over-broad seed
@@ -441,3 +468,25 @@ reports/weekly_report.py
 ml/inference_engine.py
 ml/train_advanced.py
 social/marketplace.py
+
+# ── Added 2026-09-10, second batch ───────────────────────────────────────────
+#
+# Owner decision, recorded as MASTER_OUTSTANDING §A6 and ADR 0017. The sixth
+# entry added to a baseline seeded from a subset, and the one that forced the
+# rule above to be written down.
+#
+# `api/ws_live.py` blocked a finished, tested security fix: `subscribe()` added
+# any channel name it was handed without checking who was asking, so any
+# authenticated account could join a channel carrying other customers' support
+# threads. The module is 2,425 lines; raising it from 34% to 80% is a project,
+# and the fix is 40 lines.
+#
+# The four conditions, evidenced:
+#   1. already below the floor — 34% at b932dd2 with the change stashed,
+#      measured on a clean worktree, not asserted;
+#   2. not lowered — the patch RAISES it to 35%;
+#   3. measured 2026-09-10: api/ws_live.py 34% -> 35%;
+#   4. owner agreed (§A6 option 1).
+#
+# Removing this entry is filed work, not a wish: see §A6 option 2.
+api/ws_live.py

@@ -48,6 +48,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from api.auth import TokenPayload, require_role
 from support.answering import answer_question
@@ -96,6 +97,63 @@ def _store() -> TicketStore:
     return TicketStore(SessionLocal)
 
 
+#: The live channel the operator console watches. Privileged AND private in
+#: `LiveConnectionManager`: a customer cannot subscribe to it, and it is never
+#: delivered through the implicit "empty subscription = all channels" firehose.
+QUEUE_CHANNEL = "support_queue"
+
+
+def _queue_event(event: str, ticket: Any) -> dict[str, Any]:
+    """What an operator needs to render a queue row — and nothing else.
+
+    No message bodies. An operator opens the thread to read it; a broadcast
+    that ships every customer message puts the whole conversation into every
+    connected console's memory, and into any log that records frames.
+    """
+    return {
+        "event": event,
+        "ticket_id": ticket.id,
+        "subject": ticket.subject,
+        "status": ticket.status,
+        "needs_human": ticket.needs_human,
+        "department": ticket.department,
+        "category": ticket.category,
+        "assigned_operator_id": ticket.assigned_operator_id,
+        "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
+        "first_response_at": (ticket.first_response_at.isoformat() if ticket.first_response_at else None),
+    }
+
+
+async def _publish_queue_event(event: dict[str, Any]) -> None:
+    """Push one queue change to the operator channel."""
+    from api.ws_live import get_live_manager
+
+    await get_live_manager().broadcast(QUEUE_CHANNEL, {"type": QUEUE_CHANNEL, "data": event})
+
+
+async def _announce(event: str, ticket: Any) -> None:
+    """Publish, and never let the socket decide whether the work happened.
+
+    The ticket transition is the work; this is a notification about it. If the
+    socket is down the claim still happened, the reply is still saved, and the
+    customer is still answered.
+
+    Logged at ERROR, not DEBUG: an operator console that has silently stopped
+    updating looks exactly like a quiet queue. That is F248's shape — three
+    alert call sites raised `TypeError` into a DEBUG handler, so a tripped
+    circuit breaker notified nobody for as long as the code existed.
+
+    Called only AFTER the store commits, from what the store returned.
+    Publishing first would announce a claim that then failed.
+    """
+    if ticket is None:
+        return
+    try:
+        await _publish_queue_event(_queue_event(event, ticket))
+    except Exception as exc:
+        logger.error("support: queue broadcast failed for %s (%s): %s", ticket.id, event, exc)
+
+
 class OpenTicket(BaseModel):
     subject: str = Field(min_length=1, max_length=_MAX_SUBJECT)
     body: str = Field(min_length=1, max_length=_MAX_BODY)
@@ -129,28 +187,44 @@ def _owned(store: TicketStore, ticket_id: str, user: TokenPayload) -> Any:
 
 
 @_customer_routes.post("", status_code=201, summary="Open a support ticket")
-def open_ticket(payload: OpenTicket, user: TokenPayload = Depends(_customer)) -> dict[str, Any]:
-    """Raise a ticket, and answer it now if the AI is allowed and able to."""
+async def open_ticket(payload: OpenTicket, user: TokenPayload = Depends(_customer)) -> dict[str, Any]:
+    """Raise a ticket, and answer it now if the AI is allowed and able to.
+
+    Async so the queue broadcast can be awaited after the store commits. The
+    store and the model call both block, so they go to the threadpool rather
+    than holding the event loop for the length of an inference.
+    """
     body = _reject_blank(payload.body)
     store = _store()
-    ticket = store.open_ticket(user_id=user.sub, subject=payload.subject.strip(), body=body)
+    ticket = await run_in_threadpool(store.open_ticket, user_id=user.sub, subject=payload.subject.strip(), body=body)
 
     ai_reply: str | None = None
     if not ticket.needs_human:
-        answer = answer_question(body)
+        answer = await run_in_threadpool(answer_question, body)
         if answer.available and answer.text:
-            store.add_message(ticket.id, author_kind="ai", author_id=answer.department, body=answer.text)
+            await run_in_threadpool(
+                store.add_message,
+                ticket.id,
+                author_kind="ai",
+                author_id=answer.department,
+                body=answer.text,
+            )
             ai_reply = answer.text
         else:
             # The AI could not answer. That is a ticket for a person, not a
             # ticket that quietly sits unanswered — the whole point of
             # `answering`'s refusal is that something else picks it up.
-            store.escalate(
+            await run_in_threadpool(
+                store.escalate,
                 ticket.id,
                 reason=answer.unavailable_reason or "The support AI could not answer this.",
             )
 
-    fresh = store.get(ticket.id) or ticket
+    fresh = await run_in_threadpool(store.get, ticket.id) or ticket
+    if fresh.needs_human:
+        # Published from the COMMITTED state, not from the intent, and only for
+        # the queue's own changes — a ticket the AI answered is not a queue item.
+        await _announce("escalated", fresh)
     return {
         "id": fresh.id,
         "status": fresh.status,
@@ -162,8 +236,9 @@ def open_ticket(payload: OpenTicket, user: TokenPayload = Depends(_customer)) ->
 
 
 @_customer_routes.get("", summary="My support tickets")
-def my_tickets(user: TokenPayload = Depends(_customer)) -> dict[str, Any]:
-    return {"tickets": [t.as_dict() for t in _store().tickets_for(user.sub)]}
+async def my_tickets(user: TokenPayload = Depends(_customer)) -> dict[str, Any]:
+    tickets = await run_in_threadpool(_store().tickets_for, user.sub)
+    return {"tickets": [t.as_dict() for t in tickets]}
 
 
 @_customer_routes.get("/{ticket_id}", summary="One of my tickets, with its thread")
@@ -177,16 +252,22 @@ def my_ticket(ticket_id: str, user: TokenPayload = Depends(_customer)) -> dict[s
 
 
 @_customer_routes.post("/{ticket_id}/messages", summary="Reply on my own ticket")
-def post_message(ticket_id: str, payload: PostMessage, user: TokenPayload = Depends(_customer)) -> dict[str, Any]:
+async def post_message(ticket_id: str, payload: PostMessage, user: TokenPayload = Depends(_customer)) -> dict[str, Any]:
     body = _reject_blank(payload.body)
     store = _store()
     _owned(store, ticket_id, user)
 
-    outcome = store.add_message(ticket_id, author_kind="customer", author_id=user.sub, body=body)
+    outcome = await run_in_threadpool(
+        store.add_message, ticket_id, author_kind="customer", author_id=user.sub, body=body
+    )
     if not outcome.allowed:
         raise HTTPException(status_code=409, detail=outcome.reason or "Message refused.")
 
-    fresh = store.get(ticket_id)
+    fresh = await run_in_threadpool(store.get, ticket_id)
+    if fresh and fresh.needs_human:
+        # An operator watching the row must see that the customer answered —
+        # and that a mid-thread message just escalated it.
+        await _announce("customer_replied", fresh)
     return {"status": fresh.status if fresh else None, "needs_human": bool(fresh and fresh.needs_human)}
 
 
@@ -224,30 +305,45 @@ def _apply(outcome: Any, ticket_id: str) -> dict[str, Any]:
     raise HTTPException(status_code=404 if "not found" in reason.lower() else 409, detail=reason)
 
 
+async def _transition(ticket_id: str, event: str, work) -> dict[str, Any]:
+    """Run one operator action, then announce what the store committed.
+
+    The order is the point. `_apply` raises on a refusal, so a claim that lost
+    a race never reaches `_announce` — announcing first would put a row on
+    every console showing an operator who does not hold the ticket.
+    """
+    store = _store()
+    result = _apply(await run_in_threadpool(work, store), ticket_id)
+    await _announce(event, await run_in_threadpool(store.get, ticket_id))
+    return result
+
+
 @_operator_routes.post("/{ticket_id}/claim", summary="Take a ticket")
-def claim(ticket_id: str, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
-    return _apply(_store().claim(ticket_id, operator_id=user.sub), ticket_id)
+async def claim(ticket_id: str, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
+    return await _transition(ticket_id, "claimed", lambda store: store.claim(ticket_id, operator_id=user.sub))
 
 
 @_operator_routes.post("/{ticket_id}/release", summary="Put a ticket back")
-def release(ticket_id: str, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
-    return _apply(_store().release(ticket_id, operator_id=user.sub), ticket_id)
+async def release(ticket_id: str, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
+    return await _transition(ticket_id, "released", lambda store: store.release(ticket_id, operator_id=user.sub))
 
 
 @_operator_routes.post("/{ticket_id}/reply", summary="Reply to the customer")
-def reply(ticket_id: str, payload: PostMessage, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
+async def reply(ticket_id: str, payload: PostMessage, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
     body = _reject_blank(payload.body)
-    return _apply(
-        _store().add_message(ticket_id, author_kind="operator", author_id=user.sub, body=body),
+    return await _transition(
         ticket_id,
+        "operator_replied",
+        lambda store: store.add_message(ticket_id, author_kind="operator", author_id=user.sub, body=body),
     )
 
 
 @_operator_routes.post("/{ticket_id}/resolve", summary="Close a ticket")
-def resolve(ticket_id: str, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
-    return _apply(
-        _store().resolve(ticket_id, actor=Actor.OPERATOR, actor_id=user.sub),
+async def resolve(ticket_id: str, user: TokenPayload = Depends(_operator)) -> dict[str, Any]:
+    return await _transition(
         ticket_id,
+        "resolved",
+        lambda store: store.resolve(ticket_id, actor=Actor.OPERATOR, actor_id=user.sub),
     )
 
 

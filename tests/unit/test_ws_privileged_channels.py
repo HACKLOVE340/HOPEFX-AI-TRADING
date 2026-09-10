@@ -64,9 +64,7 @@ class TestAPrivilegedChannelNeedsTheRole:
 
         refused = manager.subscribe(cid, ["support_queue"])
 
-        assert "support_queue" not in manager._subscriptions[cid], (
-            "a customer subscribed to the support operator queue"
-        )
+        assert "support_queue" not in manager._subscriptions[cid], "a customer subscribed to the support operator queue"
         assert refused == ["support_queue"], "the refusal was silent"
 
     def test_an_admin_can(self, manager):
@@ -119,9 +117,7 @@ class TestTheFirehoseCannotReachItEither:
         """Otherwise the role check is bypassed by not subscribing at all."""
         from api.ws_live import LiveConnectionManager
 
-        assert set(LiveConnectionManager._PRIVILEGED_CHANNELS) <= set(
-            LiveConnectionManager._PRIVATE_CHANNELS
-        )
+        assert set(LiveConnectionManager._PRIVILEGED_CHANNELS) <= set(LiveConnectionManager._PRIVATE_CHANNELS)
 
 
 class TestTheRoleIsRecordedAtAuthTime:

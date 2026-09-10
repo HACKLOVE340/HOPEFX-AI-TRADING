@@ -3375,10 +3375,18 @@ test.
 
 ---
 
-## §A6 — Owner decision: `api/ws_live.py` is untouchable, and that blocks the live support queue
+## §A6 — DECIDED 2026-09-10: record `api/ws_live.py`, land the WebSocket fix
 
-**This is a decision, not a task.** It sits in §A because taking it myself
-would mean expanding an allowlist or bypassing a gate.
+**Owner chose option 1.** Recorded in `docs/COVERAGE_UNMEASURABLE.txt` with its
+measured 34% -> 35% and the four conditions ADR 0017 now requires; the patch is
+applied, the parked-work directory it lived in is gone, and the live operator
+queue is unblocked (§E39). Option 2 — raising the module past the floor and deleting the entry —
+stays filed as the work that removes the debt.
+
+The original decision text follows, kept because the reasoning is the reason the
+entry is defensible.
+
+---
 
 ### The situation
 
@@ -3463,3 +3471,77 @@ The new variable is an escape hatch and is documented as one: anyone who can set
 it can point the gate at a file listing every module. It adds no capability,
 because the same person can already set `SKIP_COVERAGE_GATE=1`, which is
 documented and louder.
+
+---
+
+## §E39 — The operator queue is live (2026-09-10)
+
+§A6 decided; this is what the decision unblocked.
+
+`api/ws_live.py`'s privileged-channel patch is applied (see §A6 and ADR 0017 for
+why it could be), and `api/support.py` now pushes every queue change on
+`support_queue` — a channel that is **privileged and private**: a customer
+cannot subscribe to it, and it is never delivered through the implicit
+"empty subscription = all channels" firehose. Both properties are asserted.
+
+Six events: `escalated`, `claimed`, `released`, `resolved`, `customer_replied`,
+`operator_replied`. `GET /api/support/queue` remains, so a console that misses a
+frame resynchronises rather than drifting.
+
+### Three rules, each with the failure it prevents
+
+**A broadcast is never the operation.** The ticket transition is the work; the
+push is a notification about it. If the socket is down the claim still happened,
+the reply is still saved, and the customer is still answered — and the failure
+logs at **ERROR**, because a console that has silently stopped updating looks
+exactly like a quiet queue. That is F248: three alert call sites raised
+`TypeError` into a DEBUG handler, so a tripped circuit breaker notified nobody
+for as long as the code existed.
+
+**Nothing is announced for a transition that did not happen.** `_transition`
+runs the store call first, lets `_apply` raise on a refusal, and only then
+re-reads and announces. A losing claim publishes nothing.
+
+**No message bodies travel.** The payload carries what a row needs — id,
+subject, status, department, category, holder, timestamps. An operator opens the
+thread to read it. A broadcast carrying every customer message puts the whole
+conversation into every connected console's memory and into any log that records
+frames.
+
+The mutating routes became `async def` with the blocking store and model calls
+on `run_in_threadpool`, so the broadcast can be awaited after the commit without
+an inference holding the event loop.
+
+### The finding: the ordering rule was unproven
+
+Four counterfactuals were run. Three failed as they should. The fourth — moving
+`_announce` **above** the store call — left all fifteen tests green.
+
+The event *names* were still right; only the payload was the pre-transition
+state, and a refused claim's broadcast was covered by nothing. So a claim that
+lost a race would have put a row on every console showing an operator who does
+not hold the ticket, while the operator who does hold it watched their row get
+taken. That is §E30's "success reported for work that did not happen", one layer
+up.
+
+Four tests now pin it: a losing claim and a refused reply announce nothing, and
+the payload is asserted to be the state *after* the transition. Same
+counterfactual now fails all four.
+
+That is the fourth time in this programme a counterfactual has caught a suite
+proving something other than what it claimed — §E33's floor, §E35's escalation
+branch, and the `_local_is_ready` source-reading test before them. **The pattern
+is always the same: the test asserted an outcome that a second, unrelated code
+path also produces.**
+
+`api/support.py` is at 97% with the support suites, 19 real-time tests, 1,093
+tests across the affected areas.
+
+### Still open
+
+* **No UI.** Per CLAUDE.md an operator console needs a `flow-prototype` approval
+  pass before production implementation — the owner's call.
+* **`answer_question` is still called with no facts.** The department briefs are
+  written to answer from a FACTS block and nothing gathers one from the
+  departments' read-only actions.
+* **`api/ws_live.py` at 35%** — recorded debt, not permission. §A6 option 2.
