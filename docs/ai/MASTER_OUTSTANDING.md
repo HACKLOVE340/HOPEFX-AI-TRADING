@@ -4733,3 +4733,82 @@ not: the package's real figures are the table above.
 call, and the options — ratchet it to today's measured number, hold at 80 and
 accept red CI, or scope it to a named list — trade differently. Filed. What is
 not optional is that the number changed, and it is visible rather than quiet.
+
+---
+
+## §E50 — §A35 confirmed, and the audit chain does not cover who did what (2026-09-10)
+
+The filed claim was that a superadmin action taken during an audit-storage
+outage leaves a chain that still verifies clean. Confirmed by execution, and it
+is four defects rather than one — plus a fifth found on the way that is more
+serious than the item this started from.
+
+### 1. `verify_integrity()` verifies its own memory
+
+It walks `self.records`, the in-memory list. A record whose write failed is
+still in that list, so the chain verifies clean over records the file does not
+contain — and the file is the only artefact anyone outside the process can
+inspect. A check that reads its own memory cannot disagree with itself (F176).
+
+`verify_persisted_integrity()` reads the log file. It returns True, False, or
+**None when there is nothing to verify** — an empty or absent log is not a
+verified one, and reporting it as True is how an outage becomes a clean bill of
+health (Rule 2).
+
+### 2. The async write's exception was discarded
+
+`_persist_record` scheduled `_async_write` with
+`add_done_callback(lambda _: None)` — a callback that throws the result away,
+exceptions included. Under FastAPI there IS a running loop, so **this is the
+path production takes.**
+
+Not *silent*, precisely, and the first draft of this section said it was:
+asyncio emits "Task exception was never retrieved" when the task is
+garbage-collected. That is not a substitute — it arrives at an unpredictable
+time, from the `asyncio` logger, naming no record, no actor and no action. The
+callback now retrieves the result and reports the loss **with the record's
+identity**, which is what an operator needs to reconcile the gap.
+
+### 3. `mkdir` sat outside the try that guarded the write
+
+An unwritable log location raised `FileNotFoundError` straight into `append()`,
+so the audit write could **crash the superadmin action it was recording** —
+while an ordinary write failure two lines later was swallowed. One fault, two
+opposite behaviours, neither designed. Both now report through one path and
+neither raises into the caller.
+
+### 4. The sync and async paths reported differently
+
+Unified on `_report_lost_record`, so the message shape does not depend on
+whether an event loop happened to be running.
+
+### 5. The chain does not cover `actor`, `action`, `level` or `category`
+
+Found because a test that tampered with `actor` in the persisted log **still
+verified clean**. `_calculate_hash` hashes exactly four things:
+
+    {"seq", "prev_hash", "timestamp", "data_hash"}
+
+The payload is protected. **The attribution is not.** Rewriting who performed an
+action, or what the action was, leaves a log both verifiers pass.
+
+This is the SEC/CFTC trade-reporting chain, and "who did what" is the entire
+point of the artefact. It is the most serious finding in this sequence, and it
+is **pinned as observed, not fixed**: widening the hash input invalidates every
+record already written, so it needs a versioned record format and a decision
+about existing logs — a change to a compliance artefact, not a bug fix. Filed,
+with a recommendation.
+
+`tests/unit/test_audit_persistence_failures_are_visible.py` parametrises all
+four fields, tampers with each, and asserts verification still returns True.
+When the fix lands, that test flips to asserting detection.
+
+### One harness bug of my own, the third of this shape
+
+The async test passed before the fix. It matched asyncio's GC warning, whose
+traceback repr contains the path `compliance/auditor.py` — so a naive
+`"audit" in message` check found it and proved nothing. The assertion now
+requires a record from the `compliance.auditor` logger itself, and that the
+message names the lost record. Same family as the `_redis_sync` fixture (§E46)
+and the global-count assertion (§E47): a search that can match something other
+than what you meant is not a measurement.
