@@ -2083,7 +2083,6 @@ _NUCLEAR_HEARTBEAT_INTERVAL = 30  # seconds
 _NUCLEAR_POLL_INTERVAL = 2  # seconds between state snapshots
 
 
-@router.websocket("/ws/nuclear")
 def _get_nuclear_state() -> dict | None:
     """The nuclear supervisor + risk orchestrator snapshot the dashboard reads.
 
@@ -2124,40 +2123,88 @@ def _get_nuclear_state() -> dict | None:
     except Exception as exc:
         logger.debug("ws_nuclear: state fetch failed: %s", exc)
         return None
-    try:
-        from brain.nuclear_supervisor import get_nuclear_supervisor as _get_sup
-        from risk.orchestrator import risk_orchestrator as _orch_singleton
 
-        sup = _get_sup()
-        sup_status = sup.get_status() if sup else {}
-        orch_status = _orch_singleton.get_status() if _orch_singleton else {}
-        return {
-            "severity": sup_status.get("nuclear_level", 0),
-            "action": sup_status.get("action", "normal"),
-            "nuclear_level": sup_status.get("nuclear_level", 0),
-            "trading_paused": sup_status.get("trading_paused", False),
-            "rl_action": sup_status.get("rl_action", 0),
-            "rl_action_label": sup_status.get("rl_action_label", "NORMAL"),
-            "rl_agent_loaded": sup_status.get("rl_agent_loaded", False),
-            "confidence": sup_status.get("confidence", 0.0),
-            "raw_score": sup_status.get("raw_score", 0.0),
-            "matched_terms": sup_status.get("matched_terms", []),
-            "category_scores": sup_status.get("category_scores", {}),
-            "vol_factor": sup_status.get("vol_factor", 1.0),
-            "sentiment_factor": sup_status.get("sentiment_factor", 0.0),
-            "explanation": sup_status.get("explanation", ""),
-            "alert_active": sup_status.get("alert_active", False),
-            "historical_analog": sup_status.get("historical_analog"),
-            "cooldown_remaining": sup_status.get("cooldown_remaining", 0),
-            "event_count": sup_status.get("event_count", 0),
-            "hedge_active": orch_status.get("hedge_active", False),
-            "max_risk_fraction": orch_status.get("max_risk_fraction", 1.0),
-        }
-    except Exception as exc:
-        logger.debug("ws_nuclear: state fetch failed: %s", exc)
+
+async def _nuclear_stream_once(websocket: Any, last_heartbeat: float, last_severity: int) -> tuple[float, int] | None:
+    """One pass of the nuclear dashboard feed.
+
+    Returns the next `(last_heartbeat, last_severity)`, or **None when the
+    socket should close** — the same sentinel contract as `_pubsub_pump_once`,
+    for the same reason: `break` cannot cross a function boundary.
+
+    `last_severity` is the state that makes this feed correct rather than
+    merely noisy. It is what fires the alert on the *crossing* into severity 7
+    and the resume on the way back down, instead of on every two-second tick.
+    Extracted (§E45) because it lived in a `while True:` that never returns, so
+    the code telling an operator that trading has halted had never run in a
+    test.
+    """
+
+    async def _send(data: dict) -> bool:
+        try:
+            await websocket.send_text(json.dumps(data))
+            return True
+        except Exception:
+            return False
+
+    now = asyncio.get_running_loop().time()
+
+    # Heartbeat
+    if now - last_heartbeat >= _NUCLEAR_HEARTBEAT_INTERVAL:
+        if not await _send({"type": "heartbeat", "ts": datetime.now(UTC).isoformat()}):
+            return None
+        last_heartbeat = now
+
+    # State snapshot
+    state = _get_nuclear_state()
+    if state is not None:
+        if not await _send({"type": "nuclear_chart_update", "data": state}):
+            return None
+
+        # Alert if severity crossed threshold
+        severity = state.get("severity", 0)
+        if (
+            severity >= 7
+            and last_severity < 7
+            and not await _send(
+                {
+                    "type": "nuclear_alert",
+                    "data": {
+                        "severity": severity,
+                        "action": state.get("action"),
+                        "explanation": state.get("explanation", ""),
+                        "ts": datetime.now(UTC).isoformat(),
+                    },
+                }
+            )
+        ):
+            return None
+
+        # Resume notification
+        if (
+            last_severity >= 7
+            and severity < 7
+            and not await _send({"type": "nuclear_resume", "data": {"ts": datetime.now(UTC).isoformat()}})
+        ):
+            return None
+
+        last_severity = severity
+
+    # Drain any inbound messages (subscribe/ping) without blocking
+    try:
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=_NUCLEAR_POLL_INTERVAL)
+        inbound = json.loads(raw)
+        if inbound.get("type") == "ping":
+            await _send({"type": "pong"})
+    except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
+        pass
+    except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
         return None
 
+    return last_heartbeat, last_severity
 
+
+@router.websocket("/ws/nuclear")
 async def ws_nuclear(websocket: WebSocket) -> None:
     """
     Nuclear dashboard real-time feed.
@@ -2231,68 +2278,12 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     last_heartbeat = asyncio.get_running_loop().time()
     last_severity = -1
 
-    async def _send(data: dict) -> bool:
-        try:
-            await websocket.send_text(json.dumps(data))
-            return True
-        except Exception:
-            return False
-
     try:
         while True:
-            now = asyncio.get_running_loop().time()
-
-            # Heartbeat
-            if now - last_heartbeat >= _NUCLEAR_HEARTBEAT_INTERVAL:
-                if not await _send({"type": "heartbeat", "ts": datetime.now(UTC).isoformat()}):
-                    break
-                last_heartbeat = now
-
-            # State snapshot
-            state = _get_nuclear_state()
-            if state is not None:
-                if not await _send({"type": "nuclear_chart_update", "data": state}):
-                    break
-
-                # Alert if severity crossed threshold
-                severity = state.get("severity", 0)
-                if (
-                    severity >= 7
-                    and last_severity < 7
-                    and not await _send(
-                        {
-                            "type": "nuclear_alert",
-                            "data": {
-                                "severity": severity,
-                                "action": state.get("action"),
-                                "explanation": state.get("explanation", ""),
-                                "ts": datetime.now(UTC).isoformat(),
-                            },
-                        }
-                    )
-                ):
-                    break
-
-                # Resume notification
-                if (
-                    last_severity >= 7
-                    and severity < 7
-                    and not await _send({"type": "nuclear_resume", "data": {"ts": datetime.now(UTC).isoformat()}})
-                ):
-                    break
-
-                last_severity = severity
-
-            # Drain any inbound messages (subscribe/ping) without blocking
-            try:
-                raw = await asyncio.wait_for(websocket.receive_text(), timeout=_NUCLEAR_POLL_INTERVAL)
-                inbound = json.loads(raw)
-                if inbound.get("type") == "ping":
-                    await _send({"type": "pong"})
-            except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
-                pass
-            except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
+            nxt = await _nuclear_stream_once(websocket, last_heartbeat, last_severity)
+            if nxt is None:
                 break
+            last_heartbeat, last_severity = nxt
 
     except WebSocketDisconnect:  # nosec B110 — normal client disconnect; no action needed
         pass
@@ -2314,6 +2305,66 @@ async def broadcast_system_event(event: dict) -> None:
 
 
 # ─── /ws/notifications ────────────────────────────────────────────────────────
+
+
+async def _pubsub_pump_once(websocket: Any, pubsub: Any, last_heartbeat: float, *, message_type: str) -> float | None:
+    """One pass of a Redis pub/sub pump: heartbeat if due, then poll Redis.
+
+    Returns the new heartbeat stamp, or **None when the socket should close**.
+    The loop this came from used `break`, which cannot cross a function
+    boundary; a sentinel return is the equivalent the shell acts on.
+
+    Extracted (§E45) because the loop it lived in never returns and cannot be
+    driven in-process — so the code that decides whether a customer's
+    notification is delivered had never run inside a test.
+
+    `/ws/notifications` and `/ws/audit-events` carried byte-identical copies of
+    this loop differing only in the message type, so `message_type` is required
+    rather than defaulted: a caller that forgets it does not silently label an
+    audit record as a notification.
+    """
+    now = asyncio.get_running_loop().time()
+    if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+        try:
+            await websocket.send_text(json.dumps({"type": "heartbeat"}))
+        except Exception:
+            return None
+        last_heartbeat = now
+
+    try:
+        message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=2.0)
+        if message and message.get("type") == "message":
+            try:
+                data = json.loads(message["data"])
+                await websocket.send_text(json.dumps({"type": message_type, "data": data}))
+            except Exception:  # nosec B110  # noqa: S110
+                pass
+    except TimeoutError:  # nosec B110
+        pass
+    except WebSocketDisconnect:
+        return None
+    return last_heartbeat
+
+
+async def _heartbeat_only_once(websocket: Any, last_heartbeat: float) -> float | None:
+    """The Redis-less fallback pass: keepalive plus a drain of client input.
+
+    Same sentinel contract as `_pubsub_pump_once` — None means close.
+    """
+    now = asyncio.get_running_loop().time()
+    if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+        try:
+            await websocket.send_text(json.dumps({"type": "heartbeat"}))
+        except Exception:
+            return None
+        last_heartbeat = now
+    try:
+        await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+    except TimeoutError:  # nosec B110
+        pass
+    except WebSocketDisconnect:
+        return None
+    return last_heartbeat
 
 
 @router.websocket("/ws/notifications")
@@ -2389,29 +2440,10 @@ async def ws_notifications(websocket: WebSocket) -> None:
 
         try:
             while True:
-                now = asyncio.get_running_loop().time()
-
-                # Heartbeat
-                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-                    try:
-                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
-                    except Exception:
-                        break
-                    last_heartbeat = now
-
-                # Poll Redis for new notifications
-                try:
-                    message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=2.0)
-                    if message and message.get("type") == "message":
-                        try:
-                            data = json.loads(message["data"])
-                            await websocket.send_text(json.dumps({"type": "notification", "data": data}))
-                        except Exception:  # nosec B110  # noqa: S110
-                            pass
-                except TimeoutError:  # nosec B110
-                    pass
-                except WebSocketDisconnect:
+                nxt = await _pubsub_pump_once(websocket, pubsub, last_heartbeat, message_type="notification")
+                if nxt is None:
                     break
+                last_heartbeat = nxt
 
         finally:
             await pubsub.unsubscribe(_NOTIF_CHANNEL)
@@ -2421,19 +2453,10 @@ async def ws_notifications(websocket: WebSocket) -> None:
         # Redis unavailable — fall back to heartbeat-only loop
         try:
             while True:
-                now = asyncio.get_running_loop().time()
-                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-                    try:
-                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
-                    except Exception:
-                        break
-                    last_heartbeat = now
-                try:
-                    await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-                except TimeoutError:  # nosec B110
-                    pass
-                except WebSocketDisconnect:
+                nxt = await _heartbeat_only_once(websocket, last_heartbeat)
+                if nxt is None:
                     break
+                last_heartbeat = nxt
         except WebSocketDisconnect:  # nosec B110
             pass
     finally:
@@ -2525,27 +2548,10 @@ async def ws_audit_events(websocket: WebSocket) -> None:
 
         try:
             while True:
-                now = asyncio.get_running_loop().time()
-
-                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-                    try:
-                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
-                    except Exception:
-                        break
-                    last_heartbeat = now
-
-                try:
-                    message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=2.0)
-                    if message and message.get("type") == "message":
-                        try:
-                            data = json.loads(message["data"])
-                            await websocket.send_text(json.dumps({"type": "audit_event", "data": data}))
-                        except Exception:  # nosec B110  # noqa: S110
-                            pass
-                except TimeoutError:  # nosec B110
-                    pass
-                except WebSocketDisconnect:
+                nxt = await _pubsub_pump_once(websocket, pubsub, last_heartbeat, message_type="audit_event")
+                if nxt is None:
                     break
+                last_heartbeat = nxt
 
         finally:
             await pubsub.unsubscribe(_AUDIT_CHANNEL)
@@ -2555,19 +2561,10 @@ async def ws_audit_events(websocket: WebSocket) -> None:
         # Redis unavailable — heartbeat-only loop
         try:
             while True:
-                now = asyncio.get_running_loop().time()
-                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-                    try:
-                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
-                    except Exception:
-                        break
-                    last_heartbeat = now
-                try:
-                    await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-                except TimeoutError:  # nosec B110
-                    pass
-                except WebSocketDisconnect:
+                nxt = await _heartbeat_only_once(websocket, last_heartbeat)
+                if nxt is None:
                     break
+                last_heartbeat = nxt
         except WebSocketDisconnect:  # nosec B110
             pass
     finally:

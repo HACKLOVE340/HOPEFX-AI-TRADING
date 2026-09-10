@@ -469,45 +469,33 @@ ml/inference_engine.py
 ml/train_advanced.py
 social/marketplace.py
 
-# ── Added 2026-09-10, second batch ───────────────────────────────────────────
+# ── Removed 2026-09-10 — api/ws_live.py reached the floor ────────────────────
 #
-# Owner decision, recorded as MASTER_OUTSTANDING §A6 and ADR 0017. The sixth
-# entry added to a baseline seeded from a subset, and the one that forced the
-# rule above to be written down.
+# `api/ws_live.py` was the sixth entry, and the one that forced the rule above
+# to be written down (ADR 0017, MASTER_OUTSTANDING §A6). It was recorded at 34%
+# because a 40-line security fix — `subscribe()` added any channel name it was
+# handed without checking who was asking — could not otherwise land in a
+# 2,425-line module.
 #
-# `api/ws_live.py` blocked a finished, tested security fix: `subscribe()` added
-# any channel name it was handed without checking who was asking, so any
-# authenticated account could join a channel carrying other customers' support
-# threads. The module is 2,425 lines; raising it from 34% to 80% is a project,
-# and the fix is 40 lines.
+# It is now at **81%** and the line is deleted, which is what the ratchet
+# demands: the gate blocks on a recorded module that reaches the floor, with
+# one instruction, and it did.
 #
-# The four conditions, evidenced:
-#   1. already below the floor — 34% at b932dd2 with the change stashed,
-#      measured on a clean worktree, not asserted;
-#   2. not lowered — the patch RAISES it to 35%;
-#   3. measured 2026-09-10: api/ws_live.py 34% -> 35%;
-#   4. owner agreed (§A6 option 1).
+# Route measured, for whoever needs it next: 34% -> 48% by testing what was
+# reachable, then the loop *bodies* extracted into callable units (§E45) so the
+# `while True` shells became three lines each, then 48% -> 81% by testing the
+# bodies, the endpoints end to end, and the yfinance price arithmetic. The
+# earlier note here said 80% was unreachable by testing alone and put the
+# ceiling at ~56%. That was correct about the code as it stood and wrong as a
+# conclusion: the obstacle was the shape of the module, not the difficulty of
+# the tests.
 #
-# UPDATED 2026-09-10 (second pass, §E45) — the extraction was authorised and
-# done: seven broadcaster loop bodies are now callable, `_get_nuclear_state` is
-# hoisted out of `ws_nuclear`, and the module is at 70%. Still under the floor;
-# the remainder is the three endpoints' post-auth loops. See §E45.
-#
-# UPDATED 2026-09-10 — §A6 option 2 was attempted. 35% -> 48% via 53
-# behavioural tests (origin check, auth handshake, ATR stop-loss maths, private
-# channel routing, broadcaster restart, three endpoints' auth). One real defect
-# fixed on the way: `_compute_atr_sl_tp` treated any direction string outside
-# ("long","buy") as a SHORT, so "LONG" or "BUY" put the stop above a long entry.
-#
-# The entry STAYS, and 80% is not reachable by testing alone — measured, not
-# estimated. Seven broadcaster `while True` loops (~269 statements) and three
-# endpoint post-auth loops (~217) block uninterruptibly in-process: three
-# separate harnesses had to be killed, including one using only real sleeps,
-# `wait_for` and a cancel. Ceiling with both excluded is ~56%.
-#
-# Reaching 80% needs the loop BODIES extracted into callable units so the
-# `while True` shell is three lines — a structural change to the live socket,
-# and a different decision from the one taken in §A6. Filed there, not assumed
-# here. Deleting this line at 48% would make the module block every commit that
-# touches it again, which is the state §A6 escaped.
-api/ws_live.py
+# Four real defects were found on the way, none of them by reading:
+#   * `_compute_atr_sl_tp` treated any direction outside ("long","buy") as a
+#     SHORT, so "LONG" put the stop above a long entry;
+#   * the `/ws/nuclear` decorator ended up on a hoisted helper, so the route
+#     pointed at a sync zero-argument function and the endpoint was
+#     unregistered — now asserted by tests/unit/test_ws_routes_are_wired.py;
+#   * `_eventbus_tick_once` could return None into the backoff table;
+#   * a Redis outage reaches the endpoints two ways, and only one degrades to
+#     keepalive; the other closes with 1011. Pinned, not changed.

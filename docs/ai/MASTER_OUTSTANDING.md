@@ -3377,11 +3377,13 @@ test.
 
 ## §A6 — DECIDED 2026-09-10: record `api/ws_live.py`, land the WebSocket fix
 
-**Owner chose option 1.** Recorded in `docs/COVERAGE_UNMEASURABLE.txt` with its
-measured 34% -> 35% and the four conditions ADR 0017 now requires; the patch is
-applied, the parked-work directory it lived in is gone, and the live operator
-queue is unblocked (§E39). Option 2 — raising the module past the floor and deleting the entry —
-stays filed as the work that removes the debt.
+**Owner chose option 1**, then authorised option 2. **CLOSED 2026-09-10.**
+Recorded in `docs/COVERAGE_UNMEASURABLE.txt` with its measured 34% -> 35% and
+the four conditions ADR 0017 now requires; the patch was applied, the
+parked-work directory it lived in is gone, and the live operator queue was
+unblocked (§E39). Option 2 — raising the module past the floor and deleting the
+entry — was then done: `api/ws_live.py` is at **81%** and the entry is gone.
+See §E45. The debt this section exists to justify no longer exists.
 
 The original decision text follows, kept because the reasoning is the reason the
 entry is defensible.
@@ -3986,8 +3988,9 @@ Triage decides, tickets record and refuse, answering drafts from measured facts
 or says it cannot, the API serves both audiences with separate projections, the
 queue is live, both consoles are built, and the chain is proven as a system.
 
-The only outstanding item is **`api/ws_live.py` at 35%** — recorded debt under
-ADR 0017, §A6 option 2.
+The only outstanding item was **`api/ws_live.py` at 35%** — recorded debt under
+ADR 0017, §A6 option 2. Closed in §E45; the module is at 81% and the entry is
+deleted.
 
 ---
 
@@ -4090,3 +4093,133 @@ instruction, *delete this line*.
 
 I did not choose between these. The first is a live-surface refactor and the
 owner said "raise past 80%", not "restructure the broadcasters".
+
+
+---
+
+## §E45 — ws_live 48% → 81%, and the entry is deleted (2026-09-10)
+
+§E44 concluded that 80% was **not reachable by testing alone** and put the
+ceiling at ~56%, because seven broadcaster loops and three endpoint post-auth
+loops block uninterruptibly in-process. That measurement was right about the
+code as it stood. The conclusion drawn from it was wrong: the obstacle was the
+**shape** of the module, not the difficulty of the tests. The owner authorised
+the extraction §E44 had filed, and it is done.
+
+`api/ws_live.py` measures **81%**. Its line in `docs/COVERAGE_UNMEASURABLE.txt`
+is deleted, which the gate itself demanded — a recorded module that reaches the
+floor **blocks**, with one instruction. It did, and that is the ratchet working
+in the direction nobody ever tests.
+
+### The shape of the change
+
+Ten `while True:` bodies became callable units; each shell is now three lines.
+Nothing about what the loops do changed — the bodies are the same statements in
+the same order.
+
+`break` cannot cross a function boundary, so every extracted body returns a
+**sentinel**: the next state, or `None` meaning *the socket should close*. The
+shells act on it. That contract is asserted structurally, not by convention:
+`TestTheShellsStillDrainTheirBodies` parses `api/ws_live.py` and fails if any
+loop calls a body without honouring the `None`.
+
+| Body | What it decides |
+|---|---|
+| `_heartbeat_once`, `_account_update_once` | keepalive and account push |
+| `_price_live_only_once`, `_yfinance_price_once` | what price reaches a dashboard |
+| `_chartbot_once`, `_signal_message_once` | signal fan-out |
+| `_eventbus_tick_once` | reconnect backoff (the attempt counter round-trips through the return) |
+| `_pubsub_pump_once` | whether a notification or an audit record is delivered |
+| `_heartbeat_only_once` | the Redis-less fallback |
+| `_nuclear_stream_once` | whether an operator is told trading has halted |
+
+The two pub/sub pumps were byte-identical apart from the message type, so they
+are now one body with a **required** `message_type` — a caller that forgets it
+fails rather than silently labelling an audit record as a notification.
+
+### The extraction was the risk, and it bit
+
+An AST-guided extractor did the mechanical work, and three of its bugs mattered:
+
+1. `continue` rewritten to `return` by **indentation** — which loop a `continue`
+   belongs to is an AST question, not a whitespace one. Ruff caught it.
+2. Pre-loop statements dropped, leaving `_POLL_INTERVAL` undefined. Ruff caught it.
+3. The near-miss: `walk(stmt, False)` where `stmt` *was* the `For` node
+   converted the heartbeat's **inner** `continue` into a `return`, so the first
+   dead connection would have aborted the whole sweep instead of skipping it.
+   Nothing caught that but reading the output. It is pinned by a test now.
+
+`_eventbus_tick_once` also fell through returning `None`, which would have
+indexed the backoff table with `None` on reconnect; and the first fix put
+`return attempt` **before** the `await asyncio.sleep(delay)`, which would have
+made the reconnect spin. The repo's own unreachable-code gate caught the second.
+
+### The defect the extraction caused, and the test that now catches it
+
+Hoisting `_get_nuclear_state()` out of `ws_nuclear` put a `def` between
+`@router.websocket("/ws/nuclear")` and the function it was written for. Python
+does not complain. The decorator registered the **helper** — a synchronous,
+zero-argument function — and `ws_nuclear` was never registered at all. The
+module still imported, still linted, still type-checked, and the kill-switch
+dashboard feed pointed at something that cannot accept a socket.
+
+Shipped in commit `9c16c20`. Found by running the route table, not by reading
+it. The hoist had also left a duplicate, unreachable copy of the body after the
+`return`; that is gone too.
+
+`tests/unit/test_ws_routes_are_wired.py` now asserts the wiring itself: every
+`WebSocketRoute` in the module resolves to an async endpoint that takes an
+argument, `/ws/nuclear` resolves to `ws_nuclear`, and no `_`-prefixed helper is
+registered as an endpoint. This is the F176 shape — a control that exists and
+never runs — and the route table is the wiring, so the wiring is what gets
+asserted.
+
+An earlier version of the shell test **re-implemented the shell inside the
+test** and drove that. It would have passed against a shell that had lost its
+call entirely, which is the one thing it existed to catch. It reads the module
+now.
+
+### What the extraction made testable, and what that found
+
+The endpoints terminate now, so `ws_notifications`, `ws_audit_events` and
+`ws_nuclear` can be driven **connect → auth → stream → teardown** against a fake
+socket. Eighteen tests do. Among them: every non-admin role — including
+`"administrator"` and `"ADMIN"` — is refused the audit stream, which is the
+whole platform's superadmin action log (S6-02 shape, and it had never executed).
+
+Two findings, both recorded rather than changed:
+
+* **A Redis outage reaches these endpoints two ways and they behave
+  differently.** A factory that *raises* degrades to a keepalive-only loop and
+  the socket stays up; a factory that *returns None* closes it with 1011. Only
+  the first is a fallback. Which one a client gets is a product decision, so
+  both are pinned by test and neither is altered here.
+* **The yfinance price path** derives bid, ask and `change_pct` itself and had
+  never executed. It is correct: the spread straddles the mid, a first tick
+  reports `0.0` rather than inventing a move (Rule 2), a non-positive price is
+  refused rather than quoted, and one bad symbol does not stop the other eight.
+  All of that is now asserted rather than assumed.
+
+### Counterfactuals
+
+Every guard added here was broken on purpose and watched to fail:
+
+| Break | Goes red |
+|---|---|
+| a shell drops its body call | `test_each_body_is_called_from_a_loop_that_acts_on_the_sentinel` |
+| `ws_audit_events` labels its stream `notification` | `test_the_endpoint_passes_its_own_message_type` |
+| `_nuclear_stream_once` forgets `last_severity` | the crossing and resume tests |
+| the `/ws/nuclear` decorator slips onto a helper | four tests in `test_ws_routes_are_wired.py` |
+
+The message-type case is the one worth keeping: it passed the **first** time.
+Every direct test of the shared pump stayed green, because the body does exactly
+what it is told — only the call site proves which label an admin actually gets.
+A parameter is not a control until something asserts its caller.
+
+### One fixture bug, for the record
+
+The first nuclear tests failed because the fake socket raised
+`WebSocketDisconnect` whenever it had no queued input. A real client with
+nothing to say produces a `TimeoutError`; the stream continues. The fake made
+every pass look like a closing socket, turning assertions about the stream into
+assertions about the teardown. Suspect the measurement — it held again.

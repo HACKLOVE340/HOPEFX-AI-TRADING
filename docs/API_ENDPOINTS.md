@@ -1031,6 +1031,16 @@ They are excluded from the OpenAPI schema for the same reason.
 | `POST` | `/api/superadmin/whitelabel/tenants/{tenant_id}/api-keys/rotate` | JWT |  |  |
 | `POST` | `/api/superadmin/whitelabel/tenants/{tenant_id}/suspend` | JWT |  |  |
 | `GET` | `/api/superadmin/whitelabel/tenants/{tenant_id}/usage` | JWT |  |  |
+| `GET` | `/api/support/queue` | JWT | Tickets waiting on a person |  |
+| `GET` | `/api/support/queue/{ticket_id}` | JWT | One queued ticket, with its thread |  |
+| `POST` | `/api/support/queue/{ticket_id}/claim` | JWT | Take a ticket |  |
+| `POST` | `/api/support/queue/{ticket_id}/release` | JWT | Put a ticket back |  |
+| `POST` | `/api/support/queue/{ticket_id}/reply` | JWT | Reply to the customer |  |
+| `POST` | `/api/support/queue/{ticket_id}/resolve` | JWT | Close a ticket |  |
+| `GET` | `/api/support/tickets` | JWT | My support tickets |  |
+| `POST` | `/api/support/tickets` | JWT | Open a support ticket |  |
+| `GET` | `/api/support/tickets/{ticket_id}` | JWT | One of my tickets, with its thread |  |
+| `POST` | `/api/support/tickets/{ticket_id}/messages` | JWT | Reply on my own ticket |  |
 | `GET` | `/api/tca/alerts` | JWT | Return brokers currently above the slippage alert threshold. | tca |
 | `GET` | `/api/tca/records` | JWT | Return the N most recent TCA records, optionally filtered. | tca |
 | `DELETE` | `/api/tca/records` | JWT | Flush all in-memory TCA records (admin only). | tca |
