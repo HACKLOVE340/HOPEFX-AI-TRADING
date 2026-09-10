@@ -18,7 +18,8 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 |--------|-----------|---------------|-------|
 | Backtesting | `backtesting/` | `backtest/` | `backtest/` re-exports from `backtesting/` |
 | Strategies | `strategies/` | `strategy/` | `strategy/` = live ML engine; `strategies/` = backtestable classes |
-| Data pipeline | `data_layer/` (access) | — | `data/` is live streaming/serving (real-time price engine, scheduler, DOM, tick feed, time & sales), 20 production importers; `market_data/` is broker-side feeds. The boundary between the three is undocumented (F216/F217). |
+| Data pipeline | `data_layer/` (access) | — | `data/` is live streaming/serving (real-time price engine, scheduler, DOM, tick feed, time & sales), 20 production importers; `market_data/` is broker-side feeds. **The boundary is decided — ADR 0013, 2026-09-09.** It is a rule, not a refactor: a module on the wrong side stays there until there is a reason beyond tidiness. This row previously said the boundary was undocumented (F216/F217), which stopped being true when the ADR was accepted. |
+| Customer support | `support/` (routing) | — | `support.triage` decides **who** answers and whether a human must; `ai/departments/` holds the eleven specialists it routes to. Triage cannot answer and cannot act — a test asserts the surface stays free of `send`/`reply`/`execute`/`place_order`/`close_position`/`refund`. |
 | WebSocket | `api/ws_live.py` | **never create a top-level `websocket/`** | The old standalone server is **deleted**. Recreating that package shadows the `websocket-client` library for the whole project and silently disables the REST fallback in `market_data/mt5_live_feed.py` (audit S13-02a) |
 
 ---

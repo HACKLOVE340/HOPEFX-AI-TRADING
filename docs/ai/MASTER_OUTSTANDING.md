@@ -2985,3 +2985,105 @@ Nothing calls `mark_reviewed()` yet — the frontend has to report when a panel 
 actually opened, and no page does that today. The tracker and its endpoints are
 wired and exercised; the reporting half is the next step, and is named here
 rather than implied.
+
+---
+
+## §E33 — A support desk with a floor, and the test that could not prove it (2026-09-10)
+
+The owner asked for a support surface where the AI engages, issues reach a
+human, the operator can watch in real time and take over, and *"different AI in
+different aspects of any question"*.
+
+**Half of that already existed and nothing used it.** `ai/departments/` holds
+eleven specialists — research, markets_execution, risk_compliance, data_ops,
+news_intelligence, system_ops, platform_engineering, memory_ops,
+notification_ops, vision_ops, voice_interface — each delegating to code that
+already exists and returning `available: False` rather than a number it did not
+get. What was missing was the customer-facing flow around them: nothing routed a
+question to a specialist, and nothing decided when a person had to be involved.
+
+### What was built
+
+`support/triage.py`. One decision and only that decision: **who** should handle
+a question, and **whether a human must**. It cannot answer and it cannot act —
+no broker, no OMS, no mailer, no refund path — and a test asserts the surface
+stays free of `send`/`reply`/`execute`/`place_order`/`close_position`/`refund`,
+because a triage module that could also reply is one edit away from replying to
+something it should have escalated.
+
+The safety property is a **floor**, not a threshold:
+
+> Some categories always reach a human, whatever the AI's confidence.
+
+Financial advice. Anything touching an account, a balance or a withdrawal. A
+complaint or legal notice. A suspected security incident. Not "escalate when
+unsure" — *always*, because "unsure" cannot catch the case that matters: an AI
+that is wrong **and** certain. Two of those are not obviously support
+questions and are worth naming: *"should I buy gold?"* is regulated advice this
+platform is not licensed to give, and *"someone logged into my account"* needs a
+person within minutes — an AI that answers it helpfully has delayed the response.
+
+Enforced the way `ai/notify/policy.py` enforces its CRITICAL floor: structurally.
+The escalation decision returns before any auto-answer path is reachable,
+`TriageResult` carries no field that could turn it off, and an escalated result
+carries `suggested_reply=None` so no UI can send a draft for a ticket meant for
+a person. Routing is declared in `DEPARTMENT_ROUTES` and a test asserts every
+target exists in `ai.departments.DEPARTMENTS` — a route to a department nobody
+built is a dead end discovered at 3am by a customer. A question matching nothing
+goes to a human with `department=None`, not to a plausible default: guessing
+"probably research" is Rule 2 at the support desk.
+
+### The finding: twenty tests that could not fail
+
+The first version of the floor suite asserted `needs_human is True` and nothing
+more. Running the counterfactual — turning the floor into a threshold, `if hit
+is not None and confidence < MIN_CONFIDENCE` — left **36 of 37 tests green**.
+
+They passed for the wrong reason. With the floor disabled, "withdraw my balance"
+matches no *category* either, falls through to the unroutable branch, and
+escalates from there. The suite was measuring "these phrases do not route
+anywhere", not "the floor caught them".
+
+That is the F176 shape — a measurement that cannot fail — and it is no better in
+a test file than it was in `invariant_coverage.py`. Two changes fixed it:
+
+* each case now names the **category** the floor must attribute it to, so an
+  escalation arriving from any other branch fails; and
+* a `MIXED` set holds questions that *also* match a routable category — *"should
+  I close my position, my drawdown is nearly at the limit"*, *"my order was
+  rejected and I want a refund"*, *"the price feed was frozen so I am reporting
+  you to the regulator"*. Without the floor those reach a department and get
+  answered by an AI.
+
+Same counterfactual against the strengthened suite: **36 failed, 16 passed**.
+
+### A second finding, from a test reaching for a constant
+
+`support/__init__.py` re-exported the `triage` *function* under the same name as
+the `triage` *module*, so `import support.triage as mod` returned the function —
+`import a.b as c` resolves `b` as an attribute of `a` before falling back to
+`sys.modules`. The test hit `AttributeError: 'function' object has no attribute
+'DEPARTMENT_ROUTES'`, which reads like a typo rather than like a package that
+overwrote its own name. The package no longer re-exports the callable; a test
+asserts `support.triage` is a module.
+
+`support/` is at **100% statement and branch coverage**, 57 tests.
+
+### Still open — the desk is one decision, not a desk
+
+Named rather than implied:
+
+* **No ticket model.** Nothing persists a conversation, its state, or its
+  history. Triage returns a decision and forgets it.
+* **No operator queue.** Nothing collects escalated tickets for a person to
+  work, and nothing assigns or claims them.
+* **No real-time handoff.** The owner asked to watch in real time and take over;
+  there is no channel, no presence, and no takeover.
+* **No UI.** Per CLAUDE.md, an operator surface of this size needs a
+  `flow-prototype` approval pass before production implementation — that is the
+  owner's call to make, not one to take unilaterally.
+* **Nothing calls `triage()` yet.** It is reachable and tested; no endpoint or
+  agent invokes it. The same gap as `mark_reviewed()` in §E32 and
+  `supervisor.defer()` in §E29 — a built control with no caller is exactly the
+  defect class this programme keeps removing, and it is recorded here so it is
+  not mistaken for finished work.
