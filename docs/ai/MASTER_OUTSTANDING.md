@@ -4812,3 +4812,79 @@ requires a record from the `compliance.auditor` logger itself, and that the
 message names the lost record. Same family as the `_redis_sync` fixture (§E46)
 and the global-count assertion (§E47): a search that can match something other
 than what you meant is not a measurement.
+
+---
+
+## §E51 — The production-readiness script said "ready" without checking, and "not ready" without cause (2026-09-10)
+
+Reached from §E49's `execution/` measurement: `execution/execution.py` measures
+17.75% and has **no production importer**, so it looked like a quarantine
+candidate. Tracing who touches it led to
+`scripts/e2e_production_validation.py`, whose 22 checks stand behind the
+sentence *"All critical checks passed. System is production-ready."* and none
+of which was tested.
+
+### Two checks named an import they never performed
+
+**"Execution: ExecutionEngine imports cleanly, no forbidden imports"** read
+`execution/execution.py` as TEXT and imported nothing. `ExecutionEngine` is in
+`execution/engine.py` — a different file the check never opened. So it screened
+a module with no production importer while the class in its own title went
+unchecked, and "imports cleanly" was tested by nothing. It also checked exactly
+one forbidden pattern where the neighbouring checks test seven and nine.
+
+**"API: data_layer router importable, no forbidden imports"** did the
+forbidden-import half properly and never imported the router.
+
+Both now do what their names promise: import first, then screen the file that
+defines what they imported. Neither is loosened — both still fail on a
+forbidden import, and now also on an import error, which is what they always
+claimed to catch.
+
+### And it was failing on a rule two other gates contradict
+
+Run by hand, the script reported a CRITICAL violation and printed "Fix before
+deploying":
+
+    core/startup_factories.py: from data_layer.feeds.
+
+`data_layer.feeds.*` is **public**. CLAUDE.md line 114 says so, ADR 0013 says
+so, and `scripts/ci/gate_g_import_discipline.py` — the gate that actually runs
+in pre-commit — holds `"feeds"` in `DATA_LAYER_PUBLIC`. Three sources against
+one script, and the script is the one not wired into CI, so the disagreement
+was invisible until someone ran it.
+
+The import it flagged is legitimate and predates this work (`4ad538e`). The
+script's list was stricter than the documented boundary. It is aligned now, and
+a test fails if the two lists diverge again — because two gates enforcing one
+boundary must not disagree about where it is, and *a detector that cries wolf
+trains its readers to ignore it*, which is a warning this repository already
+wrote down in `compliance/auditor.py` about this exact failure mode.
+
+**After: 21 checks recorded, 0 failures.**
+
+### The script is not run in CI
+
+`grep` over `.github/` and `Makefile` finds nothing. All 22 checks are
+advisory, which is how a check could name the wrong file, and a rule could
+contradict pre-commit, for as long as either has existed. Wiring it in is a
+decision about build time and about what should block a deploy — filed, not
+taken.
+
+### Three of my own filtering mistakes, in one investigation
+
+Worth recording together, because they are one habit:
+
+* I nearly reported `validate_environment` as having no production caller —
+  `head -6` had cut `app.py` out of the results (§E50 context).
+* An AST sweep flagged three checks as asserting nothing. All three are
+  genuine: `__import__(m)` raises, and `raise AssertionError` is not an
+  `assert` node. My detector counted the wrong things, and only reading the
+  bodies caught it.
+* Hunting the failing check, I filtered the run output with `grep -vE "INFO"` —
+  and `record()` logs failures at INFO, so I removed exactly the line I was
+  looking for.
+
+Each was a search that could match something other than what I meant. The same
+shape as the harness bugs in §E46, §E47 and §E50, on the reading side rather
+than the writing side.

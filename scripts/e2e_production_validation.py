@@ -45,6 +45,7 @@ import contextlib
 import os
 import sys
 import time
+import functools
 import traceback
 from datetime import datetime, timezone
 
@@ -88,6 +89,7 @@ def check(name: str, critical: bool = True):
     """Decorator for check functions."""
 
     def decorator(fn):
+        @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             try:
                 detail = fn(*args, **kwargs) or ""
@@ -108,8 +110,19 @@ def check(name: str, critical: bool = True):
 
 @check("Architecture: no forbidden direct sub-module imports")
 def check_architecture() -> str:
+    # `data_layer.feeds.*` is PUBLIC — CLAUDE.md, ADR 0013, and
+    # scripts/ci/gate_g_import_discipline.py's DATA_LAYER_PUBLIC all say so,
+    # and that gate is the one that runs in pre-commit. This list used to
+    # forbid it, so the check reported a legitimate import
+    # (`core/startup_factories.py: from data_layer.feeds.macro.wgc`) as a
+    # CRITICAL violation and printed "Fix before deploying".
+    #
+    # Two gates enforcing one boundary must not disagree about where it is, and
+    # a detector that cries wolf trains its readers to ignore it — a warning
+    # this repository already wrote down in compliance/auditor.py about this
+    # exact failure mode. tests/unit/test_production_validation_checks_what_it_names.py
+    # now fails if the two lists diverge again.
     FORBIDDEN = [
-        "from data_layer.feeds.",
         "from data_layer.quality.",
         "from data_layer.microstructure.",
         "from data_layer.sentiment.",
@@ -518,10 +531,28 @@ def check_risk() -> str:
 
 @check("Execution: ExecutionEngine imports cleanly, no forbidden imports")
 def check_execution() -> str:
-    with Path("execution/execution.py").open(encoding="utf-8") as _fh:
+    """Import the class this check is named for, then screen its module.
+
+    This used to read `execution/execution.py` as TEXT and import nothing.
+    `ExecutionEngine` lives in `execution/engine.py` — a different file the
+    check never opened — so it validated a module with no production importer
+    while the class in its own title went unchecked, and "imports cleanly" was
+    tested by nothing.
+    """
+    from execution.engine import ExecutionEngine  # noqa: F401 — importing IS the check
+
+    with Path("execution/engine.py").open(encoding="utf-8") as _fh:
         src = _fh.read()
-    assert "from data_layer.lineage.store" not in src  # nosec B101 — validation script, assert is intentional
-    return "execution.execution OK, no forbidden imports"
+    forbidden = [
+        "from data_layer.lineage.store",
+        "from data_layer.feeds.",
+        "from data_layer.quality.",
+        "from data_layer.microstructure.",
+        "from data_layer.sentiment.",
+    ]
+    for f in forbidden:
+        assert f not in src, f"Forbidden import found: {f}"  # nosec B101 — validation script
+    return f"ExecutionEngine imports cleanly, {len(forbidden)} forbidden patterns absent"
 
 
 # ── Check 17: API router wiring ───────────────────────────────────────────────
@@ -529,6 +560,8 @@ def check_execution() -> str:
 
 @check("API: data_layer router importable, no forbidden imports")
 def check_api() -> str:
+    import api.data_layer as _router_mod  # noqa: F401 — importing IS the "importable" half
+
     with Path("api/data_layer.py").open(encoding="utf-8") as _fh:
         src = _fh.read()
     forbidden = [
@@ -542,7 +575,7 @@ def check_api() -> str:
     ]
     for f in forbidden:
         assert f not in src, f"Forbidden import found: {f}"  # nosec B101 — validation script, assert is intentional
-    return f"api.data_layer OK, {len(forbidden)} forbidden patterns absent"
+    return f"api.data_layer imports cleanly, {len(forbidden)} forbidden patterns absent"
 
 
 # ── Check 18: hopefx_engine wiring ───────────────────────────────────────────
