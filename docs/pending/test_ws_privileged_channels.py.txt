@@ -1,0 +1,155 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
+"""Subscribing to a channel is not the same as being allowed to read it.
+
+The support desk needs a live operator queue: the owner asked to watch it in
+real time and take over. That means broadcasting, over the live socket, the
+subject lines and escalation reasons of other people's support tickets.
+
+`LiveConnectionManager` already has `_PRIVATE_CHANNELS`, and it solves a
+different problem. It stops the "empty subscription means every channel"
+firehose from delivering private data to a client that never opted in (S8-02).
+It does **not** stop a client that *does* opt in: `subscribe` took a list of
+channel names and added every one of them, with no check of who was asking.
+
+For `prices` that is correct. For a channel carrying other customers' support
+threads it is a disclosure — any authenticated account could have subscribed to
+`support_queue` and watched the queue.
+
+So privileged channels are a separate idea from private ones:
+
+* **private** — never delivered implicitly; explicit subscribe is enough.
+* **privileged** — explicit subscribe is *not* enough; the connection must hold
+  the role.
+
+A refused subscription is **reported**, not silently dropped. A client that
+believes it is subscribed and receives nothing looks exactly like a quiet
+queue, which on a support desk means an operator watching an empty screen while
+customers wait.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+
+@pytest.fixture
+def manager():
+    from api.ws_live import LiveConnectionManager
+
+    return LiveConnectionManager()
+
+
+def _connected(manager, cid="conn_1", *, user_id=None, role=None):
+    """Register a connection without a real socket.
+
+    The manager's own dicts are the state under test; a WebSocket would add an
+    event loop and prove nothing extra here.
+    """
+    manager._connections[cid] = object()
+    manager._subscriptions[cid] = set()
+    manager._user_ids[cid] = None
+    manager._hb_misses[cid] = 0
+    if user_id is not None:
+        manager.authenticate(cid, user_id, role=role)
+    return cid
+
+
+class TestAPrivilegedChannelNeedsTheRole:
+    def test_an_ordinary_user_cannot_subscribe_to_the_operator_queue(self, manager):
+        cid = _connected(manager, user_id="cust-1", role="user")
+
+        refused = manager.subscribe(cid, ["support_queue"])
+
+        assert "support_queue" not in manager._subscriptions[cid], (
+            "a customer subscribed to the support operator queue"
+        )
+        assert refused == ["support_queue"], "the refusal was silent"
+
+    def test_an_admin_can(self, manager):
+        cid = _connected(manager, user_id="ops-1", role="admin")
+
+        refused = manager.subscribe(cid, ["support_queue"])
+
+        assert "support_queue" in manager._subscriptions[cid]
+        assert refused == []
+
+    def test_a_superadmin_can(self, manager):
+        cid = _connected(manager, user_id="root", role="superadmin")
+
+        manager.subscribe(cid, ["support_queue"])
+
+        assert "support_queue" in manager._subscriptions[cid]
+
+    def test_an_unauthenticated_connection_cannot(self, manager):
+        """No role is not a role. Fail closed."""
+        cid = _connected(manager)
+
+        manager.subscribe(cid, ["support_queue"])
+
+        assert "support_queue" not in manager._subscriptions[cid]
+
+    def test_the_ordinary_channels_in_the_same_request_still_land(self, manager):
+        """One refused channel must not discard the whole subscription."""
+        cid = _connected(manager, user_id="cust-1", role="user")
+
+        refused = manager.subscribe(cid, ["prices", "support_queue", "signals"])
+
+        assert {"prices", "signals"} <= manager._subscriptions[cid]
+        assert refused == ["support_queue"]
+
+
+class TestTheFirehoseCannotReachItEither:
+    @pytest.mark.asyncio
+    async def test_an_empty_subscription_does_not_receive_the_queue(self, manager):
+        """Privileged implies private. Both gates, not one.
+
+        Without this a connection that subscribed to nothing would receive
+        `support_queue` through the implicit-all path, and the role check on
+        `subscribe` would never have been consulted.
+        """
+        from api.ws_live import LiveConnectionManager
+
+        assert "support_queue" in LiveConnectionManager._PRIVATE_CHANNELS
+
+    def test_every_privileged_channel_is_also_private(self, manager):
+        """Otherwise the role check is bypassed by not subscribing at all."""
+        from api.ws_live import LiveConnectionManager
+
+        assert set(LiveConnectionManager._PRIVILEGED_CHANNELS) <= set(
+            LiveConnectionManager._PRIVATE_CHANNELS
+        )
+
+
+class TestTheRoleIsRecordedAtAuthTime:
+    def test_authenticate_stores_the_role(self, manager):
+        cid = _connected(manager)
+        manager.authenticate(cid, "ops-1", role="admin")
+
+        assert manager.role_for(cid) == "admin"
+
+    def test_a_token_with_no_role_claim_gets_no_role(self, manager):
+        """Rule 2: an unmeasured value is absent, never best-case."""
+        cid = _connected(manager)
+        manager.authenticate(cid, "cust-1")
+
+        assert manager.role_for(cid) is None
+
+    def test_disconnect_forgets_the_role(self, manager):
+        cid = _connected(manager, user_id="ops-1", role="admin")
+        manager.disconnect(cid)
+
+        assert manager.role_for(cid) is None
+
+    def test_a_reused_connection_id_does_not_inherit_a_role(self, manager):
+        """Ids come from a counter, but a leaked entry would be an escalation."""
+        cid = _connected(manager, user_id="ops-1", role="admin")
+        manager.disconnect(cid)
+
+        again = _connected(manager, cid=cid, user_id="cust-1", role="user")
+        manager.subscribe(again, ["support_queue"])
+
+        assert "support_queue" not in manager._subscriptions[again]

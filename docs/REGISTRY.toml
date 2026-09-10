@@ -1477,3 +1477,19 @@ subject = "database-restore"
 owner = "hacklove340"
 state = "active"
 note = "SEV1 recovery procedure. Every command executed and verified 2026-09-08, not transcribed."
+
+[[document]]
+path = "docs/pending/README.md"
+tier = "T2"
+subject = "pending-work-blocked-on-an-owner-decision"
+owner = "hacklove340"
+state = "active"
+note = "Finished, tested changes that cannot land without a decision only the owner can take. Each entry states the measurement, the blocker and the options; nothing here is a draft."
+
+[[document]]
+path = "docs/pending/test_ws_privileged_channels.py.txt"
+tier = "T3"
+subject = "pending-ws-privileged-channels-tests"
+owner = "hacklove340"
+state = "active"
+note = "The suite for docs/pending/ws-privileged-channels.patch, kept verbatim as text so it is not collected while the patch is unapplied. See MASTER_OUTSTANDING §A6."

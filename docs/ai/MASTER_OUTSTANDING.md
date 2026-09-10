@@ -3372,3 +3372,64 @@ is not an omit of a file.
 This is the same rule as F176: a report must distinguish what it measured from
 what it was told. The gate was told nothing and reported a conclusion about the
 test.
+
+---
+
+## §A6 — Owner decision: `api/ws_live.py` is untouchable, and that blocks the live support queue
+
+**This is a decision, not a task.** It sits in §A because taking it myself
+would mean expanding an allowlist or bypassing a gate.
+
+### The situation
+
+The support desk needs a live operator queue — the owner asked to watch it in
+real time and take over. That means broadcasting on a channel **only operators
+may join**, and `LiveConnectionManager.subscribe()` currently adds whatever
+channel name it is handed with no check of who is asking.
+`_PRIVATE_CHANNELS` does not help: it keeps private data out of the
+"empty subscription means every channel" firehose (S8-02) and says nothing
+about a client that *does* subscribe. Any authenticated account could have
+subscribed to `support_queue` and read other customers' subject lines and
+escalation reasons.
+
+The fix is written and passing — `docs/pending/ws-privileged-channels.patch`,
+11 new tests, and the 629 existing WebSocket tests still green. It adds a
+per-channel role requirement, records the token's `role` claim on the
+connection, refuses rather than silently dropping, and drops the role on
+disconnect so a reused connection id cannot inherit an operator's.
+
+### Why it cannot be committed
+
+`api/ws_live.py` measures **34%** against the per-module coverage gate's 80%
+floor and is **not** recorded in `docs/COVERAGE_UNMEASURABLE.txt`. The gate
+blocks every commit that touches the file. Measured on the clean tree with the
+change stashed — pre-existing, and the patch raises it to 35%.
+
+The module is 2,425 lines, and the check has to live where `subscribe` lives.
+There is no placement that avoids the file.
+
+### The options
+
+1. **Record `api/ws_live.py` in the debt list.** Its header says the list may
+   only shrink, and `tests/unit/test_coverage_gate_ratchet.py` enforces the
+   pressure. Adding an entry is expanding an allowlist. It is arguably the
+   right call anyway: the module was already in debt, and the static seed
+   ("every module whose resolved test file never mentions it") missed it only
+   because `tests/unit/test_api.py` mentions it. The entry would be honest and
+   keeps its own pressure — it blocks the moment the module clears the floor.
+   **Cost: one line, and a precedent.**
+2. **Raise `api/ws_live.py` to 80%.** ~500 more statements covered in a
+   2,425-line module. **Cost: a project, and out of proportion to a 40-line
+   security fix.**
+3. **Leave it.** The `subscribe` hole stays open (it is only exploitable for
+   channels that exist, so no support channel is added), and the support desk
+   stays a poll. **Cost: no live queue, and the hole is still there for the
+   next private channel someone adds.**
+
+My recommendation is **1**, with the entry carrying the measured 34% and this
+section as its reason — and option 2 filed as the work that removes it.
+
+Note the gate found the same class of problem twice today: §E37's
+`core/router_registry.py` was excluded by `.coveragerc` under a justification
+that was false, and this one is excluded by an omission in the ratchet's seed.
+Neither was a module anybody had decided not to test.
