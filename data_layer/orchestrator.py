@@ -1498,3 +1498,28 @@ class MarketDataOrchestrator:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 orchestrator = MarketDataOrchestrator()
+
+
+def get_feed_outage_status() -> dict:
+    """Feed health as the three documented states, on the public surface.
+
+    `data_layer`'s public surface is `orchestrator`, `tick_store` and
+    `feeds.*` — enforced by `scripts/ci/gate_g_import_discipline.py`. The
+    outage supervisor is an internal, so a consumer that wants feed health had
+    no sanctioned way to ask for it and `api/data_layer.py` reached past the
+    boundary instead (ff765d2, caught by the gate).
+
+    This is where it belongs rather than a convenience: the orchestrator is
+    what feeds the supervisor its observations on every read
+    (`_observe_feed_health`), so it already owns the relationship. The import
+    stays inside the function, matching that method, so importing the
+    orchestrator does not pull the supervisor in.
+
+    Raises whatever the supervisor raises. Callers that serve this over HTTP
+    must not turn a read failure into an optimistic body — a status endpoint
+    that reports "healthy" because it could not read the real state is worse
+    than one that fails.
+    """
+    from data_layer.outage import get_supervisor
+
+    return get_supervisor().as_dict()

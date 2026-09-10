@@ -96,23 +96,51 @@ class _TokenBlacklist:
             self._redis = None
 
     def revoke(self, jti: str, ttl_seconds: int) -> None:
-        """Mark a token JTI as revoked for ttl_seconds."""
+        """Mark a token JTI as revoked for ttl_seconds.
+
+        A shared-store write failure degrades to this process's memory, which
+        revokes the token *here* and nowhere else. Under more than one worker
+        the token stays live on every other one, so the caller's "signed out"
+        is only partly true — hence ERROR, not a suppressed exception (F248).
+        """
         self._try_connect()
         if self._redis:
             try:
                 self._redis.setex(f"revoked:{jti}", ttl_seconds, "1")
                 return
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+            except Exception as exc:
+                logger.error(
+                    "Token revocation could not be written to the shared store (%s); "
+                    "the token is revoked in this process ONLY and remains valid on other workers",
+                    exc,
+                )
         self._mem.add(jti)
 
     def is_revoked(self, jti: str) -> bool:
+        """Whether this JTI has been revoked.
+
+        The in-memory set is authoritative only for a process that has never
+        reached the shared store. Once Redis has been serving, the JTIs live
+        there and this set is empty — so a read failure returns False and a
+        REVOKED TOKEN IS TREATED AS VALID.
+
+        That is fail-open, and it is deliberate for now: failing closed would
+        sign every user out during a Redis blip. Which side to fail on is an
+        owner decision, filed rather than taken here. What is not optional is
+        saying so: at DEBUG the one moment revocation stops working is the one
+        moment nobody is told.
+        """
         self._try_connect()
         if self._redis:
             try:
                 return bool(self._redis.exists(f"revoked:{jti}"))
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+            except Exception as exc:
+                logger.error(
+                    "Could not check token revocation against the shared store (%s); "
+                    "falling back to this process's memory, so a token revoked elsewhere "
+                    "will be accepted as valid",
+                    exc,
+                )
         return jti in self._mem
 
 
@@ -202,11 +230,30 @@ def _get_fernet():
 
 
 def encrypt_totp_secret(plain: str) -> str:
-    """Encrypt a TOTP secret for DB storage. Returns base64 ciphertext or plain if unavailable."""
+    """Encrypt a TOTP secret for DB storage.
+
+    Returns base64 ciphertext, or — when ``CONFIG_ENCRYPTION_KEY`` is unset or
+    unusable — **the plaintext**, which the caller then writes to the database.
+
+    `config/startup_validator.py` requires that key for production, so this is
+    a misconfiguration path rather than a certain hole. It is still announced
+    at ERROR: a database leak in this state hands over every user's TOTP
+    secret, which is the entire second factor, and the caller's column comment
+    says "encrypted at rest". The previous code carried the comment
+    ``# fallback: store plain (warn in logs)`` and wrote no warning anywhere —
+    a control described in a comment and implemented nowhere (F176).
+
+    Whether enrolment should instead REFUSE without a key is a posture decision
+    for the owner, filed rather than taken here.
+    """
     f = _get_fernet()
     if f:
         return f.encrypt(plain.encode()).decode()
-    return plain  # fallback: store plain (warn in logs)
+    logger.error(
+        "TOTP secret stored UNENCRYPTED: CONFIG_ENCRYPTION_KEY is unset or unusable, so the "
+        "second factor is only as safe as the database. Set it (>=32 chars) and re-enrol affected users."
+    )
+    return plain
 
 
 def decrypt_totp_secret(stored: str) -> str:
@@ -817,7 +864,11 @@ class AuthService:
             if not user:
                 return False, "User not found", None
             secret = generate_totp_secret()
-            user.totp_secret = encrypt_totp_secret(secret)  # encrypted at rest
+            # Encrypted at rest ONLY when CONFIG_ENCRYPTION_KEY is configured;
+            # without it `encrypt_totp_secret` returns the plaintext and logs
+            # at ERROR. The bare "encrypted at rest" this comment used to carry
+            # was true of the intent and not of every deployment.
+            user.totp_secret = encrypt_totp_secret(secret)
             user.totp_enabled = False  # not active until confirmed
             session.commit()
             uri = get_totp_uri(secret, user.email)

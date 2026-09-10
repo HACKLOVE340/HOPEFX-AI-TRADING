@@ -347,9 +347,12 @@ async def get_feed_status(user: TokenPayload = Depends(get_current_user)) -> dic
     price is not valid after it.
     """
     try:
-        from data_layer.outage import get_supervisor
+        # Via the public surface, not `data_layer.outage` directly — the three
+        # sanctioned names are orchestrator/tick_store/feeds.* (CLAUDE.md, and
+        # scripts/ci/gate_g_import_discipline.py, which caught the original).
+        from data_layer.orchestrator import get_feed_outage_status
 
-        return get_supervisor().as_dict()
+        return get_feed_outage_status()
     except Exception as exc:
         # A status endpoint that 200s with an optimistic body when it cannot
         # read the real state is worse than one that fails: the caller would

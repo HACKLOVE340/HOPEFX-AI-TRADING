@@ -330,6 +330,17 @@ async def save_broker_settings(body: BrokerSettingsBody, user: TokenPayload = De
 # ── Password change ───────────────────────────────────────────────────────────
 
 
+def _safe_client_ip(request: Request) -> str:
+    """The client address, for a log line written while something is already
+    broken. Never raises: the caller is an exception handler, and a handler
+    that raises replaces a loud warning with a 500.
+    """
+    try:
+        return request.client.host if request.client else "unknown"
+    except Exception:  # pragma: no cover - defensive; the attribute is plain
+        return "unknown"
+
+
 class ChangePasswordBody(BaseModel):
     current_password: str
     new_password: str
@@ -379,15 +390,33 @@ async def change_password(
         )
 
     # The current_password field makes this a credential-guessing surface, so it
-    # is throttled like the login route rather than left open.
+    # is throttled like the login route rather than left open. A stolen access
+    # token is a session; the password is the account, so this is the step
+    # between the two.
     try:
         from auth.router import _check_ip_rate_limit, _get_client_ip
 
-        _check_ip_rate_limit(_get_client_ip(request))
+        client_ip = _get_client_ip(request)
+        _check_ip_rate_limit(client_ip)
     except HTTPException:
         raise
-    except Exception as exc:  # limiter unavailable — do not fail the request closed
-        logger.debug("change-password rate limit unavailable: %s", exc)
+    except Exception as exc:
+        # Deliberately fail OPEN: a limiter fault must not lock a user out of
+        # changing their own password, which is what they do when they believe
+        # someone else has access.
+        #
+        # But it is logged at ERROR, and it names the CONSEQUENCE rather than
+        # the fault. This handler is the only thing that knows the endpoint just
+        # served an unthrottled credential guess; at DEBUG — which is off in
+        # production — the one moment this route is unprotected is the one
+        # moment nobody is told (F248). "rate limit unavailable" described the
+        # tool and left an operator to infer the rest.
+        logger.error(
+            "change-password served UNTHROTTLED for user %s from %s: brute-force protection did not run (%s)",
+            uid,
+            _safe_client_ip(request),
+            exc,
+        )
 
     try:
         # The one hashing scheme the rest of auth uses. Importing it rather than

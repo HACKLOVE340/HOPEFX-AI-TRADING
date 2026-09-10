@@ -4223,3 +4223,133 @@ The first nuclear tests failed because the fake socket raised
 nothing to say produces a `TimeoutError`; the stream continues. The fake made
 every pass look like a closing socket, turning assertions about the stream into
 assertions about the teardown. Suspect the measurement — it held again.
+
+
+---
+
+## §E46 — Three safety failures that told nobody (2026-09-10)
+
+The same defect three times, in the auth surface, each found by executing the
+path rather than reading it. None of them is a bug in the control; each is a
+control that stops working and reports it at DEBUG, which is off in production
+(F248). The one moment the system is unprotected is the one moment nobody is
+told.
+
+`auth/service.py` went **67% → 81%** on the way, so it clears the floor and
+needs no debt entry.
+
+### 1. The change-password throttle
+
+`/api/auth/change-password` takes `current_password`, which makes it a
+credential-guessing surface: a stolen access token is a session, the password
+is the account. The throttle is what stands between those two states, and it
+was wrapped in `except Exception` that logged at DEBUG and carried on.
+
+Failing open there is **correct** — a limiter fault must not lock a user out of
+changing their own password, which is what they do when they think someone else
+has access. What was wrong is that the log named the *fault*
+("rate limit unavailable") and not the *consequence*. It now says the request
+was served unthrottled, at ERROR, with the user and the address.
+
+The throttle itself had never been executed by any test. The existing suite for
+this route asserts source text — that the module does not name a column, that
+it imports the right helper — which is how a route can be well covered and
+never run.
+
+### 2. Token revocation reads as "not revoked" during a Redis outage
+
+`_TokenBlacklist.is_revoked()` falls back to a per-process set when the Redis
+read fails. That set is authoritative only for a process that has never reached
+Redis; once Redis has been serving, the JTIs live there and the set is empty —
+so the call returns False and **a revoked token is accepted as valid**
+(STRIDE-S). `revoke()` fails the same way in reverse: the write lands in one
+process, so "sign out everywhere" leaves the token live on every other worker.
+
+Both logged `"Suppressed exception: %s"` at DEBUG.
+
+Both now log at ERROR naming the consequence. **Neither behaviour is changed** —
+failing closed would sign every user out during a Redis blip, and which side to
+fail on is an owner decision, filed rather than taken. Both are pinned as
+*observed* by `tests/unit/test_token_revocation_survives_redis.py`, so a future
+change of posture is deliberate and visible.
+
+### 3. TOTP secrets stored in plaintext
+
+`encrypt_totp_secret()` returns the **plaintext** when `CONFIG_ENCRYPTION_KEY`
+is unset, and `setup_2fa()` wrote it to the column under the comment
+`# encrypted at rest`. The fallback carried its own comment —
+`# fallback: store plain (warn in logs)` — and no warning was written anywhere.
+A control described in a comment and implemented nowhere.
+
+`config/startup_validator.py` requires the key for production, so this is a
+misconfiguration path rather than a certain hole. It is still the second factor
+for every user, and a database leak in that state is a complete 2FA bypass.
+Now logged at ERROR; the false comment is corrected; whether enrolment should
+*refuse* without a key is filed for the owner.
+
+### What the coverage bought
+
+The 2FA enrolment path and the account-lockout path had never executed —
+between them most of the 33-point gap. Driven now against a real in-memory
+SQLite with the real ORM models, not a stubbed `query()`, because the defects
+worth catching there live in the interaction with the database: a secret stored
+in the clear, a second factor live before it is confirmed, a lockout that counts
+the wrong rows. A fake session answers for all three.
+
+### Two harness bugs of my own, both the F255 shape
+
+Worth recording because both would have left green tests proving nothing:
+
+* A test asserting the throttle short-circuits before the password compare
+  **passed with the throttle removed** — the DB was unreachable, so
+  `verify_password` ran on no path at all. Fixed by giving the test a working
+  DB seam and asserting liveness (the compare is reachable) before asserting
+  the count.
+* A fixture that set `auth.service._redis_sync = None` to "force the DB
+  fallback" did nothing: the login path does `import redis as _redis_sync`
+  **inside** the function, so that name is a local, not a module attribute. The
+  tests were running against the real Redis in this environment, one test's
+  lockout key outlived it, and a later test found the account already locked —
+  under a randomised order, which made it look like a product bug. The seam
+  that exists is `redis.from_url`.
+
+Every guard added here was broken on purpose and watched to fail: silencing
+each of the three logs, enabling 2FA at enrolment, and letting `disable_2fa`
+keep the secret.
+
+
+### 4. And a gate of ours that had been red since ff765d2
+
+`scripts/ci/gate_g_import_discipline.py` enforces `data_layer`'s public surface
+— exactly `orchestrator`, `tick_store`, `feeds.*`, as CLAUDE.md documents.
+`api/data_layer.py` reached past it with `from data_layer.outage import
+get_supervisor` when the feed-outage supervisor was added in ff765d2. The gate
+has reported that as a **NEW violation** ever since, and
+`tests/unit/test_gate_g_import_discipline_injections.py` has been red with it.
+Nobody acted on it, this session included, until a full-suite run surfaced it.
+
+The fix is not to widen the surface — that retires a rule to avoid following
+it. Feed health is now exposed **on** the surface as
+`data_layer.orchestrator.get_feed_outage_status()`, which is where the
+relationship already lived: the orchestrator is what feeds the supervisor its
+observations on every read. `api/data_layer.py` calls that.
+
+Found on the way, and pinned rather than fixed: `data_layer/__init__.py:42`
+binds the singleton `orchestrator` over the submodule name, so
+`from data_layer import orchestrator` yields a `MarketDataOrchestrator`
+**instance**, and — because `import a.b as c` resolves `b` as an attribute of
+`a` before consulting `sys.modules` — so does `import data_layer.orchestrator
+as m`. Only `from data_layer.orchestrator import <name>` reaches the module.
+This is the same shadowing that cost time in `support/__init__.py` earlier in
+this programme. Unbinding it is an API change for 86 production importers, so
+it is documented by test instead.
+
+### A contaminated measurement, for the record
+
+The first full-suite run of this change reported six failures, five of them in
+`test_password_change_and_enumeration.py`. All five passed in isolation. The
+run had been launched **before** the edits and was still going while the
+counterfactual passes were deliberately breaking and restoring the very files
+those tests read. The suite was measuring me, not the code.
+
+Diff failure sets, never counts — and never run a suite across your own edits.
