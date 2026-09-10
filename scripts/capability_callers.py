@@ -62,6 +62,15 @@ _EXCLUDE: Final[tuple[str, ...]] = (
     "!docs/**",
     "--glob",
     "!ai/hub/capabilities.py",
+    # And this module. Documenting the triage put `DEFAULT_MAX_CONCURRENT`,
+    # `GatewayPatcher` and `COLLAPSE_ABOVE` into the docstrings below; the
+    # sweep counted itself as a production caller and three rows silently left
+    # the flagged list. A checker that reads prose is not reading code — the
+    # same trap as `security/code_analyzer.py`'s docstring scan (F255), except
+    # here it produced FALSE NEGATIVES, which is the direction that hides a
+    # dead control instead of merely wasting an inspection.
+    "--glob",
+    "!scripts/capability_callers.py",
 )
 _EXCLUDE_TESTS: Final[tuple[str, ...]] = (
     "--glob",
@@ -84,11 +93,30 @@ class Row:
     symbol: str
     production_files: int
     any_files: int
+    module_reached: bool = False
 
     @property
     def uncalled(self) -> bool:
         """No file outside tests names this symbol, other than its own definition."""
         return self.production_files <= 1
+
+    @property
+    def priority(self) -> str:
+        """Triage order for a flagged row, from the two signals together.
+
+        `unreached` — nothing in production names the symbol AND nothing
+        imports the module it lives in. The strongest evidence this screen can
+        offer that a capability is not wired up.
+
+        `symbol-only` — the module IS imported in production, but this symbol
+        is never named. Often a default argument, a factory, or an import
+        chain, and then the row is false. Sometimes the module is imported for
+        a different export and this symbol really is unreachable, as with
+        `hub/layout.ts` — imported for `readLayout`, while `COLLAPSE_ABOVE`
+        sits behind an exported function nobody calls. So it is a lower
+        priority to inspect, never a reason to skip inspecting.
+        """
+        return "symbol-only" if self.module_reached else "unreached"
 
 
 def _files_naming(symbol: str, *, exclude_tests: bool, repo: Path) -> list[str]:
@@ -101,6 +129,69 @@ def _files_naming(symbol: str, *, exclude_tests: bool, repo: Path) -> list[str]:
     cmd.append(str(repo))
     out = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False).stdout.strip()
     return [line for line in out.split("\n") if line]
+
+
+def _module_locator(evidence: str) -> tuple[str, str] | None:
+    """Split an evidence locator into (kind, module), or None if it names none.
+
+    Two shapes are used in the registry: a dotted Python module
+    (`ai.jobs.runner:DEFAULT_MAX_CONCURRENT`) and a repository path
+    (`frontend/src/hub/layout.ts:COLLAPSE_ABOVE`).
+    """
+    head = evidence.rsplit(":", 1)[0].strip()
+    if not head:
+        return None
+    if "/" in head:
+        return ("path", head)
+    if "." in head:
+        return ("python", head)
+    return None
+
+
+def _import_patterns(kind: str, module: str) -> list[str]:
+    """Every way production actually reaches a module, as regexes.
+
+    The third Python form is the one that matters and the one most easily
+    forgotten: `from ai.memory import governance` names the package, not the
+    module, so a search for `from ai.memory.governance import` misses it
+    entirely. That form defeated two hand-written sweeps before it was written
+    down here.
+    """
+    if kind == "python":
+        pkg, _, leaf = module.rpartition(".")
+        pats = [
+            rf"from\s+{re.escape(module)}\s+import",
+            rf"import\s+{re.escape(module)}\b",
+        ]
+        if pkg:
+            pats.append(rf"from\s+{re.escape(pkg)}\s+import\s+[^\n]*\b{re.escape(leaf)}\b")
+        return pats
+    # A TS/TSX import names the module without its extension.
+    stem = module.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return [rf"""from\s+['"][^'"\n]*\b{re.escape(stem)}['"]"""]
+
+
+def _module_is_reached(evidence: str, *, repo: Path) -> bool:
+    """Does any production file import the module this capability lives in?
+
+    A SECOND signal, never a substitute for the symbol count. A module can be
+    imported for one export while the capability's own symbol stays
+    unreachable, so folding this into `uncalled` would turn a screen into a
+    report that cannot fail — the exact shape this repository keeps removing.
+    """
+    located = _module_locator(evidence)
+    if located is None:
+        return False
+    kind, module = located
+    own_file = module.replace(".", "/") + ".py" if kind == "python" else module
+
+    for pattern in _import_patterns(kind, module):
+        cmd = ["rg", "-l", "--no-messages", pattern, *_EXCLUDE, *_EXCLUDE_TESTS, str(repo)]
+        out = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False).stdout.strip()
+        hits = [line for line in out.split("\n") if line and not line.endswith(own_file)]
+        if hits:
+            return True
+    return False
 
 
 def assert_sweep_works(repo: Path | None = None) -> int:
@@ -126,11 +217,17 @@ def sweep(repo: Path | None = None) -> list[Row]:
     base = repo or REPO
     assert_sweep_works(base)
 
-    from ai.hub.capabilities import REGISTRY
+    from ai.hub.capabilities import REGISTRY, ROLLUP_IDS
 
     rows: list[Row] = []
     for cap in REGISTRY:
         if cap.state != "live" or ":" not in (cap.evidence or ""):
+            continue
+        # A derived roll-up has no caller of its id BY DESIGN — `layer_state()`
+        # computes it from the rows beneath. Screening it produced four
+        # permanent false positives, and a screen that is always wrong about
+        # the same four rows teaches its readers to skim the rest.
+        if cap.id in ROLLUP_IDS:
             continue
         symbol = cap.evidence.split(":")[-1]
         if not symbol or not symbol[0].isalpha():
@@ -142,6 +239,7 @@ def sweep(repo: Path | None = None) -> list[Row]:
                 symbol=symbol,
                 production_files=len(_files_naming(symbol, exclude_tests=True, repo=base)),
                 any_files=len(_files_naming(symbol, exclude_tests=False, repo=base)),
+                module_reached=_module_is_reached(cap.evidence, repo=base),
             )
         )
     return rows
@@ -160,14 +258,40 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = sweep()
     flagged = [r for r in rows if r.uncalled]
+    unreached = [r for r in flagged if r.priority == "unreached"]
+    symbol_only = [r for r in flagged if r.priority == "symbol-only"]
+
     print(f"control: {CONTROL_SYMBOL} found in {control} production files — sweep is reading the repo")
-    print(f"screened: {len(rows)} live rows with a symbol locator")
-    print(f"flagged:  {len(flagged)} with no production caller beyond their own definition\n")
-    for r in sorted(flagged, key=lambda r: (r.production_files, r.section)):
-        print(f"  §{r.section:<4} {r.capability:<38} {r.symbol:<28} prod={r.production_files} any={r.any_files}")
+    print(f"screened: {len(rows)} live rows with a symbol locator (derived roll-ups excluded)")
+    print(f"flagged:  {len(flagged)} with no production caller beyond their own definition")
+    print(f"          {len(unreached)} unreached · {len(symbol_only)} symbol-only\n")
+
+    def _show(title: str, group: list[Row], note: str) -> None:
+        if not group:
+            return
+        print(f"{title}  ({len(group)})")
+        print(f"  {note}")
+        for r in sorted(group, key=lambda r: (r.production_files, r.section)):
+            print(f"  §{r.section:<4} {r.capability:<38} {r.symbol:<28} prod={r.production_files} any={r.any_files}")
+        print()
+
+    _show(
+        "UNREACHED",
+        unreached,
+        "nothing names the symbol AND nothing imports its module — inspect these first",
+    )
+    _show(
+        "SYMBOL-ONLY",
+        symbol_only,
+        "the module IS imported in production; often a default argument, a factory or an "
+        "import chain,\n  but sometimes the module is imported for a different export and this "
+        "symbol really is dead",
+    )
+
     if flagged:
-        print("\nThis is a SCREEN, not a verdict. Symbol matching misses aliases and dynamic")
-        print("lookup, so each row is one to inspect rather than one to demote.")
+        print("This is a SCREEN, not a verdict. Symbol matching misses aliases and dynamic")
+        print("lookup, so each row is one to inspect rather than one to demote — including")
+        print("the symbol-only ones, which are lower priority and not dismissed.")
     return 0
 
 

@@ -4471,11 +4471,9 @@ So the honest total: of 38 flagged, **1 was a dead control and is fixed**
 (`sec.secrets`), 4 are roll-ups by design, 8 are backend false positives, 1 is a
 real backend gap, and 24 are the unmounted Hub frontend.
 
-**The screen itself is the thing worth fixing.** Thirteen of its 38 rows are
+**The screen itself was the thing worth fixing.** Thirteen of its 38 rows were
 false — a third — and a report that cries wolf a third of the time teaches
-readers to skim it, which is how `sec.secrets` survived in it. Teaching it its
-own roll-up ids and module-level reachability would take the flagged count from
-38 to about 25, all of them real.
+readers to skim it, which is how `sec.secrets` survived in it. **Done below.**
 
 ### A regression this change shipped, caught by the clean run
 
@@ -4528,3 +4526,71 @@ clears 80%, and the gate blocks until the line is deleted.
 
 Two exclusions have now been found false under the same wording. The rest of
 that omit list is worth the same look, and it has not had one.
+
+
+---
+
+## §E48 — The caller screen stops crying wolf, and catches itself lying (2026-09-10)
+
+§E47 measured the screen's own error rate: 13 of 38 rows false, a third. Two
+changes, both against that measured triage rather than a guess.
+
+### Roll-ups are excluded, because they are false by construction
+
+`arch.layer_a..d` are derived roll-ups — `layer_state()` computes each from the
+rows beneath it — so they have no caller *of the id* by design. The screen now
+reads `ROLLUP_IDS` (already exported by `ai/hub/capabilities.py`) and skips
+them. Four permanent wolves, gone: 157 rows screened became 153.
+
+### Module reachability is a SECOND signal, not a replacement
+
+A symbol is not the only way to reach code. Production reaches the flagged
+backend rows through a default argument, a factory, an import chain, and
+`from pkg import module` — the form that defeated two hand-written sweeps. Each
+row now carries `module_reached`, and the report splits:
+
+* **UNREACHED** — nothing names the symbol *and* nothing imports its module.
+  The strongest evidence this screen can give. **10 rows.**
+* **SYMBOL-ONLY** — the module is imported, the symbol never named. Often a
+  default, a factory or a chain, and then the row is false. Sometimes the
+  module is imported for a *different* export and the symbol really is dead,
+  which is exactly `hub/layout.ts`: imported for `readLayout`, while
+  `COLLAPSE_ABOVE` sits behind an exported `place()` nobody calls. **23 rows.**
+
+**Deliberately not folded into `uncalled`.** Dropping symbol-only rows would
+have hit the ~25 figure §E47 predicted, and would have made the screen a report
+that cannot fail — the shape this programme exists to remove. Both signals are
+printed; the reader gets a triage *order*, not a shorter list. The prediction of
+~25 is corrected to **33** for that reason, and the correction is the point.
+
+### The screen was counting its own prose
+
+Documenting the triage put `DEFAULT_MAX_CONCURRENT`, `GatewayPatcher` and
+`COLLAPSE_ABOVE` into this module's docstrings. The sweep searches the
+repository, so it found itself, counted itself as a production caller, and
+**three rows silently left the flagged list.**
+
+`security/code_analyzer.py` scanned docstrings as source (F255);
+`scripts/verify_skill_claims.py` called four correct files broken because each
+carried a comment quoting the defect it fixed. This is the same trap from the
+other side, and worse: a false positive here wastes an inspection, a false
+negative hides a dead control, which is the only thing the screen is for.
+
+The module now excludes its own file, exactly as it already excluded
+`ai/hub/capabilities.py`. Two tests pin it — one asserts the sweep does not
+match its own source, one asserts the consequence, that a symbol named only in
+the screen's prose stays flagged. Corroborated by the control symbol itself
+dropping from 4 production files to 3: `CONTROL_SYMBOL = "PresenceAnywhere"`
+was being counted too.
+
+### Where the numbers land
+
+| | |
+|---|---|
+| Rows screened | 157 → **153** (roll-ups excluded) |
+| Flagged | 38 → **33** (37 after `sec.secrets` was armed, −4 roll-ups) |
+| Unreached | **10** — `parallel.event_triggered` plus 9 unmounted Hub modules |
+| Symbol-only | **23** — the 7 backend false positives and 16 Hub rows whose module is imported for another export |
+
+Every remaining row is one to inspect. None is a wolf the reader has to learn
+to ignore.
