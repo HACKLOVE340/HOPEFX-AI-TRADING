@@ -262,15 +262,18 @@ class TestTheUnmeasurableBaselineIsARatchet:
         monkeypatch.setenv("PYTHONPATH", str(project))
         _write_test(project, "def test_nothing():\n    assert True\n")
 
-        # Point the copied gate at this project's baseline.
-        gate_src = (project / "scripts" / "pre_commit_coverage.py").read_text(encoding="utf-8")
-        gate_src = gate_src.replace(
-            'BASELINE_PATH = Path(__file__).resolve().parent.parent / "docs" / "COVERAGE_UNMEASURABLE.txt"',
-            'BASELINE_PATH = Path(__file__).resolve().parent.parent / "baseline.txt"',
-        )
-        (project / "scripts" / "pre_commit_coverage.py").write_text(gate_src, encoding="utf-8")
-
-        result = _run(project)
+        # Point the copied gate at this project's baseline through the env var
+        # the gate exposes for it.
+        #
+        # This used to read the copied script and string-replace the exact
+        # `BASELINE_PATH = Path(__file__)…` line. Splitting that line to
+        # introduce `REPO_ROOT` made the replacement stop matching — silently,
+        # because `str.replace` on a missing needle is a no-op — so the copied
+        # gate read the REAL repository's baseline, `mymod/thing.py` was not in
+        # it, and a test about the ratchet failed for a reason that had nothing
+        # to do with the ratchet. An env var is a seam; a string match on an
+        # implementation line is a trap for the next person to touch it.
+        result = _run(project, COVERAGE_BASELINE_PATH=str(baseline_file))
         assert result.returncode == 0, f"a baselined module blocked:\n{result.stderr}"
         # The word was "BASELINED" while an entry meant "cannot be measured".
         # It now means recorded debt with a real number behind it, so the line

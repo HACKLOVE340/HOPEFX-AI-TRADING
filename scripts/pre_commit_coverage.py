@@ -83,7 +83,22 @@ _SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"
 #:
 #:     python scripts/pre_commit_coverage.py --adopt   # regenerate by measurement (slow)
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BASELINE_PATH = REPO_ROOT / "docs" / "COVERAGE_UNMEASURABLE.txt"
+
+#: Overridable so a test can point the gate at its own baseline.
+#:
+#: `tests/unit/test_coverage_gate_injections.py` used to do this by reading the
+#: copied script and string-replacing the exact `BASELINE_PATH = …` line. That
+#: is source surgery on a literal: splitting the line to introduce `REPO_ROOT`
+#: made the replacement silently stop matching, the copied gate read the real
+#: repository's baseline instead of the test's, and a test about the ratchet
+#: failed for a reason that had nothing to do with the ratchet. An env var is a
+#: seam; a string match on an implementation line is not.
+#:
+#: It is an escape hatch, and worth naming as one: anyone who can set it can
+#: point the gate at a file listing every module. It adds no capability, because
+#: the same person can already set `SKIP_COVERAGE_GATE=1`, which is documented
+#: and louder. Neither belongs in a commit.
+BASELINE_PATH = Path(os.getenv("COVERAGE_BASELINE_PATH") or (REPO_ROOT / "docs" / "COVERAGE_UNMEASURABLE.txt"))
 
 
 def _load_baseline() -> frozenset[str]:

@@ -3433,3 +3433,33 @@ Note the gate found the same class of problem twice today: §E37's
 `core/router_registry.py` was excluded by `.coveragerc` under a justification
 that was false, and this one is excluded by an omission in the ratchet's seed.
 Neither was a module anybody had decided not to test.
+
+---
+
+## §E38 — A test that edited the code it was testing (2026-09-10)
+
+A regression I shipped in §E37, caught by re-running the neighbouring suites
+rather than by review.
+
+`test_a_baselined_module_does_not_block` pointed the gate at its own baseline by
+reading the copied script and string-replacing this exact line:
+
+    BASELINE_PATH = Path(__file__).resolve().parent.parent / "docs" / "COVERAGE_UNMEASURABLE.txt"
+
+§E37 split that line to introduce `REPO_ROOT`. The replacement stopped matching
+— silently, because `str.replace` on a missing needle is a no-op — so the copied
+gate read the **real** repository's baseline, `mymod/thing.py` was not in it, and
+a test about the ratchet failed for a reason that had nothing to do with the
+ratchet.
+
+Confirmed by worktree rather than by reading: green at `57848f5`, red at
+`b932dd2`. The failure set, not a count.
+
+`COVERAGE_BASELINE_PATH` is now a real seam, and the test uses it. Source
+surgery on an implementation line is a trap for whoever touches that line next,
+and it fails in the worst way — quietly, pointing at the wrong subsystem.
+
+The new variable is an escape hatch and is documented as one: anyone who can set
+it can point the gate at a file listing every module. It adds no capability,
+because the same person can already set `SKIP_COVERAGE_GATE=1`, which is
+documented and louder.
