@@ -139,9 +139,47 @@ class TestAConfigExclusionSaysSoRatherThanBlamingTheTest:
 
 class TestReadingTheOmitList:
     def test_it_finds_a_real_entry(self, hook) -> None:
+        """A genuinely hardware-dependent exclusion — there is no CUDA in CI.
+
+        This used to name `core/startup_factories.py`, which was then lifted
+        (§E47) because its stated reason was false, and this test went red. The
+        example is now one whose reason is a property of the machine rather
+        than a claim about the test suite, so lifting it would be a real
+        decision rather than a correction.
+        """
         import pathlib
 
-        assert hook._coveragerc_omits(pathlib.Path("core/startup_factories.py")) is True
+        assert hook._coveragerc_omits(pathlib.Path("core/acceleration/gpu_engine.py")) is True
+
+    def test_it_reads_whatever_the_file_actually_lists(self, hook) -> None:
+        """Independent of any single name, so the next honest lift does not
+        break the helper's own test — which is how this one broke."""
+        import pathlib
+        import re
+
+        text = pathlib.Path(".coveragerc").read_text()
+        block = text.split("omit", 1)[1]
+        # Concrete paths only. A glob entry like `*/setup.py` handed back as a
+        # Path would assert that the helper matches a pattern against itself,
+        # which is true for a helper that does nothing.
+        entries = [line.strip() for line in block.splitlines() if re.fullmatch(r"[\w./-]+\.py", line.strip() or "x x")]
+
+        assert entries, "no concrete entry in the omit list — this proves nothing about a helper that reads it"
+        for entry in entries:
+            assert hook._coveragerc_omits(pathlib.Path(entry)) is True, f"the helper missed its own list: {entry}"
+
+    def test_startup_factories_is_no_longer_omitted(self, hook) -> None:
+        """The second exclusion found false under the same wording as
+        `core/router_registry.py`: "requires full app context; covered by
+        integration/e2e tests, not unit tests", while
+        tests/unit/test_startup_factories.py and
+        tests/unit/test_core_startup_factories.py exercise it directly, 59
+        tests between them. Lifted 2026-09-10 (§E47); measured 49% and recorded
+        as debt, where it applies pressure instead of being invisible.
+        """
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("core/startup_factories.py")) is False
 
     def test_it_does_not_claim_an_unlisted_module(self, hook) -> None:
         import pathlib
@@ -167,7 +205,9 @@ class TestReadingTheOmitList:
         """Fail toward measuring, not toward excusing."""
         import pathlib
 
-        assert hook._coveragerc_omits(pathlib.Path("core/startup_factories.py"), config=tmp_path / "nope") is False
+        assert (
+            hook._coveragerc_omits(pathlib.Path("core/acceleration/gpu_engine.py"), config=tmp_path / "nope") is False
+        )
 
     def test_an_omit_pattern_on_the_assignment_line_is_read(self, hook, tmp_path) -> None:
         config = tmp_path / ".coveragerc"

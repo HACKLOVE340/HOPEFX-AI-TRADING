@@ -4442,14 +4442,60 @@ started here for that reason, and demoting the 24 registry rows to make the
 screen quiet would be manufacturing a clean number, which is the defect this
 programme exists to remove.
 
-**9 are backend rows still to inspect one at a time:**
-`debate.no_forced_consensus` (`DECISIVE_RATIO`), `parallel.event_triggered`
-(`TriggerRegistry`), `parallel.long_running` (`RedisJobStore`),
-`memory.working` / `memory.session` (`ai.memory.tiers`), `memory.user_controls`
-(`ForgetResult`), `perf.bounded_concurrency` (`DEFAULT_MAX_CONCURRENT`),
-`improve.honest_cycle_report` (`CycleReport`), `improve.patch_generator`
-(`GatewayPatcher`). Each appears in its own definition file and the registry,
-and nowhere else outside tests — the same shape `sec.secrets` had.
+**9 are backend rows.** They were inspected, and the result corrects what the
+sentence here first said — that each had "the same shape `sec.secrets` had".
+**Eight of the nine are false positives.** The screen matches a symbol; production
+reaches these another way:
+
+| Row | Why the screen missed it |
+|---|---|
+| `perf.bounded_concurrency` | `DEFAULT_MAX_CONCURRENT` is a **default argument** of `JobRunner.__init__`; nobody names it. `get_runner()` runs from `api/safe_agent_platform.py` (3 sites) and `api/ai_core.py`. |
+| `improve.patch_generator` | reached by **factory**: `core/startup_factories.py:770` calls `patcher.build_patcher()`, not `GatewayPatcher`. |
+| `improve.honest_cycle_report` | same import: `from ai.improve import cycle, patcher` at line 763. |
+| `parallel.long_running` | `ai.jobs.store` is imported by `ai/jobs/runner.py`, which production imports. Reached through a chain. |
+| `debate.no_forced_consensus` | `ai.debate.session` is imported by `ai/agent/orchestrator.py`, `ai/debate/trade.py` and the package `__init__`. |
+| `memory.working`, `memory.session` | `api/ai_memory.py` does `from ai.memory import tiers`. |
+| `memory.user_controls` | `api/ai_memory.py` does `from ai.memory import governance`, at seven call sites. |
+
+The `from pkg import module` form defeated my own first sweep twice before I
+noticed — the grep looked for `from pkg.module import`. Worth writing down: it
+is the same class of miss the screen makes.
+
+**One is real.** `parallel.event_triggered` — `ai/bus/triggers.py` is reached by
+nothing: not by symbol, not by module, not by `ai/bus/__init__.py`, which
+re-exports `agent_bus`, `graph` and `lifecycle` and not `triggers`. Wiring
+event-triggered parallel work into production is a feature decision, not a bug
+fix, so it is filed rather than invented.
+
+So the honest total: of 38 flagged, **1 was a dead control and is fixed**
+(`sec.secrets`), 4 are roll-ups by design, 8 are backend false positives, 1 is a
+real backend gap, and 24 are the unmounted Hub frontend.
+
+**The screen itself is the thing worth fixing.** Thirteen of its 38 rows are
+false — a third — and a report that cries wolf a third of the time teaches
+readers to skim it, which is how `sec.secrets` survived in it. Teaching it its
+own roll-up ids and module-level reachability would take the flagged count from
+38 to about 25, all of them real.
+
+### A regression this change shipped, caught by the clean run
+
+Lifting `core/startup_factories.py` from the omit list turned
+`test_coverage_gate_ratchet.py::TestReadingTheOmitList::test_it_finds_a_real_entry`
+red: it proved `_coveragerc_omits()` works by naming a module that was in the
+list, and the list no longer had it. A legitimate pin, broken by a legitimate
+change.
+
+It now names `core/acceleration/gpu_engine.py` — an exclusion whose reason is a
+property of the machine (no CUDA in CI) rather than a claim about the test
+suite, so lifting *that* would be a real decision rather than a correction. A
+second test derives entries from the file itself and asserts the helper matches
+every concrete one, so the next honest lift does not break the helper's own
+test. And `test_startup_factories_is_no_longer_omitted` pins the lift, mirroring
+`test_router_registry_is_no_longer_omitted` from §E37.
+
+The first draft of the derived test picked `*/setup.py` — the first entry, and a
+glob. Handing a pattern back to a matcher asserts it matches itself, which is
+true of a matcher that does nothing. It filters to concrete paths now.
 
 
 ### And an exclusion that hid a module from the ratchet entirely
