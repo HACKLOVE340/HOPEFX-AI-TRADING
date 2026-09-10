@@ -564,6 +564,26 @@ async def ai_core_telemetry(_: TokenPayload = Depends(_viewer)) -> dict[str, Any
     return telemetry.snapshot(runner=_job_runner())
 
 
+@router.get("/review-status")
+async def ai_core_review_status(_: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """What the operator has looked at, and what is worth surfacing.
+
+    §19's missing half. `ai/awareness/watchers.py` already notices things on its
+    own and `ai/notify/policy.py` already decides when the AI may interrupt;
+    neither could say *"you have not looked at this in a while"* because nothing
+    recorded what had been looked at.
+
+    Read the `durable` flag before acting on `due`. From a process-local store
+    — no Redis — a surface with no record reads as **"unknown"**, not "never",
+    and `due` is empty: a volatile store cannot tell "you have never opened
+    this" apart from "I forgot on the last deploy", and asserting the first
+    would be the platform saying something false about the person using it.
+    """
+    from ai.awareness.reviewed import get_tracker
+
+    return get_tracker().report()
+
+
 def _job_runner() -> Any:
     """The live job pool, or None when there is not one to observe.
 

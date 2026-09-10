@@ -204,3 +204,31 @@ async def add_notification_watch(body: dict[str, Any], user: TokenPayload = Depe
     # explicit. Defaulting it on would let a routine threshold wake somebody.
     service.add_watch(watch, wake=bool(body.get("wake", False)))
     return await notification_watches(user)
+
+
+@router.post("/reviewed/{surface_id}")
+async def mark_surface_reviewed(surface_id: str, user: TokenPayload = Depends(_viewer)) -> dict[str, Any]:
+    """Record that this operator looked at `surface_id`.
+
+    Lives here rather than on `api/ai_core.py` deliberately. That router is
+    read-only by construction — `tests/unit/test_ai_core_surface.py` asserts the
+    AI Core read surface exposes nothing but GET — and marking something
+    reviewed is a write. The read half stays there at
+    `GET /api/ai-core/review-status`; this is the write half, on a router that
+    already accepts acknowledgements.
+
+    An unregistered id is a 404, not a silent no-op: a typo that returns 200
+    leaves the surface it was meant for looking permanently neglected.
+    """
+    from ai.awareness.reviewed import UnknownSurface, get_tracker
+
+    tracker = get_tracker()
+    try:
+        tracker.mark_reviewed(surface_id, actor=user.sub)
+    except UnknownSurface as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+    state = tracker.state(surface_id).as_dict()
+    if not tracker.durable:
+        state["note"] = "Recorded in a process-local store — this review will not survive a restart."
+    return state

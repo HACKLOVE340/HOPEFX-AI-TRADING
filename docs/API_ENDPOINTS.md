@@ -108,6 +108,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-core/departments` | JWT | The Cluster A department directory, and what is actually wired. | AI Core |
 | `GET` | `/api/ai-core/evals` | JWT | The latest eval report and what the promotion gate would do with it. | AI Core |
 | `GET` | `/api/ai-core/models` | JWT | Which models each vendor currently serves. | AI Core |
+| `GET` | `/api/ai-core/review-status` | JWT | What the operator has looked at, and what is worth surfacing. | AI Core |
 | `GET` | `/api/ai-core/self/calibration` | JWT | How the stated confidences have actually held up (§5). | AI Core |
 | `GET` | `/api/ai-core/self/context` | JWT | What is running for the caller, and what recently finished (§5). | AI Core |
 | `GET` | `/api/ai-core/self/depths` | JWT | The explanation registers, and the rule they all obey (§5). | AI Core |
@@ -124,6 +125,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/ai-notifications/policy` | JWT | This operator's settings, and the floor that no setting can turn off. | AI Notifications |
 | `PUT` | `/api/ai-notifications/policy` | JWT | Set quiet hours, sleep mode and rate limits for the calling operator. | AI Notifications |
 | `POST` | `/api/ai-notifications/release` | JWT | Deliver anything whose hold has expired. | AI Notifications |
+| `POST` | `/api/ai-notifications/reviewed/{surface_id}` | JWT | Record that this operator looked at `surface_id`. | AI Notifications |
 | `GET` | `/api/ai-notifications/watches` | JWT | This operator's watches. There is no listing that spans operators. | AI Notifications |
 | `POST` | `/api/ai-notifications/watches` | JWT | Add a threshold watch, owned by the caller. | AI Notifications |
 | `POST` | `/api/ai-notifications/{key}/acknowledge` | JWT | Stop a notification escalating. Acknowledging is a statement that it was seen. | AI Notifications |

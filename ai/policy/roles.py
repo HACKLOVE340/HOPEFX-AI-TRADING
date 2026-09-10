@@ -75,6 +75,7 @@ CAPABILITIES: Final[dict[str, Capability]] = {
     "proposals": _VIEW,
     "integrations": _VIEW,
     "chat_capabilities": _VIEW,
+    "ai_core_review_status": _VIEW,
     # api/ai_core.py -- the AI Core page's read surface. Read-only by
     # construction: every consequential action lives in safe_agent_platform
     # behind the rows below, and a reporting surface that could also act would

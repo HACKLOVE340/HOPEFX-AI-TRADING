@@ -2896,3 +2896,92 @@ assert behaviour.
 Before committing, every test touching `resolve_chain` / `LOCAL_PROVIDER` /
 `llm_local` was run to check whether any encoded the old "never a primary"
 policy. None did — 106 pass.
+
+---
+
+## §E32 — What the operator has actually looked at (2026-09-10)
+
+Owner requirement: everything on the AI Core page should run in the background
+and surface itself — *"pop it up or ask if operator want to check, or if it been
+a while you have check it, or operator haven't request for it at all."*
+
+Three of the four pieces already existed, and they are good:
+
+| Piece | Where |
+|---|---|
+| Background observation | `ai/awareness/watchers.py` — departments notice on their own and raise proposals. Structurally unable to act: no tool-bus import, and `Observation` has no field that could express one |
+| When the AI may interrupt | `ai/notify/policy.py` — quiet hours, sleep mode, dedup, rate limits, with a hard floor: a CRITICAL notification is never suppressed, enforced by `decide()` returning before any suppression path exists |
+| Whether anyone is looking | `frontend/src/hub/attention.ts` — tab visibility, focus, idle time, no camera; "unknown is not away" |
+| **What has been looked at** | **Did not exist.** A grep for `last_reviewed` / `unseen` / `acknowledged_at` across `ai/`, `api/` and `frontend/src` returned one hit, and it was a comment |
+
+So *"it has been a while since you checked this"* was a sentence the platform
+could not say.
+
+### `ai/awareness/reviewed.py`
+
+Eight declared surfaces — drift, calibration, risk limits, feed status, the AI
+proposal queue, the audit trail, the decision ledger, open positions — each with
+a label, a stated cadence, and a one-line reason it matters. **Declared, not
+discovered:** a registry that guessed from routes would raise "you have not
+looked at /api/health lately", and noise is how a notification channel dies.
+
+### The honesty problem the design turns on
+
+"You have never reviewed this" is a claim about a person, and it is only as good
+as the memory behind it. A store that lost its contents on restart would report
+every surface as never-reviewed, and the AI would greet an operator who reads
+the drift report daily by telling them they have never opened it. Say that once
+and they learn to ignore the mechanism entirely.
+
+So the store declares whether it survives a restart, and the state carries it:
+
+    durable store, no record   -> "never"    (a fact about the operator)
+    volatile store, no record  -> "unknown"  (a fact about the store)
+
+`due_for_review()` returns **nothing at all** from a volatile store, so the
+first thing an operator sees after a deploy is not a list of things they are
+wrongly told they have neglected. `get_tracker()` falls back to an explicitly
+non-durable `InMemoryReviewStore` rather than to a volatile store that claims
+durability.
+
+That is Rule 2 — an unmeasured value is absent, never best-case — pointed at the
+person using the platform rather than at a price.
+
+### Cadence is declared, never assumed
+
+A surface with no stated cadence cannot be overdue and is not fresh either; it
+is `no_cadence`. `open_positions` is deliberately in that state: being "overdue"
+on it would mean the operator had stopped trading. Inventing a default would
+manufacture urgency about something nobody said was urgent — the same defect as
+inventing a data-quality score.
+
+### It reports; it does not act
+
+Same rule as `Observation`. The module has no notifier, no route opener and no
+scheduler — a tracker that could act would be a scheduler with an opinion about
+your attention. It states a fact and `ai/notify/policy.py` decides whether that
+fact is worth interrupting anyone for. A test asserts the surface stays free of
+`execute`/`send`/`notify`/`open`/`act`/`trigger`/`run`.
+
+Exposed as a read on the AI Core surface and a write on the notifications one:
+
+    GET  /api/ai-core/review-status
+    POST /api/ai-notifications/reviewed/{surface_id}
+
+The split is deliberate and was enforced by a test rather than remembered. The
+first version put both on `api/ai_core.py`, and
+`tests/unit/test_ai_core_surface.py` refused it: *"the AI Core read surface
+exposes ['POST']"*. That router is **read-only by construction** — a property
+worth keeping, so the write moved to the router that already accepts
+acknowledgements rather than the contract being relaxed to fit. The same test
+also required the new GET to carry a capability row in `ai/policy/roles.py`.
+
+An unregistered id is a 404, not a silent no-op: a typo that returns 200 makes
+the surface it was meant for look permanently neglected.
+
+### Still open
+
+Nothing calls `mark_reviewed()` yet — the frontend has to report when a panel is
+actually opened, and no page does that today. The tracker and its endpoints are
+wired and exercised; the reporting half is the next step, and is named here
+rather than implied.
