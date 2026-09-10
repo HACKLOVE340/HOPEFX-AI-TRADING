@@ -164,6 +164,36 @@ async def init_env(s: Any) -> bool:
     except Exception as exc:
         logger.warning("Env validator unavailable: %s", exc)
 
+    # Teach the AI output guardrail this deployment's real credentials, now
+    # that they are resolved in the process.
+    #
+    # `ai/guardrails/output.py` scans model output two ways: regex shapes for
+    # credentials with a distinctive form, and exact matches against the values
+    # this deployment actually holds. The second arm is the only one that can
+    # catch a leaked JWT signing key, a broker password, or a system prompt
+    # echoed back — none of which have a shape a regex can find.
+    #
+    # `register_known_secret`'s docstring has always said it is "called at
+    # startup with values already in the process". Nothing called it, so the
+    # registry was empty in every running process and that arm scanned against
+    # nothing (F176; surfaced by scripts/capability_callers.py as `sec.secrets`
+    # with no production caller). This is that call.
+    #
+    # Never blocks startup: a guardrail that cannot be armed is a serious
+    # warning, not a reason to refuse to serve — but it is logged at ERROR
+    # rather than swallowed, because a silent failure here leaves the leak
+    # detection off with nobody aware of it.
+    try:
+        from ai.guardrails.output import register_deployment_secrets
+
+        register_deployment_secrets()
+    except Exception as exc:
+        logger.error(
+            "output guardrail NOT armed: deployment credentials could not be registered (%s); "
+            "leaked secrets in model output will not be detected by exact match",
+            exc,
+        )
+
     return True
 
 

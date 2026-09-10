@@ -499,3 +499,31 @@ social/marketplace.py
 #   * `_eventbus_tick_once` could return None into the backoff table;
 #   * a Redis outage reaches the endpoints two ways, and only one degrades to
 #     keepalive; the other closes with 1011. Pinned, not changed.
+
+# ── Added 2026-09-10 — core/startup_factories.py, an exclusion made visible ──
+#
+# This module was not in this list. It was in `.coveragerc`'s [run] omit, under
+# "Startup factories require full app context; covered by integration/e2e
+# tests, not unit tests."
+#
+# That was false, and false in exactly the way `core/router_registry.py`'s was
+# (§E37): tests/unit/test_startup_factories.py and
+# tests/unit/test_core_startup_factories.py exercise it directly, 59 tests
+# between them. The cost of the exclusion is worse than a recorded number — the
+# gate could not measure the file at all, so it could report neither debt nor
+# progress, and BLOCKED any commit that touched it with a diagnosis pointing at
+# a missing import that was not missing.
+#
+# An exclusion is not a measurement. A module nothing may measure is a module
+# nothing can ratchet. The omit is lifted and the real figure is recorded here,
+# where it applies pressure.
+#
+# The four conditions of ADR 0017, evidenced:
+#   1. already below the floor — 49% at 1a4a0a0 on a clean worktree with the
+#      omit lifted and the change absent, measured rather than asserted;
+#   2. not lowered — 49% after; the change adds one guarded call and comments;
+#   3. measured 2026-09-10: core/startup_factories.py 49% -> 49%;
+#   4. ADR 0017 cited as the standing agreement.
+#
+# It goes when it clears 80%, and the gate will block until the line is deleted.
+core/startup_factories.py

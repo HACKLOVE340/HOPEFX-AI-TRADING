@@ -22,8 +22,12 @@ binds only when nothing corroborates.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 _OBJECT = re.compile(r"\{.*\}", re.DOTALL)
@@ -92,6 +96,74 @@ def register_known_secret(label: str, value: str) -> None:
     """
     if value and len(value) >= _MIN_KNOWN_LEN:
         _KNOWN[label] = value
+
+
+#: Environment variables whose values, if present, are this deployment's real
+#: credentials — the ones with no distinctive shape for a regex to catch.
+#:
+#: Names only. No value is ever written here, and this list is safe to print.
+#: Ordered roughly by blast radius so a truncated log still names the worst.
+_DEPLOYMENT_SECRET_ENV: tuple[str, ...] = (
+    "SECURITY_JWT_SECRET",
+    "JWT_SECRET_KEY",
+    "CONFIG_ENCRYPTION_KEY",
+    "DB_ENCRYPTION_KEY",
+    "HOPEFX_KILL_SWITCH_TOKEN",
+    "POSTGRES_PASSWORD",
+    "DB_PASSWORD",
+    "REDIS_PASSWORD",
+    "OANDA_API_KEY",
+    "CTRADER_CLIENT_SECRET",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "CRYPTO_WEBHOOK_SECRET",
+    "FLUTTERWAVE_SECRET_KEY",
+    "SENDGRID_API_KEY",
+    "SMTP_PASSWORD",
+    "FINNHUB_API_KEY",
+    "TWELVE_API_KEY",
+    "POLYGON_API_KEY",
+    "BOOTSTRAP_SUPERADMIN_PASSWORD",
+    "BOOTSTRAP_ADMIN_PASSWORD",
+)
+
+
+def register_deployment_secrets() -> int:
+    """Teach the scanner every credential this process actually holds.
+
+    Returns **how many** were registered — never which, and never their
+    values. A registrar that returned or logged what it found would copy the
+    secret into the caller's log line, which is the failure `_refuse` is
+    written to avoid.
+
+    This is the call `register_known_secret`'s docstring has always described
+    ("called at startup with values already in the process") and that nothing
+    made. Until it existed, `_KNOWN` was empty in every running process: the
+    exact-match arm of `scan_output` scanned against nothing, the
+    system-prompt echo check — which this module calls the only mechanism that
+    can catch it — did not exist, and `StreamScanner`'s holdback never widened
+    beyond the fixed floor. `scripts/capability_callers.py` is what surfaced
+    it, as `sec.secrets` with no production caller.
+
+    Safe to call more than once: registration is keyed by label, so a restart
+    or a re-run replaces rather than accumulates. Values under
+    `_MIN_KNOWN_LEN` are dropped by `register_known_secret` itself, which also
+    keeps `.env.example` placeholders out.
+    """
+    before = len(_KNOWN)
+    for name in _DEPLOYMENT_SECRET_ENV:
+        value = os.getenv(name, "")
+        if value:
+            register_known_secret(name, value)
+    registered = len(_KNOWN) - before
+
+    # The count is safe to log; the names are too, but the values never are.
+    logger.info(
+        "output guardrail: %d deployment credential(s) registered for leak detection (of %d checked)",
+        len(_KNOWN),
+        len(_DEPLOYMENT_SECRET_ENV),
+    )
+    return max(registered, 0)
 
 
 def reset_known_secrets() -> None:
@@ -305,6 +377,7 @@ __all__ = [
     "StreamScanner",
     "bounded_severity",
     "known_secret_count",
+    "register_deployment_secrets",
     "register_known_secret",
     "reset_known_secrets",
     "scan_output",

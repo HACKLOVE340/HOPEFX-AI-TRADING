@@ -4353,3 +4353,132 @@ counterfactual passes were deliberately breaking and restoring the very files
 those tests read. The suite was measuring me, not the code.
 
 Diff failure sets, never counts — and never run a suite across your own edits.
+
+
+---
+
+## §E47 — What is left, measured; and one dead control armed (2026-09-10)
+
+`python scripts/backlog_report.py` on a clean tree. The numbers below are that
+run, not a recollection.
+
+| Section | Measured |
+|---|---|
+| Specification capabilities | 233 rows · **233 live** · 0 staged · 0 planned · 0 discrepancies |
+| Live capabilities with no production caller | 157 screened · **38 flagged** → **37** after this change |
+| Documentation debt | 224 registered · 197 with no owner · 3 duplicate subjects · 41 stale refs |
+| Group 2 platform gaps | 19 outstanding (3 struck through) |
+| Group 3 knowledge gaps | 6 outstanding (8 struck through) |
+| Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
+| Safety gates | 27 gates · 27 proven able to fail · **0 unproven** |
+| Coverage debt | 365 modules recorded |
+| Owner decisions | §A1 (RPO/RTO), §A4, §A5, plus three opened this session |
+
+Nothing is *planned but unbuilt* in the specification — every row is live. The
+work left is in the second line: capabilities that are live and that nothing
+calls.
+
+### The one fixed here: `sec.secrets` was never armed
+
+`ai/guardrails/output.py` scans model output two ways — regex shapes for
+credentials with a distinctive form, and exact matches against **this
+deployment's real values**. The module states plainly why the second exists:
+
+> Patterns cannot cover a secret with no distinctive shape — this platform's
+> own JWT signing key, a broker password, the system prompt. Registering the
+> live values is what makes leakage of those detectable at all, and it is the
+> only mechanism here that can catch system-prompt echo.
+
+and `register_known_secret` states when it runs:
+
+> Called at startup with values already in the process (the JWT signing
+> secret, broker passwords).
+
+**Nothing called it.** The only callers were tests. `_KNOWN` was empty in every
+running process, so the exact-match arm scanned against nothing, the
+system-prompt echo check did not exist, and `StreamScanner`'s holdback never
+widened past its fixed floor. F176 exactly: a control that exists, is
+documented accurately, and is never invoked.
+
+`register_deployment_secrets()` now reads 21 named environment variables and
+registers the values present; `init_env` calls it once the secrets are resolved
+into the process. It returns a **count**, never the values or the names of what
+matched — a registrar that returned its findings would copy the secret into the
+caller's log line, which is the failure `_refuse` exists to avoid. Failure to
+arm logs at ERROR and never blocks startup.
+
+The counterfactual is kept in the suite as a test: without registration, output
+containing the signing secret passes the scanner. That is what production did.
+
+Screen after the change: **38 → 37**, with `sec.secrets` gone from the list.
+
+### The 37 that remain, classified
+
+Not a verdict — the screen matches symbols and misses aliases — but every row
+below was inspected, not assumed.
+
+**4 are false positives.** `arch.layer_a…d` are *derived roll-ups*:
+`layer_state()` computes them from the rows beneath and is called at
+`ai/hub/capabilities.py:2667`. They have no caller *of the id* by design. The
+screen should know its own roll-up ids; until it does it reports four permanent
+false positives, and a screen that always cries wolf four times teaches readers
+to skim it.
+
+**24 are the AI Hub frontend, and this is one finding, not 24.** Every one is a
+module under `frontend/src/hub/` — `layout.ts`, `panelSchema.ts`, `modes.ts`,
+`attention.ts`, `visionSource.ts`, `frameTriage.ts`, `a11yContrast.ts`,
+`a11yLiveRegion.ts`, `a11yBreakpoints.ts`, `voicePrefs.ts`, `pronunciation.ts`,
+`projection.ts`, `cognitiveStream.ts`, `SurfaceView.tsx`, `layoutStrategy.ts`.
+They exist, they are tested, and **no component imports them**. Verified by
+example rather than by count: `COLLAPSE_ABOVE` is used inside `place()`, which
+is exported and imported nowhere — `hub/layout.ts`'s only non-test importer,
+`PresencePanel.tsx`, takes `readLayout` and `suggestLayout` and nothing else.
+`CognitiveStream` is imported only by `hub_panels_and_stream.test.ts`.
+
+So the Hub's frontend was built as a library and never mounted. Wiring it is a
+**build**, not a fix, and it is major UI work — which under `flow-by-flow` needs
+a `flow-prototype` approval surface before any production UI lands. It is not
+started here for that reason, and demoting the 24 registry rows to make the
+screen quiet would be manufacturing a clean number, which is the defect this
+programme exists to remove.
+
+**9 are backend rows still to inspect one at a time:**
+`debate.no_forced_consensus` (`DECISIVE_RATIO`), `parallel.event_triggered`
+(`TriggerRegistry`), `parallel.long_running` (`RedisJobStore`),
+`memory.working` / `memory.session` (`ai.memory.tiers`), `memory.user_controls`
+(`ForgetResult`), `perf.bounded_concurrency` (`DEFAULT_MAX_CONCURRENT`),
+`improve.honest_cycle_report` (`CycleReport`), `improve.patch_generator`
+(`GatewayPatcher`). Each appears in its own definition file and the registry,
+and nowhere else outside tests — the same shape `sec.secrets` had.
+
+
+### And an exclusion that hid a module from the ratchet entirely
+
+Arming the guardrail meant touching `core/startup_factories.py`, and the
+coverage gate refused it:
+
+> EXCLUDED by .coveragerc [run] omit, so it cannot be measured. Remove its line
+> from the omit list (and add the tests it then needs) rather than looking for
+> a missing import.
+
+The justification in `.coveragerc` was *"Startup factories require full app
+context; covered by integration/e2e tests, not unit tests."* False, and false in
+exactly the way `core/router_registry.py`'s was in §E37 — a defect the file's
+own comment already documents, three lines above the entry:
+`tests/unit/test_startup_factories.py` and
+`tests/unit/test_core_startup_factories.py` exercise it directly, **59 tests**
+between them.
+
+The exclusion is worse than recorded debt. A recorded module reports a number
+and applies pressure; an excluded one reports nothing, can show neither debt nor
+progress, and blocks any commit that touches it with a diagnosis that points at
+a missing import which is not missing.
+
+The omit is lifted. Measured with it lifted: **49%**, on a clean worktree at
+`1a4a0a0` with the change absent, and **49%** after — so ADR 0017's conditions
+1 and 2 are proven rather than claimed, and it is recorded in
+`docs/COVERAGE_UNMEASURABLE.txt` with its evidence. It leaves the list when it
+clears 80%, and the gate blocks until the line is deleted.
+
+Two exclusions have now been found false under the same wording. The rest of
+that omit list is worth the same look, and it has not had one.

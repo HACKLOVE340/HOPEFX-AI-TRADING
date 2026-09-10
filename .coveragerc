@@ -131,19 +131,23 @@ omit =
     core/middleware.py
     core/page_routes.py
     core/email_webhook.py
-    # Startup factories require full app context; covered by integration/e2e
-    # tests, not unit tests.
+    # `core/router_registry.py` used to sit here under "requires full app
+    # context; covered by integration/e2e tests, not unit tests". It was false:
+    # tests/unit/test_core_router_registry.py already existed and exercised
+    # `register_routers` directly. The exclusion had a cost — the per-module
+    # coverage gate could not measure the file, reported "coverage could not be
+    # measured — the test may not import the module" (a wrong diagnosis: the
+    # test imports it on line 19), and BLOCKED every commit that touched it.
+    # Measured with the exclusion lifted it was 74.7%; the sixty-odd
+    # `except ImportError` fallbacks were 25% of the module and had never been
+    # exercised. Those branches now have tests and it measures 87%.
     #
-    # `core/router_registry.py` used to sit here under the same justification.
-    # It was false: tests/unit/test_core_router_registry.py already existed and
-    # exercised `register_routers` directly. The exclusion had a cost — the
-    # per-module coverage gate could not measure the file, reported "coverage
-    # could not be measured — the test may not import the module" (a wrong
-    # diagnosis: the test imports it on line 19), and BLOCKED every commit that
-    # touched it. Measured with the exclusion lifted it was 74.7%; the
-    # sixty-odd `except ImportError` fallbacks were 25% of the module and had
-    # never been exercised. Those branches now have tests and it measures 87%.
-    core/startup_factories.py
+    # `core/startup_factories.py` sat here under the SAME justification and it
+    # was false the same way: tests/unit/test_startup_factories.py and
+    # tests/unit/test_core_startup_factories.py exercise it directly, 59 tests
+    # between them. Lifted 2026-09-10 (§E47). An exclusion is not a
+    # measurement, and a module nothing may measure is a module nothing can
+    # ratchet.
     # Advanced risk engine (Monte Carlo/GARCH) requires live risk bus wiring;
     # covered by integration tests
     core/risk/advanced_engine.py
