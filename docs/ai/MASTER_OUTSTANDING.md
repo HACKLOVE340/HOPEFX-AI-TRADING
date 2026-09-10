@@ -3156,3 +3156,78 @@ inferred from the migration source.
 * **No UI**, and per CLAUDE.md an operator surface of this size needs a
   `flow-prototype` approval pass before production implementation — the owner's
   call, not one to take unilaterally.
+
+---
+
+## §E35 — The support AI answers from facts, or says it cannot (2026-09-10)
+
+§E33 decided who should answer; §E34 recorded the conversation and refused what
+the AI must not do to it. Neither produced a reply. `support/answering.py` does,
+and almost all of its design is what it refuses.
+
+**It never answers an escalated ticket, and never calls the model for one.** The
+check runs before anything is spent. A drafted reply on an escalated ticket is a
+suggestion wearing a refusal's clothes — it ends up in front of an operator who
+is about to paste it.
+
+**No reachable model means no answer.** Not a canned fallback, not "we are
+looking into it". A deployment with no gateway leg, a budget refusal, a timeout
+and a dead vendor all produce `available=False` and a ticket for a person. A
+desk that invents a reply while the AI is down is worse than one that admits it,
+because the customer cannot tell the difference — the same argument that stops
+`ai/gateway/chain.py` promoting a local runtime it has not probed. An empty
+completion is treated the same way: a blank reply is a failure that looks like a
+success.
+
+**A fact the department could not measure is stated as `not measured`, never
+dropped.** Dropping it hands the model a gap to fill. `ai/departments/` already
+returns `available: False` rather than a number it did not get; this carries the
+same rule into the prompt.
+
+"Different AI in different aspects" is `DEPARTMENT_BRIEFS`: eight briefs, one per
+routed department, each with its own scope and its own limits — Markets &
+Execution never states the status of an order not in the facts; Data Ops never
+quotes a price, because a price in a support reply is stale the moment it is
+written; Risk & Compliance explains a limit rather than how to get around it;
+Account & Platform never asks for a password, a one-time code or an API key. A
+test asserts no two briefs are identical, because one prompt with a name
+substituted into it is not a team of specialists.
+
+### The finding: sixteen tests, and the main rule unproven
+
+Deleting the escalation branch entirely left **all sixteen tests green**.
+
+An escalated `TriageResult` carries `department=None`, so execution fell through
+into the *unroutable* branch and returned a refusal that satisfied every
+assertion — for a completely different reason. The suite could not tell which
+control had fired. That is the third time in this programme a counterfactual has
+caught a test proving the wrong thing (§E33's floor, and the `_local_is_ready`
+source-reading test before it), and the second time in two days that the
+fallthrough was doing the work.
+
+Triage returning a department alongside an escalation is a plausible change — an
+operator wants to know whose queue it belongs in — and it would have converted
+that accident into a model call on a ticket the floor had already escalated. The
+suite now pins the escalation branch with a decision the fallthrough cannot
+rescue, and asserts the refusal carries triage's *own* reason rather than merely
+a non-empty string. Same counterfactual now fails two tests.
+
+### A guard that today's code cannot open, kept and proven
+
+Coverage showed the "routable but unowned" branch never executing: `triage` sets
+`needs_human` whenever it has no department, so it is unreachable through the
+real function. That is the guard-that-can-never-open shape from
+`hopefx-dead-controls` — but deleting it is the wrong fix. It is the last thing
+between a future triage change and `_build_prompt(department=None)`, which
+composes the fallback brief and lets a generalist answer a question nobody owns.
+It stays, and a test now puts the system in the state that opens it.
+
+`support/answering.py` is at **100% statement and branch coverage**, 22 tests;
+`support/` is at 134 tests overall.
+
+### Still open
+
+* **No API surface.** Nothing HTTP-facing reaches any of this. A customer cannot
+  open a ticket and an operator cannot see one.
+* **No real-time handoff**, still. `operator_queue()` is a poll.
+* **No UI**, and it needs a `flow-prototype` approval pass first.
