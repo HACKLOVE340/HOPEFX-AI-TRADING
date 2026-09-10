@@ -238,7 +238,8 @@ async def open_ticket(payload: OpenTicket, user: TokenPayload = Depends(_custome
 @_customer_routes.get("", summary="My support tickets")
 async def my_tickets(user: TokenPayload = Depends(_customer)) -> dict[str, Any]:
     tickets = await run_in_threadpool(_store().tickets_for, user.sub)
-    return {"tickets": [t.as_dict() for t in tickets]}
+    # Customer projection — see `TicketView.as_customer_dict`.
+    return {"tickets": [t.as_customer_dict() for t in tickets]}
 
 
 @_customer_routes.get("/{ticket_id}", summary="One of my tickets, with its thread")
@@ -246,7 +247,8 @@ def my_ticket(ticket_id: str, user: TokenPayload = Depends(_customer)) -> dict[s
     store = _store()
     ticket = _owned(store, ticket_id, user)
     return {
-        "ticket": ticket.as_dict(),
+        # Customer projection: the triage internals do not cross this line.
+        "ticket": ticket.as_customer_dict(),
         "messages": [m.as_dict() for m in store.messages(ticket_id)],
     }
 

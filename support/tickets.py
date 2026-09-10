@@ -140,6 +140,35 @@ class TicketView:
             "resolved_at": _iso(self.resolved_at),
         }
 
+    def as_customer_dict(self) -> dict[str, Any]:
+        """The same ticket, projected for the person who raised it.
+
+        Three fields from `as_dict` do not cross to the customer:
+
+        * **`matched_on`** — the exact phrase that tripped the floor. Handing it
+          back is a classifier oracle: probe a few phrasings, learn which words
+          reach a person and which reach the AI, then phrase around the floor.
+          The floor is this platform's regulatory guard, so that is not a
+          curiosity.
+        * **`escalation_reason`** — wording written for an operator. *"This
+          platform is not licensed to give financial advice"* reads as a lecture
+          to the person who asked, and explains the classifier's reasoning to
+          someone with no need for it.
+        * **`assigned_operator_id`** — which staff member is handling them.
+
+        What stays is everything the customer needs: that a person is involved
+        (`needs_human`), and what state their ticket is in. Removing the
+        reasoning must not remove the fact, and a test holds that line.
+
+        A separate method rather than a filter at the endpoint: two call sites
+        already read this, and a projection that lives next to the data is one
+        someone maintains alongside it.
+        """
+        full = self.as_dict()
+        for internal in ("matched_on", "escalation_reason", "assigned_operator_id"):
+            full.pop(internal, None)
+        return full
+
 
 @dataclass(frozen=True)
 class MessageView:

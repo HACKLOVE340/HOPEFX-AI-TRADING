@@ -3708,3 +3708,87 @@ including on the clean tree — intermittent, and not introduced here.)
 * **No customer-facing ticket UI.** `supportApi` carries the customer half and
   the endpoints exist; no page uses them yet, so customers still have no way in.
 * **`api/ws_live.py` at 35%** — recorded debt under ADR 0017, §A6 option 2.
+
+---
+
+## §E41 — The customer ticket UI, and a classifier oracle on the wire (2026-09-10)
+
+`frontend/src/pages/Support.tsx` at `/support`, behind plain `AuthGuard` with no
+plan gate — the backend admits `starter`, which is the lowest role, and putting
+support behind a paid tier is how a billing complaint becomes unreachable.
+
+### The finding: the customer surface was shipping the triage internals
+
+`my_ticket` and `my_tickets` returned `TicketView.as_dict()` — the **operator's**
+projection — to the customer who raised the ticket. Three fields do not belong
+there, and one of them is a security problem rather than a taste problem:
+
+* **`matched_on`** is the exact phrase that tripped the floor: `"withdraw"`,
+  `"is … going up"`. Handing it back is a **classifier oracle**. Probe a few
+  phrasings, learn which words reach a person and which reach the AI, then
+  phrase around the floor. The floor is this platform's regulatory guard — it is
+  what stops the AI answering "should I buy gold?" — so that is not a curiosity.
+* **`escalation_reason`** is wording written for an operator. *"This platform is
+  not licensed to give financial advice"* reads as a lecture to the person who
+  asked, and explains the classifier's reasoning to someone with no need for it.
+* **`assigned_operator_id`** names the staff member handling them.
+
+`TicketView.as_customer_dict()` is the projection, and the endpoints use it. Six
+tests failed on the pre-fix tree. One asserts against the **whole response body**
+rather than a key list, because a field removed from the projection but echoed
+in a message body or a status string is the same leak with a different name.
+
+Removing the reasoning must not remove the fact: a test holds that the customer
+still learns `needs_human` and the ticket's state.
+
+A UI that declined to render those fields would not have fixed this. The data
+was on the wire.
+
+### What the page does differently from the operator console
+
+* **A customer can tell who answered.** Every reply is attributed and an AI
+  reply says so. Letting a machine's answer pass as a person's is an honesty
+  problem before it is a regulatory one.
+* **An escalated ticket says a person is coming** — in as many words, and it
+  says the assistant was taken off the conversation *on purpose*. The
+  alternative is a customer watching a thread that never moves.
+* **There is no live channel here.** `support_queue` is operator-only; giving
+  customers one would be a channel carrying other people's tickets. The page
+  polls at 15s and says nothing about being "live", because it is not.
+
+### Two tests that were passing for the wrong reason
+
+The counterfactual sweep found the empty-ticket guard **unproven**: deleting it
+left all eleven tests green.
+
+    await waitFor(() => expect(open).not.toHaveBeenCalled());
+
+`waitFor` resolves on its **first tick** — before React Query has invoked the
+mutation at all — so this measured "not yet", not "not at all". A negative
+assertion with no barrier in front of it proves nothing. Both suites now put a
+positive observation first: wait for the refusal message (customer page), or
+send a real body and watch that call land (console), so the silence that follows
+is a measured absence.
+
+Strengthening the console's version exposed a second one. It asserted the
+empty-reply guard while the composer was **disabled** — the seeded ticket said
+`assigned_operator_id: 'me'` but nothing had signed anyone in, so `mine` was
+false and the button was inert. The test had never reached the guard. It now
+seeds the store, which is the identity source §E40 established.
+
+That is the sixth time in this programme a counterfactual has caught a suite
+proving something other than what it claimed.
+
+### Verification
+
+Ratchet at exactly 8,021 across 202 files — the new page carries **zero** colour
+literals. `tsc --noEmit` clean; build emits `Support-*.js` and
+`SupportConsole-*.js`. **164 frontend tests** across both support pages, nav
+contract, route guards, page and API-contract suites; **205 backend tests**
+across the five support suites and the app-surface gate.
+
+### Still open
+
+* **`answer_question` is still called with no facts** — the last substantial gap
+  in the desk, and unchanged by this work.
+* **`api/ws_live.py` at 35%** — recorded debt under ADR 0017, §A6 option 2.

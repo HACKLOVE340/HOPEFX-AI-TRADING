@@ -478,3 +478,90 @@ class TestTheRefusalPathOnACustomerReply:
 
         assert response.status_code == 409
         assert response.json()["detail"] == "thread locked"
+
+
+class TestTheCustomerSurfaceDoesNotLeakTheTriageInternals:
+    """The same ticket, two audiences, two projections.
+
+    `my_ticket` and `my_tickets` returned `TicketView.as_dict()` — the operator's
+    projection — to the customer who raised the ticket. Three fields do not
+    belong there:
+
+    * **`matched_on`** is the exact phrase that tripped the floor ("withdraw",
+      "is … going up"). Handing it back is a classifier oracle: probe a few
+      phrasings, learn which words reach a person and which reach the AI, then
+      phrase around the floor. The floor is the platform's regulatory guard, so
+      that is not a curiosity.
+    * **`escalation_reason`** is internal wording written for an operator —
+      *"This platform is not licensed to give financial advice"* reads as a
+      lecture to the person who asked, and explains the classifier's reasoning
+      to someone who has no need for it.
+    * **`assigned_operator_id`** names the staff member handling them.
+
+    The customer is still told everything they need: that a person is involved,
+    and what state their ticket is in. What is removed is *why the machine
+    decided that*, which is the operator's business.
+    """
+
+    def _open(self, http):
+        return http.post("/api/support/tickets", json={"subject": "x", "body": "I want a refund"}).json()["id"]
+
+    @pytest.mark.parametrize("field", ["matched_on", "escalation_reason", "assigned_operator_id"])
+    def test_the_thread_read_omits_it(self, client, field: str):
+        app, mod, http = client
+        _as_customer(app, mod, user_id="cust-1")
+        ticket_id = self._open(http)
+
+        ticket = http.get(f"/api/support/tickets/{ticket_id}").json()["ticket"]
+
+        assert field not in ticket, f"the customer surface returned {field!r}"
+
+    @pytest.mark.parametrize("field", ["matched_on", "escalation_reason", "assigned_operator_id"])
+    def test_the_list_read_omits_it(self, client, field: str):
+        app, mod, http = client
+        _as_customer(app, mod, user_id="cust-1")
+        self._open(http)
+
+        rows = http.get("/api/support/tickets").json()["tickets"]
+
+        assert rows and field not in rows[0], f"the customer list returned {field!r}"
+
+    def test_the_matched_phrase_is_nowhere_in_the_payload(self, client):
+        """Asserted against the whole response, not a key list.
+
+        A field removed from `as_customer_dict` but echoed somewhere else — a
+        message body, a status string — is the same leak with a different name.
+        """
+        app, mod, http = client
+        _as_customer(app, mod, user_id="cust-1")
+        ticket_id = self._open(http)
+
+        body = http.get(f"/api/support/tickets/{ticket_id}").text
+
+        assert "escalated on match" not in body.lower()
+        assert "not licensed" not in body.lower()
+
+    def test_the_customer_still_learns_a_person_is_involved(self, client):
+        """Removing the reasoning must not remove the fact."""
+        app, mod, http = client
+        _as_customer(app, mod, user_id="cust-1")
+        ticket_id = self._open(http)
+
+        ticket = http.get(f"/api/support/tickets/{ticket_id}").json()["ticket"]
+
+        assert ticket["needs_human"] is True
+        assert ticket["status"] == "awaiting_operator"
+        assert ticket["subject"] and ticket["id"] == ticket_id
+
+    def test_the_operator_surface_still_carries_all_of_it(self, client):
+        """The operator needs exactly what the customer must not have."""
+        app, mod, http = client
+        _as_customer(app, mod, user_id="cust-1")
+        ticket_id = self._open(http)
+
+        _as(app, mod, user_id="ops-1", role="admin")
+        ticket = http.get(f"/api/support/queue/{ticket_id}").json()["ticket"]
+
+        assert ticket["matched_on"]
+        assert ticket["escalation_reason"]
+        assert "assigned_operator_id" in ticket

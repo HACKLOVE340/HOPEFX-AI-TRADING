@@ -89,6 +89,7 @@ const PatternDetector      = React.lazy(() => import('./pages/PatternDetector'))
 const AIIntelligence       = React.lazy(() => import('./pages/AIIntelligence'));
 const AICore               = React.lazy(() => import('./pages/AICore'));
 const SupportConsole       = React.lazy(() => import('./pages/SupportConsole'));
+const Support              = React.lazy(() => import('./pages/Support'));
 
 // ── Community ─────────────────────────────────────────────────────────────────
 const Leaderboard  = React.lazy(() => import('./pages/Leaderboard'));
@@ -630,6 +631,7 @@ const AppShell: React.FC = () => {
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
+            <Route path="/support"         element={wrap(<AuthGuard><Support /></AuthGuard>)} />
             <Route path="/kyc"             element={wrap(<AuthGuard><KYCPage /></AuthGuard>)} />
             <Route path="/chat"            element={wrap(<AuthGuard><ChatPage /></AuthGuard>)} />
             <Route path="/ai-assistant"    element={wrap(<AuthGuard><AIAssistant /></AuthGuard>)} />

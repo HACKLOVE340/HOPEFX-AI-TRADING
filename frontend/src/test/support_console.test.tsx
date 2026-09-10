@@ -25,6 +25,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
+import { useStore } from '../store';
 
 const queueRows = [
   {
@@ -45,14 +46,24 @@ const queueRows = [
   },
 ];
 
-const supportApi = {
+/**
+ * `vi.hoisted` rather than a bare top-level const.
+ *
+ * `vi.mock`'s factory is hoisted above the imports, so it can only reach
+ * variables that were themselves hoisted. This file worked with a plain const
+ * until `../store` was imported for `signInAs` — that import evaluates the
+ * module graph earlier, the factory ran first, and the suite died with
+ * "Cannot access 'supportApi' before initialization". The hoisted form is the
+ * documented pattern and does not depend on import order at all.
+ */
+const supportApi = vi.hoisted(() => ({
   queue:   vi.fn(),
   thread:  vi.fn(),
   claim:   vi.fn(),
   release: vi.fn(),
   reply:   vi.fn(),
   resolve: vi.fn(),
-};
+}));
 
 let liveState = { source: 'live' as 'live' | 'poll' | 'refused', lastEventAt: Date.now() };
 
@@ -71,8 +82,22 @@ async function mount() {
   );
 }
 
+/**
+ * The operator's identity comes from the authenticated session, not from the
+ * queue — see the bug §E40 records. Tests that need "this ticket is mine" have
+ * to seed it, and the one below found out the hard way: without a user in the
+ * store the composer is disabled, so an assertion about the empty-body guard
+ * was really measuring a disabled button.
+ */
+function signInAs(id: string) {
+  useStore.setState({
+    user: { id, email: `${id}@hopefx.test`, username: id, role: 'admin' },
+  } as never);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  signInAs('ops-me');
   liveState = { source: 'live', lastEventAt: Date.now() };
   supportApi.queue.mockResolvedValue({ data: { tickets: queueRows, count: 2 } });
   supportApi.thread.mockResolvedValue({
@@ -165,13 +190,28 @@ describe('the composer cannot send what the server would refuse', () => {
   });
 
   it('refuses an empty reply before it reaches the server', async () => {
+    /**
+     * The same weakness as the customer page had: a bare
+     * `waitFor(() => expect(...).not.toHaveBeenCalled())` resolves on its first
+     * tick, before React Query invokes the mutation, so it measures "not yet"
+     * rather than "not at all". A positive observation goes first — typing a
+     * real body and watching THAT call land proves the mutation path works, so
+     * the empty case's silence is a real refusal and not a race.
+     */
     supportApi.thread.mockResolvedValue({
-      data: { ticket: { ...queueRows[0], assigned_operator_id: 'me', status: 'with_operator' }, messages: [] },
+      data: { ticket: { ...queueRows[0], assigned_operator_id: 'ops-me', status: 'with_operator' }, messages: [] },
     });
+    supportApi.reply.mockResolvedValue({ data: { ok: true } });
     await mount();
     fireEvent.click(await screen.findByTestId('row-t-8841'));
-    const send = await screen.findByTestId('act-send');
-    fireEvent.click(send);
-    await waitFor(() => expect(supportApi.reply).not.toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByTestId('act-send'));
+    expect(supportApi.reply).not.toHaveBeenCalled();
+
+    // The same button, with content, does reach the server — so the silence
+    // above was the guard and not a dead control.
+    fireEvent.change(screen.getByTestId('reply-box'), { target: { value: 'On it.' } });
+    fireEvent.click(screen.getByTestId('act-send'));
+    await waitFor(() => expect(supportApi.reply).toHaveBeenCalledWith('t-8841', 'On it.'));
   });
 });
