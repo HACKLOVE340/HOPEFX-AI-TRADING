@@ -297,6 +297,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `GET` | `/api/dashboard/{symbol}/bias` | None | Get market bias summary. | Order Flow Dashboard |
 | `GET` | `/api/dashboard/{symbol}/complete` | None | Get complete order flow analysis for a symbol. | Order Flow Dashboard |
 | `GET` | `/api/dashboard/{symbol}/levels` | None | Get key S/R levels. | Order Flow Dashboard |
+| `GET` | `/api/data-layer/feed-status` | JWT | Whether the price feed can be believed right now, and what is held. | Data Layer |
 | `GET` | `/api/data-layer/feeds` | JWT | Per-feed health and configuration status — via orchestrator. | Data Layer |
 | `GET` | `/api/data-layer/health` | JWT | Full orchestrator health snapshot. | Data Layer |
 | `GET` | `/api/data-layer/lineage` | JWT | Recent lineage records (immutable audit trail) — via orchestrator. | Data Layer |

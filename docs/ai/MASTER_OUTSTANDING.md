@@ -2655,3 +2655,103 @@ baseline showed one, with the two sets disjoint and every one of the six
 passing in isolation. Diffing failure *sets* rather than counts is what
 separated one real regression from five order-dependent flakes; comparing the
 counts alone would have suggested the changes broke five things.
+
+---
+
+## §E29 — Feed failover: what existed, and the half that did not (2026-09-10)
+
+Asked for by the owner as "AI supplies the feed when the feed is down". The
+answer has a hard no in it and a real feature next to it, and both are recorded
+here because the no is the more important half.
+
+### The refusal, stated once
+
+**An LLM must never generate a market price.** A generated XAUUSD quote is
+indistinguishable from a real one — right magnitude, right volatility, right
+decimals — and it flows into position sizing, VaR, stop placement and an order.
+Every defect this programme has removed is a value nothing measured presented as
+though something had; a fabricated price is that defect with the largest
+possible blast radius. No configuration flag, no "emergency only" mode.
+
+Where AI genuinely helps at the feed layer: reasoning *over* real data —
+instrument specs, symbol mapping, explaining why a feed degraded, news and
+geopolitical context. Not manufacturing the number.
+
+### What was already built (verified, not assumed)
+
+* `data_layer/feeds/gold/manager.py` — six providers (GoldAPI, Metals.dev,
+  Yahoo, Metals-API, MetalpriceAPI, CommodityPriceAPI) in priority order, a
+  circuit breaker per feed, confidence-weighted cross-source consensus, Redis
+  pub/sub, Prometheus.
+* `MarketDataOrchestrator.get_latest_tick()` — refuses a cached tick with no
+  `source` rather than labelling it with a fabricated origin; discards one that
+  is stale **or** future-dated; returns `None` rather than a price it cannot
+  stand behind; no longer answers a non-gold symbol with the gold price.
+* Production constructs it: `MarketDataOrchestrator.start()`, line 476.
+
+**A correction worth recording:** the first trace said `GoldFeedManager` was
+constructed only by a validation script and was therefore dead. That was a
+truncated grep — `head -10` cut the orchestrator's two matches. The chain is
+wired. Same failure mode as the frontend audit's first pass, and caught the
+same way: by checking the measurement before reporting it.
+
+### What did not exist, and now does
+
+When every source is down, work still arrives — a signal fires, an operator
+clicks, a scheduled rebalance comes due — and the only answers were `None` and a
+log line. An outage left no trace beyond an absence of trades, which looks
+exactly like a quiet market.
+
+`data_layer/outage.py`:
+
+* **`FeedHealth`** — healthy / degraded / outage, the age of the last tick, how
+  many providers answer. Two inputs, neither sufficient alone: a fresh tick with
+  every provider dead is an **outage that has not surfaced yet**, and calling it
+  healthy is how an operator learns about an outage from a customer. `age_s` is
+  `None` when no tick has ever arrived, never `0.0` — a zero age reads as
+  perfectly fresh, which is the worst possible reading of "we have never had a
+  price".
+* **`DeferredWorkQueue`** — bounded, so an outage cannot become an
+  out-of-memory incident. Overflow drops the **oldest** (during a long outage
+  the newest intents are formed against the most recent known price) and counts
+  every drop.
+* **`FeedOutageSupervisor`** — returns held work **only on the recovery edge**,
+  never on every healthy observation, which would replay it forever.
+
+**The rule that shapes all of it: a deferred trade action is never replayed
+automatically.** The market moved. An intent formed against a pre-outage price
+is not valid after it — acting on it is serving a stale tick one layer up, with
+an order at the end. The module has no broker, no OMS and no execute path;
+`drain()` returns data carrying each item's age and the price context believed
+at deferral, and the caller re-decides. A test asserts the surface stays free of
+`execute`/`submit`/`send`/`on_drain`, because that callback is the tempting
+future edit that turns a forty-minute-old signal into a live order.
+
+An item past `FEED_REPLAY_MAX_AGE_S` (default 300s) comes back **marked
+expired, not dropped** — an expired intent is evidence a signal fired and
+nothing happened.
+
+Wired into `MarketDataOrchestrator._observe_feed_health()`, called on **both**
+the success and the empty path of `get_latest_tick` — a supervisor that only
+hears about successes cannot notice an outage. Exposed at
+`GET /api/data-layer/feed-status` (JWT), which is the source of truth the 59 of
+62 frontend pages carrying no staleness signal (§E26) should read.
+
+Proven by execution on the real orchestrator method, not only in tests:
+
+    before any observation : outage  | age_s: None
+    after an empty read    : outage  | outage_since recorded
+    deferred while down    : 2
+    after recovery         : healthy | pending: 0, handed back for re-decision
+    queue surface          : as_dict, defer, drain, dropped, pending
+                             — no execute, no submit, no broker
+
+### Still open at this layer
+
+* Failover covers **gold only**. A non-gold symbol gets `None` rather than a
+  chain — correct (better than a wrong price) but not covered.
+* Nothing calls `supervisor.defer()` yet. The queue is wired and observed;
+  the decision engine and scheduler have not been taught to use it, so today it
+  records outages without holding work. That is the next step and is named
+  rather than implied.
+* The frontend does not read `/feed-status` yet — §E26 item 2.

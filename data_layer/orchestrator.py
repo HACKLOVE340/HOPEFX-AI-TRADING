@@ -765,9 +765,45 @@ class MarketDataOrchestrator:
                 # Normalise and cache
                 tick = self._norm.normalize_tick(tick)
                 self._on_tick(tick)
+                self._observe_feed_health(tick.timestamp)
                 return tick
 
+        # No price is recoverable here. Record that, so an outage leaves a
+        # trace: without this the only evidence is an absence of trades, which
+        # looks exactly like a quiet market. See data_layer/outage.py.
+        self._observe_feed_health(None)
         return None
+
+    def _observe_feed_health(self, last_tick_at: datetime | None) -> None:
+        """Tell the outage supervisor what this read saw.
+
+        Called on every `get_latest_tick`, on both the success and the empty
+        path, because a supervisor that only hears about successes cannot
+        notice an outage. Never raises: this is bookkeeping around the price
+        path and must not be able to break it — but it logs at ERROR if it
+        fails, because a supervisor that silently stopped observing would
+        report "healthy" forever.
+        """
+        try:
+            from data_layer.outage import get_supervisor
+
+            if self._gold_feed is not None:
+                up = len(self._gold_feed.active_sources())
+                total = len(getattr(self._gold_feed, "_feeds", {})) or up
+            else:
+                up, total = 0, 0
+
+            recovered = get_supervisor().observe(last_tick_at=last_tick_at, sources_up=up, sources_total=total)
+            if recovered:
+                # Returned for re-decision, never replayed. The supervisor
+                # cannot execute and neither does this.
+                logger.warning(
+                    "Feed recovered with %d deferred item(s) awaiting re-decision (%d already past the replay age)",
+                    len(recovered),
+                    sum(1 for item in recovered if item.expired),
+                )
+        except Exception as exc:
+            logger.error("Orchestrator: feed-health observation failed: %s", exc, exc_info=True)
 
     def _on_tick(self, tick: GoldTick) -> None:
         """

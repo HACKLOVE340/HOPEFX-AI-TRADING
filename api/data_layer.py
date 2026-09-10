@@ -318,6 +318,47 @@ async def get_feed_health(user: TokenPayload = Depends(get_current_user)) -> dic
         raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
+@router.get("/feed-status")
+async def get_feed_status(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+    """Whether the price feed can be believed right now, and what is held.
+
+    One number every surface can agree on. The frontend audit found 59 of 62
+    data-wired pages showing no staleness signal at all, so a price that had
+    stopped updating looked identical to one that was current; this is the
+    source of truth those pages should read.
+
+    Distinguishes three states rather than a boolean, because they call for
+    different behaviour:
+
+      healthy  — a recent tick and at least one live provider
+      degraded — the last tick is older than the staleness threshold, or its
+                 timestamp is in the future (clock skew); still serving, but
+                 nothing here should be called live
+      outage   — no provider is answering, OR no tick has ever arrived. A fresh
+                 cached tick with every provider dead is an outage that has not
+                 surfaced yet, and reporting it as healthy is how an operator
+                 learns about an outage from a customer.
+
+    `age_s` is null when no tick has ever been seen — never 0.0, which would
+    read as perfectly fresh.
+
+    `deferred` reports work that arrived while the feed was down. It is held
+    for re-decision, never replayed: an intent formed against a pre-outage
+    price is not valid after it.
+    """
+    try:
+        from data_layer.outage import get_supervisor
+
+        return get_supervisor().as_dict()
+    except Exception as exc:
+        # A status endpoint that 200s with an optimistic body when it cannot
+        # read the real state is worse than one that fails: the caller would
+        # believe the feed is fine on exactly the evidence that something is
+        # not.
+        logger.error("Feed status unavailable: %s", exc, exc_info=True)
+        raise HTTPException(status_code=503, detail="Feed status unavailable — check server logs") from None
+
+
 @router.get("/ml-features")
 async def get_ml_features(
     symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)

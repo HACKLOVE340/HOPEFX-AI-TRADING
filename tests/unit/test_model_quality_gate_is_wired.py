@@ -48,6 +48,7 @@ call, and it is tracked separately alongside the `DRIFT_BLOCK` default.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 pytestmark = pytest.mark.unit
@@ -124,22 +125,56 @@ class TestPredictActuallyRunsIt:
 
 
 class TestTheScoresComeFromRealSignals:
-    def test_a_missing_calibrator_scores_zero_not_one(self) -> None:
-        # isotonic_calibrator.pkl does not exist in this tree, so every
-        # prediction today is served from a raw, uncalibrated probability and
-        # nothing says so. The gate is what says so.
+    def test_no_recorded_calibration_is_unmeasured_not_zero(self) -> None:
+        """No calibration_report.json -> score is None, and the gate fails closed.
+
+        These two tests used to assert the presence semantics:
+        `_calibrator = None` scored exactly 0.0 and `_calibrator = object()`
+        scored exactly 1.0. That was faithful to the code at the time and the
+        code was wrong: it measured whether a pickle had loaded, so a
+        badly-fitted calibrator cleared any MIN_CALIBRATION and a
+        well-calibrated raw model failed every threshold above zero.
+
+        Training now records a real 1 - ECE (ml/calibration_metrics.py) and the
+        engine reads it. Absence is absence: None, not 0.0 and not 1.0.
+        """
         engine = _engine()
         engine._calibrator = None
-        snapshot = engine._evaluate_model_quality(drift_z=0.0, data_quality=1.0)
-        assert snapshot is not None
-        assert snapshot.calibration_score == 0.0
+        assert engine._recorded_calibration_score() is None
 
-    def test_a_loaded_calibrator_scores_one(self) -> None:
-        engine = _engine()
-        engine._calibrator = object()
         snapshot = engine._evaluate_model_quality(drift_z=0.0, data_quality=1.0)
         assert snapshot is not None
-        assert snapshot.calibration_score == 1.0
+        assert snapshot.calibration_score is None
+        assert snapshot.calibration_ok is False, "an unmeasured gate is not a passed gate"
+
+    def test_a_recorded_score_is_what_the_gate_sees(self, tmp_path) -> None:
+        """A loaded calibrator object no longer confers a perfect score.
+
+        The measured number decides, and nothing else does — which is the whole
+        point of replacing the presence signal.
+        """
+        import json
+        from unittest.mock import patch
+
+        from ml.calibration_metrics import calibration_report
+
+        n = 400
+        report = calibration_report(np.full(n, 0.98), np.array([1] * (n // 2) + [0] * (n // 2)))
+        assert report is not None and report.calibration_score < 0.6
+
+        path = tmp_path / "calibration_report.json"
+        path.write_text(json.dumps(report.as_dict()))
+
+        engine = _engine()
+        engine._calibrator = object()  # present, and now irrelevant
+        with patch("ml.inference_engine._saved", return_value=path):
+            snapshot = engine._evaluate_model_quality(drift_z=0.0, data_quality=1.0)
+
+        assert snapshot is not None
+        assert snapshot.calibration_score == pytest.approx(report.calibration_score)
+        assert snapshot.calibration_score < 1.0, (
+            "an overconfident model must not score 1.0 just because a calibrator object exists"
+        )
 
     def test_drift_above_the_engines_own_threshold_fails(self) -> None:
         from ml.inference_engine import _DRIFT_Z_THRESHOLD
@@ -221,17 +256,60 @@ class TestBlockingIsOptOutAndFailsClosed:
         monkeypatch.setattr(ie, "_MODEL_QUALITY_BLOCK", False)
         _engine()._enforce_model_quality(None)
 
-    def test_a_passing_snapshot_never_raises_even_when_blocking(self, monkeypatch) -> None:
+    def test_a_passing_snapshot_never_raises_even_when_blocking(self, monkeypatch, tmp_path) -> None:
         # A gate that refuses everything is indistinguishable from a working
         # one until somebody tries to use it.
+        #
+        # This used to get a passing snapshot from `engine._calibrator =
+        # object()`, back when a loaded calibrator scored a flat 1.0. It now
+        # takes a recorded calibration report, because a measured score is the
+        # only thing that can pass — which is the point of the change, and has
+        # an operational consequence worth naming here: with
+        # MODEL_QUALITY_BLOCK=true and no calibration_report.json on disk, the
+        # engine refuses every prediction. That is correct fail-closed
+        # behaviour (do not run block-mode on a model nobody calibrated), but
+        # it means enabling block mode now requires a training run that
+        # measured calibration.
+        import json
+
+        import ml.inference_engine as ie
+        from ml.calibration_metrics import calibration_report
+
+        probs, labels = [], []
+        for conf in (0.2, 0.4, 0.6, 0.8):
+            n = 250
+            hits = int(round(conf * n))
+            probs.extend([conf] * n)
+            labels.extend([1] * hits + [0] * (n - hits))
+        report = calibration_report(np.array(probs), np.array(labels))
+        assert report is not None and report.calibration_score > 0.9
+
+        path = tmp_path / "calibration_report.json"
+        path.write_text(json.dumps(report.as_dict()))
+
+        monkeypatch.setattr(ie, "_MODEL_QUALITY_BLOCK", True)
+        monkeypatch.setattr(ie, "_saved", lambda _name: path)
+        engine = _engine()
+        snapshot = engine._evaluate_model_quality(drift_z=0.0, data_quality=1.0)
+        assert snapshot is not None and snapshot.passed
+        engine._enforce_model_quality(snapshot)
+
+    def test_blocking_with_no_recorded_calibration_refuses(self, monkeypatch) -> None:
+        """The consequence of the change above, pinned rather than discovered.
+
+        Turning on MODEL_QUALITY_BLOCK against an uncalibrated model now
+        refuses every prediction instead of waving them through on a 0.0 that
+        happened to clear a 0.0 floor.
+        """
         import ml.inference_engine as ie
 
         monkeypatch.setattr(ie, "_MODEL_QUALITY_BLOCK", True)
         engine = _engine()
-        engine._calibrator = object()
+        engine._calibrator = None
         snapshot = engine._evaluate_model_quality(drift_z=0.0, data_quality=1.0)
-        assert snapshot is not None and snapshot.passed
-        engine._enforce_model_quality(snapshot)
+        assert snapshot is not None and not snapshot.passed
+        with pytest.raises(RuntimeError, match="model quality gate failed"):
+            engine._enforce_model_quality(snapshot)
 
 
 class TestThresholdsAreTheOnesTheFileAlreadyUsed:

@@ -1463,7 +1463,6 @@ async def rl_walk_forward(
         raise HTTPException(status_code=500, detail="RL walk-forward failed — check server logs") from None
 
 
-@router.get("/rl/status", tags=["ML Models"])
 def _relative_model_dir(path: str | Path) -> str:
     """Render a model directory for display without leaking the server layout."""
     try:
@@ -1473,6 +1472,7 @@ def _relative_model_dir(path: str | Path) -> str:
         return Path(path).name
 
 
+@router.get("/rl/status", tags=["ML Models"])
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     """Return RL agent runtime status and saved model inventory.
 
