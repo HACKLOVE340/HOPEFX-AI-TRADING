@@ -28,6 +28,12 @@ dropped.** Dropping it hands the model a gap to fill. `ai/departments/` already
 returns `available: False` rather than a number it did not get; this carries
 that into the prompt as `not measured`.
 
+**Where the facts come from.** `support.facts` measures them from the routed
+department's own read-only actions — an allowlist, not a risk-tier filter,
+because READ_ONLY describes what an action does to the platform and says nothing
+about whether its output may reach a hosted model. Passing `facts=` explicitly
+skips gathering: the caller measured it, and the caller is the authority.
+
 ## "Different AI in different aspects"
 
 `DEPARTMENT_BRIEFS` is the owner's request made auditable: one brief per
@@ -209,6 +215,18 @@ def _call_gateway(*, prompt: str, operator: str, timeout_s: float) -> Any:
     )
 
 
+def _gather(department: str) -> dict[str, Any]:
+    """Measure what this department can contribute. The single fact seam.
+
+    Separate from `support.facts.gather_facts` only so the tests patch a
+    boundary in this module rather than reaching into another one — the call is
+    a straight delegation.
+    """
+    from support.facts import gather_facts
+
+    return gather_facts(department)
+
+
 def answer_question(
     question: str,
     *,
@@ -238,6 +256,20 @@ def answer_question(
             needs_human=True,
             unavailable_reason="No department owns this question; a person should read it.",
         )
+
+    # `None` means "go and find out"; `{}` is a caller deciding there are no
+    # facts. Conflating them would make a deliberate empty block indistinguishable
+    # from an unmeasured one — the distinction this module exists to keep.
+    if facts is None:
+        try:
+            facts = _gather(decision.department)
+        except Exception as exc:
+            # The facts improve an answer; they are not a precondition for one.
+            # A broken registry must not take the support desk down with it —
+            # and the prompt still says "none supplied", so the model is told
+            # it has nothing rather than left to assume.
+            logger.error("support: fact gathering failed for %s: %s", decision.department, exc)
+            facts = {}
 
     prompt = _build_prompt(question, department=decision.department, facts=facts)
 

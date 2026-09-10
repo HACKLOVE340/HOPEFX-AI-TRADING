@@ -3792,3 +3792,111 @@ across the five support suites and the app-surface gate.
 * **`answer_question` is still called with no facts** — the last substantial gap
   in the desk, and unchanged by this work.
 * **`api/ws_live.py` at 35%** — recorded debt under ADR 0017, §A6 option 2.
+
+---
+
+## §E42 — The facts reach the answer, and READ_ONLY is not "safe to send" (2026-09-10)
+
+The last substantial gap in the desk. `support.answering` composed a FACTS block
+and told the model to state no figure that was not in it — and **nothing filled
+that block**. Every reply came from the department brief alone, so the strictest
+half of the design was carrying the whole thing.
+
+`support/facts.py` fills it from the routed department's own read-only actions.
+`answer_question(facts=None)` now gathers; `facts={}` still means a caller
+deliberately decided there are none. Conflating those two would make a
+deliberate empty block indistinguishable from an unmeasured one, which is the
+distinction the module exists to keep.
+
+### The finding: the obvious implementation was a disclosure path
+
+"Call every implemented READ_ONLY action that needs no arguments" is the natural
+rule. Measured against the real registry, it calls:
+
+    platform_engineering.scan_secrets      -> secret-scanner findings
+    platform_engineering.walk_code         -> source
+    platform_engineering.run_tests         -> the test suite, per support ticket
+    research_intelligence.run_backtest     -> a backtest, per support ticket
+    markets_execution.shadow_place_order   -> a simulated order
+
+The first two are the serious ones: their output would be pasted into a prompt
+sent to a **third-party model**.
+
+> **The risk tier describes what an action does to the platform. It says nothing
+> about what its output is, and the output is what travels.**
+
+So `SUPPORT_FACTS` is a per-department **allowlist**, and the dangerous
+exclusions are asserted by name, so putting one back is a deliberate act rather
+than a diff nobody reads. Arguments are never invented either — only `operator`,
+and only because `support_desk` is this caller's real identity, the same one
+`answering` spends its model budget under.
+
+### Two things running it found that reading it did not
+
+**`default=str` makes everything serialisable.** The first `_renderable` used
+`json.dumps(value, default=str)`, so a bare `object()` became
+`"<object object at 0x7f…>"` — the unrenderable check passed and a memory
+address was on its way to a hosted model as a measurement. A timestamp and a
+`Decimal` are facts worth coercing; an arbitrary object is not, and `_coerce`
+now refuses it.
+
+**A permanently-unmeasurable fact was allowlisted.** Running the gatherer
+against the real registry showed `news_intelligence.score_geopolitical_risk`
+answering `nothing to score: 'text' was empty` — for every ticket, forever,
+because the text to score is an argument this desk will not invent. A fact that
+can never be measured is noise in a billed prompt and a control that can never
+fire. Removed, with a test holding it out by name.
+
+### What a real ticket now carries
+
+Measured, not described — every allowlisted handler invoked against the live
+registry:
+
+| Department | Fact | Result |
+|---|---|---|
+| markets_execution | query_broker_status | `available: false, reason: broker_unavailable` |
+| risk_compliance | check_drawdown | `available: true, passed: true` |
+| data_ops | feed_health / stale_sources | `available: false` — no quality engine in this process |
+| system_ops | service_health / recent_failures | `available: true`, 260 B / 1,967 B |
+| research_intelligence | score_regime | `available: false, no_regime_for_symbol` |
+| platform_engineering, notification_ops, news_intelligence | — | declare nothing, deliberately |
+
+The departments' own `available: false` honesty flows straight into the prompt,
+so the model is told *"broker_unavailable"* rather than left to guess a broker
+state. That is the whole point: `ai/departments/` refuses to invent a number,
+and the fact block refuses to hide that it refused.
+
+### Rules held by test
+
+* A handler that raises, times out, or returns something unrenderable
+  contributes `None` → rendered as `not measured`, and logged at **ERROR**: a
+  gatherer that quietly returns nothing looks exactly like a system with nothing
+  to report (F248).
+* A spent budget records absence rather than **omitting the key** — a key that
+  vanishes lets the model assume the department had nothing to say.
+* One dead action does not blank the block.
+* A broken gatherer never takes the answer down; the facts improve an answer and
+  are not a precondition for one.
+* An escalated question gathers nothing — no measurement, no spend, no model
+  call. The floor returns first.
+
+Five counterfactuals, all failing correctly: allowlist widened to the dangerous
+actions (4 failed), a failed handler contributing a plausible value (2), an
+unserialisable value passed through (3), explicit facts overwritten by gathering
+(2), and a broken gatherer taking the answer down (1).
+
+`support/facts.py` at **100% statement and branch coverage**;
+`support/answering.py` at 100%. **292 tests** across the support and department
+suites.
+
+### The desk is complete
+
+Triage decides, tickets record and refuse, answering drafts from measured facts
+or says it cannot, the API serves both audiences with separate projections, the
+queue is live, and both consoles are built. What remains is operational rather
+than structural:
+
+* **`api/ws_live.py` at 35%** — recorded debt under ADR 0017, §A6 option 2.
+* **No end-to-end test** drives a customer question through triage → facts →
+  gateway → ticket → operator queue in one run. Each seam is tested; the chain
+  is not.
