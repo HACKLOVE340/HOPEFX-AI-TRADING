@@ -2824,3 +2824,75 @@ because a second test file asserted the old contract — the Sortino `inf` (two
 files), the calibration presence signal (three tests), and the generated API
 doc. Looking before changing costs one command; finding out afterwards costs a
 red branch.
+
+---
+
+## §E31 — The AI was dead without an API key (2026-09-10)
+
+Owner requirement: *"our local model should be our primary model, so our AI can
+be active if an API token is not available — it should not be waiting for a key
+before it activates. If a key is dictated it can switch."*
+
+Measured first, with every provider credential unset:
+
+    credentialed providers : []
+    embedding    chain=['openai', 'google']                 answerable legs=0
+    fast         chain=['anthropic', 'anthropic', 'google'] answerable legs=0
+    reasoning    chain=['anthropic', 'openai', 'google']    answerable legs=0
+    vision       chain=['google', 'anthropic']              answerable legs=0
+
+**All four roles resolved to chains that could not answer.** `ai/local_model.py`
+— which the owner had already required to start with the application — was
+running on the box and was in no chain, because the policy read *"local
+inference is optional and never a primary"*: it joined only when a superadmin
+set `llm_local_enabled`, and then last.
+
+### What changed in `ai/gateway/chain.py`
+
+Local now joins four ways, in descending order of deliberateness:
+
+| Route | Effect |
+|---|---|
+| `llm_local_only` | The exclusive privacy mode. **Unchanged** — a ceiling, not a preference |
+| `llm_local_first` | Local leads; hosted legs remain behind it as fallback |
+| `llm_local_enabled` | Appended last (the pre-existing behaviour) |
+| *automatic* | Leads when **no leg in that role's chain** is credentialed |
+
+Plus: a ready local runtime is now reachable as a last resort in every chain,
+not only when `llm_local_enabled` was set. A deployment that never touched that
+setting used to lose the AI entirely the moment its providers went down.
+
+Automatic promotion is a **floor, not a preference**. A credentialed hosted
+provider keeps the lead, so a deployment paying for a frontier model is never
+quietly downgraded because ollama happens to be up — that is the owner's "if a
+key is dictated it can switch". The check is per-role rather than global, which
+is more precise than it first appears: with only an `ANTHROPIC_API_KEY`, the
+`embedding` chain (`openai`, `google`) genuinely cannot answer, so local
+correctly leads *that* chain while `reasoning` still leads with Anthropic.
+
+### The trap this could easily have become
+
+`providers.local_inference_enabled()` returns `is_credentialed("ollama")`, and
+"credentialed" for ollama means `OLLAMA_BASE_URL` is a **non-empty string**.
+Promoting on that evidence would have replaced a chain that cannot answer with
+one that cannot answer *and claims it can* — strictly worse, because the caller
+stops looking for the real problem. `ai/local_model.py::is_ready()` probes, and
+`chain._local_is_ready()` calls it; a probe that raises is not-ready, and says
+so. Two tests pin it, one of them by patching `local_inference_enabled` to True
+while the probe says False and asserting local is **not** promoted.
+
+An automatic promotion logs at WARNING naming the role and saying capability is
+materially lower — a local answer must never quietly pass for a frontier one.
+
+### Method note
+
+The first version of the probe test read `inspect.getsource(_local_is_ready)`
+and asserted the string `local_inference_enabled` was absent. It failed —
+because that function's docstring *explains* why it does not use it. A checker
+that reads prose is not reading code; this repository has had that defect
+before (F255), and it is no better in a test than in an analyzer. Rewritten to
+assert behaviour.
+
+Before committing, every test touching `resolve_chain` / `LOCAL_PROVIDER` /
+`llm_local` was run to check whether any encoded the old "never a primary"
+policy. None did — 106 pass.

@@ -75,10 +75,13 @@ DEFAULT_CHAINS: Final[dict[str, tuple[ChainLeg, ...]]] = {
     ),
 }
 
-#: Local inference is optional and never a primary. It joins a chain only when a
-#: superadmin enables it, and then as the last leg -- or as the only leg under an
-#: explicit local-only privacy mode for a deployment that must not egress
-#: prompts. Capability drops sharply; the UI has to say so.
+#: Local inference joins a chain four ways, in descending order of deliberateness:
+#: `llm_local_only` (the exclusive privacy mode, for a deployment that must not
+#: egress prompts), `llm_local_first` (leads, hosted legs behind it),
+#: `llm_local_enabled` (appended last), and automatically at the head when no leg
+#: in the chain is credentialed — because a platform with no API key had no AI at
+#: all, which is worse than a weaker answer. Capability drops sharply in every
+#: case; the UI has to say so.
 LOCAL_PROVIDER: Final = "ollama"
 
 #: Reasons that mean "this leg could not answer" -- try the next one.
@@ -184,6 +187,42 @@ def _configured_legs(config: dict, role: str) -> list[ChainLeg] | None:
     return legs
 
 
+def _credentialed_providers() -> frozenset[str]:
+    """Which vendors hold a credential. Isolated so the chain can be tested."""
+    try:
+        from ai.gateway.providers import credentialed_providers
+
+        return frozenset(credentialed_providers())
+    except Exception as exc:
+        # Fail closed: if we cannot tell which providers are credentialed, do
+        # not assume any are. That biases toward promoting the local leg, which
+        # is the safe direction — a weaker answer beats no answer.
+        logger.error("chain: could not read credentialed providers (%s)", exc)
+        return frozenset()
+
+
+def _local_is_ready() -> bool:
+    """Whether the local runtime can ACTUALLY answer, measured now.
+
+    Deliberately not `providers.local_inference_enabled()`, which returns
+    `is_credentialed("ollama")` — and "credentialed" for ollama means
+    `OLLAMA_BASE_URL` is a non-empty string. **A string is not a server.**
+    Promoting the local leg on that evidence would replace a chain that cannot
+    answer with one that cannot answer *and claims it can*: strictly worse,
+    because the caller stops looking for the real problem.
+
+    `LocalModelRuntime.is_ready()` probes. A probe that raises is evidence of no
+    server, not of an unknown state, so this is False and says so.
+    """
+    try:
+        from ai.local_model import get_local_model_runtime
+
+        return bool(get_local_model_runtime().is_ready())
+    except Exception as exc:
+        logger.warning("chain: local readiness probe unavailable (%s); treating as not ready", exc)
+        return False
+
+
 def _local_leg(config: dict) -> ChainLeg:
     """The optional on-hardware leg. Its identifier is configurable; its position is not."""
     model = str(config.get("llm_local_model", "") or "").strip() or DEFAULT_LOCAL_MODEL
@@ -242,6 +281,51 @@ def resolve_chain(role: str) -> tuple[ChainLeg, ...]:
 
     if _truthy(config.get("llm_local_enabled")) and not any(leg.provider == LOCAL_PROVIDER for leg in legs):
         legs = [*legs, _local_leg(config)]
+
+    # ── Local as primary ────────────────────────────────────────────────────
+    #
+    # Owner requirement, 2026-09-10: the AI must be active without an API token
+    # rather than waiting for one. Measured before this existed, with every
+    # credential unset, all four roles resolved to chains with ZERO answerable
+    # legs — the local runtime was on the box and in no chain, because the
+    # policy was "optional and never a primary".
+    #
+    # Two routes, and they are different things:
+    #
+    #   llm_local_first  — a deliberate preference. Local leads; the hosted legs
+    #                      stay behind it. (`llm_local_only` remains the
+    #                      exclusive privacy mode and is untouched.)
+    #   automatic        — a floor, not a preference. When NO leg in the chain
+    #                      is credentialed, a ready local runtime goes first
+    #                      rather than leaving the platform with no AI at all.
+    #                      A credentialed provider keeps the lead, so a
+    #                      deployment paying for a frontier model is never
+    #                      quietly downgraded because ollama happens to be up.
+    #
+    # Both routes require the readiness PROBE, not the env var — see
+    # `_local_is_ready`. A preference cannot make an absent server respond.
+    # A ready local runtime is worth having as a last resort even when it does
+    # not lead: if every hosted leg fails, a weaker answer beats none, and local
+    # inference egresses nothing. Previously it joined only when a superadmin
+    # set `llm_local_enabled`, so a deployment that never touched that setting
+    # lost the AI entirely the moment its providers went down.
+    if _local_is_ready() and not any(leg.provider == LOCAL_PROVIDER for leg in legs):
+        legs = [*legs, _local_leg(config)]
+
+    wants_local_first = _truthy(config.get("llm_local_first"))
+    nothing_else_can_answer = not any(leg.provider in _credentialed_providers() for leg in legs)
+
+    if (wants_local_first or nothing_else_can_answer) and _local_is_ready():
+        local = _local_leg(config)
+        if not legs or legs[0] != local:
+            legs = [local] + [leg for leg in legs if leg != local]
+            if nothing_else_can_answer and not wants_local_first:
+                logger.warning(
+                    "chain[%s]: no credentialed provider — leading with the local model. "
+                    "Capability is materially lower than a hosted frontier model; set an "
+                    "API key to restore it.",
+                    role,
+                )
 
     return tuple(legs)
 
