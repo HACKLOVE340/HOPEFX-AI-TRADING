@@ -3545,3 +3545,56 @@ tests across the affected areas.
   written to answer from a FACTS block and nothing gathers one from the
   departments' read-only actions.
 * **`api/ws_live.py` at 35%** — recorded debt, not permission. §A6 option 2.
+
+---
+
+## §A7 — Owner decision: approve the operator console before it is built
+
+**Awaiting approval.** CLAUDE.md routes any major UI/UX change through
+`flow-prototype` before production implementation, and that skill is explicit:
+*"If no approver is reachable, halt before production UI. Questions forbidden is
+not approval. No post-hoc approval."* So the console exists as a throwaway
+review surface and nothing more.
+
+**Review it here:** https://claude.ai/code/artifact/1527f1a7-d04c-4d42-ad3e-74fa76e61d4f
+
+Read-only, deterministic mock seed, no broker, no database, no message ever
+sent. Eleven states are reachable from the rail; each one annotates its
+container choice, state change, motion and recovery path. Verdicts and notes are
+stored in the artifact's own store, so what you mark comes back to me.
+
+### What is being asked
+
+Four verdicts — queue triage, claim→answer→resolve, the live channel, and the
+visual direction.
+
+### The design decisions worth disagreeing with
+
+* **The console reuses HOPEFX's own tokens** (`frontend/src/index.css`) rather
+  than a new palette: `#080c14` ground, `#00d4ff` accent, 224px rail, 56px
+  topbar. The recommendation engine proposed glassmorphism in gold and purple;
+  the product's existing language outranks it.
+* **Queue state deliberately does not use the market palette.** Green and red
+  mean price direction on this platform. A red row must not read as "down", so
+  waiting is amber, held-by-you is cyan, held-by-someone-else is slate, and red
+  is reserved for the escalation floor's own severity.
+* **The signature element is the escalation ribbon** — every row carries *why*
+  the floor sent it, in the floor's own words, because an operator taking over
+  mid-thread needs the reason and not just the fact.
+* **Rejected:** a KPI-card hero (nobody triages by average handle time) and a
+  chat-bubble layout (it hides the audit trail that makes this desk defensible).
+* **A claim is inline, not a modal.** It is small and reversible; a modal would
+  be theatre. A *conflict* is an inline banner rather than a toast, because a
+  toast that disappears takes the holder's name with it.
+
+### What the prototype does not prove
+
+A browser prototype proves interaction intent. It does not prove native
+behaviour, backend correctness, or production performance. The live channel is
+simulated — the real one is `support_queue`, landed in §E39.
+
+### After approval
+
+The prototype is deleted, not absorbed: review controls, mock adapters and
+abandoned pathways do not reach production. The decision and its reasoning are
+recorded here.
