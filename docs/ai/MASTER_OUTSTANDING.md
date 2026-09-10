@@ -3900,3 +3900,91 @@ than structural:
 * **No end-to-end test** drives a customer question through triage → facts →
   gateway → ticket → operator queue in one run. Each seam is tested; the chain
   is not.
+
+---
+
+## §E43 — The desk proven as a system, and nine tests that passed against a dead chain (2026-09-10)
+
+`tests/integration/test_support_desk_end_to_end.py` — 18 tests driving a
+customer question through the whole chain: triage → facts → gateway → ticket →
+broadcast → operator queue → claim → reply → resolve → back to the customer.
+
+Every seam already had a suite. Nothing ran the chain, so a break **between** two
+green modules had nowhere to show up.
+
+Real throughout: `support.triage`, `support.facts` and the department handlers it
+calls, `support.tickets` on a real SQLite file, `api/support.py`'s routers, and
+FastAPI's own dispatch. Two seams stood in for: the **gateway** (the one network
+boundary, so the suite needs no model and no credential) and the **broadcast**,
+which is *wrapped* rather than replaced so the real coroutine still runs and the
+frames are captured.
+
+Marked `integration`, not `e2e`. CI runs `-m "not slow and not e2e"`, so an
+`e2e` mark would have made this a test that never runs — the defect class it
+exists to catch, applied to itself.
+
+### The finding: nine tests passed against a chain that wrote nothing
+
+`hopefx-dead-controls` records F255 — a code-analyzer test wrote its sample into
+`tmp_path`, the analyzer skipped any path containing `/test`, and every "this
+must still be flagged" case passed against a scanner that never executed.
+
+> **A harness that never ran agrees with every assertion.**
+
+That was tested here rather than trusted. Breaking `open_ticket` so the store
+commits nothing left **9 of 18 tests green** — including
+`test_it_does_not_reach_the_operator_queue` and
+`test_and_nothing_was_broadcast_for_it`, which assert *absences* and therefore
+pass perfectly against a desk that does nothing at all.
+
+`TestTheHarnessIsLive` is what catches it: five tests proving the routes are
+mounted, a row reaches the real database, the gateway seam is reached, the fact
+gatherer is reached, and a frame is broadcast — **before** any journey asserts
+what did or did not happen. Under the silent-write break,
+`test_a_ticket_reaches_the_real_database` fails and the harness declares itself
+dead instead of quietly agreeing.
+
+### Six inter-module breaks, each caught
+
+| Break | Failures |
+|---|---|
+| The API stops asking the AI to answer | 6 |
+| An unanswerable ticket is no longer escalated (silent ticket) | 2 |
+| Facts are gathered but never passed to the prompt | 1 |
+| An escalation is stored but never announced on the live channel | 3 |
+| The customer projection reverts to the operator one | 1 |
+| The operator queue stops filtering on `needs_human` | 1 |
+
+None of these is visible to a unit suite: each module keeps its own tests green
+while the chain between them is severed.
+
+Under break 1 the two liveness tests fail *first* —
+`test_the_gateway_seam_is_actually_reached` and
+`test_the_fact_gatherer_is_actually_reached` — so the diagnosis points at the
+severed call rather than at the six downstream assertions that also went red.
+
+### What the chain proves that no unit test could
+
+* A **real department handler**'s answer travels into a **real prompt**:
+  `markets_execution.query_broker_status` reports `available: false` and the
+  model is told `broker_unavailable` rather than left to guess a broker state.
+* The floor **returns before either seam** — `gateway.call_count == 0` and
+  `gather.call_count == 0` on an escalated question. No measurement, no spend,
+  no model call.
+* The frame sequence over one full handoff is exactly
+  `escalated → claimed → operator_replied → resolved`.
+* The customer reads the resolved thread with the operator's reply in it, and
+  the raw response body contains neither `matched_on` nor `escalation_reason`.
+* A customer reply after resolution reopens the ticket and puts it back in the
+  queue.
+
+289 tests green across the end-to-end, support and department suites.
+
+### The desk is done
+
+Triage decides, tickets record and refuse, answering drafts from measured facts
+or says it cannot, the API serves both audiences with separate projections, the
+queue is live, both consoles are built, and the chain is proven as a system.
+
+The only outstanding item is **`api/ws_live.py` at 35%** — recorded debt under
+ADR 0017, §A6 option 2.
