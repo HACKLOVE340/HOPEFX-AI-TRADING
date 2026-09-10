@@ -391,3 +391,72 @@ class TestEscalationDoesNotDisturbAnOperatorAlreadyOnTheTicket:
             "a reopened escalated ticket landed in a state the operator queue does not show"
         )
         assert len(store.operator_queue()) == 1
+
+
+class TestATicketTheAICouldNotAnswerStillReachesAPerson:
+    """The floor is not the only way a ticket needs a human.
+
+    `support.answering` refuses rather than inventing a reply when there is no
+    reachable model. Without this, that refusal leaves a ticket nobody is
+    working — and a ticket nobody is working looks identical to one that was
+    answered.
+    """
+
+    def test_escalate_puts_an_answerable_ticket_in_the_queue(self, store):
+        ticket = _open(store)
+        assert store.operator_queue() == []
+
+        assert store.escalate(ticket.id, reason="The support AI is unavailable.").allowed is True
+
+        queued = store.operator_queue()
+        assert len(queued) == 1
+        assert queued[0].escalation_reason == "The support AI is unavailable."
+
+    def test_the_ai_can_no_longer_resolve_it(self, store):
+        from support.tickets import Actor
+
+        ticket = _open(store)
+        store.escalate(ticket.id, reason="The support AI is unavailable.")
+
+        assert store.resolve(ticket.id, actor=Actor.AI).allowed is False
+
+    def test_it_does_not_overwrite_the_floor_s_own_reason(self, store):
+        """The floor's reason is the one that took it out of the AI's hands."""
+        ticket = store.open_ticket(user_id="c1", subject="x", body="I want a refund")
+        original = store.get(ticket.id).escalation_reason
+
+        store.escalate(ticket.id, reason="The support AI is unavailable.")
+
+        assert store.get(ticket.id).escalation_reason == original
+
+    def test_it_does_not_take_a_ticket_off_an_operator(self, store):
+        ticket = _open(store)
+        store.claim(ticket.id, operator_id="ops-2")
+
+        store.escalate(ticket.id, reason="The support AI is unavailable.")
+
+        assert store.get(ticket.id).status == "with_operator"
+
+    def test_an_unknown_ticket_is_refused(self, store):
+        assert store.escalate("nope", reason="x").allowed is False
+
+
+class TestACustomerSeesOnlyTheirOwnTickets:
+    def test_the_filter_is_in_the_query(self, store):
+        """A read that fetches everything and discards other people's is one
+        forgotten filter away from returning them."""
+        mine = store.open_ticket(user_id="cust-1", subject="a", body="I want a refund")
+        store.open_ticket(user_id="cust-2", subject="b", body="I want a refund")
+
+        assert [t.id for t in store.tickets_for("cust-1")] == [mine.id]
+
+    def test_a_user_with_none_gets_an_empty_list(self, store):
+        assert store.tickets_for("nobody") == []
+
+    def test_newest_first(self, store):
+        """The opposite of the operator queue, and deliberately so: a customer
+        looks for what they raised last, an operator for who has waited longest."""
+        first = store.open_ticket(user_id="c1", subject="a", body="I want a refund")
+        second = store.open_ticket(user_id="c1", subject="b", body="I want a refund")
+
+        assert [t.id for t in store.tickets_for("c1")] == [second.id, first.id]

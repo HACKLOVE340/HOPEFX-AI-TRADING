@@ -101,3 +101,89 @@ class TestTheRecordedListIsRealPaths:
     def test_every_recorded_path_exists(self, hook) -> None:
         gone = [p for p in sorted(hook._load_baseline()) if not (REPO / p).exists()]
         assert not gone, f"recorded but deleted — remove these lines: {gone[:10]}"
+
+
+class TestAConfigExclusionSaysSoRatherThanBlamingTheTest:
+    """The gate misdiagnosed its own blocking condition.
+
+    `core/router_registry.py` sat in `.coveragerc`'s `[run] omit`, so
+    measurement returned `None` and the gate reported "the test may not import
+    the module, or may fail to collect" — while `tests/unit/test_core_router_registry.py`
+    imports it on line 19 and nine tests exercised it. The message sent a reader
+    hunting a missing import that was never missing, and the module blocked
+    every commit that touched it.
+
+    A report must distinguish what it measured from what it was told. "Nothing
+    exercised this" and "the configuration forbade measuring it" have different
+    fixes, and only the second one names its own.
+    """
+
+    def test_an_omitted_module_names_the_omit(self, hook) -> None:
+        verdict = hook._judge(PATH, TEST, None, recorded=False, omitted=True)
+
+        assert not verdict.ok, "a config exclusion must still block — it is not permission"
+        assert "omit" in verdict.message.lower()
+        assert "may not import the module" not in verdict.message, (
+            "the gate still blames the test for a configuration exclusion"
+        )
+
+    def test_a_genuinely_unmeasured_module_keeps_the_original_message(self, hook) -> None:
+        verdict = hook._judge(PATH, TEST, None, recorded=False, omitted=False)
+
+        assert "may not import the module" in verdict.message
+
+    def test_omission_does_not_change_a_module_that_measured(self, hook) -> None:
+        """The flag explains an absent number; it must not colour a present one."""
+        assert hook._judge(PATH, TEST, 84.0, recorded=False, omitted=True).ok
+
+
+class TestReadingTheOmitList:
+    def test_it_finds_a_real_entry(self, hook) -> None:
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("core/startup_factories.py")) is True
+
+    def test_it_does_not_claim_an_unlisted_module(self, hook) -> None:
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("api/support.py")) is False
+
+    def test_router_registry_is_no_longer_omitted(self, hook) -> None:
+        """The exclusion whose stated reason was false.
+
+        "Requires full app context; covered by integration/e2e tests" — while
+        nine unit tests already exercised `register_routers` directly.
+        """
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("core/router_registry.py")) is False
+
+    def test_a_glob_entry_matches(self, hook) -> None:
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("whitelabel/anything.py")) is True
+
+    def test_a_missing_config_is_not_an_exclusion(self, hook, tmp_path) -> None:
+        """Fail toward measuring, not toward excusing."""
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("core/startup_factories.py"), config=tmp_path / "nope") is False
+
+    def test_an_omit_pattern_on_the_assignment_line_is_read(self, hook, tmp_path) -> None:
+        config = tmp_path / ".coveragerc"
+        config.write_text("[run]\nomit = one_liner/*\nsource =\n    core\n")
+
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("one_liner/x.py"), config=config) is True
+        assert hook._coveragerc_omits(pathlib.Path("core/x.py"), config=config) is False
+
+    def test_a_pattern_under_another_section_is_not_an_omit(self, hook, tmp_path) -> None:
+        """`[report] exclude_lines` entries are not exclusions of a file."""
+        config = tmp_path / ".coveragerc"
+        config.write_text("[run]\nomit =\n    real/*\n\n[report]\nexclude_lines =\n    fake/*\n")
+
+        import pathlib
+
+        assert hook._coveragerc_omits(pathlib.Path("real/x.py"), config=config) is True
+        assert hook._coveragerc_omits(pathlib.Path("fake/x.py"), config=config) is False

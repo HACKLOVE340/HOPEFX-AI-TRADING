@@ -3231,3 +3231,144 @@ It stays, and a test now puts the system in the state that opens it.
   open a ticket and an operator cannot see one.
 * **No real-time handoff**, still. `operator_queue()` is a poll.
 * **No UI**, and it needs a `flow-prototype` approval pass first.
+
+---
+
+## §E36 — The support desk reaches HTTP, and an id is not authorisation (2026-09-10)
+
+§E33–E35 built a desk nothing could reach: no customer could open a ticket, no
+operator could see one. `api/support.py` is that surface, and the properties
+worth having are about who may read what.
+
+The finding it is written against is **S6-02's shape**. `api/advanced_orders.py`
+declared a router with no dependencies and three routes with no ownership check,
+so `GET /{order_id}` enumerated every user's stop levels. A support thread is
+the same class of data — it holds what a customer said about their account,
+their money and their losses.
+
+* **Ownership is checked on every customer read and write.** The ticket id is 32
+  random hex characters, which makes guessing hard and authorises nothing. A
+  hard-to-guess identifier is not a permission model.
+* **A ticket that exists but belongs to someone else answers 404, not 403.** A
+  403 confirms the id is real, which is a free oracle for an enumerator.
+* **Two routers, two roles.** `/api/support/tickets/*` gates at `starter` (a
+  starter-tier customer with a billing problem is exactly who needs a ticket);
+  `/api/support/queue/*` gates at `admin`. Router-level dependencies, so a route
+  added later inherits the gate rather than needing to remember it (S6-01).
+* **Bodies are bounded** at 8,000 characters. Unbounded text is a storage
+  problem and a prompt-cost problem at once, and the second one is billed.
+
+Auth is asserted by **calling every route anonymously**, not by reading the
+router's structure. The first version checked `router.dependencies` and could
+not: Starlette records each inclusion as an opaque `_IncludedRouter` with no
+such attribute — the trap `core/router_registry.py` documents at length. The
+sweep enumerates routes via `iter_api_routes`, asserts the list is non-empty so
+it cannot pass vacuously, and calls each one.
+
+### Two new store methods, and why `escalate` exists
+
+`TicketStore.tickets_for()` filters **in the query**: a read that fetches every
+ticket and discards other people's is one forgotten filter away from returning
+them. Newest-first, the opposite of the operator queue, and deliberately — a
+customer looks for what they raised last, an operator for who has waited longest.
+
+`TicketStore.escalate()` is how `answering`'s refusal becomes somebody's queue
+item. The floor is not the only way a ticket needs a human: an AI that could not
+answer leaves a ticket nobody is working, and **a ticket nobody is working looks
+identical to one that was answered**. It is sticky like the floor, never
+overwrites the floor's own reason, and never takes a ticket off an operator
+already on it.
+
+### The test that was testing the wrong path
+
+`test_a_reply_lands_and_reports_the_new_state` failed asserting
+`needs_human is False`. The cause was the honest path working: the test
+environment has no reachable gateway, so `answer_question` refused, the router
+escalated, and the ticket correctly reached a person. Two tests written without
+an available AI were quietly testing the escalation path while claiming to test
+the AI one. An `ai_available` fixture now makes that explicit.
+
+Two guards today's code cannot open are kept and **proven able to fire** rather
+than deleted: the 409 on a customer reply (without it a future store refusal
+would be discarded and the endpoint would report success for a message it did
+not save — the "success reported for work that did not happen" shape) and
+`answering`'s unowned-department branch from §E35.
+
+The router is registered in `core/router_registry.py`, and the ten mounted
+routes were listed by running the app rather than read off the source.
+
+`api/support.py` is at **98.3% coverage** (the two misses are the dependency
+pass-throughs), 30 tests; the support suites are 197 tests including the
+auth-coverage gates.
+
+### Still open
+
+* **No real-time handoff.** `GET /api/support/queue` is a poll. The owner asked
+  to watch it live; a WebSocket on `api/ws_live.py` is the next step.
+* **No UI**, and per CLAUDE.md an operator console needs a `flow-prototype`
+  approval pass before production implementation — the owner's call.
+* **`answer_question` is called with no facts.** The department briefs are
+  written to answer from a FACTS block, and nothing yet gathers one from the
+  department's own read-only actions. Every reply today is answered from the
+  brief alone, which is why the briefs are the strict half of the design.
+
+---
+
+## §E37 — The coverage gate blamed the test for a config exclusion (2026-09-10)
+
+Found by trying to commit §E36. Registering the support router meant touching
+`core/router_registry.py`, and the per-module coverage gate blocked:
+
+    core/router_registry.py: coverage could not be measured
+    (test: tests/unit/test_core_router_registry.py) —
+    the test may not import the module, or may fail to collect
+
+That diagnosis was wrong in a way that costs a reader real time. The test
+imports the module on line 19 and nine tests exercised `register_routers`
+directly. The actual cause was `.coveragerc`, which listed
+`core/router_registry.py` under `[run] omit` — so coverage was *configured* not
+to measure it, reported `no-data-collected`, and the gate turned that into an
+accusation about the test.
+
+Verified pre-existing: the same failure reproduces on the clean tree with the
+change stashed. Every commit touching that file was already blocked, and the
+message pointed at the wrong file to fix.
+
+### Three things were wrong, and all three are fixed
+
+**The exclusion's stated reason was false.** `.coveragerc` justified it as
+"require full app context; covered by integration/e2e tests, not unit tests" —
+written while `tests/unit/test_core_router_registry.py` already existed and
+passed. The entry is gone, and the config now records what happened instead of
+the claim that was not true.
+
+**25% of the module had never been exercised.** Measured with the exclusion
+lifted: 74.7%. The gap was the sixty-odd
+`try: import … except Exception: logger.warning(…)` fallbacks around the
+optional routers — the branches that decide what happens when part of the API
+cannot load. That matters for S6-01's reason: a router that disappears quietly
+is indistinguishable from one that was never meant to exist. The app comes up,
+the endpoint 404s, and nothing says why. Three tests now make thirty-one
+packages unimportable and assert the app still serves, that the failures are
+logged, and that the log names the router **and** the reason. 87%.
+
+Building that harness surfaced its own trap: the failing importer matched
+`from .security import router` inside `api/superadmin/__init__.py`, because a
+relative import arrives at `__import__` as `name="security", level=1`. It broke
+an unrelated package and the `ImportError` escaped `register_routers` entirely,
+so the test failed for a reason unconnected to the branch under test. It now
+matches `level == 0` only. The harness also snapshots and restores
+`sys.modules`, because evicting packages to defeat the import cache otherwise
+hands every later test in the session a second copy of each one.
+
+**The gate now names a config exclusion.** `_coveragerc_omits()` reads the omit
+list, and an excluded module reports `EXCLUDED by .coveragerc [run] omit` with
+the fix — remove the line and add the tests it then needs — instead of blaming
+the test. It still **blocks**: an exclusion is not permission, or the omit list
+becomes the way to switch the gate off. A missing config is not an exclusion,
+so it fails toward measuring. Eleven tests, including that a `[report]` pattern
+is not an omit of a file.
+
+This is the same rule as F176: a report must distinguish what it measured from
+what it was told. The gate was told nothing and reported a conclusion about the
+test.

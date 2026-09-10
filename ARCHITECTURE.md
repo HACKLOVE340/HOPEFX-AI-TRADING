@@ -19,7 +19,7 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | Backtesting | `backtesting/` | `backtest/` | `backtest/` re-exports from `backtesting/` |
 | Strategies | `strategies/` | `strategy/` | `strategy/` = live ML engine; `strategies/` = backtestable classes |
 | Data pipeline | `data_layer/` (access) | — | `data/` is live streaming/serving (real-time price engine, scheduler, DOM, tick feed, time & sales), 20 production importers; `market_data/` is broker-side feeds. **The boundary is decided — ADR 0013, 2026-09-09.** It is a rule, not a refactor: a module on the wrong side stays there until there is a reason beyond tidiness. This row previously said the boundary was undocumented (F216/F217), which stopped being true when the ADR was accepted. |
-| Customer support | `support/` (routing) | — | `support.triage` decides **who** answers and whether a human must; `ai/departments/` holds the eleven specialists it routes to. Triage cannot answer and cannot act — a test asserts the surface stays free of `send`/`reply`/`execute`/`place_order`/`close_position`/`refund`. |
+| Customer support | `support/` (decide, record, draft) · `api/support.py` (HTTP) | — | `support.triage` decides **who** answers and whether a human must; `support.tickets` records the thread and refuses an AI resolution of an escalated ticket; `support.answering` drafts a reply from given facts or says it cannot. `ai/departments/` holds the eleven specialists it routes to. None of `support/` can send or act — a test asserts the surface stays free of `send`/`reply`/`execute`/`place_order`/`close_position`/`refund`. |
 | WebSocket | `api/ws_live.py` | **never create a top-level `websocket/`** | The old standalone server is **deleted**. Recreating that package shadows the `websocket-client` library for the whole project and silently disables the REST fallback in `market_data/mt5_live_feed.py` (audit S13-02a) |
 
 ---
@@ -47,6 +47,7 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `execution/oms.py` | OMS: 9 order states, GTC/IOC/FOK/GTD/DAY, OCO/bracket |
 | `execution/smart_router.py` | Microstructure-aware broker routing with OFI alignment and circuit breakers |
 | `api/server.py` | FastAPI router aggregator — mounts all sub-routers |
+| `api/support.py` | Customer support desk: the customer's own thread and the operator queue. Router-level auth on both; every customer read checks ownership (an opaque ticket id authorises nothing) |
 | `api/ws_live.py` | The **only** WebSocket surface. Holds the JWT auth gate. Never create a top-level `websocket/` package |
 | `database/backup.py` | Scheduled snapshots. SQLite uses the online backup API — a file copy loses WAL content |
 | `database/restore.py` | Verify-before-restore, and six fail-closed refusals. See [`docs/runbooks/database-restore.md`](docs/runbooks/database-restore.md) |

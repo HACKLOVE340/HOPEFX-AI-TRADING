@@ -212,6 +212,25 @@ class TicketStore:
                 for r in rows
             ]
 
+    def tickets_for(self, user_id: str, *, limit: int = 100) -> list[TicketView]:
+        """One customer's own tickets, newest first.
+
+        Filtered in the query rather than after the fetch: a read that pulls
+        every ticket and then discards other people's is one forgotten filter
+        away from returning them.
+        """
+        from database.models import SupportTicket
+
+        with self._session_factory() as session:
+            rows = (
+                session.query(SupportTicket)
+                .filter(SupportTicket.user_id == user_id)
+                .order_by(SupportTicket.created_at.desc(), SupportTicket.id.desc())
+                .limit(max(0, limit))
+                .all()
+            )
+            return [_view(r) for r in rows]
+
     def operator_queue(self, *, unassigned_only: bool = False, limit: int = 200) -> list[TicketView]:
         """Tickets waiting on a person, oldest first.
 
@@ -311,6 +330,32 @@ class TicketStore:
                 elif row.status == STATUS_OPEN and row.needs_human:
                     row.status = STATUS_AWAITING_OPERATOR
 
+            session.commit()
+        return Outcome(True)
+
+    def escalate(self, ticket_id: str, *, reason: str) -> Outcome:
+        """Send a ticket to a person for a reason the floor did not raise.
+
+        The floor is not the only way a ticket needs a human. An AI that could
+        not answer — no reachable model, a budget refusal, an empty completion —
+        leaves a ticket nobody is working, and a ticket nobody is working looks
+        identical to one that was answered. This is how `answering`'s refusal
+        becomes somebody's queue item.
+
+        Sticky like the floor: it sets `needs_human` and never clears it.
+        """
+        from database.models import SupportTicket
+
+        with self._session_factory() as session:
+            row = session.query(SupportTicket).filter(SupportTicket.ticket_id == ticket_id).one_or_none()
+            if row is None:
+                return Outcome(False, f"Ticket {ticket_id!r} not found.")
+            if not row.needs_human:
+                row.needs_human = True
+                row.escalation_reason = reason
+                if row.status != STATUS_WITH_OPERATOR:
+                    row.status = STATUS_AWAITING_OPERATOR
+                logger.info("support: ticket %s escalated (%s)", ticket_id, reason)
             session.commit()
         return Outcome(True)
 

@@ -218,6 +218,7 @@ def register_routers(
     from api.ai_memory import router as ai_memory_router
     from api.ai_notifications import router as ai_notifications_router
     from api.brain import router as brain_router
+    from api.support import router as support_router
     from api.broker import router as broker_router
     from api.calendar import router as calendar_router
     from api.chat import router as chat_router
@@ -339,6 +340,7 @@ def register_routers(
         ai_core_router,
         ai_notifications_router,
         ai_memory_router,
+        support_router,
         profiles_router,
         social_feed_router,
         social_leaderboard_router,

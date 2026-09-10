@@ -46,6 +46,7 @@ import re
 import subprocess  # nosec B404 — pytest subprocess, fixed args
 import sys
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
 
 _THRESHOLD = int(os.getenv("COVERAGE_THRESHOLD", "80"))
@@ -81,7 +82,8 @@ _SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"
 #: measuring all 539 candidates takes about two hours:
 #:
 #:     python scripts/pre_commit_coverage.py --adopt   # regenerate by measurement (slow)
-BASELINE_PATH = Path(__file__).resolve().parent.parent / "docs" / "COVERAGE_UNMEASURABLE.txt"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+BASELINE_PATH = REPO_ROOT / "docs" / "COVERAGE_UNMEASURABLE.txt"
 
 
 def _load_baseline() -> frozenset[str]:
@@ -323,7 +325,48 @@ class Verdict:
     debt: bool = False
 
 
-def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: bool) -> Verdict:
+def _coveragerc_omits(module_path: Path, *, config: Path | None = None) -> bool:
+    """Is this module excluded by `.coveragerc`'s `[run] omit`?
+
+    The gate could not tell, and said so wrongly. `core/router_registry.py` sat
+    in that omit list, so measurement returned `None` and the gate reported
+    "the test may not import the module, or may fail to collect" — while the
+    test imported it on line 19 and nine tests exercised it. The message sent a
+    reader looking for a missing import that was never missing, and the module
+    blocked every commit that touched it.
+
+    A report must distinguish what it measured from what it was told. This is
+    the difference between "nothing exercised this" and "the configuration
+    forbade measuring it", and only the second one names its own fix.
+    """
+    config = config or (REPO_ROOT / ".coveragerc")
+    try:
+        text = config.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+    wanted = str(module_path).replace("\\", "/")
+    in_omit = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            in_omit = False
+            continue
+        if "=" in line and not raw.startswith((" ", "\t")):
+            in_omit = line.split("=", 1)[0].strip() == "omit"
+            # `omit = pattern` on one line still carries a pattern.
+            trailing = line.split("=", 1)[1].strip()
+            if in_omit and trailing and fnmatch(wanted, trailing):
+                return True
+            continue
+        if in_omit and fnmatch(wanted, line):
+            return True
+    return False
+
+
+def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: bool, omitted: bool = False) -> Verdict:
     """Decide one module. Pure — no I/O, so the decision can be asserted.
 
     Four states, and the recorded list changes only two of them:
@@ -346,7 +389,11 @@ def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: b
     shown = f"{module_path}"
     if pct is None:
         why = (
-            f"{shown}: coverage could not be measured (test: {test_path}) — "
+            f"{shown}: EXCLUDED by .coveragerc [run] omit, so it cannot be measured. "
+            "Remove its line from the omit list (and add the tests it then needs) "
+            "rather than looking for a missing import."
+            if omitted
+            else f"{shown}: coverage could not be measured (test: {test_path}) — "
             "the test may not import the module, or may fail to collect"
         )
         if recorded:
@@ -405,7 +452,13 @@ def main(argv: list[str]) -> int:
 
         checked += 1
         coverage_pct, output = _run_coverage(path, test_files)
-        verdict = _judge(path, test_file, coverage_pct, recorded=str(path).replace("\\", "/") in _load_baseline())
+        verdict = _judge(
+            path,
+            test_file,
+            coverage_pct,
+            recorded=str(path).replace("\\", "/") in _load_baseline(),
+            omitted=_coveragerc_omits(path),
+        )
 
         if verdict.ok:
             print(f"pre_commit_coverage: {verdict.message}", file=sys.stderr if verdict.debt else sys.stdout)
