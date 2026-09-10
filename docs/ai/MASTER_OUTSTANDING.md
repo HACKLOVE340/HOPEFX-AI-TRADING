@@ -3087,3 +3087,72 @@ Named rather than implied:
   `supervisor.defer()` in §E29 — a built control with no caller is exactly the
   defect class this programme keeps removing, and it is recorded here so it is
   not mistaken for finished work.
+
+---
+
+## §E34 — The ticket the AI cannot close (2026-09-10)
+
+§E33 built the decision and named what was missing: no ticket model, no operator
+queue, no handoff. This is the store, and it exists mostly to make two refusals
+possible.
+
+**An escalated ticket cannot be resolved by the AI.** The floor in triage is
+worth nothing if the thing it escalated to can be marked resolved a moment later
+by the same AI it escalated away from. `resolve(actor=Actor.AI)` on a ticket
+whose `needs_human` is set returns `Outcome(allowed=False, reason=...)` — the
+shape `invariants/enforcement.py` uses, where the caller reads whether it was
+allowed. A transition that logs and proceeds is the F176 shape.
+
+**Two operators cannot claim the same ticket.** The second claim is refused and
+*names the holder*: "someone else has it" is not something the second operator
+can act on at 3am. Re-claiming your own ticket is not an error, because a
+refreshed page must not read as a conflict.
+
+Around those: `needs_human` is sticky (a customer who mentions a withdrawal and
+then changes the subject has not made the ticket safe to auto-close), the queue
+is oldest-first (newest-first starves whoever has waited longest), a customer
+reply reopens a resolved ticket rather than requiring a new one, and only the
+holder may release.
+
+`first_response_at` is nullable with **no default**, in the model and in the
+migration. NULL means nothing has responded. A column stamped at creation would
+report a desk answering every ticket instantly — Rule 2, at the support desk.
+
+### The finding: every conversation escalated on its second turn
+
+`test_reopening_a_resolved_ticket_is_allowed` failed with `awaiting_operator`
+where it expected `open`. The follow-up path was re-running the whole of
+`triage` on *"that did not work"*: that matches no category, hits the
+unroutable-goes-to-a-human branch, and escalates.
+
+So *every* conversation would have escalated on its second turn, and the
+operator queue would have filled with people saying "thanks" — a queue nobody
+can work is a queue nobody reads, and the real escalations sink in it.
+
+The distinction the code was missing: **routing is decided once per thread; the
+floor applies to every message.** The unroutable rule exists to stop *routing a
+guess*, and on a follow-up there is nothing to route. `support.triage.check_floor`
+is now the floor alone, `triage()` calls it, and `add_message` calls only it. Nine
+tests pin both halves — five conversational replies that must not escalate, four
+that must.
+
+That defect was not visible by reading. It surfaced because a test written for
+an unrelated property (reopening) ran the path.
+
+`support/` is at **100% statement and branch coverage on `tickets.py`**, 99.3%
+across the package, 98 tests. `alembic upgrade head` was run against a real
+SQLite file and the resulting columns and indexes inspected, rather than
+inferred from the migration source.
+
+### Still open
+
+* **No real-time handoff.** The owner asked to watch the queue live and take
+  over; there is no channel, no presence and no push. `operator_queue()` is a
+  poll.
+* **No API surface.** Nothing HTTP-facing reaches `TicketStore` yet, so no
+  customer can open a ticket and no operator can see one.
+* **The AI does not answer yet.** `triage` names a department; nothing asks that
+  department for an answer and writes it back as a message.
+* **No UI**, and per CLAUDE.md an operator surface of this size needs a
+  `flow-prototype` approval pass before production implementation — the owner's
+  call, not one to take unilaterally.

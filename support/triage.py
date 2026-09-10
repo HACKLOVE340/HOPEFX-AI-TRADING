@@ -82,6 +82,7 @@ __all__ = [
     "DEPARTMENT_ROUTES",
     "MIN_CONFIDENCE",
     "TriageResult",
+    "check_floor",
     "triage",
 ]
 
@@ -313,6 +314,45 @@ def _first_match(text: str, rules: tuple[_Rule, ...]) -> tuple[_Rule, str] | Non
     return None
 
 
+def check_floor(question: str, *, confidence: float = 1.0) -> TriageResult | None:
+    """The floor alone: an escalation, or `None` if nothing on it matched.
+
+    Separate from `triage` because **a follow-up message in an open thread must
+    be checked against the floor and nothing else.**
+
+    Routing is already decided for a thread. Re-running the whole of `triage` on
+    a second turn asks it to categorise *"that did not work"* or *"ok thanks"* in
+    isolation — those match no category, hit the unroutable branch, and escalate.
+    That was measured, not reasoned about: a reopen test failed with
+    `awaiting_operator` where it expected `open`, which means every conversation
+    would have escalated on its second turn and the operator queue would have
+    filled with people saying "thanks".
+
+    The unroutable-is-a-human rule exists to stop *routing a guess*. On a
+    follow-up there is nothing to route, so it has no work to do. The floor is
+    the safety property, and it applies to every message forever.
+    """
+    text = (question or "").strip()
+    if not text:
+        return None
+
+    hit = _first_match(text, ALWAYS_HUMAN_RULES)
+    if hit is None:
+        return None
+
+    rule, matched = hit
+    logger.info("support triage: escalating (%s) on %r", rule.category, matched)
+    return TriageResult(
+        category=rule.category,
+        department=None,
+        needs_human=True,
+        escalation_reason=rule.reason,
+        confidence=confidence,
+        matched_on=matched,
+        suggested_reply=None,
+    )
+
+
 def triage(question: str, *, confidence: float = 1.0) -> TriageResult:
     """Decide who handles `question`, and whether a human must.
 
@@ -333,19 +373,9 @@ def triage(question: str, *, confidence: float = 1.0) -> TriageResult:
         )
 
     # ── The floor. Evaluated first, and it returns. ──────────────────────────
-    hit = _first_match(text, ALWAYS_HUMAN_RULES)
-    if hit is not None:
-        rule, matched = hit
-        logger.info("support triage: escalating (%s) on %r", rule.category, matched)
-        return TriageResult(
-            category=rule.category,
-            department=None,
-            needs_human=True,
-            escalation_reason=rule.reason,
-            confidence=confidence,
-            matched_on=matched,
-            suggested_reply=None,
-        )
+    floored = check_floor(text, confidence=confidence)
+    if floored is not None:
+        return floored
 
     # ── Routing to a specialist ─────────────────────────────────────────────
     routed = _first_match(text, _CATEGORY_RULES)

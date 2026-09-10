@@ -844,6 +844,80 @@ class DepartmentMemoryEntry(Base):
     __table_args__ = (Index("ix_ai_dept_memory_scope", "department", "kind", "created_at"),)
 
 
+class SupportTicket(Base):
+    """A customer conversation, and who is allowed to close it.
+
+    `support.triage` decides who should answer a question and whether a human
+    must; it decides and forgets. This is the record — and, more importantly,
+    the thing that carries the escalation forward. `needs_human` is not a
+    display flag: `support.tickets.TicketStore` refuses an AI resolution while
+    it is set, so the floor in triage cannot be undone one call later by the
+    same AI it escalated away from.
+
+    `first_response_at` is nullable and stays NULL until something actually
+    responds. A column defaulted to the creation time would report a desk
+    answering every ticket instantly — an unmeasured value presented as a
+    best case, which is the defect this programme keeps removing.
+
+    `matched_on` holds the phrase triage matched. An operator taking over a
+    ticket mid-thread needs to see why it landed with them, not just that it
+    did.
+    """
+
+    __tablename__ = "support_tickets"
+
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
+    ticket_id = Column(String(40), unique=True, nullable=False, index=True)
+    user_id = Column(String(64), nullable=False, index=True)
+    subject = Column(String(200), nullable=False)
+
+    #: open | awaiting_operator | with_operator | resolved
+    status = Column(String(24), nullable=False, default="open", index=True)
+
+    # The triage decision, kept so the ticket explains itself.
+    category = Column(String(48), nullable=True)
+    department = Column(String(48), nullable=True, index=True)
+    needs_human = Column(Boolean, nullable=False, default=False, index=True)
+    escalation_reason = Column(Text, nullable=True)
+    matched_on = Column(String(200), nullable=True)
+
+    assigned_operator_id = Column(String(64), nullable=True, index=True)
+
+    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    #: NULL until an AI or an operator actually replies. Never defaulted.
+    first_response_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        # The operator queue: waiting tickets, oldest first.
+        Index("ix_support_queue", "needs_human", "status", "created_at"),
+    )
+
+
+class SupportMessage(Base):
+    """One turn in a support conversation.
+
+    `author_kind` is one of customer / ai / operator / system. It is what
+    decides whether a message counts as a *response* — a customer chasing their
+    own ticket must not stop the clock, which is why the store checks the kind
+    rather than merely that a row was added.
+    """
+
+    __tablename__ = "support_messages"
+
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
+    ticket_id = Column(String(40), nullable=False, index=True)
+    #: customer | ai | operator | system
+    author_kind = Column(String(16), nullable=False)
+    #: The operator's id, or the AI department that answered. NULL for a customer.
+    author_id = Column(String(64), nullable=True)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
+
+    __table_args__ = (Index("ix_support_thread", "ticket_id", "created_at"),)
+
+
 class KYCRecord(Base):
     """Persistent KYC records — replaces in-memory dict."""
 
