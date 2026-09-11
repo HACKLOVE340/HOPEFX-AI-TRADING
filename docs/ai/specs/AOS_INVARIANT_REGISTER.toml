@@ -34,6 +34,7 @@ section = "30. Master Invariant Register"
 entries = 26
 mapped_on = "2026-09-10"
 existing_predicate_count_at_mapping = 339
+# 2026-09-11: 344. invariants/spatial.py added five predicates and closed AOS-EVID-028.
 
 # ── Governance and authority ─────────────────────────────────────────────────
 
@@ -170,18 +171,34 @@ gap = "No predicate over propagation edges vs causal claims."
 
 [AOS-EVID-028]
 title = "Epistemic Monotonicity Requires Evidence"
-status = "ABSENT"
-predicates = []
-gap = """A record must not move from unknown/inferred toward observed/verified without new
-evidence. `verify_data_provenance` records whether a source was verified; it does not guard
-the transition."""
+status = "COVERED"
+predicates = ["spatial.verify_epistemic_monotonicity"]
+gap = ""
+note = """Closed 2026-09-11 by the spatial intelligence work, which needed it first and most:
+a generated world produces persuasive artifacts, so a claim drifting toward "verified" for free
+is the defect with the widest blast radius in the system.
+
+`verify_epistemic_monotonicity(previous_rung, current_rung, evidence_added)` refuses a rise with
+no new evidence, permits a fall unconditionally (learning something is worse must never require
+a permit), and guards finiteness first so a non-finite rung cannot pass by silent comparison.
+`ai/spatial/assurance.py::raise_to` is the same rule at the construction site, additionally
+refusing a rise past what the supplied evidence supports.
+
+The ladder it guards: NOT_ASSESSED, VISUALIZED, PROCEDURALLY_GENERATED, ESTIMATED, SIMULATED,
+VALIDATED, EXTERNALLY_VERIFIED, HUMAN_APPROVED."""
 
 # ── State ────────────────────────────────────────────────────────────────────
 
 [AOS-STATE-019]
 title = "Unknown Must Remain Unknown"
 status = "PARTIAL"
-predicates = ["verify_data_provenance", "verify_context_freshness", "verify_data_freshness"]
+predicates = [
+  "verify_data_provenance",
+  "verify_context_freshness",
+  "verify_data_freshness",
+  "spatial.verify_spatial_result_declares_assurance",
+  "spatial.verify_composite_assurance",
+]
 gap = """This repository already treats it as a STANDING RULE — "an unmeasured value is
 absent, never best-case" (Rule 2), enforced case by case: `RiskAssessment.data_quality` is
 `float | None`, `_live_drift_score` refuses to report 0.0 when it cannot measure, and

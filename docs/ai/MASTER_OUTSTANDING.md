@@ -4904,7 +4904,12 @@ which does this platform already enforce?**
 
 ### The answer
 
-    26 AOS invariants · 2 covered · 13 partial · 11 absent
+    26 AOS invariants · 3 covered · 13 partial · 10 absent
+
+*As first mapped on 2026-09-10 this read `2 covered ... 11 absent`. The figure
+above is the current one, because this is a living document and the check in
+`scripts/doc_metrics.py` measures it against the register on every commit.
+AOS-EVID-028 moved from absent to covered on 2026-09-11 — see §E54.*
 
 `docs/ai/specs/AOS_INVARIANT_REGISTER.toml` carries the map, one row per
 invariant, each naming the predicates or mechanism that enforce it and — where
@@ -4971,7 +4976,7 @@ nothing is mis-wired. It is a trap for the next person who greps.
 
 `scripts/doc_metrics.py` now measures the four AOS figures, so a document
 stating them is checked against the register on every commit. Each pattern
-requires the separator the report line uses (`2 covered · 13 partial`), because
+requires the separator the report line uses (`3 covered · 13 partial`), because
 "covered", "partial" and "absent" are ordinary English — the same narrowing
 `gates_total` needed after it read "8 gates left" as a total.
 
@@ -5055,3 +5060,118 @@ reports the coverage gate as `(no files to check)` and every other hook as
 That attribution is by construction rather than by a clean-worktree baseline —
 the counterfactual would cost another 90 minutes, and it is recorded here as not
 run rather than implied.
+
+---
+
+## §E54 — Spatial intelligence starts with what it may not claim (2026-09-11)
+
+The owner specified a Spatial Intelligence & World Creation system: a universal
+3D builder, a construction brain, an interactive world model, a simulation
+laboratory, a construction time machine, a video director, a multi-agent design
+studio, a what-if laboratory, automatic design alternatives, reality-to-3D,
+3D-to-reality documentation, spatial memory, a persistent digital twin, an
+AR/VR layer and spatial voice interaction — integrated as a native AI OS
+capability rather than a separate 3D feature.
+
+And named one feature **absolutely essential**: *the AI should know what it does
+not know.*
+
+That one is built. The other fifteen are specified in
+`docs/ai/specs/SPATIAL_INTELLIGENCE.md` with their status measured from the tree.
+
+### Why that one first, and not the builder
+
+A 3D system produces persuasive artifacts. A generated house looks built; a
+generated car looks engineered; a solver returns a number to four decimals. Each
+is a value nothing verified, presented as though something had — the defect
+class this programme has spent itself removing, now with the widest blast radius
+it has had, because the output is *beautiful* and beauty reads as correctness.
+
+Build the renderer first and every later safety rule is retrofitted onto a
+system whose outputs already look authoritative. Build the ladder first and
+every capability that lands has to say what rung it earned.
+
+### The ladder, and the four rules that are enforced
+
+`NOT_ASSESSED → VISUALIZED → PROCEDURALLY_GENERATED → ESTIMATED → SIMULATED →
+VALIDATED → EXTERNALLY_VERIFIED → HUMAN_APPROVED`
+
+1. **A claim rises only on evidence supporting that rung.** A finite-element run
+   is evidence for `SIMULATED`; it is not evidence anyone approved anything.
+2. **A claim may always fall, with no evidence.** Learning something is worse
+   must never need a permit, or the system sits on stale assurance.
+3. **A composite is the MINIMUM of its parts.** Not the mean, not the best. This
+   single rule is what stops "the render finished" becoming "the house is safe
+   to build".
+4. **Readiness is never inferred from assurance.** `EXTERNALLY_VERIFIED` is not
+   approval; approval is a named person on every required aspect.
+
+Plus the floor: an aspect nobody assessed is `NOT_ASSESSED` **and appears in the
+report**. Never omitted — a missing row reads as a row with nothing wrong, so a
+report that drops the unexamined gets shorter as the work gets sloppier. Rule 2
+of this codebase, applied where the unmeasured thing is whether a building
+stands up.
+
+So the system cannot say "this house is safe to build". It says:
+
+    3D design                        PROCEDURALLY_GENERATED
+    Structural simulation            SIMULATED
+    Building-code compliance         NOT_ASSESSED
+    Professional engineering review  NOT_ASSESSED     required
+    Overall                          NOT_ASSESSED     (rule 3)
+    Construction readiness           NOT READY        blocking: 2 aspects
+
+### It is enforced, not merely available
+
+`ai/spatial/assurance.py` holds the rules at the construction site.
+`invariants/spatial.py` holds five predicates at the boundary where a spatial
+result crosses into a decision — because a module holding correct rules that no
+decision path consults is F176, and it would be an expensive instance.
+
+Predicate count **339 → 344**. Both constitutional rules used are pre-existing
+(*No Unverified AI Decision*, *No Silent Failure*); inventing a new one is a
+governance decision, not a code change.
+
+### This closes an AOS gap that was open
+
+**AOS-EVID-028, Epistemic Monotonicity Requires Evidence** — recorded ABSENT
+when the register was built on 2026-09-10 — is now COVERED by
+`spatial.verify_epistemic_monotonicity`. AOS-STATE-019 gained two predicates.
+
+    26 AOS invariants · 3 covered · 13 partial · 10 absent
+
+The spatial work needed that invariant first and hardest, which is why it is the
+one that got built. The register updated itself the moment the predicates
+landed, and `doc_metrics` then blocked on two lines of this document still
+stating the old figure — the ratchet doing exactly its job.
+
+### Three capabilities are already partly real, and set the standard
+
+They were found by inspection before any design, and their discipline is why
+this extends them rather than starting beside them:
+
+* `frontend/src/hub/spatial.ts` — *"Position is measured or it is not claimed."*
+  No `DOMRect`, no position; it says "the risk table" rather than inventing a
+  corner.
+* `frontend/src/hub/sceneGraph.ts` — refusals rather than silent nothings; an
+  unknown id throws, and a containment cycle is refused at the edge.
+* `frontend/src/hub/surface3d.ts` — *"A hole is never interpolated."*
+  `warrants3D` refuses more often than it accepts, and WebGL stays honestly
+  unavailable rather than claimed.
+
+### Evidence
+
+32 tests, all red before the modules existed. Every rule proven able to fail by
+mutating the implementation rather than a fixture: seven mutations of the ladder
+(allow an unevidenced rise, ignore what evidence supports, make falling require
+evidence, composite takes the best part, empty composite turns optimistic,
+readiness settles for `SIMULATED`, unassessed aspects dropped from the report) —
+each killed exactly the tests that describe it, and the restored baseline is
+green. A further test asserts the registry actually discovers all five
+predicates, because the naming convention *is* the registration mechanism.
+
+### Not claimed
+
+No solver, renderer, reconstruction pipeline or video encoder exists. Fifteen of
+sixteen capabilities are `planned`, and the specification says so in a table
+measured from the tree rather than aspired to.
