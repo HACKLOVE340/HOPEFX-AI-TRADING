@@ -204,6 +204,13 @@
 #     execution/fix_router.py 57% · execution/fix_adapter.py 35% ·
 #     core/metrics.py 33% · core/risk/advanced_engine.py 27% ·
 #     execution/execution.py 18% · core/health.py 0%
+#
+# Those figures are what the gate said on 2026-09-10 and are left as measured.
+# Three have since been raised and have left this file: core/health.py 0% -> 100%,
+# execution/execution.py 18% -> 82%, execution/fix_adapter.py 35% -> 98%. The
+# other eleven still stand. Read the list above as a record of that day's lift
+# rather than as today's state — `python scripts/pre_commit_coverage.py <module>`
+# is today's state.
 ai/core/depth.py
 ai/telemetry/host.py
 analysis/patterns/pattern_detector.py
@@ -373,7 +380,6 @@ enhanced_backtest_engine.py
 execution/__init__.py
 execution/_prom_metrics.py
 execution/engine.py
-execution/fix_adapter.py
 execution/fix_router.py
 execution/hopefx_engine.py
 execution/legacy.py

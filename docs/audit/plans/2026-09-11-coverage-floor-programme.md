@@ -408,10 +408,15 @@ and check it can report a *failure*, not only a pass, before writing anything.
 
 Sixty modules, in this order. One commit per module, Task 3's recipe each time.
 
-- [ ] **5a. `execution/fix_adapter.py` (35%)** — **REQUIRED SUB-SKILL:
+- [x] **5a. `execution/fix_adapter.py` (35% -> 98%)** — **REQUIRED SUB-SKILL:
       `hopefx-fix-bridge`.** FIX 4.4 sessions, sequence numbers,
       logon/heartbeat/reconnect, XAUUSD symbol mapping. Read that skill before
       writing a line; sequence-number handling is not guessable.
+      Done. The uncovered two-thirds was the whole quickfix callback surface,
+      unreachable because quickfix is a C extension `requirements-ci.txt`
+      cannot build, so the backend that carries production orders was the one
+      no test could load. Reached with a hand-written FIX 4.4 stand-in, which
+      surfaced three defects on that backend — see the commit.
 - [ ] **5b. `ml/train_rl_nuclear.py` (14%)**, `ml/verify_model.py` (17%),
       `ml/advanced_ai.py` (27%), `ml/train_with_macro.py` (24%) — **REQUIRED
       SUB-SKILL: `ml-pipeline-workflow`.** Training entry points; test the

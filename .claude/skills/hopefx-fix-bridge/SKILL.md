@@ -30,7 +30,7 @@ really state-lifetime bugs.
 | Paper vs live detection | `IBKRFIXConfig.is_paper` — `port in (4002, 7497)` |
 | Lifecycle | `bridge.start()` / `bridge.stop()`, or use it as a context manager |
 | Construction from env | `IBKRFIXBridge.from_env(kill_switch=...)` |
-| Tests | `tests/unit/test_ibkr_fix_bridge.py` (338 lines) |
+| Tests | `tests/unit/test_ibkr_fix_bridge.py` (bridge) · `tests/unit/test_execution_fix_adapter.py` (adapter, with a FIX 4.4 stand-in) |
 
 ### Ports carry the paper/live distinction
 
@@ -108,6 +108,34 @@ the time an order reaches this module. **REQUIRED BACKGROUND:** use
 same instrument. Never assume a symbol string is portable across adapters; map
 at the adapter edge.
 
+## The exception quickfix actually raises
+
+`quickfix.FieldNotFound` derives from `quickfix.FIXException`, which derives
+from `Exception`. It is **not** an `AttributeError`, `TypeError`, `ValueError`
+or `KeyError`, and `FieldMap::getField` throws it for every absent tag —
+including optional ones like `Text` (58) on a bare Logout.
+
+Every handler in `execution/fix_adapter.py` used to name only those four
+builtins, so against the production backend the one exception each of them
+existed to catch went straight past it. Two of those handlers are on the money
+path: a report that cannot be read must reject the caller's pending future, and
+a handler that dies first leaves `send_order` to wait out its full 30-second
+timeout instead.
+
+Use `_fix_absent_errors()` in any new handler that reads a field:
+
+```python
+except (AttributeError, TypeError, ValueError, *_fix_absent_errors()) as exc:
+```
+
+And read the key you need to *report* the failure — `ClOrdID` — before anything
+else that can fail, or the rejection is filed under `<unknown>` and the
+dispatcher drops it as unsolicited.
+
+None of this is visible in CI: `requirements-ci.txt` cannot build the C
+extension, so CI runs the simulation backend where nothing raises. Test the
+quickfix path with the stand-in in `tests/unit/test_execution_fix_adapter.py`.
+
 ## Common mistakes
 
 | Mistake | Consequence |
@@ -118,3 +146,5 @@ at the adapter edge.
 | Testing against port 4001/7496 | That is **live**; use 4002/7497 |
 | Adding an order path that skips `kill_switch` | Removes the stop of last resort |
 | Assuming `stop()` flushes state | Verify the store path before relying on restart continuity |
+| Catching only builtins around a `getField` | `FieldNotFound` is not one; the handler never runs |
+| Testing only under CI's simulation backend | Nothing raises there — the production backend is untested by construction |
