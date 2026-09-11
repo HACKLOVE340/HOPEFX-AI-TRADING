@@ -417,10 +417,17 @@ Sixty modules, in this order. One commit per module, Task 3's recipe each time.
       cannot build, so the backend that carries production orders was the one
       no test could load. Reached with a hand-written FIX 4.4 stand-in, which
       surfaced three defects on that backend — see the commit.
-- [ ] **5b. `ml/train_rl_nuclear.py` (14%)**, `ml/verify_model.py` (17%),
-      `ml/advanced_ai.py` (27%), `ml/train_with_macro.py` (24%) — **REQUIRED
-      SUB-SKILL: `ml-pipeline-workflow`.** Training entry points; test the
-      argument handling and the refusal paths, not a training run.
+- [x] **5b. `ml/train_rl_nuclear.py` (14% -> 99%)**, `ml/verify_model.py`
+      (17% -> 100%), `ml/advanced_ai.py` (27% -> 99%), `ml/train_with_macro.py`
+      (24% -> 98%) — **REQUIRED SUB-SKILL: `ml-pipeline-workflow`.** Training
+      entry points; test the argument handling and the refusal paths, not a
+      training run.
+      Done. The common obstacle was the same as 5a's: gymnasium,
+      stable-baselines3, faiss and sentence-transformers are all absent from
+      `requirements-ci.txt` (sb3 needs PyTorch), so the code behind their
+      import guards could not be reached at all. Each module is loaded a second
+      time with the libraries stubbed, which is what made the findings visible.
+      Six defects found; two fixed, four raised — see the commits.
 - [ ] **5c. `brokers/__init__.py` (25%)**, `brokers/ibkr_broker.py` (38%),
       `brokers/ibkr_connector.py` (44%) — broker adapters. Every `connect()` has
       a refused path and a raised path; both matter more than the happy one.
