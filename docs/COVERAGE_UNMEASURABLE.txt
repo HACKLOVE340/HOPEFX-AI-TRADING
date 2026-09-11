@@ -353,7 +353,6 @@ core/page_routes.py
 core/position_reconciler.py
 core/regime_router.py
 core/risk/advanced_engine.py
-core/safety_config_report.py
 core/startup_factories.py
 core/startup_helpers.py
 core/strategy_engine.py
