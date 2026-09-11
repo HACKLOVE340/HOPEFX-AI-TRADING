@@ -343,7 +343,6 @@ core/account_registry.py
 core/background_tasks.py
 core/decision/HOPEFXDecisionEngine.py
 core/email_webhook.py
-core/health.py
 core/idempotency.py
 core/metrics.py
 core/middleware.py
