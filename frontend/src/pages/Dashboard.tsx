@@ -61,6 +61,26 @@ const fmtPct = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
  * as a real, terrible Sharpe.
  */
 const has = (n: number | undefined): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/**
+ * Colour thresholds for the stat row, in the units the API actually sends.
+ *
+ * `AccountMetrics.win_rate` and `max_drawdown` are percentages 0-100 — both
+ * paths of GET /api/trading/account compute them as `x / n * 100`. The tiles
+ * multiplied by 100 a second time, so a real 62.5% win rate would have
+ * rendered as 6250.0% and a 12.4% drawdown as 1240.00%. Nobody had seen it
+ * because both values were pinned at 0 until the endpoint learned to send
+ * null instead.
+ *
+ * The thresholds carried the same mistake in the other direction: `>= 0.55`
+ * against a 0-100 value passes any win rate above half a percent, and
+ * `< 0.1` fails any drawdown above a tenth of a percent. Named here so the
+ * unit is visible at the point of comparison rather than inferred from a bare
+ * decimal.
+ */
+export const WIN_RATE_GOOD_PCT = 55;   // 55% of closed trades profitable
+export const SHARPE_GOOD = 1.5;        // unitless ratio, sent as-is
+export const DRAWDOWN_WARN_PCT = 10;   // 10% peak-to-trough
 const orDash = (n: number | undefined, render: (v: number) => string) => (has(n) ? render(n) : '—');
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
@@ -807,12 +827,12 @@ const Dashboard: React.FC = () => {
             sub={orDash(acc.daily_pnl_pct, fmtPct)} />
           <StatCard label="Total P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.total_pnl, fmtUSD)}
             positive={has(acc.total_pnl) ? acc.total_pnl >= 0 : undefined} />
-          <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => (v * 100).toFixed(1) + '%')}
-            positive={has(acc.win_rate) ? acc.win_rate >= 0.55 : undefined} />
+          <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => v.toFixed(1) + '%')}
+            positive={has(acc.win_rate) ? acc.win_rate >= WIN_RATE_GOOD_PCT : undefined} />
           <StatCard label="Sharpe" to="/performance" toHint="risk-adjusted performance"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))}
-            positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= 1.5 : undefined} />
-          <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => (v * 100).toFixed(2) + '%')}
-            positive={has(acc.max_drawdown) ? acc.max_drawdown < 0.1 : undefined} />
+            positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= SHARPE_GOOD : undefined} />
+          <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => v.toFixed(2) + '%')}
+            positive={has(acc.max_drawdown) ? acc.max_drawdown < DRAWDOWN_WARN_PCT : undefined} />
           <StatCard label="Open Trades" to="/portfolio" toHint="your positions" value={orDash(acc.open_trades, String)} />
         </div>
       )}

@@ -2163,11 +2163,27 @@ async def get_account(
     """
     Return a complete AccountMetrics payload for the authenticated user.
 
-    Fields returned (all required by the frontend AccountMetrics type):
+    Fields returned:
       balance, equity, margin_used, margin_free, margin_level,
       daily_pnl, daily_pnl_pct, total_pnl, win_rate, sharpe_ratio,
       sortino_ratio, max_drawdown, open_trades, open_risk_pct,
       cvar_95, kill_switch, unrealized_pnl, currency, account_id
+
+    **win_rate, sharpe_ratio, sortino_ratio and max_drawdown are nullable.**
+    Each is a statistic over closed trades, and AccountMetrics documents every
+    one of them as absent until there are enough of those to compute it — a
+    decision recorded under audit #37. `null` means "not measurable yet", and
+    is not the same claim as 0.
+
+    This docstring previously said every field was "required by the frontend
+    AccountMetrics type". That was the opposite of what the type says, and the
+    code matched the docstring: a new account was sent win_rate 0.0 and
+    sharpe_ratio 0.0, which the Dashboard rendered as a 0.0% win rate in red
+    and a 0.00 Sharpe in red, while the same absence of trades made
+    max_drawdown 0.0 and painted it green. Three statistics, one cause, two
+    failures and a success — none of them measuring anything.
+
+    win_rate and max_drawdown are percentages 0-100 on both paths.
     """
     import math as _math
 
@@ -2179,11 +2195,21 @@ async def get_account(
         # Paper mode: seed balance from env, enrich with real DB trade stats
         starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
 
-        # Pull real trade stats from DB even in paper mode
-        _win_rate = 0.0
-        _sharpe = 0.0
-        _sortino = 0.0
-        _max_dd = 0.0
+        # Pull real trade stats from DB even in paper mode.
+        #
+        # These four start as None, not 0.0. Every one of them is a statistic
+        # over closed trades, and AccountMetrics documents each as absent until
+        # there are enough of those to compute it. Sending 0.0 instead makes a
+        # claim the server cannot support, and the Dashboard's own `has()`
+        # helper exists to render an em-dash for exactly this case — its
+        # comment reads "a fabricated zero Sharpe reads as a real, terrible
+        # Sharpe". It was doing that correctly against a payload that never
+        # gave it the chance.
+        _win_rate: float | None = None
+        _sharpe: float | None = None
+        _sortino: float | None = None
+        _max_dd: float | None = None
+        _dd_peak = 0.0
         _total_pnl = 0.0
         _open_trades = 0
         _open_risk_pct = 0.0
@@ -2223,7 +2249,7 @@ async def get_account(
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
                     # win_rate as percentage 0-100 (consistent with live-broker path)
-                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else None
 
                     # Equity curve for drawdown + Sharpe
                     eq_vals: list[float] = []
@@ -2236,9 +2262,9 @@ async def get_account(
                     for v in eq_vals:
                         peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
-                        _max_dd = max(_max_dd, dd)
+                        _dd_peak = max(_dd_peak, dd)
                     # max_drawdown as percentage 0-100 (consistent with live-broker path)
-                    _max_dd = round(_max_dd * 100, 2)
+                    _max_dd = round(_dd_peak * 100, 2) if pnls else None
 
                     if len(pnls) >= 10:
                         rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
@@ -2246,7 +2272,7 @@ async def get_account(
                             mean_r = sum(rets) / len(rets)
                             var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
                             std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
-                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else None
                             # Downside deviation divides the summed shortfall by
                             # ALL periods, not just the losing ones — dividing by
                             # len(neg_rets) is a different statistic and read
@@ -2254,7 +2280,7 @@ async def get_account(
                             # produce (F120). Shared with every other Sortino in
                             # the repository via analytics.ratios.
                             down_std = _downside_deviation(rets)
-                            _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                            _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else None
                             sorted_rets = sorted(rets)
                             cutoff = max(1, int(len(sorted_rets) * 0.05))
                             _cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
@@ -2375,10 +2401,13 @@ async def get_account(
     daily_pnl_pct = round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4)
 
     # ── Trade statistics from DB ──────────────────────────────────────────────
-    win_rate = 0.0
-    sharpe_ratio = 0.0
-    sortino_ratio = 0.0
-    max_drawdown = 0.0
+    # None until there are closed trades to compute them from — see the paper
+    # branch above for why these four are not 0.0.
+    win_rate: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    max_drawdown: float | None = None
+    _dd_peak_live = 0.0
     total_pnl = 0.0
     open_trades = 0
     open_risk_pct = 0.0
@@ -2411,7 +2440,7 @@ async def get_account(
                 pnls = [float(t.realized_pnl or 0.0) for t in closed]
                 total_pnl = round(sum(pnls), 2)
                 wins = [p for p in pnls if p > 0]
-                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else None
 
                 # Equity curve for drawdown + Sharpe
                 starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
@@ -2426,8 +2455,8 @@ async def get_account(
                 for v in eq_vals:
                     peak = max(peak, v)
                     dd = (peak - v) / peak if peak > 0 else 0.0
-                    max_drawdown = max(max_drawdown, dd)
-                max_drawdown = round(max_drawdown * 100, 2)  # as %
+                    _dd_peak_live = max(_dd_peak_live, dd)
+                max_drawdown = round(_dd_peak_live * 100, 2) if pnls else None  # as %
 
                 # Sharpe (annualised, daily returns)
                 if len(pnls) >= 10:
@@ -2436,7 +2465,7 @@ async def get_account(
                         mean_r = sum(rets) / len(rets)
                         var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
                         std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
-                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else None
 
                         # Sortino: RMS shortfall below zero over ALL periods.
                         # Dividing by len(neg_rets) instead is a different
@@ -2444,7 +2473,7 @@ async def get_account(
                         # returns (F120); shared now via analytics.ratios so the
                         # dashboard and the backtester cannot disagree.
                         down_std = _downside_deviation(rets)
-                        sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                        sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else None
 
                         # CVaR 95% (average of worst 5% returns)
                         sorted_rets = sorted(rets)

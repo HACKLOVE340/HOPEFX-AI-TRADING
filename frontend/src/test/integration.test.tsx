@@ -299,7 +299,7 @@ describe('store → Dashboard integration', () => {
       useStore.getState().setAccount({
         balance: 250_000, equity: 255_000, margin_used: 5_000, margin_free: 245_000,
         margin_level: 5100, daily_pnl: 1000, daily_pnl_pct: 0.4, total_pnl: 5_000,
-        win_rate: 0.70, sharpe_ratio: 2.1, max_drawdown: 0.02, open_trades: 3,
+        win_rate: 70, sharpe_ratio: 2.1, max_drawdown: 2, open_trades: 3,
       });
     });
 
@@ -347,7 +347,7 @@ describe('store → Dashboard integration', () => {
       useStore.getState().setAccount({
         balance: 100_000, equity: 101_000, margin_used: 0, margin_free: 100_000,
         margin_level: 0, daily_pnl: 0, daily_pnl_pct: 0, total_pnl: 1_000,
-        win_rate: 0.72, sharpe_ratio: 1.5, max_drawdown: 0.03, open_trades: 0,
+        win_rate: 72, sharpe_ratio: 1.5, max_drawdown: 3, open_trades: 0,
       });
     });
 

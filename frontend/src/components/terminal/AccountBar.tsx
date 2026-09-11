@@ -135,7 +135,7 @@ export function AccountBar() {
         label="Win Rate"
         to="/journal"
         toHint="the trades behind it"
-        value={fmtPct(account.win_rate, 1)}
+        value={fmtPctRaw(account.win_rate, 1)}
         valueColor="#00e676"
         compact
       />

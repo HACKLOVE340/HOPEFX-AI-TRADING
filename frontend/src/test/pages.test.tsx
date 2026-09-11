@@ -193,9 +193,9 @@ const mockAccount = {
   daily_pnl:     250,
   daily_pnl_pct: 0.0025,
   total_pnl:     2500,
-  win_rate:      0.62,
+  win_rate:      62,
   sharpe_ratio:  1.8,
-  max_drawdown:  0.04,
+  max_drawdown:  4,
   open_trades:   3,
 };
 
@@ -475,7 +475,7 @@ describe('Dashboard with data', () => {
     useStore.getState().setAccount({
       balance: 100_000, equity: 102_000, margin_used: 4_000, margin_free: 98_000,
       margin_level: 2550, daily_pnl: 500, daily_pnl_pct: 0.5, total_pnl: 2_000,
-      win_rate: 0.65, sharpe_ratio: 1.8, max_drawdown: 0.04, open_trades: 1,
+      win_rate: 65, sharpe_ratio: 1.8, max_drawdown: 4, open_trades: 1,
     });
     const Dashboard = (await import('../pages/Dashboard')).default;
     return wrap(<Dashboard />);
@@ -683,7 +683,7 @@ describe('Trading page', () => {
     useStore.getState().setAccount({
       balance: 50000, equity: 51000, margin_used: 2000, margin_free: 49000,
       margin_level: 2550, daily_pnl: 250, daily_pnl_pct: 0.5, total_pnl: 1000,
-      win_rate: 0.62, sharpe_ratio: 1.5, max_drawdown: 0.03, open_trades: 1,
+      win_rate: 62, sharpe_ratio: 1.5, max_drawdown: 3, open_trades: 1,
     });
     await renderTrading();
     expect(screen.getByText(/50,000/)).toBeInTheDocument();
