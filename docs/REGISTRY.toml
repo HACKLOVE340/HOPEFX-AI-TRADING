@@ -1317,6 +1317,12 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/audit/plans/2026-09-11-coverage-floor-programme.md"
+tier = "T4"
+owner = "hacklove340"
+state = "draft"
+
+[[document]]
 path = "docs/ci_cd_pipeline.md"
 tier = "T2"
 subject = "ci_cd_pipeline"
