@@ -384,7 +384,6 @@ enhanced_backtest_engine.py
 execution/__init__.py
 execution/_prom_metrics.py
 execution/engine.py
-execution/execution.py
 execution/fix_adapter.py
 execution/fix_router.py
 execution/hopefx_engine.py
