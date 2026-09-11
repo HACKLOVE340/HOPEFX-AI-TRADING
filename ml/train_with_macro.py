@@ -211,7 +211,14 @@ def _compute_fold_sharpe(
 
     mu = np.mean(strategy_returns)
     std = np.std(strategy_returns, ddof=1)
-    if std == 0.0:
+    # A flat series has no Sharpe. This used to test `std == 0.0`, an exact
+    # comparison against a computed float: np.std([0.01] * 30, ddof=1) is
+    # 1.76e-18, so the guard fell through and the `max(std, 1e-9)` below
+    # divided by 1e-9, reporting the +/-10 clip ceiling for a series with no
+    # variation. It held for exactly representable values (0.25, 1.0, 0.0) and
+    # failed for 0.01 and 0.1 — the magnitudes daily returns actually take.
+    # 1e-12 sits well above float noise and well below the 1e-9 floor used next.
+    if not np.isfinite(std) or std < 1e-12:
         return 0.0
 
     sharpe = float(np.nan_to_num(mu, nan=0.0)) / max(float(np.nan_to_num(std, nan=0.0)), 1e-9)
@@ -492,6 +499,14 @@ def oos_eval(
         proba = model.predict_proba(X_oos)[:, 1]
         auc = float(roc_auc_score(y_oos, proba))
     except (ValueError, TypeError):
+        auc = 0.5
+    if not np.isfinite(auc):
+        # scikit-learn 1.9 does not raise when the held-out labels are all one
+        # class — it warns (UndefinedMetricWarning) and returns NaN. The except
+        # above therefore never fired, the stated 0.5 fallback was unreachable,
+        # and NaN reached the report: `json.dumps` writes a bare `NaN`, which
+        # is not valid JSON and which any strict reader of training_report.json
+        # rejects. 0.5 is the honest value — no discrimination.
         auc = 0.5
 
     # One-sided binomial test: H0 = p(correct) <= 0.5
