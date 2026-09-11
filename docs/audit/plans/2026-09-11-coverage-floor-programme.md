@@ -428,9 +428,29 @@ Sixty modules, in this order. One commit per module, Task 3's recipe each time.
       import guards could not be reached at all. Each module is loaded a second
       time with the libraries stubbed, which is what made the findings visible.
       Six defects found; two fixed, four raised — see the commits.
-- [ ] **5c. `brokers/__init__.py` (25%)**, `brokers/ibkr_broker.py` (38%),
+- [x] **5c. `brokers/__init__.py` (72%)**, `brokers/ibkr_broker.py` (38%),
       `brokers/ibkr_connector.py` (44%) — broker adapters. Every `connect()` has
       a refused path and a raised path; both matter more than the happy one.
+      `ibkr_broker.py` 38% -> 89% (`409883b5`); `ibkr_connector.py` 44% -> 98%
+      (`24f53519`). The obstacle was 5a's and 5b's again: `ib_insync` is absent
+      from `requirements-ci.txt`, so the only branch CI could reach was the one
+      that fires when the SDK is missing. Both are loaded a second time with a
+      hand-written stand-in.
+
+      That surfaced a defect on the close path and closed it (`1ea25b3d`): four
+      adapters chose their closing side with `pos.side == "LONG"`, and
+      `Position.__post_init__` normalises `side` to an `OrderSide`, so the
+      branch was dead and its `else` ran every time. Closing a SHORT bought,
+      which is right; closing a LONG *also* bought, doubling the position.
+
+      **`brokers/__init__.py` closes as a stated decision, not at the floor.**
+      Lines 280–902 are a 623-line `PaperTradingBroker` that line 1274 rebinds
+      away — unreachable normally, and a silent fallback when
+      `brokers/paper_trading.py` fails to import. It accounts for most of the
+      uncovered 28%. Testing an engine that only runs in an uncharacterised
+      failure mode is the wrong order of work; deciding which engine is the
+      paper broker comes first. See MASTER_OUTSTANDING §A6. The record line
+      stays.
 - [ ] **5d. `core/risk/advanced_engine.py` (27%)**, `core/metrics.py` (33%) —
       **REQUIRED SUB-SKILL: `risk-metrics-calculation`** for the former.
 - [ ] **5e. The remaining 50–79% money modules**, highest first:

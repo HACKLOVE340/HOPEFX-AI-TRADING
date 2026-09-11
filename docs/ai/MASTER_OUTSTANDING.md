@@ -120,6 +120,54 @@ participate in a cascade. Until they are tokens:
 `GATE_EVIDENCE.toml`). The number can no longer grow, so the codemod is worth
 doing whenever it is done, and stays done afterwards. Full evidence in §E26.
 
+### A6. Two paper-trading engines, and an import decides which one runs
+
+`brokers/__init__.py` defines a 623-line `PaperTradingBroker` at lines 280–902,
+then at line 1274 rebinds the name:
+
+```python
+try:
+    from brokers.paper_trading import PaperTradingBroker as _PTB
+    PaperTradingBroker = _PTB
+except Exception as _exc:
+    logger.warning("PaperTradingBroker import failed: %s", _exc)
+```
+
+Normally the local class is unreachable — measured: no package attribute points
+at it, and `create_broker("paper", …)` builds `brokers.paper_trading`'s. But it
+is not dead code. Block that import and the same call builds the local one
+instead, announced by a single WARNING:
+
+```
+PaperTradingBroker import failed: simulated: brokers/paper_trading.py is broken
+create_broker('paper') -> brokers.PaperTradingBroker
+```
+
+So the platform carries two paper-trading engines with different fill
+simulation, different slippage, different commission accounting and different
+persistence, and which one runs depends on whether an import succeeded. Nobody
+has characterised how their results differ, and a paper P&L is what the live
+decision is sized against.
+
+**What needs deciding is which one is the paper broker.**
+
+| Option | Cost | What it leaves |
+|---|---|---|
+| **Delete lines 280–902** and let a failed import fail loudly | ~1 session, plus whatever `create_broker` should do instead | One engine. A broken `paper_trading.py` becomes an error instead of a silent substitution |
+| **Keep the fallback and characterise it** | 2+ sessions — the two engines need a differential test before either can be trusted | Two engines, known to agree, and a WARNING nobody reads |
+| **Leave it** | nothing now | A failure mode that changes which trading engine runs and says so once, at WARNING |
+
+**Why this is here and not just done:** deleting 623 lines removes a fallback,
+and removing a fallback is a behaviour change on the money path. Found while
+raising `brokers/__init__.py` for the coverage-floor programme — the class
+accounts for most of the module's uncovered 28%, and testing an engine that
+only runs in an uncharacterised failure mode is the wrong order of work.
+`brokers/__init__.py` therefore stays in `docs/COVERAGE_UNMEASURABLE.txt` with
+this decision named, which the programme allows: "to the floor **or to a stated
+decision**".
+
+---
+
 ---
 
 ## §B — Work, ranked

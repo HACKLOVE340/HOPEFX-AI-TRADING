@@ -321,6 +321,9 @@ backtesting/optimizer.py
 backtesting/reconciled_backtest_investigation.py
 backtesting/replay_connector.py
 brain/__init__.py
+# brokers/__init__.py stays by decision, not by cost: lines 280-902 are a
+# 623-line PaperTradingBroker that line 1274 rebinds away, and that is a silent
+# fallback rather than dead code. See MASTER_OUTSTANDING A6.
 brokers/__init__.py
 brokers/binance.py
 brokers/cme_comex.py
