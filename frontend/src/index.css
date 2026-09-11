@@ -18,6 +18,29 @@
     --accent:        #00d4ff;
     --bull:          #00e676;
     --bear:          #ff1744;
+
+    /* ── Added 2026-09-11 ──────────────────────────────────────────────────
+       Eight tokens for meanings the twelve originals had no word for, which
+       is why 8,000 literals grew around them. Each replaces a value the
+       Dashboard alone repeated up to twenty times.
+
+       The muted ramp is the important one: #64748b, #94a3b8, #475569 and
+       #334155 were all doing "less important than the body text", with
+       nothing to say which was which, so every screen picked a different one.
+       Two greys with named jobs replace four without. */
+
+    --text-strong:   #f8fafc;   /* figures and headings, above --text        */
+    --text-dim:      #94a3b8;   /* secondary text                           */
+    --hairline:      #16222f;   /* dividers and quiet edges, below --border  */
+    --surface-hover: #141c2b;   /* hover fill                               */
+    --link:          #60a5fa;   /* interactive text                         */
+
+    /* Money moving, at the saturation a dark ground can carry. --bull and
+       --bear stay as they are: those are the tick-flash colours, where a
+       brief full-strength flash is the point. */
+    --gain:          #4ade80;
+    --loss:          #f87171;
+    --warn:          #fbbf24;   /* needs attention, not yet a loss          */
     --sidebar-w:     224px;
     --sidebar-w-collapsed: 60px;
     --topbar-h:      56px;
@@ -733,3 +756,70 @@
     transition: none;
   }
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Dashboard stat row — three tiers of weight
+
+   All eight tiles used to carry identical weight, so nothing led the row. The
+   tier says what kind of number it is, and the styling follows from that:
+
+     1  equity        the figure the screen exists to show
+     2  money         balance and the two P&L tiles
+     3  statistics    derived from closed trades, and meaningless without them
+
+   Saturation and size carry the hierarchy rather than an extra border or a
+   second accent colour — the thing the reference mockup does that the product
+   did not.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.stat-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: block;
+  min-width: 0;
+}
+
+.stat-tile[data-tier="1"] {
+  background: var(--raised);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  grid-column: span 2;
+}
+
+.stat-tile[data-tier="3"] {
+  background: transparent;
+  border-color: var(--hairline);
+}
+
+.stat-tile-label {
+  font-size: 10px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+
+.stat-tile-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tile[data-tier="1"] .stat-tile-value { font-size: 24px; }
+.stat-tile[data-tier="3"] .stat-tile-value { font-size: 15px; color: var(--text); }
+
+.stat-tile-value[data-tone="gain"] { color: var(--gain); }
+.stat-tile-value[data-tone="loss"] { color: var(--loss); }
+
+.stat-tile-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+a.stat-tile:hover { background: var(--surface-hover); }
+a.stat-tile[data-tier="3"]:hover { background: var(--surface); }

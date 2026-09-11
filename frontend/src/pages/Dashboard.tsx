@@ -91,6 +91,17 @@ interface StatCardProps {
   sub?: string;
   positive?: boolean | null;
   highlight?: boolean;
+  /**
+   * What kind of number this is, which decides its weight in the row.
+   *
+   *   1  the figure the screen exists to show (equity)
+   *   2  money — balance and P&L
+   *   3  a statistic derived from closed trades
+   *
+   * All eight tiles used to carry identical weight, so nothing led the row.
+   * Defaults to 2, or 1 when the older `highlight` prop is set.
+   */
+  tier?: 1 | 2 | 3;
   /** Page that explains this figure. Omit for a non-interactive tile. */
   to?: string;
   /** What the destination answers, used to build the accessible name. */
@@ -103,48 +114,39 @@ interface StatCardProps {
  * Without `to` it stays an inert div rather than an empty tab stop. F187.
  */
 const StatCard: React.FC<StatCardProps> = ({
-  label, value, sub, positive, highlight, to, toHint,
+  label, value, sub, positive, highlight, tier, to, toHint,
 }) => {
+  const tone = positive === true ? 'gain' : positive === false ? 'loss' : undefined;
+
   const body = (
     <>
-      <div style={s.statLabel} className="flex items-center gap-1">
+      <div className="stat-tile-label flex items-center gap-1">
         {label}
         {to && (
           <ChevronRight
             size={11} strokeWidth={2.5} aria-hidden
-            className="ml-auto text-slate-700 transition-colors duration-150
-                       group-hover:text-slate-300 group-focus-visible:text-slate-300"
+            className="ml-auto opacity-40 transition-opacity duration-150
+                       group-hover:opacity-100 group-focus-visible:opacity-100"
           />
         )}
       </div>
-      <div
-        style={{
-          ...s.statValue,
-          color:
-            positive === true  ? '#4ade80' :
-            positive === false ? '#f87171' :
-            '#f8fafc',
-        }}
-      >
-        {value}
-      </div>
-      {sub && <div style={s.statSub}>{sub}</div>}
+      <div className="stat-tile-value" data-tone={tone}>{value}</div>
+      {sub && <div className="stat-tile-sub">{sub}</div>}
     </>
   );
 
-  const cardStyle = { ...s.statCard, ...(highlight ? s.statCardHighlight : {}) };
-  if (!to) return <div style={cardStyle}>{body}</div>;
+  // `highlight` is the old single-tile emphasis; tier 1 subsumes it.
+  const resolvedTier = tier ?? (highlight ? 1 : 2);
+
+  if (!to) return <div className="stat-tile" data-tier={resolvedTier}>{body}</div>;
 
   return (
     <Link
       to={to}
-      style={cardStyle}
+      className="stat-tile group min-h-[44px] cursor-pointer no-underline"
+      data-tier={resolvedTier}
       aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
       title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
-      className="group block min-h-[44px] cursor-pointer no-underline transition-colors duration-150
-                 hover:bg-[#141c2b] focus-visible:outline-none focus-visible:ring-2
-                 focus-visible:ring-sky-500 focus-visible:ring-offset-2
-                 focus-visible:ring-offset-[#080c14]"
     >
       {body}
     </Link>
@@ -820,20 +822,20 @@ const Dashboard: React.FC = () => {
         <PanelSkeleton rows={3} />
       ) : (
         <div style={s.statsGrid}>
-          <StatCard label="Balance" to="/wallet" toHint="Wallet"     value={orDash(acc.balance, v => '$' + fmt(v))} />
-          <StatCard label="Equity" to="/portfolio" toHint="Portfolio"      value={orDash(acc.equity, v => '$' + fmt(v))} highlight />
-          <StatCard label="Daily P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.daily_pnl, fmtUSD)}
+          <StatCard label="Balance" to="/wallet" toHint="Wallet"     value={orDash(acc.balance, v => '$' + fmt(v))} tier={2} />
+          <StatCard label="Equity" to="/portfolio" toHint="Portfolio"      value={orDash(acc.equity, v => '$' + fmt(v))} tier={1} />
+          <StatCard label="Daily P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.daily_pnl, fmtUSD)} tier={2}
             positive={has(acc.daily_pnl) ? acc.daily_pnl >= 0 : undefined}
             sub={orDash(acc.daily_pnl_pct, fmtPct)} />
-          <StatCard label="Total P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.total_pnl, fmtUSD)}
+          <StatCard label="Total P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.total_pnl, fmtUSD)} tier={2}
             positive={has(acc.total_pnl) ? acc.total_pnl >= 0 : undefined} />
-          <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => v.toFixed(1) + '%')}
+          <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => v.toFixed(1) + '%')} tier={3}
             positive={has(acc.win_rate) ? acc.win_rate >= WIN_RATE_GOOD_PCT : undefined} />
-          <StatCard label="Sharpe" to="/performance" toHint="risk-adjusted performance"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))}
+          <StatCard label="Sharpe" to="/performance" toHint="risk-adjusted performance"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))} tier={3}
             positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= SHARPE_GOOD : undefined} />
-          <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => v.toFixed(2) + '%')}
+          <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => v.toFixed(2) + '%')} tier={3}
             positive={has(acc.max_drawdown) ? acc.max_drawdown < DRAWDOWN_WARN_PCT : undefined} />
-          <StatCard label="Open Trades" to="/portfolio" toHint="your positions" value={orDash(acc.open_trades, String)} />
+          <StatCard label="Open Trades" to="/portfolio" toHint="your positions" value={orDash(acc.open_trades, String)} tier={3} />
         </div>
       )}
 
