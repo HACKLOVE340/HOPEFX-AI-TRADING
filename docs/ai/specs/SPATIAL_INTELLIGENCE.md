@@ -67,10 +67,10 @@ not intended — a roadmap that overstates itself is the same defect one layer u
 
 | # | Capability | Status | Notes |
 |---|---|---|---|
-| 0 | **Epistemic status ladder** | **built** | `ai/spatial/assurance.py` + `invariants/spatial.py`, 32 tests, every rule counterfactually proven |
-| 1 | Universal 3D Builder | planned | Houses, cars, robots, factories, cities, interiors, landscapes — from text, sketch, image, voice, or existing CAD |
-| 2 | AI Construction Brain | planned | Components, dependencies, assembly order, constraints, materials, dimensions — and *why* it is built that way |
-| 3 | Interactive World Model | partial | Every object a structured entity, selectable and interrogable. `frontend/src/hub/sceneGraph.ts` already answers "what is next to / inside / behind what" and refuses unknown ids rather than returning null |
+| 0 | **Epistemic status ladder** | **built** | `ai/spatial/assurance.py` + `invariants/spatial.py`, every rule counterfactually proven |
+| 1 | Universal 3D Builder | **partial** | `ai/spatial/world.py` — the component graph: typed components, typed connections, assembly order, removal impact, bill of materials. The *representation*, which every capability below needs; geometry, and generation from text/sketch/image/voice/CAD, attach to it and do not exist yet |
+| 2 | AI Construction Brain | **partial** | Dependencies, assembly order and materials are answered by `world.py`. Constraints, dimensions and *why* it is built that way are not |
+| 3 | Interactive World Model | **partial** | `world.py` answers "what is this connected to?" and "what happens if I remove it?" on the backend; `frontend/src/hub/sceneGraph.ts` answers "what is next to / inside / behind what" on the screen. Both refuse unknown ids rather than returning null |
 | 4 | Simulation Laboratory | planned | Physics, structural, fluid, lighting, thermal, aerodynamics, traffic/crowd, robotics, electrical. **The AI selects the appropriate simulation rather than implying every result is physically accurate** — each result carries `SIMULATED`, never higher |
 | 5 | Construction Time Machine | planned | Pause, rewind, accelerate, inspect any stage, branch a version |
 | 6 | AI Video Director | planned | Camera, animation, labels, narration, subtitles, exploded views, cinematic walkthrough — driven by the real construction history, not a re-enactment |
@@ -78,7 +78,7 @@ not intended — a roadmap that overstates itself is the same defect one layer u
 | 8 | What-If Laboratory | planned | "What if this building were twice as tall?" → branch, re-simulate, compare, explain consequences |
 | 9 | Automatic Design Alternatives | planned | Cheapest / strongest / most efficient / most beautiful / best trade-off, compared in one workspace |
 | 10 | Reality-to-3D | planned | Photograph, video or scan → editable spatial model. Reconstruction is `ESTIMATED` at best until measured |
-| 11 | 3D-to-Reality Documentation | planned | Dimensions, components, materials, assembly sequence, diagrams, technical docs, maintenance, BOM |
+| 11 | 3D-to-Reality Documentation | **partial** | `world.py` produces the assembly sequence and the bill of materials. Dimensions, diagrams, technical docs and maintenance instructions do not exist |
 | 12 | Spatial Memory | planned | "Open the house we designed last month." Extends `ai/memory/` |
 | 13 | Persistent Digital Twin | planned | A living representation compared against observed reality. Divergence is a first-class signal |
 | 14 | AR/VR/Mixed Reality Layer | planned | Walk the model, or project it into the room |
@@ -93,6 +93,20 @@ beside them:
 * `hub/surface3d.ts` — *"A hole is never interpolated."* `warrants3D` refuses more often than it accepts, and WebGL stays honestly unavailable rather than claimed.
 
 ---
+
+## A load path is a claim
+
+`World.removal_impact` returns `PROCEDURALLY_GENERATED` and never more. The graph
+knows a beam supports a floor because **somebody declared the connection** — an
+assertion about a drawing, not a measurement of a building. Whether the structure
+stands without it is a question for a solver that has not run.
+
+That rung is enforced twice on purpose: the result carries it (so a finding
+cannot travel without it), and `verify_structural_claim_requires_solver` refuses
+a republished claim at `SIMULATED` or above with no solver run. A rule enforced
+only at its source is a rule enforced by whoever remembers it, and "the model
+says the floor stays up" becoming "the floor stays up" is the step that turns a
+drawing into a demolition decision.
 
 ## Integration points — native, not bolted on
 

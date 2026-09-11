@@ -29,6 +29,7 @@ from ai.spatial.assurance import Assurance
 from invariants.constitution import CONSTITUTIONAL, CRITICAL
 from invariants.spatial import (
     verify_composite_assurance,
+    verify_structural_claim_requires_solver,
     verify_epistemic_monotonicity,
     verify_no_required_aspect_omitted,
     verify_readiness_requires_approval,
@@ -142,3 +143,33 @@ def test_every_predicate_here_is_discovered_by_the_registry() -> None:
         "verify_readiness_requires_approval",
         "verify_spatial_result_declares_assurance",
     } <= found, f"registry sees only {sorted(found)}"
+
+
+class TestAStructuralClaimNeedsASolverThatRan:
+    """`World.removal_impact` returns PROCEDURALLY_GENERATED, correctly — the
+    graph is repeating what was declared. Nothing in the type system stops a
+    caller republishing that finding as SIMULATED, and "the model says the floor
+    stays up" becoming "the floor stays up" is precisely the step that turns a
+    drawing into a demolition decision.
+
+    So the rung is checked where the claim is published, not only where it is
+    produced. A rule enforced solely at its source is a rule enforced by whoever
+    remembers it."""
+
+    def test_a_simulated_claim_with_no_solver_run_is_a_violation(self) -> None:
+        v = verify_structural_claim_requires_solver(Assurance.SIMULATED, solver_ran=False)
+        assert v and v[0].severity == CONSTITUTIONAL
+
+    def test_a_simulated_claim_backed_by_a_solver_passes(self) -> None:
+        assert verify_structural_claim_requires_solver(Assurance.SIMULATED, solver_ran=True) == []
+
+    def test_a_procedurally_generated_claim_needs_no_solver(self) -> None:
+        """The graph may always report what was declared. That is what it knows."""
+        assert verify_structural_claim_requires_solver(Assurance.PROCEDURALLY_GENERATED, solver_ran=False) == []
+
+    def test_every_rung_above_simulated_also_requires_one(self) -> None:
+        for rung in (Assurance.VALIDATED, Assurance.EXTERNALLY_VERIFIED, Assurance.HUMAN_APPROVED):
+            assert verify_structural_claim_requires_solver(rung, solver_ran=False), rung.name
+
+    def test_a_non_finite_rung_is_refused_rather_than_compared(self) -> None:
+        assert verify_structural_claim_requires_solver(float("nan"), solver_ran=True)

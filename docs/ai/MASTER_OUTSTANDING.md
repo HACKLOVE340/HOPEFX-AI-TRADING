@@ -5175,3 +5175,95 @@ predicates, because the naming convention *is* the registration mechanism.
 No solver, renderer, reconstruction pipeline or video encoder exists. Fifteen of
 sixteen capabilities are `planned`, and the specification says so in a table
 measured from the tree rather than aspired to.
+
+---
+
+## §E55 — The 3D builder begins with a graph, not a renderer (2026-09-11)
+
+Capability #1, the Universal 3D Builder, started — and specifically its
+*representation*, approved as the first slice ahead of geometry-first and
+generator-first.
+
+The reason is that every question the surrounding capabilities actually ask is a
+graph question, and none of them needs triangles to be answered:
+
+    "What is this connected to?"     connections_of
+    "What happens if I remove it?"   removal_impact
+    "In what order is it built?"     assembly_order
+    "What does it take to build?"    bill_of_materials
+
+The Construction Brain (#2), the Interactive World Model (#3), the Time Machine
+(#5), the What-If Laboratory (#8) and the documentation generator (#11) all sit
+on those four. Geometry attaches to a component later; a component cannot attach
+to geometry retroactively without redoing the model, which is what decides the
+order.
+
+`ai/spatial/world.py`. Four capability rows moved from `planned` to `partial`,
+and the specification says which half of each is real.
+
+### A load path is a claim
+
+`removal_impact` returns `PROCEDURALLY_GENERATED` and never more. The graph knows
+a beam supports a floor because **somebody declared the connection** — an
+assertion about a drawing, not a measurement of a building.
+
+Enforced twice deliberately: the result carries its rung, and
+`verify_structural_claim_requires_solver` refuses a republished claim at
+`SIMULATED` or above with no solver run. A rule enforced only at its source is a
+rule enforced by whoever remembers it, and *"the model says the floor stays up"*
+becoming *"the floor stays up"* is the step that turns a drawing into a
+demolition decision. Predicates **344 → 345**.
+
+### Refusals taken from code that already works here
+
+* **A support cycle is refused when the edge is added** — `ai/bus/graph.py`'s
+  rule. A cycle found at traversal means a structure has already been ordered,
+  costed or drawn on the assumption it was sound.
+* **Only `SUPPORTS` is held acyclic.** Pipes and wiring legitimately loop; a ring
+  main is not a structural impossibility, and refusing it would teach people to
+  model plumbing as something else.
+* **An unknown id raises** — `frontend/src/hub/sceneGraph.ts`'s rule. An empty
+  list for a typo reads identically to one for a component that genuinely carries
+  nothing. One is a misspelling, the other is a cantilever.
+* **A component with a second support is not reported unsupported.** A warning
+  that fires on every removal is one people switch off, and the second beam is
+  the whole reason the floor is still up.
+
+### Two tests were passing for the wrong reason, and the counterfactual found it
+
+Nine mutations were run against the implementation. Seven killed the tests that
+describe them. **Two survived**, and both were tests green for a reason other
+than the one they named:
+
+* *"a connection to an unknown component is refused"* used `SUPPORTS`. With the
+  endpoint guard deleted the call still raised `UnknownComponent` — from the
+  cycle check reaching `supports('ghost')`. Same exception, different rule, test
+  none the wiser. It now uses `FEEDS`, which never reaches the cycle check, so
+  only the endpoint guard can refuse it, and it additionally asserts no dangling
+  edge was left behind.
+* *"a non-structural cycle is allowed"* used a pure `FEEDS` loop. The detector
+  only walks `SUPPORTS` edges, so that loop is invisible to it whether or not the
+  check is kind-scoped — the test could not distinguish the two. A second test
+  now uses a **mixed** loop (a riser supports a pump that feeds back into it),
+  which is the case that actually discriminates.
+
+Re-run after the fixes, both mutations die. This is the third time in this
+programme that a green test has turned out to be measuring something other than
+its name, and the second time the counterfactual is what caught it — reading the
+tests would not have.
+
+### Evidence
+
+41 tests for the world model and its invariant, all red before the modules
+existed. **100% statement and branch coverage** across `ai/spatial/assurance.py`,
+`ai/spatial/world.py` and `invariants/spatial.py` — 61 tests over the three.
+Nine mutations, each killing exactly the tests that describe it, baseline
+restored green. The diamond test exists because the cycle detector's visited-set
+branch was the one line coverage could not reach: without it the detector
+re-walks a subtree per path, which is exponential on a real structure.
+
+### Not claimed
+
+No geometry, no renderer, no solver, no generation from text, sketch, image,
+voice or CAD. The builder can describe a structure and answer questions about it;
+it cannot draw one, and the specification's status table says so.

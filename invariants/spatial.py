@@ -181,3 +181,42 @@ def verify_spatial_result_declares_assurance(result_name: str, declared_rung: An
             )
         ]
     return []
+
+
+# The rung at and above which a claim about structural behaviour stops being a
+# restatement of the model and starts being a prediction about a building.
+_PREDICTS_REALITY = 4  # Assurance.SIMULATED
+
+
+def verify_structural_claim_requires_solver(claimed_rung: Any, solver_ran: bool) -> list[Violation]:
+    """A structural claim at SIMULATED or above requires a solver to have run.
+
+    `ai.spatial.world.World.removal_impact` returns PROCEDURALLY_GENERATED,
+    correctly: the graph repeats what somebody declared about the model. Nothing
+    in the type system stops a caller republishing that finding as SIMULATED,
+    and "the model says the floor stays up" becoming "the floor stays up" is the
+    step that turns a drawing into a demolition decision.
+
+    Checked where the claim is PUBLISHED rather than only where it is produced,
+    because a rule enforced solely at its source is a rule enforced by whoever
+    remembers it.
+    """
+    if not _is_finite_number(claimed_rung):
+        return [
+            _v(
+                "No Unverified AI Decision",
+                CONSTITUTIONAL,
+                f"structural claim declares a non-finite assurance rung ({claimed_rung!r})",
+            )
+        ]
+    if int(claimed_rung) >= _PREDICTS_REALITY and not solver_ran:
+        return [
+            _v(
+                "No Unverified AI Decision",
+                CONSTITUTIONAL,
+                "structural claim asserts simulated-or-better assurance with no solver run",
+                claimed=int(claimed_rung),
+                minimum_requiring_a_solver=_PREDICTS_REALITY,
+            )
+        ]
+    return []
