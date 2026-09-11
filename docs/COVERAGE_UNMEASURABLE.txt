@@ -400,7 +400,6 @@ ml/signal_features.py
 ml/train_advanced.py
 ml/train_rl_nuclear.py
 ml/train_with_macro.py
-ml/verify_model.py
 monetization/analytics.py
 monetization/commission.py
 monetization/license.py
