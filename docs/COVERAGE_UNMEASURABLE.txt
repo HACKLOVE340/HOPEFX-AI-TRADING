@@ -341,7 +341,6 @@ config/vault.py
 core/__init__.py
 core/account_registry.py
 core/background_tasks.py
-core/compat_router.py
 core/decision/HOPEFXDecisionEngine.py
 core/email_webhook.py
 core/health.py
