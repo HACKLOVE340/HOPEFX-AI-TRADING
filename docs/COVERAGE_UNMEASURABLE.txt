@@ -70,12 +70,142 @@
 #
 # replaces the seed with the exact measured set.
 
+
+# ── Added 2026-09-09, when the Sortino denominator was unified ───────────────
+#
+# Both entries below are PRE-EXISTING debt, not new untested code. They were
+# absent from the 361-line baseline and blocked a six-line correctness fix in
+# each file. The claim that they were "newly discoverable" was checked against
+# the old gate and is false — it found their tests too — so why they were never
+# adopted is not established, and this note does not invent a reason.
+#
+# What is measured: api/trading.py 47%, reports/weekly_report.py 56% (raised
+# from 51% by the Sortino tests that shipped with that fix). Both are recorded
+# rather than bypassed, so the ratchet keeps its meaning: these numbers may only
+# go up, and each line may only be deleted, never re-added.
+
+# ── Added 2026-09-10 ─────────────────────────────────────────────────────────
+#
+# Three more pre-existing debts, surfaced the first time anyone touched these
+# files. With the two added on 2026-09-09 that is five, and five is a pattern
+# rather than five coincidences: THE BASELINE IS INCOMPLETE. It was adopted
+# from a subset of the repository, so any module outside that subset blocks the
+# first commit that touches it, however small the change — which turns the
+# ratchet from "debt may only shrink" into "you may not touch an untested
+# file", and makes recording the debt the only way through.
+#
+# Recording it is still better than bypassing it, but the real fix is to adopt
+# a complete baseline once so the list describes today's actual debt. Filed as
+# a task; until then, entries added this way say so.
+#
+# Measured 2026-09-10:
+#   ml/inference_engine.py  69%
+#   ml/train_advanced.py    56%
+#   social/marketplace.py   59%  (up from 55% — the split_revenue tests added
+#                                 in the same commit raised it)
+
+# ── Removed 2026-09-10 — api/ws_live.py reached the floor ────────────────────
+#
+# `api/ws_live.py` was the sixth entry, and the one that forced the rule above
+# to be written down (ADR 0017, MASTER_OUTSTANDING §A6). It was recorded at 34%
+# because a 40-line security fix — `subscribe()` added any channel name it was
+# handed without checking who was asking — could not otherwise land in a
+# 2,425-line module.
+#
+# It is now at **81%** and the line is deleted, which is what the ratchet
+# demands: the gate blocks on a recorded module that reaches the floor, with
+# one instruction, and it did.
+#
+# Route measured, for whoever needs it next: 34% -> 48% by testing what was
+# reachable, then the loop *bodies* extracted into callable units (§E45) so the
+# `while True` shells became three lines each, then 48% -> 81% by testing the
+# bodies, the endpoints end to end, and the yfinance price arithmetic. The
+# earlier note here said 80% was unreachable by testing alone and put the
+# ceiling at ~56%. That was correct about the code as it stood and wrong as a
+# conclusion: the obstacle was the shape of the module, not the difficulty of
+# the tests.
+#
+# Four real defects were found on the way, none of them by reading:
+#   * `_compute_atr_sl_tp` treated any direction outside ("long","buy") as a
+#     SHORT, so "LONG" put the stop above a long entry;
+#   * the `/ws/nuclear` decorator ended up on a hoisted helper, so the route
+#     pointed at a sync zero-argument function and the endpoint was
+#     unregistered — now asserted by tests/unit/test_ws_routes_are_wired.py;
+#   * `_eventbus_tick_once` could return None into the backoff table;
+#   * a Redis outage reaches the endpoints two ways, and only one degrades to
+#     keepalive; the other closes with 1011. Pinned, not changed.
+
+# ── Added 2026-09-10 — core/startup_factories.py, an exclusion made visible ──
+#
+# This module was not in this list. It was in `.coveragerc`'s [run] omit, under
+# "Startup factories require full app context; covered by integration/e2e
+# tests, not unit tests."
+#
+# That was false, and false in exactly the way `core/router_registry.py`'s was
+# (§E37): tests/unit/test_startup_factories.py and
+# tests/unit/test_core_startup_factories.py exercise it directly, 59 tests
+# between them. The cost of the exclusion is worse than a recorded number — the
+# gate could not measure the file at all, so it could report neither debt nor
+# progress, and BLOCKED any commit that touched it with a diagnosis pointing at
+# a missing import that was not missing.
+#
+# An exclusion is not a measurement. A module nothing may measure is a module
+# nothing can ratchet. The omit is lifted and the real figure is recorded here,
+# where it applies pressure.
+#
+# The four conditions of ADR 0017, evidenced:
+#   1. already below the floor — 49% at 1a4a0a0 on a clean worktree with the
+#      omit lifted and the change absent, measured rather than asserted;
+#   2. not lowered — 49% after; the change adds one guarded call and comments;
+#   3. measured 2026-09-10: core/startup_factories.py 49% -> 49%;
+#   4. ADR 0017 cited as the standing agreement.
+#
+# It goes when it clears 80%, and the gate will block until the line is deleted.
+
+# ── Added 2026-09-10 — two of nineteen lifted exclusions needed a new line ────
+#
+# `.coveragerc`'s omit list hid 18 of its 23 concrete entries behind a
+# justification naming a test suite that does not cover them, while unit tests
+# demonstrably import them (§E49, ADR 0018). Lifting them measured every one.
+#
+# FOURTEEN were ALREADY RECORDED HERE. They were excluded AND in the debt list
+# at the same time, so the entry could never be acted on: the gate cannot
+# report a figure for a module it may not measure, so the line sat here
+# describing nothing. Those fourteen simply become live now.
+#
+# ONE had earned its way off and nobody could tell: `brokers/oanda_ws.py`
+# measures 100%. It was excluded, recorded as debt, and fully covered. Its line
+# is deleted above, which is what the gate demanded the moment it could see it.
+# An exclusion hides a success exactly as well as it hides a failure.
+#
+# TWO were in neither place, and are added here:
+#
+#     execution/engine.py                      77%   (3 points off the floor)
+#     core/decision/HOPEFXDecisionEngine.py    66%
+#
+# `execution/engine.py` at 77% is the closest thing in this file to a free win.
+# `HOPEFXDecisionEngine.py` is the central 5-phase decision pipeline CLAUDE.md
+# names as a key entry point.
+#
+# ADR 0017's four conditions:
+#   1. already below the floor — each was UNMEASURABLE before this commit, so
+#      its first measurement with the omit lifted IS its pre-existing number;
+#      no code changed here, only `.coveragerc`;
+#   2. not lowered — nothing was edited that could lower it;
+#   3. measured 2026-09-10 by `scripts/pre_commit_coverage.py` itself, so each
+#      entry states what the gate will state;
+#   4. ADR 0018 decides the rule, ADR 0017 governs the recording.
+#
+# For the record, the other seventeen figures the lift made visible:
+#     execution/_prom_metrics.py 75% · brokers/oanda.py 73% ·
+#     brokers/interactive_brokers.py 69% · core/middleware.py 67% ·
+#     execution/legacy.py 66% · brokers/oanda_stream.py 64% ·
+#     execution/hopefx_engine.py 63% · core/page_routes.py 58% ·
+#     execution/fix_router.py 57% · execution/fix_adapter.py 35% ·
+#     core/metrics.py 33% · core/risk/advanced_engine.py 27% ·
+#     execution/execution.py 18% · core/health.py 0%
 ai/cache/__init__.py
-ai/cache/store.py
 ai/core/__init__.py
-ai/core/calibration.py
-ai/core/challenger.py
-ai/core/context.py
 ai/core/depth.py
 ai/telemetry/__init__.py
 ai/telemetry/agents.py
@@ -83,13 +213,10 @@ ai/telemetry/host.py
 ai/telemetry/neural.py
 ai/telemetry/reading.py
 ai/telemetry/security.py
-analysis/patterns/__init__.py
 analysis/patterns/pattern_detector.py
-analytics/__init__.py
 analytics/performance.py
 analytics/portfolio.py
 analytics/risk.py
-api/__init__.py
 api/accounts.py
 api/advanced_orders.py
 api/advanced_trading.py
@@ -152,7 +279,6 @@ api/settings.py
 api/settings_extended.py
 api/settings_new_endpoints.py
 api/status.py
-api/superadmin/__init__.py
 api/superadmin/_shared.py
 api/superadmin/ai_operations.py
 api/superadmin/alerting.py
@@ -179,8 +305,8 @@ api/superadmin/system_health.py
 api/superadmin/trading_oversight.py
 api/superadmin/whitelabel.py
 api/tca.py
+api/trading.py
 api/transparency.py
-api/tutorials.py
 api/voice.py
 api/watchlist.py
 api/webhooks.py
@@ -188,17 +314,13 @@ api/whitelabel_admin.py
 api/ws_public.py
 backtest/__init__.py
 backtest/data_validator.py
-backtest/multi_symbol_backtest.py
 backtest/reconciled_backtest_investigation.py
 backtest/transaction_costs.py
-backtesting/__init__.py
-backtesting/backtest_engine.py
 backtesting/cli_runner.py
 backtesting/data_handler.py
 backtesting/engine.py
 backtesting/engine_config.py
 backtesting/enhanced_engine.py
-backtesting/execution.py
 backtesting/hyperopt.py
 backtesting/multi_symbol_backtest.py
 backtesting/optimizer.py
@@ -206,34 +328,22 @@ backtesting/plots.py
 backtesting/portfolio.py
 backtesting/reconciled_backtest_investigation.py
 backtesting/replay_connector.py
-backtesting/reports.py
 backtesting/strategy_adapter.py
 brain/__init__.py
-brain/llm_agent.py
 brokers/__init__.py
-brokers/advanced_orders.py
-brokers/alpaca.py
 brokers/binance.py
-brokers/ccxt_connector.py
 brokers/cme_comex.py
-brokers/factory.py
-brokers/ibkr.py
 brokers/ibkr_broker.py
 brokers/ibkr_connector.py
 brokers/interactive_brokers.py
 brokers/manager.py
 brokers/mt5.py
 brokers/mt5_broker.py
-brokers/mt5_zmq_bridge.py
 brokers/oanda.py
 brokers/oanda_broker.py
-brokers/oanda_paper_clock.py
 brokers/oanda_stream.py
 brokers/ohlcv_store.py
 brokers/prop_firms/__init__.py
-brokers/prop_firms/ftmo.py
-brokers/prop_firms/guard.py
-brokers/prop_firms/myforexfunds.py
 brokers/prop_firms/the5ers.py
 brokers/prop_firms/topstep.py
 brokers/smart_router.py
@@ -245,8 +355,6 @@ chaos/__init__.py
 chaos/controller.py
 chaos/injector.py
 chaos/mutation_runner.py
-charting/__init__.py
-charting/drawing_tools.py
 charting/nuclear_ai_chart_engine.py
 charting/nuclear_explainability.py
 charting/templates.py
@@ -254,17 +362,13 @@ charting/timeframes.py
 charting/websocket_server.py
 config/__init__.py
 config/settings.py
-config/startup_validator.py
 config/vault.py
 core/__init__.py
-core/account_metrics.py
 core/account_registry.py
-core/ai_quota.py
 core/analytics/__init__.py
-core/app_state.py
 core/background_tasks.py
 core/compat_router.py
-core/domain_enums.py
+core/decision/HOPEFXDecisionEngine.py
 core/domain_models.py
 core/email_webhook.py
 core/health.py
@@ -278,7 +382,7 @@ core/regime_router.py
 core/risk/__init__.py
 core/risk/advanced_engine.py
 core/safety_config_report.py
-core/self_healer.py
+core/startup_factories.py
 core/startup_helpers.py
 core/strategy_engine.py
 core/tenancy.py
@@ -295,58 +399,42 @@ data_layer/feeds/news/manager.py
 data_layer/feeds/news/newsapi.py
 data_layer/feeds/news/newsdata.py
 data_layer/orchestrator.py
-data_layer/types.py
 data_layer/validation.py
-database/__init__.py
 database/async_connection.py
 database/connection.py
 database/encryption.py
 database/optimization.py
-database/system_events.py
-database/user_models.py
 enhanced_backtest_engine.py
 execution/__init__.py
 execution/_prom_metrics.py
 execution/algo_orders.py
-execution/broker_call.py
 execution/broker_circuit_breaker.py
+execution/engine.py
 execution/execution.py
 execution/fix_adapter.py
 execution/fix_router.py
 execution/hopefx_engine.py
 execution/legacy.py
-execution/market_impact.py
 execution/order_algorithms.py
-execution/order_gateway.py
-execution/position_manager.py
 execution/position_tracker.py
-execution/smart_router.py
-execution/spread_monitor.py
-execution/tca_recorder.py
 execution/throttler.py
-execution/trade_executor.py
-invariants/execution.py
 invariants/ml_pipeline.py
 invariants/payments.py
 invariants/portfolio.py
-invariants/risk.py
 invariants/security.py
 market_data/validation.py
 ml/__init__.py
 ml/advanced_ai.py
-ml/advanced_features.py
 ml/features_extended.py
 ml/hourly_trainer.py
-ml/macro_bootstrap.py
-ml/model_paths.py
-ml/model_registry.py
-ml/mtf_features.py
+ml/inference_engine.py
 ml/predictor.py
 ml/regime.py
 ml/rl_agent.py
 ml/run_training.py
 ml/signal_features.py
 ml/signal_validator.py
+ml/train_advanced.py
 ml/train_rl_nuclear.py
 ml/train_with_macro.py
 ml/verify_model.py
@@ -359,7 +447,6 @@ monetization/marketplace.py
 monetization/marketplace_submission.py
 monetization/payment_processor.py
 monetization/refund_policy.py
-monetization/revenue_split.py
 monetization/stripe_live.py
 monetization/subscription.py
 news/__init__.py
@@ -370,7 +457,6 @@ notifications/discord_bot.py
 notifications/email_renderer.py
 notifications/heartbeat.py
 notifications/telegram_bot.py
-payments/__init__.py
 payments/compliance.py
 payments/payment_gateway.py
 payments/security.py
@@ -381,13 +467,9 @@ portfolio/factor_model.py
 portfolio/pms.py
 portfolio/rebalancer.py
 portfolio/strategy_allocator.py
+reports/weekly_report.py
 risk/__init__.py
-risk/analytics.py
 risk/gatekeeper.py
-risk/orchestrator.py
-risk/post_trade_analyzer.py
-risk/risk_appetite.py
-risk/risk_manager.py
 risk/stress_test.py
 security/__init__.py
 security/antivirus.py
@@ -403,12 +485,10 @@ security/production_config.py
 security/security_manager.py
 security/self_healer.py
 security/vault.py
-social/__init__.py
 social/advanced_copy_trading.py
 social/copy_trading_engine.py
+social/marketplace.py
 social/profiles.py
-strategies/__init__.py
-strategies/adaptive_edge_selector.py
 strategies/base_enhanced.py
 strategies/bollinger_bands.py
 strategies/breakout.py
@@ -420,154 +500,9 @@ strategies/manager.py
 strategies/mean_reversion.py
 strategies/pullback_strategy.py
 strategies/regime_router.py
-strategies/registry.py
 strategies/rsi_strategy.py
 strategies/smc_ict.py
-strategies/sniper_entry_engine.py
-strategies/stochastic.py
 strategies/strategy_brain.py
 utils/config.py
 utils/database.py
 whitelabel/config.py
-
-# ── Added 2026-09-09, when the Sortino denominator was unified ───────────────
-#
-# Both entries below are PRE-EXISTING debt, not new untested code. They were
-# absent from the 361-line baseline and blocked a six-line correctness fix in
-# each file. The claim that they were "newly discoverable" was checked against
-# the old gate and is false — it found their tests too — so why they were never
-# adopted is not established, and this note does not invent a reason.
-#
-# What is measured: api/trading.py 47%, reports/weekly_report.py 56% (raised
-# from 51% by the Sortino tests that shipped with that fix). Both are recorded
-# rather than bypassed, so the ratchet keeps its meaning: these numbers may only
-# go up, and each line may only be deleted, never re-added.
-api/trading.py
-reports/weekly_report.py
-
-# ── Added 2026-09-10 ─────────────────────────────────────────────────────────
-#
-# Three more pre-existing debts, surfaced the first time anyone touched these
-# files. With the two added on 2026-09-09 that is five, and five is a pattern
-# rather than five coincidences: THE BASELINE IS INCOMPLETE. It was adopted
-# from a subset of the repository, so any module outside that subset blocks the
-# first commit that touches it, however small the change — which turns the
-# ratchet from "debt may only shrink" into "you may not touch an untested
-# file", and makes recording the debt the only way through.
-#
-# Recording it is still better than bypassing it, but the real fix is to adopt
-# a complete baseline once so the list describes today's actual debt. Filed as
-# a task; until then, entries added this way say so.
-#
-# Measured 2026-09-10:
-#   ml/inference_engine.py  69%
-#   ml/train_advanced.py    56%
-#   social/marketplace.py   59%  (up from 55% — the split_revenue tests added
-#                                 in the same commit raised it)
-ml/inference_engine.py
-ml/train_advanced.py
-social/marketplace.py
-
-# ── Removed 2026-09-10 — api/ws_live.py reached the floor ────────────────────
-#
-# `api/ws_live.py` was the sixth entry, and the one that forced the rule above
-# to be written down (ADR 0017, MASTER_OUTSTANDING §A6). It was recorded at 34%
-# because a 40-line security fix — `subscribe()` added any channel name it was
-# handed without checking who was asking — could not otherwise land in a
-# 2,425-line module.
-#
-# It is now at **81%** and the line is deleted, which is what the ratchet
-# demands: the gate blocks on a recorded module that reaches the floor, with
-# one instruction, and it did.
-#
-# Route measured, for whoever needs it next: 34% -> 48% by testing what was
-# reachable, then the loop *bodies* extracted into callable units (§E45) so the
-# `while True` shells became three lines each, then 48% -> 81% by testing the
-# bodies, the endpoints end to end, and the yfinance price arithmetic. The
-# earlier note here said 80% was unreachable by testing alone and put the
-# ceiling at ~56%. That was correct about the code as it stood and wrong as a
-# conclusion: the obstacle was the shape of the module, not the difficulty of
-# the tests.
-#
-# Four real defects were found on the way, none of them by reading:
-#   * `_compute_atr_sl_tp` treated any direction outside ("long","buy") as a
-#     SHORT, so "LONG" put the stop above a long entry;
-#   * the `/ws/nuclear` decorator ended up on a hoisted helper, so the route
-#     pointed at a sync zero-argument function and the endpoint was
-#     unregistered — now asserted by tests/unit/test_ws_routes_are_wired.py;
-#   * `_eventbus_tick_once` could return None into the backoff table;
-#   * a Redis outage reaches the endpoints two ways, and only one degrades to
-#     keepalive; the other closes with 1011. Pinned, not changed.
-
-# ── Added 2026-09-10 — core/startup_factories.py, an exclusion made visible ──
-#
-# This module was not in this list. It was in `.coveragerc`'s [run] omit, under
-# "Startup factories require full app context; covered by integration/e2e
-# tests, not unit tests."
-#
-# That was false, and false in exactly the way `core/router_registry.py`'s was
-# (§E37): tests/unit/test_startup_factories.py and
-# tests/unit/test_core_startup_factories.py exercise it directly, 59 tests
-# between them. The cost of the exclusion is worse than a recorded number — the
-# gate could not measure the file at all, so it could report neither debt nor
-# progress, and BLOCKED any commit that touched it with a diagnosis pointing at
-# a missing import that was not missing.
-#
-# An exclusion is not a measurement. A module nothing may measure is a module
-# nothing can ratchet. The omit is lifted and the real figure is recorded here,
-# where it applies pressure.
-#
-# The four conditions of ADR 0017, evidenced:
-#   1. already below the floor — 49% at 1a4a0a0 on a clean worktree with the
-#      omit lifted and the change absent, measured rather than asserted;
-#   2. not lowered — 49% after; the change adds one guarded call and comments;
-#   3. measured 2026-09-10: core/startup_factories.py 49% -> 49%;
-#   4. ADR 0017 cited as the standing agreement.
-#
-# It goes when it clears 80%, and the gate will block until the line is deleted.
-core/startup_factories.py
-
-# ── Added 2026-09-10 — two of nineteen lifted exclusions needed a new line ────
-#
-# `.coveragerc`'s omit list hid 18 of its 23 concrete entries behind a
-# justification naming a test suite that does not cover them, while unit tests
-# demonstrably import them (§E49, ADR 0018). Lifting them measured every one.
-#
-# FOURTEEN were ALREADY RECORDED HERE. They were excluded AND in the debt list
-# at the same time, so the entry could never be acted on: the gate cannot
-# report a figure for a module it may not measure, so the line sat here
-# describing nothing. Those fourteen simply become live now.
-#
-# ONE had earned its way off and nobody could tell: `brokers/oanda_ws.py`
-# measures 100%. It was excluded, recorded as debt, and fully covered. Its line
-# is deleted above, which is what the gate demanded the moment it could see it.
-# An exclusion hides a success exactly as well as it hides a failure.
-#
-# TWO were in neither place, and are added here:
-#
-#     execution/engine.py                      77%   (3 points off the floor)
-#     core/decision/HOPEFXDecisionEngine.py    66%
-#
-# `execution/engine.py` at 77% is the closest thing in this file to a free win.
-# `HOPEFXDecisionEngine.py` is the central 5-phase decision pipeline CLAUDE.md
-# names as a key entry point.
-#
-# ADR 0017's four conditions:
-#   1. already below the floor — each was UNMEASURABLE before this commit, so
-#      its first measurement with the omit lifted IS its pre-existing number;
-#      no code changed here, only `.coveragerc`;
-#   2. not lowered — nothing was edited that could lower it;
-#   3. measured 2026-09-10 by `scripts/pre_commit_coverage.py` itself, so each
-#      entry states what the gate will state;
-#   4. ADR 0018 decides the rule, ADR 0017 governs the recording.
-#
-# For the record, the other seventeen figures the lift made visible:
-#     execution/_prom_metrics.py 75% · brokers/oanda.py 73% ·
-#     brokers/interactive_brokers.py 69% · core/middleware.py 67% ·
-#     execution/legacy.py 66% · brokers/oanda_stream.py 64% ·
-#     execution/hopefx_engine.py 63% · core/page_routes.py 58% ·
-#     execution/fix_router.py 57% · execution/fix_adapter.py 35% ·
-#     core/metrics.py 33% · core/risk/advanced_engine.py 27% ·
-#     execution/execution.py 18% · core/health.py 0%
-core/decision/HOPEFXDecisionEngine.py
-execution/engine.py
