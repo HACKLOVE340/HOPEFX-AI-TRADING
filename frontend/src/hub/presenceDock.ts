@@ -49,6 +49,21 @@ export const DISMISSED: DockState = 'dismissed';
 /** Below this a floating orb covers content whatever corner it picks. */
 const NARROW_VIEWPORT = BREAKPOINTS.narrow;
 
+/**
+ * What the presence occupies when nobody says otherwise.
+ *
+ * This was the only size this module knew, and `PresenceAnywhere` renders its
+ * panel at `dock.rect.width` — so the closed panel was laid out 96px wide and
+ * wrapped a status sentence, a dismiss button and an "Ask about this page"
+ * button into a 72px content box, 471px tall, one word per line. It was
+ * unreadable on every authenticated page and went unnoticed because the
+ * bottom-right corner ran the top of it off the screen.
+ *
+ * It also made every collision answer wrong: the module reserved 96x96 and
+ * something four times that tall was drawn, so `avoid` was checked against a
+ * box the presence does not occupy. Callers now pass the size they will
+ * actually render at.
+ */
 const ORB = { width: 96, height: 96 };
 const MARGIN = 24;
 const BAR_HEIGHT = 72;
@@ -57,6 +72,8 @@ const TRANSITION = 'transform 220ms ease, opacity 220ms ease';
 
 export interface DockRequest {
   viewport: Rect;
+  /** What the caller will render. Defaults to the collapsed orb. */
+  size?: { width: number; height: number };
   /** What the operator is interacting with. The dock stays off all of it. */
   avoid?: readonly Rect[];
   state?: DockState;
@@ -83,14 +100,14 @@ function overlaps(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
-function rectFor(corner: DockCorner, viewport: Rect): Rect {
-  const right = viewport.x + viewport.width - ORB.width - MARGIN;
-  const bottom = viewport.y + viewport.height - ORB.height - MARGIN;
+function rectFor(corner: DockCorner, viewport: Rect, size: { width: number; height: number }): Rect {
+  const right = viewport.x + viewport.width - size.width - MARGIN;
+  const bottom = viewport.y + viewport.height - size.height - MARGIN;
   const left = viewport.x + MARGIN;
   const top = viewport.y + MARGIN;
   const x = corner.endsWith('right') ? right : left;
   const y = corner.startsWith('bottom') ? bottom : top;
-  return { x, y, width: ORB.width, height: ORB.height };
+  return { x, y, width: size.width, height: size.height };
 }
 
 function base(request: DockRequest): Pick<Dock, 'transition' | 'trapsFocus' | 'a11y'> {
@@ -132,24 +149,43 @@ export function dockFor(request: DockRequest): Dock {
   }
 
   if (viewport.width < NARROW_VIEWPORT) {
-    // A bar spans the width and pushes content rather than sitting on it, which
-    // is the only arrangement that cannot cover something on a small screen.
+    // A bar spans the width and pushes page content rather than sitting on it,
+    // which is the only arrangement that cannot cover the page on a small
+    // screen. It does not push a *fixed* control: measured at 400x1000, the
+    // bar covered the support launcher, which then drew on top of it at
+    // z-index 1200. The branch used to answer `overlapping: []` regardless —
+    // a measurement with no path to a non-empty answer, so the caller could
+    // not have shrunk, dimmed or stepped aside even though this module
+    // promises it will. Where the bar goes on a phone is a design question and
+    // is unchanged; what it says about itself is now measured.
+    const barRect = {
+      x: viewport.x,
+      y: viewport.y + viewport.height - BAR_HEIGHT,
+      width: viewport.width,
+      height: BAR_HEIGHT,
+    };
+    const covered = (request.avoid ?? []).filter((other) => overlaps(barRect, other));
     return {
       ...shared,
       visible: true,
       mode: 'bar',
       corner: 'bottom-left',
-      rect: { x: viewport.x, y: viewport.y + viewport.height - BAR_HEIGHT, width: viewport.width, height: BAR_HEIGHT },
-      overlapping: [],
-      reason: 'the viewport is narrow, so the presence docks to an edge bar rather than floating over content',
+      rect: barRect,
+      overlapping: covered,
+      reason:
+        covered.length === 0
+          ? 'the viewport is narrow, so the presence docks to an edge bar rather than floating over content'
+          : `the viewport is narrow, so the presence docks to an edge bar; it covers ${covered.length} fixed ` +
+            'control the operator can still reach, because a bar has nowhere else to go on this screen',
     };
   }
 
   const avoid = request.avoid ?? [];
+  const size = request.size ?? ORB;
   let fallback: { corner: DockCorner; rect: Rect; hits: Rect[] } | null = null;
 
   for (const corner of CORNERS) {
-    const rect = rectFor(corner, viewport);
+    const rect = rectFor(corner, viewport, size);
     const hits = avoid.filter((other) => overlaps(rect, other));
     if (hits.length === 0) {
       return { ...shared, visible: true, mode: 'float', corner, rect, overlapping: [], reason: '' };

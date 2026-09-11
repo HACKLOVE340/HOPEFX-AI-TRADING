@@ -42,7 +42,7 @@
  * the presence; it is a bug that looks like a design decision.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageSquare, X } from 'lucide-react';
 
 import { PresenceCore } from './PresenceCore';
@@ -103,6 +103,22 @@ export interface PresenceAnywhereProps {
   surfaceReason?: string;
 }
 
+/* The panel's own geometry, kept here because this is the component that
+   draws it. 360 was already the open width; the closed one was never declared
+   and defaulted to the dock's orb, which is how a status sentence ended up
+   wrapped into a 72px column. The heights are what the two states occupy, and
+   they matter because the dock uses them to decide which corner is free. */
+const OPEN_WIDTH = 360;
+const CLOSED_WIDTH = 268;
+
+/* Heights until the panel has been laid out once. They are a starting guess and
+   nothing more: the panel's height depends on how long the status sentence for
+   this page is, so a constant is wrong for most pages. Declaring 124 put the
+   panel's anchor 124px off the bottom while 276px of it rendered, and 152px
+   hung below the fold. The measured height replaces these on the first frame. */
+const OPEN_HEIGHT_GUESS = 420;
+const CLOSED_HEIGHT_GUESS = 200;
+
 export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactElement | null {
   const { pathname, nav, surface, presence, viewport } = props;
 
@@ -119,16 +135,50 @@ export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactEleme
     () => pageCapabilities({ area: page.area, surface }),
     [page.area, surface],
   );
+  // The size the panel will actually be, handed to the dock so it reserves the
+  // box it draws rather than an orb it has not been since this component was
+  // written. `dock.rect.width` is what the panel is laid out at, so a dock that
+  // guesses small does not shrink the panel — it wraps it into a column.
+  // Width is declared; height is measured. The panel's width is what the dock
+  // hands back, so declaring it is the only way not to chase our own tail. Its
+  // height then follows from how much text this page's status runs to, which
+  // nothing here can know in advance — so read it off the element. Width does
+  // not depend on height, so this settles in one frame rather than oscillating.
+  const panelRef = useRef<HTMLElement | null>(null);
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const node = panelRef.current;
+    if (node === null) return;
+    const observer = new ResizeObserver(() => {
+      const height = node.getBoundingClientRect().height;
+      if (height > 0) setMeasuredHeight(height);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  // A state change that alters the content resets the measurement, so the
+  // previous state's height is never used to place the new one.
+  useEffect(() => setMeasuredHeight(null), [open]);
+
+  const panelSize = useMemo(
+    () => ({
+      width: Math.min(open ? OPEN_WIDTH : CLOSED_WIDTH, viewport.width - 32),
+      height: measuredHeight ?? (open ? OPEN_HEIGHT_GUESS : CLOSED_HEIGHT_GUESS),
+    }),
+    [open, viewport.width, measuredHeight],
+  );
+
   const dock = useMemo(
     () =>
       dockFor({
         viewport,
+        size: panelSize,
         avoid: props.avoid,
         // An alert overrides a dismissal, so the dock must not report hidden.
         state: dismissed && !alerting ? DISMISSED : 'active',
         reducedMotion: props.reducedMotion,
       }),
-    [viewport, props.avoid, dismissed, alerting, props.reducedMotion],
+    [viewport, panelSize, props.avoid, dismissed, alerting, props.reducedMotion],
   );
 
   // The overlay owns the ASSERTIVE region only. Its `role="alert"` is what
@@ -187,6 +237,7 @@ export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactEleme
 
   return (
     <section
+      ref={panelRef}
       role="complementary"
       aria-label="HOPEFX AI assistant"
       data-corner={dock.corner}
@@ -195,7 +246,7 @@ export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactEleme
         position: 'fixed',
         left: dock.rect.x,
         top: dock.rect.y,
-        width: open ? Math.min(360, viewport.width - 32) : dock.rect.width,
+        width: dock.rect.width,
         zIndex: 40,
         transition: dock.transition,
       }}

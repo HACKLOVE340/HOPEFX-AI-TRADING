@@ -33,6 +33,8 @@ import { PresenceAnywhere } from './PresenceAnywhere';
 import type { SurfaceEntry } from './pageCapabilities';
 import { derivePresence } from './presence';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
+import { readLanes, subscribeLanes } from './floatingLanes';
+import type { Rect } from './spatial';
 
 const SURFACE_URL = '/api/ai-core/capabilities/app';
 
@@ -52,10 +54,24 @@ function useViewportRect() {
   return rect;
 }
 
+/**
+ * The rectangles other persistent floating controls have claimed.
+ *
+ * `dockFor` has always taken an `avoid` list and always been handed nothing,
+ * which is why the presence and the support launcher shared one corner. See
+ * `floatingLanes.ts`.
+ */
+function useReservedLanes(): Rect[] {
+  const [lanes, setLanes] = useState<Rect[]>(readLanes);
+  useEffect(() => subscribeLanes(() => setLanes(readLanes())), []);
+  return lanes;
+}
+
 export function PresenceAnywhereMount(): React.ReactElement | null {
   const location = useLocation();
   const viewport = useViewportRect();
   const reducedMotion = usePrefersReducedMotion();
+  const avoid = useReservedLanes();
 
   const [surface, setSurface] = useState<SurfaceEntry[] | null>(null);
   const [surfaceReason, setSurfaceReason] = useState('');
@@ -108,6 +124,7 @@ export function PresenceAnywhereMount(): React.ReactElement | null {
       surfaceReason={surfaceReason}
       presence={presence}
       viewport={viewport}
+      avoid={avoid}
       reducedMotion={reducedMotion}
     />
   );

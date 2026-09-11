@@ -51,7 +51,7 @@ describe('every tile declares what kind of number it holds', () => {
 
   it('no tile is left without one', () => {
     const source = dashboard();
-    const row = source.slice(source.indexOf('<div style={s.statsGrid}>'), source.indexOf('Live Equity Curve'));
+    const row = source.slice(source.indexOf('<div className="stat-row">'), source.indexOf('Live Equity Curve'));
     const tiles = row.match(/<StatCard/g) ?? [];
     const tiers = row.match(/tier=\{[123]\}/g) ?? [];
     expect(tiles.length).toBe(8);
@@ -67,8 +67,17 @@ describe('the weight is carried by fill and size, not a second accent', () => {
   });
 
   it('tier 1 is given room, not just colour', () => {
-    expect(block()).toMatch(/\.stat-tile\[data-tier="1"\][\s\S]{0,200}grid-column: span 2/);
+    // This asserted `grid-column: span 2`, and the span turned out to be the
+    // bug: eight tiles filled nine cells, so no column count divided evenly and
+    // the row broke to [7, 1] at 1440 and [6, 2] at 1280 — one tile stranded
+    // beside five empty columns. The room tier 1 needs is the room every tile
+    // now gets from an even four-column row; its prominence is the raised fill,
+    // the accent-mixed edge and the larger figure. The test asserts the
+    // intention, not the mechanism that failed to deliver it.
+    expect(block()).toMatch(/\.stat-tile\[data-tier="1"\][\s\S]{0,200}border-color: color-mix\(in srgb, var\(--accent\)/);
     expect(block()).toMatch(/\.stat-tile\[data-tier="1"\] \.stat-tile-value \{ font-size: 24px/);
+    // And bigger than the tier below it, which is the part that carries weight.
+    expect(block()).toMatch(/\.stat-tile-value \{[\s\S]{0,120}font-size: 18px/);
   });
 
   it('tier 3 recedes to a transparent fill and a quieter edge', () => {

@@ -821,21 +821,23 @@ const Dashboard: React.FC = () => {
       {!acc ? (
         <PanelSkeleton rows={3} />
       ) : (
-        <div style={s.statsGrid}>
-          <StatCard label="Balance" to="/wallet" toHint="Wallet"     value={orDash(acc.balance, v => '$' + fmt(v))} tier={2} />
-          <StatCard label="Equity" to="/portfolio" toHint="Portfolio"      value={orDash(acc.equity, v => '$' + fmt(v))} tier={1} />
-          <StatCard label="Daily P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.daily_pnl, fmtUSD)} tier={2}
-            positive={has(acc.daily_pnl) ? acc.daily_pnl >= 0 : undefined}
-            sub={orDash(acc.daily_pnl_pct, fmtPct)} />
-          <StatCard label="Total P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.total_pnl, fmtUSD)} tier={2}
-            positive={has(acc.total_pnl) ? acc.total_pnl >= 0 : undefined} />
-          <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => v.toFixed(1) + '%')} tier={3}
-            positive={has(acc.win_rate) ? acc.win_rate >= WIN_RATE_GOOD_PCT : undefined} />
-          <StatCard label="Sharpe" to="/performance" toHint="risk-adjusted performance"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))} tier={3}
-            positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= SHARPE_GOOD : undefined} />
-          <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => v.toFixed(2) + '%')} tier={3}
-            positive={has(acc.max_drawdown) ? acc.max_drawdown < DRAWDOWN_WARN_PCT : undefined} />
-          <StatCard label="Open Trades" to="/portfolio" toHint="your positions" value={orDash(acc.open_trades, String)} tier={3} />
+        <div className="stat-row-scope">
+          <div className="stat-row">
+            <StatCard label="Balance" to="/wallet" toHint="Wallet"     value={orDash(acc.balance, v => '$' + fmt(v))} tier={2} />
+            <StatCard label="Equity" to="/portfolio" toHint="Portfolio"      value={orDash(acc.equity, v => '$' + fmt(v))} tier={1} />
+            <StatCard label="Daily P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.daily_pnl, fmtUSD)} tier={2}
+              positive={has(acc.daily_pnl) ? acc.daily_pnl >= 0 : undefined}
+              sub={orDash(acc.daily_pnl_pct, fmtPct)} />
+            <StatCard label="Total P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.total_pnl, fmtUSD)} tier={2}
+              positive={has(acc.total_pnl) ? acc.total_pnl >= 0 : undefined} />
+            <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => v.toFixed(1) + '%')} tier={3}
+              positive={has(acc.win_rate) ? acc.win_rate >= WIN_RATE_GOOD_PCT : undefined} />
+            <StatCard label="Sharpe" to="/performance" toHint="risk-adjusted performance"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))} tier={3}
+              positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= SHARPE_GOOD : undefined} />
+            <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => v.toFixed(2) + '%')} tier={3}
+              positive={has(acc.max_drawdown) ? acc.max_drawdown < DRAWDOWN_WARN_PCT : undefined} />
+            <StatCard label="Open Trades" to="/portfolio" toHint="your positions" value={orDash(acc.open_trades, String)} tier={3} />
+          </div>
         </div>
       )}
 
@@ -981,8 +983,9 @@ const s: Record<string, React.CSSProperties> = {
   tickerPrice:  { fontSize: 16, fontWeight: 700, color: '#f8fafc', margin: '3px 0' },
   tickerChange: { fontSize: 12, fontWeight: 600 },
 
-  // Stats grid: auto-fill so it collapses to 2 cols on mobile naturally
-  statsGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 12 },
+  // Stats row: see `.stat-row` in index.css. It is a class, not a style here,
+  // because the column count has to follow the width of the row's own
+  // container, and an inline style cannot carry a container query.
   statCard:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '10px 12px' },
   statCardHighlight: { border: '1px solid #3b82f6', boxShadow: '0 0 12px rgba(59,130,246,0.15)' },
   statLabel:         { fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },

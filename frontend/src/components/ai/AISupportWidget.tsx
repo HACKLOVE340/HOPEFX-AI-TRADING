@@ -30,6 +30,8 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import AIChat from './AIChat';
+import { releaseLane, reserveLane } from '../../hub/floatingLanes';
+import type { Rect } from '../../hub/spatial';
 
 const SUPPORT_INTRO =
   '**HOPEFX Support.** I can help with logging in, subscriptions and billing, ' +
@@ -51,13 +53,43 @@ const DOCK_THRESHOLD_PX = 40;
 /** Pointer movement under this is a click, not a drag. */
 const DRAG_SLOP_PX = 5;
 
-const STORAGE_KEY = 'hopefx.support.launcher';
-
 interface Placement {
   /** Distance from the bottom of the viewport, in px. */
   bottom: number;
   /** Parked against the right edge as a sliver. */
   docked: boolean;
+}
+
+const STORAGE_KEY = 'hopefx.support.launcher';
+
+/** The lane this control claims, so the presence dock can stay out of it. */
+const LANE_ID = 'support-launcher';
+
+/* Geometry, mirrored from `.support-launcher` / `.support-sliver` in
+   index.css. A rect has to be computed before the element is laid out — the
+   presence needs to know where this will be, not where it was last frame — so
+   the numbers live here as well as there. `floating_controls_do_not_collide`
+   reads the stylesheet and fails if the two ever drift apart. */
+export const LAUNCHER_SIZE_PX = 56;
+export const LAUNCHER_RIGHT_PX = 20;
+export const SLIVER_WIDTH_PX = 6;
+export const SLIVER_HEIGHT_PX = 72;
+
+/**
+ * Where the launcher will be, given a placement and a viewport.
+ *
+ * Pure, so the presence dock and a test can both ask without a browser.
+ */
+export function launcherRect(placement: Placement, viewport: Rect): Rect {
+  const width = placement.docked ? SLIVER_WIDTH_PX : LAUNCHER_SIZE_PX;
+  const height = placement.docked ? SLIVER_HEIGHT_PX : LAUNCHER_SIZE_PX;
+  const right = placement.docked ? 0 : LAUNCHER_RIGHT_PX;
+  return {
+    x: viewport.x + viewport.width - right - width,
+    y: viewport.y + viewport.height - placement.bottom - height,
+    width,
+    height,
+  };
 }
 
 const DEFAULT_PLACEMENT: Placement = { bottom: DEFAULT_BOTTOM, docked: false };
@@ -116,6 +148,24 @@ const AISupportWidget: React.FC = () => {
     const saved = readPlacement();
     setPlacement({ ...saved, bottom: clampBottom(saved.bottom, window.innerHeight) });
   }, []);
+
+  // Publish the lane so the presence dock can pick another corner. Re-run on
+  // every placement change and on resize: the launcher is draggable, and a
+  // stale rect would send the presence out of the way of nothing.
+  useEffect(() => {
+    const publish = () => {
+      reserveLane(
+        LANE_ID,
+        launcherRect(placement, { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }),
+      );
+    };
+    publish();
+    window.addEventListener('resize', publish);
+    return () => {
+      window.removeEventListener('resize', publish);
+      releaseLane(LANE_ID);
+    };
+  }, [placement]);
 
   const commit = useCallback((next: Placement) => {
     setPlacement(next);

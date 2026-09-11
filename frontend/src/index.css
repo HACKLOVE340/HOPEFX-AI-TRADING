@@ -782,10 +782,68 @@
   min-width: 0;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   The row the tiles sit in.
+
+   This was `repeat(auto-fill, minmax(130px, 1fr))` as an inline style, and it
+   produced two defects at once, both measured in Chromium on /dashboard:
+
+     · At 1440 it chose eight 138px columns. A tier-2 tile's content box is
+       112px; `$100,000.00` at 18px needs 126px. The balance — the number the
+       screen exists to show — was cut off mid-digit for every funded account.
+
+     · The tier-1 tile spanned two columns, so eight tiles filled nine cells.
+       Eight columns took seven tiles and left the eighth alone on a second row
+       beside five empty ones: [7, 1] at 1440, [6, 2] at 1280.
+
+   An auto-fill count is whatever happens to fit, which is why it never divided
+   evenly. Declared counts that divide eight do, and four columns on a desktop
+   give each tile ~284px — room for a seven-figure balance with the weight the
+   reference mockup had and this row did not. The tier-1 tile keeps its
+   prominence from saturation and type size, which it already had; the span was
+   only ever the thing that broke the packing.
+
+   It is a class rather than an inline style for the reason the rest of this
+   file exists: an inline style cannot answer a media query.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.stat-row-scope {
+  /* The row asks its own width, not the window's. A viewport query is wrong
+     here by exactly the width of the sidebar — and the sidebar collapses, so
+     no fixed offset makes it right either. Measured at a 768px viewport with
+     a `@media (min-width: 720px)` four-column rule: the content area was
+     ~470px, every tile got an 89px content box, and all eight values clipped.
+     The same rules keyed to the container give two columns there instead.
+
+     A browser without container queries keeps the single-column base rule,
+     which is the one arrangement that cannot clip at any width. */
+  container-type: inline-size;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* The thresholds are the widest value this row can be handed, not round
+   numbers. `-$1,234,567.89` needs 204px at the tier-1 size, 153px at tier 2
+   and 128px at tier 3; a tile spends 26px on padding and border. So a tile has
+   to reach 230px before a column count is safe: 480px of container for two,
+   960px for four. Below that a tier-1 figure is cut off mid-digit, which is
+   how `$100,000.00` shipped. */
+@container (min-width: 480px) {
+  .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (min-width: 960px) {
+  .stat-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .stat-tile[data-tier="1"] {
   background: var(--raised);
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  grid-column: span 2;
 }
 
 .stat-tile[data-tier="3"] {
