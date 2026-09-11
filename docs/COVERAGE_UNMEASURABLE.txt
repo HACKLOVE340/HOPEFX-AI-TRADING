@@ -353,7 +353,6 @@ core/regime_router.py
 core/risk/advanced_engine.py
 core/startup_factories.py
 core/startup_helpers.py
-core/strategy_engine.py
 data_layer/cache/__init__.py
 data_layer/cache/redis_store.py
 data_layer/feeds/news/__init__.py
