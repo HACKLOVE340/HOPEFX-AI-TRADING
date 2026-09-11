@@ -227,3 +227,45 @@ class TestReadingTheOmitList:
 
         assert hook._coveragerc_omits(pathlib.Path("real/x.py"), config=config) is True
         assert hook._coveragerc_omits(pathlib.Path("fake/x.py"), config=config) is False
+
+
+class TestTheRecordIsWrittenOnThePredicateItIsReadWith:
+    """`adopt()` writes the record; `_judge()` reads it.
+
+    They must agree on what a line means, or regenerating the record silently
+    changes which modules block. They did not agree: `adopt()` appended a module
+    only when measurement returned ``None``, while `_judge` treats a recorded
+    line as covering *below the floor* **or** unmeasurable. So a regeneration
+    dropped every below-floor entry, and each one became a hard block on the
+    next commit that touched it — `ai/cache/__init__.py` measures 0.0, which is
+    a number and not ``None``.
+
+    A writer and a reader disagreeing about one record is the same shape as a
+    gate that cannot fail: the control still runs, and quietly stops meaning
+    what it says.
+    """
+
+    @pytest.mark.parametrize("pct", [None, 0.0, 21.0, 79.9])
+    def test_a_debt_measurement_is_recorded(self, hook, pct) -> None:
+        assert hook._records_debt(pct), f"{pct} is debt and must be kept in the record"
+
+    @pytest.mark.parametrize("pct", [80.0, 91.0, 100.0])
+    def test_a_module_at_or_above_the_floor_is_not_recorded(self, hook, pct) -> None:
+        assert not hook._records_debt(pct), f"{pct} clears the floor and must not be recorded"
+
+    @pytest.mark.parametrize("pct", [None, 0.0, 21.0, 79.9, 80.0, 91.0, 100.0])
+    def test_what_the_writer_keeps_is_what_the_reader_calls_debt(self, hook, pct) -> None:
+        """The tooth that ties the two halves together.
+
+        Kept by the writer -> the reader must let it through as recorded debt.
+        Dropped by the writer -> the reader must let it through unrecorded.
+        Any disagreement means regenerating the record changes what blocks.
+        """
+        if hook._records_debt(pct):
+            assert hook._judge(PATH, TEST, pct, recorded=True).ok, (
+                f"writer keeps {pct} but the reader blocks it when recorded"
+            )
+        else:
+            assert hook._judge(PATH, TEST, pct, recorded=False).ok, (
+                f"writer drops {pct} but the reader blocks it when unrecorded"
+            )

@@ -381,6 +381,22 @@ def _coveragerc_omits(module_path: Path, *, config: Path | None = None) -> bool:
     return False
 
 
+def _records_debt(pct: float | None) -> bool:
+    """Does this measurement belong in the record? Pure, so it can be asserted.
+
+    This is the *writing* half of the record, and it has to agree with `_judge`,
+    which is the reading half. `_judge` treats a recorded line as covering two
+    states — below the floor, and unmeasurable — so both must be written.
+
+    `adopt()` used to append only when measurement returned ``None``. Every
+    below-floor module therefore left the record on a regeneration and became a
+    hard block on the next commit that touched it: `ai/cache/__init__.py`
+    measures 0.0, which is a number, not ``None``. A writer and a reader
+    disagreeing about one record is how a ratchet stops meaning what it says.
+    """
+    return pct is None or pct < _THRESHOLD
+
+
 def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: bool, omitted: bool = False) -> Verdict:
     """Decide one module. Pure — no I/O, so the decision can be asserted.
 
@@ -525,23 +541,23 @@ def adopt() -> int:
     candidates = [p for p in candidates if _find_test_files(p)]
 
     print(f"measuring {len(candidates)} modules — this takes a while", flush=True)
-    unmeasurable: list[str] = []
+    debt: list[str] = []
     for i, module in enumerate(candidates, 1):
         test_files = _find_test_files(module)
         assert test_files  # nosec B101 — filtered above
         pct, _ = _run_coverage(module, test_files)
-        if pct is None:
-            unmeasurable.append(str(module).replace("\\", "/"))
+        if _records_debt(pct):
+            debt.append(str(module).replace("\\", "/"))
         if i % 50 == 0:
-            print(f"  {i}/{len(candidates)} — {len(unmeasurable)} unmeasurable", flush=True)
+            print(f"  {i}/{len(candidates)} — {len(debt)} in debt", flush=True)
 
     # The header is the record's meaning; regenerating must not revert it to
     # the pre-repair wording, which described a measurement that never ran.
     header = [ln for ln in BASELINE_PATH.read_text(encoding="utf-8").splitlines() if ln.startswith("#")]
     header.append("")
 
-    BASELINE_PATH.write_text("\n".join(header + sorted(unmeasurable)) + "\n", encoding="utf-8")
-    print(f"wrote {BASELINE_PATH.name}: {len(unmeasurable)} of {len(candidates)} unmeasurable")
+    BASELINE_PATH.write_text("\n".join(header + sorted(debt)) + "\n", encoding="utf-8")
+    print(f"wrote {BASELINE_PATH.name}: {len(debt)} of {len(candidates)} in debt")
     return 0
 
 
