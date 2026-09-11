@@ -168,6 +168,70 @@ decision**".
 
 ---
 
+### A7. Which of our own model artifacts do we actually know the identity of?
+
+Prompted by a framing the owner brought on open-weight versus open-source
+models: weights alone are the finished product, not the recipe. Pointed inward,
+at a repository that **commits** its models and trades on them, it asks whether
+our own artifacts are open-weight to us or open-source to us — and the first
+thing that question exposes is not reproducibility, it is identity.
+
+Measured — `python scripts/model_provenance_report.py`, `APP_ENV=production`:
+
+```
+LISTED BUT ABSENT: 1 · MISMATCH: 2 · NOT LISTED: 2 · ok: 13
+```
+
+* **Two committed artifacts no longer hash to their recorded digest** —
+  `ml/saved_models/feature_scaler.pkl` and `ml/saved_models/stacking_ensemble.pkl`.
+  `ml._verify_checksum` returns `False` for both under `APP_ENV=production`,
+  which is the gate working correctly. Nobody has decided whether the file or
+  the record is the right one.
+* `model_checksums.json` lists `lstm_signal.pt`, which is not committed.
+* `ml/saved_models/rl/hopefx_ppo.zip` and `ml/rl_models/nuclear_decision_ppo.zip`
+  are in no baseline at all.
+* Four of the five model directories **self-baseline in production**:
+  `_bootstrap_allowed` exempts any directory that is not the packaged one. That
+  exemption is right for `ML_MODEL_DIR`, where an operator's retrain job writes
+  and no shipped baseline can exist. It is wrong for `GCF/`, `XAU_USD/`, `rl/`
+  and `rl_models/`, whose contents are committed — there, the check establishes
+  its reference from the artifact it is meant to verify.
+* **Two of the fourteen modules that load a model artifact reach any integrity
+  check**, and they reach different ones. There are two systems —
+  `ml._verify_checksum` against `model_checksums.json` (fail-closed in
+  production) and `_verify_integrity` against `registry.json` (fail-open by
+  documented design). `ml/inference_engine.py`, named in CLAUDE.md as the live
+  inference entry point, reaches neither.
+
+**The decision is not "go fix the hashes."** Recomputing a mismatched digest to
+match the file destroys the only evidence that the two ever disagreed, and
+`scripts/resave_models.py` will do exactly that if pointed at this. What needs
+deciding:
+
+| Question | Why it is the owner's |
+|---|---|
+| For the two mismatches — is the **file** current and the record stale, or the record right and the artifact substituted? | Only the person who ran the retrain knows. The answer decides whether to re-record or to restore. |
+| Should committed subdirectories lose the self-baselining exemption? | Tightening a gate is allowed without instruction, but this one would start refusing loads that succeed today. |
+| One integrity system or two? | `model_checksums.json` and `registry.json` are different records with different failure stances over overlapping files. |
+| Do the other twelve loaders need a check, or are they off the money path? | `ml/inference_engine.py` plainly is not. The rest need triage before work. |
+
+**Already done and not waiting on this decision:**
+`scripts/model_provenance_report.py` measures all three surfaces and repairs
+nothing. `tests/unit/test_model_provenance_report.py` puts each bad condition on
+disk and asserts the report names it, so its numbers are numbers it could have
+printed differently. Three mutations were run against it.
+
+**Genuinely third-party weights** are a much smaller surface than the phrase
+"our AI" suggests: the LLM vendors in `ai/gateway/vendors.py` — Moonshot,
+DeepSeek, Qwen, Mistral, Groq, xAI, OpenRouter, Together — are **hosted APIs**,
+so no weights are downloaded and the open-weight question does not arise; what
+governs them is each vendor's terms, not a model licence. The one downloaded
+open-weight dependency is `ProsusAI/finbert` via `sentence-transformers` in
+`data_layer/sentiment/engine.py`. Its licence is recorded nowhere in this
+repository, which is worth fixing whatever is decided above.
+
+---
+
 ---
 
 ## §B — Work, ranked
