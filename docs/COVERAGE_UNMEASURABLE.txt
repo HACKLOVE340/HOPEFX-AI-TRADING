@@ -413,7 +413,6 @@ payments/security.py
 payments/transaction_manager.py
 payments/wallet.py
 portfolio/__init__.py
-portfolio/factor_model.py
 portfolio/pms.py
 portfolio/rebalancer.py
 portfolio/strategy_allocator.py
