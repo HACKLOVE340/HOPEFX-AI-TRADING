@@ -45,6 +45,7 @@ import os
 import re
 import subprocess  # nosec B404 — pytest subprocess, fixed args
 import sys
+import tempfile
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
@@ -312,21 +313,38 @@ def _run_coverage(module_path: Path, test_paths: list[Path]) -> tuple[float | No
     """
     cmd = _coverage_command(module_path, test_paths)
 
-    try:
-        result = subprocess.run(  # nosec B603 — fixed args, no shell
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=600,
-            env={**os.environ, "CI_FAST": "1"},
-        )
-        output = result.stdout + result.stderr
-        return _parse_module_coverage(output, module_path), output
-    except subprocess.TimeoutExpired:
-        return None, f"Coverage check timed out for {module_path}"
-    except Exception as exc:
-        return None, f"Coverage check failed: {exc}"
+    # Its own data file, outside the tree. `coverage` writes one file per
+    # process, and neither `.coveragerc` nor this gate set `data_file`,
+    # `parallel` or `COVERAGE_FILE`; nothing marks the hook `require_serial`
+    # either. Two measurements at once therefore wrote into the same file and
+    # read each other's leavings.
+    #
+    # The failure is not symmetric. A module reading HIGHER than it is gets
+    # classified stale, its line deleted, and it starts blocking — measured
+    # here, `risk/gatekeeper.py` read 0% under a parallel sweep and 86%
+    # sequentially. Isolation lives here rather than in
+    # `.pre-commit-config.yaml` because the hook is not the only caller.
+    with tempfile.TemporaryDirectory(prefix="hopefx-cov-") as scratch:
+        env = {
+            **os.environ,
+            "CI_FAST": "1",
+            "COVERAGE_FILE": str(Path(scratch) / ".coverage"),
+        }
+        try:
+            result = subprocess.run(  # nosec B603 — fixed args, no shell
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=600,
+                env=env,
+            )
+            output = result.stdout + result.stderr
+            return _parse_module_coverage(output, module_path), output
+        except subprocess.TimeoutExpired:
+            return None, f"Coverage check timed out for {module_path}"
+        except Exception as exc:
+            return None, f"Coverage check failed: {exc}"
 
 
 @dataclass(frozen=True)

@@ -269,3 +269,58 @@ class TestTheRecordIsWrittenOnThePredicateItIsReadWith:
             assert hook._judge(PATH, TEST, pct, recorded=False).ok, (
                 f"writer drops {pct} but the reader blocks it when unrecorded"
             )
+
+
+class TestEachMeasurementGetsItsOwnCoverageDataFile:
+    """Two of these running at once must not read each other's leavings.
+
+    `coverage` writes to one data file per process unless told otherwise, and
+    neither `.coveragerc` nor the gate set `data_file`, `parallel` or
+    `COVERAGE_FILE`. Nothing forces this hook serial either, so two concurrent
+    invocations measured into the same file.
+
+    The damage is not theoretical and it is not symmetric. A module that reads
+    HIGHER than it is gets classified stale, its line is deleted, and it starts
+    blocking. Measured here: `risk/gatekeeper.py` — a pre-trade gate — read 0%
+    under a parallel sweep and 86% from a sequential one, and `ai/core/depth.py`
+    read 91% and 0%. A sweep run "two at a time" reported 156 stale entries
+    where a sequential run found 66.
+
+    A gate whose answer depends on what else happened to be running is not a
+    gate. Isolation is per-invocation rather than `require_serial: true` in
+    `.pre-commit-config.yaml`, because the hook is not the only caller —
+    `adopt()` and any direct run need the same guarantee.
+    """
+
+    def _env_of_one_run(self, hook, tmp_path):
+        """Run the measurement with the subprocess stubbed, return its env."""
+        import subprocess as _sp
+        from unittest.mock import patch
+
+        seen = {}
+
+        def fake_run(cmd, **kwargs):
+            seen.update(kwargs.get("env") or {})
+            return _sp.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with patch.object(hook.subprocess, "run", side_effect=fake_run):
+            hook._run_coverage(PATH, [TEST])
+        return dict(seen)
+
+    def test_the_measurement_names_its_own_data_file(self, hook, tmp_path) -> None:
+        env = self._env_of_one_run(hook, tmp_path)
+        assert env.get("COVERAGE_FILE"), (
+            "the subprocess inherits the default data file, so a concurrent measurement writes into the same one"
+        )
+
+    def test_two_measurements_do_not_share_a_data_file(self, hook, tmp_path) -> None:
+        first = self._env_of_one_run(hook, tmp_path).get("COVERAGE_FILE")
+        second = self._env_of_one_run(hook, tmp_path).get("COVERAGE_FILE")
+        assert first and second and first != second, (
+            f"both measurements wrote to {first!r} — this is the contamination itself"
+        )
+
+    def test_the_isolated_file_is_not_inside_the_repository(self, hook, tmp_path) -> None:
+        """A stray `.coverage` in the tree would be picked up by the next run."""
+        env = self._env_of_one_run(hook, tmp_path)
+        assert not str(env["COVERAGE_FILE"]).startswith(str(REPO)), "the data file belongs outside the working tree"
