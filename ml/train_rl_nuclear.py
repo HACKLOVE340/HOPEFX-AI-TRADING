@@ -4,17 +4,6 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-
-# ── Module constants ─────────────────────────────────────────────────────────
-_RL_LOOKBACK_SHORT = 3
-_RL_LOOKBACK_MED = 5
-_RL_LOOKBACK_LONG = 7
-_RL_LOOKBACK_XL = 9
-_RL_MIN_EPISODES = 2
-_RL_CONFIDENCE_THRESHOLD = 0.5
-_RL_LEARNING_RATE = 0.05
-_RL_DISCOUNT = 0.15
-
 ml/train_rl_nuclear.py
 ======================
 TRAINING SCRIPT ONLY — not imported by any production path.
