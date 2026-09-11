@@ -1,4 +1,4 @@
-# stride-analysis-patterns — templates and worked examples
+# STRIDE — templates and worked examples
 
 ## Templates
 

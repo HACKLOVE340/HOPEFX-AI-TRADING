@@ -1,4 +1,4 @@
-# attack-tree-construction — templates and worked examples
+# Attack trees — templates and worked examples
 
 ## Templates
 

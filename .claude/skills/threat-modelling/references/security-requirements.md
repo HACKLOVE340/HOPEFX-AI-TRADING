@@ -1,4 +1,4 @@
-# security-requirement-extraction — templates and worked examples
+# Security requirements — templates and worked examples
 
 ## Templates
 

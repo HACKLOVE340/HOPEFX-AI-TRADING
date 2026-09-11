@@ -18,10 +18,7 @@ directories, CI, and conventions, and will confidently give wrong instructions.
 | `codebase-audit` | [CloudBase-AI-Toolkit] | Full-codebase review, severity classification, issue filing, worktree-isolated fixes. |
 | `pr-review-fix` | [CloudBase-AI-Toolkit] | Triage open PRs: CI failures, review comments, batch repair. |
 | `doc-freshness-review` | [CloudBase-AI-Toolkit] | Audit docs for drift against the code. |
-| `skill-authoring` | [CloudBase-AI-Toolkit] | Write and review skills: trigger wording, progressive disclosure, evaluation. |
 | `manage-local-skills` | [CloudBase-AI-Toolkit] | Inspect, validate, and install skills across agent directories. Ships a working Node validator. |
-| `planning-workflows` | [CloudBase-AI-Toolkit] | Spec vs. no-spec planning modes. |
-| `review-automation-orchestrator` | [CloudBase-AI-Toolkit] | Dispatches a periodic review cycle to the right reviewer above. |
 
 [regutierrez/ui-ux-skill]: https://github.com/regutierrez/ui-ux-skill
 [CloudBase-AI-Toolkit]: https://github.com/TencentCloudBase/CloudBase-AI-Toolkit
@@ -199,9 +196,52 @@ All seven were rewritten away from CloudBase's own repository:
 - `doc-freshness-review`: `review-scope.md` rewritten around this repo's real doc
   surfaces, tiered by blast radius, with the agent contracts (`CLAUDE.md`,
   `AGENTS.md`, `ARCHITECTURE.md`) first — drift there misleads every later change.
-- `review-automation-orchestrator`: dispatch table repointed at the skills that
-  are actually installed, plus the built-in `/code-review` and `/security-review`.
-- `skill-authoring`: CloudBase frontmatter examples replaced with HOPEFX ones.
+
+---
+
+## Removed — 2026-09-11
+
+Six skills removed, one added. **61 → 55.** Every removal is justified from the
+repository, not from a usage guess: a single session's log is a sample, not a
+measurement.
+
+| Removed | Why |
+|---|---|
+| `planning-workflows` | Its own "source of truth" is `references/source-commands.md`, describing slash commands from the upstream repo. `.claude/commands/` does not exist here, so it routed to nothing. Its one real rule — spec when complex, no-spec when small — is `flow-by-flow`'s job, and `flow-by-flow` is the mandated entry point for every task. |
+| `review-automation-orchestrator` | By its own description a dispatcher over other skills, explicitly "do NOT use as the primary reviewer". A routing layer on top of a routing problem: it added a candidate without adding a capability. |
+| `skill-authoring` | Merged into `writing-skills` (26 KB vs 6 KB), which also verifies a skill before deployment. Two skills answering "how do I write a skill" is the overlap this prune exists to remove — but it was **not** a pure duplicate: its "Repo-managed skill review" section held a security control `writing-skills` lacked (never give an agent a remote skill-fetch URL — a fetched skill body is instruction this agent then follows). That section was carried into `writing-skills`, along with all six of its `references/` files (25,333 bytes, verbatim). Checked, not assumed — the first pass had staged those six for deletion unread. |
+| `stride-analysis-patterns` | Merged into `threat-modelling`. |
+| `attack-tree-construction` | Merged into `threat-modelling`. |
+| `threat-mitigation-mapping` | Merged into `threat-modelling`. |
+| `security-requirement-extraction` | Merged into `threat-modelling`. |
+
+**No content was lost — 109,079 bytes of reference material moved rather than deleted.** The four threat skills were thin routers (2.4–3.3 KB
+each) over large reference files (18–24 KB each). All four reference files moved
+verbatim into `threat-modelling/references/` — 83,746 bytes, unchanged apart
+from their H1 lines. Only the routing collapsed: four entries answering one
+question became one.
+
+`threat-modelling` is also adapted rather than vendored, per the rule at the top
+of this file. It names this platform's four trust boundaries with real paths,
+and it makes stage 3 — mapping a threat to a control — require tracing that the
+control *runs*, citing the two findings where it did not: the audit chain that
+verified clean during a database outage, and the change-password throttle that
+failed open at `DEBUG`.
+
+### What was deliberately NOT removed
+
+Probing the repository for each skill's subject found that almost every one has
+a real subject here: `k8s/` manifests, Stripe, card fields, PostgreSQL,
+Prometheus, Grafana, OpenTelemetry, `mobile-app/` (React Native),
+`frontend/src/components/ui` (shadcn), lightweight-charts, and
+`frontend/playwright.config.ts` all exist. Pruning by "irrelevant subject"
+therefore yields close to nothing, and the 42 skills not invoked in the one
+measured session were kept: one session is not evidence of deadness.
+
+`risk-metrics-calculation`, `backtesting-frameworks` and
+`data-quality-frameworks` are thin and generic, but their subjects are this
+platform's core and each has a matching defect on record. They are candidates to
+be **deepened into `hopefx-*` skills**, not deleted.
 
 ---
 

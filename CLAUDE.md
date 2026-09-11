@@ -210,11 +210,21 @@ every task, always.** Not "when it seems worth it" — every time. They exist
 because this codebase has cost real money to get wrong, and each one encodes a
 class of mistake already made here.
 
-`.claude/skills/` holds **61** skills (`licenses/` is not one). All of them are
+`.claude/skills/` holds **55** skills (`licenses/` is not one). All of them are
 listed below. An earlier version of this file listed only thirteen "the ones
 that earn their keep most often" — that was wrong in a way that mattered: a
 skill nobody can see is a skill nobody loads, and the omitted 48 included every
 Python-craft, observability, threat-modelling and incident skill in the set.
+
+It held 61 until 2026-09-11. Six were removed and one added, for overlap rather
+than for irrelevance: `planning-workflows` routed to slash commands this
+repository does not have, `review-automation-orchestrator` was a dispatcher over
+skills already listed here, `skill-authoring` was merged into `writing-skills` (its one unique section — a prohibition on remote skill-fetch URLs — and all six of its reference files carried over rather than lost), and
+the four threat skills were four entry points to one activity — now
+`threat-modelling`, with all 83,746 bytes of their reference material preserved
+verbatim. Nothing was removed for being unused: a single session's log is a
+sample, not a measurement, and almost every skill's subject genuinely exists in
+this repository. See `.claude/skills/README.md` for the evidence behind each.
 
 ### Always, on every task
 
@@ -241,7 +251,6 @@ Python-craft, observability, threat-modelling and incident skill in the set.
 |---|---|
 | `writing-plans` | A spec or multi-step task, before touching code. |
 | `executing-plans` | A written plan to execute with review checkpoints. |
-| `planning-workflows` | Spec and no-spec planning workflows (requirements → design → tasks). |
 | `using-git-worktrees` | Feature work needing isolation from the current workspace. |
 
 ### Review
@@ -253,7 +262,6 @@ Python-craft, observability, threat-modelling and incident skill in the set.
 | `code-review-excellence` | Reviewing PRs, setting review standards. |
 | `pr-review-fix` | Triaging CI failures and review comments across open PRs in batch. |
 | `codebase-audit` | Full codebase review, severity triage, issues, worktree fixes. |
-| `review-automation-orchestrator` | Scheduling periodic review cycles and routing findings. |
 | `doc-freshness-review` | Documentation drift — `docs/`, `CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md`, `README.md`, `DEPLOYMENT.md`. |
 
 ### Python craft — reach for these by symptom
@@ -293,10 +301,7 @@ Python-craft, observability, threat-modelling and incident skill in the set.
 
 | Skill | When |
 |---|---|
-| `stride-analysis-patterns` | Threat modelling a system or feature. |
-| `attack-tree-construction` | Mapping threat paths and defence gaps. |
-| `threat-mitigation-mapping` | Mapping threats to controls; remediation plans. |
-| `security-requirement-extraction` | Turning threats into requirements and security test cases. |
+| `threat-modelling` | Threat modelling a system or feature, end to end: STRIDE → attack paths → controls that actually run → security requirements and test cases. Names this platform's four trust boundaries. |
 | `sast-configuration` | Static analysis / DevSecOps scanning setup. |
 | `k8s-security-policies` | NetworkPolicy, PodSecurity, RBAC. |
 | `pci-compliance` | Handling payment card data. |
@@ -328,7 +333,6 @@ Python-craft, observability, threat-modelling and incident skill in the set.
 
 | Skill | When |
 |---|---|
-| `skill-authoring` | Creating, rewriting, auditing or evaluating skills. |
 | `writing-skills` | Creating/editing skills and verifying them before deployment. |
 | `manage-local-skills` | Standardising and syncing local skills into agent directories. |
 

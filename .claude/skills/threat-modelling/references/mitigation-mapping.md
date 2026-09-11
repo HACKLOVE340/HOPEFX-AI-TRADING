@@ -1,4 +1,4 @@
-# Threat-mitigation mapping — templates and worked examples
+# Threat-to-control mapping — templates and worked examples
 
 ## Templates
 

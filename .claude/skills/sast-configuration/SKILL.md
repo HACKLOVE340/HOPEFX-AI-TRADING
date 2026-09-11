@@ -170,8 +170,7 @@ semgrep --config p/pci-dss --json -o pci-scan-results.json
 
 ## Related Skills
 
-- [stride-analysis-patterns](../stride-analysis-patterns/SKILL.md) — Threat-model the surface before choosing rules
-- [threat-mitigation-mapping](../threat-mitigation-mapping/SKILL.md) — Map findings to controls
+- [threat-modelling](../threat-modelling/SKILL.md) — Threat-model the surface before choosing rules, and map findings to controls that actually run
 - Dependency scanning in HOPEFX is `pip-audit` + Trivy, wired in `.github/workflows/ci.yml`
 
 ## Tool Comparison

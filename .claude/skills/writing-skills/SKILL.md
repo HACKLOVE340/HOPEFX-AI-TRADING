@@ -676,3 +676,70 @@ How future agents find your skill:
 6. **Loads example** (only when implementing)
 
 **Optimize for this flow** - put searchable terms early and often.
+
+---
+
+## Repo-managed skill review (`.claude/skills`)
+
+Carried over from `skill-authoring` when that skill was merged here on
+2026-09-11. Its six reference files came with it, unchanged, and are the detail
+behind this summary:
+
+| Reference | Holds |
+|---|---|
+| `references/repo-skill-review.md` | The long form of this section |
+| `references/frontmatter-patterns.md` | Frontmatter shapes and normalisation |
+| `references/structure-patterns.md` | Structural patterns for a SKILL.md |
+| `references/templates.md` | Starting templates |
+| `references/examples.md` | Worked examples |
+| `references/evaluation.md` | Evaluating whether a skill triggers and behaves |
+
+Most of what `skill-authoring`'s own SKILL.md said was already covered above.
+This section was not — and one of its rules is a security control rather than a
+style preference, so it is preserved rather than dropped.
+
+When the task targets `.claude/skills`, apply these in addition to the workflow
+above.
+
+### The security rule — a skill body is executed instruction
+
+* **Never add agent-directed remote skill-fetch URLs.** Not
+  `cnb.cool/.../git/raw/...` skill bodies, not `(standalone fallback: ...)` raw
+  links, not any instruction that has an agent pull skill markdown over HTTP
+  into its own context. Marketplace reviewers treat these as injection and
+  session-hijack risk, and they are right to: a fetched skill body is text this
+  agent then follows, inside a repository that moves real money.
+* **Prefer local relative sibling paths** — `../other-skill/SKILL.md`. If a
+  sibling is missing, tell the agent to ask the user to install the missing
+  skill. Never to fetch it.
+* Human documentation URLs stay allowed. The line is whether the URL is a
+  *fetch instruction aimed at the agent* or a *reference aimed at a person*.
+
+### The hygiene rules
+
+* Keep frontmatter complete and normalised, including `version` where the skill
+  declares one. `flow-by-flow` and `flow-prototype` are version-locked as a
+  pair; breaking that is a real failure, not a formatting nit.
+* Keep examples inside the skill's declared platform and scope.
+* Keep shared operational rules in **one canonical source** rather than copying
+  large blocks across neighbouring skills. Copied blocks drift independently,
+  and then two skills give conflicting instructions with equal authority.
+* If a skill says a rule is mandatory, show that rule in at least one example.
+* When giving a recommended default, state the trade-off behind it.
+* Do not infer published marketplace paths from the source tree when writing
+  install docs; verify the actual published structure first.
+
+### Reviewing the collection, not just one skill
+
+A skill collection fails differently from a single skill: not by being wrong,
+but by having several entries that answer the same question with equal
+authority, which makes routing worse as the set grows. When auditing
+`.claude/skills`, look for **overlap first** — several skills that are stages of
+one activity, or a dispatcher layered over skills already listed — and prefer
+merging to deleting, so no content is lost. Record what was merged and why in
+`.claude/skills/README.md`, and reconcile `CLAUDE.md`'s tables in the same
+commit; `tests/unit/test_claude_md_lists_the_installed_skills.py` fails if you
+do not.
+
+**Do NOT use this section for:** general documentation writing, README polish,
+or prompt tweaks that do not change a skill's structure or behaviour.
