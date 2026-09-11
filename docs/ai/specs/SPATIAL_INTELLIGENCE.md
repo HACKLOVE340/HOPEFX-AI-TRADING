@@ -60,7 +60,16 @@ Construction readiness          NOT READY           blocking: code_compliance, r
 
 ---
 
-## The fifteen capabilities
+## The sixteen capabilities
+
+**The table below is a readable copy. `docs/ai/specs/SPATIAL_CAPABILITIES.toml`
+is the authority**, and `python scripts/spatial_capabilities.py` resolves every
+claim in it against the code — a module that imports, an attribute that exists, a
+path on disk. A row here that disagrees with the register is stale prose; the
+register is what a gate checks on every commit.
+
+    16 spatial capabilities · 1 built · 9 partial · 6 planned
+
 
 Ordered as the owner gave them. Status reflects what exists **today**, measured,
 not intended — a roadmap that overstates itself is the same defect one layer up.

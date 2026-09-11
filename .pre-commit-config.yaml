@@ -259,7 +259,7 @@ repos:
         name: Documents state the measured figures
         language: system
         entry: python scripts/doc_metrics.py --check
-        files: '^(docs/.*\.(md|toml)$|[A-Z_-]+\.md$|scripts/(gate_evidence|group4_preservation|docs_registry|doc_metrics|aos_conformance)\.py$)'
+        files: '^(docs/.*\.(md|toml)$|[A-Z_-]+\.md$|scripts/(gate_evidence|group4_preservation|docs_registry|doc_metrics|aos_conformance|spatial_capabilities)\.py$)'
         pass_filenames: false
         stages: [pre-commit]
 
@@ -284,6 +284,19 @@ repos:
       # file on disk, so a rename anywhere under invariants/ can turn a row into
       # fiction that still reads as coverage. That is why invariants/*.py is in
       # the trigger set and not just the register itself.
+      # The spatial specification's status table is the answer to "what can this
+      # system actually do". As prose it rots the moment a module is renamed: the
+      # row keeps saying `partial` while pointing at a file that is gone. So
+      # ai/spatial/ and invariants/spatial.py are in the trigger set, not just the
+      # register itself.
+      - id: spatial-capabilities
+        name: Spatial capability register resolves against the code
+        language: system
+        entry: python scripts/spatial_capabilities.py --check
+        files: '^(docs/ai/specs/SPATIAL_CAPABILITIES\.toml|scripts/spatial_capabilities\.py|ai/spatial/.*\.py|invariants/spatial\.py)$'
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: aos-conformance
         name: AOS invariant register resolves against live predicates
         language: system

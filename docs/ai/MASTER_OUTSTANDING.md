@@ -137,7 +137,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 28 gates · **28 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 29 gates · **29 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -2013,7 +2013,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      28 gates · 28 proven able to fail · 0 unproven
+    gate_evidence.py      29 gates · 29 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2215,7 +2215,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              28 gates · 28 proven · 0 unproven
+    gate_evidence.py                              29 gates · 29 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -2282,7 +2282,7 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
     backend tests        21,732 pass · 0 fail · 30 skipped
     frontend tests        2,645 pass · 0 fail  (136 files)
     CI gates                 14 of 14 pass
-    gate evidence            28 gates · 28 proven able to fail · 0 unproven
+    gate evidence            29 gates · 29 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -2401,7 +2401,7 @@ that one fact:
 
 **Closed this session:** `scripts/frontend_colour_ratchet.py` +
 `docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
-`GATE_EVIDENCE.toml` (28 gates, 28 proven). The count may now only fall. The
+`GATE_EVIDENCE.toml` (29 gates, 29 proven). The count may now only fall. The
 codemod that would actually revive the three features is **owner's call** — see
 §A.
 
@@ -4370,7 +4370,7 @@ run, not a recollection.
 | Group 2 platform gaps | 19 outstanding (3 struck through) |
 | Group 3 knowledge gaps | 6 outstanding (8 struck through) |
 | Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
-| Safety gates | 28 gates · 28 proven able to fail · **0 unproven** |
+| Safety gates | 29 gates · 29 proven able to fail · **0 unproven** |
 | Coverage debt | 365 modules recorded |
 | Owner decisions | §A1 (RPO/RTO), §A4, §A5, plus three opened this session |
 
@@ -5446,3 +5446,105 @@ UI — the playback state machine has no front end, and building one crosses int
 `flow-prototype`'s approval gate. The What-If Laboratory can branch, diff and
 refuse to rank; it cannot tell you whether a building stands, because nothing in
 this repository can compute that.
+
+---
+
+## §E58 — The spatial status table stops being prose (2026-09-11)
+
+`SPATIAL_INTELLIGENCE.md` carried sixteen capabilities and a status for each.
+That table is the answer to *"what can this system actually do"*, which makes it
+the most load-bearing prose in the specification and the worst thing to leave as
+prose: rename a module and the row keeps saying `partial` while pointing at a
+file that is gone.
+
+Same problem `AOS_INVARIANT_REGISTER.toml` had, solved the same way.
+`docs/ai/specs/SPATIAL_CAPABILITIES.toml` holds the statuses,
+`scripts/spatial_capabilities.py` **resolves** every claim — a module that
+imports, an attribute that exists (dotted, so `World.assembly_order` names the
+method rather than vaguely pointing at a class), a path on disk — and it runs in
+`pre-commit`, triggered by the register, the script, **and any change under
+`ai/spatial/` or `invariants/spatial.py`**.
+
+    16 spatial capabilities · 1 built · 9 partial · 6 planned
+    29 evidence locators, all resolving
+
+### Why it is not in `ai/hub/capabilities.py`
+
+That was the first instinct, and it was wrong. The hub registry's `section` field
+is traceability to the **AI Hub specification's** §4–§27 — its own docstring says
+"the specification section that asks for it. Traceability both ways." The spatial
+capabilities come from a different specification, so giving them AI Hub section
+numbers would corrupt the one property that registry exists to hold. A second
+register, checked the same way, keeps both honest.
+
+Note also that `ai/hub/capabilities.py` already has `spatial.*` rows —
+`scene_model`, `panel_registry`, `viewport_awareness` — and they are the
+**frontend** spatial layer, screen geometry rather than 3D. Two different
+subjects sharing a word, which is worth knowing before someone greps.
+
+### `planned` may name nothing
+
+Taken from the hub registry, which learned it the hard way: *"a pointer to
+nothing reads as progress"*. A planned row citing a module that exists for other
+reasons is how a roadmap starts describing work nobody did. Six rows carry no
+evidence and are required to carry none.
+
+### Two mutations survived, and both were real missing tests
+
+Nine rules, neutralised one at a time. Seven killed their tests. **Two survived**:
+`partial` with no evidence, and `planned` with no gap. Both were genuine gaps —
+only their `built` and `partial` counterparts had been written, so half of each
+pair was enforced by nothing. Both have tests now and both mutations die.
+
+That is the fifth time in this programme a mutation has found a green suite
+measuring less than it appeared to, and the fourth found by mutation rather than
+reading.
+
+### And the new metric cried wolf immediately
+
+Ratcheting the three spatial figures into `doc_metrics.py` produced an instant
+false positive: `(\d+)\s+planned\s*·` matched the **AI Hub registry's** own report
+line — `233 rows · 233 live · 0 staged · 0 planned` — and called a true sentence
+drift.
+
+Exactly the trap `gates_total` fell into with "8 gates left", and the same fix:
+narrow the pattern rather than the writing. The spatial patterns now anchor to
+their neighbour (`capabilities · N built`, `partial · N planned`) instead of a
+trailing separator, and a regression test feeds the registry's real line in and
+asserts it is *not* read as a spatial figure.
+
+A check that cries wolf gets switched off, which would have cost more than the
+drift it was built to catch.
+
+### Then the two ratchets collided with each other
+
+Writing *this entry* produced a second false positive immediately. The AOS
+pattern `(\d+)\s+partial\s*·` matched the spatial register's own line —
+`16 spatial capabilities · 1 built · 9 partial · 6 planned` — and reported
+`aos_partial=9, measured 13`.
+
+Two ratchets built weeks apart, colliding on one English word. The AOS patterns
+are now neighbour-anchored too (`invariants · N covered`, `covered · N partial`,
+`partial · N absent`), and the spatial line is pinned as a case that must *not*
+be read as an AOS figure.
+
+A third defect fell out of fixing it: the parametrised test that proves a stale
+figure is caught bumped the **first** number in its sample line. With
+neighbour-anchored patterns the captured number is the second, so the "stale"
+sample was still correct and the test failed while the code was right. The helper
+now uses the claim's own regex to find the number it captures. A test that
+constructs its own fixture by assumption inherits the assumption.
+
+### Evidence
+
+21 tests for the checker, all red before it existed. Nine mutations, each now
+killing exactly the tests that describe it. Gate ledger **28 → 29 gates, 29
+proven able to fail, 0 unproven** — the new gate shipped with its injection
+evidence, and that increment made six lines of this document stale in the same
+commit, which `doc_metrics` blocked on.
+
+`docs_registry` also blocked, on a registry row I added for the TOML. Investigated
+rather than patched: `DOC_GLOBS` is `docs/**/*.md`, `docs/**/*.txt` and `*.md`, so
+a `.toml` entry can only ever read as dangling — and neither
+`AOS_INVARIANT_REGISTER.toml` nor `GATE_EVIDENCE.toml` is registered either. The
+row was the anomaly, not the file. Removed.

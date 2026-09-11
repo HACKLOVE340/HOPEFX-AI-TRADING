@@ -1,0 +1,162 @@
+# Spatial Intelligence — capability register
+#
+# The status table from `SPATIAL_INTELLIGENCE.md`, moved out of prose so it
+# cannot rot. Sixteen capabilities: the epistemic ladder (0) plus the owner's
+# fifteen.
+#
+# `scripts/spatial_capabilities.py` RESOLVES every locator in `evidence`:
+#
+#   module.path            must import
+#   module.path:Attribute  must import and hold that attribute
+#   dir/file.py            must exist on disk
+#
+# STATUS VOCABULARY
+#
+#   built    the capability is complete as specified. Evidence required, and no
+#            gap — a built row that states a gap is partial.
+#   partial  some of it exists. Evidence required AND a gap saying what does not.
+#   planned  named by the specification, not started. NO evidence: a pointer to
+#            nothing reads as progress (`ai/hub/capabilities.py` learned that one
+#            the hard way). A gap is still required.
+#
+# A resolving `built` row means the named code exists and imports. It does NOT
+# mean the capability is reachable from a production caller, nor that its
+# controls have been proven able to fail. Different questions, different ledgers.
+
+[meta]
+spec = "docs/ai/specs/SPATIAL_INTELLIGENCE.md"
+entries = 16
+mapped_on = "2026-09-11"
+
+[cap-00-assurance-ladder]
+title = "Epistemic status ladder"
+status = "built"
+evidence = [
+  "ai.spatial.assurance:Assurance",
+  "ai.spatial.assurance:raise_to",
+  "ai.spatial.assurance:readiness_report",
+  "invariants.spatial:verify_epistemic_monotonicity",
+  "invariants.spatial:verify_composite_assurance",
+  "invariants.spatial:verify_readiness_requires_approval",
+  "invariants.spatial:verify_structural_claim_requires_solver",
+]
+gap = ""
+
+[cap-01-universal-builder]
+title = "Universal 3D Builder"
+status = "partial"
+evidence = ["ai.spatial.world:World", "ai.spatial.world:Component", "ai.spatial.world:ConnectionKind"]
+gap = """The component graph exists — the representation every other capability needs. Geometry does
+not, and neither does generation from text, sketch, image, voice or CAD. The builder can describe a
+structure and answer questions about it; it cannot draw one."""
+
+[cap-02-construction-brain]
+title = "AI Construction Brain"
+status = "partial"
+evidence = ["ai.spatial.world:World.assembly_order", "ai.spatial.world:World.bill_of_materials"]
+gap = """Dependencies, assembly order and materials are answered from the graph. Constraints,
+dimensions, and any account of WHY something is built a given way are absent."""
+
+[cap-03-interactive-world-model]
+title = "Interactive World Model"
+status = "partial"
+evidence = [
+  "ai.spatial.world:World.connections_of",
+  "ai.spatial.world:World.removal_impact",
+  "frontend/src/hub/sceneGraph.ts",
+]
+gap = """Every component is a structured entity that can be selected and interrogated on the backend,
+and the frontend scene graph answers the on-screen questions. The two are not joined: no endpoint
+exposes the component graph, and no screen renders it."""
+
+[cap-04-simulation-laboratory]
+title = "Simulation Laboratory"
+status = "partial"
+evidence = ["ai.spatial.simulation:Laboratory", "ai.spatial.simulation:Domain", "ai.spatial.simulation:Solver"]
+gap = """The selector and its refusals exist: nine domains nameable, one solver per domain, and
+NOT_ASSESSED with a reason whenever nothing can answer. NO SOLVER IS REGISTERED. Every domain refuses
+today, which is the honest state and not the finished one."""
+
+[cap-05-time-machine]
+title = "Construction Time Machine"
+status = "partial"
+evidence = ["ai.spatial.timeline:Construction", "ai.spatial.playback:Playback"]
+gap = """Stepping, stage inspection, branching, pause, resume, seek and speed all exist as pure
+logic. Nothing animates them — there is no UI, and no renderer for one to drive."""
+
+[cap-06-video-director]
+title = "AI Video Director"
+status = "planned"
+evidence = []
+gap = """Camera direction, animation, labels, narration, subtitles, exploded views and cinematic
+walkthrough. `Construction.stages()` is the construction history it would be driven by, so the input
+exists; nothing consumes it."""
+
+[cap-07-design-studio]
+title = "Multi-Agent Design Studio"
+status = "partial"
+evidence = ["ai/departments/__init__.py", "ai/departments/vision_ops.py"]
+gap = """`ai/departments/` holds eleven specialists following the honesty contract this would extend —
+they delegate to real code and return `available: False` rather than a number they did not get. None
+of the eight design-studio roles (Architect, Engineer, Materials, Simulation, Cost, Safety/QA,
+Visualization, Video Director) exists."""
+
+[cap-08-what-if-laboratory]
+title = "What-If Laboratory"
+status = "partial"
+evidence = ["ai.spatial.compare:compare", "ai.spatial.compare:Comparison", "ai.spatial.timeline:Construction.branch"]
+gap = """Branching records its divergence point and trunk; comparison gives component and
+bill-of-materials deltas, and refuses to rank unless both sides carry a finding at SIMULATED or
+better. Re-simulation needs a solver and there is none, so today every ranking refuses."""
+
+[cap-09-design-alternatives]
+title = "Automatic Design Alternatives"
+status = "planned"
+evidence = []
+gap = """Cheapest, strongest, most efficient, most beautiful, best trade-off — generated and compared
+in one workspace. Comparison exists (cap-08); generation of alternatives does not, and ranking them
+would need the solver cap-04 is missing."""
+
+[cap-10-reality-to-3d]
+title = "Reality-to-3D"
+status = "planned"
+evidence = []
+gap = """Photograph, video or scan to an editable spatial model. No reconstruction pipeline. When one
+lands, its output is ESTIMATED at best until something measures it."""
+
+[cap-11-documentation]
+title = "3D-to-Reality Documentation"
+status = "partial"
+evidence = ["ai.spatial.world:World.assembly_order", "ai.spatial.world:World.bill_of_materials"]
+gap = """Assembly sequence and bill of materials are produced. Dimensions, diagrams, technical
+documentation and maintenance instructions are not."""
+
+[cap-12-spatial-memory]
+title = "Spatial Memory"
+status = "planned"
+evidence = []
+gap = """"Open the house we designed last month." Nothing persists a World — every model exists only
+for the life of the process that built it. Would extend `ai/memory/`."""
+
+[cap-13-digital-twin]
+title = "Persistent Digital Twin"
+status = "planned"
+evidence = []
+gap = """A living representation compared against observed reality, where divergence is a first-class
+signal. Needs persistence (cap-12) and a telemetry source, neither of which exists. Observed reality
+would enter the ladder at EXTERNALLY_VERIFIED — the first thing in this system that could."""
+
+[cap-14-xr-layer]
+title = "AR/VR/Mixed Reality Layer"
+status = "planned"
+evidence = []
+gap = """Walk the model, or project it into the room. Needs geometry (cap-01) and a renderer, neither
+of which exists."""
+
+[cap-15-spatial-voice]
+title = "Spatial Voice Interaction"
+status = "partial"
+evidence = ["frontend/src/hub/spatial.ts", "ai/departments/voice_interface.py"]
+gap = """The grounding discipline exists — `spatial.ts` resolves position from a MEASURED rect and
+says "the risk table" rather than inventing a corner. Pointing at a beam, showing a load path and
+opening the relevant simulation needs cap-01's geometry and cap-04's solver."""

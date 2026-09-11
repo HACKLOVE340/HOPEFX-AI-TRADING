@@ -114,10 +114,22 @@ CLAIMS: Final[tuple[Claim, ...]] = (
     # (`2 covered · 13 partial · 11 absent`). Without that anchor, "coverage is
     # partial in three modules" reads as a stated figure — the same trap the
     # gates_total pattern had to be narrowed out of.
+    # Anchored to their neighbours, not to a trailing separator. The spatial
+    # register's line — "16 spatial capabilities · 1 built · 9 partial · 6
+    # planned" — also contains "N partial ·", so the looser pattern read it as an
+    # AOS figure. Two ratchets built weeks apart, colliding on one English word.
     Claim("aos_entries", re.compile(r"(\d+)\s+AOS\s+invariants\b"), "scripts/aos_conformance.py"),
-    Claim("aos_covered", re.compile(r"(\d+)\s+covered\s*(?:·|,|\))"), "scripts/aos_conformance.py"),
-    Claim("aos_partial", re.compile(r"(\d+)\s+partial\s*(?:·|,|\))"), "scripts/aos_conformance.py"),
-    Claim("aos_absent", re.compile(r"(\d+)\s+absent\s*(?:·|,|\))"), "scripts/aos_conformance.py"),
+    Claim("aos_covered", re.compile(r"invariants\s*·\s*(\d+)\s+covered\b"), "scripts/aos_conformance.py"),
+    Claim("aos_partial", re.compile(r"covered\s*·\s*(\d+)\s+partial\b"), "scripts/aos_conformance.py"),
+    Claim("aos_absent", re.compile(r"partial\s*·\s*(\d+)\s+absent\b"), "scripts/aos_conformance.py"),
+    # Spatial capability statuses, anchored to their NEIGHBOUR rather than to a
+    # trailing separator. The looser `(\d+)\s+planned\s*·` read the AI Hub
+    # registry's own line — "233 rows · 233 live · 0 staged · 0 planned" — as a
+    # spatial figure and called it drift. Same trap `gates_total` fell into with
+    # "8 gates left", and the same fix: narrow the pattern, not the writing.
+    Claim("spatial_total", re.compile(r"(\d+)\s+spatial\s+capabilities\b"), "scripts/spatial_capabilities.py"),
+    Claim("spatial_built", re.compile(r"capabilities\s*·\s*(\d+)\s+built\b"), "scripts/spatial_capabilities.py"),
+    Claim("spatial_planned", re.compile(r"partial\s*·\s*(\d+)\s+planned\b"), "scripts/spatial_capabilities.py"),
 )
 
 #: Living documents only. Dated audits and archives are point-in-time records —
@@ -153,10 +165,12 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         preservation = preservation_check()
 
         from scripts.aos_conformance import check as aos_check
+        from scripts.spatial_capabilities import check as spatial_check
         from scripts.docs_registry import load as registry_load
 
         entries, _ = registry_load()
         aos = aos_check()
+        spatial = spatial_check()
     except Exception as exc:  # pragma: no cover - an unreadable source is the finding
         raise MetricsBroken(f"a measurement could not be taken: {exc}") from exc
 
@@ -171,6 +185,9 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         "aos_covered": aos.covered,
         "aos_partial": aos.partial,
         "aos_absent": aos.absent,
+        "spatial_total": spatial.entries,
+        "spatial_built": spatial.built,
+        "spatial_planned": spatial.planned,
     }
 
 
