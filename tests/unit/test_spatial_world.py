@@ -170,6 +170,16 @@ class TestInterrogatingTheModel:
         conns = _house().connections_of("sink")
         assert [(c.source, c.kind) for c in conns] == [("water_main", ConnectionKind.FEEDS)]
 
+    def test_a_component_can_be_fetched_by_id(self) -> None:
+        beam = _house().component("beam_a")
+        assert (beam.kind, beam.material) == ("beam", "steel")
+
+    def test_fetching_an_unknown_component_raises(self) -> None:
+        """Same rule as every other lookup here: `None` for a typo is
+        indistinguishable from `None` for something legitimately absent."""
+        with pytest.raises(UnknownComponent):
+            _house().component("no_such_beam")
+
     def test_a_component_carrying_nothing_reports_an_empty_list_not_an_error(self) -> None:
         """The distinction the raise above protects: a KNOWN component with no
         dependents is a real, ordinary answer."""

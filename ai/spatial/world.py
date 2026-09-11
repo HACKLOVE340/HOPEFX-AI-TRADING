@@ -181,6 +181,11 @@ class World:
     def component_ids(self) -> tuple[str, ...]:
         return tuple(self._components)
 
+    def component(self, component_id: str) -> Component:
+        """The component itself, raising on an id this world does not hold."""
+        self._require(component_id)
+        return self._components[component_id]
+
     @property
     def connections(self) -> tuple[Connection, ...]:
         return tuple(self._connections)

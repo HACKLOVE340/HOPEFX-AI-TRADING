@@ -5267,3 +5267,75 @@ re-walks a subtree per path, which is exponential on a real structure.
 No geometry, no renderer, no solver, no generation from text, sketch, image,
 voice or CAD. The builder can describe a structure and answer questions about it;
 it cannot draw one, and the specification's status table says so.
+
+---
+
+## §E56 — The Time Machine, and the rule it protects that was untested (2026-09-11)
+
+Capability #5, the Construction Time Machine, on top of `assembly_order()`.
+`ai/spatial/timeline.py`: step through a build, inspect any stage, branch from
+any point. Capability #8's branching comes with it, because *"what if this
+building were twice as tall"* is a branch taken at a stage and compared against
+the trunk, and the branch has to know what it diverged from.
+
+Five rules:
+
+1. **A Construction snapshots its world.** `World` is mutable — `add` and
+   `connect` are public and are how anything gets built. A live reference would
+   let history rewrite itself: edit the world, and the build recorded an hour ago
+   silently becomes a different build, with no diff and no event.
+2. **A stage is `PROCEDURALLY_GENERATED`.** A sequence derived from declared
+   dependencies, not an observation of anybody building anything.
+3. **`at()` out of range raises.** Clamping answers "step 999" with a picture of
+   a finished building.
+4. **A connection is live only when both ends exist.** Otherwise stage 1 shows a
+   beam bolted to a floor that has not been built. Real in the design from the
+   moment it is declared; real in the build only once both ends are standing.
+5. **A branch never mutates its trunk**, and records where it diverged.
+
+### Rule 1 was the headline rule and the tests did not cover it
+
+Seven mutations. Six killed their tests. The survivor was **replacing the
+snapshot with a live reference** — the single thing the module exists to
+prevent — and all fourteen tests stayed green.
+
+The test asserted on `stages()`, which is computed once in `__init__` and frozen
+either way, so it is identical whether the world is copied or referenced. Adding
+a component afterwards did not discriminate either: `at()` filters connections to
+what is standing, and a newly added component never is.
+
+What discriminates is a connection between two components that are **already
+installed**. It passes the standing filter, so with a live reference it appears
+in a state recorded before it was drawn. Two tests now cover it — that one, and a
+direct `Construction(w).world is not w`. Re-run, the mutation dies.
+
+That is the fourth green test in this programme found to be measuring something
+other than its name, and the third caught by mutation rather than by reading.
+The pattern is consistent enough to state plainly: **a test written from the
+same understanding that produced the code inherits its blind spots.** Only
+breaking the code finds them.
+
+### A smaller one, worth recording
+
+`test_a_branch_rebuilt_after_an_edit_reflects_it` was written asking for step 5
+of a three-step build. `StageOutOfRange` refused it — rule 3 catching an
+off-by-three in the test that was written to exercise rule 5. A guard that fires
+on its author the same hour it is written is a good sign about the guard.
+
+### Evidence
+
+16 Time Machine tests, all red before the module existed. Seven mutations, each
+now killing exactly the tests that describe it. **100% statement and branch
+coverage across the whole `ai/spatial` package and `invariants/spatial.py`** —
+79 tests over four modules, 252 statements, 76 branches, none missed.
+
+`World` gained one public accessor, `component(id)`, added test-first and holding
+the same rule as every other lookup there: an unknown id raises rather than
+returning `None`.
+
+### Not claimed
+
+No playback UI, no speed control, no solver behind the branches. The Time Machine
+can produce the sequence and the state at any point in it; nothing animates it,
+and the What-If Laboratory can branch but cannot yet tell you what the branch
+would cost or whether it would stand.

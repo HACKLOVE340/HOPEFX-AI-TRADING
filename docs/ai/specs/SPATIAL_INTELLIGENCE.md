@@ -72,10 +72,10 @@ not intended — a roadmap that overstates itself is the same defect one layer u
 | 2 | AI Construction Brain | **partial** | Dependencies, assembly order and materials are answered by `world.py`. Constraints, dimensions and *why* it is built that way are not |
 | 3 | Interactive World Model | **partial** | `world.py` answers "what is this connected to?" and "what happens if I remove it?" on the backend; `frontend/src/hub/sceneGraph.ts` answers "what is next to / inside / behind what" on the screen. Both refuse unknown ids rather than returning null |
 | 4 | Simulation Laboratory | planned | Physics, structural, fluid, lighting, thermal, aerodynamics, traffic/crowd, robotics, electrical. **The AI selects the appropriate simulation rather than implying every result is physically accurate** — each result carries `SIMULATED`, never higher |
-| 5 | Construction Time Machine | planned | Pause, rewind, accelerate, inspect any stage, branch a version |
+| 5 | Construction Time Machine | **partial** | `ai/spatial/timeline.py` — step through the build, inspect any stage, branch from any point. A Construction snapshots its world, so recorded history cannot be rewritten by a later edit. Playback speed and a UI do not exist |
 | 6 | AI Video Director | planned | Camera, animation, labels, narration, subtitles, exploded views, cinematic walkthrough — driven by the real construction history, not a re-enactment |
 | 7 | Multi-Agent Design Studio | partial | Architect, Engineer, Materials, Simulation, Cost, Safety/QA, Visualization, Video Director. `ai/departments/` already holds eleven specialists that delegate to real code and return `available: False` rather than a number they did not get — the pattern to extend |
-| 8 | What-If Laboratory | planned | "What if this building were twice as tall?" → branch, re-simulate, compare, explain consequences |
+| 8 | What-If Laboratory | **partial** | Branching exists and records its divergence point and trunk, which is what a comparison needs. Re-simulation and the explanation do not — there is no solver |
 | 9 | Automatic Design Alternatives | planned | Cheapest / strongest / most efficient / most beautiful / best trade-off, compared in one workspace |
 | 10 | Reality-to-3D | planned | Photograph, video or scan → editable spatial model. Reconstruction is `ESTIMATED` at best until measured |
 | 11 | 3D-to-Reality Documentation | **partial** | `world.py` produces the assembly sequence and the bill of materials. Dimensions, diagrams, technical docs and maintenance instructions do not exist |
