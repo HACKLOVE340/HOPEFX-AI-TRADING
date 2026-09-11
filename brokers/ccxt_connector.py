@@ -39,6 +39,7 @@ from brokers.base import (
     OrderStatus,
     OrderType,
     Position,
+    closing_side,
 )
 
 logger = logging.getLogger(__name__)
@@ -236,7 +237,7 @@ class CCXTConnector(BrokerConnector):
             positions = self.get_positions()
             for pos in positions:
                 if pos.symbol == symbol:
-                    side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
+                    side = closing_side(pos)
                     # place_order signature is (symbol, side, order_type, quantity).
                     self.place_order(symbol, side, OrderType.MARKET, abs(pos.quantity))
                     return True

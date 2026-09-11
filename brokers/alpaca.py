@@ -25,6 +25,7 @@ from .base import (
     OrderStatus,
     OrderType,
     Position,
+    closing_side,
 )
 
 logger = logging.getLogger(__name__)
@@ -353,7 +354,7 @@ class AlpacaConnector(BrokerConnector):
                 positions = self.get_positions()
                 for pos in positions:
                     if pos.symbol == symbol.upper():
-                        opposite_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
+                        opposite_side = closing_side(pos)
                         order = self.place_order(
                             symbol=symbol,
                             side=opposite_side,

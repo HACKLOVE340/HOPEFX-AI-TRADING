@@ -42,6 +42,7 @@ from .base import (
     OrderStatus,
     OrderType,
     Position,
+    closing_side,
 )
 
 
@@ -310,7 +311,7 @@ class InteractiveBrokersConnector(BrokerConnector):
 
             for position in positions:
                 # Create closing order
-                close_side = OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
+                close_side = closing_side(position)
                 close_qty = quantity or position.quantity
 
                 # Place closing order

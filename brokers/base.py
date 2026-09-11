@@ -274,6 +274,26 @@ class Position:
         )
 
 
+def closing_side(position: "Position") -> "OrderSide":
+    """The side that flattens *position*.
+
+    Four adapters wrote this inline as::
+
+        close_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
+
+    and `Position.__post_init__` normalises `side` to an `OrderSide`, so that
+    comparison put an enum member against a string and was False for every
+    position ever constructed. The dead branch's `else` ran every time: closing
+    a SHORT bought, which is right, and closing a LONG *also* bought, which
+    doubled the position instead of flattening it.
+
+    Reading the normalised value is the fix; a single named function is so the
+    four adapters cannot drift apart again, and so the behaviour has somewhere
+    to be tested. See `tests/unit/test_closing_a_long_sells_it.py`.
+    """
+    return OrderSide.SELL if position.side == OrderSide.BUY else OrderSide.BUY
+
+
 @dataclass
 class AccountInfo:
     """Account information.
