@@ -583,3 +583,153 @@
     flex-wrap: wrap;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Support widget — dockable launcher
+
+   Every colour here is a token. The widget previously carried fourteen hex
+   literals inline, none of which were the platform's: a blue-to-indigo gradient
+   while `--accent` is cyan, and a slate panel one shade off `--surface`.
+   Two greys that look alike at a glance
+   and are not the same colour is the whole reason the product reads as
+   assembled rather than designed — see scripts/frontend_colour_ratchet.py.
+
+   Inline styles also cannot respond to a cascade, which is why the light/dark
+   toggle changes nothing. Moving this component into classes is what lets it
+   follow a theme at all.
+
+   The parked state is a sliver, not a tab: a thin accent line flush with the
+   edge, echoing the presence rings on the AI Core page, so a parked assistant
+   still reads as the same assistant.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.support-launcher {
+  position: fixed;
+  right: 20px;
+  z-index: 1200;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  cursor: grab;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
+  touch-action: none;
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.support-launcher:hover {
+  box-shadow: 0 8px 26px rgb(0 0 0 / 45%);
+}
+
+.support-launcher:active {
+  cursor: grabbing;
+}
+
+.support-launcher[data-open="true"] {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.support-launcher[data-dragging="true"] {
+  transition: none;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 55%);
+}
+
+/* Parked: a thin line at the edge. Wide enough to hit, narrow enough to ignore. */
+.support-sliver {
+  position: fixed;
+  right: 0;
+  z-index: 1200;
+  width: 6px;
+  height: 72px;
+  padding: 0;
+  border: none;
+  border-radius: 3px 0 0 3px;
+  cursor: pointer;
+  background: var(--accent);
+  opacity: .55;
+  box-shadow: -2px 0 12px rgb(0 0 0 / 35%);
+  touch-action: none;
+  transition: width 160ms ease, opacity 160ms ease;
+}
+
+.support-sliver:hover,
+.support-sliver:focus-visible {
+  width: 12px;
+  opacity: 1;
+}
+
+.support-launcher:focus-visible,
+.support-sliver:focus-visible,
+.support-panel button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.support-panel {
+  position: fixed;
+  right: 20px;
+  z-index: 1200;
+  width: min(380px, calc(100vw - 40px));
+  height: min(560px, calc(100vh - 130px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 50%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.support-panel-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--raised);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.support-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.support-panel-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.support-panel-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.support-panel-close:hover {
+  color: var(--text);
+}
+
+.support-panel-body {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-launcher,
+  .support-sliver {
+    transition: none;
+  }
+}
