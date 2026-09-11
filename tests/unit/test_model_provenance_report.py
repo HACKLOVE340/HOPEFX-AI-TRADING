@@ -147,6 +147,51 @@ class TestWiringCanSayNo:
         assert [r for r in report.survey_wiring() if r["module"].endswith("pure.py")] == []
 
 
+class TestItLeavesNoTrace:
+    """The report must not become the thing it reports on.
+
+    Writing this report, the author called `ml._verify_checksum` directly on
+    three artifacts with APP_ENV=production to see what the gate would say.
+    Because `_bootstrap_allowed` exempts every directory that is not the
+    packaged one, the call did not merely answer — it wrote a brand-new trust
+    baseline into `ml/saved_models/GCF/`, `ml/saved_models/XAU_USD/` and
+    `ml/rl_models/`, recording as canonical whatever happened to be on disk at
+    that moment. Three untracked `model_checksums.json` files appeared, and had
+    they been committed they would have silently settled one of the open
+    questions in MASTER_OUTSTANDING A7 in the worst possible direction.
+
+    That is the finding demonstrating itself, and it is why the report is
+    read-only and why that is held by a test rather than by intention.
+    """
+
+    def test_surveying_a_directory_creates_no_baseline(self, report, tmp_path, monkeypatch) -> None:
+        _artifact(tmp_path, "unrecorded.pkl", b"weights")
+        monkeypatch.setattr(report, "MODEL_DIRS", (tmp_path,))
+        monkeypatch.setattr(report, "REPO", tmp_path.parent)
+
+        before = {p.name for p in tmp_path.iterdir()}
+        report.survey_identity()
+        report.survey_reach()
+
+        assert {p.name for p in tmp_path.iterdir()} == before
+        assert not (tmp_path / "model_checksums.json").exists()
+
+    def test_the_real_survey_writes_nothing_into_the_repository(self, report, tmp_path) -> None:
+        """Run it against the actual model directories, as CI and an operator
+        would, and assert the tree is unchanged afterwards."""
+        watched = [d for d in report.MODEL_DIRS if d.is_dir()]
+        before = {d: {p.name for p in d.iterdir()} for d in watched}
+
+        report.survey_identity()
+        report.survey_reach()
+        report.survey_wiring()
+
+        for directory in watched:
+            assert {p.name for p in directory.iterdir()} == before[directory], (
+                f"{directory} gained or lost a file while being measured"
+            )
+
+
 class TestItNeverRepairs:
     def test_a_mismatch_leaves_both_the_file_and_the_record_alone(self, report, tmp_path, monkeypatch) -> None:
         """Recomputing a mismatched hash destroys the only evidence that the

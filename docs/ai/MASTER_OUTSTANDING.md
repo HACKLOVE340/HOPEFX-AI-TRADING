@@ -203,6 +203,18 @@ LISTED BUT ABSENT: 1 · MISMATCH: 2 · NOT LISTED: 2 · ok: 13
   documented design). `ml/inference_engine.py`, named in CLAUDE.md as the live
   inference entry point, reaches neither.
 
+**The exemption is not theoretical, and measuring it tripped it.** Writing this
+entry, `ml._verify_checksum` was called directly on three artifacts with
+`APP_ENV=production`, to see what the gate would say. It did not merely answer.
+Because `_bootstrap_allowed` exempts every directory that is not the packaged
+one, the call *wrote three new trust baselines* — into
+`ml/saved_models/GCF/`, `ml/saved_models/XAU_USD/` and `ml/rl_models/` —
+recording as canonical whatever happened to be on disk at 23:34 on 2026-09-11.
+They were deleted, not committed: committing them would have settled the third
+question below by accident, in the direction of "whatever a session found is now
+the reference". A check that establishes its own baseline is not a check, and
+the easiest way to see that is to watch it happen.
+
 **The decision is not "go fix the hashes."** Recomputing a mismatched digest to
 match the file destroys the only evidence that the two ever disagreed, and
 `scripts/resave_models.py` will do exactly that if pointed at this. What needs
@@ -219,7 +231,10 @@ deciding:
 `scripts/model_provenance_report.py` measures all three surfaces and repairs
 nothing. `tests/unit/test_model_provenance_report.py` puts each bad condition on
 disk and asserts the report names it, so its numbers are numbers it could have
-printed differently. Three mutations were run against it.
+printed differently, and two more tests assert the report writes nothing — it
+must not become the thing it reports on. Four mutations were run against it,
+including one that makes the report call the writing gate: it recreated the same
+three baseline files, and the tests caught it.
 
 **Genuinely third-party weights** are a much smaller surface than the phrase
 "our AI" suggests: the LLM vendors in `ai/gateway/vendors.py` — Moonshot,
