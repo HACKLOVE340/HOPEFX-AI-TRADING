@@ -71,11 +71,11 @@ not intended — a roadmap that overstates itself is the same defect one layer u
 | 1 | Universal 3D Builder | **partial** | `ai/spatial/world.py` — the component graph: typed components, typed connections, assembly order, removal impact, bill of materials. The *representation*, which every capability below needs; geometry, and generation from text/sketch/image/voice/CAD, attach to it and do not exist yet |
 | 2 | AI Construction Brain | **partial** | Dependencies, assembly order and materials are answered by `world.py`. Constraints, dimensions and *why* it is built that way are not |
 | 3 | Interactive World Model | **partial** | `world.py` answers "what is this connected to?" and "what happens if I remove it?" on the backend; `frontend/src/hub/sceneGraph.ts` answers "what is next to / inside / behind what" on the screen. Both refuse unknown ids rather than returning null |
-| 4 | Simulation Laboratory | planned | Physics, structural, fluid, lighting, thermal, aerodynamics, traffic/crowd, robotics, electrical. **The AI selects the appropriate simulation rather than implying every result is physically accurate** — each result carries `SIMULATED`, never higher |
-| 5 | Construction Time Machine | **partial** | `ai/spatial/timeline.py` — step through the build, inspect any stage, branch from any point. A Construction snapshots its world, so recorded history cannot be rewritten by a later edit. Playback speed and a UI do not exist |
+| 4 | Simulation Laboratory | **partial** | `ai/spatial/simulation.py` — the selector and its refusals. Nine domains nameable; a solver registered per domain; no solver, a declining solver or a raising solver all yield `NOT_ASSESSED` with a reason, never a default. A solver's own claim is clamped to `SIMULATED`. **No solver is registered** — the lab is the honest frame, and the physics behind it does not exist |
+| 5 | Construction Time Machine | **partial** | `ai/spatial/timeline.py` — step through the build, inspect any stage, branch from any point; a Construction snapshots its world, so recorded history cannot be rewritten by a later edit. `ai/spatial/playback.py` — pause, resume, seek and speed, as a pure state machine with no timers. Reaching the end clamps *and* reports `finished`. No UI animates it |
 | 6 | AI Video Director | planned | Camera, animation, labels, narration, subtitles, exploded views, cinematic walkthrough — driven by the real construction history, not a re-enactment |
 | 7 | Multi-Agent Design Studio | partial | Architect, Engineer, Materials, Simulation, Cost, Safety/QA, Visualization, Video Director. `ai/departments/` already holds eleven specialists that delegate to real code and return `available: False` rather than a number they did not get — the pattern to extend |
-| 8 | What-If Laboratory | **partial** | Branching exists and records its divergence point and trunk, which is what a comparison needs. Re-simulation and the explanation do not — there is no solver |
+| 8 | What-If Laboratory | **partial** | `ai/spatial/compare.py` — component and bill-of-materials deltas between trunk and branch at `PROCEDURALLY_GENERATED`, and `better_on()`, which **refuses to rank** unless both sides carry a finding at `SIMULATED` or better. A side with no finding has not scored badly; it has not been measured. Re-simulation needs a solver, and none exists |
 | 9 | Automatic Design Alternatives | planned | Cheapest / strongest / most efficient / most beautiful / best trade-off, compared in one workspace |
 | 10 | Reality-to-3D | planned | Photograph, video or scan → editable spatial model. Reconstruction is `ESTIMATED` at best until measured |
 | 11 | 3D-to-Reality Documentation | **partial** | `world.py` produces the assembly sequence and the bill of materials. Dimensions, diagrams, technical docs and maintenance instructions do not exist |
@@ -107,6 +107,32 @@ a republished claim at `SIMULATED` or above with no solver run. A rule enforced
 only at its source is a rule enforced by whoever remembers it, and "the model
 says the floor stays up" becoming "the floor stays up" is the step that turns a
 drawing into a demolition decision.
+
+## The laboratory is a frame with nothing in it, deliberately
+
+`ai/spatial/simulation.py` can name nine domains and refuse all nine. That is not
+a placeholder — it is the useful half.
+
+A laboratory that always returns a number is the most dangerous component here.
+`removal_impact` is safe because it is labelled `PROCEDURALLY_GENERATED` and its
+graph is visible; **a simulation result looks like physics**. Answer a structural
+question with a thermal solver, or with a plausible default because nothing was
+registered, and the answer is indistinguishable from one a finite-element run
+produced — to the operator, to the report, and to whatever decides to build it.
+
+So the refusals shipped first and the physics has not shipped at all:
+
+| Situation | Result |
+|---|---|
+| No solver for the domain | `NOT_ASSESSED`, naming the domain |
+| Solver declines this model | `NOT_ASSESSED` — never fall back to another domain |
+| Solver raises | `NOT_ASSESSED`, carrying the failure, still naming the solver |
+| Solver claims `VALIDATED` or above | clamped to `SIMULATED` |
+| Solver claims `ESTIMATED` | kept — the clamp is a ceiling, not a floor |
+| Two solvers for one domain | refused at registration |
+
+When a real solver is adapted in, every one of those rules is already standing
+between it and a build decision.
 
 ## Integration points — native, not bolted on
 

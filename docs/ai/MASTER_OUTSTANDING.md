@@ -5339,3 +5339,110 @@ No playback UI, no speed control, no solver behind the branches. The Time Machin
 can produce the sequence and the state at any point in it; nothing animates it,
 and the What-If Laboratory can branch but cannot yet tell you what the branch
 would cost or whether it would stand.
+
+---
+
+## §E57 — The simulation frame ships before the physics, and the comparison refuses to rank (2026-09-11)
+
+The owner asked for the previous entry's "not claimed" list to be closed: no
+playback UI, no speed control, no solver, and a What-If Laboratory that could
+branch but could not say what a branch would cost or whether it would stand.
+
+Three of the four are now addressed. The UI is not, and deliberately: a major
+UI/UX surface needs `flow-prototype`'s approval gate before production
+implementation, and that gate is not something to skip because the backend is
+ready.
+
+### The Simulation Laboratory is a frame with nothing in it, on purpose
+
+`ai/spatial/simulation.py` can name nine domains and refuse all nine. That is
+the useful half, and it shipped first for a specific reason.
+
+A laboratory that always returns a number is the most dangerous component in
+this system. `removal_impact` is safe because it is labelled
+`PROCEDURALLY_GENERATED` and its graph is visible. **A simulation result looks
+like physics.** Answer a structural question with a thermal solver, or with a
+plausible default because nothing was registered, and the answer is
+indistinguishable from one a finite-element run produced.
+
+| Situation | Result |
+|---|---|
+| No solver for the domain | `NOT_ASSESSED`, naming the domain |
+| Solver declines this model | `NOT_ASSESSED` — never fall back to another domain |
+| Solver raises | `NOT_ASSESSED`, carrying the failure, still naming the solver |
+| Solver fails deciding applicability | `NOT_ASSESSED` — a solver that cannot decide has not decided |
+| Solver claims `VALIDATED` or above | clamped to `SIMULATED` |
+| Solver claims `ESTIMATED` | kept — the clamp is a ceiling, not a floor |
+| Two solvers for one domain | refused at registration |
+
+**No solver is registered.** When a real one is adapted in, every rule above is
+already standing between it and a build decision, rather than being retrofitted
+around a component that has been returning numbers for a month.
+
+### The comparison refuses to rank, and the refusal is the deliverable
+
+`ai/spatial/compare.py` gives component and bill-of-materials deltas at
+`PROCEDURALLY_GENERATED` — facts about two graphs, cheap and always available.
+
+`better_on()` is the other half, and it mostly says no. It refuses unless **both**
+sides carry a finding at `SIMULATED` or better. The case that matters is one side
+simulated and the other silent: a table showing `0.62` against a blank cell reads
+as though the blank lost. **A side with no finding has not scored badly; it has
+not been measured.**
+
+So the return is `(None, reason)`, and the reason is the value: *"the branch was
+not assessed for structural"* is actionable; *"no significant difference"* is a
+lie that closes the question. A tie — both measured, both equal — is reported as
+a tie, because that is a real answer.
+
+Non-finite values refuse rather than compare: `NaN < x` is `False` in both
+directions, so an unguarded ranking hands the win to whichever side is checked
+second.
+
+### Playback is a state machine, not an animation
+
+`ai/spatial/playback.py`: pause, resume, seek, speed. No timers, no threads, no
+event loop — `advance(dt)` is a pure function of state and elapsed seconds, so
+every rule is testable without a clock and a UI can drive it from
+`requestAnimationFrame` without the logic ending up inside a component.
+
+One apparent contradiction, stated so it does not read as an inconsistency:
+`Construction.at()` **raises** out of range while playback **clamps**. They are
+different questions. "Step 999" of a four-step build is nonsense and deserves a
+refusal; running past the end is what happens every time a video finishes. The
+clamp sets `finished` and stops `playing`, because a player silently sitting on
+the last frame is indistinguishable from one that has stalled.
+
+Speed is positive and finite. Zero is pause, and pause has its own flag —
+conflating them lets `playing` and `speed == 0` disagree about what the player is
+doing. Fractional progress accumulates rather than truncating per call, or a
+caller ticking at 60fps would never move at all.
+
+### Evidence
+
+51 new tests, all red before their modules existed. **18 mutations across the
+three modules, every one killed** — including the ones that matter most: a
+no-solver domain returning an estimate, a fall-back to another domain's solver,
+an unclamped self-certification, ranking with a finding on only one side, ranking
+`ESTIMATED` against `SIMULATED`, comparing `NaN`, and a playback that reaches the
+end silently. None survived.
+
+**100% statement and branch coverage across all seven spatial modules** —
+`ai/spatial/{assurance,compare,playback,simulation,timeline,world}.py` and
+`invariants/spatial.py`. 413 statements, 106 branches, none missed, 130 tests.
+
+Coverage found one real gap while it was at it: the handler for a solver that
+raises *while deciding applicability* was written and never tested — an untested
+handler on a safety path, which is the `hopefx-dead-controls` shape. It has a
+test now. The two remaining partial branches were `Protocol` method stubs, whose
+bodies are structural declarations that never execute; they are marked
+`# pragma: no cover` with the reason, rather than given a test that would only
+exercise `...`.
+
+### Still not claimed
+
+No solver of any kind. No geometry, no renderer, no reconstruction, no video. No
+UI — the playback state machine has no front end, and building one crosses into
+`flow-prototype`'s approval gate. The What-If Laboratory can branch, diff and
+refuse to rank; it cannot tell you whether a building stands, because nothing in
+this repository can compute that.
