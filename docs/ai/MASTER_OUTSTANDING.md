@@ -4980,3 +4980,78 @@ document stale in the same commit. Those are corrected. Three tests in
 `test_doc_metrics.py` were also filtering drift by metric across the whole
 repository rather than by their own fixture, so real drift anywhere made them
 red under a name that said the opposite; they are scoped now.
+
+---
+
+## §E53 — CI has enforced nothing for two days, and the coverage gate has 683 unreported findings (2026-09-11)
+
+Both found while trying to land an ordinary documentation commit. Neither was
+caused by it. Both are the same shape as every other finding in this programme:
+a control that exists, is configured correctly, and does not run.
+
+### CI is not running. It has not run for at least 30 consecutive pushes.
+
+Runs 4357–4386, spanning 2026-09-09 09:18 to 2026-09-10 02:07, every one
+`failure`, with durations of **3 to 72 seconds**.
+
+In run `34428186962` all seven jobs — `pre-commit`, `test (3.11)`,
+`test (3.12)`, `typecheck`, `frontend`, `build-cpp-shim`, `dependency-scan` —
+were created at `02:07:20` and completed at `02:07:22`. Two seconds, all of
+them, simultaneously. Their logs return **HTTP 404**.
+
+A job that fails on a test produces logs. A job with no logs that ends two
+seconds after creation never started. Seven of them ending together is not seven
+failures; it is one refusal upstream of all of them — the signature of GitHub
+Actions being disabled for the repository or an account spending limit being
+reached.
+
+**This is owner-actionable and nothing in the repository can fix it.** It needs
+the repository's Actions settings and the account's billing checked.
+
+The consequence is the part that matters. `.github/workflows/ci.yml` runs
+`pre-commit/action@v3.0.1`, which defaults to `--all-files` — so CI is where the
+*whole* gate set was supposed to run, as opposed to the staged subset a local
+commit sees. For at least two days:
+
+* the pre-commit gate set has enforced nothing in CI;
+* the 3.11/3.12 test matrix has run nothing;
+* typecheck, the frontend build and the dependency scan have run nothing.
+
+Every "CI enforces this" sentence in these documents has been false for that
+period. The gates themselves are fine — `pre-commit run` locally still passes
+each one, and that is what has actually been holding the line.
+
+### The per-module coverage gate has 683 findings it has never reported
+
+Running `pre-commit run --all-files` locally — which took about 90 minutes,
+because it invokes pytest once per module, roughly 400 times, two at a time —
+produced:
+
+| Finding | Count |
+|---|---:|
+| Modules in `docs/COVERAGE_UNMEASURABLE.txt` that now measure ≥ 80% and must leave the record | 156 |
+| Modules where coverage could not be measured (the paired test does not import the module, or fails to collect) | 297 |
+| Modules genuinely below the 80% floor | 230 |
+| **Distinct modules involved** | **292** |
+
+The gate is not broken. Its **scope** was never what the documentation implies.
+The hook carries `pass_filenames: true`, so on a commit it measures only the
+modules in that commit. The full sweep was CI's job, and CI is dead. So these
+683 findings have been accumulating with nothing able to report them.
+
+156 of them are *good news that the ratchet cannot record*: modules that
+improved past the floor while their exclusion lines sit in
+`COVERAGE_UNMEASURABLE.txt` claiming otherwise. An exclusion that no longer
+describes anything is exactly how a ratchet quietly stops being one — the gate
+says so in its own message, and no one has been able to hear it.
+
+### Why this commit was not blocked by either
+
+The change that surfaced them is markdown plus one test file: **zero production
+Python**. Run as a real commit runs it, `pre-commit run` on the staged set
+reports the coverage gate as `(no files to check)` and every other hook as
+`Passed`. The 292 failing modules are ones this work never touched.
+
+That attribution is by construction rather than by a clean-worktree baseline —
+the counterfactual would cost another 90 minutes, and it is recorded here as not
+run rather than implied.
