@@ -324,3 +324,54 @@ class TestEachMeasurementGetsItsOwnCoverageDataFile:
         """A stray `.coverage` in the tree would be picked up by the next run."""
         env = self._env_of_one_run(hook, tmp_path)
         assert not str(env["COVERAGE_FILE"]).startswith(str(REPO)), "the data file belongs outside the working tree"
+
+
+class TestAPackageInitIsImportedByImportingThePackage:
+    """`core/risk/__init__.py` measured 0% while `tests/unit/test_core_risk_init.py`
+    tested it directly.
+
+    `_imports_module` built the module's dotted name from its path, so a package
+    `__init__.py` became `core.risk.__init__` and the fallback looked for the
+    stem `__init__` after `from core.risk import `. Nobody writes
+    `from core.risk import __init__`, so the only test file that exercised the
+    module was invisible to the gate and the module was measured against
+    `tests/unit/test_risk.py` alone — which does not import it, giving 0%.
+
+    Nine of the seventy modules the record lists at 0% are `__init__.py`, so
+    this is a measurement artefact rather than nine untested packages. Zero from
+    a gate that could not see the tests is the same failure the record's header
+    already describes for the dotted-module invocation, one layer along.
+
+    Importing a package — or any module inside it — executes its `__init__.py`.
+    That is what the gate has to recognise.
+    """
+
+    INIT = pathlib.Path("core/risk/__init__.py")
+
+    def test_importing_the_package_counts(self, hook) -> None:
+        assert hook._imports_module("from core.risk import RiskMetrics\n", self.INIT)
+
+    def test_a_plain_package_import_counts(self, hook) -> None:
+        assert hook._imports_module("import core.risk\n", self.INIT)
+
+    def test_importing_a_submodule_counts(self, hook) -> None:
+        """`import core.risk.advanced_engine` executes `core/risk/__init__.py`
+        on the way in. The parent package is not optional."""
+        assert hook._imports_module("import core.risk.advanced_engine\n", self.INIT)
+
+    def test_a_different_package_does_not_count(self, hook) -> None:
+        """The fix must not make every `__init__.py` match every test file."""
+        assert not hook._imports_module("from ai.telemetry import reading\n", self.INIT)
+
+    def test_the_real_test_file_is_now_paired(self, hook) -> None:
+        """The whole point, asserted against the file on disk rather than a
+        fixture: the suite that tests this module must be one the gate runs."""
+        paired = [str(p) for p in hook._find_test_files(self.INIT)]
+        assert "tests/unit/test_core_risk_init.py" in paired, paired
+
+    def test_a_normal_module_is_unaffected(self, hook) -> None:
+        """`risk/manager.py` must keep resolving exactly as before."""
+        module = pathlib.Path("risk/manager.py")
+        assert hook._imports_module("from risk.manager import RiskManager\n", module)
+        assert hook._imports_module("from risk import manager\n", module)
+        assert not hook._imports_module("from risk import gatekeeper\n", module)

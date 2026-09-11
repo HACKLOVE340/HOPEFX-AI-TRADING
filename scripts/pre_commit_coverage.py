@@ -184,6 +184,20 @@ def _imports_module(text: str, module_path: Path) -> bool:
     touching any module in the package into every other module's run.
     """
     posix = str(module_path).replace("\\", "/").removesuffix(".py")
+
+    # A package's `__init__.py` IS the package. `from core.risk import X`,
+    # `import core.risk` and `import core.risk.advanced_engine` all execute it,
+    # and none of them names `__init__`.
+    #
+    # Built naively the dotted name came out `core.risk.__init__`, and the
+    # fallback then looked for the stem `__init__` after `from core.risk
+    # import `. Nobody writes that, so `tests/unit/test_core_risk_init.py` was
+    # invisible and the module was measured against a test file that does not
+    # import it — 0%, from a gate that could not see the tests. Nine of the
+    # seventy modules recorded at 0% are `__init__.py` in exactly this position.
+    if posix.endswith("/__init__"):
+        posix = posix.removesuffix("/__init__")
+
     dotted = posix.replace("/", ".")
     if f"from {dotted} import" in text or f"import {dotted}" in text or f"{dotted}." in text:
         return True

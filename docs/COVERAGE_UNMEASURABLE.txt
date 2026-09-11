@@ -204,10 +204,7 @@
 #     execution/fix_router.py 57% · execution/fix_adapter.py 35% ·
 #     core/metrics.py 33% · core/risk/advanced_engine.py 27% ·
 #     execution/execution.py 18% · core/health.py 0%
-ai/cache/__init__.py
-ai/core/__init__.py
 ai/core/depth.py
-ai/telemetry/__init__.py
 ai/telemetry/host.py
 analysis/patterns/pattern_detector.py
 analytics/performance.py
@@ -265,7 +262,6 @@ api/prop_firm.py
 api/risk_calculator.py
 api/safe_agent_platform.py
 api/schemas.py
-api/security/__init__.py
 api/security/fixes.py
 api/security_dashboard.py
 api/server.py
@@ -304,7 +300,6 @@ api/watchlist.py
 api/webhooks.py
 api/whitelabel_admin.py
 api/ws_public.py
-backtest/__init__.py
 backtest/data_validator.py
 backtest/reconciled_backtest_investigation.py
 backtest/transaction_costs.py
@@ -345,7 +340,6 @@ config/settings.py
 config/vault.py
 core/__init__.py
 core/account_registry.py
-core/analytics/__init__.py
 core/background_tasks.py
 core/compat_router.py
 core/decision/HOPEFXDecisionEngine.py
@@ -358,7 +352,6 @@ core/outbox.py
 core/page_routes.py
 core/position_reconciler.py
 core/regime_router.py
-core/risk/__init__.py
 core/risk/advanced_engine.py
 core/safety_config_report.py
 core/startup_factories.py
@@ -414,7 +407,6 @@ monetization/marketplace.py
 monetization/payment_processor.py
 monetization/stripe_live.py
 monetization/subscription.py
-news/__init__.py
 notifications/__init__.py
 notifications/discord_bot.py
 notifications/email_renderer.py
