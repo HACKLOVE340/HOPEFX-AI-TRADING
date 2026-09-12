@@ -473,11 +473,39 @@ Sixty modules, in this order. One commit per module, Task 3's recipe each time.
       `self.limits` also declares a `tail_risk` limit `_check_limits` never
       reads. No production module constructs the engine. See
       MASTER_OUTSTANDING §A8 — four options, including deleting it.
-- [ ] **5e. The remaining 50–79% money modules**, highest first:
+- [x] **5e. The remaining 50–79% money modules**, highest first:
       `core/position_reconciler.py` (79.2), `core/outbox.py` (78.6),
       `brokers/manager.py` (78.5), `ml/signal_features.py` (77.7),
       `ml/features_extended.py` (77.7), `brokers/oanda_broker.py` (77.4),
       `execution/engine.py` (76.6), then the rest in descending order.
+
+      All seven named modules are at the floor; the record went 240 -> 233.
+
+      | Module | Was | Now | Commit |
+      |---|---:|---:|---|
+      | `core/position_reconciler.py` | 79% | 95% | `ac152db4` |
+      | `core/outbox.py` | 79% | 94% | `5358d2e5` |
+      | `brokers/manager.py` | 78% | 88% | `8ebf2f65` |
+      | `ml/signal_features.py` | 78% | 99% | `b1bdb5b5` |
+      | `ml/features_extended.py` | 78% | 91% | `1910575d` |
+      | `brokers/oanda_broker.py` | 77% | 92% | `12cb56e5` |
+      | `execution/engine.py` | 77% | 81% | this commit |
+
+      Two defects closed: `_calc_pnl` priced a long stored as `"long"` as a
+      short and wrote the inverted P&L back to the database (`c258d26b`, live);
+      the outbox dead-lettered an event at 5 attempts and kept retrying it to 10
+      because the fetch filter and the threshold used different numbers
+      (`5358d2e5`).
+
+      Six raised: A10 (the reconciler prices XAUUSD off Yahoo Finance and skips
+      the cycle when it cannot), A11 (`idempotency_key` is UNIQUE in the model
+      and not in the migration, which decides whether the relay's dedup branch
+      can run), A12 (two features whose value changes with input length),
+      A13 (a causal guarantee asserted by two layers and disclaimed by the
+      third), A14 (three gaps around the pre-trade gates), plus A9 (three
+      encodings of which spellings mean long).
+
+      "The rest in descending order" is not done — 5e's named seven are.
 
 **Special to this task:** anything touching prices, quantities, lot sizes, P&L or
 balances requires **`hopefx-money-precision`** — Decimal/float boundaries and

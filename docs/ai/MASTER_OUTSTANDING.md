@@ -580,6 +580,70 @@ back here if the behaviour changes.
 
 ---
 
+### A14. Three gaps in the pre-trade gates, found while covering `execution/engine.py`
+
+The engine carries seven checks between a signal and a broker. They are well
+built and they fail closed — six mutations against them all die. These three are
+what the coverage work turned up around the edges.
+
+**1. `_check_margin` raises `ValueError` where it promises to block.** Its
+docstring says "any unexpected exception from the broker API blocks the trade
+rather than allowing it through". The handlers cover `(AttributeError,
+TypeError)` and `(RuntimeError, OSError)`. A non-numeric string — the shape a
+malformed JSON account payload actually takes — makes `float()` raise
+`ValueError`, which is neither:
+
+```
+_check_margin(...) -> ValueError: could not convert string to float: 'not a number'
+```
+
+`_check_leverage` has the identical pair of handlers and the same `float()`
+calls. **Whether `execute()` compensates is not established.** In every
+configuration tried, an earlier data-layer gate blocked first and the margin
+check was never reached, so the question could not be answered from outside.
+`execute()` does document "Returns ExecutionReport — never raises", so it may
+well hold; it was not demonstrated.
+
+**2. An order with no price skips both the margin and the leverage gate.** Both
+compute `notional = price * quantity` and return early when it is not positive:
+
+```python
+if notional <= 0:   # _check_margin
+    return None
+if price <= 0:      # _check_leverage
+    return None
+```
+
+The comment justifies it — the margin impact of an order you cannot price is not
+computable, so blocking would be a false positive. The condition that produces
+it, though, is price enrichment having failed: no data layer, no tick feed.
+Measured: the same order, same account with `margin_available=0` and
+`margin_used=1,000,000`, is blocked with a price and permitted without one.
+
+**3. Self-trade prevention is off whenever its module is unavailable.**
+`_check_self_trade` catches `(ImportError, AttributeError, TypeError,
+RuntimeError)`, logs at **DEBUG**, and returns `None` — which means allow. The
+docstring states the choice ("Non-fatal on STP unavailability"), so it is
+deliberate; the level is the problem. DEBUG is not emitted in production, so a
+market-abuse control being off leaves no trace an operator would see. This is
+`hopefx-dead-controls` sub-shape 4 verbatim.
+
+**What needs deciding.**
+
+| | Option | Note |
+|---|---|---|
+| 1 | Add `ValueError` to both handler tuples | Small and strictly fail-closed. The only reason it is not done here is the programme's rule against behaviour changes inside a coverage commit |
+| 2 | Block an unpriced order instead of skipping | Turns a missing price into a refusal to trade — safer, and a availability change on the market-order path |
+| 2 | Require enrichment to succeed before the gates | Moves the decision earlier, same trade |
+| 3 | Raise the STP swallow from DEBUG to ERROR | Explicitly allowed by CLAUDE.md ("Raising a log level is not weakening"). Needs no decision beyond noticing |
+
+**Already done:** `tests/unit/test_execution_engine_gates.py` pins all three —
+the `ValueError` as it is, the priced/unpriced contrast on the same account, and
+the STP fallthrough — each with a docstring saying it records the behaviour
+rather than endorses it.
+
+---
+
 ---
 
 ## §B — Work, ranked
@@ -691,9 +755,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 234 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 233 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 234 is not 234 untested modules.** Every entry was recorded because
+**The 233 is not 233 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
@@ -704,8 +768,8 @@ the floor and stops needing the entry. The honest count of under-covered modules
 will be whatever `--adopt` measures; nobody has spent the two hours yet.
 
 It read **361** here for a long time, against a record that has been shrinking
-since: 250 entries a dozen commits ago, 234 today. The coverage-floor programme
-took 259 to 234. Nothing checked the figure, so it stayed at 361 while the thing
+since: 250 entries a dozen commits ago, 233 today. The coverage-floor programme
+took 259 to 233. Nothing checked the figure, so it stayed at 361 while the thing
 it described moved — which is the failure mode the whole §E22 ratchet exists to
 stop, occurring in the document that describes the ratchet. `doc_metrics.py` now
 verifies it: see `coverage_debt` in `_CLAIMS`.
