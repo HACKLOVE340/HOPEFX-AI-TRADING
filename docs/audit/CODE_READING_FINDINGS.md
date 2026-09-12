@@ -8850,3 +8850,127 @@ That boundary has a market meaning. After a dead-flat stretch the two EMAs are
 under `<` that bar is misread as a trend continuation at 0.60 instead of a fresh
 crossover at 0.80, and the strategy under-weights the cleanest setup it can see.
 Now covered both ways.
+
+### F278 · The wrapper that exists so you don't have to rewrite your strategies cannot be activated · HIGH
+
+Found under the coverage-floor programme, Task 6c, raising
+`strategies/base_enhanced.py` from **0%**. Its one production importer is
+`core/mcc/master_control.py:29` — the Master Control Core, which aggregates
+strategy signals, risk checks them and routes them to execution.
+
+`MasterControlCore.register_strategy` wraps anything that is not already an
+`EnhancedStrategy`:
+
+```python
+if not isinstance(strategy, EnhancedStrategy):
+    strategy = StrategyAdapter(strategy)
+...
+strategy.mcc_callback = self._on_strategy_signal
+```
+
+`StrategyAdapter` was **not** an `EnhancedStrategy` and implemented none of the
+interface the MCC then uses. Measured before anything was changed:
+
+```
+adapter is EnhancedStrategy? False
+  has activate:            False
+  has deactivate:          False
+  has get_metrics:         False
+  has on_trade_completed:  False
+  has is_active:           False
+on_price returned: BUY
+callback fired?    []          <- mcc_callback was assigned and is never called
+```
+
+and end to end, through the real `MasterControlCore`:
+
+```
+registered: ['legacy-ma']
+activate_strategy -> AttributeError 'StrategyAdapter' object has no attribute 'activate'
+get_heatmap_data  -> AttributeError 'StrategyAdapter' object has no attribute 'get_metrics'
+```
+
+Three failures in one 30-line wrapper whose docstring reads *"Wraps your
+existing strategies to work with MCC. No need to rewrite your strategies!"*:
+
+1. **It cannot be activated.** `activate_strategy` raises, so an adapted
+   strategy never enters `active_strategies` and never receives a price.
+2. **It never reports.** Its `on_price` built a `StrategySignal`, returned it,
+   and never called `self.mcc_callback` — while `on_price_update`
+   (`master_control.py:439`) discards the return value. Second dead-control
+   shape: work delivered through a channel nobody reads.
+3. **It breaks a surface it is not on.** `get_heatmap_data` builds
+   `{name: strat.get_metrics() ...}` across *all* strategies, so one adapted
+   strategy raised for the whole payload rather than for its own row.
+
+**Severity is bounded by a second measured fact, and the record says so:**
+nothing in production calls `MasterControlCore.register_strategy`. The MCC is
+constructed at `core/startup_factories.py:3682` and health-checked at
+`api/health.py:615`, and it runs with **zero** registered strategies. This is
+latent rather than live — and it is the wall the first person to wire a strategy
+into the MCC walks into.
+
+**Fixed** by making `StrategyAdapter` subclass `EnhancedStrategy` — which is what
+the MCC's own `isinstance` check says the wrapper is for — and reducing the
+adapter to a `generate_signal` override. The base class already holds the price
+history, gates on `is_active` and fires the callback. A legacy object with no
+`on_tick` still yields nothing rather than raising; a non-mapping return still
+raises, because the MCC logs that at ERROR and a wrapper that quietly dropped an
+unrecognised signal shape would be the silent failure this class was just fixed
+for.
+
+Evidence: `tests/unit/test_strategy_adapter_reaches_the_mcc.py` — 19 of its 42
+tests fail at `5fe97c7e`. Eight mutations, all caught: dropping the base class,
+loosening the `confidence > 0.5` gate, removing the `is_active` gate, disabling
+the callback, counting break-even as a win, removing the strength clamp,
+unbounding the price history, and keeping a non-string name. 81 existing MCC
+tests still pass. Coverage 0 → **100%**.
+
+One test in the first draft named `get_status` where the defect is in
+`get_heatmap_data`, and failed on a `KeyError` rather than on the defect —
+corrected, and the test now says which line calls `get_metrics`.
+
+### F279 · Not a defect: the regime router, measured rather than read · INFO
+
+`strategies/regime_router.py` was recorded at **0%** while `core/regime_router.py`
+— a shim that does nothing but re-export its `RegimeRouter` — was measured at
+73.77%. It is live three ways: `core/startup_factories.py:2343` constructs the
+router at startup, `scripts/retrain_model.py:218` calls `detect_regime` and
+`update_regime_performance` after every retrain, and the shim re-exports it.
+
+Both sweeps come back clean, and that is worth recording as explicitly as a
+defect would be — three modules into Task 6c, "we looked and it was fine" is
+information.
+
+* **`backtesting-frameworks`:** no `center=True`, no negative `.shift()`, no
+  `bfill`. `_ema` is a forward recursion, `_atr` and `_adx_approx` read trailing
+  windows, and `detect_regime` slices `[-lookback:]` to classify *the present*
+  rather than to compare a bar against a window containing itself. That last
+  distinction is exactly what made F275 a defect and leaves this correct.
+* **`hopefx-dead-controls`:** `_DEFAULT_REGIME_STRATEGY` names
+  `"TrendFollowing"`, `"MeanReversion"` and `"Breakout"`, and those are the
+  names `strategies/manager.py` registers (lines 225, 301, 381, keyed by
+  `strategy.name` at 486). A mismatch here would not have raised — selection
+  would have fallen through to `next(iter(available))` and routed every regime
+  to an arbitrary strategy while the dashboard displayed a regime mapping. The
+  test asserts the names against the real `StrategyManager` rather than against
+  a fixture, because a fixture is what would hide it.
+
+Two properties are now pinned that the code did not state: every regime label
+`detect_regime` can return is in `ALL_REGIMES` (a label the dashboard and
+manifest do not enumerate would be invisible), and `_select_strategy` re-reads
+the manifest on every call, so a retrain in another process takes effect without
+a restart.
+
+The one thing a reader should know and the code does not say: the `REGIME_CHANGE`
+publish to `StrategyOrchestra` needs both a shared orchestra **and** a running
+event loop, and every failure is swallowed at DEBUG. `route` is called from
+synchronous paths, where `asyncio.get_running_loop()` raises and the publish is
+skipped by construction. So "no rebalance happened" and "no regime change
+happened" look identical in production logs. Asserted, not changed — a missed
+rebalance must not stop the router choosing a strategy.
+
+Evidence: `tests/unit/test_regime_router.py`, 57 tests, eight mutations all
+caught (flipped trend direction, removed confidence cap, off-by-one lookback
+guard, dropped min-trades gate, cached manifest, ascending sort, removed history
+dedupe, removed the empty-ATR guard). Coverage 0 → **100%**.

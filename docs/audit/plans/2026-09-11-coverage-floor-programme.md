@@ -564,10 +564,35 @@ carry less consequence and a 191-commit series is unreviewable.
       equal, and under `<` it is scored as a continuation (0.60) rather than a
       crossover (0.80).
 
+      Third batch, 2026-09-12: `base_enhanced` 0 → **100%**, `regime_router`
+      0 → **100%**; record 226 → 224. Both were at zero and both are live.
+
+      **F278**, HIGH, fixed. `StrategyAdapter` — the wrapper whose docstring
+      says *"No need to rewrite your strategies!"* — was not an
+      `EnhancedStrategy`, which is the exact `isinstance` check
+      `MasterControlCore.register_strategy` uses to decide whether to wrap.
+      It had none of `activate`, `deactivate`, `get_metrics`,
+      `on_trade_completed` or `is_active`, and its `on_price` never called the
+      `mcc_callback` the MCC had just assigned to it. Registering a legacy
+      strategy then activating it raised `AttributeError`, and
+      `get_heatmap_data` raised for *every* strategy rather than for that row.
+      Bounded by a second measured fact: nothing in production calls
+      `register_strategy`, so the MCC runs with zero strategies and this was
+      latent.
+
+      **F279**, INFO. `regime_router.py` needed no repair and both sweeps come
+      back clean — recorded as explicitly as a defect, because three modules
+      into this task "we looked and it was fine" is information. The
+      `hopefx-dead-controls` check that mattered: `_DEFAULT_REGIME_STRATEGY`
+      names strategies that `StrategyManager` actually registers, and a
+      mismatch would not have raised — it would have fallen through to
+      `next(iter(available))` and routed every regime to an arbitrary strategy
+      while the dashboard displayed a mapping.
+
       Remaining in this package, measured 2026-09-12: `smc_ict` 75.6,
       `its_8_os` 74.0, `strategy_brain` 69.9, `macd_strategy` 68.5,
-      `bollinger_bands` 61.4, `manager` 31.7, `pullback_strategy` 13.6, and
-      `base_enhanced`, `dynamic_registry`, `regime_router` at 0.
+      `bollinger_bands` 61.4, `manager` 31.7, `pullback_strategy` 13.6,
+      `dynamic_registry` 0.
 - [x] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
       `threat-modelling`.** A security module at 0% is a control nobody has
       watched fail. **Done 2026-09-12.** `lockdown.py` 90 → 94%, `monitor.py`
