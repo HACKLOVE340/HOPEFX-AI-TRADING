@@ -713,6 +713,34 @@ Recorded as F274. The asymmetry is asserted rather than left implicit —
 `test_lifting_does_not_reach_the_brain` fails with *"unexpected — update F274,
 the asymmetry is gone"* if someone closes it without updating the record.
 
+### A17. The Breakout strategy has never emitted a signal, and now can
+
+`strategies/breakout.py` and the unrelated `BreakoutStrategy` at
+`strategies/manager.py:377` both measured their range over a window that
+**included the bar being tested**, which makes `current_high > resistance` false
+by identity. Both breakout branches in both classes were unreachable. Measured
+before the fix: 4,000 random OHLC frames through the first produced
+`{'HOLD': 4000}`; 3,000 through the second produced `{'none': 3000}`. A 20-bar
+range broken to 130 was reported as *"Consolidating: 100 < 129 < 130"*. Fixed
+under F275.
+
+**The decision is not whether to fix it — it is what to do with the fixed
+strategy.** A strategy that emitted nothing has just started emitting:
+
+| What has never happened | Why it matters now |
+|---|---|
+| Its signals have never been seen in paper or live | There is no baseline to compare a bad week against |
+| `lookback_period=20` and `breakout_threshold=0.02` / `0.001` have never been exercised | The parameters were never tuned, because nothing they gated could fire |
+| Its backtests have never had a trade in them | Every "Breakout" backtest a user has run returned a flat curve. Those results are not a performance record; they are a record of the defect |
+
+**Recommendation, and it is the owner's to accept or reject:** treat this as a
+new strategy on its first deployment rather than a restored one — backtest it
+over the committed history before it is enabled anywhere, and do not carry
+forward any prior "Breakout" backtest result as evidence of anything. The two
+classes should probably also not both be called `BreakoutStrategy`; that is the
+same name-collision shape as `PortfolioManager` in F158, and it is why the
+defect had to be found twice.
+
 ## §B — Work, ranked
 
 Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones.
@@ -822,9 +850,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 230 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 229 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 230 is not 230 untested modules.** Every entry was recorded because
+**The 229 is not 229 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired

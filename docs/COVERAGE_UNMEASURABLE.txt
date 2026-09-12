@@ -429,7 +429,6 @@ social/marketplace.py
 social/profiles.py
 strategies/base_enhanced.py
 strategies/bollinger_bands.py
-strategies/breakout.py
 strategies/dynamic_registry.py
 strategies/ema_crossover.py
 strategies/its_8_os.py

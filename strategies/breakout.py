@@ -62,10 +62,18 @@ class BreakoutStrategy(BaseStrategy):
         Returns:
             Tuple of (support_level, resistance_level)
         """
-        high = market_data["high"]
-        low = market_data["low"]
+        # The level must be drawn from the bars BEFORE the one being tested.
+        # This used to be `high.tail(lookback).max()`, whose window included the
+        # current bar — so `resistance >= current_high` by construction and the
+        # bullish branch in `generate_signal` could not fire for any input that
+        # has ever existed. The bearish branch was the same identity with `min`.
+        # Measured over 4,000 random OHLC frames before the fix: HOLD, 4,000
+        # times. See `backtesting-frameworks`; this is the self-reference
+        # cousin of look-ahead bias.
+        prior = market_data.iloc[:-1] if len(market_data) > 1 else market_data
+        high = prior["high"]
+        low = prior["low"]
 
-        # Use recent period for levels
         recent_high = high.tail(self.lookback_period).max()
         recent_low = low.tail(self.lookback_period).min()
 
@@ -145,8 +153,12 @@ class BreakoutStrategy(BaseStrategy):
             current_volume = market_data["volume"].iloc[-1] if "volume" in market_data else 0
 
             # Average volume for confirmation
+            # Same exclusion, one field over: a breakout bar's own volume inside
+            # its 20-bar mean pulls the mean up and can disqualify the spike it
+            # is supposed to confirm.
+            prior_bars = market_data.iloc[:-1] if len(market_data) > 1 else market_data
             avg_volume = (
-                float(np.nan_to_num(market_data["volume"].tail(self.lookback_period).mean(), nan=0.0))
+                float(np.nan_to_num(prior_bars["volume"].tail(self.lookback_period).mean(), nan=0.0))
                 if "volume" in market_data
                 else 0.0
             )

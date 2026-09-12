@@ -8640,3 +8640,93 @@ the platform owner rather than a patch. Raised as MASTER_OUTSTANDING §A16. The
 asymmetry is asserted rather than left implicit —
 `TestTheDelegationToTheBrain::test_lifting_does_not_reach_the_brain` fails with
 "unexpected — update F274, the asymmetry is gone" if someone closes it.
+
+### F275 · Two classes named `BreakoutStrategy`, and neither could emit a signal · CRITICAL
+
+**Found under the coverage-floor programme, Task 6c, by the
+`backtesting-frameworks` bias sweep.** That skill's first bias is look-ahead —
+using information the bar being tested could not have had. The grep-able
+constructs for it (`center=True`, a negative `.shift()`, `bfill`) appear
+**nowhere** in `strategies/`. The sweep found the adjacent defect instead: a
+window that includes *the bar it is being compared against*.
+
+`strategies/breakout.py`:
+
+```python
+recent_high = high.tail(self.lookback_period).max()   # window includes bar -1
+...
+if current_high > resistance:                         # current_high IS in that max
+```
+
+`max` over a window containing `current_high` is `>= current_high`, so the
+comparison is false for every input that has ever existed. The bearish branch is
+the same identity with `min`. **Both breakout branches were unreachable** — the
+first dead-control shape, *a guard that can never open*, except here the guard
+is the signal.
+
+`strategies/manager.py:377` defines a **second, unrelated** `BreakoutStrategy`
+with the identical defect and a multiplier that makes it stricter still:
+
+```python
+resistance = float(np.max([c.high for c in recent]))  # recent includes [-1]
+if current > resistance * (1 + self.breakout_threshold):
+```
+
+`current <= resistance`, so `current > resistance * 1.001` cannot hold for any
+positive price. Its sell branch is the mirror.
+
+**Measured before anything was changed.** 20 bars consolidating in [100, 110],
+then a bar breaking to 130:
+
+```
+UP BREAK   -> HOLD, "Consolidating: 100.00000 < 129.00000 < 130.00000"
+DOWN BREAK -> HOLD, "Consolidating: 70.00000 < 71.00000 < 110.00000"
+```
+
+The breakout bar is reported as **consolidation**, because the bar redefined the
+level it was about to be measured against. Across 4,000 random OHLC frames
+`strategies/breakout.py` returned `{'HOLD': 4000}`; across 3,000,
+`strategies/manager.py`'s returned `{'none': 3000}`.
+
+**Both are live.** `strategies/registry.py:79` maps `"breakout"` to the first,
+`api/backtesting.py:203-204` offers it by name to anyone running a backtest,
+`strategies/__init__.py:91` re-exports it, and `strategies/manager.py:473`
+registers the second at construction. A user who selected "Breakout" got a flat
+equity curve and no reason for it.
+
+**Why it survived.** `generate_signal` wraps its whole body in
+`except Exception: return {"type": "HOLD", "reason": f"Error: {e}"}`. A
+strategy whose every failure mode is "HOLD with a reason string" is
+indistinguishable from a strategy in a quiet market. The tests it already had
+asserted the shape of the returned dict, never that a direction could ever be
+produced.
+
+**Fixed** as `backtesting-frameworks` prescribes for the whole family: the level
+is computed from bars **strictly before** the bar being tested
+(`market_data.iloc[:-1]`, and `price_data[-(lookback+1):-1]`). The volume
+confirmation in `breakout.py` had the same defect one field over — a 5,000-lot
+breakout bar inside its own 20-bar mean pulls the mean up by 200 and can
+disqualify the spike it exists to confirm — and is excluded the same way. The
+manager's version now needs `lookback + 1` candles rather than `lookback`,
+which is the honest minimum.
+
+**Consequence the owner should know before enabling it live:** a strategy that
+emitted nothing will now emit. Its signals have never been through a live or
+paper session, and its parameters (`lookback_period=20`,
+`breakout_threshold=0.02` / `0.001`) have never been exercised against real
+data, because nothing they gated could fire. Treat the first run as a new
+strategy, not a restored one. Raised as MASTER_OUTSTANDING §A17.
+
+Evidence: `tests/unit/test_breakout_can_actually_break_out.py` — 13 of its 29
+tests fail at `6793da82`. Four mutations re-applied to the fix, all caught:
+restoring the current bar to the level window, to the volume mean, and to the
+manager's range, plus an off-by-one that drops one bar too many. Coverage of
+`strategies/breakout.py` 0 → **100%**.
+
+One test was rewritten rather than kept: the first draft of
+`test_it_is_capable_of_both_directions` sampled random OHLC and asserted both
+actions appeared. It failed on the fixed code — not because a branch was dead,
+but because the manager's threshold is a fraction of the *level* rather than of
+the range, so a random walk clears it about 0.1% of the time and 300 frames was
+an underpowered sample (measured over 3,000: 3 buys, 2 sells). A test that needs
+a one-in-a-thousand event is a flake with a seed on it.

@@ -526,6 +526,24 @@ carry less consequence and a 191-commit series is unreviewable.
       refusal, then the 200. **REQUIRED SUB-SKILL: `fastapi-templates`.**
 - [ ] **6c. `strategies/` (11, median 68.5%)** — **REQUIRED SUB-SKILL:
       `backtesting-frameworks`** for look-ahead bias in the fixtures.
+      **In progress.** `breakout.py` 0 → **100%**; record 230 → 229.
+
+      The bias sweep found no look-ahead construct in `strategies/` at all —
+      no `center=True`, no negative `.shift()`, no `bfill`. It found the
+      adjacent defect instead, in both classes named `BreakoutStrategy`: a
+      range measured over a window that **includes the bar being tested**,
+      which makes `current_high > resistance` false by identity. Both breakout
+      branches in both classes were unreachable. 4,000 random frames through
+      `strategies/breakout.py` produced `{'HOLD': 4000}`; 3,000 through
+      `strategies/manager.py`'s produced `{'none': 3000}`. Fixed; **F275**,
+      CRITICAL, with §A17 raised because a strategy that emitted nothing has
+      now started emitting and its parameters have never been exercised.
+
+      Remaining in this package, measured 2026-09-12: `ema_crossover` 77.5,
+      `smc_ict` 75.6, `its_8_os` 74.0, `strategy_brain` 69.9, `macd_strategy`
+      68.5, `mean_reversion` 68.3, `rsi_strategy` 65.6, `bollinger_bands`
+      61.4, `manager` 31.7, `pullback_strategy` 13.6, and `base_enhanced`,
+      `dynamic_registry`, `regime_router` at 0.
 - [x] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
       `threat-modelling`.** A security module at 0% is a control nobody has
       watched fail. **Done 2026-09-12.** `lockdown.py` 90 → 94%, `monitor.py`
