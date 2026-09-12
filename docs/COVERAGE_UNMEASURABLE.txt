@@ -385,7 +385,6 @@ invariants/portfolio.py
 invariants/security.py
 market_data/validation.py
 ml/__init__.py
-ml/features_extended.py
 ml/hourly_trainer.py
 ml/inference_engine.py
 ml/regime.py

@@ -510,6 +510,76 @@ value computed earlier, asserted per indicator.
 
 ---
 
+### A13. A causal guarantee asserted by two layers and disclaimed by the third
+
+Three modules describe the same mechanism. The bottom one is honest; the two
+above it are not, and they cite each other.
+
+**`data_layer/orchestrator.py::get_ml_features` — the producer, accurate:**
+
+> Causal guarantee (IMPORTANT — partial):
+>   - HONORED by `as_of`: sentiment, macro calendar, temporal features.
+>   - NOT honored (always reflect CURRENT live state): microstructure,
+>     tick-quality, and FRED macro features…
+>   Consequently, calling this with a PAST `as_of` … leaks present-time
+>   micro/tick/macro data into a row labeled causal — look-ahead bias.
+>   **Do NOT use the micro/tick/macro features in a causal training or
+>   walk-forward pipeline.**
+
+**`ml/features_extended.py::add_data_layer_features` — the consumer:**
+
+> `as_of` : If provided, only use data available at this timestamp
+> (**causal guarantee for backtesting**).
+
+**`data_layer/replay/engine.py` — the caller:**
+
+> **Causal guarantee** — … The ML pipeline's `add_data_layer_features(as_of=cursor)`
+> **enforces this at the feature level.**
+
+So the replay engine names the consumer as its enforcement, the consumer
+advertises a guarantee, and the producer states in terms that three of its
+feature groups do not provide one. `backtesting/replay_connector.py` wires the
+replay engine into `BacktestEngine`.
+
+**And the injection is constant regardless.** `get_ml_features()` returns a dict
+of scalars — one moment's reading — and each is assigned `d["dl_x"] = scalar`,
+which pandas broadcasts to every row. Measured with a live orchestrator
+returning non-zero values, on a 500-bar frame spanning 2023-01-01 to 2023-01-21:
+
+```
+dl_spread      first=0.35   last=0.35   distinct=1
+dl_macro_vix   first=17.9   last=17.9   distinct=1
+36 of 36 dl_ columns constant
+```
+
+Two consequences. Within one frame, 36 zero-variance columns cannot inform a
+split and contribute nothing. Across frames built at different moments, the
+constant becomes a proxy for *when the frame was built* — concatenate a Monday
+and a Tuesday batch for training and `dl_macro_vix` tells the model which batch
+a row came from.
+
+**What needs deciding.**
+
+| Option | Cost | What it leaves |
+|---|---|---|
+| **Make the injection per-row** — reconstruct each feature point-in-time from stored history | large: the orchestrator would need point-in-time reads for micro/tick/macro, which it says it does not have | Features that mean what their name says, and a real causal guarantee |
+| **Drop the non-causal groups** from any training path and keep them live-only | ~1 session | Honest features, fewer of them. The replay engine loses its claim and should stop making it |
+| **Correct the two docstrings** and leave the behaviour | hours | The code is unchanged but nobody is misled into training on it. Minimum honest action |
+| **Leave it** | nothing now | Two documents asserting a guarantee their own foundation disclaims, above a backtest path |
+
+**Why this is not just fixed:** the third option is safe and I could have taken
+it, but correcting a docstring to say "these features are not causal" without
+deciding what happens to the pipeline that consumes them would leave a
+contradiction of a different kind — a backtest path knowingly fed non-causal
+features. The three belong in one decision.
+
+**Already done:** `tests/unit/test_ml_features_extended_data_layer.py` pins the
+constancy, the per-call variation across moments, `as_of` reaching the
+orchestrator, and the NaN/inf scrub, each with an assertion message pointing
+back here if the behaviour changes.
+
+---
+
 ---
 
 ## §B — Work, ranked
@@ -621,9 +691,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 236 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 235 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 236 is not 236 untested modules.** Every entry was recorded because
+**The 235 is not 235 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
@@ -634,8 +704,8 @@ the floor and stops needing the entry. The honest count of under-covered modules
 will be whatever `--adopt` measures; nobody has spent the two hours yet.
 
 It read **361** here for a long time, against a record that has been shrinking
-since: 250 entries a dozen commits ago, 236 today. The coverage-floor programme
-took 259 to 236. Nothing checked the figure, so it stayed at 361 while the thing
+since: 250 entries a dozen commits ago, 235 today. The coverage-floor programme
+took 259 to 235. Nothing checked the figure, so it stayed at 361 while the thing
 it described moved — which is the failure mode the whole §E22 ratchet exists to
 stop, occurring in the document that describes the ratchet. `doc_metrics.py` now
 verifies it: see `coverage_debt` in `_CLAIMS`.
