@@ -8504,3 +8504,139 @@ manifests describe this project's dependencies and the blocking scanner reads
 the one that pins nothing. `requirements.lock` needs to be visible to Trivy —
 and the count that comes back when it is has not been measured. Recorded as
 TODO item 24.
+
+---
+
+### F272 · The admin lockdown switch reported success and moved nothing · CRITICAL
+
+**Found under the coverage-floor programme, Task 6d, by applying
+`threat-modelling` stage 3 to the operator-surfaces boundary — not by reading
+`security/lockdown.py`, which is correct.**
+
+The threat, stated plainly: *an operator sees an attack in progress, hits the
+lockdown switch, is told the platform is locked down, and orders keep flowing.*
+
+`api/security_dashboard.py` called three methods on the singleton returned by
+`security.lockdown.get_lockdown_manager()`:
+
+```python
+mgr.activate(reason=req.reason, activated_by=user.sub)   # line 252
+mgr.clear(cleared_by=user.sub)                           # lines 236, 294
+```
+
+`LockdownManager` defines neither. It has `trigger(reason, triggered_by)` and
+`lift(lifted_by)`, and **both are `async def`**. So each call raised
+`AttributeError` into:
+
+```python
+except Exception as _exc:
+    logger.debug("Lockdown manager unavailable (enable path), using in-memory: %s", _exc)
+```
+
+— DEBUG, off in production — and fell through to a module-level
+`_lockdown_state` dict, after which the endpoint returned a response composed
+out of the **request** rather than read back from the manager:
+
+```python
+return {"status": "active", "lockdown_active": True, "reason": req.reason, ...}
+```
+
+Two of the four dead-control shapes, stacked: **#2**, success reported for work
+that did not happen, and **#4**, the evidence swallowed by `except`. Even had
+the names matched, the calls were unawaited, so they would have returned
+coroutines and done nothing — a rename alone would have produced a green review
+and the same dead switch.
+
+**The tell was visible from outside both files.** `GET /lockdown` reads
+`mgr.status()`, which exists and does not raise, so it reported the singleton —
+`active: False` — while the POST that had just "succeeded" wrote only to the
+fallback dict. Toggle lockdown on in `SecurityDashboard.tsx`, refresh, and the
+badge says the platform is open. Proven by execution before anything was
+changed:
+
+```
+activate() -> AttributeError 'LockdownManager' object has no attribute 'activate'
+clear()    -> AttributeError 'LockdownManager' object has no attribute 'clear'
+status after both: {'active': False, ...}
+```
+
+**Fixed** in `api/security_dashboard.py`: the three call sites now `await` the
+real methods with their real keyword names; the response is read back from the
+manager's returned status; a manager that exists and *refuses* returns **503**
+rather than a cheerful `lockdown_active: true`; and the swallowed `logger.debug`
+is now `logger.error`, naming the operator and the reason. The in-memory
+fallback survives for the one honest case — the module cannot be imported at
+all — and `_lift_lockdown` is now shared by `POST /lockdown {enable:false}` and
+`POST /lockdown/clear` so the two cannot drift apart again.
+
+Evidence: `tests/unit/test_lockdown_actually_locks_down.py` — 8 of its tests
+fail at `5496d0a8`. Three mutations were re-applied to the fix and each was
+caught: dropping the `await`, returning `lockdown_active: True` instead of
+raising 503, and lowering the log back to DEBUG. One test is a general guard:
+every attribute the router reaches for on `mgr` must exist on
+`LockdownManager`, and no coroutine method may be called unawaited — checked by
+AST, so the next rename is caught by a test rather than by an operator.
+
+Coverage: `security/lockdown.py` 90% → 94%, `security/__init__.py` → 100%.
+
+### F273 · The attack feed on the security dashboard can only ever read zero · HIGH
+
+`GET /api/security/attacks` backs the KPI strip on `SecurityDashboard.tsx`. It
+reads `security.monitor.SecurityMonitor.recent_attacks()` and `.attack_count()`,
+falling back to `api.security_dashboard._attack_log`. Both stores are written by
+exactly one function each, and **neither function has a caller**:
+
+```
+$ grep -rn "record_attack" --include="*.py" . | grep -v ./.venv
+./api/security_dashboard.py:96:def record_attack_event(...)     <- a different function
+./security/monitor.py:31:def record_attack(event) -> None:      <- the definition
+```
+
+`record_attack_event`'s own docstring says *"Called by middleware / auth
+rate-limiter to record an attack."* Nothing calls it. So the endpoint returns
+`{"events": [], "total": 0}` whatever is happening to the platform — the third
+dead-control shape, **a measurement that cannot fail**, shown to an operator who
+is looking at it precisely because they suspect something is wrong.
+
+**Not fixed here, deliberately.** Wiring attack recording into the request path
+of a money-moving system is a behaviour change with an owner: which events count
+as attacks, whether the recorder runs in the middleware or the rate-limiter, and
+what it costs per request are decisions, not a coverage task. Raised as
+MASTER_OUTSTANDING §A15.
+
+What *was* done is pin the semantics so the day it is wired the feed behaves:
+newest-first ordering, a `limit` that takes the newest rather than the oldest,
+a bounded buffer that drops the oldest, and a total that keeps counting past the
+window it can hold — the last one matters because a flood that overruns 1,000
+events must not read as a smaller flood. Evidence:
+`tests/unit/test_security_monitor_feed.py`; six mutations applied to
+`security/monitor.py` and all six caught. Coverage 48.72% → 97.44%.
+
+### F274 · Lifting a lockdown does not lift it in Redis, and two routers claim the path · MEDIUM
+
+What actually stops traffic during a lockdown is
+`security.global_fortress.HOPEFXBrain.trigger_full_lockdown`, which sets
+`lockdown:active` in Redis with a 3600-second TTL; `core/health.py:204` reads
+that key and fails the pod's readiness probe.
+`LockdownManager.trigger` fires it — fire-and-forget via
+`asyncio.ensure_future`, with failures logged at DEBUG.
+
+`LockdownManager.lift` has **no matching call**. Clearing the lockdown through
+the dashboard flips the in-process flag and leaves the Redis key set until its
+TTL expires, so the pod can stay out of the load balancer for up to an hour
+after an operator has declared the incident over. `global_fortress` mounts its
+own `POST /lockdown/clear` that does `redis.delete("lockdown:active")`; the
+dashboard's clear path cannot reach it.
+
+Both routers use `prefix="/api/security"`, so `GET|POST /lockdown` is claimed
+twice. Measured on the real app (1,327 routes) in the default configuration,
+only `api.security_dashboard` serves them — `security_brain` is behind
+`F.init_security_brain` and off — so there is no live collision today. Enabling
+that flag creates one, and which handler wins depends on registration order.
+
+**Not changed:** deciding which of the two routers owns the lockdown path, and
+whether the dashboard's clear should reach Redis, is an ownership question for
+the platform owner rather than a patch. Raised as MASTER_OUTSTANDING §A16. The
+asymmetry is asserted rather than left implicit —
+`TestTheDelegationToTheBrain::test_lifting_does_not_reach_the_brain` fails with
+"unexpected — update F274, the asymmetry is gone" if someone closes it.

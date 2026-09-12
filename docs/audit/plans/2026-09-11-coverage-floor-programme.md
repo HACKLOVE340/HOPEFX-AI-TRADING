@@ -526,9 +526,36 @@ carry less consequence and a 191-commit series is unreviewable.
       refusal, then the 200. **REQUIRED SUB-SKILL: `fastapi-templates`.**
 - [ ] **6c. `strategies/` (11, median 68.5%)** — **REQUIRED SUB-SKILL:
       `backtesting-frameworks`** for look-ahead bias in the fixtures.
-- [ ] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
+- [x] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
       `threat-modelling`.** A security module at 0% is a control nobody has
-      watched fail.
+      watched fail. **Done 2026-09-12.** `lockdown.py` 90 → 94%, `monitor.py`
+      48.7 → 97.4%, `__init__.py` → 100%; record 233 → 230.
+
+      The threat model earned its place at stage 3 rather than stage 1. The
+      boundary is **operator surfaces**; the threat is *"an operator hits the
+      lockdown switch, is told the platform is locked down, and orders keep
+      flowing"*; and the mapped control — `LockdownManager` — is well written
+      and was never reached. `api/security_dashboard.py` called `mgr.activate()`
+      and `mgr.clear()`, which the class does not define, caught the
+      `AttributeError` at DEBUG, and returned `lockdown_active: True` composed
+      out of the request. Fixed; **F272**, CRITICAL.
+
+      Two findings raised rather than patched, per this task's own rule that a
+      module which turns out to be dead is a finding: **F273** — the attack feed
+      can only ever read zero, because neither `record_attack` nor
+      `record_attack_event` has a caller (§A15) — and **F274** — `lift()` never
+      clears the Redis key `trigger()` set, and two routers claim
+      `/api/security/lockdown` (§A16).
+
+      **`encryption.py`, `key_manager.py` and `vault.py` were deliberately not
+      tested.** All three have zero importers; F180/F181 already record them,
+      F262 already disarmed `rotate_key`. Re-raising would duplicate the prior
+      audit, and testing a module nothing calls is what this task forbids. They
+      stay on the record as a stated decision, like `brokers/__init__.py` in
+      §A6. The deployment scripts' references to `key_manager.py`
+      (`deployments/vps_bootstrap.sh:252`, `deployments/gen_env.sh:99,215`) are
+      **comments** describing HOPEFX_MASTER_KEY validation, not invocations — so
+      the validation those scripts advertise does not run either.
 - [ ] **6e. The remaining packages** — `data_layer`, `database`, `notifications`,
       `social`, `charting`, `analytics`, `invariants`, `chaos`, `utils`,
       `monetization`, `payments`, `portfolio`, `reports`, `config`,

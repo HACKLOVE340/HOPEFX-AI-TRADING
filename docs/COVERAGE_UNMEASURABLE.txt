@@ -412,7 +412,6 @@ portfolio/rebalancer.py
 portfolio/strategy_allocator.py
 reports/weekly_report.py
 risk/__init__.py
-security/__init__.py
 security/antivirus.py
 security/code_analyzer.py
 security/encryption.py
@@ -420,8 +419,6 @@ security/github_pr_publisher.py
 security/global_fortress.py
 security/key_manager.py
 security/llm_wrapper.py
-security/lockdown.py
-security/monitor.py
 security/production_config.py
 security/security_manager.py
 security/self_healer.py

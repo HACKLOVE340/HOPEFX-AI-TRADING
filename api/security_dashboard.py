@@ -55,7 +55,7 @@ router = APIRouter(prefix="/api/security", tags=["security-dashboard"])
 # ---------------------------------------------------------------------------
 _attack_log: list[dict] = []
 _alert_store: list[dict] = []
-_lockdown_state: dict = {"active": False, "reason": None, "activated_at": None}
+_lockdown_state: dict = {"active": False, "reason": None, "activated_at": None, "activated_by": None}
 _blocked_ips: list[str] = []
 _threat_store: list[dict] = []
 _scan_history: list[dict] = []
@@ -180,15 +180,32 @@ async def get_security_alerts(
 # =============================================================================
 
 
+def _lockdown_manager():
+    """Return the singleton :class:`~security.lockdown.LockdownManager`, or ``None``.
+
+    ``None`` means the module could not be imported at all — the one condition
+    in which falling back to :data:`_lockdown_state` is honest.  A manager that
+    exists and *refuses* is a different thing entirely, and the callers below
+    do not paper over it.
+    """
+    try:
+        from security.lockdown import get_lockdown_manager
+
+        return get_lockdown_manager()
+    except Exception as exc:
+        # Not DEBUG. This is the lockdown control; if it is missing, whoever
+        # reads production logs needs to know before they reach for it.
+        logger.error("Lockdown manager unavailable — using in-process state: %s", exc)
+        return None
+
+
 @router.get("/lockdown", response_model=None, summary="Lockdown status")
 async def get_lockdown_status(
     user: TokenPayload = Depends(require_role("admin")),
 ):
     """Return whether the platform is in lockdown mode and why."""
-    try:
-        from security.lockdown import get_lockdown_manager
-
-        mgr = get_lockdown_manager()
+    mgr = _lockdown_manager()
+    if mgr is not None:
         state = mgr.status()
         # Normalise to the shape the frontend expects: lockdown_active (bool)
         return {
@@ -197,13 +214,13 @@ async def get_lockdown_status(
             "triggered_at": state.get("triggered_at"),
             "triggered_by": state.get("triggered_by"),
         }
-    except Exception as _exc:
-        logger.debug("Lockdown manager unavailable: %s", _exc)
+
     # In-memory fallback — also normalised
     return {
         "lockdown_active": bool(_lockdown_state.get("active", False)),
         "reason": _lockdown_state.get("reason"),
-        "activated_at": _lockdown_state.get("activated_at"),
+        "triggered_at": _lockdown_state.get("activated_at"),
+        "triggered_by": _lockdown_state.get("activated_by"),
     }
 
 
@@ -225,44 +242,50 @@ async def activate_lockdown(
 
     - ``enable=true``  → activate lockdown (halt trading, block new sessions)
     - ``enable=false`` → clear/deactivate lockdown (delegates to clear logic)
+
+    Until 2026-09-12 this called ``mgr.activate(...)`` and ``mgr.clear(...)``,
+    neither of which ``LockdownManager`` defines, and caught the resulting
+    ``AttributeError`` at DEBUG before returning ``lockdown_active: True``
+    anyway.  The switch reported success and moved nothing.  The response is
+    now read back from the manager rather than composed from the request.
     """
     global _lockdown_state
 
-    # ── Disable path ─────────────────────────────────────────────────────────
     if not req.enable:
+        return await _lift_lockdown(user)
+
+    mgr = _lockdown_manager()
+    if mgr is not None:
         try:
-            from security.lockdown import get_lockdown_manager
+            state = await mgr.trigger(reason=req.reason, triggered_by=user.sub)
+        except Exception as exc:
+            logger.error(
+                "PLATFORM LOCKDOWN NOT ACTIVATED (requested by %s, reason=%s): %s",
+                user.sub,
+                req.reason,
+                exc,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Lockdown could not be activated.",
+            ) from exc
 
-            mgr = get_lockdown_manager()
-            mgr.clear(cleared_by=user.sub)
-            logger.warning("Lockdown DISABLED by admin: user=%s", user.sub)
-            return {"status": "cleared", "lockdown_active": False, "cleared_by": user.sub}
-        except Exception as _exc:
-            logger.debug("Lockdown manager unavailable (disable path), using in-memory: %s", _exc)
-
-        _lockdown_state = {"active": False, "reason": None, "activated_at": None}
-        logger.warning("Lockdown DISABLED (in-memory): user=%s", user.sub)
-        return {"status": "cleared", "lockdown_active": False, "cleared_by": user.sub}
-
-    # ── Enable path ──────────────────────────────────────────────────────────
-    activated_at = datetime.now(UTC).isoformat()
-    try:
-        from security.lockdown import get_lockdown_manager
-
-        mgr = get_lockdown_manager()
-        mgr.activate(reason=req.reason, activated_by=user.sub)
         logger.warning("Lockdown ACTIVATED by admin: user=%s reason=%s", user.sub, req.reason)
         return {
-            "status": "active",
-            "lockdown_active": True,
-            "reason": req.reason,
-            "activated_by": user.sub,
-            "activated_at": activated_at,
+            "status": "active" if state.get("active") else "inactive",
+            "lockdown_active": bool(state.get("active", False)),
+            "reason": state.get("reason"),
+            "activated_by": state.get("triggered_by"),
+            "activated_at": state.get("triggered_at"),
         }
-    except Exception as _exc:
-        logger.debug("Lockdown manager unavailable (enable path), using in-memory: %s", _exc)
 
-    _lockdown_state = {"active": True, "reason": req.reason, "activated_at": activated_at}
+    activated_at = datetime.now(UTC).isoformat()
+    _lockdown_state = {
+        "active": True,
+        "reason": req.reason,
+        "activated_at": activated_at,
+        "activated_by": user.sub,
+    }
     logger.warning("Lockdown ACTIVATED (in-memory): user=%s reason=%s", user.sub, req.reason)
     return {
         "status": "active",
@@ -271,6 +294,38 @@ async def activate_lockdown(
         "activated_by": user.sub,
         "activated_at": activated_at,
     }
+
+
+async def _lift_lockdown(user: TokenPayload) -> dict:
+    """Deactivate the lockdown, or say plainly that it could not be deactivated.
+
+    Shared by ``POST /lockdown {enable: false}`` and ``POST /lockdown/clear``
+    so the two cannot drift apart — they did not have a shared implementation
+    when both were calling a method that did not exist.
+    """
+    global _lockdown_state
+
+    mgr = _lockdown_manager()
+    if mgr is not None:
+        try:
+            state = await mgr.lift(lifted_by=user.sub)
+        except Exception as exc:
+            logger.error("PLATFORM LOCKDOWN NOT LIFTED (requested by %s): %s", user.sub, exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Lockdown could not be cleared.",
+            ) from exc
+
+        logger.warning("Lockdown cleared by admin: user=%s", user.sub)
+        return {
+            "status": "cleared",
+            "lockdown_active": bool(state.get("active", False)),
+            "cleared_by": user.sub,
+        }
+
+    _lockdown_state = {"active": False, "reason": None, "activated_at": None, "activated_by": None}
+    logger.warning("Lockdown cleared (in-memory): user=%s", user.sub)
+    return {"status": "cleared", "lockdown_active": False, "cleared_by": user.sub}
 
 
 @router.post(
@@ -286,21 +341,7 @@ async def clear_lockdown(
 
     Requires admin or superadmin role.  Emits an audit log entry.
     """
-    global _lockdown_state
-
-    try:
-        from security.lockdown import get_lockdown_manager
-
-        mgr = get_lockdown_manager()
-        mgr.clear(cleared_by=user.sub)
-        logger.warning("Lockdown cleared by admin: user=%s", user.sub)
-        return {"status": "cleared", "cleared_by": user.sub}
-    except Exception as _exc:
-        logger.debug("Lockdown clear failed: %s", _exc)
-
-    _lockdown_state = {"active": False, "reason": None, "activated_at": None}
-    logger.warning("Lockdown cleared (in-memory): user=%s", user.sub)
-    return {"status": "cleared", "cleared_by": user.sub}
+    return await _lift_lockdown(user)
 
 
 # =============================================================================

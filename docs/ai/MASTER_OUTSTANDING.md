@@ -646,6 +646,73 @@ rather than endorses it.
 
 ---
 
+### A15. The attack feed on the security dashboard can only ever read zero
+
+`GET /api/security/attacks` backs the KPI strip on `SecurityDashboard.tsx`. Both
+stores behind it — `security.monitor._event_buffer` and
+`api.security_dashboard._attack_log` — are written by exactly one function each,
+and **neither function has a caller anywhere in the repository**:
+
+```
+$ grep -rn "record_attack" --include="*.py" . | grep -v ./.venv
+./api/security_dashboard.py:96:def record_attack_event(...)     <- a different function
+./security/monitor.py:31:def record_attack(event) -> None:      <- the definition
+```
+
+`record_attack_event`'s own docstring says *"Called by middleware / auth
+rate-limiter to record an attack."* Nothing calls it. The endpoint therefore
+returns `{"events": [], "total": 0}` whatever is happening to the platform —
+shown to an operator who is looking at it precisely because they suspect
+something is wrong. Recorded as F273.
+
+**Why this is not a patch.** Three questions have to be answered before anything
+is wired, and none of them has a defensible default:
+
+| Question | Why it cannot be defaulted |
+|---|---|
+| **Which events count as attacks?** | Failed logins, 429s, invalid JWTs and SQLi probes have wildly different base rates. Pick wrong and the feed is either empty or unreadable |
+| **Where does the recorder run?** | Middleware sees every request and costs on every request; the auth rate-limiter sees only the interesting ones and misses unauthenticated probes |
+| **What does it cost per request?** | This is the request path of a money-moving system. A deque append is free; anything that touches Redis on the hot path is not |
+
+**Holding position:** the buffer's semantics are pinned by
+`tests/unit/test_security_monitor_feed.py` (newest-first, bounded, a total that
+keeps counting past the window it can hold), so the day it is wired the
+behaviour is already specified. The feed stays honestly empty until then —
+which is better than the alternative only because nobody currently believes it.
+That last part is the risk: the dashboard does not say "not wired", it says
+"0 attacks".
+
+### A16. Which router owns the lockdown path, and should clearing it reach Redis?
+
+Fixing F272 — the admin lockdown switch that reported success and moved nothing
+— surfaced two things that are ownership questions rather than defects.
+
+**1. `lift()` does not undo what `trigger()` did.** What actually stops traffic
+is `HOPEFXBrain.trigger_full_lockdown`, which sets `lockdown:active` in Redis
+with a 3600-second TTL; `core/health.py:204` reads that key and fails the pod's
+readiness probe. `LockdownManager.trigger` fires it.
+`LockdownManager.lift` has no matching call, so clearing the lockdown through
+the dashboard flips the in-process flag and leaves the Redis key set until the
+TTL expires — the pod can stay out of the load balancer for up to an hour after
+an operator has declared the incident over.
+
+**2. Two routers claim `/api/security/lockdown`.** `api/security_dashboard.py`
+and `security/global_fortress.py` both use `prefix="/api/security"` and both
+define `GET /lockdown` and `POST /lockdown/clear`. Measured on the real app
+(1,327 routes) in the default configuration, only `api.security_dashboard`
+serves them — `security_brain` is behind `F.init_security_brain` and off — so
+there is no live collision today. **Enabling that flag creates one**, and which
+handler wins depends on registration order rather than on anyone's intent.
+
+The two are one question: if the dashboard owns the path, its clear must reach
+Redis, and `global_fortress`'s duplicate routes should go. If the brain owns it,
+the dashboard's lockdown endpoints should go. Leaving both is the only option
+that is certainly wrong, and it is the current state.
+
+Recorded as F274. The asymmetry is asserted rather than left implicit —
+`test_lifting_does_not_reach_the_brain` fails with *"unexpected — update F274,
+the asymmetry is gone"* if someone closes it without updating the record.
+
 ## §B — Work, ranked
 
 Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones.
@@ -755,9 +822,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 233 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 230 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 233 is not 233 untested modules.** Every entry was recorded because
+**The 230 is not 230 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
