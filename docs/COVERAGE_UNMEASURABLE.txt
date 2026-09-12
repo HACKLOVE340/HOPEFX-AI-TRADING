@@ -328,7 +328,6 @@ brokers/__init__.py
 brokers/binance.py
 brokers/cme_comex.py
 brokers/interactive_brokers.py
-brokers/manager.py
 brokers/mt5_broker.py
 brokers/oanda.py
 brokers/oanda_broker.py

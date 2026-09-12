@@ -277,7 +277,7 @@ Held by ratchets: the number may only fall, and a new violation blocks.
 |---|---:|---|
 | Documents with no owner | 197 | `scripts/docs_registry.py --check` — Phase 1 addresses most |
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
-| Modules with recorded coverage debt | 238 | `docs/COVERAGE_UNMEASURABLE.txt` — measured, not a snapshot: `scripts/doc_metrics.py --check` verifies it |
+| Modules with recorded coverage debt | 237 | `docs/COVERAGE_UNMEASURABLE.txt` — measured, not a snapshot: `scripts/doc_metrics.py --check` verifies it |
 | Capabilities flagged with no production caller | 38 | `scripts/capability_callers.py` — F4 above; mostly screen artifact |
 | Contested document subjects | 3 | needs the authority decision |
 | Change records stating an expected effect | 29% | `deployment/change_records.py --report` — advisory by ADR 0012 |
