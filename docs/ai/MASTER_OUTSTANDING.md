@@ -422,16 +422,24 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 361 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 240 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 361 is not 361 untested modules.** Every entry was recorded because
+**The 240 is not 240 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
-*everything* — so the list is a census of one broken invocation. It is kept
-rather than deleted because it is now the ratchet that lets the repaired gate
+*everything* — so the list began as a census of one broken invocation. It is
+kept rather than deleted because it is now the ratchet that lets the repaired
+gate
 bite without blocking every commit that touches any of those files: a recorded
 module reports its real number without blocking, and blocks the moment it clears
 the floor and stops needing the entry. The honest count of under-covered modules
 will be whatever `--adopt` measures; nobody has spent the two hours yet.
+
+It read **361** here for a long time, against a record that has been shrinking
+since: 250 entries twelve commits ago, 240 today. The coverage-floor programme
+took 259 to 240. Nothing checked the figure, so it stayed at 361 while the thing
+it described moved — which is the failure mode the whole §E22 ratchet exists to
+stop, occurring in the document that describes the ratchet. `doc_metrics.py` now
+verifies it: see `coverage_debt` in `_CLAIMS`.
 
 **The caller sweep is a screen, not a verdict.** Symbol matching misses aliases
 and dynamic lookup, so each of the 37 is one row to *inspect*, not one defect to

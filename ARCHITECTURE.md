@@ -39,6 +39,7 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `ml/cached_series.py` | The committed daily CSVs, loaded with their age and OHLC integrity attached. Returns `CachedSeries`, never a bare DataFrame — deliberately **not** wired into the live path, so cached history cannot satisfy a freshness check |
 | `scripts/predict_offline.py` | Run the model on that cached series with no market feed. Defaults to `CLEAN_SINCE` (2020+); `--full-history` opts into the pre-2020 bars |
 | `scripts/clamp_ohlc.py` | Reconstruct impossible OHLC bars into a *separate* file with a provenance sidecar recording every edit. Never overwrites the source |
+| `scripts/model_provenance_report.py` | Whether every committed model artifact still hashes to its recorded digest, which directories the integrity gate actually guarantees, and which loaders reach a check at all. Reports; repairs nothing, and never recomputes a mismatched checksum |
 | `scripts/adr.py` | Architecture Decision Records (Group 3 Ch 6) — numbered, immutable, two-options-minimum. `--check` runs in pre-commit; immutability is enforced against git |
 | `ai/ledger/decisions.py` | The Decision Ledger (Group 3 Ch 7) — one schema for every actor's operational decisions. **Refusals are entries, not absences**, and each names the control that refused |
 | `ai/ledger/outcomes.py` | Outcome and failure memory (Group 3 Ch 8) — attaches what actually happened to a stated prediction, and feeds `ai/core/calibration.py` the `resolve()` it never had |
@@ -178,6 +179,7 @@ this file. Each is a **command**, so its answer is current rather than a snapsho
 | `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
 | `python scripts/docs_registry.py --check` | Document tiers, owners and contested subjects |
 | `python scripts/docs_freshness.py` | Stale references and false claims in living documents |
+| `python scripts/model_provenance_report.py` | Which model artifacts still match their recorded hashes, and which loaders verify anything |
 | `python scripts/aos_conformance.py` | Which AI OS specification invariants this repository enforces, resolved against live predicates |
 
 All but `backlog_report.py` run in `pre-commit` and are **ratcheted**: recorded

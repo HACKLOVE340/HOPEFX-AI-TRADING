@@ -40,6 +40,7 @@ is always today's. Everything below is the shape; that command is the state.
 | What binds every group? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — T0, twelve Articles, INV-01…21 |
 | How do I recover the database? | `docs/runbooks/database-restore.md` |
 | How do I run the model without a market feed? | `python scripts/predict_offline.py` · `ml/cached_series.py` |
+| Do we know the identity of the model artifacts we ship? | `python scripts/model_provenance_report.py` · `ml/saved_models/model_checksums.json` |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |

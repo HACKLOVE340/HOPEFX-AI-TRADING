@@ -130,6 +130,19 @@ CLAIMS: Final[tuple[Claim, ...]] = (
     Claim("spatial_total", re.compile(r"(\d+)\s+spatial\s+capabilities\b"), "scripts/spatial_capabilities.py"),
     Claim("spatial_built", re.compile(r"capabilities\s*·\s*(\d+)\s+built\b"), "scripts/spatial_capabilities.py"),
     Claim("spatial_planned", re.compile(r"partial\s*·\s*(\d+)\s+planned\b"), "scripts/spatial_capabilities.py"),
+    # The coverage record's size. Anchored to the exact phrase the two tables
+    # that state it use, because a bare `(\d+)\s+modules` would match half the
+    # prose in this repository — the same collision `gates_total` and
+    # `spatial_planned` above had to be narrowed out of.
+    #
+    # This one is here because it drifted: both tables read 361 while the record
+    # held 240, and `--check` reported no drift because nothing measured it. A
+    # figure describing a ratchet, going stale for want of a ratchet.
+    Claim(
+        "coverage_debt",
+        re.compile(r"recorded\s+coverage\s+debt\s*\|\s*(\d+)"),
+        "scripts/pre_commit_coverage.py",
+    ),
 )
 
 #: Living documents only. Dated audits and archives are point-in-time records —
@@ -167,6 +180,7 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         from scripts.aos_conformance import check as aos_check
         from scripts.spatial_capabilities import check as spatial_check
         from scripts.docs_registry import load as registry_load
+        from scripts.pre_commit_coverage import _load_baseline as coverage_baseline
 
         entries, _ = registry_load()
         aos = aos_check()
@@ -188,6 +202,7 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         "spatial_total": spatial.entries,
         "spatial_built": spatial.built,
         "spatial_planned": spatial.planned,
+        "coverage_debt": len(coverage_baseline()),
     }
 
 
