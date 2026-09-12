@@ -691,9 +691,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 235 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 234 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 235 is not 235 untested modules.** Every entry was recorded because
+**The 234 is not 234 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
@@ -704,8 +704,8 @@ the floor and stops needing the entry. The honest count of under-covered modules
 will be whatever `--adopt` measures; nobody has spent the two hours yet.
 
 It read **361** here for a long time, against a record that has been shrinking
-since: 250 entries a dozen commits ago, 235 today. The coverage-floor programme
-took 259 to 235. Nothing checked the figure, so it stayed at 361 while the thing
+since: 250 entries a dozen commits ago, 234 today. The coverage-floor programme
+took 259 to 234. Nothing checked the figure, so it stayed at 361 while the thing
 it described moved — which is the failure mode the whole §E22 ratchet exists to
 stop, occurring in the document that describes the ratchet. `doc_metrics.py` now
 verifies it: see `coverage_debt` in `_CLAIMS`.

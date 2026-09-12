@@ -330,7 +330,6 @@ brokers/cme_comex.py
 brokers/interactive_brokers.py
 brokers/mt5_broker.py
 brokers/oanda.py
-brokers/oanda_broker.py
 brokers/oanda_stream.py
 cache/redis_client.py
 cache/redis_manager.py
