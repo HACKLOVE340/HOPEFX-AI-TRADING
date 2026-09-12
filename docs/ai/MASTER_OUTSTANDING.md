@@ -311,6 +311,42 @@ Python `float` or an `np.float64` from `fit`.
 
 ---
 
+### A9. Three encodings of "which spellings mean long"
+
+`database.models.Position.side` is a free-text `String(10)`. Three places in
+this repository independently answer the question "does this value mean long?",
+and they do not agree:
+
+| Where | Encoding | Covers |
+|---|---|---|
+| `database/repositories/position_repository.py:147` | SQL `case` | `"long"`, `"buy"` |
+| `brokers/base.py:207` | `_SIDE_BUY_ALIASES` | `"BUY"`, `"LONG"`, `"buy"`, `"long"` |
+| `core/position_reconciler.py` | `_LONG_SIDES`, added today | `"buy"`, `"long"`, case-insensitively |
+
+Before today the reconciler's answer was `== "buy"` alone, and a long stored as
+`"long"` had its unrealized P&L written to the database with the sign inverted.
+That is fixed. The duplication is not, and it is the same shape that produced
+two `PaperTradingBroker` classes (§A6) and two risk engines (`a84bcf58`): one
+fact, several copies, drifting apart at different rates.
+
+**What needs deciding is where the answer lives.** The reconciler cannot simply
+import `brokers/base.py` — that executes `brokers/__init__.py`, the whole broker
+package with its optional-SDK guards, and inverts the core-to-brokers
+dependency. So the options are:
+
+| Option | Cost | What it leaves |
+|---|---|---|
+| **A neutral module** both can import, under `core/` and free of broker imports | ~half a session, three call sites | One encoding. The SQL case still has to mirror it by hand, because it runs in the database |
+| **Constrain the column** to an enum at the schema level | a migration, plus every writer | The question stops existing. Most work, most durable |
+| **Leave three copies** and test each | nothing now | They drift again, and the next divergence is another inverted number |
+
+**Why this is not just done:** picking where a shared constant lives is an
+architecture decision, and `CLAUDE.md`'s canonical-directory table is the sort
+of thing it would need a line in. Raised from Task 5e of the coverage-floor
+programme, which found the defect it caused.
+
+---
+
 ---
 
 ## §B — Work, ranked
