@@ -9059,3 +9059,50 @@ the general case:
   indirect way to say "MACD above its signal line with a shrinking positive
   histogram"; the tests now drive `calculate_macd` with the condition stated
   directly.
+
+### F282 · Not a defect: six SMC components that fail into a complete-looking analysis · INFO
+
+`strategies/smc_ict.py` was recorded at 75.57%, and the distribution was the
+point: `analyze` and the two scoring paths were exercised, and **every one of the
+six components they call was not** — `_analyze_market_structure` (BOS and CHoCH
+in all three trends), `_identify_order_blocks`, `_identify_fair_value_gaps`,
+`_analyze_liquidity`, `_calculate_premium_discount`, `_calculate_ote_levels`.
+
+That matters because of how `generate_signal` works: it adds five weighted
+booleans (0.25, 0.25, 0.2, 0.2, 0.1) and fires at 0.5. A component that silently
+returns its empty fallback does not raise and does not change the shape of
+anything — it contributes 0 forever, and the strategy quietly needs a higher bar
+from the remaining four. Each component wraps its body in
+`except Exception: return <empty>`, so any internal error produces exactly that.
+
+**Measured, and it corrected an assumption made while writing the test.**
+Handed a malformed final bar, `analyze` does **not** return `{"error": ...}` —
+its own `except` is never reached, because all six components catch first. It
+returns a full-shaped analysis with nothing in it: no `error` key, `high` and
+`low` defaulted to 0, every list empty, `trend: "neutral"`. The runtime outcome
+is safe — the scoring reaches 0 and no signal is produced — but the report is
+indistinguishable from one taken of a quiet market.
+
+What makes that liveable, and is worth stating because this repository's usual
+finding is the opposite: **each component logs its failure at ERROR, not DEBUG.**
+The evidence exists where someone will see it. The test asserts the level, so a
+later "tidy-up" to DEBUG has to argue with a test.
+
+No repair. Coverage 75.6 → **93.7%**, nine mutations all caught (lowered score
+bar, bullish path reading the bearish lists, removed FVG minimum-gap filter,
+liquidity sweep including its own bar, premium/discount swapped, OTE retracing
+the wrong way, near-level threshold widened 100x, FVG membership made exclusive,
+order-block weight zeroed).
+
+Two fixture corrections, both the same lesson as F281's: **a fixture is an
+assumption until it is measured.**
+
+* `_analyze_market_structure` finds swing highs by comparing a bar against
+  `pivot_n` neighbours on each side, so a monotonic ramp has **no pivots at all**
+  and classifies as neutral. The first draft asserted "bullish" over a straight
+  line. A trend this component can see is a staircase, not a slope.
+* The same ramp asserted to have no fair-value gaps *does* gap: 200 points over
+  40 bars steps ~5 a bar against a 1-point spread, so bar *i*'s low really is
+  above bar *i-2*'s high. The fixture was wrong, not the component — a
+  continuous market is one where consecutive ranges overlap, and both cases are
+  now tested.

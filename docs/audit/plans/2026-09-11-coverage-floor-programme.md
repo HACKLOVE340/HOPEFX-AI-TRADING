@@ -611,9 +611,21 @@ carry less consequence and a 191-commit series is unreviewable.
       hit (four MACD branch tests built from `np.linspace` landed one branch
       over). Both now drive the condition directly.
 
-      Remaining in this package, measured 2026-09-12: `smc_ict` 75.6,
-      `its_8_os` 74.0, `strategy_brain` 69.9, `manager` 31.7,
-      `pullback_strategy` 13.6, `dynamic_registry` 0.
+      Fifth batch, 2026-09-12: `smc_ict` 75.6 → **93.7%**; record 222 → 221.
+      **F282**, INFO, no repair. The uncovered part was the distribution: the
+      orchestration and both scoring paths were exercised and all six
+      components they call were not. `generate_signal` adds five weighted
+      booleans and fires at 0.5, so a component that silently returns its empty
+      fallback contributes 0 forever without raising. Measured: a malformed bar
+      does **not** produce `{"error": ...}` — every component catches first, so
+      `analyze` returns a full-shaped analysis with nothing in it, safe at
+      runtime and indistinguishable from a quiet market in a report. What makes
+      it liveable is that each component logs at ERROR rather than DEBUG, which
+      the tests now assert.
+
+      Remaining in this package, measured 2026-09-12: `its_8_os` 74.0,
+      `strategy_brain` 69.9, `manager` 31.7, `pullback_strategy` 13.6,
+      `dynamic_registry` 0.
 - [x] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
       `threat-modelling`.** A security module at 0% is a control nobody has
       watched fail. **Done 2026-09-12.** `lockdown.py` 90 → 94%, `monitor.py`
