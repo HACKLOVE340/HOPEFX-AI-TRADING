@@ -99,8 +99,27 @@ class GARCHModel:
         return self
 
     def forecast(self, horizon: int = 1) -> np.ndarray:
-        """Forecast conditional volatility."""
-        last_var = self.omega / (1 - self.alpha - self.beta)
+        """Forecast conditional volatility.
+
+        The denominator is floored the way `simulate` already floors it. Without
+        that, a non-stationary parameter pair fails two different ways depending
+        on a type: on a fresh model `omega` is a Python `float` and
+        `omega / 0.0` raises `ZeroDivisionError`; after `fit` it is `np.float64`
+        from `result.x`, the division yields `inf`, and the `np.nan_to_num(...,
+        posinf=0.0)` below turns that into a forecast volatility of exactly
+        zero. Measured on a fitted model with alpha = beta = 0.5: `[0. 0. 0.]`
+        from here against a simulated std of 28.8 from `simulate`.
+
+        `fit` cannot rule the case out. L-BFGS-B runs under bounds
+        `[(1e-8, 1), (0, 1), (0, 1), (2.1, 30)]`, which bound alpha and beta
+        individually and leave their sum free; stationarity is only penalised
+        inside the likelihood, so a run that cannot improve off that 1e10
+        plateau returns a non-stationary pair.
+
+        An unconditional variance this large produces an enormous volatility,
+        which for a risk engine is the right direction to fail in. Zero is not.
+        """
+        last_var = self.omega / max(1 - self.alpha - self.beta, 1e-8)
         forecasts = np.zeros(horizon)
 
         for h in range(horizon):

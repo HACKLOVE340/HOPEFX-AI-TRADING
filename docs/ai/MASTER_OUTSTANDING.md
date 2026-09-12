@@ -247,6 +247,70 @@ repository, which is worth fixing whatever is decided above.
 
 ---
 
+### A8. The advanced risk engine reports zero risk, and its kill switch cannot fire
+
+`MonteCarloRiskEngine.add_asset` is the only public way to put an asset into the
+engine. It fits a GARCH model and records the returns column. **It never fits
+the copula.** `calculate_portfolio_risk` then hits its own first guard —
+
+```python
+if not self.garch_models or not self.copula.marginals:
+    return RiskMetrics(var_95=0.0, var_99=0.0, cvar_95=0.0, ...)
+```
+
+— and returns all zeros. Measured, using nothing but the public API:
+
+```
+after add_asset x2:
+  garch_models     ['EURUSD', 'XAUUSD']
+  copula.marginals {}
+  risk -> RiskMetrics(var_95=0.0, var_99=0.0, cvar_95=0.0, cvar_99=0.0,
+                      volatility=0.0, max_drawdown=0.0, tail_risk=0.0,
+                      correlation_stress=0.0)
+  violations       []
+  kill switch      False
+
+after e.copula.fit(e.historical_returns) by hand:
+  var_95 = -0.000375   cvar_95 = -0.000459
+```
+
+The guard's comment says it returns zero metrics "when no assets have been
+added". Two assets *had* been added. The condition it tests is not the condition
+it describes, and the difference is the whole defect.
+
+Downstream, `_check_limits` compares `0.0 < -0.02`, `0.0 < -0.03` and
+`0.0 < -0.10`. All three are False, always. So `_trigger_kill_switch` is
+unreachable through the public API — the purest form of the
+`hopefx-dead-controls` first sub-shape, a guard that can never open.
+
+**A second, smaller one in the same class:** `self.limits` declares
+`"tail_risk": 3.0` and `_check_limits` never reads it. Three of the four
+declared limits are enforced. The unenforced one is the tail-risk limit, which
+is precisely the limit that exists to catch what VaR misses.
+
+**What needs deciding is whether this engine should work or go.**
+
+| Option | Cost | What it leaves |
+|---|---|---|
+| **Fit the copula lazily** in `calculate_portfolio_risk` from `historical_returns` | ~1 session incl. tests | An engine that computes. But `CopulaRiskModel.fit` runs `stats.johnsonsu.fit` per column — expensive, and it can fail to converge on real returns, inside what is now a risk call |
+| **Make `add_asset` refit the copula** each time | similar | Simpler to read; O(n²) fitting as assets are added |
+| **Delete the engine** | ~1 session of removal | No production module constructs it. `core/acceleration/gpu_engine.py` re-exports it and nothing else does |
+| **Leave it** | nothing now | A risk engine that answers "no risk" and a kill switch that cannot fire, both of which currently *look* implemented |
+
+**Why this is not just fixed:** no production module constructs
+`MonteCarloRiskEngine` or `RealTimeRiskMonitor`, so this is latent rather than
+live — and "make the risk engine compute different numbers" is not a change to
+take without the owner, even when the current numbers are zero. Deleting it may
+well be the better answer, and that is not a call for a coverage task.
+
+**Already done and not waiting on this decision:** `core/risk/__init__.py` no
+longer ships a stale copy of the engine (`a84bcf58`), and
+`GARCHModel.forecast` no longer returns a volatility of exactly zero on a
+non-stationary fit — it had two failure modes selected by whether `omega` was a
+Python `float` or an `np.float64` from `fit`.
+
+---
+
 ---
 
 ## §B — Work, ranked
