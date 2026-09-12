@@ -347,6 +347,70 @@ programme, which found the defect it caused.
 
 ---
 
+### A10. The position reconciler prices XAUUSD off Yahoo Finance, and skips the cycle when it cannot
+
+`PositionReconciler._get_price` is the only price source the reconciliation loop
+has:
+
+```python
+import yfinance as yf
+ticker = yf.Ticker(symbol)
+hist = ticker.history(period="1d", interval="1m")
+if not hist.empty:
+    return float(hist["Close"].iloc[-1])
+except Exception as _exc:
+    logger.debug("Suppressed exception: %s", _exc)
+return None
+```
+
+Two things follow, and the second is the serious one.
+
+**It is the wrong feed.** This platform has `data_layer/` — an orchestrator, a
+tick store, feed adapters — and a live price engine in `data/`. The reconciler
+reaches past all of it for a free equities API, using the platform's own symbol
+spelling. Yahoo does not quote `XAUUSD`; its gold tickers are `GC=F` and
+`XAUUSD=X`. No translation happens here.
+
+**A `None` skips everything.** `_reconcile_once` does:
+
+```python
+price = await self._get_price(pos.symbol)
+if price is None:
+    continue
+```
+
+So a symbol the feed cannot price gets no P&L update, no drift comparison
+against the broker, no contribution to the aggregate book value that the
+reconciliation invariant checks, and no exposure figure. The position is simply
+absent from the cycle. The only trace is one `logger.debug`, which is off in
+production.
+
+That is the first `hopefx-dead-controls` sub-shape wearing a feed: the guard
+below it can never open, because the value it guards on never arrives. The
+reconciler is constructed in production at `core/startup_factories.py:2829`, and
+`stats` would report cycles climbing and `mismatches` at zero — a healthy-looking
+counter for a loop that reconciled nothing.
+
+**What needs deciding is which feed the reconciler uses.**
+
+| Option | Cost | What it leaves |
+|---|---|---|
+| **Read `data_layer.orchestrator`**, the canonical market-data surface | ~1 session, plus deciding what a stale tick means to a reconciler | One feed, the platform's own, with the staleness machinery already built |
+| **Keep yfinance and map the symbols** | ~half a session | A second market-data path, a third-party dependency on the reconciliation loop, and rate limits |
+| **Leave it** | nothing now | A reconciliation loop that may be skipping every position while its cycle counter climbs |
+
+**Whatever is chosen, the `logger.debug` should be an ERROR** — a reconciler that
+cannot price a position is not a debug-level event. That much is not a design
+question, but it is not changed here either, because raising the level without
+fixing the feed would turn a silent no-op into a log flood, and the two belong
+in one commit.
+
+**Already measured, not fixed:** `tests/unit/test_position_reconciler_gates.py`
+covers all three `_get_price` outcomes, including the one where the whole cycle
+is skipped, so the behaviour is pinned while the decision is open.
+
+---
+
 ---
 
 ## §B — Work, ranked
@@ -458,9 +522,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 240 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 239 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 240 is not 240 untested modules.** Every entry was recorded because
+**The 239 is not 239 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
@@ -471,8 +535,8 @@ the floor and stops needing the entry. The honest count of under-covered modules
 will be whatever `--adopt` measures; nobody has spent the two hours yet.
 
 It read **361** here for a long time, against a record that has been shrinking
-since: 250 entries twelve commits ago, 240 today. The coverage-floor programme
-took 259 to 240. Nothing checked the figure, so it stayed at 361 while the thing
+since: 250 entries a dozen commits ago, 239 today. The coverage-floor programme
+took 259 to 239. Nothing checked the figure, so it stayed at 361 while the thing
 it described moved — which is the failure mode the whole §E22 ratchet exists to
 stop, occurring in the document that describes the ratchet. `doc_metrics.py` now
 verifies it: see `coverage_debt` in `_CLAIMS`.
