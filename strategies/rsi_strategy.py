@@ -54,9 +54,33 @@ class RSIStrategy(BaseStrategy):
         self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
         logger.info("RSI Strategy initialized: period=%s, oversold=%s, overbought=%s", period, oversold, overbought)
 
+    @staticmethod
+    def _first_non_empty(*candidates: Any) -> Any:
+        """First candidate that actually holds prices. Series-safe.
+
+        This was ``data.get("prices") or data.get("close")``, and ``or`` calls
+        ``__bool__``, which pandas raises on for a Series:
+
+            ValueError: The truth value of a Series is ambiguous.
+
+        So the very next line's ``isinstance(prices, pd.Series)`` branch could
+        never be reached — passing a Series raised from the ``or`` first. The
+        falsy-fallback semantics for lists are preserved exactly: an empty list
+        under ``prices`` still falls through to ``close``.
+        """
+        # `len()` is the right test here and `bool()` is not: pandas defines
+        # `__len__` on a Series and raises on `__bool__`. A mutation that
+        # removed an earlier `isinstance(candidate, pd.Series)` special case
+        # survived every test, which was correct — the special case was
+        # redundant, and the simpler form is the one that says why.
+        for candidate in candidates:
+            if candidate is not None and len(candidate):
+                return candidate
+        return None
+
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute RSI from OHLCV data dict."""
-        prices = data.get("prices") or data.get("close")
+        prices = self._first_non_empty(data.get("prices"), data.get("close"))
         if prices is None:
             return {"rsi": None, "error": "no price data"}
         series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
@@ -117,8 +141,22 @@ class RSIStrategy(BaseStrategy):
         loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean().fillna(0.0)
 
         rs = gain / loss.replace(0, float("nan"))
-        rsi = (100 - (100 / (1 + rs))).fillna(50.0)
-        return rsi
+        rsi = 100 - (100 / (1 + rs))
+
+        # A window with no losses is not a neutral reading — it is the most
+        # overbought RSI can be, and 100 is what the definition gives. Dividing
+        # by a zeroed loss produced NaN, and `.fillna(50.0)` then called it
+        # neutral: measured on a monotonic rally of 40 bars, this returned
+        # **50.0**, so the overbought branch could not fire during the strongest
+        # uptrend the strategy will ever see. The defect was one-sided — a
+        # monotonic slide correctly returned 0.0, because there `rs` is 0/0 → 0
+        # rather than NaN — which left the strategy able to see oversold and not
+        # overbought.
+        rsi = rsi.where(~((loss == 0) & (gain > 0)), 100.0)
+
+        # Only a window with neither gains nor losses is genuinely neutral, and
+        # that includes the warm-up bars before the rolling window fills.
+        return rsi.fillna(50.0)
 
     def _generate_dict_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""

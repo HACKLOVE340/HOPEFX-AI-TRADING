@@ -741,6 +741,42 @@ classes should probably also not both be called `BreakoutStrategy`; that is the
 same name-collision shape as `PortfolioManager` in F158, and it is why the
 defect had to be found twice.
 
+### A18. Two mean-reverting strategies that cannot take profit at the mean
+
+`strategies/mean_reversion.py` and `strategies/rsi_strategy.py` both carry exit
+branches gated on `self.position == "LONG"` / `"SHORT"`. Both classes declare
+`self.position: str | None = None` and **neither ever writes it**, so the exits
+cannot fire in production. `BaseStrategy` maintains `self.positions` — plural, a
+list. The only singular `.position` assignments outside `tests/` belong to
+`backtesting/strategy_adapter.py`, which is the adapter's own state and never
+reaches inside the strategy it wraps. F276.
+
+Consequence: mean reversion buys the lower band and holds to the *opposite*
+band rather than taking profit at the mean; RSI buys below 30 and holds past 50
+to 70. Both are materially different strategies from the ones their code
+describes.
+
+**The decision is where position state should live**, and it is not a one-line
+fix either way:
+
+| Option | What it costs |
+|---|---|
+| Thread live position state into the strategy | Strategies are stateless by design and `execution/position_tracker.py` owns positions. This couples them, and a strategy that is wrong about its own position is worse than one that has none |
+| Move the exit rule into `backtesting/strategy_adapter.py` and its live equivalent | Keeps strategies stateless, but the exit rule then lives away from the strategy that defines it, and the adapter currently only understands flat/long |
+| Delete the branches | Honest, and makes the strategies what they already are: band-to-band rather than band-to-mean. Changes nothing at runtime |
+
+The third is the only one that changes no behaviour, which is an argument for it
+as an interim step — but it also throws away the stated intent, so it should be
+a decision rather than a tidy-up.
+
+**Also folded in here: `RSIStrategy` now emits SELL where it previously emitted
+nothing.** F277 fixed a `calculate_rsi` that returned **50** — neutral — for any
+window with no down bars, so the overbought branch could not fire during a clean
+uptrend, while a clean downtrend correctly returned 0 and the oversold branch
+did fire. The bias was one-directional. The fix is what the definition gives
+(100 for a lossless window), but the threshold has never been exercised against
+a real one-sided rally, so treat the first sustained uptrend as new behaviour.
+
 ## §B — Work, ranked
 
 Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones.
@@ -850,9 +886,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 229 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 226 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 229 is not 229 untested modules.** Every entry was recorded because
+**The 226 is not 226 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired

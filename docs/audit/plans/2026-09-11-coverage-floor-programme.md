@@ -539,11 +539,35 @@ carry less consequence and a 191-commit series is unreviewable.
       CRITICAL, with §A17 raised because a strategy that emitted nothing has
       now started emitting and its parameters have never been exercised.
 
-      Remaining in this package, measured 2026-09-12: `ema_crossover` 77.5,
-      `smc_ict` 75.6, `its_8_os` 74.0, `strategy_brain` 69.9, `macd_strategy`
-      68.5, `mean_reversion` 68.3, `rsi_strategy` 65.6, `bollinger_bands`
-      61.4, `manager` 31.7, `pullback_strategy` 13.6, and `base_enhanced`,
-      `dynamic_registry`, `regime_router` at 0.
+      Second batch, 2026-09-12: `ema_crossover` 77.5 → **98.0%**,
+      `mean_reversion` 68.3 → **100%**, `rsi_strategy` 65.6 → **86.5%**;
+      record 229 → 226.
+
+      Two more findings, both from the same pattern as F275 — a branch that
+      cannot be entered. **F276**: both mean-reverting strategies gate their
+      take-profit-at-the-mean exits on `self.position == "LONG"`, and neither
+      ever writes `self.position`; the existing suite covered those branches by
+      setting the attribute by hand, so the lines were green and the condition
+      had never existed in production (§A18). **F277**: `calculate_rsi`
+      returned **50** — neutral — for any window with no down bars, so the
+      overbought branch could not fire during a clean uptrend while the
+      oversold branch fired correctly in a downtrend. One-directional bias,
+      fixed. A second defect in the same method's `analyze`:
+      `data.get("prices") or data.get("close")` raises on a pandas Series, so
+      the `isinstance(prices, pd.Series)` branch written to handle one was
+      unreachable.
+
+      `ema_crossover.py` needed no repair and the bias sweep is clean on it,
+      but a surviving mutation there was informative: `prev_fast <= prev_slow`
+      tightened to `<` passed every test, and the boundary has a market meaning
+      — the first bar rising out of a dead-flat range has the two EMAs exactly
+      equal, and under `<` it is scored as a continuation (0.60) rather than a
+      crossover (0.80).
+
+      Remaining in this package, measured 2026-09-12: `smc_ict` 75.6,
+      `its_8_os` 74.0, `strategy_brain` 69.9, `macd_strategy` 68.5,
+      `bollinger_bands` 61.4, `manager` 31.7, `pullback_strategy` 13.6, and
+      `base_enhanced`, `dynamic_registry`, `regime_router` at 0.
 - [x] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
       `threat-modelling`.** A security module at 0% is a control nobody has
       watched fail. **Done 2026-09-12.** `lockdown.py` 90 → 94%, `monitor.py`

@@ -8730,3 +8730,123 @@ but because the manager's threshold is a fraction of the *level* rather than of
 the range, so a random walk clears it about 0.1% of the time and 300 frames was
 an underpowered sample (measured over 3,000: 3 buys, 2 sells). A test that needs
 a one-in-a-thousand event is a flake with a seed on it.
+
+### F276 · Both mean-reverting strategies can enter and cannot take profit at the mean · HIGH
+
+Found under the coverage-floor programme, Task 6c, raising
+`strategies/mean_reversion.py` (68.29%) and `strategies/rsi_strategy.py`
+(65.55%).
+
+Both carry exit branches gated on the strategy's own position:
+
+```
+strategies/mean_reversion.py:143  elif hasattr(self, "position") and self.position == "LONG" and current_price >= current_sma:
+strategies/rsi_strategy.py:182    elif hasattr(self, "position") and self.position == "LONG" and current_rsi > 50:
+```
+
+**Nothing in production ever sets `.position` on a strategy instance.** Both
+classes declare it — `mean_reversion.py:53` and `rsi_strategy.py:54`, both
+`self.position: str | None = None` with the comment *"tracks current position
+side"* — and neither writes it again. `BaseStrategy` maintains something
+different: `self.positions`, plural, a list (`strategies/base.py:100`). The only
+assignments to a singular `.position` outside `tests/` are
+`backtesting/strategy_adapter.py:172,188`, which are the **adapter's** own state
+— it wraps `self.strategy` and never reaches inside it — and
+`examples/backtest_example.py`.
+
+So a mean-reversion strategy buys the lower band and never signals the exit at
+the mean; it holds until the *opposite* extreme. RSI buys below 30 and holds past
+50 until 70. That is a materially different strategy from the one the code
+describes. First dead-control shape, *a guard that can never open*, one letter
+from `positions`.
+
+**`hasattr` makes it worse, not safer.** The guard is satisfied on a freshly
+constructed strategy — the attribute exists — so a reviewer who checks the guard
+finds it passing. What fails is the comparison against `"LONG"`, one line later.
+
+**What hid it is what `hopefx-dead-controls` predicts.** The existing suite
+covers these branches by doing `strat.position = "LONG"` by hand
+(`tests/unit/test_strategy_signal_paths.py:586,602,683,694`). Those tests pass,
+the lines are green, and the condition they construct has never existed in
+production. *A suite cannot tell you a control is off.*
+
+**Not fixed.** Teaching a strategy its own position is an architecture decision —
+`execution/position_tracker.py` owns live positions and these strategies are
+stateless by design — and the two candidate fixes (thread position state in, or
+move the exit rule into the adapter) have different consequences for backtest
+results. Raised as MASTER_OUTSTANDING §A18. The tests that exercise the exits are
+named for the fact that they only pass because they set the attribute
+themselves, and `TestNothingSetsPositionInProduction` fails with *"something now
+sets .position — update F276"* if that changes.
+
+### F277 · RSI reads 50 during the strongest uptrend it will ever see · HIGH
+
+Found while covering `strategies/rsi_strategy.py`. `calculate_rsi` was:
+
+```python
+rs = gain / loss.replace(0, float("nan"))
+rsi = (100 - (100 / (1 + rs))).fillna(50.0)
+```
+
+When a window contains no down bars, `loss` is zero, `rs` is `NaN`, and
+`.fillna(50.0)` calls the result **neutral**. Measured on a 40-bar monotonic
+rally before the fix:
+
+```
+rally : 50.0      <- should be 100
+slide : 0.0       <- correct
+flat  : 50.0      <- correct
+```
+
+`self.overbought` is 70, so the SELL branch could not fire during a clean
+uptrend. **The defect was one-sided**: a monotonic slide gives `rs = 0/loss = 0`
+rather than `NaN`, so RSI correctly reads 0 and the BUY branch fires. The
+strategy could see oversold and not overbought — a directional bias in a live
+strategy, not a rounding difference.
+
+**Fixed**: a window with no losses and some gains is mapped to 100, which is what
+the definition gives; only a window with neither gains nor losses stays at 50,
+which also covers the warm-up bars before the rolling window fills.
+
+```python
+rsi = rsi.where(~((loss == 0) & (gain > 0)), 100.0).fillna(50.0)
+```
+
+**Second defect in the same module, same session.** `analyze` began:
+
+```python
+prices = data.get("prices") or data.get("close")
+```
+
+`or` calls `__bool__`, which pandas raises on for a Series, so
+`analyze({"prices": pd.Series([...])})` raised
+`ValueError: The truth value of a Series is ambiguous` — and the very next line's
+`isinstance(prices, pd.Series)` branch, written to handle exactly that input,
+could never be reached. Replaced with a `len()`-based helper that preserves the
+old falsy-fallback semantics exactly (an empty list under `prices` still falls
+through to `close`).
+
+**Consequence the owner should know:** `RSIStrategy` will now emit SELL in
+sustained uptrends where it previously emitted nothing. Its overbought threshold
+has never been exercised against a real one-sided rally. Folded into
+MASTER_OUTSTANDING §A18 alongside F276, since both change what these two
+strategies do.
+
+Evidence: `tests/unit/test_reversion_exits_are_never_reached.py` — 4 of its 45
+tests fail at `f5cd3271`. Five mutations applied to the fix: calling a lossless
+window neutral again, calling it oversold, overwriting the genuinely flat window
+too, and two on the helper. Two survived the first draft and both were
+informative rather than benign — one showed an `isinstance` special case was
+redundant (`len()` works on a Series; only `bool()` raises), the other showed the
+empty-list fallback was untested. The helper is simpler and the fallback is
+asserted. Coverage: `mean_reversion.py` → **100%**, `rsi_strategy.py` →
+**86.5%**, `ema_crossover.py` → **98.0%**.
+
+`ema_crossover.py` needed no repair — the `backtesting-frameworks` sweep is clean
+on it and causality is asserted directly — but a mutation there was also
+informative: tightening `prev_fast <= prev_slow` to `<` survived every test.
+That boundary has a market meaning. After a dead-flat stretch the two EMAs are
+*exactly* equal, so the first bar rising out of it has `prev_fast == prev_slow`;
+under `<` that bar is misread as a trend continuation at 0.60 instead of a fresh
+crossover at 0.80, and the strategy under-weights the cleanest setup it can see.
+Now covered both ways.

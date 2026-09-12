@@ -430,14 +430,11 @@ social/profiles.py
 strategies/base_enhanced.py
 strategies/bollinger_bands.py
 strategies/dynamic_registry.py
-strategies/ema_crossover.py
 strategies/its_8_os.py
 strategies/macd_strategy.py
 strategies/manager.py
-strategies/mean_reversion.py
 strategies/pullback_strategy.py
 strategies/regime_router.py
-strategies/rsi_strategy.py
 strategies/smc_ict.py
 strategies/strategy_brain.py
 utils/config.py
