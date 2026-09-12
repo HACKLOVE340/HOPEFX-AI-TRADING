@@ -462,6 +462,54 @@ way the decision goes, the behaviour under both is pinned.
 
 ---
 
+### A12. Two latent defects in `ml/signal_features.py`, both about a number changing meaning
+
+Raised together because neither has a production caller — `ml/regime.py` imports
+only `FeatureVector` — and both are the same species: a value that keeps its
+name while changing what it means.
+
+**`volume_trend_{p}` depends on how much history you passed.** It is
+`mean(volumes[-p:]) / mean(volumes[-2p:-p]) - 1`, and `extract_features` admits
+any series of at least `max(lookback) + 10` bars — 60 for the defaults
+`[5, 10, 20, 50]`. For `p = 50` the denominator slice `[-100:-50]` then clamps
+to whatever exists. Measured on identical rising volume:
+
+```
+ 60 bars -> +0.2871   (numerator 50 bars, denominator 10 bars)
+ 80 bars -> +0.3493   (numerator 50 bars, denominator 30 bars)
+100 bars -> +0.4016   (numerator 50 bars, denominator 50 bars)
+```
+
+Same market, three answers. A model trained on long windows and served from a
+short buffer is fed a different feature under the same column name — train/serve
+skew, arriving silently.
+
+**`confidence` is documented `# 0 to 1` and is not bounded.**
+`SignalEnsemble.predict` computes `abs(probability - 0.5) * 2`, and
+`_get_model_prediction` takes whatever `predict()` returns. A regressor is under
+no obligation to return 0–1, so a model answering 2.5 yields a confidence of
+4.0. Anything sizing a position off that reads four times the stated maximum.
+
+**What needs deciding.** Both fixes change behaviour:
+
+| | Option | What it costs |
+|---|---|---|
+| volume_trend | require `2 * max(lookback)` bars | `extract_features` starts returning `None` for 60–99 bar inputs it accepts today |
+| | compute the denominator over the bars available and name the feature for it | the feature stops being comparable across window lengths, which is the honest version of what it already does |
+| confidence | clamp the probability to [0, 1] at `_get_model_prediction` | a model returning 2.5 is silently truncated rather than flagged — arguably it should raise |
+| | raise on an out-of-range probability | a live ensemble starts throwing where it used to return a number |
+
+Availability versus correctness on a feature path, twice. The owner's call.
+
+**Already done:** `tests/unit/test_ml_signal_features.py` pins both, each in a
+class whose docstring says it is recording the behaviour rather than blessing
+it, and each with an assertion message telling the next reader to update this
+entry if the behaviour changes. The suite also holds the property that matters
+most in a feature module — causality: appending future bars must not change any
+value computed earlier, asserted per indicator.
+
+---
+
 ---
 
 ## §B — Work, ranked
@@ -573,9 +621,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 237 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 236 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 237 is not 237 untested modules.** Every entry was recorded because
+**The 236 is not 236 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
@@ -586,8 +634,8 @@ the floor and stops needing the entry. The honest count of under-covered modules
 will be whatever `--adopt` measures; nobody has spent the two hours yet.
 
 It read **361** here for a long time, against a record that has been shrinking
-since: 250 entries a dozen commits ago, 237 today. The coverage-floor programme
-took 259 to 237. Nothing checked the figure, so it stayed at 361 while the thing
+since: 250 entries a dozen commits ago, 236 today. The coverage-floor programme
+took 259 to 236. Nothing checked the figure, so it stayed at 361 while the thing
 it described moved — which is the failure mode the whole §E22 ratchet exists to
 stop, occurring in the document that describes the ratchet. `doc_metrics.py` now
 verifies it: see `coverage_debt` in `_CLAIMS`.
