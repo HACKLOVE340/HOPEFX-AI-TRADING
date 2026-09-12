@@ -427,10 +427,8 @@ social/advanced_copy_trading.py
 social/copy_trading_engine.py
 social/marketplace.py
 social/profiles.py
-strategies/bollinger_bands.py
 strategies/dynamic_registry.py
 strategies/its_8_os.py
-strategies/macd_strategy.py
 strategies/manager.py
 strategies/pullback_strategy.py
 strategies/smc_ict.py

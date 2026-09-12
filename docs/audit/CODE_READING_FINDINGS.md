@@ -8974,3 +8974,88 @@ Evidence: `tests/unit/test_regime_router.py`, 57 tests, eight mutations all
 caught (flipped trend direction, removed confidence cap, off-by-one lookback
 guard, dropped min-trades gate, cached manifest, ascending sort, removed history
 dedupe, removed the empty-ATR guard). Coverage 0 → **100%**.
+
+### F280 · F277 was a family: the same unreachable line in three strategies · MEDIUM
+
+Raising `strategies/rsi_strategy.py` found one instance of:
+
+```python
+prices = data.get("prices") or data.get("close")
+...
+series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
+```
+
+`or` calls `__bool__`, which pandas raises on for a Series, so the branch on the
+next line — written to accept exactly that input — can never be reached. A
+repo-wide sweep for the pattern found **the identical two lines** in
+`strategies/macd_strategy.py:57` and `strategies/bollinger_bands.py:57`, both
+proved by execution before being touched:
+
+```
+macd:      ValueError: The truth value of a Series is ambiguous.
+bollinger: ValueError: The truth value of a Series is ambiguous.
+```
+
+Fixed once rather than three times: `strategies.base.first_non_empty` holds the
+rule and all three call it. `len()` is the right test and `bool()` is not —
+pandas defines `__len__` and raises on `__bool__` — and the falsy-fallback
+semantics are preserved exactly, so an empty list under `prices` still falls
+through to `close`.
+
+Two other call sites of the same shape were checked and are **not** affected:
+`execution/async_engine.py:597` reads parsed JSON where `prices` is always a
+list, and `strategies/base.py:171` reads a bar of scalars. `core/signal_engine.py:1930`
+wraps the same idiom in `bool(...)` and would raise on a Series, but no caller
+passes one; left alone rather than changed speculatively.
+
+Coverage: `macd_strategy.py` 68.5 → **96.6%**, `bollinger_bands.py` 61.4 →
+**100%**. Eight mutations; two survived the first pass and both were real gaps
+rather than noise — see F281 and the squeeze note below.
+
+**The squeeze threshold was untested, not merely uncovered.** Loosening
+`current_std < avg_std * 0.75` to `* 1.0` passed every test, because both
+squeeze fixtures contract far below either threshold. The test added for it sits
+at a measured contraction ratio of ~0.84 — narrower than average, not a squeeze —
+with the price above the SMA, which is the exact state the loosened threshold
+would mislabel as a breakout.
+
+### F281 · Not a defect: the MACD momentum bonus can never not fire · INFO
+
+Found because a mutation survived. Flattening the crossover confidence from
+`0.85` to `0.75` passed every test that asserted `>= 0.85`, which sent the
+question back to the arithmetic:
+
+```python
+if prev_macd <= prev_signal and current_macd > current_signal:   # bullish crossover
+    confidence = 0.75
+    if current_macd < 0:
+        confidence = 0.85              # "from oversold"
+    if current_hist > prev_hist:
+        confidence = min(0.95, confidence + 0.1)   # "with momentum"
+```
+
+A crossing **is** the histogram changing sign: `prev_macd <= prev_signal` makes
+`prev_hist <= 0`, and `current_macd > current_signal` makes `current_hist > 0`,
+so `current_hist > prev_hist` is true by construction. Measured over 4,000
+random crossings: **zero** without the bonus. The bearish branch is the mirror.
+
+So the four confidences the code appears to offer collapse to two — **0.85 and
+0.95** — and the `0.75` base is unobservable. That is not a wrong number; it is a
+redundant conditional with a flat effect. **Not changed**, because rewriting a
+strategy's confidence scale is a strategy decision rather than a defect fix. The
+test `test_the_momentum_bonus_at_a_crossover_can_never_not_fire` asserts it, so
+whoever tunes these numbers learns it from a test rather than from a backtest.
+
+Two test-quality lessons from the same session, both recorded because they are
+the general case:
+
+* **A conditional assertion is a test that may never run.** The first draft
+  wrote the oversold check as `if signal["metadata"]["macd"] < 0: assert ...`
+  over a price fixture, leaving it to the fixture whether the assertion
+  executed. That is what let the mutation through.
+* **An indirect fixture tests whatever it happens to hit.** Four MACD branch
+  tests built from `np.linspace` landed one branch over — a continuation
+  fixture produced 0.50 where the test expected 0.55. A price series is an
+  indirect way to say "MACD above its signal line with a shrinking positive
+  histogram"; the tests now drive `calculate_macd` with the condition stated
+  directly.

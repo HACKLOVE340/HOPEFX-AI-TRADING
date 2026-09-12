@@ -589,10 +589,31 @@ carry less consequence and a 191-commit series is unreviewable.
       `next(iter(available))` and routed every regime to an arbitrary strategy
       while the dashboard displayed a mapping.
 
+      Fourth batch, 2026-09-12: `macd_strategy` 68.5 → **96.6%**,
+      `bollinger_bands` 61.4 → **100%**; record 224 → 222.
+
+      **F280**, MEDIUM, fixed. F277 turned out to be a family: the
+      `data.get("prices") or data.get("close")` line that raises on a pandas
+      Series — making the `isinstance(prices, pd.Series)` branch on the next
+      line unreachable — appears identically in three strategies. Fixed once,
+      in `strategies.base.first_non_empty`, and all three now call it.
+
+      **F281**, INFO. A surviving mutation showed the MACD "with momentum"
+      bonus is structurally unconditional at a crossover — a crossing *is* the
+      histogram changing sign — so the four confidences the code appears to
+      offer collapse to two, 0.85 and 0.95, and the 0.75 base is unobservable.
+      Measured over 4,000 crossings: zero without the bonus. Asserted, not
+      changed.
+
+      Two test-quality lessons worth carrying into the remaining batches: a
+      conditional assertion is a test that may never run (that is what let the
+      mutation through), and an indirect fixture tests whatever it happens to
+      hit (four MACD branch tests built from `np.linspace` landed one branch
+      over). Both now drive the condition directly.
+
       Remaining in this package, measured 2026-09-12: `smc_ict` 75.6,
-      `its_8_os` 74.0, `strategy_brain` 69.9, `macd_strategy` 68.5,
-      `bollinger_bands` 61.4, `manager` 31.7, `pullback_strategy` 13.6,
-      `dynamic_registry` 0.
+      `its_8_os` 74.0, `strategy_brain` 69.9, `manager` 31.7,
+      `pullback_strategy` 13.6, `dynamic_registry` 0.
 - [x] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
       `threat-modelling`.** A security module at 0% is a control nobody has
       watched fail. **Done 2026-09-12.** `lockdown.py` 90 → 94%, `monitor.py`

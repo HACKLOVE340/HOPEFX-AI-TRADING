@@ -17,7 +17,7 @@ from typing import Any
 
 import pandas as pd
 
-from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
+from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig, first_non_empty
 
 logger = logging.getLogger(__name__)
 
@@ -54,33 +54,9 @@ class RSIStrategy(BaseStrategy):
         self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
         logger.info("RSI Strategy initialized: period=%s, oversold=%s, overbought=%s", period, oversold, overbought)
 
-    @staticmethod
-    def _first_non_empty(*candidates: Any) -> Any:
-        """First candidate that actually holds prices. Series-safe.
-
-        This was ``data.get("prices") or data.get("close")``, and ``or`` calls
-        ``__bool__``, which pandas raises on for a Series:
-
-            ValueError: The truth value of a Series is ambiguous.
-
-        So the very next line's ``isinstance(prices, pd.Series)`` branch could
-        never be reached — passing a Series raised from the ``or`` first. The
-        falsy-fallback semantics for lists are preserved exactly: an empty list
-        under ``prices`` still falls through to ``close``.
-        """
-        # `len()` is the right test here and `bool()` is not: pandas defines
-        # `__len__` on a Series and raises on `__bool__`. A mutation that
-        # removed an earlier `isinstance(candidate, pd.Series)` special case
-        # survived every test, which was correct — the special case was
-        # redundant, and the simpler form is the one that says why.
-        for candidate in candidates:
-            if candidate is not None and len(candidate):
-                return candidate
-        return None
-
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute RSI from OHLCV data dict."""
-        prices = self._first_non_empty(data.get("prices"), data.get("close"))
+        prices = first_non_empty(data.get("prices"), data.get("close"))
         if prices is None:
             return {"rsi": None, "error": "no price data"}
         series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
