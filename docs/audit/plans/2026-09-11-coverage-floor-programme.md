@@ -623,9 +623,19 @@ carry less consequence and a 191-commit series is unreviewable.
       it liveable is that each component logs at ERROR rather than DEBUG, which
       the tests now assert.
 
+      Sixth batch, 2026-09-12: `manager` 31.7 → **90.6%**; record 221 → 220.
+      234 production importers — more than the rest of `strategies/` combined —
+      and the least covered thing in it. Four findings, all measured, none
+      patched, all in §A19: **F286** (HIGH) a mean-reversion stop anchored to the
+      band rather than the fill, which lands above its own buy entry on ~53% of
+      signals (990 broken / 887 correct over 3,000 windows); **F283** (HIGH) the
+      brain's `set(list_strategies())` over a list of dicts, which raises and is
+      swallowed at DEBUG so routing always returns a hardcoded first candidate;
+      **F284** `max_drawdown` reporting 200%; **F285** `profit_factor` returning
+      non-serialisable infinity.
+
       Remaining in this package, measured 2026-09-12: `its_8_os` 74.0,
-      `strategy_brain` 69.9, `manager` 31.7, `pullback_strategy` 13.6,
-      `dynamic_registry` 0.
+      `strategy_brain` 69.9, `pullback_strategy` 13.6, `dynamic_registry` 0.
 - [x] **6d. `security/` (7, median 0%)** — **REQUIRED SUB-SKILL:
       `threat-modelling`.** A security module at 0% is a control nobody has
       watched fail. **Done 2026-09-12.** `lockdown.py` 90 → 94%, `monitor.py`

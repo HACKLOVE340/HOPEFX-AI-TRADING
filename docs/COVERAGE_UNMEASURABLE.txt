@@ -429,7 +429,6 @@ social/marketplace.py
 social/profiles.py
 strategies/dynamic_registry.py
 strategies/its_8_os.py
-strategies/manager.py
 strategies/pullback_strategy.py
 strategies/strategy_brain.py
 utils/config.py

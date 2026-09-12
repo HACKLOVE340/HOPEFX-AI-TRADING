@@ -9106,3 +9106,98 @@ assumption until it is measured.**
   above bar *i-2*'s high. The fixture was wrong, not the component — a
   continuous market is one where consecutive ranges overlap, and both cases are
   now tested.
+
+### F283 · The brain's "which strategies exist" check cannot succeed · HIGH
+
+`brain/hopefx_brain.py:525`, inside `_route_strategy`:
+
+```python
+_list_fn = getattr(self._strategy_manager, "list_strategies", lambda: [])
+available = set(_list_fn())
+```
+
+`StrategyManager.list_strategies` returns a **list of dicts**, so `set()` raises
+`TypeError: unhashable type: 'dict'` into `except Exception: logger.debug(...)`.
+`_route_strategy` then falls through to `candidates[0]` — the first name in a
+hardcoded table — while believing it consulted the manager. Measured:
+
+```
+DEBUG brain.hopefx_brain: Strategy manager query failed: unhashable type: 'dict'
+trending_up -> smc_ict
+ranging     -> mean_reversion
+volatile    -> breakout
+```
+
+With a stub whose `list_strategies` returns plain names, the intended logic works
+and picks `ema_crossover`. So the mechanism is one `row["name"]` from correct.
+
+**A second mismatch sits behind the first, and it is why the extraction fix alone
+changes nothing here.** The manager registers `TrendFollowing`, `MeanReversion`
+and `Breakout`; the brain's table names `smc_ict`, `ema_crossover`,
+`ma_crossover`, `mean_reversion`, `bollinger_bands`, `stochastic`,
+`rsi_strategy`, `breakout` — snake_case against CamelCase. Lower-casing recovers
+`breakout` and **not** `MeanReversion`, because the table spells it
+`mean_reversion` with an underscore. So this is a naming decision, not a
+`.lower()`. Third encoding mismatch recorded in this package, after §A9's three
+spellings of "long". Raised as §A19.
+
+### F284 · `max_drawdown` can report more than 100% · MEDIUM
+
+`strategies/manager.py:213` computes `(peak - equity) / (peak + 1e-9)` over
+**cumulative P&L**, not account equity. Up 10 then down 20 leaves P&L at −10
+against a peak of +10, which this calls a **200%** drawdown; `+100, −100, −50`
+reports 150%. No account can lose more than it had. A drawdown fraction needs
+capital in the denominator, and P&L alone does not carry it — which is why this
+is raised (§A19) rather than patched with an invented reference point.
+`risk-metrics-calculation`: *document assumptions*. Reachable through
+`list_strategies(...)["performance"]`.
+
+### F285 · `profit_factor` is `float("inf")` and is not serialisable · MEDIUM
+
+Same method: `round(gross_profit / gross_loss, 4) if gross_loss else float("inf")`.
+A strategy that has not lost yet reports infinity, and
+`json.dumps(metrics, allow_nan=False)` raises
+`ValueError: Out of range float values are not JSON compliant`. The default
+encoder emits the non-standard literal `Infinity`, which many clients reject.
+The correct value for "no losses" is undefined, not infinite. Reaches the same
+surface as F284.
+
+### F286 · A mean-reversion stop that sits on the wrong side of its own entry · HIGH
+
+`strategies/manager.py`'s `MeanReversionStrategy` anchors the stop to the band
+rather than to the fill:
+
+```python
+stop_loss=lower * 0.99,   # buy
+stop_loss=upper * 1.01,   # sell
+```
+
+The entry condition is `current < lower`, so the stop is below a buy entry only
+while the entry sits inside the band's own 1% buffer (`entry > lower * 0.99`).
+Any close that gaps further than 1% past the band — about **20 points on XAUUSD
+at 2000** — gets a **stop above its buy entry**, which a broker either rejects or
+fills immediately at a loss. The sell branch is the mirror.
+
+Measured over 3,000 random ranging windows, before anything was changed:
+
+```
+buy signals with stop BELOW entry (correct): 887
+buy signals with stop ABOVE entry (broken) : 990
+```
+
+**Wrong on roughly 53% of the signals it produces** — and right on the other
+47%, which is why it survived: half the fixtures anyone would reach for look
+fine. `MeanReversionStrategy` is preloaded by `_initialize_default_strategies`,
+so it is in the default rotation.
+
+**Not fixed.** The obvious repair — `min(lower * 0.99, entry * 0.99)` — changes
+the stop distance, and every downstream risk model derives position size from
+that distance. Inventing a stop-loss rule in a money-moving system is what
+`CLAUDE.md` forbids without the owner. §A19.
+
+Evidence for all four: `tests/unit/test_strategy_manager.py`, 102 tests, six
+mutations on the manager's gates all caught (plan gate removed, zero-price signal
+filter removed, zero-close guard removed, dedup keeping the weakest, unknown plan
+satisfying everything, IDLE strategies no longer asked). Coverage 31.7 →
+**90.6%** on the most-imported module in the package — 234 production importers,
+more than the rest of `strategies/` combined.

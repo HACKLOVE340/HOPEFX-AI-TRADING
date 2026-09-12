@@ -777,6 +777,43 @@ did fire. The bias was one-directional. The fix is what the definition gives
 (100 for a lossless window), but the threshold has never been exercised against
 a real one-sided rally, so treat the first sustained uptrend as new behaviour.
 
+### A19. Four decisions in `strategies/manager.py`, the package's most-imported module
+
+Found covering it from 31.7% to 90.6%. All four are measured; none is patched,
+because each fix changes a number the platform reports or trades on.
+
+**1. A mean-reversion stop on the wrong side of its own entry (F286, HIGH).**
+The stop is anchored to the band, not the fill: `stop_loss = lower * 0.99` on a
+buy whose entry condition is `current < lower`. It is correct only while the
+entry sits inside the band's 1% buffer; gap further than ~20 points below it on
+XAUUSD and the stop lands **above** the buy entry, which a broker rejects or
+fills at once. Measured over 3,000 ranging windows: **990 broken, 887 correct** —
+wrong on ~53% of the signals it produces. `MeanReversionStrategy` is preloaded by
+default.
+
+| Option | What it costs |
+|---|---|
+| `min(lower * 0.99, entry * 0.99)` | Smallest change, but it alters the stop *distance*, and every downstream risk model sizes the position from that distance |
+| Anchor to the fill (`entry * (1 - r)`) | Coherent by construction; discards the band as the risk reference, which is what the strategy is arguably about |
+| Refuse the signal when the stop would invert | Fails closed and trades less; the 53% become no-trades rather than bad trades |
+
+**2. The brain cannot read this manager (F283, HIGH).** `_route_strategy` does
+`set(list_strategies())` on a list of dicts, raises `TypeError`, swallows it at
+DEBUG and returns a hardcoded `candidates[0]`. Extracting `row["name"]` fixes the
+mechanism and **still matches nothing**, because the manager registers
+CamelCase (`MeanReversion`) and the brain's table is snake_case
+(`mean_reversion`). The decision is which spelling wins — the third encoding
+mismatch in this package after §A9.
+
+**3. `max_drawdown` can report 200% (F284).** It divides by cumulative P&L
+instead of equity. A percentage needs capital in the denominator and P&L does not
+carry it, so the choice is: report drawdown in currency, take a starting-capital
+input, or keep the fraction and document that it is P&L-relative.
+
+**4. `profit_factor` is `float("inf")` with no losses (F285).** Not
+JSON-serialisable under a strict encoder. `None` is the honest value; it changes
+the field's type for consumers.
+
 ## §B — Work, ranked
 
 Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones.
@@ -886,9 +923,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 221 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 220 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 221 is not 221 untested modules.** Every entry was recorded because
+**The 220 is not 220 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
