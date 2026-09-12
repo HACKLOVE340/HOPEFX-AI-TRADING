@@ -206,15 +206,30 @@ class OutboxRelay:
         _, max_attempts, batch_size = _get_batch_config()
 
         try:
+            from sqlalchemy import func as sa_func
+
             from database.models import OutboxEvent
 
             # Fetch pending rows (status="pending" OR legacy published_at IS NULL)
             # ordered oldest-first for FIFO delivery guarantees.
+            # `coalesce`, not the module default, because the dead-letter
+            # branch below uses the row's own `max_attempts` and the two must
+            # be the same number. They were not: the filter used the module
+            # default (env `OUTBOX_MAX_ATTEMPTS`, 10) while dead-lettering used
+            # the column (schema default 5), so a row was declared dead at 5
+            # and kept being fetched until 10 — five further publish attempts
+            # after the system said it had stopped, each logging
+            # `outbox: dead-lettered` at ERROR. Six identical alerts per event.
+            #
+            # The row's column is the authority: it is explicit, per-row, and
+            # defaulted at the schema (`server_default="5"` in the migration),
+            # and it is the number the dead-letter log already claims. The
+            # module value is the fallback for rows that have none.
             rows = (
                 session.query(OutboxEvent)
                 .filter(
                     OutboxEvent.published_at.is_(None),
-                    OutboxEvent.attempts < max_attempts,
+                    OutboxEvent.attempts < sa_func.coalesce(OutboxEvent.max_attempts, max_attempts),
                 )
                 .order_by(OutboxEvent.created_at.asc())
                 .limit(batch_size)

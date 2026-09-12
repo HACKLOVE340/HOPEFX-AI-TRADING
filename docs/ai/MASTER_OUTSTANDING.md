@@ -411,6 +411,57 @@ is skipped, so the behaviour is pinned while the decision is open.
 
 ---
 
+### A11. `outbox_events.idempotency_key` has two schemas, and the code only works under one
+
+`database/models.py:1263` declares the column with `unique=True`. The migration
+that adds it to an existing table —
+`alembic/versions/n1o2p3q4r5s6_add_journal_subaccounts_billing_profiles.py:237`
+— adds it without:
+
+```python
+sa.Column("idempotency_key", sa.String(128), nullable=True),
+```
+
+So `outbox_events` has one shape if the database was built by
+`Base.metadata.create_all` (tests, a fresh deployment) and another if it was
+built by migrations (any upgraded environment). Nothing compares them.
+
+It decides whether live code runs. `OutboxRelay._relay_batch` skips a duplicate
+by looking for *another* row with the same key that is already published:
+
+```python
+already = (session.query(OutboxEvent)
+           .filter(OutboxEvent.idempotency_key == row.idempotency_key,
+                   OutboxEvent.published_at.isnot(None),
+                   OutboxEvent.id != row.id).first())
+```
+
+Under a UNIQUE column two such rows cannot exist, so `already` is always `None`
+and the branch is unreachable by construction. Under the migrated shape it
+works as written. Found by a test that inserted two rows with the same key and
+died on an `IntegrityError`.
+
+**What needs deciding is which shape is correct**, and that is a question about
+what the key is for:
+
+| Option | Cost | What it leaves |
+|---|---|---|
+| **UNIQUE is right** — the database rejects the duplicate at write time | a migration adding the constraint, plus handling `IntegrityError` at every `write_outbox_event` call site | Duplicates impossible. The relay's skip branch is then dead code and should be deleted rather than left looking load-bearing |
+| **Non-unique is right** — duplicates are tolerated and the relay de-duplicates | a migration dropping `unique=True` from the model | The relay branch is live and is the mechanism. Fresh deployments stop differing from upgraded ones |
+| **Leave it** | nothing now | Two schemas, one of which silently disables a de-duplication guard, and no test that would notice |
+
+**Why this is not just done:** it is a migration either way, on a compliance
+audit table, and which direction is correct depends on whether a duplicate
+`idempotency_key` is an error to refuse or a condition to absorb. That is the
+owner's call.
+
+**Already done:** `tests/unit/test_outbox_relay_against_a_real_db.py` covers
+both shapes — one test asserts the `create_all` constraint exists, another
+builds the migrated shape and drives the skip branch through it — so whichever
+way the decision goes, the behaviour under both is pinned.
+
+---
+
 ---
 
 ## §B — Work, ranked
@@ -522,9 +573,9 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 239 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 238 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
-**The 239 is not 239 untested modules.** Every entry was recorded because
+**The 238 is not 238 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
 *everything* — so the list began as a census of one broken invocation. It is
 kept rather than deleted because it is now the ratchet that lets the repaired
@@ -535,8 +586,8 @@ the floor and stops needing the entry. The honest count of under-covered modules
 will be whatever `--adopt` measures; nobody has spent the two hours yet.
 
 It read **361** here for a long time, against a record that has been shrinking
-since: 250 entries a dozen commits ago, 239 today. The coverage-floor programme
-took 259 to 239. Nothing checked the figure, so it stayed at 361 while the thing
+since: 250 entries a dozen commits ago, 238 today. The coverage-floor programme
+took 259 to 238. Nothing checked the figure, so it stayed at 361 while the thing
 it described moved — which is the failure mode the whole §E22 ratchet exists to
 stop, occurring in the document that describes the ratchet. `doc_metrics.py` now
 verifies it: see `coverage_debt` in `_CLAIMS`.
