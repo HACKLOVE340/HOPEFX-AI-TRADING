@@ -352,7 +352,6 @@ core/background_tasks.py
 core/decision/HOPEFXDecisionEngine.py
 core/email_webhook.py
 core/idempotency.py
-core/metrics.py
 core/middleware.py
 core/outbox.py
 core/page_routes.py

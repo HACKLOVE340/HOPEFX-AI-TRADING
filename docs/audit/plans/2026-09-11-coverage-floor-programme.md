@@ -451,8 +451,28 @@ Sixty modules, in this order. One commit per module, Task 3's recipe each time.
       failure mode is the wrong order of work; deciding which engine is the
       paper broker comes first. See MASTER_OUTSTANDING §A6. The record line
       stays.
-- [ ] **5d. `core/risk/advanced_engine.py` (27%)**, `core/metrics.py` (33%) —
+- [x] **5d. `core/risk/advanced_engine.py` (27%)**, `core/metrics.py` (33%) —
       **REQUIRED SUB-SKILL: `risk-metrics-calculation`** for the former.
+      `advanced_engine.py` 27% -> 85% (`f5ff3344`); `core/metrics.py` 33% -> 100%.
+      Both record lines deleted.
+
+      Three defects closed and one raised. `core/risk/__init__.py` was a stale
+      285-line copy of the engine it should re-export, carrying six defects the
+      module had already fixed (`a84bcf58`). `GARCHModel.forecast` lacked the
+      floor `simulate` has, so a non-stationary fit gave `ZeroDivisionError` on
+      a fresh model and a volatility of *exactly zero* after a real `fit()` —
+      which failure you got depended on whether `omega` was a Python `float` or
+      an `np.float64` (`f5ff3344`). The HTTP metrics middleware recorded nothing
+      when a handler raised, so `hopefx_http_requests_total` counted only the
+      requests that worked and an error-rate alert read zero during the outage
+      it exists to catch; now recorded in a `finally`.
+
+      Raised, not fixed: `MonteCarloRiskEngine.add_asset` never fits the copula,
+      so `calculate_portfolio_risk` returns all-zero metrics for any portfolio
+      built through the public API and `_trigger_kill_switch` is unreachable.
+      `self.limits` also declares a `tail_risk` limit `_check_limits` never
+      reads. No production module constructs the engine. See
+      MASTER_OUTSTANDING §A8 — four options, including deleting it.
 - [ ] **5e. The remaining 50–79% money modules**, highest first:
       `core/position_reconciler.py` (79.2), `core/outbox.py` (78.6),
       `brokers/manager.py` (78.5), `ml/signal_features.py` (77.7),

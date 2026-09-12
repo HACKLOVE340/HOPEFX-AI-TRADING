@@ -170,21 +170,32 @@ def make_metrics_middleware():
     """
 
     async def metrics_middleware(request, call_next):
+        # Recorded in `finally`, so a handler that raises is still counted.
+        #
+        # This used to be a plain `response = await call_next(request)` followed
+        # by the `.inc()`. A handler exception propagates straight out of the
+        # middleware, so neither line ran: Starlette's own error middleware
+        # turned it into the 500 the client saw, and `hopefx_http_requests_total`
+        # never heard about it. An error-rate alert on `status=~"5.."` read zero
+        # during exactly the outage it exists to catch, and the latency
+        # histogram lost the failing requests, which are usually the slow ones.
+        #
+        # `finally` rather than `except` so the exception still propagates —
+        # counting a crash must not turn it into a silent success.
         start = time.perf_counter()
-        response = await call_next(request)
-        duration = time.perf_counter() - start
+        status = "500"
+        try:
+            response = await call_next(request)
+            status = str(response.status_code)
+            return response
+        finally:
+            duration = time.perf_counter() - start
+            # Normalise path to avoid high-cardinality label explosion
+            path = _normalise_path(request.url.path)
+            method = request.method
 
-        # Normalise path to avoid high-cardinality label explosion
-        path = _normalise_path(request.url.path)
-        method = request.method
-
-        HTTP_REQUESTS.labels(
-            method=method,
-            path=path,
-            status=str(response.status_code),
-        ).inc()
-        HTTP_LATENCY.labels(method=method, path=path).observe(duration)
-        return response
+            HTTP_REQUESTS.labels(method=method, path=path, status=status).inc()
+            HTTP_LATENCY.labels(method=method, path=path).observe(duration)
 
     return metrics_middleware
 
