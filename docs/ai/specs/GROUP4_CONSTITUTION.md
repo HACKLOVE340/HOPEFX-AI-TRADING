@@ -324,16 +324,54 @@ Seven fields, and the two that matter most are the last three: **expected
 outcome, actual outcome, lessons.** A decision record that stops at "decision" is
 a minute; one that returns to compare expectation against result is memory.
 
-**Measured status: NEW.** Nothing in the tree implements it — there is no ADR
-directory, and the three partial decision ledgers Group 3 Chapter 7 identifies do
-not carry expected-versus-actual. This corroborates two existing gaps from a
-second source:
+**Measured status: PARTIAL — five of the seven fields.** Corrected 2026-09-13.
 
-* Group 3 Chapter 6 — *ADR system, back-fill the eight known decisions* (High)
-* Group 2 Chapter 6 — *change records with expected effect* (High)
+This paragraph read *"Measured status: NEW. Nothing in the tree implements it —
+there is no ADR directory"* until then, and both halves of that sentence had
+stopped being true. `docs/decisions/` holds **19 records**, `scripts/adr.py`
+validates every one of them, and `adr-check` runs in `pre-commit`. The
+Architecture Decision Registry the source asks for exists.
+
+The correction matters more than the count, because the gap it was pointing at is
+real and is **narrower and more specific** than "nothing implements it":
+
+| Source field | Carried today | Where |
+|---|---|---|
+| context | yes | `## Context` — required by `adr.py` |
+| alternatives | yes | `## Options considered` — required, **two minimum**, enforced |
+| evidence | yes | `## Evidence` — required |
+| decision | yes | `## Decision` — required |
+| expected outcome | partly | `## Consequences`, and the `Expected-Effect:` commit trailer (Group 2 Ch 6) |
+| **actual outcome** | **no** | nothing records it |
+| **lessons** | **no** | nothing records it |
+
+Measured: **0 of 19 records carry an actual outcome or lessons**, and
+`REQUIRED_SECTIONS` in `scripts/adr.py` does not ask for either. So the registry
+is built and the **ledger is not** — which is exactly the distinction this
+chapter's own sentence draws, and it now reads as a live finding rather than a
+retired one:
+
+> A decision record that stops at "decision" is a minute; one that returns to
+> compare expectation against result is memory.
+
+An accepted ADR here is immutable but for its status line, so "return later and
+record what actually happened" cannot be an edit to the record — it needs a
+second artefact or a permitted amendment. Naming that is the next step; inventing
+the mechanism without the owner is not this document's call.
+
+This still corroborates two existing gaps from a second source, and the half that
+remains open is the platform half:
+
+* Group 3 Chapter 6 — *ADR system, back-fill the eight known decisions* (High) —
+  **the system is built**; the back-fill and the outcome half are not
+* Group 2 Chapter 6 — *change records with expected effect* (High) — `Expected-Effect:`
+  exists and warns rather than blocks (ADR 0012), and nothing compares it to what
+  happened
 
 They are the same requirement seen from the knowledge side and the platform side.
-Building either without the other produces half a ledger.
+Building either without the other produces half a ledger — and half a ledger is
+what is measured today, which is the evidence for that sentence rather than a
+restatement of it.
 
 ## Chapter 10 — Operating Principle
 

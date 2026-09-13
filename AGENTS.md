@@ -26,7 +26,7 @@ python scripts/gate_evidence.py      # which safety gates are proven able to fai
 | What rules bind every change? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — **T0**, twelve Articles, INV-01…21 |
 | How is the specification organised? | `docs/ai/BACKLOG_GROUPS.md` — four groups, one-group rule |
 | How do I recover the database? | `docs/runbooks/database-restore.md` |
-| Which skills apply, and when? | `CLAUDE.md` — all 61, with trigger conditions |
+| Which skills apply, and when? | `CLAUDE.md` — all 55, with trigger conditions |
 
 **A document's numbers are a snapshot; a script's numbers are today's.** Where
 they disagree the script is right — fix the document, do not work around it.
@@ -237,8 +237,11 @@ python ml/train_advanced.py --years 50 --oos-years 4 --stacking
 ```
 
 Model staleness and drift are enforced at inference time. `STALE_MODEL_BLOCK=true`
-blocks inference when the model exceeds `MODEL_MAX_AGE_DAYS`. `DRIFT_BLOCK=true`
-blocks signals when feature drift is detected.
+blocks inference when the model exceeds `MODEL_MAX_AGE_DAYS`, and it is the code
+default. `DRIFT_BLOCK=true` blocks signals when feature drift is detected, and it is
+**not** the code default — it defaults `false` and every deployment surface overrides
+it. Whether that changes is an owner decision recorded in ADR 0019, which also measures
+what the guard is comparing: `python scripts/drift_guard_report.py`.
 
 ---
 
@@ -249,7 +252,7 @@ blocks signals when feature drift is detected.
 | `APP_ENV` | `production` | Set `development` in devcontainer |
 | `BROKER_TYPE` | `paper` | `paper` / `oanda` / `ibkr` / `mt5` |
 | `STALE_MODEL_BLOCK` | `true` | Block inference on stale model |
-| `DRIFT_BLOCK` | `true` | Block signals on feature drift |
+| `DRIFT_BLOCK` | **`false`** | Block signals on feature drift. This row said `true` until 2026-09-13; the CODE default is `false` (`ml/inference_engine.py:120`), and the `true` came from `.env.example`. Every deployment surface sets `true`, so a container or CI run that sets neither trades a drifted model while this table says otherwise — see ADR 0019 |
 | `WS_AUTH_REQUIRED` | `true` | Require JWT on WebSocket |
 | `REDIS_FORCE_TLS` | `false` | Auto-upgrade to `rediss://` |
 | `ML_HOURLY_ENABLED` | `false` | Enable hourly online learning |
@@ -277,7 +280,7 @@ Full list: `.env.example`
 
 ## CI / CD
 
-15 GitHub Actions workflows run on push/PR to `main`:
+19 GitHub Actions workflows run on push/PR to `main` (this said 15 until 2026-09-13):
 
 | Workflow | What it checks |
 |----------|---------------|
@@ -294,23 +297,23 @@ CI skips `e2e` and `slow` markers automatically (`-m "not slow and not e2e"`).
 
 | Gate | Script | What it enforces |
 |------|--------|-----------------|
-| Gate A | `gate_a_auth_coverage.py` | Every mutating route has auth |
-| Gate B | `gate_b_env_consistency.py` | `.env.example` matches code expectations |
-| Gate C | `gate_c_docker_compose.py` | Compose files are structurally valid |
-| Gate D | `gate_d_model_accuracy.py` | ML model meets minimum accuracy threshold |
-| Gate E | `gate_e_dead_files.py` | No dead/unreferenced files in guarded packages |
-| Gate F | `gate_f_doc_consistency.py` | Class/function names in docs exist in code |
-| Gate G | `gate_g_import_discipline.py` | No imports from legacy directories |
-| Gate H | `gate_h_wordmap_schema.py` | `WORDMAP.json.example` schema is valid |
-| Gate I | `gate_i_migration_chain.py` | Alembic chain is linear with one root and one head |
-| Gate J | `gate_j_circular_imports.py` | No module-level circular imports in guarded packages |
-| Gate K | `gate_k_requirements_consistency.py` | Lock file covers all direct deps; no CI version downgrades |
-| Gate L | `gate_l_safety_invariants.py` | Safety-critical env defaults stay safe (`BROKER_TYPE`, `FEATURE_LIVE_TRADING`, `DRIFT_BLOCK`, `STALE_MODEL_BLOCK`, `WS_AUTH_REQUIRED`, `REDIS_FORCE_TLS`) |
-| Gate M | `gate_m_ml_edge.py` | ML still beats the rule baseline on the leakage-safe OOS split |
+| Gate A | `scripts/ci/gate_a_auth_coverage.py` | Every mutating route has auth |
+| Gate B | `scripts/ci/gate_b_env_consistency.py` | `.env.example` matches code expectations |
+| Gate C | `scripts/ci/gate_c_docker_compose.py` | Compose files are structurally valid |
+| Gate D | `scripts/ci/gate_d_model_accuracy.py` | ML model meets minimum accuracy threshold |
+| Gate E | `scripts/ci/gate_e_dead_files.py` | No dead/unreferenced files in guarded packages |
+| Gate F | `scripts/ci/gate_f_doc_consistency.py` | Class/function names in docs exist in code |
+| Gate G | `scripts/ci/gate_g_import_discipline.py` | No imports from legacy directories |
+| Gate H | `scripts/ci/gate_h_wordmap_schema.py` | `WORDMAP.json.example` schema is valid |
+| Gate I | `scripts/ci/gate_i_migration_chain.py` | Alembic chain is linear with one root and one head |
+| Gate J | `scripts/ci/gate_j_circular_imports.py` | No module-level circular imports in guarded packages |
+| Gate K | `scripts/ci/gate_k_requirements_consistency.py` | Lock file covers all direct deps; no CI version downgrades |
+| Gate L | `scripts/ci/gate_l_safety_invariants.py` | Safety-critical env defaults stay safe (`BROKER_TYPE`, `FEATURE_LIVE_TRADING`, `DRIFT_BLOCK`, `STALE_MODEL_BLOCK`, `WS_AUTH_REQUIRED`, `REDIS_FORCE_TLS`) |
+| Gate M | `scripts/ci/gate_m_ml_edge.py` | ML still beats the rule baseline on the leakage-safe OOS split |
 
-| Broken imports | `gate_broken_imports.py` | No `from x import Y` where `Y` is undefined in `x` |
+| Broken imports | `scripts/ci/gate_broken_imports.py` | No `from x import Y` where `Y` is undefined in `x` |
 
-`gate_broken_imports.py` carries a `KNOWN_BROKEN` baseline of imports that are
+`scripts/ci/gate_broken_imports.py` carries a `KNOWN_BROKEN` baseline of imports that are
 still broken on purpose or awaiting implementation (see S-41/S-42 in
 `docs/HARDENING_BACKLOG.md`). Every entry needs a reason and a backlog
 reference. Fixing an import means **deleting its entry in the same change** — a
@@ -552,11 +555,11 @@ want to override. See `ARCHITECTURE.md` — WORDMAP.json section for details.
 
 ## Agent Skills
 
-**61 skills are installed** in `.claude/skills/`. CLAUDE.md carries the full
+**55 skills are installed** in `.claude/skills/`. CLAUDE.md carries the full
 list grouped by when to reach for each; `.claude/skills/README.md` carries the
 provenance, licences, and local patches. This section previously said "two
 skills are installed", naming only the two below — that was wrong in the way
-that matters: a skill nobody can see is a skill nobody loads, and the other 59
+that matters: a skill nobody can see is a skill nobody loads, and the other 53
 include every Python-craft, observability, threat-modelling, and incident skill
 in the set.
 
@@ -571,7 +574,7 @@ the orchestrator cannot complete its UI/UX approval gate without its sibling:
 | `flow-by-flow` | Any development task: features, bugs, refactors, audits, micro changes. Start here. |
 | `flow-prototype` | Throwaway, read-only interactive model of a UI flow, required before any major UI/UX change reaches production code. |
 
-Four of the 61 are **custom to this repository** — `hopefx-money-precision`,
+Four of the 55 are **custom to this repository** — `hopefx-money-precision`,
 `hopefx-invariants`, `hopefx-dead-controls`, `hopefx-fix-bridge`. Each encodes a
 defect class already made here, and every mechanically checkable claim in them is
 verified against the codebase by `scripts/verify_skill_claims.py`, which runs in
