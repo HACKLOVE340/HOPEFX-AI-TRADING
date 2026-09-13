@@ -1206,35 +1206,76 @@ def _p_f223() -> tuple[str, str]:
     )
 
 
+#: What counts as asserting. `\bassert\b` alone does not match `self.assertEqual`
+#: — there is no word boundary inside `assertEqual` — so every unittest.TestCase
+#: file in the suite read as empty. That is how this probe reported
+#: test_backtest.py (18 assertions across 9 tests) and test_risk_calculations.py
+#: (6 across 6) as asserting nothing, both of which pass when run. A probe that
+#: measures the wrong mechanism produces a confident wrong answer, which is the
+#: same defect it was written to find.
+_ASSERTS_RE = re.compile(
+    r"\bassert\b"  # bare pytest assert
+    r"|\bself\.assert\w+\("  # unittest: assertEqual, assertRaises, assertIn, ...
+    r"|\bself\.fail\("  # unittest: explicit failure
+    r"|\bpytest\.raises\b"  # context-manager assertion
+    r"|\bpytest\.fail\b"
+)
+
+
 def _p_f108() -> tuple[str, str]:
     """A test file with no assertion asserts nothing, whatever it is named."""
     empty = []
+    checked = 0
     for f in _tracked("tests/unit/*.py"):
         if f.endswith("conftest.py"):
             continue  # fixtures, not tests — nothing to assert
         body = _code(f)
-        if "def test" in body and not re.search(r"\bassert\b|pytest\.raises", body):
+        if "def test" not in body:
+            continue
+        checked += 1
+        if not _ASSERTS_RE.search(body):
             empty.append(f)
+    if not checked:
+        # A scan that matched nothing agrees with the conclusion below (F255).
+        return UNVERIFIED, "no unit-test file matched — the scan is broken, not the suite"
     return _named(
         OPEN if empty else FIXED,
-        f"{len(empty)} test file(s) define tests and assert nothing: {', '.join(empty[:3])}"
+        f"{len(empty)} of {checked} test file(s) define tests and assert nothing: {', '.join(empty[:3])}"
         if empty
-        else "every unit-test file that defines a test also asserts",
+        else f"all {checked} unit-test files that define a test also assert",
     )
 
 
 def _p_f106() -> tuple[str, str]:
-    """Nothing exercises TradeExecutor against a real connector."""
-    joined = [
-        f for f in _tracked("tests/**/*.py") if "executor" in f and re.search(r"connector|integration|oanda|ibkr", f)
-    ]
-    return _named(
-        FIXED if joined else OPEN,
-        f"joined by {joined[0]}"
-        if joined
-        else "TradeExecutor is tested against MagicMock brokers only. A mock with no spec "
-        "agrees with every call, so the signature mismatch that F61 describes survives "
-        "the whole suite",
+    """Nothing exercises TradeExecutor against a connector that can refuse.
+
+    Measured by content, not by filename. The first version matched any test
+    path containing "executor" and a connector word, which a file could satisfy
+    while passing `MagicMock()` throughout — the exact thing the finding is
+    about. What closes F106 is `create_autospec`, because only a specced double
+    rejects what the real class would.
+    """
+    # Both conditions must hold in CODE, not prose: the file must import from
+    # `brokers` and must autospec. A first version matched the word "connector"
+    # anywhere and credited a file that autospecs an unrelated class — a probe
+    # satisfied by vocabulary is the same defect as a test satisfied by a mock.
+    joined = []
+    for f in _tracked("tests/**/*.py"):
+        body = _code(f)
+        if "create_autospec" not in body:
+            continue
+        if re.search(r"^\s*(from|import)\s+brokers\b", body, re.M):
+            joined.append(f)
+    if not joined:
+        return OPEN, (
+            "TradeExecutor is tested against MagicMock brokers only. A mock with no spec "
+            "agrees with every call, so nothing in the suite can tell a real connector "
+            "surface from an invented one"
+        )
+    return FIXED, (
+        f"exercised against autospec'd connectors by {joined[0]}. Note the finding's premise "
+        "was wrong: BrokerConnector.place_market_order is a concrete base method every "
+        "connector inherits, so the signature mismatch F61 describes does not exist"
     )
 
 
@@ -2526,13 +2567,28 @@ FINDINGS: list[Finding] = [
         "P1",
         "Tests",
         "docs/audit/REMEDIATION_PLAN.md — Phase 5",
-        "`TradeExecutor` is tested against `MagicMock` brokers. A mock with no spec agrees "
-        "with every call, which is exactly how F61's signature mismatch — `place_order` "
-        "versus `place_market_order` — survives the whole suite and surfaces at the first "
-        "live order. Use `create_autospec(RealConnector)` so the mock rejects what the real "
-        "class would.",
-        "Re-run the existing executor tests against an autospec of each connector and watch "
-        "the ones with wrong signatures fail.",
+        "`TradeExecutor` was tested against `MagicMock` brokers only. A mock with no spec "
+        "agrees with every call, so nothing in the suite could tell a real connector "
+        "surface from an invented one. Closed with `create_autospec(..., spec_set=True)` "
+        "against all 15 concrete connectors. **The finding's stated cause was wrong, and "
+        "this is the correction.** It said F61's mismatch — the executor calling "
+        "`place_market_order` while connectors implement `place_order` — would surface at "
+        "the first live order, and `grep -c 'def place_market_order' brokers/*.py` returns "
+        "1, which appears to confirm it. It does not. "
+        "`BrokerConnector.place_market_order` is a CONCRETE base method (brokers/base.py:558) "
+        "adapting the router's (symbol, side, quantity) contract onto each connector's "
+        "`place_order`, handling sync and async bodies and normalising the result. Every "
+        "connector inherits it; a per-file grep cannot see an inherited method, so it "
+        "counted the one class that overrides it and called the other fourteen broken. An "
+        "adapter was written against that phantom before these tests caught it — carrying a "
+        "fallback branch getattr could never reach, a guard that can never open, added "
+        "while closing a finding about guards that can never open. It was reverted.",
+        "Carried by tests/unit/test_trade_executor_against_real_connectors.py — 37 "
+        "assertions across 15 connectors. Three are shaped to fail if a belief drifts: one "
+        "fails the moment BrokerConnector.place_market_order is removed (when the "
+        "register's original claim would become true), one fails if any override narrows "
+        "the signature the executor calls, and a positive control shows in four lines why "
+        "a spec-less mock could not have caught either outcome.",
         "python scripts/correction_register.py --id F106",
         _p_f106,
         [S_DEAD, S_TDD],
