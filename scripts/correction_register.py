@@ -637,6 +637,39 @@ def _p_create_all_upgrade() -> tuple[str, str]:
     )
 
 
+def _p_drift_absence() -> tuple[str, str]:
+    """Absent features must not be scored as drift.
+
+    `_check_feature_drift` computed `z = |live - train_mean| / std` for every
+    feature, and a feature the pipeline could not supply arrives zero-filled —
+    so `|0 - train_mean|` is large whenever the training mean is far from zero
+    and a DEAD FEED read as feature drift. With DRIFT_BLOCK=true that halts the
+    desk and the log blames the model.
+
+    Measured by scripts/drift_guard_report.py on the shipped stats: 103 of 176
+    features zero-filled, and 12 of the 14 exceeding z=4.0 are absent rather
+    than drifted. The deployed chart runs z=3.0, where it is 15.
+    """
+    body = _code("ml/inference_engine.py")
+    if not body:
+        return UNVERIFIED, "ml/inference_engine.py not readable — the scan is broken"
+
+    separates = "_drift_absent_count" in body and "train_mean != 0.0" in body
+    exposed = "absent_features" in body
+    if not separates:
+        return OPEN, (
+            "a zero-filled feature is scored as drift, so a feed outage trips DRIFT_BLOCK "
+            "and is reported as feature_drift"
+        )
+    if not exposed:
+        return PARTIAL, "absence is separated from drift but not exposed on the status payload"
+    return FIXED, (
+        "absence and drift are counted apart, z_max is over measured features only, absence "
+        "is logged at ERROR and both counts are on the status payload. Whether absence should "
+        "itself halt inference is a separate gate and is the owner's call (DRIFT-ABSENCE)"
+    )
+
+
 def _p_f218() -> tuple[str, str]:
     """Model tables that exist only via create_all() and have no migration.
 
@@ -2298,6 +2331,39 @@ S_DOC = "doc-freshness-review"
 
 FINDINGS: list[Finding] = [
     # ── Verification capability ────────────────────────────────────────────
+    Finding(
+        "DRIFT-ABSENCE",
+        "A feed outage was scored as feature drift",
+        "P1",
+        "ML",
+        "This session, 2026-09-13 — measured by scripts/drift_guard_report.py",
+        "`_check_feature_drift` scored every feature as `|live - train_mean| / std`. A "
+        "feature the pipeline could not supply arrives ZERO-FILLED, so its z is large "
+        "whenever the training mean is far from zero — and absent data read as drift. "
+        "Measured on the shipped stats: 103 of 176 features zero-filled, and 12 of the 14 "
+        "exceeding z=4.0 absent rather than drifted; at the deployed chart's z=3.0 it is 15 "
+        "of 15. So with DRIFT_BLOCK armed a FEED OUTAGE halts the desk and the log blames "
+        "the model — an operator chases a retrain while the real fault is a dead feed. "
+        "This became live when DEPLOY-CHART set DRIFT_BLOCK=true on the chart ArgoCD "
+        "deploys, which previously set nothing and inherited the false default. Fixed with "
+        "the same rule scripts/drift_guard_report.py already used — live exactly zero while "
+        "the training mean is not — so the block fires on distribution change, `z_max` is "
+        "computed over measured features only (it feeds model-quality scoring, which would "
+        "otherwise draw a second wrong conclusion from the same missing data), absence is "
+        "logged at ERROR, and both counts reach the status payload. **Whether absence should "
+        "itself halt inference is NOT decided here**: it arguably should — a model "
+        "predicting from 103 zero-filled features is not predicting from much — but that is "
+        "a new gate with its own blast radius, and inventing it would be the same mistake in "
+        "the other direction. That is the owner's call.",
+        "tests/unit/test_drift_guard_separates_absence_from_drift.py — seven, six red on the "
+        "pre-fix tree. Two are controls that matter: a genuine 30-sigma move must STILL be "
+        "caught (a guard that stopped reporting drift would pass the main test), and a "
+        "feature whose TRAINING mean is legitimately zero must not be exempted — otherwise "
+        "the rule becomes a hole in the guard rather than a fix to it.",
+        "python scripts/correction_register.py --id DRIFT-ABSENCE",
+        _p_drift_absence,
+        [S_DEAD, S_VBC],
+    ),
     Finding(
         "MIGRATE-OVER-CREATEALL",
         "`alembic upgrade head` cannot run over a database built by `create_all()`",

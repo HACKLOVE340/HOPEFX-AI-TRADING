@@ -336,7 +336,11 @@ class InferenceEngine:
         # Format: {feature_name: {"mean": float, "std": float}}
         self._train_stats: dict[str, dict] | None = None
         self._drift_detected: bool = False
-        self._drift_z_max: float = 0.0  # max z-score across features (last check)
+        self._drift_z_max: float = 0.0  # max z-score across MEASURED features (last check)
+        # Absent (zero-filled) vs genuinely drifted, kept apart so a dead feed is
+        # never reported as a distribution change. See _check_feature_drift.
+        self._drift_absent_count: int = 0
+        self._drift_drifted_count: int = 0
 
     # ── Lazy loaders ──────────────────────────────────────────────────────────
 
@@ -689,6 +693,12 @@ class InferenceEngine:
             "min_coverage": _DRIFT_MIN_COVERAGE,
             "drift_detected": bool(getattr(self, "_drift_detected", False)),
             "z_max": float(getattr(self, "_drift_z_max", 0.0) or 0.0),
+            # Absent and drifted, side by side, so an operator can tell a dead
+            # feed from a distribution change without reading logs. `z_max` is
+            # over MEASURED features only; a high absent count means the number
+            # beside it describes a shrinking slice of the vector.
+            "absent_features": int(getattr(self, "_drift_absent_count", 0)),
+            "drifted_features": int(getattr(self, "_drift_drifted_count", 0)),
             # Which features are unwatched. "170 of 229 covered" does not tell
             # an operator whether the gap is one stale block or scattered
             # across the vector, and the two have different remedies.
@@ -1087,19 +1097,60 @@ class InferenceEngine:
 
             max_z = 0.0
             drifted_features: list[str] = []
+            absent_features: list[str] = []
 
             for i, feat_name in enumerate(col_names):
                 if feat_name not in train_stats:
                     continue
                 train_mean = float(train_stats[feat_name].get("mean", 0.0))
                 train_std = float(train_stats[feat_name].get("std", 1.0))
+
+                # A feature the pipeline could not supply is zero-filled before
+                # the guard sees it. Scored as drift, `|0 - train_mean| / std` is
+                # large whenever the training mean is far from zero — so a DEAD
+                # FEED reads as feature drift, and with DRIFT_BLOCK=true it halts
+                # the desk and the log blames the model.
+                #
+                # Measured on the shipped stats (scripts/drift_guard_report.py):
+                # 103 of 176 features zero-filled, and 12 of the 14 that exceed
+                # z=4.0 are zero-filled rather than drifted.
+                #
+                # Same rule the report uses: live exactly zero while the training
+                # mean is not. The second half matters — a binary feature whose
+                # training mean IS ~0 is legitimately zero and must stay in scope,
+                # or this becomes a hole in the guard instead of a fix to it.
+                if live_means[i] == 0.0 and train_mean != 0.0:
+                    absent_features.append(feat_name)
+                    continue
+
                 z = abs(live_means[i] - train_mean) / max(train_std, 1e-9)
                 max_z = max(max_z, z)
                 if z > _DRIFT_Z_THRESHOLD:
                     drifted_features.append(f"{feat_name}(z={z:.1f})")
 
+            # z_max over MEASURED features only. It feeds _evaluate_model_quality,
+            # so letting absence inflate it draws a second wrong conclusion — a
+            # degraded model score — from the same missing data.
             self._drift_z_max = round(max_z, 3)
+            self._drift_absent_count = len(absent_features)
+            self._drift_drifted_count = len(drifted_features)
             self._drift_detected = len(drifted_features) > 0
+
+            if absent_features:
+                # ERROR, not DEBUG: absence no longer blocks, so this log is the
+                # only thing that says the feed is degraded. Whether absence
+                # SHOULD halt inference is a separate gate with its own blast
+                # radius and is the owner's call — tracked as DRIFT-ABSENCE.
+                logger.error(
+                    "FEATURES ABSENT: %d of %d compared features arrived zero-filled "
+                    "(e.g. %s). These are NOT scored as drift — a feed outage is not a "
+                    "distribution change. Inference continues on the remaining %d. "
+                    "Check the feature pipeline before reading the drift number below.",
+                    len(absent_features),
+                    len(absent_features) + len(drifted_features) + self._drift_covered,
+                    ", ".join(absent_features[:5]),
+                    max(self._drift_covered - len(absent_features), 0),
+                )
 
             if self._drift_detected:
                 logger.warning(
