@@ -3059,6 +3059,18 @@ item, is in the programme plan.
 Measured across all 70 page components in `frontend/src/pages`, 87 routes and
 every component, by running counters over the tree rather than reading it.
 
+> **Re-measured 2026-09-13.** Routes still count 87 in `App.tsx`. The page
+> count is now **72**, not 70: `2be0c54c` (customer ticket UI) and `19ee7988`
+> (operator console) each added one on 2026-09-10, the day after this section
+> was measured. Every "of 70" figure below is therefore as-of 2026-09-09 and
+> is left as measured — the derived counts interlock, and re-basing two of
+> them would misreport the rest. Count with
+> `find frontend/src/pages -maxdepth 1 -name '*.tsx' | wc -l` and
+> `grep -cE '<Route[[:space:]]' frontend/src/App.tsx` rather than trusting
+> either number. Both are scoped: top-level pages, and `App.tsx` only. A
+> recursive page count returns 114 and a repo-wide route count 147; those
+> measure something else and are not comparable to the figures here.
+
 ### What is sound, and should not be touched
 
 87 routes, each wrapped in an `ErrorBoundary`. Four guard tiers compose
