@@ -417,6 +417,61 @@ class TestExecuteWithFallback:
             await router.execute_with_fallback({"symbol": "EURUSD", "side": "buy", "type": "MARKET", "size": 1})
 
     @pytest.mark.asyncio
+    async def test_a_fallback_timeout_does_not_place_a_second_order(self):
+        """A timeout means the outcome is UNKNOWN, at any position in the chain.
+
+        `execute_with_fallback` already refuses to re-route when the PRIMARY
+        times out, and says why: "the primary may have received and filled the
+        order while the response was merely slow. Failing over here would place
+        a SECOND order and double the position."
+
+        That reasoning does not stop applying one broker later. `asyncio.wait_for`
+        raises `TimeoutError`, which is a subclass of `Exception`, so the
+        fallback loop's `except Exception ... continue` swallowed a timed-out
+        fallback and sent the order on to the next broker — the same double fill
+        the primary path was hardened against.
+        """
+        router = _make_router()
+        sent: list[str] = []
+
+        def _recording(name, behaviour):
+            conn = _make_connector(name)
+
+            async def _place(**kwargs):
+                sent.append(name)
+                if behaviour == "reject":
+                    raise RuntimeError(f"{name} rejected")
+                if behaviour == "hang":
+                    await asyncio.sleep(10)
+                return {"id": f"ord-{name}", "status": "FILLED", "avg_price": 1.0}
+
+            conn.client.place_order = _place
+            return conn
+
+        router.add_broker("primary", _recording("primary", "reject"))
+        router.add_broker("slow", _recording("slow", "hang"))
+        router.add_broker("last", _recording("last", "fill"))
+        router.scores["primary"].latency_ms = 1.0
+        router.scores["slow"].latency_ms = 2.0
+        router.scores["last"].latency_ms = 3.0
+
+        orig = router._execute_with_timeout
+
+        async def _quick(broker_id, order, timeout_ms=300):
+            return await orig(broker_id, order, timeout_ms=300)
+
+        router._execute_with_timeout = _quick
+
+        with pytest.raises(RuntimeError, match="outcome unknown"):
+            await router.execute_with_fallback({"symbol": "EURUSD", "side": "buy", "type": "MARKET", "size": 1})
+
+        assert "last" not in sent, (
+            "a broker was sent an order after an earlier broker timed out with an "
+            f"unknown outcome — that is the duplicate fill the primary path refuses: {sent}"
+        )
+        assert sent == ["primary", "slow"], sent
+
+    @pytest.mark.asyncio
     async def test_fallback_reason_recorded(self):
         router = _make_router()
 
