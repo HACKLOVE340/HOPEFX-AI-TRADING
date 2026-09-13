@@ -185,7 +185,7 @@ Four artefacts, three of which exist:
 |---|---|---|
 | `ARCHITECTURE.md` | Canonical module map, entry points, env flags | AVAILABLE |
 | `CLAUDE.md` / `AGENTS.md` | Conventions and the high-signal subset | AVAILABLE |
-| `.claude/skills/` (61 skills) | Encoded classes of mistake already made here | AVAILABLE |
+| `.claude/skills/` (55 skills) | Encoded classes of mistake already made here | AVAILABLE |
 | **Package ownership register** | Owner, tier, stability, deprecation state per top-level package | **NEW** |
 
 The ownership register is the missing piece. Each of the ~70 top-level packages

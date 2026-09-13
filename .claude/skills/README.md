@@ -37,7 +37,9 @@ verbatim under `licenses/`.
 
 ## Second wave: production-discipline and domain skills
 
-61 skills total (`licenses/` and this README are not skills). The first wave
+55 skills total (`licenses/` and this README are not skills) — this said 61 until
+2026-09-13, before the consolidation recorded in CLAUDE.md removed six for overlap
+and added one. The first wave
 (below) covered repo workflow; this wave was selected against a measured profile
 of the codebase rather than by guesswork.
 
