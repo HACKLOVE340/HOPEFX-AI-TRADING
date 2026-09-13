@@ -554,7 +554,164 @@ class WalkForwardRequest(BaseModel):
     initial_capital: float = Field(10000.0, gt=0)
     n_splits: int = Field(5, ge=2, le=20, description="Number of train/test folds")
     train_ratio: float = Field(0.7, gt=0.0, lt=1.0, description="Fraction of each fold used for training")
+    purge_days: int = Field(
+        5,
+        ge=0,
+        le=90,
+        description=(
+            "Embargo between a fold's training and test periods. The bar immediately "
+            "after the training cut still carries the state that produced the last "
+            "training signal, so scoring on it leaks. Matches the purge in "
+            "backtesting/walk_forward.py::WalkForwardEngine."
+        ),
+    )
     strategy_params: dict[str, Any] | None = None
+
+
+def _run_backtest_window(
+    strategy_name: str,
+    symbol: str,
+    start: datetime,
+    end: datetime,
+    initial_capital: float,
+) -> dict:
+    """Backtest a strategy over an EXPLICIT window.
+
+    `_run_real_backtest` takes a count of days and always ends at
+    `datetime.now(UTC)`. That is fine for a single "last N days" run and was
+    catastrophic for walk-forward, which needs each fold measured over its own
+    period — see `_walk_forward_execute` below (F123).
+    """
+    req = BacktestRequest(
+        strategy=strategy_name,
+        symbol=symbol,
+        start_date=start.strftime("%Y-%m-%dT%H:%M:%S"),
+        end_date=end.strftime("%Y-%m-%dT%H:%M:%S"),
+        initial_capital=initial_capital,
+    )
+    return _run_backtest_sync(req)
+
+
+def _walk_forward_execute(req: WalkForwardRequest, run_id: str, user_id: str) -> None:
+    """Run the folds and persist the result.
+
+    Module level rather than a closure so it can be driven directly by a test.
+    The defect below could not be caught while the only way in was an HTTP
+    request that started a background task.
+
+    **What this used to do.** It computed each fold's train and test windows,
+    then called `_run_real_backtest(strategy, symbol, days, capital)` with only
+    the *length* of each. That helper always ends at `datetime.now(UTC)`, so
+    every fold measured the same recent period — train the last
+    `fold_days * train_ratio` days, test the last `fold_days * (1 - train_ratio)`
+    days — with the test window contained entirely inside the training window,
+    and the computed fold dates reaching the response as labels for a
+    computation that never happened. Five folds, one window, total leakage, and
+    an `avg_test_sharpe` that was the recent period's Sharpe averaged with
+    itself.
+
+    **What it does now.** Each fold is measured over its own window, the folds
+    advance through time, and an embargo separates training from testing —
+    `WalkForwardEngine` purges for the same reason: the bar immediately after
+    the training cut still carries the state that produced the last training
+    signal.
+
+    `backtesting/walk_forward.py::WalkForwardEngine` is not called from here,
+    deliberately. It is a parameter-grid optimiser — `run(data,
+    strategy_factory, parameter_grid)` — and this endpoint validates one
+    parameterisation against out-of-sample data. Reaching for it would mean
+    inventing a grid the caller did not ask for. Its purge semantics are what
+    was worth borrowing, and they are.
+    """
+    created_at = datetime.now(UTC).isoformat()
+    pending: dict[str, Any] = {
+        "run_id": run_id,
+        "strategy": req.strategy,
+        "symbol": req.symbol,
+        "n_splits": req.n_splits,
+        "train_ratio": req.train_ratio,
+        "purge_days": req.purge_days,
+        "status": "running",
+        "created_at": created_at,
+        "folds": [],
+    }
+
+    try:
+        _load_strategy(req.strategy, req.strategy_params)
+    except ValueError as exc:
+        _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)}, user_id=user_id)
+        return
+
+    from datetime import timedelta
+
+    total_days = 365 * 3
+    end_dt = datetime.now(UTC)
+    start_dt = end_dt - timedelta(days=total_days)
+    fold_days = total_days // req.n_splits
+    folds: list[dict] = []
+
+    for i in range(req.n_splits):
+        fold_start = start_dt + timedelta(days=i * fold_days)
+        fold_end = fold_start + timedelta(days=fold_days)
+        train_end = fold_start + timedelta(days=int(fold_days * req.train_ratio))
+        # The embargo sits between them and belongs to neither.
+        test_start = train_end + timedelta(days=req.purge_days)
+
+        if test_start >= fold_end:
+            folds.append(
+                {
+                    "fold": i + 1,
+                    "error": (
+                        f"purge_days={req.purge_days} leaves no test period in a "
+                        f"{fold_days}-day fold at train_ratio={req.train_ratio}"
+                    ),
+                }
+            )
+            continue
+
+        try:
+            train_result = _run_backtest_window(req.strategy, req.symbol, fold_start, train_end, req.initial_capital)
+            test_result = _run_backtest_window(req.strategy, req.symbol, test_start, fold_end, req.initial_capital)
+            folds.append(
+                {
+                    "fold": i + 1,
+                    "train_start": fold_start.date().isoformat(),
+                    "train_end": train_end.date().isoformat(),
+                    "test_start": test_start.date().isoformat(),
+                    "test_end": fold_end.date().isoformat(),
+                    "purge_days": req.purge_days,
+                    "train_sharpe": train_result.get("sharpe_ratio", 0.0),
+                    "test_sharpe": test_result.get("sharpe_ratio", 0.0),
+                    "train_return_pct": train_result.get("total_return_pct", 0.0),
+                    "test_return_pct": test_result.get("total_return_pct", 0.0),
+                    "train_max_dd": train_result.get("max_drawdown_pct", 0.0),
+                    "test_max_dd": test_result.get("max_drawdown_pct", 0.0),
+                }
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.warning("Walk-forward fold %d failed: %s", i + 1, exc)
+            folds.append({"fold": i + 1, "error": str(exc)})
+
+    valid = [f for f in folds if "error" not in f]
+    avg_test_sharpe = sum(f["test_sharpe"] for f in valid) / len(valid) if valid else 0.0
+    avg_test_return = sum(f["test_return_pct"] for f in valid) / len(valid) if valid else 0.0
+
+    _persist_wf_result(
+        run_id,
+        {
+            **pending,
+            "status": "completed",
+            "folds": folds,
+            "summary": {
+                "avg_test_sharpe": round(avg_test_sharpe, 3),
+                "avg_test_return_pct": round(avg_test_return, 2),
+                "folds_completed": len(valid),
+                "folds_failed": req.n_splits - len(valid),
+            },
+            "completed_at": datetime.now(UTC).isoformat(),
+        },
+        user_id=user_id,
+    )
 
 
 @router.post("/walk-forward/run", status_code=status.HTTP_202_ACCEPTED)
@@ -565,96 +722,25 @@ async def run_walk_forward(
 ):
     """Trigger a walk-forward backtest. Returns run_id immediately; poll GET /walk-forward/{run_id}."""
     run_id = str(uuid.uuid4())
-    created_at = datetime.now(UTC).isoformat()
 
-    # Seed a pending record so the frontend can poll immediately
-    pending: dict[str, Any] = {
-        "run_id": run_id,
-        "strategy": req.strategy,
-        "symbol": req.symbol,
-        "n_splits": req.n_splits,
-        "train_ratio": req.train_ratio,
-        "status": "running",
-        "created_at": created_at,
-        "folds": [],
-    }
-    _persist_wf_result(run_id, pending, user_id=_user.sub)
+    # Seed a pending record so the frontend can poll immediately.
+    _persist_wf_result(
+        run_id,
+        {
+            "run_id": run_id,
+            "strategy": req.strategy,
+            "symbol": req.symbol,
+            "n_splits": req.n_splits,
+            "train_ratio": req.train_ratio,
+            "purge_days": req.purge_days,
+            "status": "running",
+            "created_at": datetime.now(UTC).isoformat(),
+            "folds": [],
+        },
+        user_id=_user.sub,
+    )
 
-    def _execute() -> None:
-        try:
-            _load_strategy(req.strategy, req.strategy_params)
-        except ValueError as exc:
-            _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)}, user_id=_user.sub)
-            return
-
-        # Build a synthetic date range spanning 3 years for the walk-forward splits
-        from datetime import timedelta
-
-        total_days = 365 * 3
-        end_dt = datetime.now(UTC)
-        start_dt = end_dt - timedelta(days=total_days)
-        fold_days = total_days // req.n_splits
-        folds: list[dict] = []
-
-        for i in range(req.n_splits):
-            fold_start = start_dt + timedelta(days=i * fold_days)
-            fold_end = fold_start + timedelta(days=fold_days)
-            train_end = fold_start + timedelta(days=int(fold_days * req.train_ratio))
-
-            try:
-                train_result = _run_real_backtest(
-                    req.strategy,
-                    req.symbol,
-                    int((train_end - fold_start).days),
-                    req.initial_capital,
-                )
-                test_result = _run_real_backtest(
-                    req.strategy,
-                    req.symbol,
-                    int((fold_end - train_end).days),
-                    req.initial_capital,
-                )
-                folds.append(
-                    {
-                        "fold": i + 1,
-                        "train_start": fold_start.date().isoformat(),
-                        "train_end": train_end.date().isoformat(),
-                        "test_start": train_end.date().isoformat(),
-                        "test_end": fold_end.date().isoformat(),
-                        "train_sharpe": train_result.get("sharpe_ratio", 0.0),
-                        "test_sharpe": test_result.get("sharpe_ratio", 0.0),
-                        "train_return_pct": train_result.get("total_return_pct", 0.0),
-                        "test_return_pct": test_result.get("total_return_pct", 0.0),
-                        "train_max_dd": train_result.get("max_drawdown_pct", 0.0),
-                        "test_max_dd": test_result.get("max_drawdown_pct", 0.0),
-                    }
-                )
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning("Walk-forward fold %d failed: %s", i + 1, exc)
-                folds.append({"fold": i + 1, "error": str(exc)})
-
-        valid = [f for f in folds if "error" not in f]
-        avg_test_sharpe = sum(f["test_sharpe"] for f in valid) / len(valid) if valid else 0.0
-        avg_test_return = sum(f["test_return_pct"] for f in valid) / len(valid) if valid else 0.0
-
-        _persist_wf_result(
-            run_id,
-            {
-                **pending,
-                "status": "completed",
-                "folds": folds,
-                "summary": {
-                    "avg_test_sharpe": round(avg_test_sharpe, 3),
-                    "avg_test_return_pct": round(avg_test_return, 2),
-                    "folds_completed": len(valid),
-                    "folds_failed": req.n_splits - len(valid),
-                },
-                "completed_at": datetime.now(UTC).isoformat(),
-            },
-            user_id=_user.sub,
-        )
-
-    background_tasks.add_task(_execute)
+    background_tasks.add_task(_walk_forward_execute, req, run_id, _user.sub)
     return {"run_id": run_id, "status": "running"}
 
 

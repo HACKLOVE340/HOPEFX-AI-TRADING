@@ -1014,18 +1014,40 @@ def _p_f94() -> tuple[str, str]:
 
 
 def _p_f123() -> tuple[str, str]:
-    """/walk-forward/run must perform walk-forward analysis."""
+    """The walk-forward endpoint must measure each fold over its own window.
+
+    The original probe asked whether `api/backtesting.py` imports
+    `backtesting/walk_forward.py`. That was the wrong question: the engine there
+    is a parameter-grid optimiser and this endpoint validates one
+    parameterisation, so importing it was never the fix. What matters is whether
+    each fold gets its own dates and an embargo.
+    """
     body = _code("api/backtesting.py")
-    if "run_walk_forward" not in body:
-        return UNVERIFIED, "no run_walk_forward endpoint found"
-    uses_real = bool(re.search(r"backtesting[\.\s]+walk_forward|WalkForwardAnalyzer|purge", body))
-    return _named(
-        FIXED if uses_real else OPEN,
-        "the endpoint delegates to the real analyser"
-        if uses_real
-        else "api/backtesting.py never imports backtesting/walk_forward.py, which already "
-        "implements this correctly with a purge gap. The endpoint reports results "
-        "from a procedure that is not walk-forward",
+    if not body:
+        return UNVERIFIED, "api/backtesting.py not found"
+    if "_walk_forward_execute" not in body:
+        return OPEN, "no _walk_forward_execute — the fold loop is unreachable from a test"
+
+    fn = re.search(r"def _walk_forward_execute.*?(?=\n@router|\ndef )", body, re.S)
+    if not fn:
+        return UNVERIFIED, "could not isolate _walk_forward_execute"
+    fn_body = fn.group(0)
+
+    explicit_windows = "_run_backtest_window(" in fn_body
+    # The defect was passing only a LENGTH, so every fold ended at now().
+    length_only = re.search(r"_run_real_backtest\(\s*\n?\s*req\.strategy", fn_body) is not None
+    embargo = "purge_days" in fn_body and "test_start = train_end" in fn_body
+    proven = _exists("tests/unit/test_walk_forward_actually_walks_forward.py")
+
+    if explicit_windows and not length_only and embargo and proven:
+        return FIXED, (
+            "each fold is measured over its own window, the folds advance through time, "
+            "and purge_days embargoes training from testing. Before: all five folds "
+            "measured the same recent period with the test window inside the training "
+            "window, and the fold dates were labels for a computation that never happened"
+        )
+    return OPEN, (
+        f"explicit_windows={explicit_windows} still_passes_only_a_length={length_only} embargo={embargo} test={proven}"
     )
 
 
@@ -2101,17 +2123,29 @@ FINDINGS: list[Finding] = [
     ),
     Finding(
         "F123",
-        "`/walk-forward/run` performs no walk-forward analysis",
+        "`/walk-forward/run` tested on its own training data",
         "P1",
         "Quant",
         "docs/audit/REMEDIATION_PLAN.md — Phase 5",
-        "`api/backtesting.py` never imports `backtesting/walk_forward.py`, which already "
-        "implements this correctly with a purge gap. The endpoint returns results labelled "
-        "walk-forward from a procedure that is not one — the worst kind of backtest defect, "
-        "because look-ahead leakage shows up as a good number. Delegate to the existing "
-        "analyser.",
-        "A leakage test: construct a series where an in-sample-fit strategy scores well and "
-        "a purged walk-forward does not, and assert the endpoint reports the second.",
+        "Done 2026-09-13, and it was worse than this entry said. The endpoint computed five "
+        "fold windows spanning three years and then discarded them: "
+        "`_run_real_backtest(strategy, symbol, days, capital)` takes a *count of days* and "
+        "always ends at `datetime.now(UTC)`. So all five folds measured the same recent "
+        "period — train the last 153 days, test the last 66 — **with the test window "
+        "contained entirely inside the training window**, which is total leakage rather "
+        "than a missing purge gap, while the 2023-2026 fold dates reached the response as "
+        "labels for a computation that never happened. `avg_test_sharpe` was the last 66 "
+        "days' Sharpe averaged with itself. Each fold now runs over its own window through "
+        "`_run_backtest_window`, the folds advance, and a `purge_days` embargo (default 5) "
+        "separates training from testing. `WalkForwardEngine` is deliberately still not "
+        "called: it is a parameter-grid optimiser and this endpoint validates one "
+        "parameterisation, so using it would mean inventing a grid the caller did not ask "
+        "for. Its purge semantics were the part worth borrowing.",
+        "Carried by tests/unit/test_walk_forward_actually_walks_forward.py — distinct "
+        "periods per fold, no train/test overlap, an embargo of the requested width, "
+        "reported dates equal to measured dates, and folds that advance. Two of them "
+        "initially passed against the defect because they compared datetimes and the "
+        "broken code called now() once per backtest; they compare dates now.",
         "python scripts/correction_register.py --id F123",
         _p_f123,
         ["backtesting-frameworks"],
