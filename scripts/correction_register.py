@@ -1716,40 +1716,80 @@ def _p_ai_surface() -> tuple[str, str]:
 
 
 def _p_tier_skip() -> tuple[str, str]:
-    """An affiliate clearing two tiers at once should not be granted only one."""
+    """An affiliate clearing two tiers at once is granted only one.
+
+    PARTIAL is the honest ceiling. Whether tiers should be skippable is a
+    COMMERCIAL decision — it changes what the platform pays — and a probe must
+    not close it by deciding for the owner. What is not a commercial decision,
+    and is fixed: the shortfall used to be invisible. `check_level_upgrade`'s
+    name and signature gave a caller no way to tell "the next step" from "the
+    level they qualify for", so an affiliate earning 15% instead of the 25%
+    their numbers cleared was under-paid by omission rather than by policy.
+    """
     body = _code("monetization/affiliate.py")
     m = re.search(r"def check_level_upgrade.*?(?=\n    def )", body, re.S)
     if not m:
         return UNVERIFIED, "check_level_upgrade not found"
+
     # Returning inside the ascending loop grants the FIRST qualifying tier.
-    first_match = re.search(r"for level in .*?:\s*.*?return level", m.group(0), re.S)
-    return _named(
-        OPEN if first_match else FIXED,
-        "check_level_upgrade returns the first qualifying tier above the current one, so "
-        "an affiliate whose numbers already clear a higher tier is granted the next one up "
-        "and earns the lower commission rate until the following conversion"
-        if first_match
-        else "the highest qualifying tier is granted",
+    grants_one_step = re.search(r"for level in .*?:\s*.*?return level", m.group(0), re.S) is not None
+    legible = "def highest_qualifying_level" in body and "def tiers_behind" in body
+
+    if not grants_one_step:
+        return FIXED, "the highest qualifying tier is granted"
+    if not legible:
+        return OPEN, (
+            "check_level_upgrade returns the first qualifying tier above the current one, so "
+            "an affiliate whose numbers already clear a higher tier is granted the next one up "
+            "and earns the lower commission rate until the following conversion"
+        )
+    return PARTIAL, (
+        "still one tier per conversion — a commercial decision, not closed here. But the "
+        "shortfall is now legible rather than silent: highest_qualifying_level() reports the "
+        "tier the numbers earn and tiers_behind() reports the gap, so paying below it is a "
+        "visible choice. Today's behaviour is pinned by a test that must be rewritten if the "
+        "policy changes"
     )
 
 
 def _p_of_voter() -> tuple[str, str]:
-    """One of the three bias voters calls a method that does not exist."""
+    """One of the three bias voters cannot vote, and the count must say so.
+
+    PARTIAL is the honest ceiling here. Wiring the advanced voter to a real
+    signal is a quantitative decision — choosing which of the analyzer's seven
+    methods constitutes a bullish or bearish read is a modelling choice, and
+    picking one to make the count come out right would be inventing a signal.
+    What is fixable without that decision, and now is: the voter declines
+    knowingly instead of raising AttributeError into a WARNING handler on every
+    call, and `bias_with_quorum` / `get_summary` report how many of the three
+    declared voters actually answered — so a majority of two can no longer read
+    as a majority of three.
+    """
     dash = _code("analysis/order_flow_dashboard.py")
     adv = _code("analysis/advanced_order_flow.py")
     if not dash or not adv:
         return UNVERIFIED, "order-flow dashboard or advanced analyzer not found"
-    calls_analyze = re.search(r"self\._adv\.analyze\(", dash) is not None
+
     has_analyze = re.search(r"^\s{4}def analyze\(", adv, re.M) is not None
-    if calls_analyze and not has_analyze:
+    blind_call = re.search(r"self\._adv\.analyze\(", dash) is not None
+    quorum = "bias_with_quorum" in dash and "bias_voters" in dash
+
+    if blind_call and not has_analyze:
         return OPEN, (
             "_bias_vote_advanced calls self._adv.analyze(), which AdvancedOrderFlowAnalyzer "
             "does not define — every call raises AttributeError into a WARNING handler and "
             "returns None, so the majority is decided by two voters wearing three hats"
         )
-    return _named(
-        FIXED if not calls_analyze or has_analyze else OPEN,
-        f"calls_analyze={calls_analyze} method_exists={has_analyze}",
+    if not quorum:
+        return OPEN, "the bias is reported without the number of voters that produced it"
+    if has_analyze:
+        return FIXED, "the advanced analyzer exposes a directional read and all three voters can vote"
+    return PARTIAL, (
+        "the voter declines knowingly rather than raising on every call, and the bias now "
+        "carries its quorum (bias_voters / bias_voters_total), so a two-of-three majority "
+        "cannot read as three. The vote itself is still absent: wiring it means choosing "
+        "which of the analyzer's seven methods is a directional read, which is a "
+        "quantitative decision and not a wiring fix"
     )
 
 
@@ -2997,12 +3037,23 @@ FINDINGS: list[Finding] = [
         "`check_level_upgrade` walks the levels above the current one and returns the "
         "FIRST that qualifies, so an affiliate whose referral count and revenue already "
         "clear a higher tier is granted only the next one up. They earn the lower "
-        "commission rate until the following conversion triggers another check. Whether "
-        "tiers should be skippable is a commercial decision rather than a bug, so the "
-        "behaviour is pinned by a test that says so rather than quietly changed — if the "
-        "policy changes, that test should fail and be rewritten.",
-        "tests/unit/test_affiliate_commissions_conserve.py"
-        "::test_check_level_upgrade_advances_one_tier_per_call pins today's behaviour.",
+        "commission rate until the following conversion triggers another check — bronze to "
+        "platinum is three conversions at 10%, 15% and 20% before the 25% their numbers "
+        "already earned. Whether tiers should be skippable is a COMMERCIAL decision rather "
+        "than a bug, and is not made here; today's behaviour is pinned by a test that must "
+        "be rewritten if the policy changes. What was not a commercial decision, and is "
+        "fixed: the shortfall was invisible. The method's name and signature gave a caller "
+        "no way to tell 'the next step' from 'the level they qualify for', so an affiliate "
+        "was under-paid by omission rather than by policy. `highest_qualifying_level()` now "
+        "reports the tier the numbers earn and `tiers_behind()` the gap, so paying below it "
+        "is a visible choice someone can price.",
+        "tests/unit/test_affiliate_commissions_conserve.py carries five: today's one-step "
+        "policy is pinned by name, the earned tier and the gap are asserted against it, a "
+        "control proves an up-to-date affiliate reports no gap, and two guard the "
+        "arithmetic — that BOTH thresholds are required (`and` becoming `or` is a "
+        "one-character change that raises every commission rate and would pass everything "
+        "else) and that a tier is earned exactly AT its threshold. Four fail against the "
+        "pre-fix module.",
         "python scripts/correction_register.py --id AFF-TIER",
         _p_tier_skip,
         [S_MONEY],
@@ -3019,14 +3070,24 @@ FINDINGS: list[Finding] = [
         "`detect_delta_divergence`, `get_stacked_imbalances`, `get_volume_clusters` and "
         "`get_volume_imbalance_by_level`. Every call raises `AttributeError` into a handler "
         "that logs at WARNING and returns None, so `get_bias`'s majority is decided by two "
-        "voters while reading as three. Deliberately pinned rather than repaired: choosing "
-        "which of those methods constitutes a bullish or bearish read is a quantitative "
-        "decision, and guessing one would be inventing a signal. `get_bias` is unrouted "
-        "today — reachable only from `get_summary`, which nothing serves — so nothing acts "
-        "on it yet.",
-        "tests/unit/test_order_flow_says_when_it_has_no_data.py"
-        "::test_the_advanced_bias_voter_can_never_vote asserts the method is absent and the "
-        "vote is None, and says to rewrite itself when the voter is wired.",
+        "voters while reading as three. Wiring it stays a quantitative decision — choosing "
+        "which of those seven methods is a directional read is a modelling choice, and "
+        "picking one to make the count come out right would be inventing a signal, which is "
+        "worse than declining to emit one. Two halves of it were NOT that decision and are "
+        "fixed: the voter now checks for the capability and declines, warning once per "
+        "process rather than raising `AttributeError` on every call; and `bias_with_quorum` "
+        "plus `get_summary`'s `bias_voters` / `bias_voters_total` report how many of the "
+        "three declared voters answered, so a consumer weighting this signal can see the "
+        "quorum instead of reading a majority of two as a majority of three. `get_bias` is "
+        "unrouted today — reachable only from `get_summary`, which nothing serves — so "
+        "nothing acts on it yet.",
+        "tests/unit/test_order_flow_says_when_it_has_no_data.py carries three, all red "
+        "against the pre-fix module: the voter declines without raising and warns exactly "
+        "once across two calls, `bias_with_quorum` reports fewer voters than it declares, "
+        "and `get_summary` carries the quorum beside the bias. The first was written as a "
+        "grep for `self._adv.analyze(` and failed against the FIXED code, because the new "
+        "docstring quotes the call it replaced — a text match tests how code is written, so "
+        "it asserts behaviour instead.",
         "python scripts/correction_register.py --id OF-VOTER",
         _p_of_voter,
         [S_DEAD],

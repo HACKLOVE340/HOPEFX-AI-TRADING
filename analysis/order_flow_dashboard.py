@@ -397,7 +397,12 @@ class OrderFlowDashboard:
             except Exception as exc:
                 logger.warning("Advanced summary error for %s: %s", symbol, exc)
 
-        result["bias"] = self.get_bias(symbol)
+        bias, voted, declared = self.bias_with_quorum(symbol)
+        result["bias"] = bias
+        # Reported beside the bias, not only in a log line: a consumer must be
+        # able to tell a full poll from a partial one without reading the source.
+        result["bias_voters"] = voted
+        result["bias_voters_total"] = declared
         return result
 
     # ----------------------------------------------------------------
@@ -416,16 +421,58 @@ class OrderFlowDashboard:
             logger.warning("DOM get_bias error for %s: %s", symbol, exc)
         return None
 
+    #: Logged once per process rather than per call. The condition below is
+    #: structural — it cannot change between invocations — so warning on every
+    #: vote would flood a hot path with the same sentence.
+    _advanced_vote_warned: bool = False
+
     def _bias_vote_advanced(self, symbol: str) -> str | None:
-        """Return advanced-flow bias vote or None."""
+        """Decline to vote: the advanced analyzer exposes no directional read.
+
+        This used to call ``self._adv.analyze(symbol)``.
+        :class:`~analysis.advanced_order_flow.AdvancedOrderFlowAnalyzer` has no
+        ``analyze``. Its surface is ``get_aggression_metrics``,
+        ``get_pressure_gauges``, ``get_order_flow_oscillator``,
+        ``detect_delta_divergence``, ``get_stacked_imbalances``,
+        ``get_volume_clusters`` and ``get_volume_imbalance_by_level``.
+
+        So every call raised ``AttributeError`` into a handler that logged at
+        WARNING and returned ``None`` — one exception per invocation, and a vote
+        that was silently absent while :meth:`get_bias` read as a majority of
+        three. Two voters wearing three hats (OF-VOTER).
+
+        **Wiring it remains a quantitative decision and is not made here.**
+        Choosing which of those seven methods constitutes a bullish or bearish
+        read is a modelling choice; picking one to make the count come out right
+        would be inventing a signal, which is worse than declining to emit one.
+
+        What changes is honesty about the absence: the capability is checked and
+        the vote declined, so the gap is a stated condition rather than a
+        swallowed error, and :meth:`bias_with_quorum` reports that only two of
+        three voters answered.
+        """
         if self._adv is None:
             return None
+
+        reader = getattr(self._adv, "analyze", None)
+        if reader is None:
+            if not OrderFlowDashboard._advanced_vote_warned:
+                OrderFlowDashboard._advanced_vote_warned = True
+                logger.warning(
+                    "order flow bias: the advanced voter is not wired — %s exposes no "
+                    "directional read, so the bias is a majority of two, not three "
+                    "(OF-VOTER). get_summary reports this as bias_voters.",
+                    type(self._adv).__name__,
+                )
+            return None
+
         try:
-            analysis = self._adv.analyze(symbol)
-            if analysis and analysis.overall_bias in ("bullish", "bearish"):
-                return analysis.overall_bias
+            analysis = reader(symbol)
         except Exception as exc:
             logger.warning("Advanced get_bias error for %s: %s", symbol, exc)
+            return None
+        if analysis and getattr(analysis, "overall_bias", None) in ("bullish", "bearish"):
+            return analysis.overall_bias
         return None
 
     def _bias_vote_institutional(self, symbol: str) -> str | None:
@@ -442,31 +489,49 @@ class OrderFlowDashboard:
             logger.warning("Institutional get_bias error for %s: %s", symbol, exc)
         return None
 
+    def bias_with_quorum(self, symbol: str) -> tuple[str, int, int]:
+        """Aggregated bias, plus how many of the declared voters actually voted.
+
+        The count is the point. ``get_bias`` consults three vote functions and
+        tallies only the non-``None`` answers, so a voter that cannot answer
+        disappears from the result rather than reducing confidence in it — and
+        "bullish" decided by two voters is indistinguishable in the output from
+        "bullish" decided by three. Any consumer weighting this signal is
+        weighting a quorum it cannot see.
+
+        Today that is exactly the situation: the advanced voter declines
+        (OF-VOTER), so the honest reading of every bias this returns is
+        two-of-three.
+
+        Returns ``(bias, voted, declared)``.
+        """
+        voters = (
+            self._bias_vote_dom,
+            self._bias_vote_advanced,
+            self._bias_vote_institutional,
+        )
+        votes = [v for v in (fn(symbol) for fn in voters) if v is not None]
+
+        bull = votes.count("bullish")
+        bear = votes.count("bearish")
+        if bull > bear:
+            bias = "bullish"
+        elif bear > bull:
+            bias = "bearish"
+        else:
+            bias = "neutral"
+        return bias, len(votes), len(voters)
+
     def get_bias(self, symbol: str) -> str:
         """
         Get aggregated directional bias for a symbol via majority vote.
 
-        Returns 'bullish', 'bearish', or 'neutral'.
+        Returns 'bullish', 'bearish', or 'neutral'. Use
+        :meth:`bias_with_quorum` when the number of voters that answered
+        matters — with the advanced voter unwired it is two of three.
         """
-        votes: list[str] = []
-        for vote_fn in (
-            self._bias_vote_dom,
-            self._bias_vote_advanced,
-            self._bias_vote_institutional,
-        ):
-            v = vote_fn(symbol)
-            if v is not None:
-                votes.append(v)
-
-        if not votes:
-            return "neutral"
-        bull = votes.count("bullish")
-        bear = votes.count("bearish")
-        if bull > bear:
-            return "bullish"
-        if bear > bull:
-            return "bearish"
-        return "neutral"
+        bias, _voted, _declared = self.bias_with_quorum(symbol)
+        return bias
 
 
 # ================================================================

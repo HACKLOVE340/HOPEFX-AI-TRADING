@@ -44,7 +44,7 @@ from decimal import Decimal
 
 import pytest
 
-from monetization.affiliate import AffiliateManager, ReferralStatus
+from monetization.affiliate import Affiliate, AffiliateLevel, AffiliateManager, ReferralStatus
 from monetization.subscription import SubscriptionTier
 
 pytestmark = pytest.mark.unit
@@ -457,3 +457,94 @@ def test_programme_stats_count_what_exists():
 
     assert stats["total_affiliates"] >= 1
     assert stats["total_referrals"] >= 1
+
+
+# ── AFF-TIER: the tier an affiliate has, versus the one they have earned ──────
+
+
+def test_a_bronze_affiliate_clearing_platinum_is_offered_only_silver():
+    """Today's behaviour, pinned because it costs the affiliate money.
+
+    `check_level_upgrade` walks the levels above the current one and returns the
+    FIRST that qualifies. Requirements ascend, so "first qualifying" is the
+    LOWEST tier they clear, not the highest: an affiliate whose numbers already
+    clear platinum (50 referrals, $100k) is granted silver and paid the 15%
+    rate instead of 25% — a 10-point spread on every commission until the next
+    conversion triggers another check, which grants gold, and so on.
+
+    Whether tiers should be skippable is a commercial decision and is not made
+    here. What this pins is that the decision is visible: if the policy changes,
+    this test fails and should be rewritten.
+    """
+    affiliate = Affiliate(affiliate_id="a1", user_id="u1", code="C1")
+    affiliate.total_referrals = 80
+    affiliate.total_revenue = Decimal("250000")
+
+    assert affiliate.level is AffiliateLevel.BRONZE
+    assert affiliate.check_level_upgrade() is AffiliateLevel.SILVER, (
+        "the one-tier-per-call policy changed — revisit AFF-TIER and this test"
+    )
+
+
+def test_the_tier_they_have_earned_is_reported_alongside_the_one_they_get():
+    """The half that is not a commercial decision: say what was earned.
+
+    A caller reading `check_level_upgrade` reasonably assumes it returns the
+    level the affiliate qualifies for. It returns the next step toward it, and
+    nothing in the method's name, signature or return value says so. That is a
+    silent under-payment rather than a policy — the policy only becomes a policy
+    once both numbers are visible.
+    """
+    affiliate = Affiliate(affiliate_id="a1", user_id="u1", code="C1")
+    affiliate.total_referrals = 80
+    affiliate.total_revenue = Decimal("250000")
+
+    assert affiliate.highest_qualifying_level() is AffiliateLevel.PLATINUM
+    assert affiliate.check_level_upgrade() is AffiliateLevel.SILVER
+    # bronze -> silver -> gold -> platinum: three steps, not the two a first draft
+    # expected. The index arithmetic was mine to get wrong, not the module's.
+    assert affiliate.tiers_behind() == 3, "bronze to platinum is three tiers of lag"
+
+
+def test_an_affiliate_at_the_tier_they_earned_is_not_behind():
+    """The control. A gap detector that always reports a gap is not one."""
+    affiliate = Affiliate(affiliate_id="a2", user_id="u2", code="C2")
+    affiliate.total_referrals = 30
+    affiliate.total_revenue = Decimal("60000")
+    affiliate.level = AffiliateLevel.GOLD
+
+    assert affiliate.highest_qualifying_level() is AffiliateLevel.GOLD
+    assert affiliate.tiers_behind() == 0
+    assert affiliate.check_level_upgrade() is None
+
+
+def test_both_requirements_must_be_met_not_either():
+    """Revenue without referrals, or referrals without revenue, is not a tier.
+
+    Asserted because `and` becoming `or` here is a one-character change that
+    raises every commission rate and would pass every other test in this file.
+    """
+    revenue_only = Affiliate(affiliate_id="a3", user_id="u3", code="C3")
+    revenue_only.total_referrals = 1
+    revenue_only.total_revenue = Decimal("999999")
+    assert revenue_only.highest_qualifying_level() is AffiliateLevel.BRONZE
+    assert revenue_only.check_level_upgrade() is None
+
+    referrals_only = Affiliate(affiliate_id="a4", user_id="u4", code="C4")
+    referrals_only.total_referrals = 999
+    referrals_only.total_revenue = Decimal("0")
+    assert referrals_only.highest_qualifying_level() is AffiliateLevel.BRONZE
+    assert referrals_only.check_level_upgrade() is None
+
+
+def test_a_tier_is_earned_exactly_at_its_threshold_not_above_it():
+    """`>=`, asserted at the boundary. Off-by-one here is a tier of commission."""
+    at_silver = Affiliate(affiliate_id="a5", user_id="u5", code="C5")
+    at_silver.total_referrals = 10
+    at_silver.total_revenue = Decimal("18000")
+    assert at_silver.highest_qualifying_level() is AffiliateLevel.SILVER
+
+    just_under = Affiliate(affiliate_id="a6", user_id="u6", code="C6")
+    just_under.total_referrals = 10
+    just_under.total_revenue = Decimal("17999.99")
+    assert just_under.highest_qualifying_level() is AffiliateLevel.BRONZE

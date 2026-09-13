@@ -41,6 +41,9 @@ service — nothing whatsoever would change, with no error to explain why.
 
 from __future__ import annotations
 
+import inspect  # noqa: F401 — kept for the sibling suite
+import logging
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -385,3 +388,81 @@ def test_the_complete_analysis_survives_a_failing_subsystem():
         )
     finally:
         analyzer.clear_trades(SYMBOL)
+
+
+# ── OF-VOTER: the vote is absent; the count must say so ───────────────────────
+
+
+def test_the_dead_voter_no_longer_calls_a_method_that_does_not_exist(caplog):
+    """Refusing knowingly is not the same as failing every time.
+
+    Wiring the advanced voter to a real signal stays a quantitative decision and
+    is not made here. Raising `AttributeError` into a WARNING handler on every
+    single call is not that decision — it is a bug that produces the same answer
+    by accident, one exception per invocation, on a hot path.
+
+    The voter now checks for the capability and declines, so the absence is a
+    stated condition rather than a swallowed error.
+    """
+    import analysis.order_flow_dashboard as ofd
+
+    # Asserted behaviourally. Grepping the source for `self._adv.analyze(` was
+    # the first attempt and it failed against the FIXED code, because the new
+    # docstring quotes the call it replaced — `inspect.getsource` returns the
+    # docstring too. A text match tests how code is written; calling it tests
+    # what it does.
+    dashboard = _dashboard()
+    ofd.OrderFlowDashboard._advanced_vote_warned = False
+
+    with caplog.at_level(logging.WARNING, logger=ofd.logger.name):
+        first = dashboard._bias_vote_advanced(SYMBOL)
+        second = dashboard._bias_vote_advanced(SYMBOL)
+
+    assert first is None and second is None
+
+    # One warning for a structural condition, not one per call on a hot path.
+    unwired = [r for r in caplog.records if "advanced voter is not wired" in r.getMessage()]
+    assert len(unwired) == 1, f"expected exactly one warning across two calls, got {len(unwired)}"
+
+    # And nothing raised: the old code produced an AttributeError every time.
+    assert not [r for r in caplog.records if "Advanced get_bias error" in r.getMessage()], (
+        "the voter is still raising into the generic error handler"
+    )
+
+
+def test_get_bias_reports_how_many_voters_actually_voted():
+    """A majority of two must not read as a majority of three.
+
+    `get_bias` consults three vote functions and counts only the non-None
+    answers, so with the advanced voter permanently silent the result is decided
+    by two — and "bullish" from a 2-voter poll is indistinguishable in the
+    output from "bullish" from a 3-voter poll. Any consumer weighting this
+    signal is weighting a quorum it cannot see.
+    """
+    dashboard = _dashboard()
+    bias, voted, total = dashboard.bias_with_quorum(SYMBOL)
+
+    assert bias in ("bullish", "bearish", "neutral")
+    assert total == 3, "the number of declared voters changed — revisit OF-VOTER"
+    assert voted < total, (
+        "every voter now votes; the advanced voter may have been wired, so this test and OF-VOTER should be revisited"
+    )
+    assert dashboard.get_bias(SYMBOL) == bias, "get_bias and bias_with_quorum disagree"
+
+
+def test_the_summary_carries_the_quorum_so_a_consumer_can_see_it():
+    """Reporting the number where the bias is reported, not only in a log line.
+
+    `hopefx-dead-controls`: evidence swallowed at DEBUG is evidence nobody has.
+    A consumer of `get_summary` must be able to tell a full poll from a partial
+    one without reading the source.
+    """
+    summary = _dashboard().get_summary(SYMBOL)
+    assert "bias" in summary
+    assert summary.get("bias_voters_total") == 3, "the number of declared voters changed — revisit OF-VOTER"
+    # With no ticks ingested every voter declines, which is itself the right
+    # answer — and the reason this asserts a bound rather than the 2 a first
+    # draft expected. What must hold is that the count is REPORTED and can never
+    # reach the declared total while the advanced voter is unwired.
+    assert summary.get("bias_voters") is not None, "the quorum is not reported beside the bias"
+    assert 0 <= summary["bias_voters"] < 3

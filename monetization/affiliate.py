@@ -149,8 +149,49 @@ class Affiliate:
         self.status = AffiliateStatus.SUSPENDED
         logger.info("Affiliate %s suspended", self.affiliate_id)
 
+    def highest_qualifying_level(self) -> AffiliateLevel:
+        """The best tier this affiliate's numbers actually earn, today.
+
+        Distinct from :meth:`check_level_upgrade`, which grants one step at a
+        time — see that method for why both exist. Both thresholds must be met:
+        revenue without referrals, or referrals without revenue, earns nothing.
+        """
+        earned = AffiliateLevel.BRONZE
+        for level in AffiliateLevel:
+            req = LEVEL_REQUIREMENTS[level]
+            if self.total_referrals >= req["referrals"] and self.total_revenue >= req["revenue"]:
+                earned = level
+        return earned
+
+    def tiers_behind(self) -> int:
+        """How many tiers below their earned level this affiliate is being paid.
+
+        Zero is the normal state. A positive number is money the affiliate has
+        earned and is not receiving, and it is reported rather than inferred so
+        the one-step policy below is a visible choice instead of a silent one.
+        """
+        levels = list(AffiliateLevel)
+        return max(0, levels.index(self.highest_qualifying_level()) - levels.index(self.level))
+
     def check_level_upgrade(self) -> AffiliateLevel | None:
-        """Check if affiliate qualifies for level upgrade"""
+        """The next tier to grant — **one step**, not the tier they have earned.
+
+        Returns the FIRST level above the current one whose requirements are
+        met. Requirements ascend, so "first qualifying" is the LOWEST tier the
+        affiliate clears, not the highest: someone whose numbers already clear
+        platinum is granted silver and paid 15% instead of 25% until the next
+        conversion triggers another check, which grants gold, and so on. A
+        ten-point spread on every commission in between.
+
+        **Whether tiers should be skippable is a commercial decision, and this
+        method does not make it.** What changed is that it no longer makes it
+        silently: the name and signature gave a caller no way to tell this from
+        "the level they qualify for", so under-payment read as policy without
+        anyone choosing it. :meth:`highest_qualifying_level` and
+        :meth:`tiers_behind` make the gap legible, and
+        `tests/unit/test_affiliate_commissions_conserve.py` pins today's
+        behaviour so a change to it has to be deliberate (AFF-TIER).
+        """
         current_level_idx = list(AffiliateLevel).index(self.level)
 
         for level in list(AffiliateLevel)[current_level_idx + 1 :]:
