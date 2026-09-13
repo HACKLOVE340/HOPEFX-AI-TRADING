@@ -829,7 +829,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 29 gates · **29 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 30 gates · **30 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -2713,7 +2713,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      29 gates · 29 proven able to fail · 0 unproven
+    gate_evidence.py      30 gates · 30 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2915,7 +2915,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              29 gates · 29 proven · 0 unproven
+    gate_evidence.py                              30 gates · 30 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -2982,7 +2982,7 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
     backend tests        21,732 pass · 0 fail · 30 skipped
     frontend tests        2,645 pass · 0 fail  (136 files)
     CI gates                 14 of 14 pass
-    gate evidence            29 gates · 29 proven able to fail · 0 unproven
+    gate evidence            30 gates · 30 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -3113,7 +3113,7 @@ that one fact:
 
 **Closed this session:** `scripts/frontend_colour_ratchet.py` +
 `docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
-`GATE_EVIDENCE.toml` (29 gates, 29 proven). The count may now only fall. The
+`GATE_EVIDENCE.toml` (30 gates, 30 proven). The count may now only fall. The
 codemod that would actually revive the three features is **owner's call** — see
 §A.
 
@@ -4307,7 +4307,7 @@ mean a genuine order being refused as somebody else's replay. `trade_executor`'s
 
 ---
 
-## §A8 — DECIDE: the model checksum manifest has never been correct, and nothing reads it
+## §A8 — P0: two committed model artifacts fail the baseline that gates their load
 
 **Measured 2026-09-13.** `python scripts/model_provenance_report.py`:
 
@@ -4324,12 +4324,35 @@ all, including everything under `ml/rl_models/`.
 commit* gives 7 match, 3 mismatch, 2 absent. It did not go stale; it was
 committed wrong and nothing has read it since.
 
-**Nothing reads it.** No workflow and no pre-commit hook references
-`model_checksums.json` or `model_provenance_report.py`. What CI does run is
-`python -m ml.verify_model` (`ci.yml:398`), which sha256-checks the single
-**active** model from `registry.json` -- a different file. Run locally it exits
-0 and prints `OK -- active=xgb_horizon5_v3`, while two shipped artifacts fail
-their recorded hash. The gate is real; its scope is one model.
+**Correction, 2026-09-13 — this entry first said "nothing reads it". That was
+wrong, and it understated the severity.** No *workflow* and no *pre-commit hook*
+reads the manifest, which is what was checked and is still true. But
+`ml/__init__.py::_verify_checksum` reads it on **every model load**, and it is
+fail-closed in production: `_bootstrap_allowed()` returns False for the packaged
+directory unless `APP_ENV` is a development environment, so a mismatch returns
+False and `_try_load` returns `None`. Measured directly against the tree:
+
+    MISMATCH  feature_scaler.pkl       -> refused at load in production
+    MISMATCH  stacking_ensemble.pkl    -> refused at load in production
+    ABSENT    lstm_signal.pt
+
+So this is not a dormant manifest awaiting a decision. **In production, two
+committed artifacts do not load today.** `python scripts/correction_register.py
+--id A8` re-measures it.
+
+There is a second defect underneath, and it is the one worth fixing first.
+`_try_load` returns `None` for *both* "file absent" and "integrity refused" --
+the caller cannot tell a tampered artifact from an uninstalled one. Downstream,
+`ml/advanced_predictor.py:1004` guards `if self._meta_scaler is not None`, so a
+refused scaler does not stop a prediction; it produces one from **unscaled**
+meta-input. A refusal that degrades silently into a worse answer is the
+`hopefx-dead-controls` shape: the control fires correctly and nothing acts on it.
+
+What CI does run is `python -m ml.verify_model` (`ci.yml:398`), which
+sha256-checks the single **active** model from `registry.json` -- a different
+file. Run locally it exits 0 and prints `OK -- active=xgb_horizon5_v3`, while
+two shipped artifacts fail their recorded hash. That gate is real; its scope is
+one model.
 
 Separately, the report's reach line reads `SELF-BASELINES, then allows` for all
 five model directories, and 12 of 14 ML modules load with **NO INTEGRITY
@@ -4337,8 +4360,41 @@ CHECK** -- `ml/inference_engine.py` among them, which `CLAUDE.md` names as a key
 entry point. `ml/advanced_predictor.py` and `ml/continuous_learning.py` are the
 two that reach one.
 
-**The decision is what the manifest is for**, and it is the owner's because
-every option changes what a safety artifact means:
+### Root cause — found 2026-09-13, and it removes the tampering question
+
+The two mismatches are a **test side effect that was committed**, not a
+substitution. The chain is short and each link is checked:
+
+1. `retrain_model.py --smoke --advanced` shells out to `ml/train_advanced.py`,
+   whose `MODEL_DIR` is hardcoded to `ml/saved_models/` — so the smoke test
+   rewrites tracked artifacts in place. `tests/unit/test_ml_training_pipeline.py`
+   knows this and carries a `_preserve_saved_models` fixture to put them back.
+2. That fixture's `_SMOKE_OVERWRITES` list is hand-maintained and names **six**
+   artifacts. `train_advanced.py` writes **eight**. `calibration_report.json`
+   and `feature_importances.json` are not restored. Reproduced: `pytest
+   tests/unit/test_ml_training_pipeline.py` leaves
+   `ml/saved_models/feature_importances.json` dirty.
+3. `model_checksums.json` has **one** commit in its history (`334e50f3`).
+   `feature_scaler.pkl` and `stacking_ensemble.pkl` have **three each** — two of
+   them after the manifest was frozen.
+4. One of those two is `05efdbab`, *"fix(mobile): register must not issue tokens
+   when it cannot create the user"*. Its diff carries `feature_scaler.pkl`,
+   `stacking_ensemble.pkl` (49,605 → 48,693 bytes), 710 changed lines of
+   `feature_stats.json` and a newly created `feature_importances.json` — none of
+   which has anything to do with mobile authentication.
+
+So the recorded hashes were correct for the bytes at `334e50f3`, and the bytes
+moved underneath them twice, carried by commits about something else. The
+artifacts are exactly two of the six the smoke retrain overwrites.
+
+That settles option 3 below — the mismatches have a known, innocent provenance —
+and it means the durable fix is not the manifest at all. It is **ML-LEAK** in
+`docs/audit/CORRECTION_REGISTER.md`: complete the restore list, then gate a
+commit that changes an artifact under `ml/saved_models/` without regenerating
+the manifest. Regenerating without fixing the leak buys one clean run.
+
+**The decision is what the manifest is for**, and it is still the owner's,
+because every option changes what a safety artifact means:
 
 1. **Regenerate it from the tree.** Cheapest, and normally forbidden --
    `scripts/model_provenance_report.py` says so itself: "a mismatched checksum
@@ -4358,6 +4414,11 @@ every option changes what a safety artifact means:
 Engineering should not pick between these silently. `CLAUDE.md`'s claim that the
 artifacts are "checksum-verified in CI" is corrected in the same commit as this
 entry; the correction is not the fix.
+
+**What engineering can do without a decision**, and should: make `_try_load`
+distinguish refusal from absence, so that whichever option is chosen, a refused
+artifact stops being indistinguishable from one that was never installed. That
+is a fail-closed change on a safety path, not a policy choice.
 
 ## §A7 — APPROVED 2026-09-10: the operator console is built
 
@@ -5179,7 +5240,7 @@ run, not a recollection.
 | Group 2 platform gaps | 19 outstanding (3 struck through) |
 | Group 3 knowledge gaps | 6 outstanding (8 struck through) |
 | Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
-| Safety gates | 29 gates · 29 proven able to fail · **0 unproven** |
+| Safety gates | 30 gates · 30 proven able to fail · **0 unproven** |
 | Coverage debt | 365 modules recorded |
 | Owner decisions | §A1 (RPO/RTO), §A4, §A5, plus three opened this session |
 
@@ -6347,7 +6408,7 @@ constructs its own fixture by assumption inherits the assumption.
 ### Evidence
 
 21 tests for the checker, all red before it existed. Nine mutations, each now
-killing exactly the tests that describe it. Gate ledger **28 → 29 gates, 29
+killing exactly the tests that describe it. Gate ledger **28 → 29 at that commit, each
 proven able to fail, 0 unproven** — the new gate shipped with its injection
 evidence, and that increment made six lines of this document stale in the same
 commit, which `doc_metrics` blocked on.

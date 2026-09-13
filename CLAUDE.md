@@ -28,6 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
+| **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
 | Which spec capabilities are live, staged or planned? | `python scripts/backlog_report.py` · `ai/hub/capabilities.py` |
@@ -54,8 +55,8 @@ is current.** Where they disagree, the script is right and the document is stale
 The ratcheted checks below run in `pre-commit`, so a regression blocks rather
 than accumulating: document registry, documentation freshness, Group 4 source
 preservation, volume-index drift, gate injection evidence, stated-figure drift,
-per-module coverage, frontend colour literals, AOS invariant conformance, and
-spatial capability evidence.
+per-module coverage, frontend colour literals, AOS invariant conformance,
+spatial capability evidence, and correction-register drift.
 
 **They only block once the hook is installed.** Until 2026-09-09 nothing
 installed it, so on a fresh clone that sentence described something that was not
@@ -372,14 +373,18 @@ they are the ones most often skipped under time pressure:
   the artifacts under both directories were, which is not what runs.
   `ci.yml:398` runs `python -m ml.verify_model`, and that verifies the sha256 of
   the single **active** model named in `ml/saved_models/registry.json`. Nothing
-  verifies `ml/rl_models/` at all, and nothing reads
-  `ml/saved_models/model_checksums.json` — no workflow, no hook. Measured with
-  `python scripts/model_provenance_report.py`, that 12-entry manifest currently
-  reports 2 mismatches, 1 listed-but-absent and 7 artifacts it does not list;
-  `python -m ml.verify_model` exits 0 regardless, because it is not looking at
-  it. The manifest has one commit in its whole history and already carried 3
-  mismatches at that commit, so it has never been correct. See §A8 — do not
-  regenerate it without reading that first.
+  verifies `ml/rl_models/` at all, and no workflow or hook reads
+  `ml/saved_models/model_checksums.json`. **The runtime does, though** — this
+  bullet previously said nothing read it, which was wrong in the direction that
+  matters: `ml/__init__.py::_verify_checksum` reads the manifest on every model
+  load and is fail-closed in production. That 12-entry manifest currently
+  reports 2 mismatches (`feature_scaler.pkl`, `stacking_ensemble.pkl`) and 1
+  listed-but-absent, so **those two artifacts do not load in production today**,
+  while `python -m ml.verify_model` exits 0 because it is not looking at them.
+  Worse, `_try_load` returns `None` for both "absent" and "integrity refused",
+  so a caller cannot tell them apart. The manifest has one commit in its whole
+  history and already carried 3 mismatches at that commit, so it has never been
+  correct. See §A8 — do not regenerate it without reading that first.
 - `WORDMAP.json` is gitignored; copy from `WORDMAP.json.example` locally.
   `prop_firm_mode.json` is **not** — `.gitignore` commits it deliberately with
   placeholder credentials so CI has a config to load. This file previously said
