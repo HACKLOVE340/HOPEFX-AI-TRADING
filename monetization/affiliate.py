@@ -14,6 +14,7 @@ This module handles:
 - Affiliate dashboard data
 """
 
+import json
 import logging
 import secrets
 import string
@@ -31,7 +32,8 @@ except ImportError:
 
 
 UTC = timezone.utc
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
+from collections.abc import Sequence
 from typing import Any
 
 from .pricing import SubscriptionTier
@@ -271,7 +273,18 @@ class Referral:
         self.converted_at = datetime.now(UTC)
         self.tier = tier
         self.subscription_amount = subscription_amount
-        self.commission_amount = subscription_amount * commission_rate
+        # Quantized to cents at the point the commission becomes authoritative.
+        # The raw product keeps every digit Decimal multiplication produces, so
+        # 10% of 3,333.33 was 333.3330 — a third of a cent no transfer can move.
+        # Worse, it was permanent: a withdrawal of the 333.33 that *can* be paid
+        # left 0.0030 outstanding, which is below MIN_PAYOUT so no withdrawal
+        # could ever take it, and which kept `outstanding_commission` above zero
+        # so the referral never reached PAID. ROUND_HALF_UP matches
+        # revenue_split.py; `round()` would round half to even, which is not how
+        # money rounds.
+        self.commission_amount = (subscription_amount * commission_rate).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         logger.info(
             "Referral %s converted: $%s -> $%s commission",
@@ -405,7 +418,17 @@ class AffiliateManager:
     # Minimum payout threshold
     MIN_PAYOUT = Decimal("100.00")
 
-    def __init__(self):
+    def __init__(self, session_factory=None):
+        #: SQLAlchemy sessionmaker for the affiliate ledger tables. Without one
+        #: the manager runs entirely in memory, which is the mode tests and
+        #: paper trading use and is not a failure. With one, every affiliate,
+        #: referral and payout is written through and reloaded on construction.
+        #:
+        #: Production wiring is `init_affiliate_manager`, called by
+        #: `core.startup_factories.init_affiliate_ledger`. A persistence layer
+        #: nothing wires never runs — the creator ledger one module over spent
+        #: months in exactly that state (F208).
+        self._session_factory = session_factory
         self._affiliates: dict[str, Affiliate] = {}
         self._referrals: dict[str, Referral] = {}
         self._payouts: dict[str, Payout] = {}
@@ -420,6 +443,227 @@ class AffiliateManager:
         # over. Re-entrant because request_withdrawal reads through
         # _calculate_pending_commission while already holding it.
         self._lock = threading.RLock()
+
+        self._load_from_db()
+
+    # ── Persistence ───────────────────────────────────────────────────────────
+    # The ledger tables are the durable record; the dictionaries above are a
+    # working set loaded from them. Everything is written through, and a write
+    # the database rejected raises rather than leaving memory ahead of the
+    # ledger — a commission the ledger did not record has not been earned.
+    #
+    # Before these tables existed a restart erased what every affiliate was
+    # owed, and each worker held its own disjoint copy of the ledger: two
+    # workers could each approve a withdrawal the other could not see
+    # (F31/F32, second half).
+
+    def _write(self, fn) -> None:
+        """Run ``fn(session)`` in one transaction, or raise having changed nothing."""
+        if not self._session_factory:
+            return
+        session = self._session_factory()
+        try:
+            fn(session)
+            session.commit()
+        except Exception:
+            try:
+                session.rollback()
+            except Exception:
+                logger.debug("Affiliate ledger rollback failed", exc_info=True)
+            logger.exception("Affiliate ledger write failed")
+            raise
+        finally:
+            try:
+                session.close()
+            except Exception:
+                logger.debug("Affiliate ledger session close failed", exc_info=True)
+
+    def _persist(
+        self,
+        *,
+        affiliates: "Sequence[Affiliate]" = (),
+        referrals: "Sequence[Referral]" = (),
+        payouts: "Sequence[Payout]" = (),
+    ) -> None:
+        """Write every object a mutation touched, in one transaction.
+
+        One transaction and not three: a payout that settled its referrals must
+        not be able to land without them, or the commissions are paid and still
+        outstanding.
+        """
+        if not self._session_factory:
+            return
+
+        def _apply(session) -> None:
+            for affiliate in affiliates:
+                self._upsert_affiliate(session, affiliate)
+            for referral in referrals:
+                self._upsert_referral(session, referral)
+            for payout in payouts:
+                self._upsert_payout(session, payout)
+
+        self._write(_apply)
+
+    @staticmethod
+    def _upsert_affiliate(session, affiliate: Affiliate) -> None:
+        from database.models import AffiliateRow
+
+        row = session.query(AffiliateRow).filter_by(affiliate_id=affiliate.affiliate_id).one_or_none()
+        if row is None:
+            row = AffiliateRow(
+                affiliate_id=affiliate.affiliate_id,
+                user_id=affiliate.user_id,
+                created_at=affiliate.created_at,
+            )
+            session.add(row)
+        row.code = affiliate.code
+        row.level = str(affiliate.level.value)
+        row.status = str(affiliate.status.value)
+        row.payment_details_json = json.dumps(affiliate.payment_details or {})
+        row.total_referrals = affiliate.total_referrals
+        row.total_revenue = affiliate.total_revenue
+        row.total_commissions = affiliate.total_commissions
+        row.approved_at = affiliate.approved_at
+
+    @staticmethod
+    def _upsert_referral(session, referral: Referral) -> None:
+        from database.models import AffiliateReferralRow
+
+        row = session.query(AffiliateReferralRow).filter_by(referral_id=referral.referral_id).one_or_none()
+        if row is None:
+            row = AffiliateReferralRow(
+                referral_id=referral.referral_id,
+                affiliate_id=referral.affiliate_id,
+                referred_user_id=referral.referred_user_id,
+                created_at=referral.created_at,
+            )
+            session.add(row)
+        row.status = str(referral.status.value)
+        row.tier = str(referral.tier.value) if referral.tier is not None else None
+        row.subscription_amount = referral.subscription_amount
+        row.commission_amount = referral.commission_amount
+        row.commission_paid = referral.commission_paid
+        row.converted_at = referral.converted_at
+        row.expires_at = referral.expires_at
+
+    @staticmethod
+    def _upsert_payout(session, payout: Payout) -> None:
+        from database.models import AffiliatePayoutRow
+
+        row = session.query(AffiliatePayoutRow).filter_by(payout_id=payout.payout_id).one_or_none()
+        if row is None:
+            row = AffiliatePayoutRow(
+                payout_id=payout.payout_id,
+                affiliate_id=payout.affiliate_id,
+                created_at=payout.created_at,
+            )
+            session.add(row)
+        row.amount = payout.amount
+        row.payment_method = payout.payment_method
+        row.status = str(payout.status.value)
+        row.transaction_id = payout.transaction_id
+        row.notes = payout.notes
+        # str(amount), not float(amount): this list is what a failed payout
+        # returns to the affiliate, so it must survive storage exactly.
+        row.settlements_json = json.dumps([[ref_id, str(amount)] for ref_id, amount in payout.settlements])
+        row.reversed = payout.reversed
+        row.processed_at = payout.processed_at
+
+    def _load_from_db(self) -> None:
+        """Restore affiliates, referrals and payouts from the ledger tables.
+
+        Without this the tables would be write-only: a restart would still
+        forget what every affiliate is owed, which is the defect the tables
+        exist to fix.
+
+        The two lookup indexes are rebuilt here as well. They are state, not a
+        convenience — `create_referral` resolves an affiliate by code and
+        `get_user_affiliate` by user id, so a reload that restores the
+        affiliates without the indexes leaves every referral link broken while
+        looking healthy.
+        """
+        if not self._session_factory:
+            return
+        from database.models import AffiliatePayoutRow, AffiliateReferralRow, AffiliateRow
+
+        session = self._session_factory()
+        try:
+            for row in session.query(AffiliateRow).all():
+                affiliate = Affiliate(
+                    affiliate_id=row.affiliate_id,
+                    user_id=row.user_id,
+                    code=row.code,
+                    level=AffiliateLevel(row.level),
+                    status=AffiliateStatus(row.status),
+                    payment_details=json.loads(row.payment_details_json) if row.payment_details_json else {},
+                )
+                affiliate.created_at = row.created_at
+                affiliate.approved_at = row.approved_at
+                affiliate.total_referrals = int(row.total_referrals or 0)
+                affiliate.total_revenue = Decimal(str(row.total_revenue or "0.00"))
+                affiliate.total_commissions = Decimal(str(row.total_commissions or "0.00"))
+                self._affiliates[affiliate.affiliate_id] = affiliate
+                self._affiliate_codes[affiliate.code] = affiliate.affiliate_id
+                self._user_affiliates[affiliate.user_id] = affiliate.affiliate_id
+
+            for row in session.query(AffiliateReferralRow).all():
+                referral = Referral(
+                    referral_id=row.referral_id,
+                    affiliate_id=row.affiliate_id,
+                    referred_user_id=row.referred_user_id,
+                    status=ReferralStatus(row.status),
+                    tier=SubscriptionTier(row.tier) if row.tier else None,
+                )
+                referral.created_at = row.created_at
+                referral.converted_at = row.converted_at
+                if row.expires_at is not None:
+                    referral.expires_at = row.expires_at
+                referral.subscription_amount = (
+                    Decimal(str(row.subscription_amount)) if row.subscription_amount is not None else None
+                )
+                referral.commission_amount = (
+                    Decimal(str(row.commission_amount)) if row.commission_amount is not None else None
+                )
+                referral.commission_paid = Decimal(str(row.commission_paid or "0.00"))
+                self._referrals[referral.referral_id] = referral
+
+            for row in session.query(AffiliatePayoutRow).all():
+                payout = Payout(
+                    payout_id=row.payout_id,
+                    affiliate_id=row.affiliate_id,
+                    amount=Decimal(str(row.amount)),
+                    payment_method=row.payment_method,
+                    status=PayoutStatus(row.status),
+                )
+                payout.created_at = row.created_at
+                payout.processed_at = row.processed_at
+                payout.transaction_id = row.transaction_id
+                payout.notes = row.notes or ""
+                payout.reversed = bool(row.reversed)
+                payout.settlements = [
+                    (ref_id, Decimal(str(amount))) for ref_id, amount in json.loads(row.settlements_json or "[]")
+                ]
+                # `request_withdrawal` stamps this on the object it returns and
+                # api/monetization.py reads it back. Restored the same way it
+                # was set, so a withdrawal looked up after a restart still
+                # reports the id the caller was given.
+                if payout.payout_id.startswith("WD-"):
+                    payout.withdrawal_id = payout.payout_id  # type: ignore[attr-defined]
+                self._payouts[payout.payout_id] = payout
+
+            logger.info(
+                "Affiliate ledger restored: %d affiliates, %d referrals, %d payouts",
+                len(self._affiliates),
+                len(self._referrals),
+                len(self._payouts),
+            )
+        except Exception:
+            logger.exception("Affiliate ledger load failed — starting from an empty working set")
+        finally:
+            try:
+                session.close()
+            except Exception:
+                logger.debug("Affiliate ledger session close failed", exc_info=True)
 
     def _generate_affiliate_code(self, length: int = 8) -> str:
         """Generate unique affiliate code"""
@@ -463,6 +707,7 @@ class AffiliateManager:
         self._affiliate_codes[code] = affiliate_id
         self._user_affiliates[user_id] = affiliate_id
 
+        self._persist(affiliates=[affiliate])
         logger.info("Created affiliate %s with code %s", affiliate_id, code)
 
         return affiliate
@@ -488,6 +733,7 @@ class AffiliateManager:
             return False
 
         affiliate.approve()
+        self._persist(affiliates=[affiliate])
         return True
 
     def suspend_affiliate(self, affiliate_id: str) -> bool:
@@ -497,6 +743,7 @@ class AffiliateManager:
             return False
 
         affiliate.suspend()
+        self._persist(affiliates=[affiliate])
         return True
 
     def create_referral(self, affiliate_code: str, referred_user_id: str) -> Referral | None:
@@ -531,6 +778,7 @@ class AffiliateManager:
         )
 
         self._referrals[referral_id] = referral
+        self._persist(referrals=[referral])
         logger.info("Created referral %s for affiliate %s", referral_id, affiliate.affiliate_id)
 
         return referral
@@ -549,7 +797,28 @@ class AffiliateManager:
         total — the sale recorded and then erased.
         """
         with self._lock:
-            return self._convert_referral_locked(referred_user_id, tier, subscription_amount)
+            commission = self._convert_referral_locked(referred_user_id, tier, subscription_amount)
+            if commission is None:
+                return None
+            # Inside the lock: the referral and the affiliate totals it updated
+            # land together, or neither does.
+            referral = self._find_converted_referral(referred_user_id)
+            affiliate = self.get_affiliate(referral.affiliate_id) if referral else None
+            self._persist(
+                affiliates=[affiliate] if affiliate else [],
+                referrals=[referral] if referral else [],
+            )
+            return commission
+
+    def _find_converted_referral(self, referred_user_id: str) -> "Referral | None":
+        """The referral `_convert_referral_locked` just converted, if any."""
+        for ref in self._referrals.values():
+            if ref.referred_user_id == referred_user_id and ref.status in (
+                ReferralStatus.CONVERTED,
+                ReferralStatus.PAID,
+            ):
+                return ref
+        return None
 
     def _convert_referral_locked(
         self,
@@ -663,6 +932,10 @@ class AffiliateManager:
                     pending,
                 )
 
+            # The payout and every referral it settled, in one transaction: a
+            # payout that landed without its settlements would pay commissions
+            # that are still outstanding.
+            self._persist(referrals=covered, payouts=[payout])
             logger.info("Created payout request %s for $%s", payout_id, pending)
 
             return payout
@@ -687,6 +960,7 @@ class AffiliateManager:
             return False
 
         payout.process(transaction_id)
+        self._persist(payouts=[payout])
         return True
 
     def complete_payout(self, payout_id: str) -> bool:
@@ -696,6 +970,7 @@ class AffiliateManager:
             return False
 
         payout.complete()
+        self._persist(payouts=[payout])
         return True
 
     def fail_payout(self, payout_id: str, reason: str) -> bool:
@@ -734,6 +1009,12 @@ class AffiliateManager:
                     continue
                 returned += ref.unsettle(amount)
 
+            self._persist(
+                referrals=[
+                    ref for ref in (self._referrals.get(rid) for rid, _ in payout.settlements) if ref is not None
+                ],
+                payouts=[payout],
+            )
             if returned:
                 logger.info(
                     "Payout %s failed (%s) — returned $%s to outstanding commissions",
@@ -870,6 +1151,12 @@ class AffiliateManager:
                     requested,
                 )
 
+            self._persist(
+                referrals=[
+                    ref for ref in (self._referrals.get(rid) for rid, _ in payout.settlements) if ref is not None
+                ],
+                payouts=[payout],
+            )
             logger.info("Withdrawal %s created for affiliate %s: $%s", payout_id, affiliate_id, requested)
             return payout
 
@@ -879,6 +1166,7 @@ class AffiliateManager:
         if not affiliate:
             raise ValueError(f"Affiliate {affiliate_id} not found")
         affiliate.payment_details.update(payment_details)
+        self._persist(affiliates=[affiliate])
         logger.info("Payment method updated for affiliate %s", affiliate_id)
         return True
 
@@ -949,5 +1237,34 @@ class AffiliateManager:
         }
 
 
-# Global affiliate manager instance
+# Global affiliate manager instance.
+#
+# Constructed without a session factory on purpose: importing this module must
+# not open a database connection, and the in-memory mode is a supported mode.
+# Production wiring happens at startup, through init_affiliate_manager below.
 affiliate_manager = AffiliateManager()
+
+
+def init_affiliate_manager(session_factory) -> AffiliateManager:
+    """Give the module singleton a session factory and reload its working set.
+
+    Mirrors `monetization.revenue_split.init_revenue_engine` and
+    `compliance.aml.init_aml_gate`. Called from
+    `core.startup_factories.init_affiliate_ledger`.
+
+    Without this entry point and its registry entry, the persistence below is
+    complete, correct and unreachable — which is precisely the state the
+    creator ledger sat in for months while its probe read FIXED.
+
+    The working set is cleared before the reload so the database is the record
+    and memory a projection of it, never the union of the two.
+    """
+    with affiliate_manager._lock:
+        affiliate_manager._session_factory = session_factory
+        affiliate_manager._affiliates.clear()
+        affiliate_manager._referrals.clear()
+        affiliate_manager._payouts.clear()
+        affiliate_manager._affiliate_codes.clear()
+        affiliate_manager._user_affiliates.clear()
+        affiliate_manager._load_from_db()
+    return affiliate_manager

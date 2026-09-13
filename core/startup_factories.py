@@ -2131,6 +2131,30 @@ async def init_revenue_ledger(s: Any) -> bool:
     return True
 
 
+async def init_affiliate_ledger(s: Any) -> bool:
+    """Wire the affiliate ledger to the database.
+
+    Until it was wired, `AffiliateManager` kept every affiliate, referral and
+    payout in module dictionaries: a restart erased what every affiliate was
+    owed, and each worker held its own disjoint copy (F31/F32).
+    """
+    from monetization.affiliate import init_affiliate_manager
+
+    factory = getattr(s, "db_session_factory", None)
+    if factory is None:
+        # Not a detail for DEBUG — see init_revenue_ledger. Without a factory
+        # the manager reverts to the in-memory mode this component exists to
+        # end, and it does so silently.
+        logger.error(
+            "Affiliate ledger NOT persisted: no db_session_factory at startup. "
+            "Affiliate accounts, referrals and commissions will be lost on restart."
+        )
+        return False
+
+    init_affiliate_manager(factory)
+    return True
+
+
 async def init_strategy_brain(s: Any) -> Any:
     from strategies.base import StrategyConfig
     from strategies.bollinger_bands import BollingerBandsStrategy
@@ -3318,6 +3342,7 @@ def build_component_registry(app, feature_flags):
         )
         .register("aml", F.init_aml, required=False, deps=["database"])
         .register("revenue_ledger", F.init_revenue_ledger, required=False, deps=["database"])
+        .register("affiliate_ledger", F.init_affiliate_ledger, required=False, deps=["database"])
         .register("strategy_brain", F.init_strategy_brain, required=False, deps=["config"])
         .register("event_store", F.init_event_store, required=False, deps=["config"])
         .register(

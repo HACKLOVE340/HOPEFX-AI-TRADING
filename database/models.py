@@ -1447,6 +1447,109 @@ if SQLALCHEMY_AVAILABLE:
         )
 
 
+# ── Affiliate ledger ──────────────────────────────────────────────────────────
+# Affiliates, their referrals and their payouts. Before these tables existed all
+# three lived only in AffiliateManager's module dictionaries: a restart erased
+# what every affiliate was owed, and each worker in a multi-worker deployment
+# held its own disjoint copy, so two workers could each approve a withdrawal the
+# other could not see (F31/F32, second half).
+#
+# Money is Numeric(18, 2) for the same reason as the creator ledger above: a
+# commission that cannot round-trip is a commission that drifts against what was
+# actually paid. `commission_paid` is an amount and not a flag because a
+# withdrawal may settle part of one referral — it was a flag, and the referral
+# that crossed the requested total was marked fully paid, destroying the
+# difference.
+#
+# Same event-sourced shape: affiliate_referrals and affiliate_payouts are the
+# facts, and the totals on `affiliates` are a summary those facts can re-derive.
+
+if SQLALCHEMY_AVAILABLE:
+
+    class AffiliateRow(Base):
+        """An affiliate account."""
+
+        __tablename__ = "affiliates"
+
+        id = Column(PKBigInt, primary_key=True)
+        affiliate_id = Column(String(64), unique=True, nullable=False, index=True)
+        user_id = Column(String(64), unique=True, nullable=False, index=True)
+        code = Column(String(32), unique=True, nullable=False, index=True)
+        # TEXT + CHECK rather than a native enum, as above: the level and status
+        # sets evolve with the programme, and a PG enum needs a migration to
+        # extend.
+        level = Column(String(20), nullable=False)
+        status = Column(String(20), nullable=False, index=True)
+        payment_details_json = Column(Text, nullable=True)  # JSON object
+        total_referrals = Column(Integer, nullable=False, default=0)
+        total_revenue = Column(Numeric(18, 2), nullable=False, default=0)
+        total_commissions = Column(Numeric(18, 2), nullable=False, default=0)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        approved_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("total_revenue >= 0", name="ck_affiliates_revenue_non_negative"),
+            CheckConstraint("total_commissions >= 0", name="ck_affiliates_commissions_non_negative"),
+            CheckConstraint("total_referrals >= 0", name="ck_affiliates_referrals_non_negative"),
+        )
+
+    class AffiliateReferralRow(Base):
+        """One referred user, and the commission it earned."""
+
+        __tablename__ = "affiliate_referrals"
+
+        id = Column(PKBigInt, primary_key=True)
+        referral_id = Column(String(64), unique=True, nullable=False, index=True)
+        affiliate_id = Column(String(64), nullable=False, index=True)
+        # One referral per referred user: `create_referral` enforces this in
+        # Python by scanning the working set, which protects nothing across
+        # workers. The database is what actually enforces it.
+        referred_user_id = Column(String(64), unique=True, nullable=False, index=True)
+        status = Column(String(20), nullable=False, index=True)
+        tier = Column(String(20), nullable=True)
+        subscription_amount = Column(Numeric(18, 2), nullable=True)
+        commission_amount = Column(Numeric(18, 2), nullable=True)
+        # How much of commission_amount has been paid out. An amount, never a
+        # flag — see the module comment above.
+        commission_paid = Column(Numeric(18, 2), nullable=False, default=0)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        converted_at = Column(DateTime(timezone=True), nullable=True)
+        expires_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("commission_paid >= 0", name="ck_affiliate_referrals_paid_non_negative"),
+            Index("idx_affiliate_referrals_affiliate_status", "affiliate_id", "status"),
+        )
+
+    class AffiliatePayoutRow(Base):
+        """A disbursement to an affiliate, and the commissions it consumed."""
+
+        __tablename__ = "affiliate_payouts"
+
+        id = Column(PKBigInt, primary_key=True)
+        payout_id = Column(String(64), unique=True, nullable=False, index=True)
+        affiliate_id = Column(String(64), nullable=False, index=True)
+        amount = Column(Numeric(18, 2), nullable=False)
+        payment_method = Column(String(40), nullable=False)
+        status = Column(String(20), nullable=False, index=True)
+        transaction_id = Column(String(128), nullable=True)
+        notes = Column(Text, nullable=True)
+        # [[referral_id, amount], ...] — exactly what this payout took, so a
+        # failure returns that and not whatever happens to be outstanding when
+        # the failure is noticed.
+        settlements_json = Column(Text, nullable=True)
+        # Set once the settlements have been returned, so a duplicated failure
+        # notice is not a second credit.
+        reversed = Column(Boolean, nullable=False, default=False)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        processed_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("amount >= 0", name="ck_affiliate_payouts_amount_non_negative"),
+            Index("idx_affiliate_payouts_affiliate_created", "affiliate_id", "created_at"),
+        )
+
+
 # ── Chargeback table ──────────────────────────────────────────────────────────
 # Tracks payment disputes raised by cardholders via their bank.
 # Populated by the Stripe webhook handler on charge.dispute.created events.

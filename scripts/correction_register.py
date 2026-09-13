@@ -1482,7 +1482,16 @@ def _p_f31() -> tuple[str, str]:
     body = _code("monetization/affiliate.py")
     if not body:
         return UNVERIFIED, "monetization/affiliate.py not found"
-    persisted = "session_factory" in body or "session.commit" in body
+    # Both halves, for the reason F208 records: a write-through nothing wires
+    # is a write-through that never runs, and `"session_factory" in body` alone
+    # cannot tell the two apart.
+    startup = _code("core/startup_factories.py")
+    persisted = (
+        ("session_factory" in body or "session.commit" in body)
+        and "def init_affiliate_manager" in body
+        and "init_affiliate_manager" in startup
+        and '"affiliate_ledger"' in startup
+    )
     locked = "RLock(" in body or "threading.Lock(" in body
     # Partial settlement is what stops a withdrawal consuming the referral that
     # crosses the requested total. Without it a lock alone still destroys money,
@@ -1494,7 +1503,11 @@ def _p_f31() -> tuple[str, str]:
         and "payout.reversed" in body  # ...exactly once
     )
     if persisted and locked and conserves:
-        return FIXED, "affiliate commissions are conserved, serialised and persisted"
+        return FIXED, (
+            "affiliate commissions are conserved, serialised and persisted — the ledger "
+            "writes through to affiliates/affiliate_referrals/affiliate_payouts, and "
+            "startup wires the singleton through the registered affiliate_ledger component"
+        )
     if locked and conserves:
         return PARTIAL, (
             "commissions are conserved and serialised — a withdrawal settles exactly what "
@@ -1505,6 +1518,23 @@ def _p_f31() -> tuple[str, str]:
     return OPEN, (
         f"conserves={conserves} locked={locked} persisted={persisted} — the defects fixed "
         "in revenue_split.py (F203/F208) are still live here"
+    )
+
+
+def _p_aff_cents() -> tuple[str, str]:
+    """A commission an affiliate is owed must be an amount that can be paid."""
+    body = _code("monetization/affiliate.py")
+    if not body:
+        return UNVERIFIED, "monetization/affiliate.py not found"
+    if "subscription_amount * commission_rate" not in body:
+        return UNVERIFIED, "the commission calculation moved — this probe no longer measures it"
+    quantized = "ROUND_HALF_UP" in body and ".quantize(" in body
+    return _named(
+        FIXED if quantized else OPEN,
+        "commissions are quantized to cents with ROUND_HALF_UP where they become authoritative"
+        if quantized
+        else "the raw Decimal product is stored, so a commission carries a fraction of a cent "
+        "that no transfer can move and no withdrawal can ever clear",
     )
 
 
@@ -3040,6 +3070,30 @@ FINDINGS: list[Finding] = [
         [S_DOC, S_TDD],
     ),
     Finding(
+        "AFF-CENTS",
+        "An affiliate commission carried a fraction of a cent that could never be paid",
+        "P1",
+        "Money",
+        "Found while adding the affiliate ledger tables (F31/F32, second half)",
+        "`Referral.convert` stored `subscription_amount * commission_rate` raw. Decimal "
+        "multiplication keeps every digit, so 10% of 3,333.33 was 333.3330. Reproduced with no "
+        "concurrency and no database: withdrawing the 333.33 that *can* be paid left 0.0030 "
+        "outstanding, which is below MIN_PAYOUT (100.00) so no withdrawal could ever take it, "
+        "and which kept `outstanding_commission` above zero so the referral never reached PAID "
+        "— it sat in the CONVERTED working set permanently, showing the affiliate a pending "
+        "balance they could not withdraw. The new `Numeric(18, 2)` ledger columns exposed the "
+        "same defect from the other side: storage truncated 333.3330 to 333.33, so the "
+        "database and memory disagreed about what was owed. Fixed by quantizing to cents with "
+        "ROUND_HALF_UP where the commission becomes authoritative, matching "
+        "`monetization/revenue_split.py`. `round()` would round half to even, which is not how "
+        "money rounds.",
+        "`tests/unit/test_affiliate_commission_is_payable_in_cents.py` — eight of its ten tests "
+        "fail on the pre-fix tree, including the stranding reproduction above.",
+        "python scripts/correction_register.py --id AFF-CENTS",
+        _p_aff_cents,
+        [S_MONEY, S_TDD],
+    ),
+    Finding(
         "F205",
         "A log call with more placeholders than arguments cannot emit",
         "P2",
@@ -3108,10 +3162,16 @@ FINDINGS: list[Finding] = [
         "saw the full balance — **300.00 paid against 150.00 earned**. Referrals now carry "
         "`commission_paid` so a withdrawal can settle part of one, and both payout paths "
         "plus `convert_referral` hold an `RLock` across the whole read-modify-write. "
-        "**Persistence remains**: the ledger is still module dicts, so a restart erases "
-        "what affiliates are owed and each worker holds its own. That half needs schema — "
-        "revenue_split writes through a session factory into ledger tables — and lands in "
-        "F218 territory, so it is deliberately not bundled here.",
+        "**Persistence landed 2026-09-13.** Three tables (`affiliates`, "
+        "`affiliate_referrals`, `affiliate_payouts`) with `Numeric(18, 2)` money and a "
+        "migration, a write-through on every mutation — the payout and the referrals it "
+        "settled in one transaction, so a payout cannot land without them — a reload that "
+        "rebuilds the code and user-id indexes as well as the records, and "
+        "`init_affiliate_manager` wired by the registered `affiliate_ledger` component. That "
+        "last part is the half F208 proves is not optional: the creator ledger's identical "
+        "write-through ran nowhere for months because nothing handed the singleton a factory. "
+        "Adding the `Numeric(18, 2)` columns also exposed AFF-CENTS — the commission carried a "
+        "fraction of a cent that could never be paid.",
         "For the remaining half: credit a commission, rebuild the manager from its store, "
         "and assert the balance survived. It will fail today.",
         "python scripts/correction_register.py --id F31/F32",
