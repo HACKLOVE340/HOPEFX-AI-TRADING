@@ -47,6 +47,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Do we know the identity of the model artifacts we ship? | `python scripts/model_provenance_report.py` · `ml/saved_models/model_checksums.json` |
 | Which model loaders reach no integrity check at all? | `python scripts/model_provenance_report.py --check` · `docs/MODEL_PROVENANCE_DEBT.json` |
 | Does every ORM table have a migration, or only `create_all()`? | `python scripts/schema_migration_check.py --check` |
+| Which buttons have no accessible name? | `cd frontend && npm run lint` · `frontend/a11y-debt.json` |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |

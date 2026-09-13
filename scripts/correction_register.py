@@ -1996,25 +1996,52 @@ def _p_f187() -> tuple[str, str]:
 
 
 def _p_f172() -> tuple[str, str]:
-    """Icon-only buttons without an accessible name — NOT measurable here.
+    """Icon-only buttons without an accessible name.
 
-    Two regex attempts both produced confident wrong answers, and the reason is
-    structural rather than a slip: a JSX opening tag cannot be bracketed by
-    `<button\b([^>]*)>`, because an attribute may contain `>` —
-    `onClick={() => navigate('/x')}` ends the match at the arrow. Everything
-    after it reads as the button's children, so "does this button contain text"
-    is answered from the wrong span. One version reported FIXED across 552
-    buttons; the other reported 9 offending files. Neither had measured
-    anything.
+    This reported UNVERIFIED for a structural reason, not a slip: a JSX opening
+    tag cannot be bracketed by ``<button\b([^>]*)>``, because an attribute may
+    contain ``>`` — ``onClick={() => navigate('/x')}`` ends the match at the
+    arrow, so everything after it reads as the button's children and "does this
+    button contain text" is answered from the wrong span. One regex reported
+    FIXED across 552 buttons; another reported 9 offending files. Neither had
+    measured anything.
 
-    Reporting UNVERIFIED is the honest outcome. `eslint-plugin-jsx-a11y`'s
-    `control-has-associated-label` parses the JSX properly and is the way to
-    make this a real gate; adding it is the fix, and the count comes with it.
+    `eslint-plugin-jsx-a11y`'s `control-has-associated-label` parses the JSX and
+    answers it: 138 violations across 67 files. It is wired into
+    `eslint.config.js` at `error`, downgraded to `warn` only for the files in
+    `frontend/a11y-debt.json` — so a violation anywhere else fails
+    ``npm run lint``, and the list may only shrink.
+
+    This probe reads that committed measurement rather than re-running eslint,
+    which needs node_modules and twelve seconds. `a11y_debt_is_accurate.test.ts`
+    is what holds the file to the tree.
     """
-    return UNVERIFIED, (
-        "not decidable by regex — a JSX attribute containing `>` breaks any "
-        "attempt to bracket the opening tag. Wire eslint-plugin-jsx-a11y and "
-        "this becomes a real measurement"
+    debt = _read("frontend/a11y-debt.json")
+    if not debt:
+        return UNVERIFIED, (
+            "not decidable by regex — a JSX attribute containing `>` breaks any attempt to "
+            "bracket the opening tag. Wire eslint-plugin-jsx-a11y and this becomes a real "
+            "measurement"
+        )
+    try:
+        recorded = json.loads(debt)
+    except ValueError:
+        return UNVERIFIED, "frontend/a11y-debt.json is not readable JSON"
+
+    files = recorded.get("files") or {}
+    total = sum(files.values())
+    config = _read("frontend/eslint.config.js")
+    wired = "jsx-a11y/control-has-associated-label" in config and "a11y-debt.json" in config
+
+    if not wired:
+        return OPEN, "a11y-debt.json exists but eslint.config.js does not enforce the rule against it"
+    if not total:
+        return FIXED, "no button lacks an accessible name"
+    return PARTIAL, (
+        f"{total} violation(s) across {len(files)} file(s), measured by a parser rather than a "
+        "regex and capped: the rule is an error everywhere except these files, so new debt "
+        "fails `npm run lint`, and a11y_debt_is_accurate.test.ts refuses an entry that no "
+        "longer describes anything. Fixing the 67 is follow-up work"
     )
 
 
@@ -3458,14 +3485,26 @@ FINDINGS: list[Finding] = [
         "P2",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "Deliberately UNVERIFIED. Two regex attempts each produced a confident wrong answer "
-        "(one said FIXED across 552 buttons, the other found 9 offending files) because a "
-        "JSX opening tag cannot be bracketed by a regex — an attribute may contain `>`, and "
-        "`onClick={() => nav('/x')}` ends the match at the arrow. Add "
-        "`eslint-plugin-jsx-a11y` and let a real parser answer it; that lint rule IS the "
-        "fix, and the count comes with it.",
-        "The lint rule itself, run in CI. Break one button's label and watch it fail.",
-        "npm run lint  (once jsx-a11y is wired)",
+        "Was deliberately UNVERIFIED: two regex attempts each produced a confident wrong "
+        "answer (one said FIXED across 552 buttons, the other found 9 offending files) "
+        "because a JSX opening tag cannot be bracketed by a regex — an attribute may contain "
+        "`>`, and `onClick={() => nav('/x')}` ends the match at the arrow. **Measured "
+        "2026-09-13 with a parser: 138 violations across 67 files.** "
+        "`eslint-plugin-jsx-a11y` is now a devDependency and "
+        "`jsx-a11y/control-has-associated-label` is an ERROR in eslint.config.js, downgraded "
+        "to `warn` only for the files listed in `frontend/a11y-debt.json` — so a violation in "
+        "any other file fails `npm run lint` and new debt cannot arrive quietly, while the "
+        "existing 67 do not wall off a codebase nobody could then adopt the rule in. Fixing "
+        "those 67 is follow-up work and is not this entry.",
+        "src/test/a11y_debt_is_accurate.test.ts runs eslint and compares it to the list "
+        "entry by entry. Three refusals proven by injection: a listed file with no violations "
+        "left must be DELETED from the list (otherwise the entry is a standing permission), a "
+        "count that ROSE inside an already-listed file (invisible to eslint, since the whole "
+        "file is downgraded), and a new violating file (which eslint also errors on "
+        "independently). It uses spawnSync rather than execFileSync because eslint exits "
+        "non-zero on this tree's 14 pre-existing errors from other rules, and a throwing call "
+        "discarded the JSON and failed with 'Command failed' — a red for the wrong reason.",
+        "npm run lint · npx vitest run src/test/a11y_debt_is_accurate.test.ts",
         _p_f172,
         [S_UI],
     ),
