@@ -843,7 +843,7 @@ const Dashboard: React.FC = () => {
 
       <div style={s.card}>
         <div style={s.cardHeader}>
-          <span style={s.cardTitle}>Live Equity Curve</span>
+          <h2 style={s.cardTitle}>Live Equity Curve</h2>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             {has(acc?.total_pnl) && (
               <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
@@ -877,7 +877,7 @@ const Dashboard: React.FC = () => {
       <div style={s.twoCol}>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 10 }}>
-            <span style={s.cardTitle}>Open Positions</span>
+            <h2 style={s.cardTitle}>Open Positions</h2>
             <Link
               to="/portfolio"
               className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
@@ -892,7 +892,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 10 }}>
-            <span style={s.cardTitle}>Active Signals</span>
+            <h2 style={s.cardTitle}>Active Signals</h2>
             <Link
               to="/ai-strategy"
               className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
@@ -910,7 +910,7 @@ const Dashboard: React.FC = () => {
       <div style={s.twoCol}>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
-            <span style={s.cardTitle}>Market Regime — XAU/USD</span>
+            <h2 style={s.cardTitle}>Market Regime — XAU/USD</h2>
             <Link to="/ai-chart" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
               AI Chart <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
@@ -919,7 +919,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
-            <span style={s.cardTitle}>Risk Snapshot</span>
+            <h2 style={s.cardTitle}>Risk Snapshot</h2>
             <Link to="/risk-calculator" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
               Calculator <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
@@ -930,7 +930,7 @@ const Dashboard: React.FC = () => {
 
       <div style={s.card}>
         <div style={{ ...s.cardHeader, marginBottom: 12 }}>
-          <span style={s.cardTitle}>ML Model Accuracy</span>
+          <h2 style={s.cardTitle}>ML Model Accuracy</h2>
           <Link to="/performance" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
               Performance <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
@@ -939,7 +939,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div style={s.card}>
-        <div style={{ ...s.cardTitle, marginBottom: 12 }}>Quick Navigation</div>
+        <h2 style={{ ...s.cardTitle, marginBottom: 12 }}>Quick Navigation</h2>
         <QuickNav />
       </div>
 
@@ -994,7 +994,12 @@ const s: Record<string, React.CSSProperties> = {
 
   card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 14px', marginBottom: 12 },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle:  { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+  // Rendered as <h2>. Every section title used to be a <span>, so the page
+  // offered one landmark — the <h1> from PageHeader — and no way for a screen
+  // reader to move between its seven regions (F173). `margin: 0` and the
+  // explicit size neutralise the h2 defaults, so this is a semantic change with
+  // no visual one.
+  cardTitle:  { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: 0 },
 
   // twoCol: single column on mobile, 2 cols on sm+ — achieved via className
   twoCol: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 12, marginBottom: 12 },

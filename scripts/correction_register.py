@@ -1251,31 +1251,51 @@ def _p_f201() -> tuple[str, str]:
 
 
 def _p_f173() -> tuple[str, str]:
-    """A page with no heading has no document outline."""
-    page = next((f for f in _tracked("frontend/src/pages/*.tsx") if re.search(r"/(Trading)?Dashboard\.tsx$", f)), None)
+    """The dashboard must expose a heading outline.
+
+    The original probe counted `<h[123]` in Dashboard.tsx and reported zero.
+    It could not see the `<h1>` the shared `<PageHeader>` component renders, so
+    it described a page with no outline at all when the real gap was narrower:
+    one landmark and seven sections marked up as spans. Measured in the DOM by
+    a vitest render now, not by grepping a file that delegates its header.
+    """
+    page = _code("frontend/src/pages/Dashboard.tsx")
     if not page:
-        return UNVERIFIED, "no Dashboard page found"
-    n = len(re.findall(r"<h[123]\b", _code(page)))
+        return UNVERIFIED, "Dashboard.tsx not found"
+    sections_are_headings = page.count("<h2 style={s.cardTitle}>") >= 6
+    proven = _exists("frontend/src/test/dashboard_heading_outline.test.tsx")
     return _named(
-        OPEN if n == 0 else FIXED,
-        f"{page} renders {n} h1-h3 elements — a screen reader gets no outline"
-        if n == 0
-        else f"{page} renders {n} h1-h3 elements",
+        FIXED if sections_are_headings and proven else OPEN,
+        "the page renders one h1 (from PageHeader) and an h2 per section, asserted "
+        "against the rendered DOM including that no level is skipped"
+        if sections_are_headings and proven
+        else f"section_titles_are_headings={sections_are_headings} dom_test={proven}",
     )
 
 
 def _p_f187() -> tuple[str, str]:
-    """Metrics nobody can act on are a readout, not an application."""
-    page = next((f for f in _tracked("frontend/src/pages/*.tsx") if re.search(r"/(Trading)?Dashboard\.tsx$", f)), None)
+    """Dashboard metrics must drill into the page that explains them.
+
+    This probe counted `onClick` in Dashboard.tsx, found one, and reported that
+    the metrics do not drill through. They do, and did before this audit
+    touched them: `StatCard` renders a react-router `<Link>` when given `to`,
+    and all eight tiles pass one. Counting the wrong mechanism produced a
+    confident wrong answer on a P2 line.
+    """
+    page = _code("frontend/src/pages/Dashboard.tsx")
     if not page:
-        return UNVERIFIED, "no Dashboard page found"
-    clickable = len(re.findall(r"onClick", _code(page)))
-    return _named(
-        OPEN if clickable < 5 else FIXED,
-        f"{page} has {clickable} onClick handler(s) — the metrics do not drill through"
-        if clickable < 5
-        else f"{page} has {clickable} onClick handlers",
-    )
+        return UNVERIFIED, "Dashboard.tsx not found"
+    linked_tiles = len(re.findall(r"<StatCard[^>]*\bto=", page, re.S))
+    accessible = "aria-label={`${label}: ${value}" in page
+    sized = "min-h-[44px]" in page
+    proven = _exists("frontend/src/test/dashboard_heading_outline.test.tsx")
+    if linked_tiles >= 8 and accessible and sized and proven:
+        return FIXED, (
+            f"{linked_tiles} headline figures are links to the page that explains them, "
+            "each with a 44px minimum target and an accessible name naming the figure, "
+            "its value and its destination"
+        )
+    return OPEN, (f"linked_tiles={linked_tiles} accessible_name={accessible} target_44px={sized} dom_test={proven}")
 
 
 def _p_f172() -> tuple[str, str]:
@@ -2454,10 +2474,19 @@ FINDINGS: list[Finding] = [
         "P2",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "`Dashboard.tsx` renders zero `h1`–`h3` across 1,027 lines, so a screen reader gets "
-        "no document outline for the product's main page. `/landing` renders 24.",
-        "A render test asserting the page exposes exactly one `h1` and a sensible heading order.",
-        "python scripts/correction_register.py --id F173",
+        "Done 2026-09-13, and the finding was overstated. It said the page renders zero "
+        "h1-h3. It renders one h1 — from the shared `<PageHeader>` component, which a grep "
+        "of Dashboard.tsx cannot see. The real gap was the level below: all seven section "
+        "titles (Live Equity Curve, Open Positions, Active Signals, Market Regime, Risk "
+        "Snapshot, ML Model Accuracy, Quick Navigation) were `<span>`s carrying a "
+        "`cardTitle` style, so the page offered one landmark and no way for a screen "
+        "reader to move between its regions. They are `<h2>` now; `margin: 0` and the "
+        "explicit size neutralise the browser defaults, so the change is semantic with no "
+        "visual difference.",
+        "frontend/src/test/dashboard_heading_outline.test.tsx asserts the outline against "
+        "the RENDERED DOM — one h1, an h2 per named section, and no skipped level — which "
+        "is the only way to see a heading a child component contributes.",
+        "cd frontend && npx vitest run src/test/dashboard_heading_outline.test.tsx",
         _p_f173,
         [S_UI],
     ),
@@ -2467,12 +2496,19 @@ FINDINGS: list[Finding] = [
         "P2",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "One `onClick` in the whole page. A dashboard whose numbers cannot be opened is a "
-        "readout, not an application — and per F185 the endpoints behind them "
-        "(`/equity-curve`, `/history`, `/depth/{symbol}`, `/microstructure`) already exist. "
-        "Both halves are built; nothing joins them.",
-        "For each metric tile, a test asserting a click navigates to the page that explains it.",
-        "python scripts/correction_register.py --id F187",
+        "Not a defect, and this register said it was until 2026-09-13. The probe counted "
+        "`onClick` in Dashboard.tsx, found one, and concluded the metrics do not drill "
+        "through. They do, and did before this audit began: `StatCard` renders a "
+        "react-router `<Link>` when given `to`, and all eight headline figures pass one — "
+        "Balance to /wallet, Win Rate to /journal, Sharpe and Account DD to /performance, "
+        "and so on. Each carries a 44px minimum target, a chevron affordance, and an "
+        "`aria-label` naming the figure, its value and what the destination answers. The "
+        "component's own docstring cites F187. Counting the wrong mechanism produced a "
+        "confident wrong answer on a page this register called the product's front door.",
+        "Now covered by frontend/src/test/dashboard_heading_outline.test.tsx, which "
+        "resolves the tiles by accessible name and asserts both the href and the target "
+        "size.",
+        "cd frontend && npx vitest run src/test/dashboard_heading_outline.test.tsx",
         _p_f187,
         [S_UI],
     ),
