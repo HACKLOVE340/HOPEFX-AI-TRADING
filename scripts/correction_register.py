@@ -1052,17 +1052,44 @@ def _p_f123() -> tuple[str, str]:
 
 
 def _p_f147() -> tuple[str, str]:
-    """A mounted subsystem that is never fed reports zeros as data."""
-    body = _code("core/startup_factories.py")
-    constructed = "init_order_flow" in body
-    fed = bool(re.search(r"order_flow.*(on_tick|subscribe|feed|ingest)", body, re.I))
-    if constructed and fed:
-        return FIXED, "the order-flow analyser is constructed and subscribed to a feed"
-    return _named(
-        PARTIAL if constructed else OPEN,
-        f"constructed={constructed} fed={fed} — 2,791 LOC mounted behind three routers "
-        "with no tick source, so its endpoints return empty structures that read as "
-        "'no imbalance' rather than 'not measured'",
+    """Order flow must say when it has measured nothing, and have one analyzer.
+
+    The original probe asked whether the analyzer was "fed", by grepping
+    startup_factories for a subscribe call. Wiring a tick source is a product
+    decision — which symbols, what rate, what retention — and F147's actual harm
+    was never the absence of a feed. It was that an unfed subsystem answered as
+    though it had measured: a cumulative delta of 0, an empty level set, and a
+    market bias of "neutral / weak".
+    """
+    flow = _code("analysis/order_flow.py")
+    dash = _code("analysis/order_flow_dashboard.py")
+    startup = _code("core/startup_factories.py")
+    if not flow:
+        return UNVERIFIED, "analysis/order_flow.py not found"
+
+    refuses = "def has_data" in flow and flow.count("_require_data(symbol)") >= 3
+    says_ingesting = '"ingesting"' in flow
+    dash_refuses = "def has_data" in dash and "_require_data(symbol)" in dash
+    # init_order_flow built a SECOND analyzer whose routes were shadowed.
+    one_instance = "get_order_flow_analyzer()" in startup and "OrderFlowAnalyzer()" not in startup
+
+    # PARTIAL, not FIXED, and deliberately so. The register's own vocabulary:
+    # PARTIAL is "the harm is contained but the capability is absent". The
+    # misleading answers are gone; order-flow analysis on live data does not
+    # exist, because nothing subscribes a tick source. Calling that FIXED would
+    # close a capability gap by fixing a truthfulness bug.
+    if refuses and says_ingesting and dash_refuses and one_instance:
+        return PARTIAL, (
+            "/delta, /levels and /footprint refuse a symbol with no ingested ticks, as "
+            "/analysis and /profile already did; /stats reports `ingesting`; the dashboard "
+            "no longer derives a bias from nothing; and init_order_flow returns the same "
+            "analyzer the router serves, so wiring a feed to it would actually reach the "
+            "endpoints. A tick source is still not subscribed — that is a product "
+            "decision, and the endpoints now say so instead of answering zero"
+        )
+    return OPEN, (
+        f"per_symbol_refusals={refuses} stats_states_ingesting={says_ingesting} "
+        f"dashboard_refuses={dash_refuses} single_analyzer={one_instance}"
     )
 
 
@@ -1275,6 +1302,26 @@ def _p_tier_skip() -> tuple[str, str]:
         "and earns the lower commission rate until the following conversion"
         if first_match
         else "the highest qualifying tier is granted",
+    )
+
+
+def _p_of_voter() -> tuple[str, str]:
+    """One of the three bias voters calls a method that does not exist."""
+    dash = _code("analysis/order_flow_dashboard.py")
+    adv = _code("analysis/advanced_order_flow.py")
+    if not dash or not adv:
+        return UNVERIFIED, "order-flow dashboard or advanced analyzer not found"
+    calls_analyze = re.search(r"self\._adv\.analyze\(", dash) is not None
+    has_analyze = re.search(r"^\s{4}def analyze\(", adv, re.M) is not None
+    if calls_analyze and not has_analyze:
+        return OPEN, (
+            "_bias_vote_advanced calls self._adv.analyze(), which AdvancedOrderFlowAnalyzer "
+            "does not define — every call raises AttributeError into a WARNING handler and "
+            "returns None, so the majority is decided by two voters wearing three hats"
+        )
+    return _named(
+        FIXED if not calls_analyze or has_analyze else OPEN,
+        f"calls_analyze={calls_analyze} method_exists={has_analyze}",
     )
 
 
@@ -2152,17 +2199,31 @@ FINDINGS: list[Finding] = [
     ),
     Finding(
         "F147",
-        "The order-flow subsystem is mounted and never fed",
+        "Order flow answered as though it had measured, and had two analyzers",
         "P1",
         "Dead controls",
         "docs/audit/REMEDIATION_PLAN.md — Phase 5",
-        "2,791 LOC constructed in `startup_factories.py` and mounted behind three routers, "
-        "with no tick source attached. Its endpoints return empty structures, which a "
-        "caller reads as 'no imbalance' rather than 'not measured' — a zero produced from "
-        "missing measurement, which the audit plan's own decision rules call misleading "
-        "rather than neutral. Either subscribe it to the tick feed or make its endpoints "
-        "report unavailability.",
-        "Assert the endpoint reports 'not measured' with no feed attached, rather than a zero-valued structure.",
+        "Done 2026-09-13, on the honesty half — and a second defect underneath it. "
+        "**(a) Zeros presented as measurements.** `/analysis` and `/profile` already 404ed "
+        "with no data; `/delta` returned `cumulative_delta: 0`, `/levels` an empty level "
+        "set and `/footprint` an empty list — each identical to a real, balanced, quiet "
+        "tape. The dashboard was worse: `get_market_bias` returned "
+        "`{bias: neutral, strength: weak}`, a defensible trading read synthesised from "
+        "zero ticks. All now refuse, matching the convention the router had already set "
+        "for itself, and `/stats` states `ingesting` so an operator can tell a quiet tape "
+        "from a dead subscription. **(b) Two analyzers, and the feedable one was "
+        "unreachable.** `init_order_flow` built its own `OrderFlowAnalyzer()` and mounted "
+        "a duplicate of the same paths with a plain `include_router`, while the registry "
+        "mounted the module global; FastAPI resolves to the first, so the startup service "
+        "was shadowed. Measured: two trades into it and `/delta` still answered 0. Anyone "
+        "wiring a tick feed to the obvious object would have seen nothing change, with no "
+        "error. It now returns the analyzer that serves. **Subscribing a tick source "
+        "remains open** — which symbols, what rate, what retention is a product decision, "
+        "and the endpoints now say `not measured` rather than guessing in the meantime.",
+        "Carried by tests/unit/test_order_flow_says_when_it_has_no_data.py — refusals per "
+        "endpoint, positive controls that a fed symbol is served (one of which caught the "
+        "dashboard tests passing against a wrong route prefix), the delta's real value, "
+        "the `ingesting` flag, and that the startup service is the served analyzer.",
         "python scripts/correction_register.py --id F147",
         _p_f147,
         [S_DEAD],
@@ -2348,6 +2409,30 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id AFF-TIER",
         _p_tier_skip,
         [S_MONEY],
+    ),
+    Finding(
+        "OF-VOTER",
+        "One of three order-flow bias voters can never vote",
+        "P2",
+        "Quant",
+        "This session, 2026-09-13 — found while covering order_flow_dashboard.py",
+        "`OrderFlowDashboard._bias_vote_advanced` calls `self._adv.analyze(symbol)`. "
+        "`AdvancedOrderFlowAnalyzer` has no `analyze` — its surface is "
+        "`get_aggression_metrics`, `get_pressure_gauges`, `get_order_flow_oscillator`, "
+        "`detect_delta_divergence`, `get_stacked_imbalances`, `get_volume_clusters` and "
+        "`get_volume_imbalance_by_level`. Every call raises `AttributeError` into a handler "
+        "that logs at WARNING and returns None, so `get_bias`'s majority is decided by two "
+        "voters while reading as three. Deliberately pinned rather than repaired: choosing "
+        "which of those methods constitutes a bullish or bearish read is a quantitative "
+        "decision, and guessing one would be inventing a signal. `get_bias` is unrouted "
+        "today — reachable only from `get_summary`, which nothing serves — so nothing acts "
+        "on it yet.",
+        "tests/unit/test_order_flow_says_when_it_has_no_data.py"
+        "::test_the_advanced_bias_voter_can_never_vote asserts the method is absent and the "
+        "vote is None, and says to rewrite itself when the voter is wired.",
+        "python scripts/correction_register.py --id OF-VOTER",
+        _p_of_voter,
+        [S_DEAD],
     ),
     # ── Owner decisions ────────────────────────────────────────────────────
     Finding(

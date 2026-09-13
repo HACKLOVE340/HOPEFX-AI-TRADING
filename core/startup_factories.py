@@ -1216,10 +1216,27 @@ async def init_alert_engine(s: Any, app: Any) -> Any:
 
 
 async def init_order_flow(s: Any, app: Any) -> Any:
-    from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
+    """Register the order-flow analyzer as a startup service.
 
-    ofa = OrderFlowAnalyzer()
-    app.include_router(create_order_flow_router(ofa))
+    Returns the SAME instance `core/router_registry.py` mounts. It used to build
+    its own `OrderFlowAnalyzer()` and mount a second copy of the same paths with
+    a plain `include_router`, while the registry mounted the module-level router
+    built on the global. FastAPI resolves to the first registration, so this
+    one's routes were shadowed and the object returned here — the registered
+    startup service, and therefore the obvious thing to wire a tick feed to —
+    could never serve a request. Measured: two trades into it, and
+    `/api/orderflow/{symbol}/delta` still answered 0 (F147).
+
+    The router is mounted through the deduped helper because the registry has
+    very likely mounted these paths already; including them twice is what
+    created the shadow.
+    """
+    from analysis.order_flow import create_order_flow_router, get_order_flow_analyzer
+
+    from core.router_registry import _include_router_deduped
+
+    ofa = get_order_flow_analyzer()
+    _include_router_deduped(app, create_order_flow_router(ofa))
     return ofa
 
 

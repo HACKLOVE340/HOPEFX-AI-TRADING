@@ -258,6 +258,17 @@ class OrderFlowDashboard:
         analysis = self.get_complete_analysis(symbol, lookback_minutes)
         return analysis.get("summary", {"bias": "neutral", "strength": "weak"})
 
+    def has_data(self, symbol: str) -> bool:
+        """Whether any tick has been ingested for *symbol*.
+
+        Everything this dashboard reports is derived from the order-flow
+        analyzer, so with no ticks the derivation still runs and still produces
+        a shape. `get_market_bias` returned ``{"bias": "neutral", "strength":
+        "weak"}`` from zero data — a defensible read of a real tape, and not
+        the same statement as "nothing has been measured" (F147).
+        """
+        return bool(self._ofa is not None and self._ofa.has_data(symbol))
+
     def get_key_levels(self, symbol: str) -> dict:
         """
         Get key support/resistance levels from order flow.
@@ -307,62 +318,13 @@ class OrderFlowDashboard:
                 logger.warning("Order flow add_trade error for %s: %s", symbol, exc)
 
     # ----------------------------------------------------------------
-    # Summary helpers
+    # `_summary_dom`, `_summary_order_flow`, `_summary_institutional` and
+    # `_summary_advanced` lived here and had no callers. `get_summary` below
+    # does the same four things inline, so they were a second copy that no test
+    # could reach and no reader could tell was dead. Removed 2026-09-13 rather
+    # than covered: writing tests for unreachable code to clear a coverage gate
+    # makes the gate lie about what is protected.
     # ----------------------------------------------------------------
-
-    def _summary_dom(self, symbol: str, result: dict) -> None:
-        """Populate DOM fields in *result* in-place."""
-        if self._dom is None:
-            return
-        try:
-            dom_analysis = self._dom.get_order_book_analysis(symbol)
-            if dom_analysis:
-                dom_dict = dom_analysis.to_dict() if hasattr(dom_analysis, "to_dict") else {}
-                result["dom_imbalance"] = dom_dict.get("imbalance_ratio")
-                result["spread"] = dom_dict.get("spread")
-        except Exception as exc:
-            logger.warning("DOM summary error for %s: %s", symbol, exc)
-
-    def _summary_order_flow(self, symbol: str, lookback_minutes: int, result: dict) -> None:
-        """Populate order-flow fields in *result* in-place."""
-        if self._ofa is None:
-            return
-        try:
-            of_analysis = self._ofa.analyze(symbol, lookback_minutes=lookback_minutes)
-            if of_analysis:
-                of_dict = of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
-                result["cumulative_delta"] = of_dict.get("cumulative_delta")
-                result["buy_pressure"] = of_dict.get("buy_volume")
-                result["sell_pressure"] = of_dict.get("sell_volume")
-        except Exception as exc:
-            logger.warning("Order flow summary error for %s: %s", symbol, exc)
-
-    def _summary_institutional(self, symbol: str, lookback_minutes: int, result: dict) -> None:
-        """Populate smart-money field in *result* in-place."""
-        if self._inst is None:
-            return
-        try:
-            smart = self._inst.get_smart_money_direction(symbol, lookback_minutes=lookback_minutes)
-            if smart is not None:
-                if hasattr(smart, "to_dict"):
-                    direction = smart.to_dict().get("direction")
-                elif hasattr(smart, "direction"):
-                    direction = smart.direction
-                else:
-                    direction = smart
-                result["smart_money_direction"] = direction
-        except Exception as exc:
-            logger.warning("Institutional summary error for %s: %s", symbol, exc)
-
-    def _summary_advanced(self, symbol: str, lookback_minutes: int, result: dict) -> None:
-        """Populate large-order-count field in *result* in-place."""
-        if self._adv is None:
-            return
-        try:
-            stacked = self._adv.get_stacked_imbalances(symbol, lookback_minutes=lookback_minutes)
-            result["large_order_count"] = len(stacked) if stacked else 0
-        except Exception as exc:
-            logger.warning("Advanced summary error for %s: %s", symbol, exc)
 
     def get_summary(self, symbol: str, lookback_minutes: int = 60) -> dict:
         """
@@ -556,7 +518,7 @@ def create_dashboard_router(dashboard: OrderFlowDashboard):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter
+    from fastapi import APIRouter, HTTPException
 
     router = APIRouter(prefix="/api/dashboard", tags=["Order Flow Dashboard"])
 
@@ -565,14 +527,27 @@ def create_dashboard_router(dashboard: OrderFlowDashboard):
         """Get complete order flow analysis for a symbol."""
         return dashboard.get_complete_analysis(symbol, lookback_minutes)
 
+    def _require_data(symbol: str) -> None:
+        """Refuse to derive a read from a symbol with no ingested ticks."""
+        if not dashboard.has_data(symbol):
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No order-flow data recorded for {symbol}. This is not a neutral "
+                    "market read: no tick has been ingested for this symbol."
+                ),
+            )
+
     @router.get("/{symbol}/bias")
     async def get_market_bias(symbol: str, lookback_minutes: int = 60):
         """Get market bias summary."""
+        _require_data(symbol)
         return dashboard.get_market_bias(symbol, lookback_minutes)
 
     @router.get("/{symbol}/levels")
     async def get_key_levels(symbol: str):
         """Get key S/R levels."""
+        _require_data(symbol)
         return dashboard.get_key_levels(symbol)
 
     return router
