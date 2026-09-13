@@ -443,9 +443,9 @@ The practical consequence is worth stating plainly, because 68 red checks read a
 #### F208 · Creator balances, sales and payouts existed only in RAM
 
 - **Priority** P0 · **Area** Money
-- **Measured now** creator ledger writes through a session factory
-- **Fix** Done: the creator ledger writes through a session factory.
-- **Write this test first** Carried by the revenue-split money tests.
+- **Measured now** creator ledger writes through a session factory, and startup wires the singleton to it through the registered revenue_ledger component
+- **Fix** Done, in two halves. The write-through, the three ledger tables and the reload landed first. They then ran nowhere: `revenue_engine = RevenueSplitEngine()` was built with no session factory and nothing assigned one, so `if not self._session_factory: return` was taken on every write and a restart still erased every creator balance — the persistence was complete, correct and unreachable, and this probe read FIXED throughout because it only asked whether the code existed. `monetization.revenue_split.init_revenue_engine` now wires the singleton and reloads its working set, `core.startup_factories.init_revenue_ledger` calls it, and the `revenue_ledger` component registers it after `database`. The probe measures both halves, and `tests/unit/test_creator_ledger_is_actually_persisted.py` executes them rather than grepping for them.
+- **Write this test first** `tests/unit/test_creator_ledger_is_actually_persisted.py` — four of its six tests fail on the pre-fix tree; the two that pass are controls proving the persistence layer itself worked and only the wiring was missing.
 - **Verify** `python scripts/correction_register.py --id F208`
 - **Skills** `hopefx-money-precision`
 - **Full evidence** docs/audit/REMEDIATION_PLAN.md — Phase 2

@@ -798,5 +798,35 @@ class RevenueSplitEngine:
         return self._balances[creator_id]
 
 
-# Module-level singleton
+# Module-level singleton.
+#
+# It is constructed without a session factory on purpose: importing this module
+# must not open a database connection, and the in-memory mode is a supported
+# mode. Production wiring happens at startup, through init_revenue_engine below.
 revenue_engine = RevenueSplitEngine()
+
+
+def init_revenue_engine(session_factory) -> RevenueSplitEngine:
+    """Give the module singleton a session factory and reload its working set.
+
+    Until this existed, nothing could: the singleton was built with
+    ``session_factory=None`` and no code anywhere assigned one afterwards, so
+    every ``_write`` returned at its first line and the creator ledger tables
+    were never written. The persistence layer was complete, correct and dead —
+    a restart still erased every creator balance, which is the defect (F208)
+    the tables were added to fix.
+
+    Mirrors ``compliance.aml.init_aml_gate``, which has had this entry point
+    and a registry entry since it was written. Called from
+    ``core.startup_factories.init_revenue_ledger``.
+
+    The working set is cleared before the reload so the database is the record
+    and memory is a projection of it, never the union of the two.
+    """
+    with revenue_engine._lock:
+        revenue_engine._session_factory = session_factory
+        revenue_engine._transactions.clear()
+        revenue_engine._balances.clear()
+        revenue_engine._payouts.clear()
+        revenue_engine._load_from_db()
+    return revenue_engine

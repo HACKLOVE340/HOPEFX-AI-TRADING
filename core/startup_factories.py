@@ -2103,6 +2103,34 @@ async def init_aml(s: Any) -> bool:
     return True
 
 
+async def init_revenue_ledger(s: Any) -> bool:
+    """Wire the creator revenue ledger to the database.
+
+    The three creator ledger tables, the write-through and the reload all
+    existed and none of them ran: ``monetization.revenue_split.revenue_engine``
+    was constructed with no session factory and nothing assigned one, so every
+    write returned immediately and a restart erased every creator balance.
+    Without this registration the persistence is a no-op no matter how correct
+    it is.
+    """
+    from monetization.revenue_split import init_revenue_engine
+
+    factory = getattr(s, "db_session_factory", None)
+    if factory is None:
+        # Not a detail for DEBUG. Without a factory the engine reverts to the
+        # in-memory mode this component exists to end, and it does so silently:
+        # every write still "succeeds", and the loss only shows up as creator
+        # balances that vanished at the next restart.
+        logger.error(
+            "Creator revenue ledger NOT persisted: no db_session_factory at startup. "
+            "Creator sales, balances and payouts will be lost on restart."
+        )
+        return False
+
+    init_revenue_engine(factory)
+    return True
+
+
 async def init_strategy_brain(s: Any) -> Any:
     from strategies.base import StrategyConfig
     from strategies.bollinger_bands import BollingerBandsStrategy
@@ -3289,6 +3317,7 @@ def build_component_registry(app, feature_flags):
             deps=["compliance_manager"],
         )
         .register("aml", F.init_aml, required=False, deps=["database"])
+        .register("revenue_ledger", F.init_revenue_ledger, required=False, deps=["database"])
         .register("strategy_brain", F.init_strategy_brain, required=False, deps=["config"])
         .register("event_store", F.init_event_store, required=False, deps=["config"])
         .register(

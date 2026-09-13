@@ -814,15 +814,42 @@ def _p_f203() -> tuple[str, str]:
 
 
 def _p_f208() -> tuple[str, str]:
+    """Does the creator ledger persist — and does that persistence *run*?
+
+    This probe used to ask only whether ``revenue_split.py`` contained a
+    session factory and a commit. It did, so F208 read FIXED for months while
+    the module singleton the API uses was built as ``RevenueSplitEngine()``
+    with no factory and nothing assigned one, so every write returned at
+    ``if not self._session_factory``. The persistence was complete, correct and
+    unreachable, and the probe could not tell the difference — which is the
+    register's own rule 4: evidence that resolves is not evidence that runs.
+
+    So it now measures both halves: the write-through exists, *and* startup
+    hands the singleton a factory through a registered component.
+    """
     body = _code("monetization/revenue_split.py")
     if not body:
         return UNVERIFIED, "monetization/revenue_split.py not found"
     persisted = "session_factory" in body and "commit()" in body
+    if not persisted:
+        return _named(OPEN, "balances live in module dicts; a restart erases what creators are owed")
+
+    startup = _code("core/startup_factories.py")
+    if not startup:
+        return UNVERIFIED, "core/startup_factories.py not found"
+    entry = "init_revenue_engine" in body
+    wired = "init_revenue_engine" in startup
+    registered = '"revenue_ledger"' in startup
+    if not (entry and wired and registered):
+        return _named(
+            PARTIAL,
+            "the creator ledger writes through a session factory, but nothing gives the "
+            "module singleton one at startup — every write is a no-op in production",
+        )
     return _named(
-        FIXED if persisted else OPEN,
-        "creator ledger writes through a session factory"
-        if persisted
-        else "balances live in module dicts; a restart erases what creators are owed",
+        FIXED,
+        "creator ledger writes through a session factory, and startup wires the singleton "
+        "to it through the registered revenue_ledger component",
     )
 
 
@@ -2478,8 +2505,20 @@ FINDINGS: list[Finding] = [
         "P0",
         "Money",
         "docs/audit/REMEDIATION_PLAN.md — Phase 2",
-        "Done: the creator ledger writes through a session factory.",
-        "Carried by the revenue-split money tests.",
+        "Done, in two halves. The write-through, the three ledger tables and the reload "
+        "landed first. They then ran nowhere: `revenue_engine = RevenueSplitEngine()` was "
+        "built with no session factory and nothing assigned one, so `if not "
+        "self._session_factory: return` was taken on every write and a restart still erased "
+        "every creator balance — the persistence was complete, correct and unreachable, and "
+        "this probe read FIXED throughout because it only asked whether the code existed. "
+        "`monetization.revenue_split.init_revenue_engine` now wires the singleton and reloads "
+        "its working set, `core.startup_factories.init_revenue_ledger` calls it, and the "
+        "`revenue_ledger` component registers it after `database`. The probe measures both "
+        "halves, and `tests/unit/test_creator_ledger_is_actually_persisted.py` executes them "
+        "rather than grepping for them.",
+        "`tests/unit/test_creator_ledger_is_actually_persisted.py` — four of its six tests "
+        "fail on the pre-fix tree; the two that pass are controls proving the persistence "
+        "layer itself worked and only the wiring was missing.",
         "python scripts/correction_register.py --id F208",
         _p_f208,
         [S_MONEY],
