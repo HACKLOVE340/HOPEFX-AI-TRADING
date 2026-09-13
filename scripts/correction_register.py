@@ -1027,6 +1027,59 @@ def _p_f146() -> tuple[str, str]:
     )
 
 
+_ADR_DIR = "docs/decisions"
+# The seven fields the constitution's Chapter 9 requires of the pair. The first
+# five are what `adr.py` enforces; the last two are the finding.
+_LEDGER_SECTIONS = ("actual outcome", "lessons")
+
+
+def _p_adr_ledger() -> tuple[str, str]:
+    """The Decision Registry is built; the Decision Ledger is not.
+
+    GROUP4_CONSTITUTION Chapter 9 requires "an Architecture Decision Registry AND
+    Decision Ledger recording context, alternatives, evidence, decision, expected
+    outcome, actual outcome and lessons" — seven fields across two artefacts, and
+    the chapter singles out the last three as the ones that matter: "a decision
+    record that stops at 'decision' is a minute; one that returns to compare
+    expectation against result is memory."
+
+    Five of the seven are enforced by `scripts/adr.py::REQUIRED_SECTIONS`.
+    Neither of the remaining two is asked for by anything, and no record carries
+    one. Group 3 Chapter 6 and Group 2 Chapter 6 rank the same gap High from the
+    knowledge side and the platform side respectively.
+
+    Measured rather than asserted, because "we have ADRs now" is exactly the
+    answer that closed this prematurely once: the constitution read "there is no
+    ADR directory" while nineteen records sat in one.
+    """
+    records = (
+        sorted(p for p in (ROOT / _ADR_DIR).glob("[0-9][0-9][0-9][0-9]-*.md")) if (ROOT / _ADR_DIR).exists() else []
+    )
+    if not records:
+        return _named(OPEN, f"no decision records under {_ADR_DIR}/ — the registry half is absent too")
+
+    gate = _read("scripts/adr.py")
+    asked = [s for s in _LEDGER_SECTIONS if re.search(rf'"{s}"', gate, re.IGNORECASE)]
+    carrying = [
+        p.name
+        for p in records
+        if all(
+            re.search(rf"(?mi)^#+\s*{s}\b", p.read_text(encoding="utf-8", errors="replace")) for s in _LEDGER_SECTIONS
+        )
+    ]
+    if carrying and asked:
+        return _named(
+            FIXED,
+            f"all {len(records)} record(s) carry an actual outcome and lessons, and adr.py requires both",
+        )
+    return _named(
+        OPEN,
+        f"{len(carrying)} of {len(records)} decision record(s) carry an actual outcome and lessons; "
+        f"adr.py requires {len(asked)} of the 2 — so the Architecture Decision Registry is built "
+        f"and the Decision Ledger (expected vs actual) is not",
+    )
+
+
 def _p_f205() -> tuple[str, str]:
     """A log call with more placeholders than arguments cannot emit."""
     # Counted with `ast`, not a regex. The first version of this probe stopped
@@ -2478,6 +2531,30 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id F146",
         _p_f146,
         [S_DEAD],
+    ),
+    Finding(
+        "ADR-LEDGER",
+        "Decisions record what was chosen and never what happened",
+        "P2",
+        "Docs",
+        "docs/ai/specs/GROUP4_CONSTITUTION.md Chapter 9 · Group 3 Ch 6 · Group 2 Ch 6",
+        "The constitution requires a Decision Registry AND a Decision Ledger across seven "
+        "fields: context, alternatives, evidence, decision, expected outcome, actual outcome, "
+        "lessons. `scripts/adr.py` enforces the first five and nothing asks for the last two, "
+        "so no record returns to compare its expectation against the result. The expected half "
+        "exists in two places already — an ADR's `## Consequences` and the `Expected-Effect:` "
+        "commit trailer, which ADR 0012 deliberately made a warning rather than a block — and "
+        "neither is ever read back. Note what the fix may NOT be: an accepted ADR is immutable "
+        "but for its status line (Group 3 Ch 3 — 'editing a record destroys the only evidence "
+        "of what was known when'), so the outcome cannot be an edit to the record. It needs a "
+        "second artefact keyed by ADR number, or an explicitly permitted amendment section. "
+        "Choosing between those is a governance decision, not a refactor.",
+        "A record with an outcome section and one without; assert the probe tells them apart, "
+        "and assert an accepted record is still refused an edit — the ledger must not be built "
+        "by making records mutable.",
+        "python scripts/correction_register.py --id ADR-LEDGER",
+        _p_adr_ledger,
+        [S_DOC, S_TDD],
     ),
     Finding(
         "F205",

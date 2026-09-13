@@ -412,29 +412,182 @@ def _check_float_money(node: ast.AST, add) -> None:
             return
 
 
+# Argument-less string methods a flag expression may chain onto the read before
+# comparing. `os.getenv(...).strip().lower() == "true"` is the house idiom, and
+# matching the un-chained form alone is what made this check blind (see below).
+_STR_METHODS = frozenset({"lower", "upper", "strip", "lstrip", "rstrip", "casefold", "title"})
+_PERMISSIVE_DEFAULTS = frozenset({"false", "0", "no", "off", "", "none", "disabled"})
+_UNDECIDABLE = object()
+
+# Flags that DISABLE a control when set. Off is their safe state, so "off unless
+# set" is the correct configuration and reporting it would call correct code a
+# defect. `HEAL_ALLOW_UNSIGNED_PATCHES` is the case this module's own docstring
+# names: without a signing key the patch queue is refused, and that flag is the
+# only way through, deliberately not defaulted.
+#
+# This is a name-based exclusion, which is the weakest kind of evidence in this
+# repository and is used here because nothing stronger is available statically —
+# polarity lives in the variable's meaning, not its syntax. It is kept narrow and
+# pinned by tests in both directions: that these stay excluded, and that a
+# control-ENABLING flag (DRIFT_BLOCK, WS_AUTH_REQUIRED, REDIS_FORCE_TLS) is still
+# reported. Without the second, widening this set to silence a noisy finding is
+# invisible, and an exclusion list becomes an excuse list.
+_OPT_OUT_MARKERS = (
+    "SKIP",
+    "DISABLE",
+    "BYPASS",
+    "IGNORE",
+    "UNSAFE",
+    "INSECURE",
+    "ALLOW_UNSIGNED",
+    "OPT_OUT",
+    "NO_VERIFY",
+)
+
+
+def _is_opt_out(variable: str) -> bool:
+    upper = variable.upper()
+    return any(marker in upper for marker in _OPT_OUT_MARKERS)
+
+
+def _env_read(node: ast.AST) -> tuple[str, str, list[str]] | None:
+    """Unwrap a chained read down to `os.getenv` / `os.environ.get`.
+
+    Returns (variable, default, methods-in-source-order), or None if this is not
+    an environment read carrying a literal default.
+    """
+    methods: list[str] = []
+    cur = node
+    while (
+        isinstance(cur, ast.Call)
+        and isinstance(cur.func, ast.Attribute)
+        and cur.func.attr in _STR_METHODS
+        and not cur.args
+        and not cur.keywords
+    ):
+        methods.append(cur.func.attr)
+        cur = cur.func.value
+
+    if not (isinstance(cur, ast.Call) and isinstance(cur.func, ast.Attribute)):
+        return None
+    reader = cur.func
+    is_getenv = reader.attr == "getenv"
+    is_environ_get = reader.attr == "get" and isinstance(reader.value, ast.Attribute) and reader.value.attr == "environ"
+    if not (is_getenv or is_environ_get):
+        return None
+    if len(cur.args) < _GETENV_WITH_DEFAULT:
+        # No default: unset raises or yields None rather than silently disabling
+        # a control, and there is nothing to fold. Claiming either way here would
+        # be Rule 2's unmeasured-rendered-as-a-finding.
+        return None
+
+    name_node, default_node = cur.args[0], cur.args[1]
+    if not (isinstance(default_node, ast.Constant) and isinstance(default_node.value, str)):
+        return None
+    variable = name_node.value if isinstance(name_node, ast.Constant) and isinstance(name_node.value, str) else "?"
+    # Collected outermost-first while descending; source order is the reverse.
+    return variable, default_node.value, list(reversed(methods))
+
+
+def _literal(node: ast.AST):
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Tuple | ast.List | ast.Set) and all(isinstance(e, ast.Constant) for e in node.elts):
+        return [e.value for e in node.elts]
+    return _UNDECIDABLE
+
+
+def _flag_is_off_by_default(compare: ast.Compare, default: str, methods: list[str]):
+    """Evaluate the flag expression against its own default. True == off.
+
+    This is the part that makes the check hard to slip past. It does not match a
+    shape; it asks what the expression *yields* when the variable is unset, so a
+    spelling nobody anticipated still has to evaluate to False to be reported —
+    and a control that is ON by default is not reported however permissive its
+    default string looks (`== "false"` with default `"false"` is on).
+    """
+    if len(compare.ops) != 1 or len(compare.comparators) != 1:
+        return _UNDECIDABLE
+    value: object = default
+    for method in methods:
+        try:
+            value = getattr(value, method)()
+        except Exception:  # pragma: no cover - a method we mis-modelled
+            return _UNDECIDABLE
+    other = _literal(compare.comparators[0])
+    if other is _UNDECIDABLE:
+        return _UNDECIDABLE
+    op = compare.ops[0]
+    try:
+        if isinstance(op, ast.Eq):
+            return value == other
+        if isinstance(op, ast.NotEq):
+            return value != other
+        if isinstance(op, ast.In):
+            return value in other
+        if isinstance(op, ast.NotIn):
+            return value not in other
+    except TypeError:
+        return _UNDECIDABLE
+    return _UNDECIDABLE
+
+
 def _check_permissive_env(node: ast.AST, add) -> None:
-    if not isinstance(node, ast.Assign):
+    """A control that is OFF when its variable is unset.
+
+    This check passed for the life of the module while finding nothing. It
+    required the comparison's LEFT to BE the `getenv` call, so it matched only
+    `os.getenv("X", "false") == "true"` — and measured 2026-09-13, not one of the
+    38 permissive defaults in this tree is written that way. They wrap the read,
+    almost always in `.lower()`. Its test used the un-wrapped form too, so the
+    fixture agreed with the check and neither agreed with the codebase.
+
+    It now unwraps the chain, accepts `os.environ.get`, reads annotated
+    assignments, and decides by folding the default through the expression
+    rather than by recognising a shape.
+    """
+    if isinstance(node, ast.AnnAssign):
+        targets: list[ast.AST] = [node.target] if node.value is not None else []
+        value = node.value
+    elif isinstance(node, ast.Assign):
+        targets = list(node.targets)
+        value = node.value
+    else:
         return
-    compare = node.value
-    if not isinstance(compare, ast.Compare):
+    if not isinstance(value, ast.Compare):
         return
-    left = compare.left
-    if not (isinstance(left, ast.Call) and isinstance(left.func, ast.Attribute) and left.func.attr == "getenv"):
+
+    read = _env_read(value.left)
+    if read is None:
         return
-    if len(left.args) < _GETENV_WITH_DEFAULT:
+    variable, default, methods = read
+    if _is_opt_out(variable):
+        # Off is this flag's safe state; see _OPT_OUT_MARKERS.
         return
-    default = left.args[1]
-    if not (isinstance(default, ast.Constant) and isinstance(default.value, str)):
-        return
-    if default.value.strip().lower() not in {"false", "0", "no", "off", ""}:
-        return
-    for target in node.targets:
-        name = target.id if isinstance(target, ast.Name) else getattr(target, "attr", "")
-        add(
-            "permissive_env_default",
-            node.lineno,
-            f"{name} is off unless its variable is set, so the control it gates is off in every environment "
-            "that has not been told otherwise — including a fresh deployment",
-            severity="high",
+
+    verdict = _flag_is_off_by_default(value, default, methods)
+    if verdict is _UNDECIDABLE:
+        # Surfaced rather than swallowed: the default looks permissive and the
+        # expression could not be evaluated, so a reader is told what is unknown
+        # instead of the finding disappearing because the spelling was novel.
+        if default.strip().lower() not in _PERMISSIVE_DEFAULTS:
+            return
+        severity, claim = (
+            "medium",
+            f"{{name}} reads {variable} with a permissive default ({default!r}) in a comparison this "
+            "check could not evaluate, so whether the control is off when unset is UNDETERMINED — "
+            "read it by hand rather than assuming either answer",
         )
+    elif verdict is False:
+        severity, claim = (
+            "high",
+            f"{{name}} is off unless {variable} is set, so the control it gates is off in every "
+            "environment that has not been told otherwise — including a fresh deployment",
+        )
+    else:
+        return
+
+    for target in targets:
+        name = target.id if isinstance(target, ast.Name) else getattr(target, "attr", "")
+        add("permissive_env_default", node.lineno, claim.format(name=name), severity=severity)
         return

@@ -549,3 +549,207 @@ def test_the_department_result_carries_the_dropped_check_rather_than_hiding_it()
     result = platform_engineering.walk_code(paths="ai/improve")
     dropped = {entry["check"] for entry in result["checks_skipped"]}
     assert "dead_control" in dropped
+
+
+# ── permissive_env_default: the shapes this codebase actually writes ──────────
+#
+# The check above passed for the life of the module while finding nothing, and
+# the test that covered it is the reason. Its fixture wrote
+#
+#     ENFORCE_SIGNATURES = os.getenv("ENFORCE_SIGNATURES", "false") == "true"
+#
+# and the check matched exactly that: a Compare whose LEFT IS the getenv call.
+# Not one flag in this repository is written that way. Measured 2026-09-13, all
+# 38 permissive env defaults in the tree wrap the call — `.lower()`, usually —
+# and every one was invisible. Among them FEATURE_LIVE_TRADING,
+# REDIS_TLS_SKIP_VERIFY, PROP_FIRM_MODE, SKIP_COVERAGE_GATE, and DRIFT_BLOCK and
+# MODEL_QUALITY_BLOCK themselves.
+#
+# A synthetic fixture in a form the production code never uses is how a control
+# stays green and blind at once. These cases are the forms the tree has.
+
+
+def _permissive_hits(tmp_path, body: str):
+    from ai.improve import walker
+
+    root = _tree(tmp_path, {"sec/gate.py": body})
+    report = walker.walk(root, checks=("permissive_env_default",))
+    return [f for f in report.findings if f.check == "permissive_env_default"]
+
+
+def test_it_finds_the_lower_wrapped_form_the_repo_actually_writes(tmp_path):
+    """`ml/inference_engine.py:120` is this shape, and it was missed."""
+    assert _permissive_hits(
+        tmp_path,
+        """
+        import os
+        DRIFT_BLOCK = os.getenv("DRIFT_BLOCK", "false").lower() == "true"
+        """,
+    )
+
+
+def test_it_finds_the_annotated_form(tmp_path):
+    """`_STALE_MODEL_BLOCK` is written with an annotation; AnnAssign was skipped."""
+    assert _permissive_hits(
+        tmp_path,
+        """
+        import os
+        QUALITY_BLOCK: bool = os.getenv("MODEL_QUALITY_BLOCK", "false").lower() == "true"
+        """,
+    )
+
+
+def test_it_finds_environ_get_as_well_as_getenv(tmp_path):
+    """`os.environ.get` is the same read spelled differently.
+
+    This fixture first used SKIP_COVERAGE_GATE, which was a bad choice and
+    failed the moment polarity landed below — SKIP_ is an opt-out and is
+    excluded on purpose, so the test was asserting two unrelated things at once
+    and would have passed for the wrong reason if the exclusion had gone in
+    first. The variable here enables a control, so this case tests only the
+    thing it names.
+    """
+    assert _permissive_hits(
+        tmp_path,
+        """
+        import os
+        WS_AUTH = os.environ.get("WS_AUTH_REQUIRED", "0").strip().lower() == "1"
+        """,
+    )
+
+
+def test_it_finds_a_membership_test(tmp_path):
+    """`in ("1", "true")` is a comparison too, and defaults to off here."""
+    assert _permissive_hits(
+        tmp_path,
+        """
+        import os
+        LIVE = os.getenv("FEATURE_LIVE_TRADING", "0") in ("1", "true", "yes")
+        """,
+    )
+
+
+# ── and the negative controls, which are what stop this becoming a grep ───────
+
+
+def test_a_default_that_leaves_the_control_ON_is_not_flagged(tmp_path):
+    """The string is "false" and the flag is True by default.
+
+    Matching on the default string alone would call this permissive. It is the
+    opposite: unset, the comparison yields True and the control is on. The check
+    folds the default through the expression instead of pattern-matching it,
+    which is also what makes it hard to slip past — a shape it has not seen
+    still has to evaluate to False to be reported.
+    """
+    assert not _permissive_hits(
+        tmp_path,
+        """
+        import os
+        REFUSE_UNSIGNED = os.getenv("HEAL_ALLOW_UNSIGNED_PATCHES", "false").lower() == "false"
+        """,
+    )
+
+
+def test_a_safe_default_is_not_flagged(tmp_path):
+    assert not _permissive_hits(
+        tmp_path,
+        """
+        import os
+        STALE_BLOCK = os.getenv("STALE_MODEL_BLOCK", "true").lower() == "true"
+        """,
+    )
+
+
+def test_a_getenv_with_no_default_is_not_flagged(tmp_path):
+    """Nothing to fold, so nothing is claimed. Unmeasured is absent, never zero."""
+    assert not _permissive_hits(
+        tmp_path,
+        """
+        import os
+        FLAG = os.getenv("SOMETHING") == "true"
+        """,
+    )
+
+
+# ── the positive control: it must fire on the real tree ───────────────────────
+
+
+def test_it_finds_the_real_flags_it_was_blind_to():
+    """A check that cannot fire on its own repository is the defect it hunts.
+
+    Asserting against the live tree rather than a fixture is the point: the
+    fixture is what hid this for so long. If these three flags are ever renamed
+    this test fails loudly, which is the correct outcome — it is naming the
+    instances that proved the check was dead.
+    """
+    from ai.improve import walker
+
+    report = walker.walk(_ROOT, paths=("ml",), checks=("permissive_env_default",))
+    hits = [f for f in report.findings if f.check == "permissive_env_default"]
+    assert report.summary()["files_walked"] > 10, "walked almost nothing; the assertion below would be vacuous"
+
+    claimed = " ".join(f.claim for f in hits)
+    for flag in ("DRIFT_BLOCK", "MODEL_QUALITY_BLOCK", "FEATURE_ONLINE_LEARNING"):
+        assert flag in claimed, f"{flag} is a permissive default in ml/ and was not reported"
+
+
+# ── polarity: an opt-out flag is SAFE when it is off ──────────────────────────
+#
+# Widening the check surfaced three flags whose off-state is the correct one:
+# HEAL_ALLOW_UNSIGNED_PATCHES (off => unsigned patches refused),
+# SKIP_COVERAGE_GATE (off => the gate runs) and REDIS_TLS_SKIP_VERIFY (off =>
+# TLS is verified). The walker's own module docstring already names the first as
+# the shape this check must NOT report.
+#
+# Reporting them would be worse than the original blindness. A check that calls
+# correct code a defect is switched off by the first person it interrupts —
+# which is the reasoning GROUP2 records for why the emoji ratchet excludes box
+# drawing rather than reporting eighty thousand violations on its first run. So
+# the exclusion is narrow, name-based, and pinned: these tests are what stop it
+# quietly growing into an excuse list.
+
+
+def test_an_opt_out_flag_is_not_reported(tmp_path):
+    """The exact line `security/self_healer.py:146` carries."""
+    assert not _permissive_hits(
+        tmp_path,
+        """
+        import os
+        ALLOW = os.getenv("HEAL_ALLOW_UNSIGNED_PATCHES", "").strip().lower() in ("1", "true", "yes")
+        """,
+    )
+
+
+def test_skip_and_disable_shapes_are_not_reported(tmp_path):
+    for body in (
+        'SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"',
+        'NOVERIFY = os.getenv("REDIS_TLS_SKIP_VERIFY", "false").lower() == "true"',
+        'OFF = os.getenv("DISABLE_RATE_LIMIT", "false").lower() == "true"',
+        'BYPASS = os.getenv("BYPASS_RISK_GATE", "false").lower() == "true"',
+    ):
+        assert not _permissive_hits(tmp_path, f"import os\n{body}\n"), body
+
+
+def test_the_exclusion_does_not_swallow_a_real_control(tmp_path):
+    """The narrowness is the point: a control-ENABLING flag is still reported.
+
+    Without this, widening the exclusion list to silence a noisy finding would
+    go unnoticed — which is how an exclusion becomes an excuse list.
+    """
+    for body in (
+        'DRIFT_BLOCK = os.getenv("DRIFT_BLOCK", "false").lower() == "true"',
+        'WS_AUTH = os.getenv("WS_AUTH_REQUIRED", "false").lower() == "true"',
+        'TLS = os.getenv("REDIS_FORCE_TLS", "false").lower() == "true"',
+    ):
+        assert _permissive_hits(tmp_path, f"import os\n{body}\n"), body
+
+
+def test_the_real_tree_no_longer_reports_the_three_correct_flags():
+    """Positive control against the live tree, not a fixture."""
+    from ai.improve import walker
+
+    report = walker.walk(_ROOT, paths=("security", "scripts", "cache"), checks=("permissive_env_default",))
+    assert report.summary()["files_walked"] > 10, "walked almost nothing; the assertion below would be vacuous"
+    claimed = " ".join(f.claim for f in report.findings if f.check == "permissive_env_default")
+    for safe in ("HEAL_ALLOW_UNSIGNED_PATCHES", "SKIP_COVERAGE_GATE", "REDIS_TLS_SKIP_VERIFY"):
+        assert safe not in claimed, f"{safe} is an opt-out; off is its safe state and it must not be reported"
