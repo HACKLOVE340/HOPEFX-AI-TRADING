@@ -2044,7 +2044,7 @@ of the whole specification.
 | # | Gap | Chapter | Priority | Why this rank |
 |---|---|---|---|---|
 | ~~1~~ | ~~Tested backup and restore~~ | 9 | **DONE** — Phase R1 | `database/restore.py`; round trip proven against SQLite and a live PostgreSQL 16.13 with matching checksums. Found two defects by execution: a WAL database backed up file-only restored to nothing, and pg_dump was buffered entirely in memory |
-| ~~2~~ | ~~Rule 1 injection evidence across existing gates~~ | 0, 19, 20 | **DONE — R2–R12** | **23 gates, 23 proven, 0 unproven.** Injecting found further dead controls — gate M passed with no dataset, the secret scanner skipped credentials containing `xxx` or `none`, and gate E's dead-file detector had never actually detected a dead file in any guarded package — though not every gate is broken: gate C's docker-compose safety defaults were already alive |
+| ~~2~~ | ~~Rule 1 injection evidence across existing gates~~ | 0, 19, 20 | **DONE — R2–R12** | **32 gates, 32 proven, 0 unproven** (`python scripts/gate_evidence.py`; this cell read 23/23/0 at R12 and the ledger has grown with the gates since — the count is discovered, never listed, so it moves on its own).** Injecting found further dead controls — gate M passed with no dataset, the secret scanner skipped credentials containing `xxx` or `none`, and gate E's dead-file detector had never actually detected a dead file in any guarded package — though not every gate is broken: gate C's docker-compose safety defaults were already alive |
 | 3 | Acceleration answer-invariance: cache age carried, downgrade always visible | 28, 32, 33 | High | A stale price or a silent model downgrade is a wrong answer delivered quickly |
 | 4 | Data egress and sovereignty boundary | 13 | High | Blocks Group 1 §23/§24; currently convention, not control |
 | 5 | Correlation key joining metrics, traces, logs, changes | 14 | High | Blocks Group 1 §16 |
@@ -2064,7 +2064,7 @@ of the whole specification.
 | 19 | Execution-target abstraction and capability probe | 29 | Medium | No target may be claimed until something has run on it |
 | 20 | API versioning and deprecation policy | 21 | Low | No external consumers yet |
 | 21 | Retention and classification policy | 25 | Low | Prerequisite for 3 at scale |
-| 22 | `data/` ÷ `data_layer/` boundary decision | 1, 25 | Low | Holding position is workable; decide deliberately |
+| ~~22~~ | ~~`data/` ÷ `data_layer/` boundary decision~~ | 1, 25 | **DONE 2026-09-09** | ADR 0013 (accepted) decides it: `data/` owns live streaming and serving, `data_layer/` owns market-data access, `market_data/` owns broker-side feeds. It is a rule describing what the code already does, not a licence to move the 106 production importers — the decision was the deliverable, and no module moved. Closed as F217 in the correction register, whose probe resolves the ADR rather than reading this row |
 
 ### Why this design
 

@@ -906,9 +906,15 @@ Group 3: root/docs duplicate contracts (Ch 1, 3) · outcome memory linkage (Ch 8
 ### B4. Low
 
 API versioning and deprecation policy (Group 2 Ch 21) · retention and
-classification policy (Ch 25) · `data/` ÷ `data_layer/` boundary (Ch 1, 25 —
-decision A2) · semantic search with provenance (Group 3 Ch 16) · tiering the six
-dated audits and archiving completed plans (Group 3 Ch 1, 4).
+classification policy (Ch 25) · ~~`data/` ÷ `data_layer/` boundary (Ch 1, 25 —
+decision A2)~~ **decided 2026-09-09, ADR 0013** · semantic search with provenance
+(Group 3 Ch 16) · tiering the six dated audits and archiving completed plans
+(Group 3 Ch 1, 4).
+
+§A2 above was struck through when the decision was made and this line was not,
+so the same item read as decided in one section and outstanding two hundred
+lines later. Group 2's ranked gap list carried it as open item 22 for the same
+reason; both are now struck with ADR 0013 as the evidence.
 
 ---
 
