@@ -9,7 +9,6 @@
 
 adopted = "2026-09-08"
 known = [
-  "stale_path|AGENTS-IMPROVEMENT-SPEC.md|`scripts/generate_wordmap.py` does not exist, but `scripts/` does",
   "stale_path|ARCHITECTURE.md|`ml/saved_models/lstm_signal.pt` does not exist, but `ml/saved_models/` does",
   "stale_path|README.md|`docs/FEATURES.md` does not exist, but `docs/` does",
   "stale_path|docs/AB_ML_VS_BASELINE.md|`ml/saved_models/ab_baseline_report.json` does not exist, but `ml/saved_models/` does",
@@ -37,10 +36,6 @@ known = [
   "stale_path|docs/SETUP_GUIDE.md|`market_data/nuclear_streamer.py` does not exist, but `market_data/` does",
   "stale_path|docs/UPDATE_RUNBOOK.md|`frontend/dist` does not exist, but `frontend/` does",
   "stale_path|docs/VIDEO_TUTORIALS.md|`risk/halt_state.json` does not exist, but `risk/` does",
-  "stale_path|docs/architecture.md|`brokers/alpaca_broker.py` does not exist, but `brokers/` does",
-  "stale_path|docs/architecture.md|`brokers/binance_broker.py` does not exist, but `brokers/` does",
-  "stale_path|docs/architecture.md|`brokers/bybit_broker.py` does not exist, but `brokers/` does",
-  "stale_path|docs/architecture.md|`brokers/paper_broker.py` does not exist, but `brokers/` does",
   "stale_path|docs/audit/CODE_READING_FINDINGS.md|`api/custom-indicators` does not exist, but `api/` does",
   "stale_path|docs/audit/CODE_READING_FINDINGS.md|`api/metrics.py` does not exist, but `api/` does",
   "stale_path|docs/audit/CODE_READING_FINDINGS.md|`config/credentials.enc` does not exist, but `config/` does",

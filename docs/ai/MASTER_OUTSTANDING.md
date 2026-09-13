@@ -825,7 +825,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `ai/hub/capabilities.py` | Specification capabilities and their evidence | 233 rows · 230 live · 3 staged · 233/233 evidence resolves |
 | `scripts/capability_callers.py` | Live rows with no production caller | 154 screened · **37 flagged** |
 | `docs/REGISTRY.toml` | Documents, tiers, owners, contested subjects | 201 registered · **197 unowned** · 3 contested subjects |
-| `docs/FRESHNESS_BASELINE.toml` | Stale references in living documents | **41 outstanding** |
+| `docs/FRESHNESS_BASELINE.toml` | Stale references in living documents | **36 outstanding** |
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
@@ -5066,7 +5066,7 @@ run, not a recollection.
 |---|---|
 | Specification capabilities | 233 rows · **233 live** · 0 staged · 0 planned · 0 discrepancies |
 | Live capabilities with no production caller | 157 screened · **38 flagged** → **37** after this change |
-| Documentation debt | 224 registered · 197 with no owner · 3 duplicate subjects · 41 stale refs |
+| Documentation debt | 227 registered · 197 with no owner · 3 duplicate subjects · 36 stale refs |
 | Group 2 platform gaps | 19 outstanding (3 struck through) |
 | Group 3 knowledge gaps | 6 outstanding (8 struck through) |
 | Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
