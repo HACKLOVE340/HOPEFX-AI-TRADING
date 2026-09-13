@@ -196,6 +196,13 @@ evidence = "tests/unit/test_frontend_colour_ratchet.py"
 injected = "Three distinct regressions, each refused: an extra hex literal in a baselined file (20 -> 21 blocks with both counts named), a brand-new file carrying one literal (no baseline entry blocks), and a file driven to zero while its baseline line remains (blocks with 'delete the line'). Also proven against the real tree rather than only a fixture: appending '#abcdef' to frontend/src/pages/NotFound.tsx took the total 8021 -> 8022 and the gate blocked naming that file; restoring it returned the gate to green. A sanity floor test asserts the recorded total exceeds 5000, so a glob or regex that stops matching reads as a broken counter rather than as 8021 clean files"
 
 [[gate]]
+id = "schema-migration-check"
+kind = "pre_commit"
+runs = "scripts/schema_migration_check.py --check"
+evidence = "tests/unit/test_schema_migration_check.py"
+injected = "Five refusals against a throwaway tree: a table added to database/models.py with no migration, the same for database/user_models.py (the module F218's original probe never read, so a genuine gap there was invisible), a deleted migration, a scan that finds no tables, and a scan that finds no migrations — the last two fail closed rather than certifying a tree they never read. Four more tests exist because this gate replaces one that cried wolf: F218 reported `36 of 44 tables have no migration` and the real number was 0 of 47, because 35 tables are created through a local `_tbl()` idempotency wrapper and four via a module-level constant, neither of which the old regex could see. So all three real declaration styles are exercised and must be RECOGNISED, and neutralising the wrapper resolution reproduces the historic 36 exactly — which is how the false-positive cause was proven rather than surmised"
+
+[[gate]]
 id = "model-provenance-ratchet"
 kind = "pre_commit"
 runs = "scripts/model_provenance_report.py --check"

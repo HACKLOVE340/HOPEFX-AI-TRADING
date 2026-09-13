@@ -46,6 +46,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Is the feature-drift guard running, and what is it measuring? | `python scripts/drift_guard_report.py` · ADR 0019 — most of today's z is zero-filled features, not drift |
 | Do we know the identity of the model artifacts we ship? | `python scripts/model_provenance_report.py` · `ml/saved_models/model_checksums.json` |
 | Which model loaders reach no integrity check at all? | `python scripts/model_provenance_report.py --check` · `docs/MODEL_PROVENANCE_DEBT.json` |
+| Does every ORM table have a migration, or only `create_all()`? | `python scripts/schema_migration_check.py --check` |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |
@@ -60,8 +61,8 @@ The ratcheted checks below run in `pre-commit`, so a regression blocks rather
 than accumulating: document registry, documentation freshness, Group 4 source
 preservation, volume-index drift, gate injection evidence, stated-figure drift,
 per-module coverage, frontend colour literals, frontend emoji, ungated model
-loaders, AOS invariant conformance, spatial capability evidence, and
-correction-register drift.
+loaders, ORM tables without a migration, AOS invariant conformance, spatial
+capability evidence, and correction-register drift.
 
 **They only block once the hook is installed.** Until 2026-09-09 nothing
 installed it, so on a fresh clone that sentence described something that was not

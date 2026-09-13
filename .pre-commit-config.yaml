@@ -341,6 +341,20 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # Base.metadata.create_all() creates what is missing and never ALTERs, so
+      # a table with no migration drifts between a fresh install and an upgraded
+      # one and nothing notices until a query fails on one of them (F218). The
+      # check resolves names with the AST rather than matching text: 35 of the
+      # 47 tables are created through a local `_tbl()` idempotency wrapper and
+      # four via a module-level constant, neither of which a regex sees.
+      - id: schema-migration-check
+        name: Every ORM table is created by a migration
+        language: system
+        entry: python scripts/schema_migration_check.py --check
+        files: '^(database/(models|user_models)\.py$|alembic/versions/.*\.py$|scripts/schema_migration_check\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
       # The AOS specification's §30 register maps 26 named invariants onto what
       # this repository enforces. Every claim in it names a live predicate or a
       # file on disk, so a rename anywhere under invariants/ can turn a row into

@@ -569,20 +569,124 @@ def _p_f221() -> tuple[str, str]:
     )
 
 
+def _p_create_all_upgrade() -> tuple[str, str]:
+    """`alembic upgrade head` over a create_all() database dies on a collision.
+
+    Static, not executed: running the migration chain takes seconds and needs a
+    scratch database, which a pre-commit probe should not do. It asks the
+    question the failure turns on — does a migration call `op.create_table` for
+    a table the ORM also declares, without first checking whether it exists?
+    """
+    import ast
+
+    declared: set[str] = set()
+    for rel in ("database/models.py", "database/user_models.py"):
+        try:
+            tree = ast.parse(_read(rel))
+        except (SyntaxError, ValueError):
+            continue
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+                and any(isinstance(t, ast.Name) and t.id == "__tablename__" for t in node.targets)
+            ):
+                declared.add(node.value.value)
+
+    if not declared:
+        return UNVERIFIED, "no __tablename__ found — the scan is broken, not the ORM"
+
+    unguarded: list[str] = []
+    files = _glob("alembic/versions/*.py")
+    if not files:
+        return UNVERIFIED, "no migrations found — the scan is broken"
+
+    for rel in files:
+        body = _read(rel)
+        try:
+            tree = ast.parse(body)
+        except SyntaxError:
+            continue
+        # TABLE guards only. A first version also accepted the generic
+        # `if_not_exists`, which matches `_add_index_if_not_exists` and
+        # `_add_column_if_not_exists` — so `n1o2p3q4r5s6`, the migration that
+        # actually fails, was skipped as guarded while a different file was
+        # reported. A probe that names the wrong file to fix is worse than one
+        # that names none.
+        guarded = any(token in body for token in ("_tbl(", "_table_exists", "has_table", "get_table_names"))
+        if guarded:
+            continue
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "create_table"):
+                continue
+            arg = node.args[0] if node.args else None
+            name = arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else None
+            if name in declared:
+                unguarded.append(f"{rel.split('/')[-1]}:{name}")
+
+    if unguarded:
+        return OPEN, (
+            f"{len(unguarded)} unguarded create_table call(s) for a table the ORM also "
+            f"declares: {', '.join(sorted(unguarded)[:4])} — `alembic upgrade head` over a "
+            "database built by create_all() dies there"
+        )
+    return FIXED, (
+        f"every migration that creates one of the {len(declared)} ORM tables checks first, so "
+        "a create_all() database can be brought under migration control"
+    )
+
+
 def _p_f218() -> tuple[str, str]:
-    """Model tables that exist only via create_all() and have no migration."""
-    tables = set(re.findall(r'__tablename__\s*=\s*"([^"]+)"', _code("database/models.py")))
-    # Only a create_table declaration counts. Searching the whole migration text
-    # matched table names inside comments and reported 0 missing of 44.
-    mig = "\n".join(_code(p) for p in _tracked("alembic/versions/*.py"))
-    created = set(re.findall(r'create_table\(\s*["\']([^"\']+)["\']', mig))
-    missing = sorted(tables - created)
-    if not tables:
-        return UNVERIFIED, "no __tablename__ found in database/models.py"
-    return _named(
-        OPEN if missing else FIXED,
-        f"{len(missing)} of {len(tables)} tables have no migration"
-        + (f": {', '.join(missing[:6])}" if missing else ""),
+    """Model tables that exist only via create_all() and have no migration.
+
+    Delegates to scripts/schema_migration_check.py, which resolves names instead
+    of matching text. The previous probe searched the migration corpus for
+
+        create_table(  "table_name"
+
+    and reported "36 of 44 tables have no migration". The real number was 0 of
+    47, and the gap was entirely the probe's:
+
+      * 35 tables are created through a local `_tbl(name, *args, **kwargs)`
+        idempotency wrapper, so the literal never sits beside `create_table`;
+      * four more are created as `op.create_table(_TABLE, ...)` against a
+        module-level constant;
+      * three live in `database/user_models.py`, which the probe never read —
+        it would have missed a genuine gap there entirely.
+
+    32 false positives is worse than no probe: a real missing migration would
+    have been invisible in the noise, and the figure was quoted in three
+    documents as a P1.
+    """
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "_schema_migration_check", ROOT / "scripts" / "schema_migration_check.py"
+        )
+        if spec is None or spec.loader is None:
+            return UNVERIFIED, "scripts/schema_migration_check.py could not be loaded"
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    except Exception as exc:
+        return UNVERIFIED, f"schema_migration_check unavailable: {type(exc).__name__}: {exc}"
+
+    declared = mod.declared_tables(ROOT)
+    created = mod.migrated_tables(ROOT)
+    if not declared or not created:
+        # A scan that matched nothing agrees with any conclusion (F255).
+        return UNVERIFIED, "the schema scan found no tables or no migrations — broken scan, not a clean tree"
+
+    missing = sorted(set(declared) - set(created))
+    if missing:
+        return OPEN, (
+            f"{len(missing)} of {len(declared)} tables have no migration and exist only via "
+            f"create_all(), which never ALTERs: {', '.join(missing[:6])}"
+        )
+    return FIXED, (
+        f"all {len(declared)} ORM tables across {len(set(declared.values()))} models module(s) "
+        f"are created by a migration; pinned by tests/unit/test_schema_migration_check.py"
     )
 
 
@@ -2132,6 +2236,40 @@ S_DOC = "doc-freshness-review"
 FINDINGS: list[Finding] = [
     # ── Verification capability ────────────────────────────────────────────
     Finding(
+        "MIGRATE-OVER-CREATEALL",
+        "`alembic upgrade head` cannot run over a database built by `create_all()`",
+        "P2",
+        "Persistence",
+        "This session, 2026-09-13 — reproduced by execution; noted but untracked in docs/audit/TODO.md #3",
+        "`create_all()` is called from five places — `database/connection.py`, "
+        "`database/models.py`, `cli.py` (twice), `scripts/bootstrap_dev.py` and "
+        "`scripts/create_superadmin.py` — so a developer who bootstraps and then runs "
+        "`alembic upgrade head` hits this, and a deployment first stood up that way can "
+        "**never** be brought under migration control. Reproduced: build the schema with "
+        "`Base.metadata.create_all()` (47 tables), then `alembic upgrade head` fails at "
+        "`m1n2o3p4q5r6 -> n1o2p3q4r5s6` with `sqlite3.OperationalError: table "
+        "trade_journal already exists`. Most migrations define a local `_tbl()` wrapper "
+        "that skips an existing table for exactly this reason; three do not, and "
+        "`n1o2p3q4r5s6` is simply the first one reached. The fix is to give those three "
+        "the same guard their siblings already use — not to change what `create_all()` "
+        "does. Recorded in docs/audit/TODO.md as 'still open, deliberately not fixed "
+        "here', where nothing measured it; tracked now so it cannot be lost.",
+        "**Fixed 2026-09-13.** Both migrations now define the `_tbl()` / `_idx()` guards "
+        "their siblings already use. tests/unit/test_migrations_run_over_a_create_all_"
+        "database.py carries four, two of them red on the pre-fix tree: upgrade-to-head "
+        "over a create_all() database, and the same run twice (an operator re-running a "
+        "failed deploy). Two are controls and both earned their place — one asserts "
+        "create_all() really produced the colliding table, without which the regression "
+        "could pass for want of a collision; the other asserts a FRESH migration run still "
+        "creates all 47 tables, because a guard computing `_existing_tables` wrongly would "
+        "make every create_table a no-op and leave an empty schema behind a green run. "
+        "Verified up -> down -> up as well, and the pre-existing column-level suite "
+        "(test_migrated_schema_matches_models.py, 9 tests) still passes.",
+        "python scripts/correction_register.py --id MIGRATE-OVER-CREATEALL",
+        _p_create_all_upgrade,
+        [S_TDD, S_DEBUG],
+    ),
+    Finding(
         "DEPLOY-CHART",
         "The chart ArgoCD deploys carried none of the safety posture the tests verify",
         "P0",
@@ -2457,11 +2595,26 @@ FINDINGS: list[Finding] = [
         "P1",
         "Persistence",
         "docs/audit/REMEDIATION_PLAN.md — Phase 4",
-        "`create_all()` never ALTERs, so these tables drift silently between a fresh "
-        "install and an upgraded one. Add the missing migrations, then a CI check "
-        "comparing `__tablename__`s against the migration history.",
-        "The CI check itself is the test: assert every `__tablename__` appears in "
-        "`alembic/versions/`, and watch it fail with one removed.",
+        "`create_all()` never ALTERs, so a table with no migration drifts silently between "
+        "a fresh install and an upgraded one. **The count was wrong, and that is the "
+        "finding.** It read '36 of 44 tables have no migration'; measured with names "
+        "resolved rather than matched as text it is 0 of 47. The probe searched the "
+        "migration corpus for a string literal beside `create_table(`, and this repository "
+        "does not write that: 35 tables are created through a local `_tbl()` idempotency "
+        "wrapper, four via `op.create_table(_TABLE, ...)` against a module-level constant, "
+        "and three live in `database/user_models.py`, which the probe never read — so a "
+        "genuine gap THERE would have been missed entirely. 32 false positives is worse "
+        "than no probe: a real missing migration is invisible in that noise, and the figure "
+        "was quoted as a P1 in three documents. The CI check F218 asked for now exists as "
+        "`scripts/schema_migration_check.py --check`, wired into pre-commit and registered "
+        "in GATE_EVIDENCE.toml.",
+        "tests/unit/test_schema_migration_check.py, deliberately in two halves. It can "
+        "fail: a table added to EITHER models module with no migration is refused, removing "
+        "a migration is refused, and a scan finding no tables or no migrations fails closed "
+        "rather than certifying a tree it never read. It does not cry wolf: all three real "
+        "declaration styles — plain literal, `_tbl()` wrapper, module-level constant — are "
+        "exercised against a throwaway tree and must be recognised, because two of the three "
+        "are exactly what produced the 32 false positives.",
         "python scripts/correction_register.py --id F218",
         _p_f218,
         [S_TDD],

@@ -32,8 +32,41 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # ── Idempotency ───────────────────────────────────────────────────────────
+    # `Base.metadata.create_all()` is called from five places in this
+    # repository, so a database can reach this migration with these tables
+    # already present. Unguarded, `op.create_table` then raised
+    # `table trade_journal already exists` and the upgrade stopped here — which meant a
+    # deployment first stood up with `create_all()` could NEVER be brought under
+    # migration control, because every attempt died at this same commit
+    # (MIGRATE-OVER-CREATEALL).
+    #
+    # This is the guard nearly every sibling migration already defines. Adding
+    # it to a migration that has already run is safe in both directions: where
+    # the table exists it skips, and the end state is identical.
+    bind = op.get_bind()
+    _existing_tables = set(sa.inspect(bind).get_table_names())
+
+    def _tbl(name, *args, **kwargs):
+        """Create table only if it does not already exist."""
+        if name not in _existing_tables:
+            op.create_table(name, *args, **kwargs)
+
+    def _idx(index_name, table_name, *args, **kwargs):
+        """Create index only if it does not already exist.
+
+        Re-inspects each time, so an index on a table created earlier in this
+        same upgrade() call is handled correctly.
+        """
+        try:
+            existing = {i["name"] for i in sa.inspect(bind).get_indexes(table_name)}
+        except Exception:
+            existing = set()
+        if index_name not in existing:
+            op.create_index(index_name, table_name, *args, **kwargs)
+
     # ── trade_journal ─────────────────────────────────────────────────────────
-    op.create_table(
+    _tbl(
         "trade_journal",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column(
@@ -72,11 +105,11 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index("idx_journal_user_created", "trade_journal", ["user_id", "created_at"])
-    op.create_index("idx_journal_trade", "trade_journal", ["trade_id"])
+    _idx("idx_journal_user_created", "trade_journal", ["user_id", "created_at"])
+    _idx("idx_journal_trade", "trade_journal", ["trade_id"])
 
     # ── sub_accounts ──────────────────────────────────────────────────────────
-    op.create_table(
+    _tbl(
         "sub_accounts",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column(
@@ -112,11 +145,11 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index("idx_sub_accounts_owner", "sub_accounts", ["owner_id"])
-    op.create_index("idx_sub_accounts_active", "sub_accounts", ["is_active"])
+    _idx("idx_sub_accounts_owner", "sub_accounts", ["owner_id"])
+    _idx("idx_sub_accounts_active", "sub_accounts", ["is_active"])
 
     # sub_account_members — many-to-many: users can be members of sub-accounts
-    op.create_table(
+    _tbl(
         "sub_account_members",
         sa.Column(
             "sub_account_id",
@@ -140,12 +173,12 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("sub_account_id", "user_id"),
     )
-    op.create_index(
+    _idx(
         "idx_sub_account_members_user", "sub_account_members", ["user_id"]
     )
 
     # ── billing_history ───────────────────────────────────────────────────────
-    op.create_table(
+    _tbl(
         "billing_history",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column(
@@ -175,12 +208,12 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index("idx_billing_user_created", "billing_history", ["user_id", "created_at"])
-    op.create_index("idx_billing_provider_id", "billing_history", ["provider_payment_id"])
-    op.create_index("idx_billing_status", "billing_history", ["status"])
+    _idx("idx_billing_user_created", "billing_history", ["user_id", "created_at"])
+    _idx("idx_billing_provider_id", "billing_history", ["provider_payment_id"])
+    _idx("idx_billing_status", "billing_history", ["status"])
 
     # ── user_profiles ─────────────────────────────────────────────────────────
-    op.create_table(
+    _tbl(
         "user_profiles",
         sa.Column(
             "user_id",

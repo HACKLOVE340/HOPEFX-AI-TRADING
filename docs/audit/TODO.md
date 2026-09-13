@@ -233,11 +233,21 @@ defaulted to 1.0 — completed here. And `u1v2w3x4y5z6`'s docstring said
 `1b0666c43575` in an older eight-column shape. Its guard was right for the
 wrong reason.
 
-**Still open, found while verifying and deliberately not fixed here:**
-`alembic upgrade head` over a database built by `create_all()` fails in a
+**~~Still open, found while verifying and deliberately not fixed here:~~**
+~~`alembic upgrade head` over a database built by `create_all()` fails in a
 *pre-existing* migration — `n1o2p3q4r5s6` raises `table trade_journal already
 exists`. It is reached long before this migration runs, so it is a separate
-finding with its own blast radius.
+finding with its own blast radius.~~
+
+**Fixed 2026-09-13** as MIGRATE-OVER-CREATEALL. Deferring it was the right call
+at the time and left it measured by nothing, so it is in the correction register
+now. Two migrations created tables without the existence guard nearly every
+sibling defines; `n1o2p3q4r5s6` was simply the first one reached, and
+`s1t2u3v4w5x6` would have failed next. Both now carry the `_tbl()` / `_idx()`
+guards. The blast radius was larger than "a developer annoyance": a deployment
+first stood up with `create_all()` could never be brought under migration
+control, because every attempt died at the same commit and every later migration
+— including the column additions above — was unreachable.
 
 ### 25. The brain placed market orders with no risk gate · CRITICAL · **fixed**
 

@@ -50,8 +50,41 @@ _MONEY = sa.Numeric(18, 2)
 
 
 def upgrade() -> None:
+    # ── Idempotency ───────────────────────────────────────────────────────────
+    # `Base.metadata.create_all()` is called from five places in this
+    # repository, so a database can reach this migration with these tables
+    # already present. Unguarded, `op.create_table` then raised
+    # `table creator_sales already exists` and the upgrade stopped here — which meant a
+    # deployment first stood up with `create_all()` could NEVER be brought under
+    # migration control, because every attempt died at this same commit
+    # (MIGRATE-OVER-CREATEALL).
+    #
+    # This is the guard nearly every sibling migration already defines. Adding
+    # it to a migration that has already run is safe in both directions: where
+    # the table exists it skips, and the end state is identical.
+    bind = op.get_bind()
+    _existing_tables = set(sa.inspect(bind).get_table_names())
+
+    def _tbl(name, *args, **kwargs):
+        """Create table only if it does not already exist."""
+        if name not in _existing_tables:
+            op.create_table(name, *args, **kwargs)
+
+    def _idx(index_name, table_name, *args, **kwargs):
+        """Create index only if it does not already exist.
+
+        Re-inspects each time, so an index on a table created earlier in this
+        same upgrade() call is handled correctly.
+        """
+        try:
+            existing = {i["name"] for i in sa.inspect(bind).get_indexes(table_name)}
+        except Exception:
+            existing = set()
+        if index_name not in existing:
+            op.create_index(index_name, table_name, *args, **kwargs)
+
     # creator_payouts first: creator_sales has a foreign key into it.
-    op.create_table(
+    _tbl(
         "creator_payouts",
         sa.Column("id", _PK, primary_key=True, autoincrement=True),
         sa.Column("payout_id", sa.String(64), nullable=False, unique=True),
@@ -70,13 +103,13 @@ def upgrade() -> None:
             name="ck_creator_payouts_status",
         ),
     )
-    op.create_index("ix_creator_payouts_payout_id", "creator_payouts", ["payout_id"])
-    op.create_index("ix_creator_payouts_creator_id", "creator_payouts", ["creator_id"])
-    op.create_index("ix_creator_payouts_status", "creator_payouts", ["status"])
-    op.create_index("ix_creator_payouts_created_at", "creator_payouts", ["created_at"])
-    op.create_index("idx_creator_payouts_creator_created", "creator_payouts", ["creator_id", "created_at"])
+    _idx("ix_creator_payouts_payout_id", "creator_payouts", ["payout_id"])
+    _idx("ix_creator_payouts_creator_id", "creator_payouts", ["creator_id"])
+    _idx("ix_creator_payouts_status", "creator_payouts", ["status"])
+    _idx("ix_creator_payouts_created_at", "creator_payouts", ["created_at"])
+    _idx("idx_creator_payouts_creator_created", "creator_payouts", ["creator_id", "created_at"])
 
-    op.create_table(
+    _tbl(
         "creator_sales",
         sa.Column("id", _PK, primary_key=True, autoincrement=True),
         sa.Column("transaction_id", sa.String(64), nullable=False, unique=True),
@@ -112,19 +145,19 @@ def upgrade() -> None:
             name="ck_creator_sales_type",
         ),
     )
-    op.create_index("ix_creator_sales_transaction_id", "creator_sales", ["transaction_id"])
-    op.create_index("ix_creator_sales_strategy_id", "creator_sales", ["strategy_id"])
-    op.create_index("ix_creator_sales_creator_id", "creator_sales", ["creator_id"])
-    op.create_index("ix_creator_sales_buyer_id", "creator_sales", ["buyer_id"])
-    op.create_index("ix_creator_sales_transaction_type", "creator_sales", ["transaction_type"])
-    op.create_index("ix_creator_sales_created_at", "creator_sales", ["created_at"])
+    _idx("ix_creator_sales_transaction_id", "creator_sales", ["transaction_id"])
+    _idx("ix_creator_sales_strategy_id", "creator_sales", ["strategy_id"])
+    _idx("ix_creator_sales_creator_id", "creator_sales", ["creator_id"])
+    _idx("ix_creator_sales_buyer_id", "creator_sales", ["buyer_id"])
+    _idx("ix_creator_sales_transaction_type", "creator_sales", ["transaction_type"])
+    _idx("ix_creator_sales_created_at", "creator_sales", ["created_at"])
     # PostgreSQL does not index a foreign key column for you. This one is read
     # on every payout cycle ("which sales are still unsettled").
-    op.create_index("ix_creator_sales_settled_by_payout_id", "creator_sales", ["settled_by_payout_id"])
-    op.create_index("idx_creator_sales_creator_settled", "creator_sales", ["creator_id", "settled_by_payout_id"])
-    op.create_index("idx_creator_sales_creator_created", "creator_sales", ["creator_id", "created_at"])
+    _idx("ix_creator_sales_settled_by_payout_id", "creator_sales", ["settled_by_payout_id"])
+    _idx("idx_creator_sales_creator_settled", "creator_sales", ["creator_id", "settled_by_payout_id"])
+    _idx("idx_creator_sales_creator_created", "creator_sales", ["creator_id", "created_at"])
 
-    op.create_table(
+    _tbl(
         "creator_balances",
         sa.Column("creator_id", sa.String(64), primary_key=True),
         sa.Column("pending_usd", _MONEY, nullable=False, server_default="0"),
