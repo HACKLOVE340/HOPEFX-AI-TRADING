@@ -179,6 +179,7 @@ this file. Each is a **command**, so its answer is current rather than a snapsho
 | `python scripts/drift_guard_report.py` | Whether the drift guard is running, and how much of its z is missing data rather than drift |
 | `python scripts/frontend_colour_ratchet.py --check` | Hardcoded colour literals in `frontend/src`; the count may only fall |
 | `python scripts/frontend_emoji_ratchet.py --check` | Emoji in `frontend/src`; the count may only fall. Emoji cannot inherit `currentColor`, so they ignore theme, hover and disabled state (F170, F175) |
+| `python scripts/model_provenance_report.py --check` | ml/ modules that load a model and reach no integrity check, and committed artifacts no baseline records; both lists may only fall (A8) |
 | `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
 | `python scripts/docs_registry.py --check` | Document tiers, owners and contested subjects |
 | `python scripts/docs_freshness.py` | Stale references and false claims in living documents |

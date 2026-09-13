@@ -189,10 +189,111 @@ def survey_wiring() -> list[dict[str, Any]]:
     return rows
 
 
+BASELINE = REPO / "docs" / "MODEL_PROVENANCE_DEBT.json"
+
+
+def check() -> int:
+    """The ratchet: neither list may grow, and a cleared entry must leave it.
+
+    Two things this deliberately does NOT block on.
+
+    **The two MISMATCH artifacts.** `feature_scaler.pkl` and
+    `stacking_ensemble.pkl` do not match their recorded hashes, and because
+    `ml/__init__.py::_verify_checksum` is fail-closed in production, they do not
+    load there. Whether to regenerate the manifest, restore the bytes, or
+    investigate is an owner decision (MASTER_OUTSTANDING A8) — the root cause is
+    known (a test leaked them into the working tree, ML-LEAK) but "which bytes
+    are the real ones" is not something a gate can answer. Blocking every commit
+    until it is answered would be this repository deciding it by attrition.
+
+    **The twelve ungated loaders.** Adding a fail-closed integrity check to
+    `ml/inference_engine.py` today would refuse a model that currently loads and
+    halt live inference. That is a deployment decision with a blast radius, not a
+    tidy-up. What this refuses is the THIRTEENTH — a new loader added with no
+    check, or a new artifact committed with no baseline entry.
+
+    Usage:
+        python scripts/model_provenance_report.py            # the full report
+        python scripts/model_provenance_report.py --check    # the gate
+        python scripts/model_provenance_report.py --adopt    # bank progress
+    """
+    if not BASELINE.exists():
+        print(f"model provenance: no baseline at {BASELINE.relative_to(REPO)} — run --adopt", file=sys.stderr)
+        return 1
+    recorded = json.loads(BASELINE.read_text(encoding="utf-8"))
+
+    now_ungated = {r["module"] for r in survey_wiring() if not r["gates"]}
+    now_unlisted = {r["path"] for r in survey_identity() if r["verdict"] == "NOT LISTED"}
+
+    if not survey_wiring():
+        # A scan that matched nothing agrees with every rule below (F255).
+        print("model provenance: no loader modules found — the scan is broken, not ml/", file=sys.stderr)
+        return 1
+
+    failures: list[str] = []
+    for label, now, was, advice in (
+        (
+            "ungated loader",
+            now_ungated,
+            set(recorded.get("ungated_loaders", ())),
+            "route the load through ml.__init__._try_load, or add a registry-digest check — "
+            "a bare joblib.load gates arbitrary code execution, not merely a wrong prediction",
+        ),
+        (
+            "unlisted artifact",
+            now_unlisted,
+            set(recorded.get("unlisted_artifacts", ())),
+            "record it in the baseline its directory uses — an artifact no baseline mentions "
+            "is one _verify_checksum refuses to load in production",
+        ),
+    ):
+        for added in sorted(now - was):
+            failures.append(f"NEW {label}: {added}\n      {advice}")
+        for cleared in sorted(was - now):
+            if (REPO / cleared).exists() or label == "ungated loader":
+                failures.append(
+                    f"{label} {cleared} is clean now and must leave "
+                    f"{BASELINE.relative_to(REPO)} — an entry that no longer describes "
+                    f"anything is how a ratchet quietly stops being one"
+                )
+
+    print(
+        f"model provenance: {len(now_ungated)} ungated loader(s), {len(now_unlisted)} unlisted "
+        f"artifact(s) (baseline {len(recorded.get('ungated_loaders', ()))} / "
+        f"{len(recorded.get('unlisted_artifacts', ()))})"
+    )
+    if failures:
+        print(f"\nmodel provenance: {len(failures)} regression(s):", file=sys.stderr)
+        for f in failures:
+            print(f"  {f}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def adopt() -> int:
+    recorded = json.loads(BASELINE.read_text(encoding="utf-8")) if BASELINE.exists() else {}
+    recorded["ungated_loaders"] = sorted(r["module"] for r in survey_wiring() if not r["gates"])
+    recorded["unlisted_artifacts"] = sorted(r["path"] for r in survey_identity() if r["verdict"] == "NOT LISTED")
+    BASELINE.write_text(json.dumps(recorded, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    print(
+        f"model provenance: adopted {len(recorded['ungated_loaders'])} ungated loader(s), "
+        f"{len(recorded['unlisted_artifacts'])} unlisted artifact(s)"
+    )
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="emit the measurement as JSON")
+    parser.add_argument("--check", action="store_true", help="the gate: neither debt list may grow")
+    parser.add_argument("--adopt", action="store_true", help="write today's lists as the baseline")
+    parser.add_argument("files", nargs="*", help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    if args.check:
+        return check()
+    if args.adopt:
+        return adopt()
 
     identity = survey_identity()
     reach = survey_reach()

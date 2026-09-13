@@ -325,6 +325,22 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # 2 of 14 ml/ modules that load a model reach any integrity check, and
+      # ml/__init__.py::_verify_checksum gates a pickle.load -- so what the
+      # other twelve permit is arbitrary code execution, not merely a wrong
+      # prediction. Closing them is a deployment decision with a blast radius
+      # (a fail-closed check on inference_engine.py would refuse a model that
+      # loads today and halt live inference), and the two MISMATCH artifacts are
+      # an owner decision (A8). Neither is forced here. What this refuses is the
+      # THIRTEENTH ungated loader and the eighth unlisted artifact.
+      - id: model-provenance-ratchet
+        name: Ungated model loaders may only decrease
+        language: system
+        entry: python scripts/model_provenance_report.py --check
+        files: '^(ml/.*\.py$|docs/MODEL_PROVENANCE_DEBT\.json$|scripts/model_provenance_report\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
       # The AOS specification's §30 register maps 26 named invariants onto what
       # this repository enforces. Every claim in it names a live predicate or a
       # file on disk, so a rename anywhere under invariants/ can turn a row into

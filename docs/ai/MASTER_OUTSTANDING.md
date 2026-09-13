@@ -179,8 +179,14 @@ thing that question exposes is not reproducibility, it is identity.
 Measured — `python scripts/model_provenance_report.py`, `APP_ENV=production`:
 
 ```
-LISTED BUT ABSENT: 1 · MISMATCH: 2 · NOT LISTED: 2 · ok: 13
+LISTED BUT ABSENT: 1 · MISMATCH: 2 · NOT LISTED: 7 · ok: 8
 ```
+
+*(Re-measured 2026-09-13. This block read `NOT LISTED: 2 · ok: 13` and was
+stale: the report's scope now includes the committed `GCF/` and `XAU_USD/`
+artifacts that the fourth bullet below already described as self-baselining, so
+they are counted rather than assumed. The mismatch count is unchanged, which is
+the number the owner decision turns on.)*
 
 * **Two committed artifacts no longer hash to their recorded digest** —
   `ml/saved_models/feature_scaler.pkl` and `ml/saved_models/stacking_ensemble.pkl`.
@@ -228,6 +234,18 @@ deciding:
 | Do the other twelve loaders need a check, or are they off the money path? | `ml/inference_engine.py` plainly is not. The rest need triage before work. |
 
 **Already done and not waiting on this decision:**
+
+`scripts/model_provenance_report.py --check` is now a **ratchet**, wired into
+pre-commit and registered in `GATE_EVIDENCE.toml`.
+`docs/MODEL_PROVENANCE_DEBT.json` records today's twelve ungated loaders and
+seven unlisted artifacts, and neither list may grow. It does **not** block on
+the two mismatches or on the existing twelve — both are decisions above — so it
+answers none of the questions in the table while making sure the hole stops
+growing while they are open. Two of its eight tests assert what it deliberately
+does *not* refuse, so the exemptions cannot be quietly tightened into a gate
+that settles A7 by attrition, and one keeps `ml/inference_engine.py` named in
+the debt until it is genuinely fixed.
+
 `scripts/model_provenance_report.py` measures all three surfaces and repairs
 nothing. `tests/unit/test_model_provenance_report.py` puts each bad condition on
 disk and asserts the report names it, so its numbers are numbers it could have
@@ -829,7 +847,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 32 gates · **32 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 33 gates · **33 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -2719,7 +2737,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      32 gates · 32 proven able to fail · 0 unproven
+    gate_evidence.py      33 gates · 33 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2921,7 +2939,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              32 gates · 32 proven · 0 unproven
+    gate_evidence.py                              33 gates · 33 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -2988,7 +3006,7 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
     backend tests        21,732 pass · 0 fail · 30 skipped
     frontend tests        2,645 pass · 0 fail  (136 files)
     CI gates                 14 of 14 pass
-    gate evidence            32 gates · 32 proven able to fail · 0 unproven
+    gate evidence            33 gates · 33 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -3119,7 +3137,7 @@ that one fact:
 
 **Closed this session:** `scripts/frontend_colour_ratchet.py` +
 `docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
-`GATE_EVIDENCE.toml` (32 gates, 32 proven). The count may now only fall. The
+`GATE_EVIDENCE.toml` (33 gates, 33 proven). The count may now only fall. The
 codemod that would actually revive the three features is **owner's call** — see
 §A.
 
@@ -5314,7 +5332,7 @@ run, not a recollection.
 | Group 2 platform gaps | 19 outstanding (3 struck through) |
 | Group 3 knowledge gaps | 6 outstanding (8 struck through) |
 | Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
-| Safety gates | 32 gates · 32 proven able to fail · **0 unproven** |
+| Safety gates | 33 gates · 33 proven able to fail · **0 unproven** |
 | Coverage debt | 365 modules recorded |
 | Owner decisions | §A1 (RPO/RTO), §A4, §A5, plus three opened this session |
 

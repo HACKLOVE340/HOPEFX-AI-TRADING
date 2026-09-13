@@ -196,6 +196,13 @@ evidence = "tests/unit/test_frontend_colour_ratchet.py"
 injected = "Three distinct regressions, each refused: an extra hex literal in a baselined file (20 -> 21 blocks with both counts named), a brand-new file carrying one literal (no baseline entry blocks), and a file driven to zero while its baseline line remains (blocks with 'delete the line'). Also proven against the real tree rather than only a fixture: appending '#abcdef' to frontend/src/pages/NotFound.tsx took the total 8021 -> 8022 and the gate blocked naming that file; restoring it returned the gate to green. A sanity floor test asserts the recorded total exceeds 5000, so a glob or regex that stops matching reads as a broken counter rather than as 8021 clean files"
 
 [[gate]]
+id = "model-provenance-ratchet"
+kind = "pre_commit"
+runs = "scripts/model_provenance_report.py --check"
+evidence = "tests/unit/test_model_provenance_ratchet.py"
+injected = "Four regressions refused: a thirteenth ungated loader (an ml/ module that loads a model and reaches no integrity check, dropped from the baseline), an eighth unlisted artifact, a baseline entry that no longer describes anything (`must leave`), and a missing baseline, which fails closed rather than certifying. Two tests assert what the gate deliberately does NOT block, so the exemptions cannot be quietly tightened into a gate that decides A8 by attrition: the two artifacts whose recorded sha256 does not match (whether to regenerate the manifest, restore the bytes or investigate is the owner's answer) and the existing twelve ungated loaders (adding a fail-closed check to ml/inference_engine.py would refuse a model that loads today and halt live inference). A sanity floor asserts both survey counts stay above a threshold, so a survey that stops matching reads as a broken scan rather than as a clean ml/, and a named assertion keeps ml/inference_engine.py — the live prediction path — visible in the debt until it is genuinely fixed"
+
+[[gate]]
 id = "frontend-emoji-ratchet"
 kind = "pre_commit"
 runs = "scripts/frontend_emoji_ratchet.py --check"

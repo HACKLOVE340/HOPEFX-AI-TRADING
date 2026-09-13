@@ -45,6 +45,7 @@ is always today's. Everything below is the shape; that command is the state.
 | How do I run the model without a market feed? | `python scripts/predict_offline.py` · `ml/cached_series.py` |
 | Is the feature-drift guard running, and what is it measuring? | `python scripts/drift_guard_report.py` · ADR 0019 — most of today's z is zero-filled features, not drift |
 | Do we know the identity of the model artifacts we ship? | `python scripts/model_provenance_report.py` · `ml/saved_models/model_checksums.json` |
+| Which model loaders reach no integrity check at all? | `python scripts/model_provenance_report.py --check` · `docs/MODEL_PROVENANCE_DEBT.json` |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |
@@ -58,8 +59,9 @@ is current.** Where they disagree, the script is right and the document is stale
 The ratcheted checks below run in `pre-commit`, so a regression blocks rather
 than accumulating: document registry, documentation freshness, Group 4 source
 preservation, volume-index drift, gate injection evidence, stated-figure drift,
-per-module coverage, frontend colour literals, frontend emoji, AOS invariant
-conformance, spatial capability evidence, and correction-register drift.
+per-module coverage, frontend colour literals, frontend emoji, ungated model
+loaders, AOS invariant conformance, spatial capability evidence, and
+correction-register drift.
 
 **They only block once the hook is installed.** Until 2026-09-09 nothing
 installed it, so on a fresh clone that sentence described something that was not
