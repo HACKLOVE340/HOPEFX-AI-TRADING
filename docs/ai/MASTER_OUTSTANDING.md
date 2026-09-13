@@ -6637,14 +6637,26 @@ intent:
   is ignored"*; the real one is a step earlier and worse, because there is no red
   build to ignore.
 * **ADR 0016 — "takes the registry's contested-subject count from 3 to 0."**
-  `docs/REGISTRY.toml:33` still reads `subject = "architecture"` for
-  `ARCHITECTURE.md`, and `docs_registry.py --check` still reports three contested
-  subjects, baselined as `note`. The reasoning was sound and nobody disputed it;
-  the edit simply never happened, and nothing connected the record to the script
-  that would have said so.
+  `docs/REGISTRY.toml:33` still read `subject = "architecture"` for
+  `ARCHITECTURE.md`, and `docs_registry.py --check` still reported three
+  contested subjects, baselined as `note`. The reasoning was sound and nobody
+  disputed it; the edit simply never happened, and nothing connected the record
+  to the script that would have said so. **Applied the same day** — the
+  re-subjecting, both `superseded_by` marks, and an empty
+  `known_duplicate_subjects`, because a baseline that outlives its debt hides
+  the next one. `--check` reports 0 contested, and
+  `test_docs_registry.py::TestTheLiveRegistryIsHonest` asserts it against the
+  live registry rather than the baseline. Clearing the baseline broke the test
+  that asserted every baselined collision is still reported — with an empty
+  baseline its central assertion is vacuous — so it now injects a synthetic
+  collision to prove the detector is live before reading silence as success
+  (F255).
 
-Both follow-ups live in the outcome files that found them. The decision owns its
-own unfinished business.
+0016 was closed the same day; 0014 is left open deliberately, since the branch's
+CI does not execute at all today (F95) and adding a workflow nobody runs would
+close the record while leaving the 210 tests exactly as unrun. Both follow-ups
+live in the outcome files that found them. The decision owns its own unfinished
+business.
 
 ### The generalisable lesson
 

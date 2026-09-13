@@ -205,7 +205,42 @@ class TestTheLiveRegistryIsHonest:
             "subject that stops appearing means the detector stopped looking, "
             "not that the collision was resolved"
         )
-        assert subjects, "the baseline lists no collisions, so this proves nothing"
+
+        # An empty baseline is the goal AND the state in which the assertion
+        # above is vacuous — a scan that matched nothing agrees with every
+        # conclusion (F255). So prove the detector is still live by injecting a
+        # collision, rather than reading silence as success.
+        if not baseline.known_duplicate_subjects:
+            pair = [
+                _entry("A.md", tier="T2", subject="collide", owner="x", state="active"),
+                _entry("B.md", tier="T2", subject="collide", owner="x", state="active"),
+            ]
+            injected = check(pair, ["A.md", "B.md"], Baseline(unowned_count=0))
+            assert [f.rule for f in injected if f.blocking] == ["duplicate_subject"], (
+                "the live registry reports no collision and neither does an injected one — "
+                "the detector is off, not the debt paid"
+            )
+
+    def test_no_subject_is_claimed_by_two_live_documents(self) -> None:
+        """ADR 0016, applied — see `docs/decisions/outcomes/0016.md`.
+
+        The record said this takes the contested count "from 3 to 0". Four days
+        later it was still 3: `ARCHITECTURE.md` had never been re-subjected and
+        the two `docs/` copies had never been marked superseded. The decision was
+        sound and simply not carried out, and nothing connected the record to the
+        script that would have said so — which is what the ADR outcome ledger is
+        for, and how this was found.
+
+        Asserted against the live registry rather than against the baseline, so
+        the count cannot quietly climb back.
+        """
+        entries, baseline = load()
+        contested = [f for f in check(entries, discover(), baseline) if f.rule == "duplicate_subject"]
+        assert contested == [], "contested subjects: " + "; ".join(f.detail for f in contested)
+        assert baseline.known_duplicate_subjects == [], (
+            "the baseline still admits a collision the registry no longer has — "
+            "a baseline that outlives its debt hides the next one"
+        )
 
     def test_authority_tiers_are_the_three_that_claim_a_subject(self) -> None:
         assert set(AUTHORITY_TIERS) == {"T0", "T1", "T2"}

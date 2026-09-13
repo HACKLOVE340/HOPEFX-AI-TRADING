@@ -11,7 +11,7 @@ adopted = "2026-09-08"
 # The ratchet. These record what was already wrong at adoption so that NEW
 # violations fail while existing debt is paid down. They may only shrink.
 unowned_count = 197
-known_duplicate_subjects = ["architecture", "contributing", "deployment"]
+known_duplicate_subjects = []
 
 [[document]]
 path = "AGENTS-IMPROVEMENT-SPEC.md"
@@ -30,7 +30,7 @@ state = "draft"
 [[document]]
 path = "ARCHITECTURE.md"
 tier = "T2"
-subject = "architecture"
+subject = "architecture_module_map"
 owner = ""
 state = "draft"
 
@@ -220,7 +220,8 @@ path = "docs/CONTRIBUTING.md"
 tier = "T2"
 subject = "contributing"
 owner = ""
-state = "draft"
+state = "superseded"
+superseded_by = "CONTRIBUTING.md"
 
 [[document]]
 path = "docs/COVERAGE_UNMEASURABLE.txt"
@@ -249,7 +250,8 @@ path = "docs/DEPLOYMENT.md"
 tier = "T2"
 subject = "deployment"
 owner = ""
-state = "draft"
+state = "superseded"
+superseded_by = "DEPLOYMENT.md"
 
 [[document]]
 path = "docs/DIAGNOSTIC_REPORT.md"

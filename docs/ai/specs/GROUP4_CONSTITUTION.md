@@ -380,9 +380,10 @@ applied**, neither visible from the registry, because a registry records intent:
   `tests.yml` and `ci.yml` deselect them and neither has a `schedule:` trigger.
   210 tests are selected by nothing.
 * **0016** — "takes the registry's contested-subject count from 3 to 0".
-  `docs/REGISTRY.toml` still reads `subject = "architecture"` for
-  `ARCHITECTURE.md`, and `docs_registry.py --check` still reports three contested
-  subjects.
+  `docs/REGISTRY.toml` still read `subject = "architecture"` for
+  `ARCHITECTURE.md` and `docs_registry.py --check` still reported three contested
+  subjects. **Applied the same day**, and the baseline cleared with it: the
+  count is now 0, asserted against the live registry rather than the baseline.
 
 Both follow-ups are recorded in the outcome files that found them, which is where
 they belong: the decision owns its own unfinished business.

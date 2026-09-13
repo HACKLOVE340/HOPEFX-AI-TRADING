@@ -3277,7 +3277,9 @@ FINDINGS: list[Finding] = [
         "nineteen entries surfaced two decisions recorded and never applied — 0014's nightly "
         "slow/e2e tier does not exist (210 tests selected by no workflow) and 0016's registry "
         're-subjecting was never made (`subject = "architecture"` still, contested count 3 '
-        "not 0). Neither was visible from the registry, because a registry records intent.",
+        "not 0 — applied the same day, baseline cleared with it, and now asserted against the "
+        "live registry rather than the baseline). Neither was visible from the registry, "
+        "because a registry records intent.",
         "Carried by tests/unit/test_adr_outcome_ledger.py — 16 of its 18 cases are red on the "
         "pre-fix tree; the 2 that are green both times are the immutability guards, which must "
         "not change. Positive controls run against this probe: removing one outcome takes it to "
