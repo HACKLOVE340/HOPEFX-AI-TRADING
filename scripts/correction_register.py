@@ -194,6 +194,22 @@ def _named(status: str, evidence: str) -> tuple[str, str]:
     return status, evidence
 
 
+def _scanned(files: list[str], what: str) -> tuple[str, str] | None:
+    """Refuse rather than report clean when the scan matched nothing.
+
+    Rule 2 — an unmeasured value is absent, never zero — applied to the register
+    itself. Ten probes decided `OPEN if hits else FIXED`, so an empty file list
+    read as "no violations" rather than "nothing was measured": a renamed
+    package, a moved directory or a glob that stopped matching closed the
+    finding silently. F108 already refuses this way; the others did not.
+
+    Returns a status tuple to return, or None to carry on.
+    """
+    if not files:
+        return UNVERIFIED, f"no {what} matched — the scan is broken, not the code"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Probes
 # ---------------------------------------------------------------------------
@@ -229,8 +245,11 @@ def _p_f97() -> tuple[str, str]:
     appleboy/ssh-action, which this session's repository-scoped GitHub access
     cannot perform — and a guessed SHA breaks every deploy.
     """
+    _wf = _tracked(".github/workflows/*.yml")
+    if (unscanned := _scanned(_wf, "workflow file")) is not None:
+        return unscanned
     hits = []
-    for wf in _tracked(".github/workflows/*.yml"):
+    for wf in _wf:
         body = _code(wf)
         for block in re.split(r"\n(?=\s*-\s+(?:name|uses):)", body):
             m = re.search(r"uses:\s*(\S+)", block)
@@ -619,13 +638,41 @@ def _p_f61() -> tuple[str, str]:
             "startup broker paths verifies the connector can place an order — the factory path "
             "states it in a docstring and checks nothing"
         )
+    # The only thing left is venue verification, which cannot be read out of the
+    # source — so it is read out of a record instead. Without this branch the
+    # probe could never reach FIXED, and the finding would stay PARTIAL for ever
+    # even after somebody placed the order: a measurement that cannot succeed,
+    # which is the mirror of the controls-that-cannot-fail this register hunts.
+    #
+    # To close it: place ONE order on an OANDA practice account with
+    # OANDA_PRACTICE=true, and record it in docs/VENUE_EVIDENCE.toml as
+    #
+    #     [oanda]
+    #     verified_on = "YYYY-MM-DD"
+    #     account_type = "practice"
+    #     order_id = "<the id OANDA returned>"
+    #     side_confirmed = "buy"   # that the venue booked the side we asked for
+    #
+    # The side matters more than the fill: `_units()` treats an unrecognised
+    # direction as a SELL, so "it placed an order" is not the claim being made —
+    # "it placed the side we asked for" is.
+    evidence = _read("docs/VENUE_EVIDENCE.toml")
+    verified = bool(re.search(r"(?ms)^\s*\[oanda\].*?^\s*side_confirmed\s*=", evidence))
+    if verified:
+        return _named(
+            FIXED,
+            "the adapter is written, refuses an unrecognised side, both startup paths verify the "
+            "connector can place an order, and docs/VENUE_EVIDENCE.toml records a practice-account "
+            "order with the booked side confirmed",
+        )
     return _named(
         PARTIAL,
         "the adapter is written, maps OrderSide/long/short and refuses anything else rather than "
         "defaulting to SELL, and both startup paths refuse a connector that cannot place an order"
         + (" (pinned by tests)" if guarded else "")
         + ". NOT venue-verified: every test runs against a stubbed place_order and nothing here has "
-        "spoken to OANDA — that needs a practice account, so it cannot be measured from the tree",
+        "spoken to OANDA. Record a practice order in docs/VENUE_EVIDENCE.toml to close it — the "
+        "probe reads that file, so this can reach FIXED without anyone editing the probe",
     )
 
 
@@ -1157,8 +1204,11 @@ def _p_f205() -> tuple[str, str]:
     # were not there. Balanced parentheses are not a regular language.
     import ast
 
+    _money = _tracked("monetization/*.py") + _tracked("payments/**/*.py")
+    if (unscanned := _scanned(_money, "monetization/payments module")) is not None:
+        return unscanned
     bad = []
-    for rel in _tracked("monetization/*.py") + _tracked("payments/**/*.py"):
+    for rel in _money:
         try:
             tree = ast.parse(_read(rel))
         except SyntaxError:
@@ -1214,11 +1264,12 @@ def _p_f206() -> tuple[str, str]:
     `int((converted * 100).quantize(...))` — because a probe that flags the fix
     is worse than one that misses the defect.
     """
+    _money = _tracked("monetization/*.py") + _tracked("payments/**/*.py") + _tracked("payments/*.py")
+    if (unscanned := _scanned(_money, "monetization/payments module")) is not None:
+        return unscanned
     bad = _grep(
         r"int\(\s*[A-Za-z_][A-Za-z0-9_.]*\s*\*\s*100\s*\)",
-        *_tracked("monetization/*.py"),
-        *_tracked("payments/**/*.py"),
-        *_tracked("payments/*.py"),
+        *_money,
     )
     return _named(
         PARTIAL if bad else FIXED,
@@ -1371,9 +1422,17 @@ def _p_f217() -> tuple[str, str]:
 
 def _p_f180() -> tuple[str, str]:
     """Only one SecureVault may be reachable; the others destroy credentials."""
-    classes = _grep(r"^class SecureVault\b", *_tracked("**/*.py"))
+    py = _tracked("**/*.py")
+    if (unscanned := _scanned(py, "python source file")) is not None:
+        return unscanned
+    classes = _grep(r"^class SecureVault\b", *py)
     others = [c for c in classes if not c.startswith("config/vault.py")]
-    if len(classes) <= 1:
+    live = [c for c in classes if c.startswith("config/vault.py")]
+    if not live:
+        # `len(classes) <= 1` reported FIXED "one SecureVault, in config/vault.py"
+        # on ZERO matches, so a renamed or deleted live vault read as the fix.
+        return OPEN, "no SecureVault in config/vault.py — the live credential store is gone or renamed"
+    if len(classes) == 1:
         return FIXED, "one SecureVault, in config/vault.py"
     return PARTIAL, (
         f"{len(classes)} classes named SecureVault ({len(others)} besides the live one in "
@@ -1428,7 +1487,10 @@ def _p_f99() -> tuple[str, str]:
 
 def _p_f223() -> tuple[str, str]:
     """Tests named after the coverage metric hide the behaviour they protect."""
-    files = [f for f in _tracked("tests/**/*.py") if re.search(r"(coverage_boost|coverage\d|_coverage)\.py$", f)]
+    _tests = _tracked("tests/**/*.py")
+    if (unscanned := _scanned(_tests, "test file")) is not None:
+        return unscanned
+    files = [f for f in _tests if re.search(r"(coverage_boost|coverage\d|_coverage)\.py$", f)]
     return _named(
         OPEN if files else FIXED,
         f"{len(files)} test file(s) named after the metric rather than the behaviour "
@@ -1513,7 +1575,10 @@ def _p_f106() -> tuple[str, str]:
 
 def _p_f119() -> tuple[str, str]:
     """Annualisation must use the bar frequency, not the sample length."""
-    bad = _grep(r"252\s*/\s*len\(", *_tracked("backtesting/*.py"), *_tracked("risk/*.py"), *_tracked("analytics/*.py"))
+    files = _tracked("backtesting/*.py") + _tracked("risk/*.py") + _tracked("analytics/*.py")
+    if (unscanned := _scanned(files, "backtesting/risk/analytics module")) is not None:
+        return unscanned
+    bad = _grep(r"252\s*/\s*len\(", *files)
     return _named(
         OPEN if bad else FIXED,
         bad[0]
@@ -1698,9 +1763,12 @@ def _p_f149() -> tuple[str, str]:
     # is not. The first version of this probe flagged
     # `const jitter = delay * Math.random()` in useWebSocket.ts, which is correct
     # code doing exactly what backoff should.
+    _fe = [f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))]
+    if (unscanned := _scanned(_fe, "frontend source file")) is not None:
+        return unscanned
     bad = [
         h
-        for h in _grep(r"Math\.random\(\)", *[f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))])
+        for h in _grep(r"Math\.random\(\)", *_fe)
         if not re.search(r"id\b|key|uuid|nonce|jitter|backoff|delay|seed|shuffle", h, re.I)
         and "/test" not in h
         and not h.split(":")[0].endswith((".test.ts", ".test.tsx"))
@@ -1719,9 +1787,12 @@ def _p_f150() -> tuple[str, str]:
     # the correct shape — the first version of this probe matched the name and
     # called it a defect. What F150 describes is a key *assembled in the browser*:
     # a template literal or concatenation producing the key value itself.
+    _fe = [f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))]
+    if (unscanned := _scanned(_fe, "frontend source file")) is not None:
+        return unscanned
     bad = _grep(
         r"(api[_-]?key)\s*[:=]\s*[`'\"][^`'\"]*\$\{|btoa\([^)]*api[_-]?key",
-        *[f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))],
+        *_fe,
     )
     return _named(
         OPEN if bad else FIXED,
@@ -1745,6 +1816,8 @@ def _p_f210() -> tuple[str, str]:
     """Duplicate aliases break breadcrumbs and active-nav."""
     app = _read("frontend/src/App.tsx")
     paths = re.findall(r'path="(/[^"]*)"', app)
+    if (unscanned := _scanned(paths, "route declaration in frontend/src/App.tsx")) is not None:
+        return unscanned
     dupes = sorted({p for p in paths if paths.count(p) > 1})
     return _named(
         OPEN if dupes else FIXED,
@@ -1756,9 +1829,12 @@ def _p_f210() -> tuple[str, str]:
 
 def _p_f201() -> tuple[str, str]:
     """Telling a subscriber 15 courses are available when all are placeholders."""
+    _fe = [f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))]
+    if (unscanned := _scanned(_fe, "frontend source file")) is not None:
+        return unscanned
     bad = _grep(
         r"COMING SOON|available on your plan",
-        *[f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))],
+        *_fe,
         code_only=False,
     )
     return _named(

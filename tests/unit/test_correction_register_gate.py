@@ -240,3 +240,64 @@ def test_the_cent_truncation_probe_sees_a_dotted_expression():
     assert "payment_gateway" in evidence or "3 site" in evidence, (
         f"the dotted call site is still invisible to the probe: {evidence}"
     )
+
+
+# ── no probe may report a clean result from a scan that found nothing ─────────
+#
+# Rule 2 — an unmeasured value is absent, never zero — applied to the register
+# itself. Audited by execution on 2026-09-13, TEN of 75 probes decided
+# `OPEN if hits else FIXED`, so an empty file list read as "no violations found"
+# rather than "nothing was measured": _p_f97, _p_f119, _p_f149, _p_f150,
+# _p_f180, _p_f201, _p_f205, _p_f206, _p_f210, _p_f223. A renamed package, a
+# moved directory or a glob that stopped matching would have closed each of them
+# silently, and `--check` would have agreed because the counts still tallied.
+#
+# _p_f180 was the worst of them: `len(classes) <= 1` returned the message
+# "one SecureVault, in config/vault.py" on ZERO matches, so deleting the live
+# credential store read as the fix.
+#
+# This test is the audit, kept, so the class cannot come back.
+
+
+def _starved(cr):
+    """Every file reader returns nothing, as if the tree had moved."""
+    cr._read = lambda rel: ""
+    cr._code = lambda rel: ""
+    cr._grep = lambda *a, **k: []
+    cr._tracked = lambda pat: []
+    cr._glob = lambda pat: []
+    cr._exists = lambda rel: False
+    return cr
+
+
+def test_no_probe_reports_fixed_when_it_scanned_nothing():
+    cr = _starved(_register_module())
+    probes = {n: f for n, f in vars(cr).items() if n.startswith("_p_") and callable(f)}
+    assert len(probes) > 50, "almost no probes were collected; this assertion would be vacuous"
+
+    reporting_clean = []
+    for name, probe in sorted(probes.items()):
+        try:
+            status, _ = probe()
+        except Exception:
+            continue  # Finding.measure turns a raising probe into UNVERIFIED, which is fail-closed
+        if status == cr.FIXED:
+            reporting_clean.append(name)
+
+    assert not reporting_clean, (
+        f"{reporting_clean} report FIXED from a scan that matched nothing — "
+        "an unmeasured value rendered as 'no defect found'"
+    )
+
+
+def test_the_starvation_harness_actually_starves():
+    """The positive control.
+
+    Without it, a typo in `_starved` leaves the readers live, every probe
+    measures the real tree, and the assertion above passes while testing
+    nothing — which is the defect it exists to catch, one level up.
+    """
+    cr = _starved(_register_module())
+    assert cr._tracked("**/*.py") == []
+    assert cr._code("scripts/correction_register.py") == ""
+    assert cr._grep("anything", "some/file.py") == []
