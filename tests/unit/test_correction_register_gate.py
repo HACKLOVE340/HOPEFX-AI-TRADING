@@ -376,3 +376,65 @@ def test_section_four_lists_exactly_the_owner_findings():
     # row names a finding the register actually knows, so a renamed or dropped id
     # cannot sit here pointing at nothing.
     assert listed - known == set(), f"§4 names findings the register does not track: {sorted(listed - known)}"
+
+
+def test_the_documents_prose_sections_survive_a_regeneration():
+    """`--markdown > CORRECTION_REGISTER.md` deletes four of the six sections.
+
+    The document is prose §1-§3, then the generated block, then prose §4-§6. The
+    obvious regeneration command is a redirect, and a redirect writes only the
+    block. It happened twice on 2026-09-13, and `--check` agreed both times,
+    because it compares counts and the counts were right. Only
+    `test_section_four_lists_exactly_the_owner_findings` above noticed, and only
+    because the OWNER count had moved in the same window — had it not, the loss
+    would have been silent.
+
+    So `--write` splices, and this asserts the shape the splice preserves.
+    """
+    from pathlib import Path
+
+    cr = _register_module()
+    document = Path(cr.ROOT, "docs/audit/CORRECTION_REGISTER.md").read_text(encoding="utf-8")
+    headings = [line for line in document.splitlines() if line.startswith("## ")]
+    assert len(headings) >= 6, (
+        f"the register has {len(headings)} top-level sections, expected 6 — a redirect over the "
+        f"file leaves only the generated block. Regenerate with `--write`. Found: {headings}"
+    )
+    assert cr.GENERATED_MARKER in document, "the generated block's marker is gone, so --write cannot find it"
+
+
+def test_the_splice_keeps_what_it_did_not_generate():
+    cr = _register_module()
+    document = "\n".join(
+        [
+            "# Title",
+            "",
+            "## 1. Prose before",
+            "",
+            "kept",
+            "",
+            cr.GENERATED_MARKER,
+            "**stale counts**",
+            "",
+            "### OPEN — 9",
+            "",
+            "## 4. Prose after",
+            "",
+            "also kept",
+            "",
+        ]
+    )
+    spliced = cr.splice(document, cr.GENERATED_MARKER + "\n**fresh counts**\n")
+    assert "kept" in spliced and "also kept" in spliced
+    assert "## 1. Prose before" in spliced and "## 4. Prose after" in spliced
+    assert "**fresh counts**" in spliced
+    assert "**stale counts**" not in spliced and "### OPEN — 9" not in spliced
+
+
+def test_the_splice_refuses_a_document_it_cannot_find_the_block_in():
+    """Refusing is the point: the alternative is replacing prose with a table."""
+    import pytest as _pytest
+
+    cr = _register_module()
+    with _pytest.raises(ValueError, match="no generated block"):
+        cr.splice("## 1. Only prose here\n\nnothing generated\n", "body")
