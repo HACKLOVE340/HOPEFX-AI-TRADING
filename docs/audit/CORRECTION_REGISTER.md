@@ -1,19 +1,116 @@
+# HOPEFX — Correction Register
+
+**The single list of what is left to fix.** One entry per finding, each with the
+fix, the test to write first, and the command that proves it. If you are picking
+up this programme, start here and nowhere else.
+
+> **Status is measured, not remembered.** Every entry below is probed against the
+> code by `scripts/correction_register.py` and regenerated from that probe. Where
+> this document and the script disagree, the script is right — that is the
+> repository's standing rule, and `pre-commit` enforces it here.
+
+```bash
+python scripts/correction_register.py            # status of everything, now
+python scripts/correction_register.py --id A8    # one finding, in full
+python scripts/correction_register.py --check    # what pre-commit runs
+python scripts/correction_register.py --markdown # regenerate §3 below
+```
+
+---
+
+## 1. Why this file exists
+
+The outstanding work was spread across fifteen documents totalling about 29,000
+lines: `docs/audit/REMEDIATION_PLAN.md` (80 open checkboxes), five plans under
+`docs/audit/plans/`, and three prose registers — `CODE_READING_FINDINGS.md`
+(9,203 lines), `HARDENING_BACKLOG.md` (7,806) and
+`docs/ai/MASTER_OUTSTANDING.md` (6,359). Nothing was wrong with any of them
+individually. Together they had no answer to "what do I do next".
+
+**This file does not replace them.** They hold the evidence: how each defect was
+found, what was measured, what was ruled out. That reasoning is worth keeping and
+is not reproduced here. This file holds the *work*, and points at them.
+
+### What it deliberately is not
+
+A copy of those 80 open checkboxes. Measured on 2026-09-13, **half of them
+describe work that is already done** — F135's wallet id carries a `uuid4` suffix,
+F137's `amount_crypto` is `Numeric(28, 8)`, F139's kill-switch RBAC exists in both
+k8s trees, F142's `FIXRouter` takes an injected `OrderGate`, F176 prints
+`DECLARED` instead of `FULL COVERAGE ✅`. Copying them forward would have broken
+the audit plan's own Phase 11 rule — *no previously fixed defect is re-reported as
+open without evidence of regression* — and would have cost the reader their first
+hour on work that does not exist.
+
+That is why each entry carries a probe rather than a checkbox. A checkbox records
+what someone believed when they typed it. A probe records what the code says when
+you ask.
+
+---
+
+## 2. How to work an item
+
+Do not skip to the fix. This sequence is the repository's correction protocol,
+and every step of it has caught something here at least once.
+
+1. **Read the full evidence first.** The `Full evidence` line points at the
+   document that explains *why*. A fix built from this summary alone will be the
+   wrong fix about a third of the time — several findings here were revised once
+   someone read the original.
+2. **Reproduce it.** `python scripts/correction_register.py --id <ID>` prints
+   what the probe currently sees. Prove by execution, never by reading: nine of
+   the defects in this repository read as correct.
+3. **Write the test named in `Write this test first`, and run it RED.** Watch it
+   fail, and check it fails *for the stated reason* — a test that errors on a
+   fixture signature is not a red. `git stash` the fix and re-run if you need to
+   be sure.
+4. **Make the smallest change that turns it green.** No adjacent refactor.
+5. **Expect neighbouring tests to turn red, and read them before you "fix" them.**
+   Three suites in this repository encoded a defect as the requirement. If a test
+   goes red under your fix, the question is not how to make it pass — it is
+   whether the behaviour it asserts is one anybody would want.
+6. **Run the gates.** `ruff check .`, `pre-commit run --files <changed>`, the
+   affected test files, and `python scripts/correction_register.py --check`.
+7. **Update the documents your change made stale**, in the same commit. If you
+   changed what a gate measures, run the script and fix every document stating
+   its figure.
+
+### Two rules that are not negotiable
+
+- **Never weaken a risk gate, kill switch, or staleness/drift check** to make a
+  test pass. Widening a reconciliation tolerance to silence a failure is the same
+  offence. If a check needs a bigger epsilon, it is reporting a real defect.
+- **Every fix ships with a test that fails on the pre-fix tree.** A test that has
+  never failed proves nothing.
+
+### Priorities
+
+| | Meaning |
+|---|---|
+| **P0** | Capital loss, data loss or corruption, auth bypass, a safety gate that cannot refuse |
+| **P1** | Normal-path failure, or a control that silently does not run |
+| **P2** | Correctness or consistency with bounded blast radius |
+| **P3** | Minor UX, naming, cosmetic |
+| **OWNER** | Not engineering's to decide — see §4 |
+
+### Statuses
+
+| | Meaning |
+|---|---|
+| **OPEN** | The probe still finds the defect |
+| **PARTIAL** | The harm is contained but the capability is absent — read the entry, the remainder is usually a feature |
+| **OWNER** | Blocked on a decision only the owner can make |
+| **UNVERIFIED** | Cannot honestly be called open or fixed with the evidence available |
+| **FIXED** | The probe confirms it is gone. Kept, not deleted — a register that forgets what it closed invites the same defect back |
+
+---
+
+## 3. The register
+
 <!-- generated by scripts/correction_register.py — do not hand-edit this block -->
-**81 tracked · OPEN 1 · PARTIAL 10 · OWNER 6 · UNVERIFIED 0 · FIXED 64**
+**81 tracked · OPEN 0 · PARTIAL 11 · OWNER 6 · UNVERIFIED 0 · FIXED 64**
 
-### OPEN — 1
-
-#### AML-UNREACHED · Every AML withdrawal rule is unreachable in production
-
-- **Priority** P0 · **Area** Compliance
-- **Measured now** check_withdrawal is called only from payments/wallet.py, which has no production consumer, and /payments/withdraw does not consult the gate — every AML rule, the single-transaction cap included, is unreachable in production
-- **Fix** `compliance/aml.py::check_withdrawal` enforces a single-transaction cap, a daily withdrawal count, a daily volume limit and sanctions/PEP screening. It is built correctly and wired correctly — `core/startup_factories.py::init_aml` hands it a session factory through the registered `aml` component — and it is never consulted. The gate itself was proved to work, called directly against a populated ledger: a 40,000 withdrawal was refused by the 10,000 single cap, and a 100 withdrawal was refused after six same-day rows by the 5-per-day rule. The defect is reachability, and it is doubled. `check_withdrawal` has exactly one production call site — `payments/wallet.py::debit_wallet` — inside the class WALLET-DEAD shows nothing calls. And the live endpoint that withdraws money, `POST /payments/withdraw`, never mentions it: it checks KYC through a dependency, a minimum amount and a rate limit, and returns. What is NOT true today is that money leaves unscreened — that endpoint is documented NOT YET PERSISTED, queues nothing and disburses nothing. That is exactly why this is worth fixing now rather than later: the day `FIAT_PROVIDER` is configured and the endpoint is made real, it will disburse without ever touching the gate, and the gate will still look wired at startup to anyone who reads it.
-- **Write this test first** Spy on the AML gate, drive `POST /payments/withdraw` through the test client, and assert the gate was consulted. It is not consulted today, so the test fails before the endpoint is made real rather than after.
-- **Verify** `python scripts/correction_register.py --id AML-UNREACHED`
-- **Skills** `hopefx-dead-controls`, `test-driven-development`
-- **Full evidence** Found while measuring WALLET-DEAD
-
-### PARTIAL — 10
+### PARTIAL — 11
 
 #### A8 · Two committed model artifacts fail the integrity baseline that gates their load
 
@@ -24,6 +121,16 @@
 - **Verify** `python scripts/correction_register.py --id A8`
 - **Skills** `hopefx-dead-controls`
 - **Full evidence** docs/ai/MASTER_OUTSTANDING.md §A8
+
+#### AML-UNREACHED · Every AML withdrawal rule is unreachable in production
+
+- **Priority** P0 · **Area** Compliance
+- **Measured now** the withdrawal path consults the AML gate (api/payments.py, payments/wallet.py), so the single-transaction cap and sanctions/PEP screening now fire. The daily count and volume rules still cannot: they read wallet_transactions, which nothing writes while WALLET-DEAD stands
+- **Fix** `compliance/aml.py::check_withdrawal` enforces a single-transaction cap, a daily withdrawal count, a daily volume limit and sanctions/PEP screening. It is built correctly and wired correctly — `core/startup_factories.py::init_aml` hands it a session factory through the registered `aml` component — and it is never consulted. The gate itself was proved to work, called directly against a populated ledger: a 40,000 withdrawal was refused by the 10,000 single cap, and a 100 withdrawal was refused after six same-day rows by the 5-per-day rule. The defect is reachability, and it is doubled. `check_withdrawal` has exactly one production call site — `payments/wallet.py::debit_wallet` — inside the class WALLET-DEAD shows nothing calls. And the live endpoint that withdraws money, `POST /payments/withdraw`, never mentions it: it checks KYC through a dependency, a minimum amount and a rate limit, and returns. What is NOT true today is that money leaves unscreened — that endpoint is documented NOT YET PERSISTED, queues nothing and disburses nothing. That is exactly why this is worth fixing now rather than later: the day `FIAT_PROVIDER` is configured and the endpoint is made real, it would have disbursed without ever touching the gate, and the gate would still have looked wired at startup to anyone who read it. **Half-closed 2026-09-13**: `api/payments.py::_screen_withdrawal_for_aml` now consults the gate before the endpoint returns, refusing with a 403 carrying the gate's own reason. Strictness mirrors `require_kyc`, which guards the same endpoint — reject in production when the gate cannot be reached, pass through in development where nothing wires one, `HOPEFX_REQUIRE_AML_STRICT` overriding either way. The amount crosses as `Decimal(str(x))`, because the gate compares against Decimal thresholds. The single cap and sanctions/PEP screening therefore fire today. The daily count and volume rules still cannot, and no amount of work on this endpoint will change that: they read `wallet_transactions`, which nothing writes while WALLET-DEAD stands. That is why this reads PARTIAL rather than FIXED.
+- **Write this test first** `tests/unit/test_withdrawal_is_screened_by_aml.py` — six of its ten tests fail on the pre-fix tree. A spy proves the call happens; a real `AMLGate` over a real session factory, driven through the endpoint, proves the refusal is real. The pair that pass both ways are controls: a sub-minimum request is still rejected on its own terms without consulting the gate, and a withdrawal under every limit is still allowed, so a gate that refused everything could not pass as a fix.
+- **Verify** `python scripts/correction_register.py --id AML-UNREACHED`
+- **Skills** `hopefx-dead-controls`, `test-driven-development`
+- **Full evidence** Found while measuring WALLET-DEAD
 
 #### F147 · Order flow answered as though it had measured, and had two analyzers
 
@@ -555,7 +662,7 @@ The practical consequence is worth stating plainly, because 68 red checks read a
 
 - **Priority** P1 · **Area** Money
 - **Measured now** every amount-to-cents conversion rounds rather than truncates
-- **Fix** `revenue_split.py` now quantizes ROUND_HALF_UP; `monetization/stripe_integration.py` still truncates. Truncation toward zero always takes the same side of the rounding, so the loss accumulates in one direction. Use the same helper.
+- **Fix** Truncation toward zero always takes the same side of the rounding, so the loss accumulates in one direction. Closed across four sites, in three passes, which is the point worth keeping: `revenue_split.py` quantizes ROUND_HALF_UP; `monetization/stripe_integration.py`'s charge and refund now use `to_cents`; `payments/payment_gateway.py` quantizes inline rather than importing across the package boundary; and `api/payments.py`'s Stripe deposit was found on 2026-09-13, months after the others, because the probe scanned `monetization/` and `payments/` and never looked in `api/`. A 10.999 deposit was collected as 10.99, and 1.005 lost its cent twice — once to the float's binary error, once to the truncation. The probe now scans `api/*.py` too, and was injection-tested against exactly that site.
 - **Write this test first** A test asserting 0.999 becomes 100 cents, not 99 — and watch it fail on the truncating call site.
 - **Verify** `python scripts/correction_register.py --id F206`
 - **Skills** `hopefx-money-precision`
@@ -694,7 +801,7 @@ The practical consequence is worth stating plainly, because 68 red checks read a
 #### F108 · Test files that define tests and assert nothing
 
 - **Priority** P2 · **Area** Tests
-- **Measured now** all 896 unit-test files that define a test also assert
+- **Measured now** all 898 unit-test files that define a test also assert
 - **Fix** Two files remain. A test that cannot fail is a measurement that cannot fail — the defining defect of this codebase, in the suite that is supposed to catch it. Give each an assertion or delete it.
 - **Write this test first** The probe is the test: assert no unit-test file defines a test without asserting.
 - **Verify** `python scripts/correction_register.py --id F108`
@@ -821,3 +928,86 @@ The practical consequence is worth stating plainly, because 68 red checks read a
 - **Skills** `test-driven-development`
 - **Full evidence** docs/audit/REMEDIATION_PLAN.md — Phase 5
 
+
+## 4. Owner decisions — engineering must not default these
+
+Each of these changes what something *means*, not just what it does. Picking one
+silently would be engineering deciding policy. They are listed above with their
+measured state; this section says what the choice is.
+
+| | Decision | Why it is yours |
+|---|---|---|
+| **F95** | GitHub Actions billing | No repository change clears it. Until it is green, every gate in this file is unverified — that is the honest status, not a pessimistic one. |
+| **A9** | `UNIQUE(client_order_id)`: make it live, drop it, or leave it latent | Making it live changes the money path's failure mode. Dropping it removes a stated intent. Leaving it latent is defensible and is what the code now says. |
+| **SEC-ROTATE** | Rotate the exposed Vercel token | An account action. The token was never written to disk or into a commit — verified — but it left the machine. |
+| **F178/F98** | Which k8s tree deploys | Two ConfigMaps share the name `hopefx-config` with contradictory `HOPEFX_INVARIANT_MODE` values, so which is live depends on apply order. Engineering can add the duplicate-name test; only you can say which tree is real. |
+| **F61/F107** | Whether to build the OANDA adapter now | Live OANDA is the stated next milestone. The adapter needs a practice venue to test against — guessed at, it can place the opposite side of an intended trade. |
+| **F146** | Whether feature drift blocks inference, and at what z | The code default and all four deployment surfaces disagree. ADR 0019 is drafted and `proposed`; accepting or rejecting it is the decision. Most of today's measured z is zero-filled features, not drift — `python scripts/drift_guard_report.py`. |
+| **AI-SCOPE** | What the AI Core is allowed to claim and to do | Scope, not implementation. Engineering can build whichever answer; it cannot pick which one is honest. |
+| **WALLET-DEAD** | Is the fiat wallet the withdrawal ledger, or is it retired? | `WalletManager` is ~700 lines of correct, tested, exact-`Decimal` ledger with **no production consumer**, and it is the only writer of `wallet_transactions` — which AML's daily withdrawal rules and the health check both read, and therefore both read empty. Either it becomes the ledger the withdrawal path writes through, or it is retired and those two readers are repointed in the same change. Deleting it silently is the one certainly-wrong answer. See MASTER_OUTSTANDING §A20. |
+
+Every finding the register measures as OWNER appears here. It carried five rows
+while the register measured six, because nothing checked the two against each
+other, and a decision absent from this table is a decision nobody is asked to
+make — `tests/unit/test_correction_register_gate.py` now asserts it.
+
+The reverse does not hold, deliberately: a decision can outlive the status of
+the finding that surfaced it. F61/F107 measures PARTIAL and F178/F98 measures
+FIXED, while "build the OANDA adapter now?" and "which k8s tree is real?" are
+both still yours to answer. What is asserted is that every row names a finding
+the register actually tracks, so a renamed id cannot sit here pointing at
+nothing.
+
+---
+
+## 5. What is not in this file, and where it lives
+
+| Not here | Where | Why |
+|---|---|---|
+| Why each defect was found, and what was ruled out | `docs/audit/CODE_READING_FINDINGS.md` | 9,203 lines of evidence. Summarising it would lose the reasoning that makes a fix correct. |
+| Hardening items S7-xx, S13-xx | `docs/HARDENING_BACKLOG.md` | A separate programme with its own numbering, referenced from the code. |
+| Specification capabilities and platform gaps | `python scripts/backlog_report.py` | Already measured, and re-measured on every run. Duplicating its output here would create a second number to keep true. |
+| The four backlog groups and the constitution | `docs/ai/BACKLOG_GROUPS.md`, `docs/ai/specs/GROUP4_CONSTITUTION.md` | Constitutional scope, not defect scope. |
+| Step-by-step task plans | `docs/audit/plans/` | This file says *what*; those say *how*, in bite-sized steps with their own checkboxes. |
+| How the audit is conducted | The owner's Audit & Correction Plan (PDF, 2026-09-12) | Methodology: evidence levels, phases, the standard finding record. This file is its Unified Finding Register deliverable. |
+
+### Coverage of the source documents
+
+Every open checkbox in `docs/audit/REMEDIATION_PLAN.md` now has a probe here.
+That was the last gap: an earlier version of this file tracked 27 findings and
+said roughly fifty more still needed probes written.
+
+Eight of those fifty were the AI Core section's planning items rather than
+defects. They are folded into **AI-GATE**, **AI-SURFACE** and **AI-SCOPE** above
+rather than listed one by one, because four of them are one scope decision wearing
+four hats.
+
+The step-by-step task checkboxes inside `docs/audit/plans/*.md` are deliberately
+**not** mirrored here. Those are execution steps for work already tracked above —
+"write the failing test", "run it", "commit" — and copying them would turn this
+register into a task list with 200 rows and no signal. Work them in their own
+plan; this file tracks the finding, not the keystrokes.
+
+To add a finding: write a probe in `scripts/correction_register.py` and append a
+`Finding(...)`. The `--check` gate then keeps the count true. A probe that cannot
+honestly decide should return `UNVERIFIED` with the reason — see F172, where a
+regex cannot parse JSX and two attempts produced two different confident wrong
+answers.
+
+---
+
+## 6. Keeping this file honest
+
+`pre-commit` runs `python scripts/correction_register.py --check`. It fails if
+the headline counts in §3 disagree with what the probes measure, or if a tracked
+finding is missing from the document.
+
+To prove that gate can actually fail — the standard this repository holds every
+control to:
+
+```bash
+python scripts/correction_register.py --selftest
+```
+
+It writes a deliberately wrong count into this file, confirms `--check` refuses
+it, and restores the original. A gate nobody has watched fail is not a gate.

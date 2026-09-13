@@ -124,3 +124,46 @@ def test_a_refund_does_not_short_the_customer(monkeypatch):
     integration.refund_payment("pi_1", amount=Decimal("24.995"))
     assert "refund" in fake.calls, "Stripe was never called; the test never reached the conversion"
     assert fake.calls["refund"]["amount"] == 2500, "a refund truncated to 2499 shorts the customer a cent"
+
+
+# ── Third site: api/payments.py, the fiat deposit ─────────────────────────────
+# Found 2026-09-13, months after the two above were fixed. The F206 probe scanned
+# `monetization/*.py` and `payments/**/*.py` and never looked in `api/`, so
+# `int(req.amount * 100)` at the Stripe deposit sat in scope-shadow the whole
+# time — the probe's own docstring warns against a pattern "satisfied by
+# vocabulary rather than by behaviour" and then had a blind spot in its file
+# list. The probe now scans `api/*.py` too.
+
+
+def test_a_fiat_deposit_does_not_undercharge(monkeypatch):
+    """api/payments.py — `_fiat_deposit_impl`, the Stripe branch.
+
+    `int(10.999 * 100)` is 1099: the customer is charged 10.99 for a 10.999
+    deposit, and the cent has to come from somewhere. `1.005` is worse — as a
+    float it is 1.00499…, so truncation loses the cent to the binary error as
+    well as to the rounding.
+    """
+    import asyncio
+    import sys
+    from types import SimpleNamespace
+
+    calls: dict = {}
+
+    class _FakeIntent:
+        @staticmethod
+        def create(**kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(client_secret="not-a-secret")  # pragma: allowlist secret
+
+    fake_stripe = SimpleNamespace(api_key="", PaymentIntent=_FakeIntent)
+    monkeypatch.setitem(sys.modules, "stripe", fake_stripe)
+    monkeypatch.setenv("FIAT_PROVIDER", "stripe")
+
+    from api.payments import FiatDepositRequest, _fiat_deposit_impl
+
+    asyncio.run(_fiat_deposit_impl(FiatDepositRequest(amount=10.999, method="card")))
+
+    assert calls, "Stripe was never called; the test never reached the conversion"
+    assert calls["amount"] == 1100, (
+        f"a deposit of 10.999 was charged {calls['amount']} cents — truncated to 1099, which undercharges by a cent"
+    )

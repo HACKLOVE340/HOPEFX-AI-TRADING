@@ -340,3 +340,39 @@ def test_the_starvation_harness_actually_starves():
     assert cr._tracked("**/*.py") == []
     assert cr._code("scripts/correction_register.py") == ""
     assert cr._grep("anything", "some/file.py") == []
+
+
+def test_section_four_lists_exactly_the_owner_findings():
+    """The register's prose and its probes must name the same owner decisions.
+
+    §4 says what each owner choice *is*; the probes say which findings are
+    waiting on one. Nothing checked the two against each other, so §4 carried
+    five rows while the register measured six — a reader working the owner's
+    queue from §4 would never have seen the sixth.
+    """
+    import re
+    from pathlib import Path
+
+    cr = _register_module()
+    document = Path(cr.ROOT, "docs/audit/CORRECTION_REGISTER.md").read_text(encoding="utf-8")
+
+    section = document.split("## 4. Owner decisions", 1)
+    assert len(section) == 2, "the register has no §4 — it was dropped, not renamed"
+    body = section[1].split("\n## ", 1)[0]
+    listed = set(re.findall(r"^\|\s*\*\*([^*]+)\*\*\s*\|", body, re.M))
+    assert listed, "§4's table is empty — this test would otherwise assert nothing"
+
+    measured = {f.id for f in cr.FINDINGS if f.measure()[0] == cr.OWNER}
+    known = {f.id for f in cr.FINDINGS}
+
+    assert measured - listed == set(), (
+        f"owner findings missing from §4: {sorted(measured - listed)} — the owner works their "
+        "queue from this table, so a decision absent from it is a decision nobody is asked to make"
+    )
+    # The reverse does NOT hold, deliberately. A decision can outlive the status
+    # of the finding that surfaced it: F61/F107 measures PARTIAL and F178/F98
+    # measures FIXED, while "build the OANDA adapter now?" and "which k8s tree is
+    # real?" are both still the owner's to answer. What must hold is that every
+    # row names a finding the register actually knows, so a renamed or dropped id
+    # cannot sit here pointing at nothing.
+    assert listed - known == set(), f"§4 names findings the register does not track: {sorted(listed - known)}"

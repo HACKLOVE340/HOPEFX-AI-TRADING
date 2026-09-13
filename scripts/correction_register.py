@@ -1484,8 +1484,17 @@ def _p_f206() -> tuple[str, str]:
     `int((converted * 100).quantize(...))` — because a probe that flags the fix
     is worse than one that misses the defect.
     """
-    _money = _tracked("monetization/*.py") + _tracked("payments/**/*.py") + _tracked("payments/*.py")
-    if (unscanned := _scanned(_money, "monetization/payments module")) is not None:
+    # `api/*.py` was added 2026-09-13. The list was monetization/ and payments/
+    # only, so `int(req.amount * 100)` in `api/payments.py`'s Stripe deposit —
+    # the same truncation, in a router rather than a service — was never
+    # scanned, and this finding read FIXED for months with a live undercharge in
+    # the deposit path. A probe that looks in the wrong place is a probe
+    # satisfied by vocabulary, which is precisely what the paragraph above says
+    # it must not be.
+    _money = (
+        _tracked("monetization/*.py") + _tracked("payments/**/*.py") + _tracked("payments/*.py") + _tracked("api/*.py")
+    )
+    if (unscanned := _scanned(_money, "monetization/payments/api module")) is not None:
         return unscanned
     bad = _grep(
         r"int\(\s*[A-Za-z_][A-Za-z0-9_.]*\s*\*\s*100\s*\)",
@@ -1574,6 +1583,17 @@ def _production_python() -> list[str]:
         and "/tests/" not in f
         and not f.rsplit("/", 1)[-1].startswith("test_")
     ]
+
+
+def _WALLET_CONSUMER_FILES() -> list[str]:
+    """Production files that use the fiat wallet — shared by two probes."""
+    plumbing = {
+        "payments/wallet.py",
+        "payments/__init__.py",
+        "core/startup_factories.py",
+        "core/app_state.py",
+    }
+    return [rel for rel in _production_python() if rel not in plumbing and _WALLET_CONSUMER.search(_code(rel) or "")]
 
 
 def _p_wallet_dead() -> tuple[str, str]:
@@ -1691,7 +1711,25 @@ def _p_aml_unreached() -> tuple[str, str]:
             f"check_withdrawal is called from {', '.join(callers[:3])}, but /payments/withdraw "
             "does not consult the gate",
         )
-    return _named(FIXED, f"the withdrawal path consults the AML gate ({', '.join(callers[:3])})")
+    # Consulted is not the same as effective. Two of the gate's four rules —
+    # the daily withdrawal count and the daily volume — read
+    # `wallet_transactions`, and nothing in production writes that table while
+    # WALLET-DEAD stands. Reporting FIXED here would claim a daily limit that
+    # cannot fire, which is the exact shape this register exists to refuse.
+    ledger_written = bool(_WALLET_CONSUMER_FILES())
+    if not ledger_written:
+        return _named(
+            PARTIAL,
+            f"the withdrawal path consults the AML gate ({', '.join(callers[:3])}), so the "
+            "single-transaction cap and sanctions/PEP screening now fire. The daily count and "
+            "volume rules still cannot: they read wallet_transactions, which nothing writes "
+            "while WALLET-DEAD stands",
+        )
+    return _named(
+        FIXED,
+        f"the withdrawal path consults the AML gate ({', '.join(callers[:3])}) and the ledger "
+        "it counts against is written",
+    )
 
 
 def _p_aff_cents() -> tuple[str, str]:
@@ -3299,11 +3337,24 @@ FINDINGS: list[Finding] = [
         "What is NOT true today is that money leaves unscreened — that endpoint is documented "
         "NOT YET PERSISTED, queues nothing and disburses nothing. That is exactly why this is "
         "worth fixing now rather than later: the day `FIAT_PROVIDER` is configured and the "
-        "endpoint is made real, it will disburse without ever touching the gate, and the gate "
-        "will still look wired at startup to anyone who reads it.",
-        "Spy on the AML gate, drive `POST /payments/withdraw` through the test client, and "
-        "assert the gate was consulted. It is not consulted today, so the test fails before the "
-        "endpoint is made real rather than after.",
+        "endpoint is made real, it would have disbursed without ever touching the gate, and the "
+        "gate would still have looked wired at startup to anyone who read it. "
+        "**Half-closed 2026-09-13**: `api/payments.py::_screen_withdrawal_for_aml` now consults "
+        "the gate before the endpoint returns, refusing with a 403 carrying the gate's own "
+        "reason. Strictness mirrors `require_kyc`, which guards the same endpoint — reject in "
+        "production when the gate cannot be reached, pass through in development where nothing "
+        "wires one, `HOPEFX_REQUIRE_AML_STRICT` overriding either way. The amount crosses as "
+        "`Decimal(str(x))`, because the gate compares against Decimal thresholds. The single "
+        "cap and sanctions/PEP screening therefore fire today. The daily count and volume rules "
+        "still cannot, and no amount of work on this endpoint will change that: they read "
+        "`wallet_transactions`, which nothing writes while WALLET-DEAD stands. That is why this "
+        "reads PARTIAL rather than FIXED.",
+        "`tests/unit/test_withdrawal_is_screened_by_aml.py` — six of its ten tests fail on the "
+        "pre-fix tree. A spy proves the call happens; a real `AMLGate` over a real session "
+        "factory, driven through the endpoint, proves the refusal is real. The pair that pass "
+        "both ways are controls: a sub-minimum request is still rejected on its own terms "
+        "without consulting the gate, and a withdrawal under every limit is still allowed, so a "
+        "gate that refused everything could not pass as a fix.",
         "python scripts/correction_register.py --id AML-UNREACHED",
         _p_aml_unreached,
         [S_DEAD, S_TDD],
@@ -3363,9 +3414,16 @@ FINDINGS: list[Finding] = [
         "P1",
         "Money",
         "docs/audit/REMEDIATION_PLAN.md — Phase 2",
-        "`revenue_split.py` now quantizes ROUND_HALF_UP; `monetization/stripe_integration.py` "
-        "still truncates. Truncation toward zero always takes the same side of the rounding, "
-        "so the loss accumulates in one direction. Use the same helper.",
+        "Truncation toward zero always takes the same side of the rounding, so the loss "
+        "accumulates in one direction. Closed across four sites, in three passes, which is the "
+        "point worth keeping: `revenue_split.py` quantizes ROUND_HALF_UP; "
+        "`monetization/stripe_integration.py`'s charge and refund now use `to_cents`; "
+        "`payments/payment_gateway.py` quantizes inline rather than importing across the "
+        "package boundary; and `api/payments.py`'s Stripe deposit was found on 2026-09-13, "
+        "months after the others, because the probe scanned `monetization/` and `payments/` and "
+        "never looked in `api/`. A 10.999 deposit was collected as 10.99, and 1.005 lost its "
+        "cent twice — once to the float's binary error, once to the truncation. The probe now "
+        "scans `api/*.py` too, and was injection-tested against exactly that site.",
         "A test asserting 0.999 becomes 100 cents, not 99 — and watch it fail on the truncating call site.",
         "python scripts/correction_register.py --id F206",
         _p_f206,
