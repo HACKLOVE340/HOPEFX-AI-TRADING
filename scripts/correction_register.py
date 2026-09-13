@@ -2363,8 +2363,20 @@ FINDINGS: list[Finding] = [
         "OWNER",
         "CI",
         "docs/audit/REMEDIATION_PLAN.md — Phase 0",
-        "Not fixable from code. Check GitHub → Billing → Actions. Runs end in "
-        "`startup_failure` with no runner assigned, which is the billing signature.",
+        "Not fixable from code. Check GitHub → Billing → Actions. Runs end with no runner "
+        "assigned, which is the billing signature.\n\n"
+        "**Confirmed against the API 2026-09-13**, so this is measured rather than inferred. "
+        "Run 34780841624 on PR #315 (head 3cc8e217): 68 checks, every one `failure`, the "
+        "whole run created and closed in 39 seconds — individual jobs in ONE TO THREE "
+        "seconds. `GET /actions/jobs/103787449312` returns `runner_id: 0`, `runner_name: "
+        '""`, `runner_group_id: 0`, and the job log 404s because nothing ever ran. '
+        "Workflow runs ARE still being created — this one is run_number 5740 — so Actions is "
+        "not disabled; no job reaches a machine.\n\n"
+        "The practical consequence is worth stating plainly, because 68 red checks read as "
+        "68 defects: **none of them is a code failure, and a green PR is currently "
+        "unreachable by any change to this repository.** A week-old batch of the same "
+        "failures (SHAs e55fcc37 and 067086ea, 2026-09-06) shows the identical 1-3 second "
+        "signature, so nothing has executed in at least that long either.",
         "None — this is an account setting, not a behaviour.",
         "Observe a green `ci.yml` run on a fresh push.",
         _p_owner("account-level; no repository change can clear it"),
