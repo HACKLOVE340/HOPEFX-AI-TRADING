@@ -181,65 +181,104 @@ def _register_module():
     return module
 
 
-def test_code_stripping_preserves_line_numbers():
-    """A line's number in the stripped body is its number in the file."""
+def test_code_stripping_preserves_line_numbers(tmp_path):
+    """A line's number in the stripped body is its number in the file.
+
+    This first used `monetization/stripe_integration.py` and the live
+    `int(amount * 100)` truncation as its fixture — and then F206 fixed that
+    truncation and the test failed, exactly as its own guard message predicted:
+    "the fixture line vanished from the file; re-point this test". A test
+    anchored to a defect is a test scheduled to break the day somebody fixes it,
+    which is the shape this repository keeps finding in other people's suites.
+
+    It now asserts the PROPERTY on a constructed file, and separately that the
+    property holds across real modules — neither of which depends on any
+    particular defect still being present.
+    """
     cr = _register_module()
-    source = 'x = 1\n"""\na docstring\nspanning several\nlines\n"""\nTARGET = 2\n'
-    path = ROOT / "monetization" / "stripe_integration.py"
-    real = path.read_text(encoding="utf-8")
-    stripped = cr._code("monetization/stripe_integration.py")
-    assert len(stripped.splitlines()) == len(real.splitlines()), (
-        "stripping changed the line count, so every reported line number is offset"
+
+    sample = tmp_path / "sample.py"
+    sample.write_text(
+        'x = 1\n"""\na docstring\nspanning\nseveral lines\n"""\n# a comment\nTARGET = 2\n',
+        encoding="utf-8",
     )
+    cr_root = cr.ROOT
+    try:
+        cr.ROOT = tmp_path
+        stripped = cr._code("sample.py")
+        assert len(stripped.splitlines()) == 8, "stripping changed the line count"
+        assert "a docstring" not in stripped, "the docstring survived; _code stopped stripping prose"
+        target = [n for n, line in enumerate(stripped.splitlines(), 1) if "TARGET" in line]
+        assert target == [8], f"TARGET is on line 8 of the file, reported {target}"
+    finally:
+        cr.ROOT = cr_root
 
-    # And the specific regression, against the live file rather than a fixture.
-    rx = re.compile(r"int\(\s*amount\s*\*\s*100\s*\)")
-    real_lines = [n for n, line in enumerate(real.splitlines(), 1) if rx.search(line)]
-    strip_lines = [n for n, line in enumerate(stripped.splitlines(), 1) if rx.search(line)]
-    assert real_lines, "the fixture line vanished from the file; re-point this test"
-    assert real_lines == strip_lines, f"reported {strip_lines}, file has {real_lines}"
-    assert source  # documents the shape above; the live-file assertion is the test
 
+def test_code_stripping_preserves_line_numbers_on_real_modules():
+    """The same property on files that actually carry prose, live.
 
-def test_code_still_strips_prose():
-    """The reason `_code` exists must survive the line-preserving fix."""
+    Chosen because they are heavily documented — the more prose a file has, the
+    further a deleted-docstring offset would push its line numbers — and because
+    none of them is tied to an open finding.
+    """
     cr = _register_module()
-    body = cr._code("scripts/correction_register.py")
-    # This very file's probes quote patterns inside docstrings. If stripping
-    # stopped working, those quotes would be matchable and half the probes here
-    # would start finding themselves.
-    assert '"""' not in body, "docstrings are no longer stripped"
+    for rel in ("scripts/correction_register.py", "brokers/base.py", "risk/manager.py"):
+        real = (cr.ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        stripped = cr._code(rel)
+        assert len(stripped.splitlines()) == len(real.splitlines()), (
+            f"{rel}: stripping changed the line count, so every line number it reports is offset"
+        )
 
 
 def test_grep_reports_a_line_that_exists_in_the_file():
-    """Every location the register prints must resolve in the real file."""
-    cr = _register_module()
-    hits = cr._grep(
-        r"int\(\s*[A-Za-z_][A-Za-z0-9_.]*\s*\*\s*100\s*\)",
-        *cr._tracked("monetization/*.py"),
-    )
-    assert hits, "nothing matched; the assertion below would be vacuous"
-    for hit in hits:
-        rel, line_no, _ = hit.split(":", 2)
-        actual = (ROOT / rel).read_text(encoding="utf-8").splitlines()[int(line_no) - 1]
-        assert "100" in actual, f"{rel}:{line_no} does not point at the reported code: {actual!r}"
+    """Every location the register prints must resolve in the real file.
 
-
-def test_the_cent_truncation_probe_sees_a_dotted_expression():
-    """`int(payment.amount * 100)` truncates exactly as `int(amount * 100)` does.
-
-    The probe's pattern was anchored to the literal name `amount`, so a call
-    site spelling it `payment.amount` was invisible. Fixing only what the probe
-    could see would have turned F206 green with a live truncation still in
-    `payments/payment_gateway.py` — a probe satisfied by vocabulary, which is
-    the same defect as a test satisfied by a mock.
+    Anchored on `class` declarations rather than on any defect: a class exists
+    for as long as the module does, so this cannot be broken by fixing a finding.
     """
     cr = _register_module()
-    status, evidence = cr._p_f206()
-    assert status in {"PARTIAL", "OPEN"}, f"reported {status} while a truncation remains"
-    assert "payment_gateway" in evidence or "3 site" in evidence, (
-        f"the dotted call site is still invisible to the probe: {evidence}"
+    hits = cr._grep(r"^class \w+", *cr._tracked("brokers/*.py"))
+    assert len(hits) > 5, "almost nothing matched; the assertion below would be vacuous"
+    for hit in hits:
+        rel, line_no, _ = hit.split(":", 2)
+        actual = (cr.ROOT / rel).read_text(encoding="utf-8", errors="replace").splitlines()[int(line_no) - 1]
+        assert actual.lstrip().startswith("class "), (
+            f"{rel}:{line_no} does not point at the reported declaration: {actual!r}"
+        )
+
+
+def test_the_cent_truncation_probe_sees_a_dotted_expression(tmp_path):
+    """`int(payment.amount * 100)` truncates exactly as `int(amount * 100)` does.
+
+    The probe's pattern was anchored to the literal name `amount`, so a call site
+    spelling it `payment.amount` was invisible and F206 could have reported FIXED
+    with a live truncation still in `payments/`.
+
+    THIS DRIVES `_p_f206` ITSELF against a constructed tree. The first version
+    passed the widened regex to `_grep` as a literal argument and therefore
+    tested a copy of the pattern rather than the probe's — it passed against the
+    reverted, `amount`-anchored code, which is the whole defect class this file
+    exists to catch, committed inside the file that catches it. Caught by
+    injecting the old pattern back and watching the test stay green.
+    """
+    cr = _register_module()
+    (tmp_path / "monetization").mkdir()
+    (tmp_path / "monetization" / "gw.py").write_text("b = int(payment.amount * 100)\n", encoding="utf-8")
+
+    root, tracked = cr.ROOT, cr._tracked
+    try:
+        cr.ROOT = tmp_path
+        cr._tracked = lambda pat: ["monetization/gw.py"] if "monetization" in pat else []
+        status, evidence = cr._p_f206()
+    finally:
+        cr.ROOT, cr._tracked = root, tracked
+
+    assert status != cr.FIXED, (
+        "the probe reported FIXED with `int(payment.amount * 100)` in the tree — "
+        "a dotted call site is invisible to it, so fixing only what it can see "
+        "would close F206 with a live truncation in the payment path"
     )
+    assert "gw.py" in evidence, f"the truncation was not named in the evidence: {evidence}"
 
 
 # ── no probe may report a clean result from a scan that found nothing ─────────
