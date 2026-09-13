@@ -123,20 +123,52 @@ def test_a_cleared_entry_must_leave_the_list(restore_baseline):
     assert "must leave" in result.stderr
 
 
-def test_the_two_mismatches_do_not_block(restore_baseline):
+def test_artifact_identity_is_outside_this_gate_entirely(restore_baseline):
     """The deliberate exemption, asserted so it cannot be quietly tightened.
 
-    Two artifacts mismatch their recorded sha256 today and the gate passes
-    anyway. That is not an oversight: it is A8, and it is the owner's to answer.
-    A gate that blocked every commit until then would decide it by attrition.
+    This test used to assert that the two A8 mismatches existed and did not
+    block, and it carried a note to revisit itself if they ever cleared. They
+    have: `feature_scaler.pkl` and `stacking_ensemble.pkl` were re-recorded once
+    git history showed the manifest had never matched any committed version of
+    them, while the bytes on disk trace to a deliberate fix (776b59cf, F145). So
+    the original assertion can no longer hold, and the test does what its own
+    note said to do.
+
+    What still needs pinning is the SCOPE: this ratchet is about ungated loaders
+    and unlisted artifacts, and it must not start blocking on artifact identity.
+    Identity is `_verify_checksum`'s job at load time and the manifest gate's job
+    at commit time; a third opinion here would mean a mismatch blocks every
+    unrelated commit, which is how A8 would have been decided by attrition.
+
+    The report still SURVEYS identity — that capability is what found A8 — and
+    the gate still passes while the survey is non-clean.
     """
     report = run("--json")
     assert report.returncode == 0, report.stderr
     identity = json.loads(report.stdout)["identity"]
-    mismatches = [r["path"] for r in identity if r["verdict"] == "MISMATCH"]
-    assert mismatches, "no artifact mismatches any more — A8 may be resolved; revisit this test"
 
-    assert run("--check").returncode == 0, "the ratchet started blocking on the A8 mismatches"
+    verdicts = {r["verdict"] for r in identity}
+    assert verdicts - {"ok"}, (
+        "the identity survey is entirely clean, so this test proves nothing about scope; "
+        "if that is now true of the repository, assert it directly instead"
+    )
+
+    assert run("--check").returncode == 0, (
+        "the ratchet blocked on an identity verdict — it is scoped to ungated loaders and "
+        "unlisted artifacts, and identity belongs to _verify_checksum and the manifest gate"
+    )
+
+
+def test_the_a8_mismatches_stay_fixed():
+    """The two artifacts that did not load in production must keep loading.
+
+    `_verify_checksum` is fail-closed in production, so a mismatch here is not a
+    stale number — it is a model the platform refuses to load.
+    """
+    report = run("--json")
+    identity = json.loads(report.stdout)["identity"]
+    mismatched = [r["path"] for r in identity if r["verdict"] == "MISMATCH"]
+    assert mismatched == [], f"an artifact stopped matching its recorded sha256: {mismatched}"
 
 
 def test_check_without_a_baseline_refuses(tmp_path, restore_baseline):

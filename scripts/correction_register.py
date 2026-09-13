@@ -1050,11 +1050,23 @@ def _p_a8() -> tuple[str, str]:
 
     if not mismatch and not absent:
         return FIXED, f"all {len(stored)} listed artifacts match their recorded sha256"
-    return OPEN, (
-        f"{len(mismatch)} of {len(stored)} artifacts fail their recorded sha256 "
-        f"({', '.join(mismatch) or 'none'}); {len(absent)} listed but absent "
-        f"({', '.join(absent) or 'none'}). ml/__init__.py::_verify_checksum reads this "
-        "file on every load and refuses in production, so each mismatch is a refused load"
+
+    # A MISMATCH and a LISTED-BUT-ABSENT entry are not the same severity, and
+    # reporting them together hid that. A mismatch means a SHIPPED artifact does
+    # not load in production — `_verify_checksum` is fail-closed there. An entry
+    # for a file that is not shipped refuses nothing and blocks nothing; it is a
+    # stale line, not a broken load.
+    if mismatch:
+        return OPEN, (
+            f"{len(mismatch)} of {len(stored)} artifacts fail their recorded sha256 "
+            f"({', '.join(mismatch)}). ml/__init__.py::_verify_checksum reads this file on "
+            "every load and refuses in production, so each mismatch is a refused load"
+        )
+    return PARTIAL, (
+        f"all {len(stored) - len(absent)} shipped artifacts match their recorded sha256 — the "
+        f"refused loads are fixed. {len(absent)} entr(y/ies) describe a file that is not "
+        f"committed ({', '.join(absent)}): inert, since _verify_checksum only reads files "
+        "that exist, but the manifest should describe what ships"
     )
 
 
@@ -3776,10 +3788,19 @@ FINDINGS: list[Finding] = [
         "`ml/__init__.py::_verify_checksum` reads it on every load and, in production, "
         "returns False rather than bootstrapping — so `_try_load` returns None and the "
         "artifact is simply absent to the caller. Two consequences to fix together. "
-        "(a) Establish which side is wrong — the recorded hash or the committed bytes — "
-        "before regenerating anything; regenerating first destroys the only evidence, and "
-        "the manifest has one commit in its whole history and already carried three "
-        "mismatches at that commit, so it has never been correct. "
+        "(a) **Settled 2026-09-13 by git history, not by asking.** The manifest has ONE "
+        "commit (`334e50f3`) and the artifacts hash to `d20ee7a6…`/`4714e96b…` AT THAT "
+        "COMMIT while it records `b236e4aa…`/`dc33b5a1…` — so it never described any "
+        "committed version of these files; it was wrong the moment it was written. The bytes "
+        "on disk are neither the manifest's nor the leak's (`05efdbab`): they are "
+        "`776b59cf`, *fix(ml): a missing feature reaches the model as neutral, not as -15 "
+        "sigma (F145)* — a named, deliberate regeneration. So there was nothing to restore, "
+        "and re-recording blesses a deliberate fix rather than an accident. Both entries "
+        "re-recorded; `_verify_checksum` under APP_ENV=production went False -> True for "
+        "both, verified by execution before and after. The evidence the two ever disagreed "
+        "now lives here and in the commit, which is what the earlier caution was protecting. "
+        "REMAINING: `lstm_signal.pt` is listed and not committed — inert, since "
+        "_verify_checksum only reads files that exist. "
         "(b) **Done 2026-09-13 — this half was never an owner decision.** "
         "`ml/advanced_predictor.py` guarded `if self._meta_scaler is not None`, so a "
         "refused or absent scaler removed the transform and fed RAW probabilities into a "
