@@ -6572,3 +6572,109 @@ rather than patched: `DOC_GLOBS` is `docs/**/*.md`, `docs/**/*.txt` and `*.md`, 
 a `.toml` entry can only ever read as dangling — and neither
 `AOS_INVARIANT_REGISTER.toml` nor `GATE_EVIDENCE.toml` is registered either. The
 row was the anomaly, not the file. Removed.
+
+## §E59 — The decision ledger, and the two decisions it caught on its first pass (2026-09-13)
+
+`GROUP4_CONSTITUTION.md` Chapter 9 asks for an Architecture Decision Registry
+**and** a Decision Ledger, across seven fields. `scripts/adr.py` enforced five.
+Nothing asked for **actual outcome** or **lessons**, and 0 of 19 records carried
+either — so, in the chapter's own words, every decision was a minute and none was
+memory.
+
+This is the human half. §E23's `ai/ledger/` is the *operational* ledger — what
+the platform decided at runtime, Group 3 Chapters 7 and 8. They are different
+artefacts answering different questions, and both are now built.
+
+### The governance choice, and why it went the way it did
+
+An accepted ADR is immutable but for its status line (Group 3 Ch 3 — *"editing a
+record destroys the only evidence of what was known when"*). So the outcome could
+not be an edit to the record. Two options, recorded as **ADR 0020**:
+
+* a **second artefact** keyed by decision number, or
+* an **explicitly permitted amendment section** inside the record.
+
+The second artefact won, and the deciding argument was not tidiness. Teaching
+`immutability_problems` to ignore an `## Outcome` heading puts an exception into
+the registry's one absolute rule, and it makes the git-based check stop being
+able to say *"this accepted record changed, therefore something is wrong"* — it
+would have to reason about which part changed, which is exactly the kind of check
+that silently stops working. Two artefacts because they have two different truth
+conditions.
+
+`docs/decisions/outcomes/NNNN.md`, deliberately mutable, validated by the same
+gate. `records()` globs non-recursively, so an outcome is never parsed as a
+decision record — asserted in the tests rather than left to the glob's shape.
+
+### The three rules that stop it being a box to tick
+
+Each is a defect this repository has already shipped:
+
+1. **`pending` is not `observed`.** A decision four days old has no observable
+   outcome. Demanding one manufactures a placeholder, and nineteen placeholders
+   would satisfy every structural rule while recording nothing — F176's shape.
+   The probe counts `observed`, and `PARTIAL` is what a ledger of placeholders
+   scores.
+2. **A pending review comes due.** `Review by: YYYY-MM-DD` is mandatory while
+   pending and a past date fails `--check`. An obligation that never falls due is
+   a measurement that cannot fail.
+3. **A `proposed` record is owed nothing.**
+
+### What the back-fill found
+
+Nineteen entries written in one pass, and two of them are the reason this was
+worth the afternoon. Both decisions were **recorded, accepted, cited, and never
+applied**, and neither was visible from the registry, because a registry records
+intent:
+
+* **ADR 0014 — "run the `slow` and `e2e` tiers nightly."** No workflow in
+  `.github/workflows/` runs `pytest -m "slow or e2e"` on any schedule.
+  `tests.yml:125` and `ci.yml:421` both pass `-m "not slow and not e2e"` and
+  neither has a `schedule:` trigger; the only nightly cron is `load-test.yml`;
+  `ci.yml:621`'s job named `e2e` is Playwright against the frontend, a different
+  thing sharing a word. **210 tests are deselected everywhere and selected
+  nowhere.** The record predicted the failure mode as *"a nightly that fails and
+  is ignored"*; the real one is a step earlier and worse, because there is no red
+  build to ignore.
+* **ADR 0016 — "takes the registry's contested-subject count from 3 to 0."**
+  `docs/REGISTRY.toml:33` still reads `subject = "architecture"` for
+  `ARCHITECTURE.md`, and `docs_registry.py --check` still reports three contested
+  subjects, baselined as `note`. The reasoning was sound and nobody disputed it;
+  the edit simply never happened, and nothing connected the record to the script
+  that would have said so.
+
+Both follow-ups live in the outcome files that found them. The decision owns its
+own unfinished business.
+
+### The generalisable lesson
+
+**Write `## Expected` as something a reader can go and test.** "3 to 0" and "runs
+nightly" were checkable in seconds and both were false. The entries whose
+expectation was prose — the honest, careful, unfalsifiable kind — found nothing.
+That is the difference between a ledger and a scrapbook, and it is a cheap rule
+to apply at the moment a decision is written rather than months later.
+
+A second, smaller one: ADR 0010 wrote down **what its own reversal would look
+like** — a second tier list, a second calibration — so verifying it had not been
+abandoned was a grep rather than a judgement call. Copying that habit would make
+every outcome entry cheaper to write.
+
+### Evidence
+
+```bash
+python scripts/adr.py --check      # 20 records; 19 outcomes — 16 observed, 3 pending
+python scripts/adr.py --list       # every decision, with how it turned out
+python scripts/correction_register.py --id ADR-LEDGER
+pytest tests/unit/test_adr_outcome_ledger.py -q
+```
+
+18 tests. **16 are red on the pre-fix tree**; the 2 green in both directions are
+the immutability guards, which must not change — the ledger must not be bought by
+making records mutable. Positive controls run against the probe itself: removing
+one outcome file takes it to `OPEN`, and flipping nine entries to `pending` takes
+it to `PARTIAL`, so a green reading is a measurement rather than an agreement.
+
+**The correction register reaches OPEN 0** with this: 78 findings · OPEN 0 ·
+PARTIAL 11 · OWNER 5 · UNVERIFIED 0 · FIXED 62. Eleven PARTIAL and five OWNER
+remain, and the two follow-ups above are new work that this entry created rather
+than closed.

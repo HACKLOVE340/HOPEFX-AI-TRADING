@@ -582,14 +582,6 @@ owner = ""
 state = "draft"
 
 [[document]]
-path = "docs/ai/specs/SPATIAL_INTELLIGENCE.md"
-tier = "T1"
-subject = "spatial-intelligence"
-owner = "hacklove340"
-state = "active"
-note = "3D creation, simulation and world modelling as a native AI OS capability. Capability 0 — the epistemic assurance ladder — is built and enforced; the other fifteen are planned, with status measured from the tree rather than aspired to."
-
-[[document]]
 path = "docs/ai/specs/GROUP4_CONSTITUTION.md"
 tier = "T0"
 subject = "group4-constitution"
@@ -620,6 +612,14 @@ subject = "group4-master-ai-os-v2"
 owner = "hacklove340"
 state = "active"
 note = "Uploaded source, preserved verbatim. Complete Volumes I-XX: 118 named sections, each with a statement. Not a superset of v1."
+
+[[document]]
+path = "docs/ai/specs/SPATIAL_INTELLIGENCE.md"
+tier = "T1"
+subject = "spatial-intelligence"
+owner = "hacklove340"
+state = "active"
+note = "3D creation, simulation and world modelling as a native AI OS capability. Capability 0 — the epistemic assurance ladder — is built and enforced; the other fifteen are planned, with status measured from the tree rather than aspired to."
 
 [[document]]
 path = "docs/ai_change_ledger.md"
@@ -1259,16 +1259,16 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/audit/CORRECTION_REGISTER.md"
+tier = "T1"
+subject = "correction_register"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/audit/FIX_PHASES.md"
 tier = "T2"
 subject = "fix_phases"
-owner = ""
-state = "draft"
-
-[[document]]
-path = "docs/audit/PLATFORM_ARCHITECTURE.md"
-tier = "T2"
-subject = "platform_architecture"
 owner = ""
 state = "draft"
 
@@ -1280,11 +1280,11 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
-path = "docs/audit/CORRECTION_REGISTER.md"
-tier = "T1"
-subject = "correction_register"
-owner = "hacklove340"
-state = "active"
+path = "docs/audit/PLATFORM_ARCHITECTURE.md"
+tier = "T2"
+subject = "platform_architecture"
+owner = ""
+state = "draft"
 
 [[document]]
 path = "docs/audit/REMEDIATION_PLAN.md"
@@ -1478,9 +1478,149 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
+path = "docs/decisions/0020-the-decision-ledger-is-a-second-artefact.md"
+tier = "T3"
+subject = "decision-0020"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/decisions/README.md"
 tier = "T2"
 subject = "decision-records"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0001.md"
+tier = "T3"
+subject = "outcome-0001"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0002.md"
+tier = "T3"
+subject = "outcome-0002"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0003.md"
+tier = "T3"
+subject = "outcome-0003"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0004.md"
+tier = "T3"
+subject = "outcome-0004"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0005.md"
+tier = "T3"
+subject = "outcome-0005"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0006.md"
+tier = "T3"
+subject = "outcome-0006"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0007.md"
+tier = "T3"
+subject = "outcome-0007"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0008.md"
+tier = "T3"
+subject = "outcome-0008"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0009.md"
+tier = "T3"
+subject = "outcome-0009"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0010.md"
+tier = "T3"
+subject = "outcome-0010"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0011.md"
+tier = "T3"
+subject = "outcome-0011"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0012.md"
+tier = "T3"
+subject = "outcome-0012"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0013.md"
+tier = "T3"
+subject = "outcome-0013"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0014.md"
+tier = "T3"
+subject = "outcome-0014"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0015.md"
+tier = "T3"
+subject = "outcome-0015"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0016.md"
+tier = "T3"
+subject = "outcome-0016"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0017.md"
+tier = "T3"
+subject = "outcome-0017"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0018.md"
+tier = "T3"
+subject = "outcome-0018"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0020.md"
+tier = "T3"
+subject = "outcome-0020"
 owner = "hacklove340"
 state = "active"
 

@@ -4,9 +4,10 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """Architecture Decision Records — Group 3 Chapter 6.
 
-    python scripts/adr.py --check              # validate every record
-    python scripts/adr.py --list               # what has been decided
+    python scripts/adr.py --check              # validate every record and outcome
+    python scripts/adr.py --list               # what has been decided, and how it turned out
     python scripts/adr.py new "Pin Python"     # start the next record
+    python scripts/adr.py outcome 7            # start (or find) 0007's outcome
 
 ## Why numbered files rather than the narrative that already exists
 
@@ -42,6 +43,28 @@ been written down somewhere.
 
 Immutability is checked against git rather than a hash manifest, because a
 manifest is a second thing to edit and git already holds the history.
+
+## The other half — the ledger (ADR 0020)
+
+GROUP4_CONSTITUTION Chapter 9 asks for a Decision Registry **and** a Decision
+Ledger, across seven fields. The five above are the registry. The last two —
+*actual outcome* and *lessons* — are the ledger, and until 2026-09-13 nothing
+asked for either, so every record was a minute and none was memory.
+
+They cannot live in the record: an accepted record is immutable, and buying the
+second half by relaxing the first would destroy the only evidence of what was
+known at the time. So an outcome is a **second artefact**, keyed by decision
+number, at `docs/decisions/outcomes/NNNN.md`, and it is deliberately mutable —
+being written in later is its whole purpose.
+
+Two rules stop it becoming a box to tick:
+
+* **`pending` is not `observed`.** A file that says "too early to tell" is an
+  honest entry and is counted separately, so eighteen placeholders cannot read
+  as a complete ledger.
+* **A pending review comes due.** `Review by:` is mandatory while pending, and
+  a date in the past fails `--check`. An obligation that never falls due is a
+  measurement that cannot fail.
 """
 
 from __future__ import annotations
@@ -56,6 +79,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DECISIONS = ROOT / "docs" / "decisions"
+OUTCOMES = DECISIONS / "outcomes"
 
 #: Exactly the sections Group 3 Chapter 6 tabulates, in its order.
 REQUIRED_SECTIONS: tuple[str, ...] = (
@@ -66,7 +90,21 @@ REQUIRED_SECTIONS: tuple[str, ...] = (
     "Evidence",
 )
 
+#: The ledger half of Chapter 9 — see the module docstring and ADR 0020.
+OUTCOME_SECTIONS: tuple[str, ...] = (
+    "Expected",
+    "Actual outcome",
+    "Lessons",
+)
+
+#: A decision that has not been accepted has not happened, so it is owed nothing.
+_OWES_AN_OUTCOME = ("accepted", "superseded")
+
 _FILENAME = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")
+_OUTCOME_FILENAME = re.compile(r"^(\d{4})\.md$")
+_DECISION_REF = re.compile(r"^-\s*Decision:\s*(\d{4})\s*$", re.MULTILINE)
+_REVIEW_BY = re.compile(r"^-\s*Review by:\s*(\d{4}-\d{2}-\d{2})\s*$", re.MULTILINE)
+_OBSERVED_ON = re.compile(r"^-\s*Observed:\s*(\d{4}-\d{2}-\d{2})\s*$", re.MULTILINE)
 _HEADING = re.compile(r"^#\s+(\d{4})\.\s+(.+?)\s*$", re.MULTILINE)
 _STATUS = re.compile(r"^-\s*Status:\s*(.+?)\s*$", re.MULTILINE)
 _SUPERSEDED = re.compile(r"^superseded by (\d{4})$")
@@ -230,6 +268,152 @@ def _validate_one(record: Record, numbers: set[int]) -> list[Problem]:
     return problems
 
 
+@dataclasses.dataclass(frozen=True)
+class Outcome:
+    """What a decision actually did, written after the fact.
+
+    Deliberately mutable, unlike the record it points at. The record says what
+    was known when the choice was made and must never change; this says what
+    happened, and it changes as more happens.
+    """
+
+    path: Path
+    number: int
+    status: str
+    review_by: dt.date | None
+    observed: dt.date | None
+    sections: dict[str, str]
+
+
+def _parse_outcome(path: Path) -> Outcome:
+    text = path.read_text(encoding="utf-8")
+    status = _STATUS.search(text)
+    reference = _DECISION_REF.search(text)
+    filename = _OUTCOME_FILENAME.match(path.name)
+    review = _REVIEW_BY.search(text)
+    seen = _OBSERVED_ON.search(text)
+    return Outcome(
+        path=path,
+        number=int(reference.group(1)) if reference else (int(filename.group(1)) if filename else -1),
+        status=(status.group(1).strip().lower() if status else ""),
+        review_by=_date(review.group(1)) if review else None,
+        observed=_date(seen.group(1)) if seen else None,
+        sections=_sections(text),
+    )
+
+
+def _date(raw: str) -> dt.date | None:
+    try:
+        return dt.date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def outcomes(directory: Path = OUTCOMES) -> list[Outcome]:
+    if not directory.exists():
+        return []
+    return [_parse_outcome(p) for p in sorted(directory.glob("*.md")) if _OUTCOME_FILENAME.match(p.name)]
+
+
+def outcome_problems(
+    decisions: Path = DECISIONS,
+    directory: Path = OUTCOMES,
+    today: dt.date | None = None,
+) -> list[Problem]:
+    """The Decision Ledger — Chapter 9's `actual outcome` and `lessons`.
+
+    Every decision that was actually taken owes one. A `proposed` record does
+    not: nothing has happened yet, and demanding an outcome would manufacture a
+    placeholder, which is the exact failure this mechanism exists to prevent.
+    """
+    today = today or dt.date.today()
+    problems: list[Problem] = []
+
+    found = records(decisions)
+    owed = {r.number: r for r in found if r.status.strip().lower().startswith(_OWES_AN_OUTCOME)}
+    written = {o.number: o for o in outcomes(directory)}
+
+    for path in sorted(directory.glob("*.md")) if directory.exists() else []:
+        if path.name == "README.md":
+            continue
+        if not _OUTCOME_FILENAME.match(path.name):
+            problems.append(Problem(path, f"{path.name} is not NNNN.md, so nothing connects it to a decision"))
+
+    for number, record in sorted(owed.items()):
+        if number not in written:
+            problems.append(
+                Problem(
+                    record.path,
+                    f"decision {number:04d} has no outcome record — write "
+                    f"{directory.name}/{number:04d}.md, or it is a minute rather than memory "
+                    "(GROUP4_CONSTITUTION Ch 9, ADR 0020)",
+                )
+            )
+
+    for _number, outcome in sorted(written.items()):
+        problems.extend(_validate_outcome(outcome, owed, today))
+
+    return problems
+
+
+def _validate_outcome(outcome: Outcome, owed: dict[int, Record], today: dt.date) -> list[Problem]:
+    problems: list[Problem] = []
+    path = outcome.path
+    filename = _OUTCOME_FILENAME.match(path.name)
+    filename_number = int(filename.group(1)) if filename else -1
+
+    if outcome.number != filename_number:
+        return [
+            Problem(
+                path,
+                f"filename says {filename_number:04d} and `- Decision:` says {outcome.number:04d}; "
+                "an outcome that names the wrong decision is worse than none",
+            )
+        ]
+    if outcome.number not in owed:
+        problems.append(
+            Problem(
+                path,
+                f"outcome {outcome.number:04d} points at no accepted decision — either the record is "
+                "missing or it is still `proposed`, and an outcome for a decision nobody took is fiction",
+            )
+        )
+
+    if outcome.status == "pending":
+        if outcome.review_by is None:
+            problems.append(
+                Problem(
+                    path,
+                    "a `pending` outcome needs `- Review by: YYYY-MM-DD` — an obligation with no date "
+                    "is one nothing ever returns to",
+                )
+            )
+        elif outcome.review_by < today:
+            problems.append(
+                Problem(
+                    path,
+                    f"review overdue since {outcome.review_by.isoformat()} — record what happened, or "
+                    "move the date and say in the file why it moved",
+                )
+            )
+    elif outcome.status == "observed":
+        if outcome.observed is None:
+            problems.append(
+                Problem(path, "an `observed` outcome needs `- Observed: YYYY-MM-DD`, so its age is readable")
+            )
+    else:
+        problems.append(Problem(path, f"status {outcome.status!r} is not `pending` or `observed`"))
+
+    for section in OUTCOME_SECTIONS:
+        if section not in outcome.sections:
+            problems.append(Problem(path, f"no `## {section}` section"))
+        elif not outcome.sections[section].strip():
+            problems.append(
+                Problem(path, f"`## {section}` is empty — a heading with nothing under it is a template, not a record")
+            )
+    return problems
+
+
 def immutability_problems(directory: Path = DECISIONS) -> list[Problem]:
     """Accepted records must not change, except their status line.
 
@@ -301,6 +485,29 @@ TEMPLATE = """# {number:04d}. {title}
 """
 
 
+OUTCOME_TEMPLATE = """# Outcome {number:04d} — {title}
+
+- Decision: {number:04d}
+- Status: pending
+- Review by: {review}
+
+## Expected
+
+<What {number:04d} said would happen. Its `## Consequences`, restated in one place
+so the comparison is readable without opening two files.>
+
+## Actual outcome
+
+<What happened, measured. `pending` until there is something to measure — and
+when there is, change Status to `observed` and add `- Observed: YYYY-MM-DD`.>
+
+## Lessons
+
+<What the difference taught. "The expectation held" is a lesson when you say why
+it was in doubt.>
+"""
+
+
 def slugify(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug or "decision"
@@ -317,6 +524,23 @@ def create(title: str, directory: Path = DECISIONS) -> Path:
     return path
 
 
+def create_outcome(number: int, directory: Path = OUTCOMES, horizon_days: int = 90) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{number:04d}.md"
+    if path.exists():
+        return path
+    record = next((r for r in records(DECISIONS) if r.number == number), None)
+    path.write_text(
+        OUTCOME_TEMPLATE.format(
+            number=number,
+            title=record.title if record else "<title>",
+            review=(dt.date.today() + dt.timedelta(days=horizon_days)).isoformat(),
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Architecture Decision Records — Group 3 Chapter 6.")
     parser.add_argument("--check", action="store_true", help="validate every record; non-zero exit on a problem")
@@ -326,8 +550,13 @@ def main(argv: list[str] | None = None) -> int:
     # with "unrecognized arguments" — and a tool whose documented invocation does
     # not work teaches people it is broken, which sends them back to recording
     # decisions in commit messages.
-    parser.add_argument("command", nargs="?", choices=["new"], help="start the next record")
-    parser.add_argument("title", nargs="*", help="the decision's title")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=["new", "outcome"],
+        help="`new` starts the next record; `outcome NNNN` starts that record's ledger entry",
+    )
+    parser.add_argument("title", nargs="*", help="the decision's title, or the number for `outcome`")
     args = parser.parse_args(argv)
 
     if args.command == "new":
@@ -343,12 +572,33 @@ def main(argv: list[str] | None = None) -> int:
         print("Fill in every section. Two options minimum, or it is not a decision.")
         return 0
 
-    if args.list:
-        for record in records(DECISIONS):
-            print(f"  {record.number:04d}  {record.status:<22}  {record.title}")
+    if args.command == "outcome":
+        raw = " ".join(args.title).strip()
+        if not raw.isdigit():
+            parser.error("a decision number is required: adr.py outcome 7")
+        path = create_outcome(int(raw), OUTCOMES)
+        try:
+            shown = path.relative_to(ROOT)
+        except ValueError:
+            shown = path
+        print(f"wrote {shown}")
+        print("Fill in what actually happened. `pending` is honest; empty is not.")
         return 0
 
-    problems = validate_directory(DECISIONS) + immutability_problems(DECISIONS)
+    if args.list:
+        ledger = {o.number: o for o in outcomes(OUTCOMES)}
+        for record in records(DECISIONS):
+            outcome = ledger.get(record.number)
+            if outcome is None:
+                mark = "no outcome" if record.status.lower().startswith(_OWES_AN_OUTCOME) else "-"
+            elif outcome.status == "observed":
+                mark = f"observed {outcome.observed}"
+            else:
+                mark = f"pending, review {outcome.review_by}"
+            print(f"  {record.number:04d}  {record.status:<22}  {mark:<24}  {record.title}")
+        return 0
+
+    problems = validate_directory(DECISIONS) + immutability_problems(DECISIONS) + outcome_problems(DECISIONS, OUTCOMES)
     for problem in problems:
         try:
             name = problem.path.relative_to(ROOT)
@@ -356,10 +606,15 @@ def main(argv: list[str] | None = None) -> int:
             name = problem.path
         print(f"FAIL  {name}: {problem.message}", file=sys.stderr)
     total = len(records(DECISIONS))
+    ledger = outcomes(OUTCOMES)
+    observed = sum(1 for o in ledger if o.status == "observed")
     if problems:
         print(f"\nadr: {len(problems)} problem(s) across {total} record(s)", file=sys.stderr)
         return 1
-    print(f"adr: {total} decision record(s), all well formed")
+    print(
+        f"adr: {total} decision record(s), all well formed; "
+        f"{len(ledger)} outcome(s) — {observed} observed, {len(ledger) - observed} pending"
+    )
     return 0
 
 

@@ -51,6 +51,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |
+| How did that decision actually turn out? | `docs/decisions/outcomes/NNNN.md` — the ledger half of Chapter 9 (ADR 0020). `adr.py --check` refuses a missing outcome or an overdue review |
 | What did the platform decide today, and what did it refuse? | `ai/ledger/decisions.py::summary()` · refusals are first-class entries |
 | What was this release *for*? | `python -m deployment.change_records --report` · trading-path commits should carry an `Expected-Effect:` trailer — a warning, not a block |
 

@@ -1335,7 +1335,7 @@ _LEDGER_SECTIONS = ("actual outcome", "lessons")
 
 
 def _p_adr_ledger() -> tuple[str, str]:
-    """The Decision Registry is built; the Decision Ledger is not.
+    """The Decision Registry is built; is the Decision Ledger?
 
     GROUP4_CONSTITUTION Chapter 9 requires "an Architecture Decision Registry AND
     Decision Ledger recording context, alternatives, evidence, decision, expected
@@ -1344,10 +1344,17 @@ def _p_adr_ledger() -> tuple[str, str]:
     record that stops at 'decision' is a minute; one that returns to compare
     expectation against result is memory."
 
-    Five of the seven are enforced by `scripts/adr.py::REQUIRED_SECTIONS`.
-    Neither of the remaining two is asked for by anything, and no record carries
-    one. Group 3 Chapter 6 and Group 2 Chapter 6 rank the same gap High from the
-    knowledge side and the platform side respectively.
+    Five of the seven are enforced by `scripts/adr.py::REQUIRED_SECTIONS`. The
+    other two now live in `docs/decisions/outcomes/NNNN.md` — a second artefact,
+    keyed by decision number and deliberately mutable, because an accepted record
+    is immutable but for its status line and buying the ledger by relaxing that
+    would have destroyed the registry to build the ledger (ADR 0020).
+
+    **This probe counts `observed`, not files.** Eighteen `pending` placeholders
+    would satisfy every structural rule and record nothing, which is the shape
+    F176 had: a measurement that could not fail. So a ledger whose entries are
+    mostly pending reads as PARTIAL here, and one with no gate behind it reads as
+    OPEN — regardless of how many files exist.
 
     Measured rather than asserted, because "we have ADRs now" is exactly the
     answer that closed this prematurely once: the constitution read "there is no
@@ -1361,23 +1368,51 @@ def _p_adr_ledger() -> tuple[str, str]:
 
     gate = _read("scripts/adr.py")
     asked = [s for s in _LEDGER_SECTIONS if re.search(rf'"{s}"', gate, re.IGNORECASE)]
-    carrying = [
+
+    outcome_dir = ROOT / _ADR_DIR / "outcomes"
+    entries = sorted(outcome_dir.glob("[0-9][0-9][0-9][0-9].md")) if outcome_dir.exists() else []
+    observed, pending, hollow = [], [], []
+    for entry in entries:
+        text = entry.read_text(encoding="utf-8", errors="replace")
+        if not all(re.search(rf"(?mi)^#+\s*{s}\b", text) for s in _LEDGER_SECTIONS):
+            hollow.append(entry.name)
+        elif re.search(r"(?mi)^-\s*Status:\s*observed\b", text):
+            observed.append(entry.name)
+        else:
+            pending.append(entry.name)
+
+    # Which decisions are owed one: a `proposed` record has not happened yet.
+    owed = [
         p.name
         for p in records
-        if all(
-            re.search(rf"(?mi)^#+\s*{s}\b", p.read_text(encoding="utf-8", errors="replace")) for s in _LEDGER_SECTIONS
-        )
+        if re.search(r"(?mi)^-\s*Status:\s*(accepted|superseded)", p.read_text(encoding="utf-8", errors="replace"))
     ]
-    if carrying and asked:
+    missing = len(owed) - (len(observed) + len(pending))
+
+    if not asked:
         return _named(
-            FIXED,
-            f"all {len(records)} record(s) carry an actual outcome and lessons, and adr.py requires both",
+            OPEN,
+            f"{len(entries)} outcome record(s) exist but adr.py requires neither of the 2 ledger fields — "
+            "an unenforced convention is one commit from being absent",
+        )
+    if missing > 0 or hollow:
+        return _named(
+            OPEN,
+            f"{missing} of {len(owed)} accepted decision(s) carry no outcome"
+            + (f" and {len(hollow)} outcome record(s) are missing a required section" if hollow else "")
+            + " — the Decision Ledger is incomplete",
+        )
+    if len(observed) <= len(pending):
+        return _named(
+            PARTIAL,
+            f"every accepted decision has an outcome record, but only {len(observed)} of "
+            f"{len(entries)} is observed — a ledger of placeholders is the minute the registry already was",
         )
     return _named(
-        OPEN,
-        f"{len(carrying)} of {len(records)} decision record(s) carry an actual outcome and lessons; "
-        f"adr.py requires {len(asked)} of the 2 — so the Architecture Decision Registry is built "
-        f"and the Decision Ledger (expected vs actual) is not",
+        FIXED,
+        f"all {len(owed)} accepted decision(s) carry an outcome record — {len(observed)} observed, "
+        f"{len(pending)} pending with a review date — and adr.py requires both ledger fields, "
+        f"refusing an overdue review",
     )
 
 
@@ -3189,20 +3224,26 @@ FINDINGS: list[Finding] = [
         "P2",
         "Docs",
         "docs/ai/specs/GROUP4_CONSTITUTION.md Chapter 9 · Group 3 Ch 6 · Group 2 Ch 6",
-        "The constitution requires a Decision Registry AND a Decision Ledger across seven "
-        "fields: context, alternatives, evidence, decision, expected outcome, actual outcome, "
-        "lessons. `scripts/adr.py` enforces the first five and nothing asks for the last two, "
-        "so no record returns to compare its expectation against the result. The expected half "
-        "exists in two places already — an ADR's `## Consequences` and the `Expected-Effect:` "
-        "commit trailer, which ADR 0012 deliberately made a warning rather than a block — and "
-        "neither is ever read back. Note what the fix may NOT be: an accepted ADR is immutable "
-        "but for its status line (Group 3 Ch 3 — 'editing a record destroys the only evidence "
-        "of what was known when'), so the outcome cannot be an edit to the record. It needs a "
-        "second artefact keyed by ADR number, or an explicitly permitted amendment section. "
-        "Choosing between those is a governance decision, not a refactor.",
-        "A record with an outcome section and one without; assert the probe tells them apart, "
-        "and assert an accepted record is still refused an edit — the ledger must not be built "
-        "by making records mutable.",
+        "Done 2026-09-13. The constitution requires a Decision Registry AND a Decision Ledger "
+        "across seven fields; `scripts/adr.py` enforced the first five, nothing asked for "
+        "**actual outcome** or **lessons**, and 0 of 19 records carried either — so every "
+        "decision was a minute and none was memory. The governance choice was between a second "
+        "artefact and a permitted amendment section, and it went to the second artefact "
+        "(**ADR 0020**): `docs/decisions/outcomes/NNNN.md`, keyed by decision number and "
+        "deliberately mutable, so ADR immutability keeps no exception to argue about later. "
+        "`records()` globs non-recursively, so an outcome is never parsed as a decision record "
+        "and `immutability_problems` never sees one — asserted, not left to the glob's shape. "
+        "Three rules stop it being a box to tick: `pending` is counted separately from "
+        "`observed`, a pending entry needs `Review by:` and an overdue one fails `--check`, and "
+        "a `proposed` record is owed nothing. **The back-fill is what earned it**: writing "
+        "nineteen entries surfaced two decisions recorded and never applied — 0014's nightly "
+        "slow/e2e tier does not exist (210 tests selected by no workflow) and 0016's registry "
+        're-subjecting was never made (`subject = "architecture"` still, contested count 3 '
+        "not 0). Neither was visible from the registry, because a registry records intent.",
+        "Carried by tests/unit/test_adr_outcome_ledger.py — 16 of its 18 cases are red on the "
+        "pre-fix tree; the 2 that are green both times are the immutability guards, which must "
+        "not change. Positive controls run against this probe: removing one outcome takes it to "
+        "OPEN, and flipping nine entries to `pending` takes it to PARTIAL.",
         "python scripts/correction_register.py --id ADR-LEDGER",
         _p_adr_ledger,
         [S_DOC, S_TDD],

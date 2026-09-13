@@ -324,16 +324,18 @@ Seven fields, and the two that matter most are the last three: **expected
 outcome, actual outcome, lessons.** A decision record that stops at "decision" is
 a minute; one that returns to compare expectation against result is memory.
 
-**Measured status: PARTIAL — five of the seven fields.** Corrected 2026-09-13.
+**Measured status: BUILT — seven of the seven fields.** Corrected twice, on
+2026-09-13, and both corrections are worth keeping visible.
 
 This paragraph read *"Measured status: NEW. Nothing in the tree implements it —
-there is no ADR directory"* until then, and both halves of that sentence had
-stopped being true. `docs/decisions/` holds **19 records**, `scripts/adr.py`
-validates every one of them, and `adr-check` runs in `pre-commit`. The
-Architecture Decision Registry the source asks for exists.
+there is no ADR directory"* while `docs/decisions/` held nineteen records,
+`scripts/adr.py` validated every one of them and `adr-check` ran in `pre-commit`.
+It was then corrected to **PARTIAL — five of the seven fields**, which was
+accurate: the registry was built and the ledger was not.
 
-The correction matters more than the count, because the gap it was pointing at is
-real and is **narrower and more specific** than "nothing implements it":
+The ledger is now built too. The five registry fields are unchanged; the two that
+were missing live in a **second artefact**, `docs/decisions/outcomes/NNNN.md`,
+keyed by decision number:
 
 | Source field | Carried today | Where |
 |---|---|---|
@@ -341,32 +343,60 @@ real and is **narrower and more specific** than "nothing implements it":
 | alternatives | yes | `## Options considered` — required, **two minimum**, enforced |
 | evidence | yes | `## Evidence` — required |
 | decision | yes | `## Decision` — required |
-| expected outcome | partly | `## Consequences`, and the `Expected-Effect:` commit trailer (Group 2 Ch 6) |
-| **actual outcome** | **no** | nothing records it |
-| **lessons** | **no** | nothing records it |
+| expected outcome | yes | `## Consequences` in the record, restated as `## Expected` in the outcome so the comparison is readable in one place |
+| **actual outcome** | **yes** | `## Actual outcome` in `outcomes/NNNN.md` — required by `adr.py::OUTCOME_SECTIONS` |
+| **lessons** | **yes** | `## Lessons`, same file, same gate |
 
-Measured: **0 of 19 records carry an actual outcome or lessons**, and
-`REQUIRED_SECTIONS` in `scripts/adr.py` does not ask for either. So the registry
-is built and the **ledger is not** — which is exactly the distinction this
-chapter's own sentence draws, and it now reads as a live finding rather than a
-retired one:
+Measured 2026-09-13: **20 decision records, 19 outcome records — 16 observed, 3
+pending with a review date, 0 missing.** `python scripts/adr.py --check` prints
+that split and exits non-zero on a missing outcome, an empty section, or a
+pending review whose date has passed.
 
-> A decision record that stops at "decision" is a minute; one that returns to
-> compare expectation against result is memory.
+**Why a second artefact rather than an amendment section — ADR 0020.** An
+accepted record is immutable but for its status line, and teaching
+`immutability_problems` to ignore an `## Outcome` heading would have bought the
+ledger by putting an exception into the registry's one absolute rule. Two
+artefacts because they have two different truth conditions: the record says what
+was known when the choice was made and never changes; the outcome says what
+happened and changes as more happens. `records()` globs non-recursively, so an
+outcome file is never parsed as a decision record.
 
-An accepted ADR here is immutable but for its status line, so "return later and
-record what actually happened" cannot be an edit to the record — it needs a
-second artefact or a permitted amendment. Naming that is the next step; inventing
-the mechanism without the owner is not this document's call.
+**Three rules stop the ledger becoming a box to tick**, each an instance of a
+defect this repository has already shipped:
 
-This still corroborates two existing gaps from a second source, and the half that
-remains open is the platform half:
+1. `pending` is counted separately from `observed`. A decision four days old has
+   no observable outcome; demanding one manufactures a placeholder.
+2. A pending entry carries `Review by: YYYY-MM-DD`, and a date in the past fails
+   `--check`. An obligation that never falls due is a measurement that cannot
+   fail (F176's shape).
+3. A `proposed` record is owed nothing — nothing has happened yet.
+
+**The back-fill is the evidence this was worth building.** Writing nineteen
+entries in one pass surfaced two decisions that had been **recorded and never
+applied**, neither visible from the registry, because a registry records intent:
+
+* **0014** — "run the `slow` and `e2e` tiers nightly". No workflow in
+  `.github/workflows/` runs `pytest -m "slow or e2e"` on any schedule; both
+  `tests.yml` and `ci.yml` deselect them and neither has a `schedule:` trigger.
+  210 tests are selected by nothing.
+* **0016** — "takes the registry's contested-subject count from 3 to 0".
+  `docs/REGISTRY.toml` still reads `subject = "architecture"` for
+  `ARCHITECTURE.md`, and `docs_registry.py --check` still reports three contested
+  subjects.
+
+Both follow-ups are recorded in the outcome files that found them, which is where
+they belong: the decision owns its own unfinished business.
+
+This still corroborates two existing gaps from a second source:
 
 * Group 3 Chapter 6 — *ADR system, back-fill the eight known decisions* (High) —
-  **the system is built**; the back-fill and the outcome half are not
-* Group 2 Chapter 6 — *change records with expected effect* (High) — `Expected-Effect:`
-  exists and warns rather than blocks (ADR 0012), and nothing compares it to what
-  happened
+  the system is built and the outcome half with it; the back-fill of decisions
+  taken before the system existed is separate
+* Group 2 Chapter 6 — *change records with expected effect* (High) —
+  `Expected-Effect:` exists and warns rather than blocks (ADR 0012). It is now
+  read back: `outcomes/0012.md` records the KPI moving 20% → 35% since the
+  decision, which is the comparison Chapter 9 asks for, applied to the gate that
+  most needed it
 
 They are the same requirement seen from the knowledge side and the platform side.
 Building either without the other produces half a ledger — and half a ledger is
