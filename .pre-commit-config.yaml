@@ -277,6 +277,23 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # ml/saved_models/model_checksums.json gates the load: ml/__init__.py
+      # ::_verify_checksum reads it on every model load and refuses in
+      # production when the bytes do not match. Two artefacts mismatch today
+      # because a leaking test suite got them committed alongside unrelated
+      # work and nobody regenerated the manifest (MASTER_OUTSTANDING §A8). This
+      # refuses the next one: a staged artefact whose recorded checksum did not
+      # change with it. A mismatch that predates the commit is deliberately NOT
+      # blocked -- resolving those is an owner decision, and a gate that blocked
+      # every commit until it was made would decide it by attrition.
+      - id: model-artifact-manifest
+        name: A model artefact changes only with its checksum
+        language: system
+        entry: python scripts/model_artifact_manifest_gate.py
+        files: '^ml/saved_models/'
+        pass_filenames: false
+        stages: [pre-commit]
+
       # The frontend's twelve semantic tokens are declared and almost unused:
       # 8,021 hardcoded colour literals across frontend/src against 58 uses of
       # var(--...). That is why the light/dark toggle changes nothing (no

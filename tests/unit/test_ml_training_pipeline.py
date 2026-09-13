@@ -24,6 +24,7 @@ Covers
 
 from __future__ import annotations
 
+import re
 import json
 import subprocess  # nosec B404 - test file
 import sys
@@ -247,16 +248,34 @@ def test_advanced_training_report_feature_count(monkeypatch):
 # ── retrain_model.py --smoke ──────────────────────────────────────────────────
 
 
-# Artefacts the smoke retrain overwrites in place. They are committed and
-# checksum-verified in CI, so a test run must hand them back byte-identical.
-_SMOKE_OVERWRITES = (
-    "advanced_oos.pkl",
-    "advanced_oos_meta.json",
-    "advanced_training_report.json",
-    "feature_scaler.pkl",
-    "feature_stats.json",
-    "stacking_ensemble.pkl",
-)
+# Every writer `ml/train_advanced.py` has into MODEL_DIR, discovered rather than
+# listed. This was a hand-typed tuple of six names while train_advanced wrote
+# eight, so `calibration_report.json` and `feature_importances.json` were never
+# handed back and the suite left them dirty in the working tree.
+#
+# That is not a small tidiness problem. It is the root cause of MASTER_OUTSTANDING
+# §A8: `model_checksums.json` has one commit in its history, while
+# `feature_scaler.pkl` and `stacking_ensemble.pkl` have three each — and one of
+# the later two is `05efdbab`, "fix(mobile): register must not issue tokens when
+# it cannot create the user", whose diff carries two model binaries, 710 changed
+# lines of feature_stats.json and a newly created feature_importances.json for no
+# reason connected to mobile authentication. Leaked artefacts get committed
+# alongside whatever else was in flight, the recorded checksums stop matching the
+# committed bytes, and `ml/__init__.py::_verify_checksum` then refuses to load
+# them in production.
+#
+# So the fixture below no longer trusts a list. It snapshots the whole directory,
+# which cannot fall behind a writer nobody remembered to add.
+
+
+def _train_advanced_writes() -> set[str]:
+    """Artefact names `ml/train_advanced.py` writes into MODEL_DIR.
+
+    Read out of the source rather than duplicated here, so a new writer is
+    covered the day it is added instead of the day somebody notices.
+    """
+    source = (ROOT / "ml" / "train_advanced.py").read_text(encoding="utf-8")
+    return set(re.findall(r'MODEL_DIR\s*/\s*"([^"]+)"', source))
 
 
 @pytest.fixture
@@ -275,19 +294,58 @@ def _preserve_saved_models():
     ml/advanced_predictor.py reads models back from ml/saved_models. Honouring
     it here would silently send a production retrain somewhere inference does
     not look. So the test cleans up after itself instead.
+
+    Snapshots every file in the directory, not a named subset: a restore list
+    that has to be kept in step with a writer is a list that falls out of step.
+    Files the run creates are removed; files it changes are written back.
     """
-    saved = {}
-    for name in _SMOKE_OVERWRITES:
-        path = MODELS / name
-        saved[path] = path.read_bytes() if path.exists() else None
+    saved = {p: p.read_bytes() for p in MODELS.iterdir() if p.is_file()}
     try:
         yield
     finally:
         for path, original in saved.items():
-            if original is None:
-                path.unlink(missing_ok=True)
-            elif path.read_bytes() != original:
+            if not path.exists() or path.read_bytes() != original:
                 path.write_bytes(original)
+        for path in MODELS.iterdir():
+            if path.is_file() and path not in saved:
+                path.unlink()
+
+
+def test_the_snapshot_covers_every_artefact_train_advanced_writes(_preserve_saved_models):
+    """The regression for the leak: mutate everything, and get it all back.
+
+    The old fixture named six artefacts and train_advanced writes eight, so this
+    fails on the pre-fix tree for `calibration_report.json` and
+    `feature_importances.json` — the two that were escaping.
+    """
+    writes = _train_advanced_writes()
+    assert len(writes) >= 8, f"expected train_advanced to write 8 artefacts, found {writes}"
+
+    for name in sorted(writes):
+        (MODELS / name).write_bytes(b'{"scribbled-by": "the test"}')
+
+    # Teardown restores; the companion below sees the result.
+
+
+def test_the_snapshot_left_no_scribble():
+    """Runs after the test above and sees the restored state."""
+    for name in sorted(_train_advanced_writes()):
+        path = MODELS / name
+        if not path.exists():
+            continue
+        assert b"scribbled-by" not in path.read_bytes(), (
+            f"{name} was not restored — the smoke retrain will leak it into the "
+            "working tree, and it will be committed alongside unrelated work"
+        )
+
+
+def test_the_snapshot_removes_a_file_the_run_created(_preserve_saved_models):
+    """A writer added tomorrow must be cleaned up without anyone listing it."""
+    (MODELS / "invented_by_a_future_writer.json").write_text("{}", encoding="utf-8")
+
+
+def test_no_file_invented_by_the_previous_test_survives():
+    assert not (MODELS / "invented_by_a_future_writer.json").exists()
 
 
 def test_preserve_saved_models_actually_restores(_preserve_saved_models):

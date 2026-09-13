@@ -502,34 +502,31 @@ def _p_router_timeout() -> tuple[str, str]:
 
 
 def _p_smoke_leak() -> tuple[str, str]:
-    """Everything the smoke retrain writes must be on the restore list.
+    """Nothing the smoke retrain writes may survive the test run.
 
-    `tests/unit/test_ml_training_pipeline.py::_preserve_saved_models` puts the
-    tracked artifacts back after `retrain_model.py --smoke --advanced` rewrites
-    them in place. The list is hand-maintained, and `ml/train_advanced.py` has
-    since grown writers it does not cover — so those artifacts leak into the
-    working tree and get committed alongside unrelated work.
+    The restore list was hand-typed and named six of the eight artefacts
+    `ml/train_advanced.py` writes, so two leaked into the working tree and were
+    committed alongside unrelated work — the root cause of A8. The question this
+    probe asks is not "are the two names there now" but "can the list fall
+    behind again", so it checks that the fixture snapshots the directory rather
+    than enumerating it.
     """
-    written = set(re.findall(r'MODEL_DIR\s*/\s*"([^"]+)"', _code("ml/train_advanced.py")))
-    block = _code("tests/unit/test_ml_training_pipeline.py")
-    m = re.search(r"_SMOKE_OVERWRITES\s*=\s*\(([^)]*)\)", block, re.S)
-    if not written or not m:
-        return UNVERIFIED, "could not locate the writer list or the restore list"
-    restored = set(re.findall(r'"([^"]+)"', m.group(1)))
-    leaking = sorted(written - restored)
-    return _named(
-        OPEN if leaking else FIXED,
-        f"{len(leaking)} artifact(s) written by the smoke retrain and not restored: {', '.join(leaking)}"
-        if leaking
-        else f"all {len(written)} artifacts the smoke retrain writes are restored",
-    )
+    body = _code("tests/unit/test_ml_training_pipeline.py")
+    if not body:
+        return UNVERIFIED, "tests/unit/test_ml_training_pipeline.py not found"
 
+    enumerated = "_SMOKE_OVERWRITES" in body
+    snapshots = "MODELS.iterdir()" in body
+    gated = _exists("scripts/model_artifact_manifest_gate.py")
 
-# ── Batch 2 probes: the remainder of REMEDIATION_PLAN.md ────────────────────
-#
-# Each of these was written after reading what the finding actually cites, not
-# from its one-line summary. Several summaries are now out of date, which is the
-# whole reason the status column is probed rather than copied.
+    if snapshots and not enumerated and gated:
+        return FIXED, (
+            "the fixture snapshots every file in ml/saved_models/ instead of a named "
+            "subset, so a writer added tomorrow is covered the day it lands; and "
+            "scripts/model_artifact_manifest_gate.py refuses a staged artefact whose "
+            "recorded checksum did not change with it"
+        )
+    return OPEN, (f"snapshots_directory={snapshots} still_enumerates={enumerated} commit_gate={gated}")
 
 
 def _p_f103() -> tuple[str, str]:
@@ -1610,10 +1607,14 @@ FINDINGS: list[Finding] = [
         "P1",
         "ML",
         "This session, 2026-09-13 — reproduced by execution",
-        "`ml/train_advanced.py` writes eight artifacts into `ml/saved_models/`; the "
-        "`_SMOKE_OVERWRITES` restore list in `tests/unit/test_ml_training_pipeline.py` "
-        "names six. The uncovered ones stay dirty after the suite runs and get committed "
-        "alongside whatever else was in flight. **This is the root cause of A8** — proven, "
+        "Done 2026-09-13, both halves. `ml/train_advanced.py` writes eight artifacts into "
+        "`ml/saved_models/` and the `_SMOKE_OVERWRITES` restore list named six, so two "
+        "leaked into the working tree after every suite run and were committed alongside "
+        "whatever else was in flight. The fixture now snapshots the whole directory — a "
+        "restore list that must be kept in step with a writer is a list that falls out of "
+        "step — and `scripts/model_artifact_manifest_gate.py` refuses a staged artefact "
+        "whose recorded checksum did not change with it, so the class of accident cannot "
+        "be committed however it leaks in. **This was the root cause of A8** — proven, "
         "not surmised: `model_checksums.json` has one commit (`334e50f3`), while "
         "`feature_scaler.pkl` and `stacking_ensemble.pkl` have three each, and one of the "
         "later two is `05efdbab`, a *mobile authentication* fix that carried "
@@ -1621,9 +1622,10 @@ FINDINGS: list[Finding] = [
         "`feature_importances.json` for no reason connected to its subject. Fix the list, "
         "then add the gate: a commit that changes an artifact under `ml/saved_models/` "
         "without regenerating the manifest should not pass.",
-        "Run the smoke retrain and assert `git status --porcelain ml/saved_models/` is "
-        "empty afterwards — the assertion the current fixture is missing. Watch it fail "
-        "with one name removed from the restore list.",
+        "Carried by test_ml_training_pipeline.py (mutate every artefact train_advanced "
+        "writes, discovered from its source, and assert all are handed back) and "
+        "test_model_artifact_manifest_gate.py (seven injections against a real throwaway "
+        "repository).",
         "python scripts/correction_register.py --id ML-LEAK",
         _p_smoke_leak,
         [S_DEAD, S_TDD],
