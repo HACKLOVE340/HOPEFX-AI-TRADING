@@ -454,12 +454,37 @@ def _p_f199() -> tuple[str, str]:
 
 
 def _p_f200() -> tuple[str, str]:
+    """The docs page must be able to load its own assets where it is mounted.
+
+    The original probe looked for a vendored swagger-ui-dist. That presumed the
+    fix; the requirement is that the page can load, and vendoring is one way to
+    get there — the wrong one here, since `static/` is gitignored and /docs does
+    not exist in production at all.
+    """
+    body = _code("core/middleware.py")
+    if not body:
+        return UNVERIFIED, "core/middleware.py not found"
+
     vendored = bool(_glob("static/swagger*") or _glob("**/swagger-ui-dist"))
-    return _named(
-        FIXED if vendored else OPEN,
-        "swagger assets vendored"
-        if vendored
-        else "/docs loads the Swagger CDN, which the CSP blocks — the page is blank in every deployment",
+    if vendored:
+        return FIXED, "swagger assets are served from this origin"
+
+    # Allowed only outside production, which is exactly where docs_url is set.
+    conditional = "docs_cdn" in body and '"" if _is_production()' in body
+    prod_locked = re.search(r'script_src = "\'self\'" if _is_production\(\)', body) is not None
+    proven = _exists("tests/unit/test_docs_page_can_load_its_own_assets.py")
+
+    if conditional and prod_locked and proven:
+        return FIXED, (
+            "the CSP admits the Swagger CDN exactly where /docs is mounted — everywhere "
+            "except production, whose script-src stays 'self' and is guarded by its own "
+            "test. The coupling is the invariant: a CDN allowed in production, or a docs "
+            "page that still cannot load, both fail"
+        )
+    return OPEN, (
+        f"vendored={vendored} conditional_cdn={conditional} production_locked={prod_locked} "
+        f"test={proven} — /docs loads swagger-ui from a CDN the CSP refuses, so the page "
+        "renders blank and only the browser console says why"
     )
 
 
@@ -1751,10 +1776,22 @@ FINDINGS: list[Finding] = [
         "P2",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "The CSP blocks the Swagger CDN the page loads. Vendor `swagger-ui-dist` and "
-        "serve it locally rather than widening the CSP.",
-        "A test asserting `/docs` returns a body referencing a same-origin asset.",
-        "python scripts/correction_register.py --id F200",
+        "Done 2026-09-13. Swagger UI fetches its JS and CSS from jsDelivr and the CSP "
+        "admitted neither, so the page rendered empty with the reason visible only in the "
+        'browser console. The finding said "blank in every deployment" and the '
+        "difference decided the fix: `app.py` and `api/server.py` both set "
+        '`docs_url=None if APP_ENV == "production"`, so in production /docs does not '
+        "exist at all — it was blank in development, staging and local runs, which is "
+        "where people open it. The CDN is now allowed **exactly where the page is "
+        "mounted**, and production's `script-src 'self'` is untouched. Vendoring "
+        "swagger-ui-dist — the usual answer — was rejected deliberately: `static/` is "
+        "gitignored, so it would mean committing ~1.5 MB of vendor JavaScript to serve a "
+        "page that does not exist in the environment the CSP protects.",
+        "tests/unit/test_docs_page_can_load_its_own_assets.py pins the coupling in both "
+        "directions — the CDN is admitted iff the docs are mounted — plus a regression "
+        "guard that production script-src stays 'self' with no unsafe-inline, so a "
+        "later relaxation cannot pass as part of this fix.",
+        "pytest tests/unit/test_docs_page_can_load_its_own_assets.py -q",
         _p_f200,
         [S_UI],
     ),
