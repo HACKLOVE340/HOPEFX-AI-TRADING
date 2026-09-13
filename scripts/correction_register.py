@@ -1521,6 +1521,144 @@ def _p_f31() -> tuple[str, str]:
     )
 
 
+#: A production reference to the *fiat* wallet — see `_p_wallet_dead` for the
+#: three near-misses the boundaries exist to exclude.
+_WALLET_CONSUMER = re.compile(
+    r"(?<![A-Za-z0-9_])(?<!Crypto)WalletManager\b"
+    r"|(?<![A-Za-z0-9_.])wallet_manager\b"
+    r"|payments\.wallet\.wallet_manager\b"
+)
+
+
+def _production_python() -> list[str]:
+    """Tracked .py files that are neither tests nor tooling."""
+    return [
+        f
+        for f in _tracked("*.py")
+        if not f.startswith(("tests/", "scripts/", "alembic/"))
+        and "/tests/" not in f
+        and not f.rsplit("/", 1)[-1].startswith("test_")
+    ]
+
+
+def _p_wallet_dead() -> tuple[str, str]:
+    """Does anything in production actually use the wallet ledger?
+
+    `WalletManager` is the only production writer of `wallet_transactions`.
+    Measured by asking which production modules reference it at all, rather than
+    by reading the module and finding it correct — which it is.
+    """
+    files = _production_python()
+    guard = _scanned(files, "production Python file")
+    if guard:
+        return guard
+
+    # Where the singleton is *defined*, *exported*, *constructed at startup* or
+    # declared as an empty app_state slot. A reference from one of these is not
+    # a consumer.
+    plumbing = {
+        "payments/wallet.py",
+        "payments/__init__.py",
+        "core/startup_factories.py",
+        "core/app_state.py",
+    }
+    consumers = []
+    control = 0
+    for rel in files:
+        body = _code(rel)
+        if not body:
+            continue
+        # Positive control: a singleton that genuinely has consumers. If this
+        # stays at zero the scan is broken and the answer means nothing.
+        if "revenue_engine" in body and rel != "monetization/revenue_split.py":
+            control += 1
+        if rel in plumbing:
+            continue
+        # Three near-misses this has to exclude, each of which reported the
+        # finding FIXED against a file that has nothing to do with the fiat
+        # wallet: `CryptoWalletManager` (substring), `crypto_wallet_manager`
+        # (substring), and `from .wallet_manager import ...` in the crypto
+        # package (a module path, not this singleton). A dotted path is only a
+        # reference to this singleton when it is spelled out in full.
+        if re.search(_WALLET_CONSUMER, body):
+            consumers.append(rel)
+
+    if control == 0:
+        return UNVERIFIED, (
+            "the control singleton was not found in any production file — the scan is broken, not the code"
+        )
+    if consumers:
+        return _named(
+            FIXED,
+            f"the wallet ledger has {len(consumers)} production consumer(s): {', '.join(consumers[:3])}",
+        )
+
+    # No consumer. Which way that gets fixed is a product decision, not a
+    # refactor — the same shape as F146, so the same mechanism: OWNER while
+    # nothing records the decision, enforced once an ADR accepts one. Reporting
+    # OPEN here would imply engineering may pick, and the two options (make the
+    # wallet the withdrawal ledger, or retire it and repoint AML) are not
+    # interchangeable.
+    decided = any(
+        re.search(r"(?m)^-\s*Status:\s*accepted\b", _read(rel)) and re.search(r"(?i)wallet", _read(rel))
+        for rel in _tracked("docs/decisions/*.md")
+    )
+    detail = (
+        "no production module uses WalletManager, so nothing writes wallet_transactions: "
+        "the AML daily-withdrawal rules and the health-check aggregation both read a table "
+        "that is permanently empty"
+    )
+    if not decided:
+        return _named(
+            OWNER,
+            detail + ". No accepted ADR says whether the fiat wallet is the ledger the "
+            "withdrawal path writes through or is retired — that is the owner's call",
+        )
+    return _named(OPEN, detail + ". An ADR has decided; the code has not followed it yet")
+
+
+def _p_aml_unreached() -> tuple[str, str]:
+    """Is the AML gate reachable from the endpoint that withdraws money?
+
+    `check_withdrawal` is correct — both the single cap and the daily rules were
+    reproduced firing against a populated ledger. The defect is that its only
+    call site sits inside `WalletManager`, which nothing calls, and the live
+    `/payments/withdraw` endpoint never consults it.
+    """
+    files = _production_python()
+    guard = _scanned(files, "production Python file")
+    if guard:
+        return guard
+
+    callers = [rel for rel in files if rel != "compliance/aml.py" and "check_withdrawal" in (_code(rel) or "")]
+    if not callers:
+        return _named(
+            OPEN,
+            "nothing in production calls check_withdrawal — the AML gate is wired at startup and never consulted",
+        )
+
+    endpoint = _code("api/payments.py")
+    if not endpoint:
+        return UNVERIFIED, "api/payments.py not found"
+    withdraw_screened = "check_withdrawal" in endpoint
+
+    unreachable_only = callers == ["payments/wallet.py"]
+    if unreachable_only and not withdraw_screened:
+        return _named(
+            OPEN,
+            "check_withdrawal is called only from payments/wallet.py, which has no production "
+            "consumer, and /payments/withdraw does not consult the gate — every AML rule, the "
+            "single-transaction cap included, is unreachable in production",
+        )
+    if not withdraw_screened:
+        return _named(
+            PARTIAL,
+            f"check_withdrawal is called from {', '.join(callers[:3])}, but /payments/withdraw "
+            "does not consult the gate",
+        )
+    return _named(FIXED, f"the withdrawal path consults the AML gate ({', '.join(callers[:3])})")
+
+
 def _p_aff_cents() -> tuple[str, str]:
     """A commission an affiliate is owed must be an amount that can be paid."""
     body = _code("monetization/affiliate.py")
@@ -3068,6 +3206,66 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id ADR-LEDGER",
         _p_adr_ledger,
         [S_DOC, S_TDD],
+    ),
+    Finding(
+        "WALLET-DEAD",
+        "The wallet ledger has no production consumer, so `wallet_transactions` is never written",
+        "P0",
+        "Money",
+        "Found while wiring the creator and affiliate ledgers (F208, F31/F32)",
+        "`payments/wallet.py::WalletManager` is 700 lines of correct, tested, exact-Decimal "
+        "ledger — balance validation, a rollback when the ledger write is refused, freeze and "
+        "transfer paths — and no production module uses it. Measured by an exhaustive sweep of "
+        "every tracked `.py`: the only references are its own module, the `payments/__init__.py` "
+        "export, `core/app_state.py` declaring the slot as `None`, and "
+        "`core/startup_factories.py::init_wallet`, which builds one into `app_state.wallet_manager` "
+        "that nothing ever reads. Dynamic access was checked too — no string form of the name "
+        "appears anywhere. This is `portfolio/pms.py`'s shape (F158), not F208's: the module is "
+        "not merely unwired, it is unreferenced. The user-facing surface reads elsewhere — "
+        "`/billing/balance` reads the broker account and the subscription manager, "
+        "`/billing/transactions` reads Stripe and subscription events. So `WalletManager` is the "
+        "only production writer of `wallet_transactions`, and it never runs: the table is "
+        "permanently empty, which is what makes AML-UNREACHED's daily rules unfireable and what "
+        "`health_check_service.py` aggregates to zero. The fix is a decision, not a refactor: "
+        "either the wallet becomes the ledger the withdrawal path writes through, or it is "
+        "retired and AML and the health check are pointed at whatever is authoritative instead. "
+        "Deleting it silently is the one wrong answer — the AML rules would then read an empty "
+        "table with nothing left to explain why.",
+        "Assert a production caller exists: drive a withdrawal through the API and assert a row "
+        "lands in `wallet_transactions`. It will fail today, at the point where there is no "
+        "path from any endpoint to the ledger.",
+        "python scripts/correction_register.py --id WALLET-DEAD",
+        _p_wallet_dead,
+        [S_MONEY, S_DEAD],
+    ),
+    Finding(
+        "AML-UNREACHED",
+        "Every AML withdrawal rule is unreachable in production",
+        "P0",
+        "Compliance",
+        "Found while measuring WALLET-DEAD",
+        "`compliance/aml.py::check_withdrawal` enforces a single-transaction cap, a daily "
+        "withdrawal count, a daily volume limit and sanctions/PEP screening. It is built "
+        "correctly and wired correctly — `core/startup_factories.py::init_aml` hands it a session "
+        "factory through the registered `aml` component — and it is never consulted. The gate "
+        "itself was proved to work, called directly against a populated ledger: a 40,000 "
+        "withdrawal was refused by the 10,000 single cap, and a 100 withdrawal was refused "
+        "after six same-day rows by the 5-per-day rule. The defect is reachability, and it is "
+        "doubled. `check_withdrawal` has exactly one production call site — "
+        "`payments/wallet.py::debit_wallet` — inside the class WALLET-DEAD shows nothing calls. "
+        "And the live endpoint that withdraws money, `POST /payments/withdraw`, never mentions "
+        "it: it checks KYC through a dependency, a minimum amount and a rate limit, and returns. "
+        "What is NOT true today is that money leaves unscreened — that endpoint is documented "
+        "NOT YET PERSISTED, queues nothing and disburses nothing. That is exactly why this is "
+        "worth fixing now rather than later: the day `FIAT_PROVIDER` is configured and the "
+        "endpoint is made real, it will disburse without ever touching the gate, and the gate "
+        "will still look wired at startup to anyone who reads it.",
+        "Spy on the AML gate, drive `POST /payments/withdraw` through the test client, and "
+        "assert the gate was consulted. It is not consulted today, so the test fails before the "
+        "endpoint is made real rather than after.",
+        "python scripts/correction_register.py --id AML-UNREACHED",
+        _p_aml_unreached,
+        [S_DEAD, S_TDD],
     ),
     Finding(
         "AFF-CENTS",

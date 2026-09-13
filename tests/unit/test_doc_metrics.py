@@ -239,3 +239,63 @@ class TestTheSpatialFiguresAreRatchetedWithoutCryingWolf:
         doc.write_text(sentence + "\n", encoding="utf-8")
         drift = [d for d in check(extra_documents=[doc]).drift if d.path == doc and d.metric.startswith("spatial_")]
         assert not drift, f"{sentence!r} was read as a spatial figure: {drift}"
+
+
+class TestTheOwnerDecisionCountIsRatcheted:
+    """MASTER_OUTSTANDING's summary said "Four of them" while §A carried
+    seventeen. Nothing measured it, so nothing caught it, and a reader trusting
+    the summary believed the owner's queue was a quarter of its real size — the
+    same "figure describing a ratchet, going stale for want of a ratchet" shape
+    the coverage_debt claim above was added for."""
+
+    def test_the_count_is_measured_from_the_headings(self) -> None:
+        import re
+        from pathlib import Path as _Path
+
+        from scripts.doc_metrics import REPO, measure
+
+        measured = measure()["owner_decisions"]
+        headings = re.findall(
+            r"(?m)^###\s+A\d+\.",
+            _Path(REPO, "docs/ai/MASTER_OUTSTANDING.md").read_text(encoding="utf-8"),
+        )
+        assert measured == len(headings) > 0
+
+    def test_a_wrong_owner_count_is_reported(self, tmp_path: Path) -> None:
+        from scripts.doc_metrics import measure
+
+        wrong = measure()["owner_decisions"] + 1
+        doc = tmp_path / "SUMMARY.md"
+        doc.write_text(
+            f"* **§A — Decisions only the owner can make.** {wrong} of them. Nothing moves.\n",
+            encoding="utf-8",
+        )
+        drift = [d for d in check(extra_documents=[doc]).drift if d.metric == "owner_decisions"]
+        assert drift, "a wrong owner-decision count was not reported"
+
+    def test_the_right_owner_count_is_not_reported(self, tmp_path: Path) -> None:
+        from scripts.doc_metrics import measure
+
+        doc = tmp_path / "SUMMARY.md"
+        doc.write_text(
+            f"* **§A — Decisions only the owner can make.** {measure()['owner_decisions']} of them.\n",
+            encoding="utf-8",
+        )
+        drift = [d for d in check(extra_documents=[doc]).drift if d.metric == "owner_decisions"]
+        assert not drift
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "There are 4 of them in the backlog.",
+            "Decisions only the operator can make. 4 of them.",
+            "5 of them are already done.",
+        ],
+    )
+    def test_an_unrelated_count_is_not_read_as_the_owner_count(self, tmp_path: Path, sentence: str) -> None:
+        """The pattern is anchored to §A's exact phrasing. A bare `(\\d+) of them`
+        would match most of this repository's prose."""
+        doc = tmp_path / "OTHER.md"
+        doc.write_text(sentence + "\n", encoding="utf-8")
+        drift = [d for d in check(extra_documents=[doc]).drift if d.metric == "owner_decisions"]
+        assert not drift, f"{sentence!r} was read as the owner-decision count"

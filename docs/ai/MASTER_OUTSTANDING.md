@@ -9,8 +9,13 @@
 This is the single place that answers "what is outstanding". It has two halves and
 they are not equally trustworthy, so they are separated:
 
-* **§A — Decisions only the owner can make.** Four of them. Nothing below them
+* **§A — Decisions only the owner can make.** 18 of them. Nothing below them
   moves until they are picked, and each is stated with what it costs either way.
+  This read "Four of them" until 2026-09-13, when there were already seventeen —
+  a reader who trusted it would have believed the owner's queue was a quarter of
+  its real size. `scripts/doc_metrics.py --check` now counts the `### A<n>.`
+  headings and blocks on the difference, so it cannot drift again. The numbering
+  is not contiguous: A2 and A3 no longer appear.
 * **§B — Work.** Ranked, with the measurement behind each item.
 
 > **The numbers in §B go stale.** They were measured on 2026-09-08. Re-run
@@ -831,6 +836,63 @@ input, or keep the fraction and document that it is P&L-relative.
 **4. `profit_factor` is `float("inf")` with no losses (F285).** Not
 JSON-serialisable under a strict encoder. `None` is the honest value; it changes
 the field's type for consumers.
+
+### A20. Is the fiat wallet the withdrawal ledger, or is it retired?
+
+`payments/wallet.py::WalletManager` is ~700 lines of correct, tested,
+exact-`Decimal` ledger — balance validation, a rollback when the ledger write is
+refused, freeze and transfer paths — and **no production module uses it**.
+Measured by an exhaustive sweep of every tracked `.py`: the only references are
+its own module, the `payments/__init__.py` export, `core/app_state.py` declaring
+the slot as `None`, and `core/startup_factories.py::init_wallet`, which builds one
+into `app_state.wallet_manager` that nothing ever reads. Dynamic access was
+checked too — no string form of the name appears anywhere.
+
+This is `portfolio/pms.py`'s shape (F158), not F208's: the module is not merely
+unwired, it is **unreferenced**. The user-facing surface reads elsewhere —
+`/billing/balance` reads the broker account and the subscription manager,
+`/billing/transactions` reads Stripe and subscription events.
+
+**What follows from it.** `WalletManager` is the only production writer of
+`wallet_transactions`, so that table is permanently empty, and two things read
+it:
+
+| Reader | What it gets today |
+|---|---|
+| `compliance/aml.py::_check_db_rules` — daily withdrawal count and volume | An empty result set, so neither rule can ever fire |
+| `health_check_service.py:435` — deposit/withdrawal/fee aggregation | Zero, reported as a measurement |
+
+Recorded as **WALLET-DEAD**, and it is OWNER rather than OPEN deliberately: the
+two ways out are not interchangeable, and engineering should not pick.
+
+1. **The wallet becomes the ledger the withdrawal path writes through.** That
+   makes `wallet_transactions` real, which is what AML's daily rules and the
+   health check were written against. It also means `POST /payments/withdraw`
+   stops being a stub.
+2. **The wallet is retired.** Then AML's daily rules and the health check must
+   be repointed at whatever *is* authoritative, in the same change.
+
+**Deleting it silently is the one certainly-wrong answer** — the AML rules would
+then read an empty table with nothing left in the tree to explain why.
+
+The probe is gated on an accepted ADR mentioning the wallet, the same mechanism
+F146 uses: while nothing records the decision the finding reads OWNER, and once
+an ADR accepts one the probe enforces it, so a choice made cannot quietly drift
+back.
+
+Separately and **not** an owner decision: **AML-UNREACHED** (P0, OPEN).
+`check_withdrawal` enforces a single-transaction cap, a daily count, a daily
+volume limit and sanctions/PEP screening, is wired correctly at startup, and is
+never consulted. The gate itself was proved to work, called directly against a
+populated ledger — a 40,000 withdrawal refused by the 10,000 single cap, and a
+100 withdrawal refused after six same-day rows by the 5-per-day rule. Its only
+production call site is inside `WalletManager.debit_wallet`, and the live
+`POST /payments/withdraw` never mentions it. **No money leaves unscreened
+today** — that endpoint is documented NOT YET PERSISTED, queues nothing and
+disburses nothing. That is precisely why it is worth closing now: the day
+`FIAT_PROVIDER` is configured and the endpoint is made real, it will disburse
+without ever touching the gate, and the gate will still look wired to anyone
+who reads startup.
 
 ## §B — Work, ranked
 

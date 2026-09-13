@@ -143,7 +143,20 @@ CLAIMS: Final[tuple[Claim, ...]] = (
         re.compile(r"recorded\s+coverage\s+debt\s*\|\s*(\d+)"),
         "scripts/pre_commit_coverage.py",
     ),
+    # How many decisions are waiting on the owner. This is here because it
+    # drifted badly: MASTER_OUTSTANDING's own summary read "Four of them" while
+    # §A carried seventeen, so a reader trusting the summary believed the
+    # owner's queue was a quarter of its real size. Measured by counting the
+    # `### A<n>.` headings in §A, which is the list itself.
+    Claim(
+        "owner_decisions",
+        re.compile(r"Decisions only the owner can make\.\*\*\s*(\d+)\s+of them"),
+        "docs/ai/MASTER_OUTSTANDING.md",
+    ),
 )
+
+#: §A's entries, the thing `owner_decisions` counts.
+_OWNER_HEADING: Final = re.compile(r"(?m)^###\s+A\d+\.")
 
 #: Living documents only. Dated audits and archives are point-in-time records —
 #: "refreshing" a historical figure would destroy the record it exists to be.
@@ -203,7 +216,16 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         "spatial_built": spatial.built,
         "spatial_planned": spatial.planned,
         "coverage_debt": len(coverage_baseline()),
+        "owner_decisions": _count_owner_decisions(repo),
     }
+
+
+def _count_owner_decisions(repo: Path) -> int:
+    """§A's entries, counted from the headings rather than from anyone's memory."""
+    path = repo / "docs/ai/MASTER_OUTSTANDING.md"
+    if not path.exists():
+        raise MetricsBroken("docs/ai/MASTER_OUTSTANDING.md is missing — refusing to report a count")
+    return len(_OWNER_HEADING.findall(path.read_text(encoding="utf-8")))
 
 
 def _documents(repo: Path, extra: list[Path] | None = None) -> list[Path]:
