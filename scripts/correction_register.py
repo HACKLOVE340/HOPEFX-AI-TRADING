@@ -746,18 +746,39 @@ def _p_f220() -> tuple[str, str]:
 
 
 def _p_f130() -> tuple[str, str]:
-    """Self-healer patch signing must be more than a named constant."""
-    body = _code("ai/improve/proposal.py")
+    """The patch queue must refuse an entry it cannot verify.
+
+    This probe used to read `ai/improve/proposal.py` and report OPEN because
+    that module does not name `HEAL_PATCH_SIGNING_KEY`. It does not name it on
+    purpose — proposal.py can neither sign nor apply, and a test asserts that by
+    parsing the file. The control lives in `security/self_healer.py`, which the
+    probe was never looking at. Measuring the wrong file is how a finding that
+    was fixed stayed open on a P0 line.
+    """
+    body = _code("security/self_healer.py")
     if not body:
-        return UNVERIFIED, "ai/improve/proposal.py not found"
-    wired = "HEAL_PATCH_SIGNING_KEY" in body
-    return _named(
-        FIXED if wired else OPEN,
-        "the module reads the signing key"
-        if wired
-        else "the module never names HEAL_PATCH_SIGNING_KEY and never writes a signature — "
-        "the agent sandbox ships with an unsigned patch path",
-    )
+        return UNVERIFIED, "security/self_healer.py not found"
+
+    gate = re.search(r"def _patch_entry_is_trusted.*?(?=\ndef )", body, re.S)
+    if not gate:
+        return OPEN, "no _patch_entry_is_trusted gate in security/self_healer.py"
+    gate_body = gate.group(0)
+
+    # The no-key branch is the one that used to return True for every entry.
+    no_key = re.search(r"if not _PATCH_SIGNING_KEY:(.*?)(?=\n    sig\b)", gate_body, re.S)
+    fails_closed = bool(no_key and "return False" in no_key.group(1))
+    opt_in_is_explicit = "_ALLOW_UNSIGNED_PATCHES" in gate_body and "getenv" in body
+    proven = _exists("tests/unit/test_self_healer_fails_closed.py")
+
+    if fails_closed and opt_in_is_explicit and proven:
+        return FIXED, (
+            "the no-key branch returns False, running unsigned needs an explicit "
+            "HEAL_ALLOW_UNSIGNED_PATCHES opt-in that warns on every use, and "
+            "test_self_healer_fails_closed.py injects the cases. Exercised directly as "
+            "well as read: no key rejects, key with no _sig rejects, a tampered signature "
+            "rejects, only a correct signature is accepted"
+        )
+    return OPEN, f"fails_closed={fails_closed} explicit_opt_in={opt_in_is_explicit} proven={proven}"
 
 
 def _p_f184() -> tuple[str, str]:
@@ -808,17 +829,33 @@ def _p_f180() -> tuple[str, str]:
 
 
 def _p_f144() -> tuple[str, str]:
-    """Login must take the same time whether or not the user exists."""
+    """Login must take the same time whether or not the user exists.
+
+    Checks the CALL SITE, not just that an equaliser is defined somewhere. A
+    helper nobody invokes is the defect this repository names most often.
+    """
     body = _code("auth/service.py")
     if not body:
         return UNVERIFIED, "auth/service.py not found"
-    equalised = bool(re.search(r"_DUMMY_HASH|dummy_hash|_dummy_verify|compare_digest", body))
-    return _named(
-        FIXED if equalised else OPEN,
-        "the unknown-user path performs an equivalent hash"
-        if equalised
-        else "the unknown-user path returns before verify_password, so a 268 ms gap "
-        "enumerates registered accounts — STRIDE-I, and it needs no credentials",
+
+    defined = "_absorb_unknown_user_timing" in body
+    branch = re.search(
+        r"if not user:((?:(?!\n            if )[\s\S])*?user_not_found[\s\S]*?return False)",
+        body,
+    )
+    called = bool(branch and "_absorb_unknown_user_timing" in branch.group(1))
+    proven = _exists("tests/unit/test_login_does_not_enumerate_users.py")
+
+    if defined and called and proven:
+        return FIXED, (
+            "the unknown-user branch verifies the supplied password against a fixed dummy "
+            "hash before refusing. Measured: 309 ms vs 1.2 ms (257x) before, 313 ms vs "
+            "309 ms (1.01x) after"
+        )
+    return OPEN, (
+        f"equaliser_defined={defined} called_on_the_unknown_user_branch={called} "
+        f"test={proven} — the unknown-user path returns before verify_password, so the "
+        "clock enumerates registered accounts with no credentials and no lockout"
     )
 
 
@@ -1785,16 +1822,23 @@ FINDINGS: list[Finding] = [
     ),
     Finding(
         "F130",
-        "Self-healer patch signing is off and set nowhere",
+        "The self-healer patch queue accepted every unsigned entry",
         "P0",
         "Security",
         "docs/audit/REMEDIATION_PLAN.md — Phase 3",
-        "`ai/improve/proposal.py` never names `HEAL_PATCH_SIGNING_KEY` and never writes a "
-        "signature. The AI layer's agent sandbox therefore ships with an unsigned patch "
-        "path — the spec's approval queue is the same shape as F176, a control described "
-        "accurately and enforced by convention.",
-        "A test that submits an unsigned patch and asserts it is refused, not applied.",
-        "python scripts/correction_register.py --id F130",
+        "Done, and this register said otherwise until 2026-09-13 — the entry was carried "
+        "over from REMEDIATION_PLAN and its probe read `ai/improve/proposal.py`, which "
+        "deliberately never names the key (it cannot sign and cannot apply, asserted by "
+        "parsing the file). The control is in `security/self_healer.py`. "
+        "`_patch_entry_is_trusted` used to return True for every entry when no key was "
+        "set, and no shipped configuration set one, so there was no deployment in which "
+        "it was on. It now fails closed; running unsigned needs an explicit "
+        "`HEAL_ALLOW_UNSIGNED_PATCHES` opt-in that warns on every use and cannot override "
+        "a configured key.",
+        "Already carried by tests/unit/test_self_healer_fails_closed.py — seven tests "
+        "injecting no key, a key with no `_sig`, a correct signature, a tampered "
+        "signature, the opt-in, and the opt-in against a configured key.",
+        "pytest tests/unit/test_self_healer_fails_closed.py -q",
         _p_f130,
         [S_DEAD, S_INV],
     ),
@@ -1861,12 +1905,21 @@ FINDINGS: list[Finding] = [
         "P1",
         "Security",
         "docs/audit/REMEDIATION_PLAN.md — Phase 3",
-        "The unknown-user path returns before `verify_password`, so the response is fast for "
-        "an address that is not registered and slow for one that is — a 268.74 ms measured "
-        "gap. STRIDE-I, and it needs no credentials to exploit. Hash a fixed dummy password "
-        "on the unknown-user path so both branches do the same work.",
-        "Time both paths over N attempts and assert the medians are within a stated bound. "
-        "Run it before the fix and watch the gap.",
+        "Done 2026-09-13. `login` returned as soon as the SELECT missed, so a registered "
+        "address paid bcrypt at cost 12 and an unregistered one paid a failed lookup. Both "
+        "branches already returned the same message, so the response gave nothing away and "
+        "the clock gave away the customer list — no credentials needed, and no lockout "
+        "counter to trip, because an address that does not exist has nothing to increment. "
+        "Re-measured rather than trusting the audit's 268.74 ms: **309.04 ms against "
+        "1.20 ms, a 257x gap**; after the fix 312.98 ms against 309.12 ms, **1.01x**. The "
+        "unknown-user branch now verifies the supplied password against a fixed dummy hash, "
+        "computed on first use so no process pays ~300 ms merely to import the module.",
+        "Carried by tests/unit/test_login_does_not_enumerate_users.py: a deterministic one "
+        "asserting verification actually runs for an unknown email (the mechanism, so it "
+        "says the same thing on a loaded runner), a loose statistical one on the outcome, "
+        "identical refusal messages, and a positive control that a correct password still "
+        "authenticates — without which every other assertion is satisfied by a login that "
+        "refuses everyone.",
         "python scripts/correction_register.py --id F144",
         _p_f144,
         ["threat-modelling"],

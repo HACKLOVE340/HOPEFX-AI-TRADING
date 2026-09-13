@@ -25,9 +25,11 @@ import hashlib
 import logging
 import os
 import secrets
+import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Final
 
 UTC = timezone.utc
 
@@ -278,6 +280,48 @@ def decrypt_totp_secret(stored: str) -> str:
 # while auth.jwt used bcrypt, causing "hash could not be identified" on login.
 from auth.jwt import hash_password, verify_password
 
+# ── Login timing: an unknown email must cost what a known one costs ─────────
+#
+# `login` returned as soon as the SELECT missed, so a registered address paid
+# bcrypt at cost factor 12 and an unregistered one paid a failed lookup.
+# Measured before this existed, twelve attempts each with a fresh user so the
+# lockout never short-circuited bcrypt: 309.04 ms against 1.20 ms — a 257x gap
+# (F144). Both branches already returned the same message, so the response gave
+# nothing away and the clock gave away the whole customer list, with no
+# credentials needed and no lockout counter to trip.
+#
+# The remedy is to do the same work either way: verify the supplied password
+# against a fixed hash nobody can authenticate with.
+# A hash input, never a credential: nothing authenticates against its digest.
+_DUMMY_PASSWORD: Final[str] = "hopefx-timing-equalisation-placeholder"  # noqa: S105
+_dummy_hash: str | None = None
+_dummy_hash_lock = threading.Lock()
+
+
+def _absorb_unknown_user_timing(password: str) -> None:
+    """Spend a password verification on an email that does not exist.
+
+    Computed on first use rather than at import: bcrypt at cost 12 is ~300 ms,
+    and paying that in every process that merely imports this module — every
+    test collection included — is a cost with no security value.
+
+    The result is deliberately discarded. Nothing can authenticate against this
+    hash, and the caller has already decided to refuse.
+    """
+    global _dummy_hash
+    if _dummy_hash is None:
+        with _dummy_hash_lock:
+            if _dummy_hash is None:
+                _dummy_hash = hash_password(_DUMMY_PASSWORD)
+    try:
+        verify_password(password, _dummy_hash)
+    except Exception as exc:
+        # Never let the equaliser change the outcome of a refusal it exists to
+        # disguise. Logged at ERROR rather than swallowed: if this stops running
+        # the side channel is back and nothing else would say so.
+        logger.error("auth: timing equalisation failed: %s", exc)
+
+
 # ── TOTP (2FA) ───────────────────────────────────────────────────────────────
 try:
     import pyotp as _pyotp
@@ -473,6 +517,9 @@ class AuthService:
                     logger.debug("Suppressed exception: %s", _exc)
 
             if not user:
+                # Same work as the branch below, so the clock says no more than
+                # the message does (F144).
+                _absorb_unknown_user_timing(password)
                 _record(False, "user_not_found")
                 return False, "Invalid credentials", None
 
