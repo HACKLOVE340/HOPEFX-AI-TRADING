@@ -568,16 +568,65 @@ def _p_f218() -> tuple[str, str]:
 
 
 def _p_f61() -> tuple[str, str]:
-    alias = _grep(r"AsyncOANDAConnector\s*=", "brokers/oanda.py")
-    guarded = _exists("tests/unit/test_broker_type_oanda_is_not_silently_broken.py")
-    if alias and guarded:
-        return PARTIAL, (
-            "the bare alias remains, but a test now forces it to fail loudly rather "
-            "than at the first live order — building the adapter is a feature, not a fix"
+    """Can `BROKER_TYPE=oanda` place an order, and does startup refuse if not?
+
+    The previous probe matched the line `AsyncOANDAConnector = OANDABroker` and
+    reported PARTIAL whenever it existed — "the bare alias remains". But the
+    alias was never the defect: it is a legitimate name binding that
+    `core/startup_factories.py` imports, and the probe could only have reached
+    FIXED if somebody DELETED it, which would break the import. A probe that can
+    only be satisfied by a harmful change is worse than no probe, and this one
+    also told every reader to go and build an adapter that already existed.
+
+    What the finding actually asks is whether the connector the executor calls
+    implements `place_market_order`, and whether it maps the side rather than
+    guessing it — `_units()` treats an unrecognised direction as a SELL, so a
+    default there places the opposite of the intended trade.
+
+    Three states, because the honest answer is not binary: the adapter is
+    written and refuses ambiguity, and nothing in this tree has spoken to OANDA.
+    Venue verification needs a practice account, so it cannot be measured here —
+    the probe says what it checked and names what it did not.
+    """
+    body = _code("brokers/oanda.py")
+    if not body:
+        return UNVERIFIED, "brokers/oanda.py not found"
+    if not _grep(r"AsyncOANDAConnector\s*=", "brokers/oanda.py"):
+        return OPEN, "AsyncOANDAConnector is gone; core/startup_factories.py imports it by name"
+
+    adapter = re.search(r"async def place_market_order\s*\(", body) is not None
+    refuses = re.search(r"def _normalise_side", body) is not None and "Unrecognised order side" in _read(
+        "brokers/oanda.py"
+    )
+    if not adapter:
+        return OPEN, (
+            "the connector AsyncOANDAConnector aliases has no place_market_order — "
+            "execution/trade_executor.py calls it, so the first live order raises AttributeError"
         )
-    if alias:
-        return OPEN, alias[0]
-    return FIXED, "no bare alias"
+    if not refuses:
+        return OPEN, (
+            "place_market_order exists but nothing refuses an unrecognised side; "
+            "_units() defaults to SELL, so a bad side places the opposite trade"
+        )
+
+    # Both startup paths must refuse a connector that cannot place an order.
+    startup = _code("core/startup_factories.py")
+    guards = len(re.findall(r'_required\s*=\s*\(\s*"place_market_order"', startup))
+    guarded = _exists("tests/unit/test_broker_type_oanda_is_not_silently_broken.py")
+    if guards < 2:
+        return PARTIAL, (
+            f"the adapter is written and refuses an unrecognised side, but only {guards} of the 2 "
+            "startup broker paths verifies the connector can place an order — the factory path "
+            "states it in a docstring and checks nothing"
+        )
+    return _named(
+        PARTIAL,
+        "the adapter is written, maps OrderSide/long/short and refuses anything else rather than "
+        "defaulting to SELL, and both startup paths refuse a connector that cannot place an order"
+        + (" (pinned by tests)" if guarded else "")
+        + ". NOT venue-verified: every test runs against a stubbed place_order and nothing here has "
+        "spoken to OANDA — that needs a practice account, so it cannot be measured from the tree",
+    )
 
 
 def _p_f204() -> tuple[str, str]:

@@ -207,7 +207,7 @@ and every step of it has caught something here at least once.
 #### F61/F107 · `BROKER_TYPE=oanda` cannot place an order
 
 - **Priority** P1 · **Area** Brokers
-- **Measured now** the bare alias remains, but a test now forces it to fail loudly rather than at the first live order — building the adapter is a feature, not a fix
+- **Measured now** the adapter is written, maps OrderSide/long/short and refuses anything else rather than defaulting to SELL, and both startup paths refuse a connector that cannot place an order (pinned by tests). NOT venue-verified: every test runs against a stubbed place_order and nothing here has spoken to OANDA — that needs a practice account, so it cannot be measured from the tree
 - **Fix** Half done, deliberately. `AsyncOANDAConnector = OANDABroker` is still a bare alias with no `place_market_order`, but a test now makes that fail where someone can see it instead of at the first live order. Writing the adapter is a feature and needs a practice venue to test against: `place_order` takes `direction` ('long'/'short') and returns a dict, while the caller passes an `_OrderSide` and expects a `MarketOrderResult`. Guessed wrong, it places the opposite side. Live OANDA is the stated next milestone, so this is the gating item.
 - **Write this test first** The existing loud-failure test stays; the adapter needs paper-venue contract tests for side, quantity and result shape before it is wired.
 - **Verify** `pytest tests/unit/test_broker_type_oanda_is_not_silently_broken.py -q`

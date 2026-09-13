@@ -1692,10 +1692,13 @@ async def _try_connect_oanda(
         broker = AsyncOANDAConnector(api_key=token, account_id=account_id, practice=practice)
 
         # Verify the connector can actually place an order before reporting the
-        # broker as ready. AsyncOANDAConnector is a bare alias for OANDABroker
-        # (brokers/oanda.py:681), which has place_order(dict) but NOT
-        # place_market_order — the method execution/trade_executor.py:409 calls.
-        # So this configuration used to boot cleanly, log "OANDA broker
+        # broker as ready. AsyncOANDAConnector is an alias for OANDABroker,
+        # which NOW implements place_market_order (brokers/oanda.py:422) over
+        # place_order — the method execution/trade_executor.py:434 calls. This
+        # comment used to say it did not, which was true when the guard was
+        # written and stopped being true when the adapter landed; the guard is
+        # kept because it is what makes the property enforced rather than
+        # believed. This configuration used to boot cleanly, log "OANDA broker
         # connected", and raise AttributeError on the first signal instead
         # (F61/F107). deployments/k8s/k8s-configmap.yaml:33-34 already sets
         # BROKER_TYPE=oanda with OANDA_PRACTICE=false.
@@ -1763,8 +1766,19 @@ async def _try_connect_factory_broker(broker_type: str, log_activity: Any) -> An
     """Instantiate + connect a BrokerFactory-registered connector (alpaca, binance,
     bybit, ccxt, ibkr, cme, …). Returns the connected broker or None on failure.
 
-    These connectors implement BrokerConnector and inherit place_market_order
-    from the base adapter, so the live order router drives them uniformly.
+    These connectors are expected to implement BrokerConnector and inherit
+    place_market_order from the base adapter, so the live order router drives
+    them uniformly. That sentence used to be the only thing standing behind the
+    claim, and a docstring is not a control: measured across the 22 registered
+    names, 21 satisfy it and `oanda` -> `OANDAConnector` does not (its base is
+    `object`). Nothing reaches that one by a path calling place_market_order
+    today — startup dispatches oanda to `_try_connect_oanda`, which has always
+    checked — but the asymmetry was the defect: the one branch that verified was
+    the one broker anybody had looked at.
+
+    So the same check runs here, for every type. Refusing at startup is the
+    whole point: a deployment that cannot place an order should say so while
+    someone is watching the logs, not on the first live signal (F61/F107).
     """
     try:
         from brokers.factory import BrokerFactory
@@ -1773,6 +1787,20 @@ async def _try_connect_factory_broker(broker_type: str, log_activity: Any) -> An
         if broker is None:
             logger.warning("[BROKER] factory has no connector registered for '%s'", broker_type)
             return None
+
+        _required = ("place_market_order", "get_account_info", "get_positions")
+        _missing = [m for m in _required if not hasattr(broker, m)]
+        if _missing:
+            logger.error(
+                "[BROKER] %s resolved to %s, which is missing %s. This deployment cannot "
+                "place an order; refusing it rather than reporting the broker ready and "
+                "raising on the first signal (F61/F107).",
+                broker_type,
+                type(broker).__name__,
+                _missing,
+            )
+            return None
+
         connect = broker.connect()
         ok = await connect if asyncio.iscoroutine(connect) else connect
         if not ok:
