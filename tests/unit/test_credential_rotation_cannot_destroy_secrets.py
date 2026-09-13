@@ -48,9 +48,9 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def vault():
-    from security.encryption import SecureVault
+    from security.encryption import CredentialCipher
 
-    return SecureVault(master_key="original-master-key-for-tests")  # nosec B106
+    return CredentialCipher(master_key="original-master-key-for-tests")  # nosec B106
 
 
 def test_rotation_does_not_silently_orphan_existing_ciphertext(vault):
@@ -121,3 +121,64 @@ def test_the_live_vault_is_the_one_that_can_rotate():
 
     source = inspect.getsource(LiveVault.rotate_key)
     assert "keyring" in source, "config/vault.py::rotate_key no longer stages the new key in the keyring"
+
+
+# ── one name, one credential store ───────────────────────────────────────────
+#
+# Two classes were named `SecureVault`: the live one in `config/vault.py`
+# (Argon2id, crash-safe rotation) and this module's, which cannot rotate at all.
+# A name collision on a credential store is how the wrong one gets imported, and
+# the failure is silent — both encrypt, both decrypt, and only one survives a
+# key change.
+#
+# The fix is a rename rather than a deletion: `security/encryption.py` is
+# load-bearing (`hash_password` has 31 production references, `verify_password`
+# 18), so the module stays and only the misleading name goes. `CredentialCipher`
+# is what it actually is — it holds no credentials and has no vault semantics,
+# which is precisely why `rotate_key` raises.
+
+
+def test_exactly_one_importable_class_is_named_SecureVault():
+    """And it is the live one.
+
+    Asserted against the source tree rather than by importing, because importing
+    every module to find a class name would execute half the platform.
+    """
+    import pathlib
+    import re
+    import subprocess
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    tracked = subprocess.run(
+        ["git", "ls-files", "*.py"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.split()
+    assert len(tracked) > 100, "git ls-files returned almost nothing; this assertion would be vacuous"
+
+    declaring = [
+        rel
+        for rel in tracked
+        if re.search(r"(?m)^class SecureVault\b", (root / rel).read_text(encoding="utf-8", errors="replace"))
+    ]
+    assert declaring == ["config/vault.py"], (
+        f"SecureVault is declared in {declaring}; exactly one credential store may carry that name, "
+        "and it is the one in config/vault.py that can actually rotate a key"
+    )
+
+
+def test_the_renamed_cipher_is_still_reachable_under_its_new_name():
+    """The rename must not quietly delete the behaviour the module still needs."""
+    from security.encryption import CredentialCipher
+
+    c = CredentialCipher(master_key="k")  # nosec B106
+    assert c.decrypt(c.encrypt("OANDA-TOKEN")) == "OANDA-TOKEN"
+
+
+def test_the_renamed_cipher_still_refuses_to_rotate():
+    """The refusal is the point of the whole finding; a rename must not lose it."""
+    import pytest as _pytest
+
+    from security.encryption import CredentialCipher
+
+    c = CredentialCipher(master_key="k")  # nosec B106
+    with _pytest.raises(RuntimeError, match="cannot rotate"):
+        c.rotate_key("new-key")

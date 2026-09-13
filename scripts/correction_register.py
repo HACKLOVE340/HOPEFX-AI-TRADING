@@ -2903,13 +2903,19 @@ FINDINGS: list[Finding] = [
         "P1",
         "Security",
         "docs/audit/REMEDIATION_PLAN.md — Phase 3",
-        "Down from three; `config/vault.py` is the live one and is genuinely good "
-        "(Argon2id, crash-safe rotation). `security/encryption.py` still defines a second. "
-        "A name collision on a credential store is how the wrong one gets imported, and the "
-        "unreferenced copy is dangerous rather than merely redundant: `rotate_key()` returns "
-        "True and destroys every credential, a random salt when `HOPEFX_SALT` is unset loses "
-        "everything on restart, and `encrypt()` falls back to base64 while `decrypt()` "
-        "honours it. Delete it or rename it; do not leave two importable.",
+        "Done: `security/encryption.py`'s copy is renamed `CredentialCipher`, so exactly one "
+        "importable class is called `SecureVault` and it is the live one in `config/vault.py` "
+        "(Argon2id, crash-safe rotation). Renamed rather than deleted: the module is "
+        "load-bearing — `hash_password` has 31 production references and `verify_password` 18 "
+        "— so only the misleading name went. The new name is what it is: it holds no "
+        "credentials, only a key, a cipher and a salt, which is why `rotate_key` refuses. "
+        "This entry previously said that `rotate_key()` 'returns True and destroys every "
+        "credential'. Measured by execution 2026-09-13 it RAISES RuntimeError, pinned by "
+        "test_rotation_never_returns_true — fixed earlier and never re-measured here, so the "
+        "register was describing a danger that had already been closed. What remained, and is "
+        "now closed, was the name collision itself. Still true and unaddressed: a random salt "
+        "when `HOPEFX_SALT` is unset loses anything this cipher encrypted across a restart — "
+        "harmless while nothing in production constructs it, and a trap if anything starts.",
         "A test asserting exactly one importable `SecureVault`, and that it is the config/vault.py one.",
         "python scripts/correction_register.py --id F180/F181/F182/F183",
         _p_f180,

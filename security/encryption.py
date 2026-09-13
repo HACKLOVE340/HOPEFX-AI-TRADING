@@ -40,9 +40,29 @@ class EncryptedCredential:
     version: int = 1
 
 
-class SecureVault:
+class CredentialCipher:
     """
-    Secure credential vault with hardware-backed encryption when available
+    Symmetric cipher for credential strings. NOT a vault, and named that way
+    deliberately.
+
+    This class was called ``SecureVault`` until 2026-09-13, which collided with
+    ``config/vault.py::SecureVault`` — the live credential store, with Argon2id
+    and crash-safe rotation. Two importable classes under one name on a
+    credential store is how the wrong one gets imported, and the failure is
+    silent: both encrypt, both decrypt, and only one survives a key change.
+
+    The name was the misleading part. This holds no credentials — only a master
+    key, a cipher and a salt — which is exactly why ``rotate_key`` refuses:
+    there is nothing here to re-encrypt, so rotating would orphan every
+    ciphertext produced under the old key (F180-F183).
+
+    For storing a credential, use ``config.vault.vault``. This is the cipher
+    ``APICredentialManager`` composes, and nothing in production constructs it.
+
+    Features:
+    - Master key derivation from password or environment
+    - AES-256-GCM authenticated encryption
+    - Secure credential storage
 
     Features:
     - Master key derivation from password or environment
@@ -149,7 +169,7 @@ class SecureVault:
             self._initialize_cipher()
             return True
 
-        It re-encrypted nothing, and it cannot: ``SecureVault`` holds no
+        It re-encrypted nothing, and it cannot: ``CredentialCipher`` holds no
         credentials — only ``_master_key``, ``_cipher`` and ``_salt``. It is a
         stateless cipher, so swapping its key leaves every ciphertext produced
         under the old key permanently undecryptable, wherever that ciphertext is
@@ -175,7 +195,7 @@ class SecureVault:
         correctly, for the pattern it is looking for.
         """
         raise RuntimeError(
-            "SecureVault cannot rotate its key: it holds no credentials to re-encrypt, so "
+            "CredentialCipher cannot rotate its key: it holds no credentials to re-encrypt, so "
             "changing the key would make every existing ciphertext permanently unreadable "
             "while reporting success. Use config/vault.py, which stages the new key before "
             "swapping the cipher. (F180-F183)"
@@ -187,7 +207,7 @@ class APICredentialManager:
     Manage API credentials for multiple brokers and services
     """
 
-    def __init__(self, vault: SecureVault):
+    def __init__(self, vault: CredentialCipher):
         self.vault = vault
         self._credentials: dict[str, dict[str, EncryptedCredential]] = {}
         self._cache: dict[str, str] = {}  # Decrypted cache (short-lived)
@@ -349,19 +369,23 @@ def verify_password(password: str, key: str, salt: str) -> bool:
 
 
 # Global instances — locks guard against race conditions on multi-threaded startup
-_vault: SecureVault | None = None
+_vault: CredentialCipher | None = None
 _vault_lock = threading.Lock()
 _credential_manager: APICredentialManager | None = None
 _credential_manager_lock = threading.Lock()
 
 
-def get_vault() -> SecureVault:
-    """Get global secure vault (thread-safe singleton)."""
+def get_vault() -> CredentialCipher:
+    """Get the global credential cipher (thread-safe singleton).
+
+    Named ``get_vault`` for its callers' sake; it returns a cipher, not the
+    vault. `config.vault.vault` is the vault. Nothing in production calls this.
+    """
     global _vault  # pylint: disable=global-statement
     if _vault is None:
         with _vault_lock:
             if _vault is None:
-                _vault = SecureVault()
+                _vault = CredentialCipher()
     return _vault
 
 
