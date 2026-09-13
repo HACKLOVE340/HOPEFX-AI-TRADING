@@ -62,6 +62,223 @@
     --q-selected-bg: #0a1a24;
     --q-accent-edge: #06404f;
     --q-on-accent:   #04212b;
+
+    /* ── Added 2026-09-14 — the rest of the layer ──────────────────────────
+       The twenty tokens above name COLOURS. Nothing named a size, a step, a
+       radius, a shadow or a duration, so 72 pages named them inline: 24
+       distinct font sizes between 9px and 56px, 343 uses of 12px and 366 of
+       13px sitting a pixel apart for no reason anyone could state. That is
+       what reads as unfinished — inconsistent type gives a product away
+       faster than colour does.
+
+       Density is deliberately tight. This is a professional instrument, and a
+       trader wants more of the book on screen, not more whitespace around
+       less of it. */
+
+    /* Surfaces the original set had no word for. */
+    --sunken:        #05070c;   /* below --bg: wells, inputs, code          */
+    --border-strong: #2b3f56;   /* emphasis edge, above --border            */
+    --accent-soft:   rgba(0, 212, 255, .12);
+    --accent-ink:    #04212b;   /* text ON --accent                         */
+    --focus:         #38bdf8;   /* focus ring, never reused as decoration   */
+    --overlay:       rgba(2, 6, 14, .62);
+    --info:          #7dd3fc;   /* neutral notice, not a gain and not a loss */
+    /* Referenced by .stat-tile-label since that component was written and
+       declared nowhere, so the label inherited its colour instead of
+       receding. Fainter than --text-muted, for a label whose value is the
+       thing being read. */
+    --text-faint:    #56627a;
+
+    /* Type scale. Seven steps, each with a job. A page picks a role, never a
+       number — which is the only way 72 of them stay in agreement. */
+    --fs-micro:  10.5px;  /* units, timestamps, legends                     */
+    --fs-label:  11.5px;  /* column headers, eyebrow labels                 */
+    --fs-body:     13px;  /* default body and table cells                   */
+    --fs-value:    15px;  /* metric values, emphasised figures              */
+    --fs-title:    17px;  /* card and section titles                        */
+    --fs-head:     21px;  /* page heading                                   */
+    --fs-hero:     28px;  /* the one number the screen is about             */
+
+    --lh-tight:   1.15;
+    --lh-snug:    1.35;
+    --lh-body:     1.5;
+    --tracking-label: .07em;
+    --fw-regular:  400;
+    --fw-medium:   500;
+    --fw-semi:     600;
+    --fw-bold:     700;
+
+    /* Spacing. Pro-max density: the steps are tighter than a consumer app's
+       and they are a scale, so nothing lands between two of them. */
+    --sp-1:   4px;
+    --sp-2:   6px;
+    --sp-3:   8px;
+    --sp-4:  12px;
+    --sp-5:  16px;
+    --sp-6:  20px;
+    --sp-7:  28px;
+    --sp-8:  40px;
+    --pad-card: 14px;   /* card and panel padding                           */
+    --pad-row:   9px;   /* table row vertical padding                       */
+    --gap-grid: 10px;   /* gap between sibling cards                        */
+
+    /* Radii and elevation. Border, fill, radius and shadow each say
+       "separate object" — spend them by role rather than stamping one of
+       each on every block, which flattens the hierarchy. */
+    --r-sm:    6px;
+    --r-md:   10px;
+    --r-lg:   14px;
+    --r-pill: 999px;
+    --e-0: none;
+    --e-1: 0 1px 2px rgba(0, 0, 0, .40);
+    --e-2: 0 1px 2px rgba(0, 0, 0, .40), 0 8px 24px -12px rgba(0, 0, 0, .70);
+    --e-3: 0 24px 60px -20px rgba(0, 0, 0, .80);
+
+    /* Motion. Declared centrally so the reduced-motion rule at the foot of
+       this file can zero all of it in one place. */
+    --dur-fast: 120ms;
+    --dur-base: 200ms;
+    --dur-slow: 320ms;
+    --ease-out:    cubic-bezier(.22, .61, .36, 1);
+    --ease-in-out: cubic-bezier(.40, .00, .20, 1);
+
+    /* AI surface defaults. Declared here so the scoped override below can
+       only ever REDEFINE a token that exists — a typo in a scoped block is
+       otherwise silent and inherits the wrong colour. */
+    --ai-model: #a78bfa;   /* model and inference state, distinct from accent */
+    --ai-grid:  none;      /* plotting-field texture, off outside AI pages    */
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LIGHT THEME
+
+     ThemeContext stamps data-theme on <html>; AppearanceSection offers
+     light / dark / system. Both have been correct since they were written.
+     This is the half that was missing, and its absence is why choosing Light
+     saved a preference and changed nothing.
+
+     Not an inversion. The dark palette carries its accent at high saturation
+     because a dark ground can take it; the same cyan on white is unreadable,
+     so light gets a deeper blue at the same semantic role. Money keeps its
+     meaning and gains contrast: #00e676 on white fails WCAG AA outright.
+     ═══════════════════════════════════════════════════════════════════════ */
+  :root[data-theme="light"] {
+    --bg:            #f4f5f8;
+    --surface:       #ffffff;
+    --raised:        #ffffff;
+    --sunken:        #eceff4;
+    --border:        #d7dce5;
+    --border-strong: #b6bfcd;
+    --hairline:      #e6eaf0;
+    --surface-hover: #f1f4f9;
+    --text:          #1b2230;
+    --text-strong:   #0b1120;
+    --text-dim:      #5a6577;
+    --text-muted:    #78849a;
+    --text-faint:    #949fb2;
+    --accent:        #1063d0;
+    --accent-soft:   rgba(16, 99, 208, .10);
+    --accent-ink:    #ffffff;
+    --link:          #1058bd;
+    --focus:         #1063d0;
+    --overlay:       rgba(15, 23, 42, .38);
+    --info:          #0369a1;
+
+    /* Direction and money. Saturation drops and darkness rises so both clear
+       AA on white; the pair stays distinguishable for red-green deficiency
+       by lightness as well as hue. */
+    --bull:  #0b8f5a;
+    --bear:  #c22f2f;
+    --gain:  #0b8f5a;
+    --loss:  #c22f2f;
+    --warn:  #9a6206;
+
+    /* Support desk keeps its meanings: waiting amber, mine accent, theirs
+       slate, done receded, urgent its own severity. */
+    --q-waiting:     #a96b00;
+    --q-mine:        #1063d0;
+    --q-theirs:      #5b6b8a;
+    --q-done:        #8d99ad;
+    --q-urgent:      #c01b3c;
+    --q-urgent-bg:   #fdeaee;
+    --q-urgent-text: #7a0c22;
+    --q-selected-bg: #e8f1fd;
+    --q-accent-edge: #a9cdf5;
+    --q-on-accent:   #ffffff;
+
+    --ai-model: #6d43d6;
+
+    /* A shadow tuned for a dark ground is a smudge on a white one. */
+    --e-1: 0 1px 2px rgba(15, 23, 42, .07);
+    --e-2: 0 1px 3px rgba(15, 23, 42, .07), 0 10px 30px -18px rgba(15, 23, 42, .28);
+    --e-3: 0 24px 60px -24px rgba(15, 23, 42, .32);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     AI SURFACE — scientific instrument
+
+     Set data-surface="ai" on an AI page's root element. It is a scoped token
+     override, nothing more: the same markup and the same components, a
+     different palette underneath.
+
+     The reference is a research instrument, not an arcade. Ground goes cool
+     and deep, edges become faintly luminous, the accent moves to an
+     instrument cyan and inference state gets its own violet so "the model
+     did this" never has to borrow the interaction colour.
+
+     It stays dark under BOTH themes, deliberately. Pro canvases do this —
+     Xcode, Logic, Final Cut all keep a dark working surface in Light — and
+     the reason applies here: this is where plotted output and live inference
+     are read, and a white ground behind a luminous grid is neither
+     legible nor what anyone means by the instrument.
+
+     What it must NOT touch: --bull, --bear, --gain, --loss. Green and red
+     mean price direction across the whole platform. A surface that restyles
+     them teaches a second vocabulary for the one thing that must stay
+     unambiguous, and design_tokens.test.ts fails if this block reaches them.
+     ═══════════════════════════════════════════════════════════════════════ */
+  [data-surface="ai"] {
+    --bg:            #05080f;
+    --surface:       #080d17;
+    --raised:        #0c1422;
+    --sunken:        #03060b;
+    --border:        rgba(94, 234, 255, .15);
+    --border-strong: rgba(94, 234, 255, .30);
+    --hairline:      rgba(94, 234, 255, .08);
+    --surface-hover: #0e1726;
+    --text:          #dce6f2;
+    --text-strong:   #f2f7ff;
+    --text-dim:      #93a4bc;
+    --text-muted:    #6b7c95;
+    --text-faint:    #55657e;
+    --accent:        #5eeaff;
+    --accent-soft:   rgba(94, 234, 255, .10);
+    --accent-ink:    #03161c;
+    --link:          #8bb8ff;
+    --focus:         #5eeaff;
+    --ai-model:      #a78bfa;
+    --e-1: 0 1px 2px rgba(0, 0, 0, .55);
+    --e-2: 0 1px 2px rgba(0, 0, 0, .55), 0 10px 30px -14px rgba(0, 0, 0, .85);
+    --e-3: 0 28px 70px -24px rgba(0, 0, 0, .90);
+
+    /* The plotting field: two hairline grids at 32px, drawn from the border
+       token so it moves with the palette rather than being a second literal. */
+    --ai-grid:
+      repeating-linear-gradient(to right,  var(--hairline) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(to bottom, var(--hairline) 0 1px, transparent 1px 32px);
+  }
+
+  /* One place to honour a reduced-motion preference. Every transition and
+     animation in this stylesheet reads a --dur token, so zeroing the three
+     here removes spatial travel everywhere at once instead of leaving each
+     component to remember. Meaning is preserved: state still changes, it
+     just changes immediately. */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --dur-fast: 0ms;
+      --dur-base: 0ms;
+      --dur-slow: 0ms;
+    }
   }
 
   * {
@@ -75,7 +292,17 @@
   }
 
   body {
-    @apply bg-terminal-bg text-slate-200 font-sans antialiased;
+    /* Was `@apply bg-terminal-bg text-slate-200` — two fixed literals, so the
+       page ground could not respond to [data-theme] no matter what the toggle
+       set. This is the first real consumer of the token layer: choosing Light
+       now moves the document itself.
+
+       It does not move the 201 files that still paint their own backgrounds
+       inline. Those are the migration, and they are counted by
+       scripts/frontend_colour_ratchet.py. */
+    background: var(--bg);
+    color: var(--text);
+    @apply font-sans antialiased;
     font-feature-settings: 'tnum' 1, 'ss01' 1;
     overflow-x: hidden;
   }
