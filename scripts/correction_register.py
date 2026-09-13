@@ -179,32 +179,56 @@ def _named(status: str, evidence: str) -> tuple[str, str]:
 
 
 def _p_f96() -> tuple[str, str]:
+    """A deploy must be gated on a verification workflow that SUCCEEDED."""
     body = _code(".github/workflows/deploy.yml")
     if not body:
         return UNVERIFIED, "deploy.yml not found"
-    gated = "needs:" in body or "workflow_run:" in body
-    return _named(
-        FIXED if gated else OPEN,
-        "deploy.yml gates on another workflow"
-        if gated
-        else "deploy.yml has no `needs:` and no `workflow_run:` — it fires on push regardless of CI",
-    )
+    by_run = "workflow_run:" in body
+    by_needs = re.search(r"^\s+needs:", body, re.M) is not None
+    # workflow_run fires on completion, failures included. Without the
+    # conclusion check the trigger reads as a gate and ships red builds.
+    checks_conclusion = "workflow_run.conclusion" in body and "success" in body
+    if by_needs and not by_run:
+        return FIXED, "deploy is gated by a job-level needs:"
+    if by_run and checks_conclusion:
+        return FIXED, (
+            "deploy triggers on the CI workflow completing and runs only when its "
+            "conclusion is success; workflow_dispatch is allowed through explicitly"
+        )
+    if by_run:
+        return OPEN, "triggers on workflow_run but does not check the conclusion — it deploys red builds"
+    return OPEN, "deploy.yml has no `needs:` and no `workflow_run:` — it fires on push regardless of CI"
 
 
 def _p_f97() -> tuple[str, str]:
+    """No secret-holding action may be pinned to a mutable tag.
+
+    Reports PARTIAL while the known reference is still a tag but a ratchet
+    prevents a second one. The pin itself needs a SHA lookup against
+    appleboy/ssh-action, which this session's repository-scoped GitHub access
+    cannot perform — and a guessed SHA breaks every deploy.
+    """
     hits = []
     for wf in _tracked(".github/workflows/*.yml"):
-        for m in re.finditer(r"uses:\s*([\w.-]+/[\w.-]+)@(\S+)", _code(wf)):
-            action, ref = m.group(1), m.group(2)
-            if not re.fullmatch(r"[0-9a-f]{40}", ref):
-                hits.append(f"{wf}: {action}@{ref}")
-    secret_holders = [h for h in hits if "ssh-action" in h]
-    if secret_holders:
-        return OPEN, f"{len(hits)} unpinned action refs; secret-holding: {secret_holders[0]}"
-    return (
-        (FIXED, "no secret-holding action is float-pinned")
-        if not hits
-        else (PARTIAL, f"{len(hits)} unpinned refs, none holding a deploy secret")
+        body = _code(wf)
+        for block in re.split(r"\n(?=\s*-\s+(?:name|uses):)", body):
+            m = re.search(r"uses:\s*(\S+)", block)
+            if not m or "secrets." not in block:
+                continue
+            ref = m.group(1)
+            if "@" in ref and not re.fullmatch(r"[0-9a-f]{40}", ref.rsplit("@", 1)[1]):
+                hits.append(f"{wf.split('/')[-1]}: {ref}")
+
+    ratcheted = _exists("tests/unit/test_deploy_workflow_is_gated_and_pinned.py")
+    if not hits:
+        return FIXED, "every secret-holding action is pinned to a commit SHA"
+    return _named(
+        PARTIAL if ratcheted else OPEN,
+        f"{len(hits)} secret-holding action(s) still on a mutable tag ({hits[0]}). "
+        "A ratchet blocks a second one and the recorded set may only shrink; the pin "
+        "itself needs the tag resolved to its 40-character SHA on GitHub"
+        if ratcheted
+        else f"{len(hits)} secret-holding action(s) on a mutable tag: {hits[0]}",
     )
 
 
@@ -1388,10 +1412,22 @@ FINDINGS: list[Finding] = [
         "P1",
         "CI",
         "docs/audit/REMEDIATION_PLAN.md — Phase 0",
-        "Add `needs:` on the CI job, or convert the trigger to `workflow_run` "
-        "completed+success. A deploy that cannot observe a red build is not gated.",
-        "A workflow-lint test asserting every deploying workflow declares a dependency on a verification workflow.",
-        "python scripts/correction_register.py --id F96",
+        "Done 2026-09-13. `deploy.yml` had no `needs:` and no `workflow_run:`, so the only "
+        "thing between a push to main and `docker compose up` on the production VPS was "
+        "the push. It now triggers on the CI workflow completing on main and runs only "
+        "when the conclusion is `success` — the conclusion check matters as much as the "
+        "trigger, because `workflow_run` fires on failure and cancellation too, and a "
+        "trigger without it reads as a gate while shipping red builds. "
+        "`workflow_dispatch` is allowed through explicitly so a manual deploy still works. "
+        "Two consequences, both stated in the workflow: `workflow_run` does not support "
+        "`paths-ignore`, so the docs-only skip is gone and a documentation push that "
+        "passes CI now redeploys (idempotent, costs runner time); and deployment is now "
+        "coupled to CI actually running, which while F95 holds means no deploy — but "
+        "deploy.yml is not running today either, so nothing regresses and both return "
+        "together when billing is restored.",
+        "tests/unit/test_deploy_workflow_is_gated_and_pinned.py asserts the gate exists "
+        "and that it requires success rather than mere completion.",
+        "pytest tests/unit/test_deploy_workflow_is_gated_and_pinned.py -q",
         _p_f96,
         [S_TDD],
     ),
@@ -1401,11 +1437,23 @@ FINDINGS: list[Finding] = [
         "P1",
         "CI",
         "docs/audit/REMEDIATION_PLAN.md — Phase 0",
-        "Pin `appleboy/ssh-action` to a 40-character commit SHA. A moving tag on an "
-        "action that receives a deploy key is a supply-chain hole with a credential behind it.",
-        "A test that walks `.github/workflows/*.yml` and fails on any `uses:` ref that "
-        "is not a 40-hex SHA where the step also references a secret.",
-        "python scripts/correction_register.py --id F97",
+        "Half done, and the remaining half is blocked on something this session cannot do. "
+        "`appleboy/ssh-action@v1.2.5` is a tag, and a tag is mutable: whoever controls it "
+        "controls a step that receives the private deploy key for the production VPS. It "
+        "is the only `uses:` in the repository that both takes a secret and floats. "
+        "Resolving the tag to its 40-character commit SHA needs a lookup against "
+        "`appleboy/ssh-action`, and this session's GitHub access is scoped to this "
+        "repository — the API and a direct fetch both refuse. A guessed SHA breaks every "
+        "deploy, so it is not guessed. What is in place is the invariant as a **ratchet**, "
+        "the shape `FRESHNESS_BASELINE.toml` and `COVERAGE_UNMEASURABLE.txt` already use "
+        "here: the one known reference is recorded, a second secret-holding action on a "
+        "tag fails immediately, and a companion test fails if the recorded entry is left "
+        "behind after the pin lands. To finish: resolve the SHA, write "
+        "`appleboy/ssh-action@<sha>  # v1.2.5`, delete the line from "
+        "`_UNPINNED_SECRET_ACTIONS`.",
+        "tests/unit/test_deploy_workflow_is_gated_and_pinned.py — the ratchet, proven by "
+        "injecting a second secret-holding action on a tag and watching it refuse.",
+        "pytest tests/unit/test_deploy_workflow_is_gated_and_pinned.py -q",
         _p_f97,
         [S_TDD],
     ),

@@ -17,14 +17,29 @@
 # =============================================================================
 name: Deploy to VPS
 
+# Runs AFTER the CI workflow finishes on main, and only when it succeeded.
+#
+# This fired on `push: branches: [main]` with no gate of any kind — no `needs:`,
+# no `workflow_run:` — so the only thing between a push and `docker compose up`
+# on the production VPS was the push itself (F96). A deploy that cannot observe
+# a red build is not gated, it is automatic.
+#
+# `workflow_run` does not support `paths-ignore`, so the docs-only skip that
+# used to live here is gone: a documentation-only push to main that passes CI
+# will now redeploy. That is idempotent — the deploy resets to the same commit
+# and rebuilds — and costs a few minutes of runner time and the concurrency
+# lock. Deploying unverified code costs more.
+#
+# NOTE: this couples deployment to CI actually running. While GitHub Actions is
+# unavailable at the account level (F95 — runs end in startup_failure with no
+# runner assigned), no CI run completes, so no deploy is triggered. Nothing
+# regresses today, because deploy.yml is not running either; when billing is
+# restored, both come back together and in the right order.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-    # Don't redeploy for docs-only changes.
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "diagnostics/**"
   workflow_dispatch: {}
 
 # Never run two deploys at once; let an in-flight deploy finish.
@@ -44,6 +59,16 @@ jobs:
     # referenced in a job-level `if:` (GitHub Actions restriction — see
     # actions/runner#520), so the secret is piped through a job-level `env:` and
     # checked in the step's `if:` instead, which DOES support the env context.
+    # Two conditions, and both are load-bearing.
+    #
+    # `workflow_run` fires on COMPLETION, which includes failure and
+    # cancellation — without the conclusion check the trigger would read as a
+    # gate while deploying red builds, which is worse than no gate because it
+    # looks like one. A manual `workflow_dispatch` has no `workflow_run`
+    # context, so it is allowed through explicitly.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     env:
       VPS_HOST: ${{ secrets.VPS_HOST }}
     steps:
