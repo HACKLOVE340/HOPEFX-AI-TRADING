@@ -6,12 +6,17 @@
  *   The palette opens on Cmd+K / Ctrl+K from anywhere.
  *
  *   To register dynamic actions from a page:
+ *     import { Zap } from 'lucide-react';
  *     import { useCommandActions } from '../components/CommandPalette';
  *     const { register, unregister } = useCommandActions();
  *     useEffect(() => {
- *       register({ id: 'open-trade', label: 'Open Trade', icon: '⚡', action: () => navigate('/trade') });
+ *       register({ id: 'open-trade', label: 'Open Trade', icon: Zap, action: () => navigate('/trade') });
  *       return () => unregister('open-trade');
  *     }, []);
+ *
+ * The navigable entries are NOT listed here. They are derived from NAV_ITEMS
+ * in `sidebar/navConfig.ts`, which the sidebar also reads — see
+ * `buildNavCommands` below for why that matters (F175).
  */
 
 import React, {
@@ -19,8 +24,11 @@ import React, {
   useRef, useState,
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useStore } from '../store';
-import { NAV_ITEMS } from './sidebar/navConfig';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowRight, CreditCard, Search as SearchIcon, Star, StarOff } from 'lucide-react';
+import { useStore, type UserRole } from '../store';
+import { isAdmin, isSuperAdmin } from '../lib/subscription';
+import { NAV_ITEMS, NAV_GROUPS, type NavItem } from './sidebar/navConfig';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,7 +37,9 @@ export interface CommandItem {
   label:    string;
   /** Short description shown below label */
   desc?:    string;
-  icon?:    string;
+  /** A Lucide component, or a string for the rare glyph that has no icon.
+   *  Not an emoji: see `buildNavCommands`. */
+  icon?:    LucideIcon | string;
   /** Keyboard shortcut hint (display only) */
   shortcut?: string;
   /** Category for grouping */
@@ -60,68 +70,70 @@ export function useCommandPalette() {
   return { open: ctx.open, close: ctx.close };
 }
 
-// ── Static navigation commands ────────────────────────────────────────────────
+// ── Navigation commands, derived from the sidebar's config ───────────────────
 
-function buildStaticCommands(navigate: ReturnType<typeof useNavigate>): CommandItem[] {
+/**
+ * The palette's navigable entries come from NAV_ITEMS — the same list the
+ * sidebar renders — rather than from a second list maintained here.
+ *
+ * There *was* a second list: fifty hand-written entries, each with an emoji for
+ * an icon, immediately below the `import { NAV_ITEMS }` this file already had.
+ * It had drifted, exactly as a duplicate source of truth does:
+ *
+ *   * `Dashboard` pointed at `/home`, which is now a redirect to `/dashboard`;
+ *   * `2FA Setup` pointed at `/2fa`, which is not a route at all — the palette
+ *     offered a page that 404s into the SPA shell;
+ *   * `/system-status` and `/system-reliability` were the pre-rename paths, both
+ *     now redirects;
+ *   * eleven pages added to the sidebar since (AI Assistant, Strategy Builder,
+ *     Transparency, News & Sentiment, Support, Academy, Upgrade Plan,
+ *     Observability, ML-Ops, AI Core, Support Console) were not offered at all.
+ *
+ * Deriving fixes the class, not the instances: a page added to the sidebar is
+ * in the palette the same commit.
+ *
+ * The emoji went with it. `ui-ux-pro-max` forbids emoji as icons and navConfig
+ * says why in detail (F170): they render per-platform, are announced literally,
+ * and cannot inherit `currentColor`, so they ignore the selected row's colour.
+ *
+ * Role filtering matches `Sidebar.tsx:384-385`. Without it the palette listed
+ * every admin and superadmin page to every user — the routes are guarded, so
+ * this was a disclosure of page names rather than of access, but it is still
+ * the sidebar's rule and the palette should not have its own.
+ */
+
+const GROUP_LABEL: Record<string, string> = Object.fromEntries(
+  NAV_GROUPS.map((g) => [g.id, g.label]),
+);
+
+export function visibleNavItems(role: UserRole | undefined): NavItem[] {
+  const admin      = role ? isAdmin(role) : false;
+  const superAdmin = role ? isSuperAdmin(role) : false;
+  return NAV_ITEMS.filter((item) => {
+    if (item.superAdminOnly && !superAdmin) return false;
+    if (item.adminOnly && !admin) return false;
+    return true;
+  });
+}
+
+function buildNavCommands(
+  navigate: ReturnType<typeof useNavigate>,
+  role: UserRole | undefined,
+): CommandItem[] {
   const go = (path: string) => () => navigate(path);
+  const fromNav = visibleNavItems(role).map<CommandItem>((item) => ({
+    id:       `nav-${item.path.slice(1)}`,
+    label:    item.label,
+    icon:     item.icon,
+    category: GROUP_LABEL[item.group] ?? 'Other',
+    action:   go(item.path),
+  }));
+
+  // Pages that are real routes but deliberately absent from the sidebar,
+  // because they are reachable before sign-in.
   return [
-    // Trading
-    { id: 'nav-trade',        label: 'Trade',                  icon: '⚡', category: 'Trading',    action: go('/trade') },
-    { id: 'nav-dashboard',    label: 'Dashboard',              icon: '📊', category: 'Trading',    action: go('/home') },
-    { id: 'nav-portfolio',    label: 'Portfolio',              icon: '💼', category: 'Trading',    action: go('/portfolio') },
-    { id: 'nav-watchlist',    label: 'Watchlist',              icon: '👁', category: 'Trading',    action: go('/watchlist') },
-    { id: 'nav-journal',      label: 'Trade Journal',          icon: '📓', category: 'Trading',    action: go('/journal') },
-    { id: 'nav-pnl',          label: 'P&L Dashboard',          icon: '💰', category: 'Trading',    action: go('/pnl') },
-    { id: 'nav-performance',  label: 'Performance',            icon: '📈', category: 'Trading',    action: go('/performance') },
-    { id: 'nav-risk-calc',    label: 'Risk Calculator',        icon: '🛡', category: 'Trading',    action: go('/risk-calculator') },
-    { id: 'nav-replay',       label: 'Market Replay',          icon: '⏪', category: 'Trading',    action: go('/replay') },
-    { id: 'nav-alerts',       label: 'Price Alerts',           icon: '🔔', category: 'Trading',    action: go('/alerts') },
-    { id: 'nav-calendar',     label: 'Economic Calendar',      icon: '📅', category: 'Trading',    action: go('/calendar') },
-    // AI & Analytics
-    { id: 'nav-terminal',     label: 'Trading Terminal',       icon: '🖥️', category: 'Trading',    action: go('/terminal') },
-    { id: 'nav-intelligence', label: 'AI Intelligence',        icon: '🧠', category: 'AI',         action: go('/intelligence') },
-    { id: 'nav-ai-strategy',  label: 'AI Strategy Generator',  icon: '🤖', category: 'AI',         action: go('/ai-strategy') },
-    { id: 'nav-ai-chart',     label: 'AI Chart Dashboard',     icon: '🧠', category: 'AI',         action: go('/ai-chart') },
-    { id: 'nav-correlation',  label: 'Correlation Dashboard',  icon: '🔗', category: 'AI',         action: go('/correlation') },
-    { id: 'nav-pattern',      label: 'Pattern Detector',       icon: '🔍', category: 'AI',         action: go('/pattern-detector') },
-    { id: 'nav-walk-forward', label: 'Walk-Forward Testing',   icon: '🔬', category: 'AI',         action: go('/walk-forward') },
-    { id: 'nav-ab-testing',   label: 'A/B Testing',            icon: '⚗️', category: 'AI',         action: go('/ab-testing') },
-    { id: 'nav-tca',          label: 'TCA Dashboard',          icon: '📉', category: 'AI',         action: go('/tca') },
-    { id: 'nav-indicators',   label: 'Custom Indicators',      icon: '📐', category: 'AI',         action: go('/indicators') },
-    { id: 'nav-research',     label: 'Research Notebook',      icon: '🧪', category: 'AI',         action: go('/research') },
-    { id: 'nav-nuclear',      label: 'Nuclear Dashboard',      icon: '☢️', category: 'AI',         action: go('/nuclear') },
-    { id: 'nav-geopolitical', label: 'Geopolitical Risk',      icon: '🌍', category: 'AI',         action: go('/geopolitical') },
-    // Social
-    { id: 'nav-copy-trading', label: 'Copy Trading',           icon: '👥', category: 'Social',     action: go('/copy-trading') },
-    { id: 'nav-leaderboard',  label: 'Leaderboard',            icon: '🏆', category: 'Social',     action: go('/leaderboard') },
-    { id: 'nav-signals',      label: 'Signal Feed',            icon: '📡', category: 'Social',     action: go('/signals') },
-    { id: 'nav-marketplace',  label: 'Marketplace',            icon: '🛒', category: 'Social',     action: go('/marketplace') },
-    { id: 'nav-affiliate',    label: 'Affiliate',              icon: '🤝', category: 'Social',     action: go('/affiliate') },
-    { id: 'nav-teams',        label: 'Teams',                  icon: '🫂', category: 'Social',     action: go('/teams') },
-    { id: 'nav-chat',         label: 'Chat',                   icon: '💬', category: 'Social',     action: go('/chat') },
-    // Account
-    { id: 'nav-wallet',       label: 'Wallet',                 icon: '💳', category: 'Account',    action: go('/wallet') },
-    { id: 'nav-profile',      label: 'Profile',                icon: '👤', category: 'Account',    action: go('/profile') },
-    { id: 'nav-settings',     label: 'Settings',               icon: '⚙️', category: 'Account',    action: go('/settings') },
-    { id: 'nav-kyc',          label: 'KYC Verification',       icon: '🪪', category: 'Account',    action: go('/kyc') },
-    { id: 'nav-mobile',       label: 'Mobile App',             icon: '📱', category: 'Account',    action: go('/mobile') },
-    { id: 'nav-sub-accounts', label: 'Sub-Accounts',           icon: '🗂', category: 'Account',    action: go('/sub-accounts') },
-    { id: 'nav-2fa',          label: '2FA Setup',              icon: '🔐', category: 'Account',    action: go('/2fa') },
-    { id: 'nav-notifications',label: 'Notifications',          icon: '🔔', category: 'Account',    action: go('/notifications') },
-    { id: 'nav-elite',        label: 'Elite Dashboard',        icon: '👑', category: 'Account',    action: go('/elite') },
-    { id: 'nav-prop-firm',    label: 'Prop Firm Tracker',      icon: '🏦', category: 'Account',    action: go('/prop-firm') },
-    // Admin
-    { id: 'nav-admin',        label: 'Admin Panel',            icon: '🔧', category: 'Admin',      action: go('/admin') },
-    { id: 'nav-audit',        label: 'Audit Log',              icon: '🔍', category: 'Admin',      action: go('/audit') },
-    { id: 'nav-security',     label: 'Security Dashboard',     icon: '🛡️', category: 'Admin',      action: go('/security') },
-    { id: 'nav-auto-heal',    label: 'Auto-Heal',              icon: '🩺', category: 'Admin',      action: go('/auto-heal') },
-    { id: 'nav-whitelabel',   label: 'Whitelabel Admin',       icon: '🏷️', category: 'Admin',      action: go('/whitelabel') },
-    { id: 'nav-superadmin',   label: 'Super Admin',            icon: '⚡', category: 'Admin',      action: go('/superadmin') },
-    { id: 'nav-reliability',  label: 'System Reliability',     icon: '🔬', category: 'Admin',      action: go('/system-reliability') },
-    { id: 'nav-status',       label: 'System Status',          icon: '🟢', category: 'Admin',      action: go('/system-status') },
-    // Other
-    { id: 'nav-docs',         label: 'Documentation',          icon: '📖', category: 'Other',      action: go('/docs') },
-    { id: 'nav-pricing',      label: 'Pricing',                icon: '💎', category: 'Other',      action: go('/pricing') },
+    ...fromNav,
+    { id: 'nav-pricing', label: 'Pricing', icon: CreditCard, category: 'Other', action: go('/pricing') },
   ];
 }
 
@@ -151,6 +163,31 @@ function scoreMatch(query: string, item: CommandItem): number {
   return 20;
 }
 
+// ── Icon ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Renders a Lucide component, or a plain string for the rare entry that has no
+ * icon.
+ *
+ * It names no colour. Lucide defaults to `currentColor`, so the icon takes the
+ * row's colour and therefore follows selection and hover — which is exactly what
+ * an emoji could not do, and the concrete reason the palette's fifty emoji kept
+ * their own appearance on the highlighted row. `opacity` rather than a second
+ * grey keeps the icon a step behind the label without another literal.
+ */
+function CommandIcon({ icon, selected }: { icon?: LucideIcon | string; selected: boolean }) {
+  const box = { flexShrink: 0, width: 24, opacity: selected ? 1 : 0.7 } as const;
+  if (typeof icon === 'string') {
+    return <span style={{ ...box, fontSize: 17, textAlign: 'center' as const }}>{icon}</span>;
+  }
+  const Glyph = icon ?? ArrowRight;
+  return (
+    <span style={{ ...box, display: 'flex', justifyContent: 'center' }}>
+      <Glyph size={17} strokeWidth={2} aria-hidden="true" />
+    </span>
+  );
+}
+
 // ── Highlight matching chars ──────────────────────────────────────────────────
 
 function HighlightMatch({ text, query }: { text: string; query: string }) {
@@ -175,6 +212,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 export const CommandPalette: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const user           = useStore((s) => s.user);
   const favorites      = useStore((s) => s.favorites);
   const toggleFavorite = useStore((s) => s.toggleFavorite);
   const [open, setOpen]         = useState(false);
@@ -191,13 +229,13 @@ export const CommandPalette: React.FC = () => {
     actionItems.push({
       id: 'action-pin-current',
       label: pinned ? `Unpin "${currentNav.label}" from favorites` : `Pin "${currentNav.label}" to favorites`,
-      icon: pinned ? '★' : '☆',
+      icon: pinned ? StarOff : Star,
       category: 'Actions',
       action: () => toggleFavorite(currentNav.path),
     });
   }
 
-  const staticItems = buildStaticCommands(navigate);
+  const staticItems = buildNavCommands(navigate, user?.role);
   const allItems    = [...actionItems, ...staticItems, ...dynamicItems];
 
   const filtered = allItems
@@ -290,6 +328,9 @@ export const CommandPalette: React.FC = () => {
 
       {/* Palette */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         style={{
           position: 'fixed', top: '18%', left: '50%', transform: 'translateX(-50%)',
           zIndex: 9001, width: '90%', maxWidth: 580,
@@ -304,7 +345,7 @@ export const CommandPalette: React.FC = () => {
 
         {/* Search input */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid #1e293b' }}>
-          <span style={{ fontSize: 16, color: '#475569', flexShrink: 0 }}>🔍</span>
+          <SearchIcon size={16} strokeWidth={2} color="#475569" style={{ flexShrink: 0 }} aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}
@@ -331,10 +372,8 @@ export const CommandPalette: React.FC = () => {
             </div>
           ) : (
             Object.entries(groups).map(([cat, items]) => {
-              // A group only exists because it has at least one item, but the
-              // compiler cannot see that (audit #38).
-              const firstItem = items[0];
-              const globalIdx = firstItem ? filtered.indexOf(firstItem) : -1;
+              // `globalIdx` was computed here and never read — a leftover from
+              // when the group header showed its first row's index.
               return (
                 <div key={cat}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 16px 4px' }}>
@@ -352,12 +391,15 @@ export const CommandPalette: React.FC = () => {
                           display: 'flex', alignItems: 'center', gap: 12,
                           padding: '9px 16px', cursor: 'pointer',
                           background: isSelected ? '#1e293b' : 'transparent',
+                          // On the row, not the label: the Lucide icon inherits
+                          // it through currentColor.
+                          color: isSelected ? '#f1f5f9' : '#cbd5e1',
                           transition: 'background 0.1s',
                         }}
                       >
-                        <span style={{ fontSize: 17, flexShrink: 0, width: 24, textAlign: 'center' }}>{item.icon ?? '▸'}</span>
+                        <CommandIcon icon={item.icon} selected={isSelected} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: isSelected ? '#f1f5f9' : '#cbd5e1' }}>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>
                             <HighlightMatch text={item.label} query={query} />
                           </div>
                           {item.desc && (

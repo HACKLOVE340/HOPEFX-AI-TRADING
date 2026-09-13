@@ -829,7 +829,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 31 gates · **31 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 32 gates · **32 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -2713,7 +2713,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      31 gates · 31 proven able to fail · 0 unproven
+    gate_evidence.py      32 gates · 32 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -2915,7 +2915,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              31 gates · 31 proven · 0 unproven
+    gate_evidence.py                              32 gates · 32 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -2982,7 +2982,7 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
     backend tests        21,732 pass · 0 fail · 30 skipped
     frontend tests        2,645 pass · 0 fail  (136 files)
     CI gates                 14 of 14 pass
-    gate evidence            31 gates · 31 proven able to fail · 0 unproven
+    gate evidence            32 gates · 32 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -3113,9 +3113,40 @@ that one fact:
 
 **Closed this session:** `scripts/frontend_colour_ratchet.py` +
 `docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
-`GATE_EVIDENCE.toml` (31 gates, 31 proven). The count may now only fall. The
+`GATE_EVIDENCE.toml` (32 gates, 32 proven). The count may now only fall. The
 codemod that would actually revive the three features is **owner's call** — see
 §A.
+
+### Emoji as icons — the same shape, capped the same way (F175)
+
+The plan recorded this as done for `frontend/src`: *"no source file carries
+emoji"*. Measured 2026-09-13: **1,389 across 145 files**, concentrated exactly
+where icons live — `PlatformConfiguration.tsx` 136, `SystemReliabilitySection.tsx`
+62, `Settings.tsx` 52.
+
+`navConfig.ts` already carries the reasoning, written when the *sidebar* was
+converted (F170): emoji cannot inherit `currentColor`, so they ignore theme,
+hover and disabled state; they render differently on every OS; a screen reader
+announces them literally. The sidebar was fixed and nothing carried the fix
+outward — the same "correct fix connected only where the defect was found"
+shape as the Sortino and staleness findings above.
+
+**Closed this session:** `scripts/frontend_emoji_ratchet.py` +
+`docs/FRONTEND_EMOJI_DEBT.json`, wired into pre-commit and registered in
+`GATE_EVIDENCE.toml`. The count may only fall.
+
+`CommandPalette.tsx`'s 60 went with it, and they were the symptom rather than
+the defect. It hand-maintained fifty navigation entries directly beneath its own
+`import { NAV_ITEMS }`, and the duplicate had drifted: `Dashboard` pointed at
+`/home` (a redirect since F209), `2FA Setup` pointed at `/2fa` which is not a
+route at all, `/system-status` and `/system-reliability` were pre-rename paths,
+and eleven pages added to the sidebar since — AI Assistant, Strategy Builder,
+Transparency, News & Sentiment, Support, Academy, Upgrade Plan, Observability,
+ML-Ops, AI Core, Support Console — were never offered. It now derives from
+`NAV_ITEMS`, applies the sidebar's own role filter, and renders that config's
+Lucide components.
+
+Converting the remaining 145 files is a codemod and **owner's call** — see §A.
 
 ### Pages that cannot report their own failure
 
@@ -5240,7 +5271,7 @@ run, not a recollection.
 | Group 2 platform gaps | 19 outstanding (3 struck through) |
 | Group 3 knowledge gaps | 6 outstanding (8 struck through) |
 | Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
-| Safety gates | 31 gates · 31 proven able to fail · **0 unproven** |
+| Safety gates | 32 gates · 32 proven able to fail · **0 unproven** |
 | Coverage debt | 365 modules recorded |
 | Owner decisions | §A1 (RPO/RTO), §A4, §A5, plus three opened this session |
 

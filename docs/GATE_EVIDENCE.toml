@@ -196,6 +196,13 @@ evidence = "tests/unit/test_frontend_colour_ratchet.py"
 injected = "Three distinct regressions, each refused: an extra hex literal in a baselined file (20 -> 21 blocks with both counts named), a brand-new file carrying one literal (no baseline entry blocks), and a file driven to zero while its baseline line remains (blocks with 'delete the line'). Also proven against the real tree rather than only a fixture: appending '#abcdef' to frontend/src/pages/NotFound.tsx took the total 8021 -> 8022 and the gate blocked naming that file; restoring it returned the gate to green. A sanity floor test asserts the recorded total exceeds 5000, so a glob or regex that stops matching reads as a broken counter rather than as 8021 clean files"
 
 [[gate]]
+id = "frontend-emoji-ratchet"
+kind = "pre_commit"
+runs = "scripts/frontend_emoji_ratchet.py --check"
+evidence = "tests/unit/test_frontend_emoji_ratchet.py"
+injected = "Five regressions refused on a throwaway tree: an extra emoji in a baselined file (2 -> 3, both counts named), a brand-new file carrying one, a file driven to zero while its baseline line remains ('delete the line'), a check with no baseline at all, and — the one that decides whether this gate survives contact — a file of box-drawing banners, arrows and `Cmd`+K glyphs, which must NOT be flagged. This repository holds 79,148 box-drawing characters; a gate that swept 'symbols' would report eighty thousand violations on its first run and be switched off the same hour. Proven against the real tree too: appending a rocket emoji to frontend/src/pages/NotFound.tsx took the total 1389 -> 1390 and the gate blocked naming that file and both counts; restoring it returned the gate to green. A sanity floor asserts the recorded total exceeds 900, so a glob or regex that stops matching reads as a broken counter rather than as a clean frontend"
+
+[[gate]]
 id = "gate_chroma_embedded_only"
 kind = "ci_gate"
 runs = "scripts/ci/gate_chroma_embedded_only.py"

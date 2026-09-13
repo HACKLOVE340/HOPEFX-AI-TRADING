@@ -38,6 +38,7 @@ is always today's. Everything below is the shape; that command is the state.
 | What can the spatial/3D system claim, and what must it refuse to? | `docs/ai/specs/SPATIAL_INTELLIGENCE.md` · `ai/spatial/assurance.py` · `invariants/spatial.py` |
 | Which spatial capabilities actually exist, measured? | `python scripts/spatial_capabilities.py` · `docs/ai/specs/SPATIAL_CAPABILITIES.toml` |
 | Why does the light/dark toggle change nothing? | `python scripts/frontend_colour_ratchet.py --check` · `docs/FRONTEND_COLOUR_DEBT.json` |
+| Why are there still emoji where icons belong? | `python scripts/frontend_emoji_ratchet.py --check` · `docs/FRONTEND_EMOJI_DEBT.json` |
 | How are the four specification groups organised? | `docs/ai/BACKLOG_GROUPS.md` |
 | What binds every group? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — T0, twelve Articles, INV-01…21 |
 | How do I recover the database? | `docs/runbooks/database-restore.md` |
@@ -56,8 +57,8 @@ is current.** Where they disagree, the script is right and the document is stale
 The ratcheted checks below run in `pre-commit`, so a regression blocks rather
 than accumulating: document registry, documentation freshness, Group 4 source
 preservation, volume-index drift, gate injection evidence, stated-figure drift,
-per-module coverage, frontend colour literals, AOS invariant conformance,
-spatial capability evidence, and correction-register drift.
+per-module coverage, frontend colour literals, frontend emoji, AOS invariant
+conformance, spatial capability evidence, and correction-register drift.
 
 **They only block once the hook is installed.** Until 2026-09-09 nothing
 installed it, so on a fresh clone that sentence described something that was not

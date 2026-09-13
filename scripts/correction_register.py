@@ -51,6 +51,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -401,11 +402,53 @@ def _p_f222() -> tuple[str, str]:
 
 
 def _p_f175() -> tuple[str, str]:
-    emoji = re.compile("[\U0001f300-\U0001faff]")
-    files = [f for f in _tracked("frontend/src/**") if f.endswith((".ts", ".tsx")) and emoji.search(_read(f))]
-    return _named(
-        FIXED if not files else OPEN,
-        f"{len(files)} frontend source file(s) still carry emoji" if files else "no emoji in frontend/src",
+    """Emoji as UI icons: measured by the ratchet, not by this probe's own regex.
+
+    The first version of this probe counted emoji with a regex of its own and
+    reported OPEN. That was true but useless — it restated the size of the debt
+    every run and could only ever go green after a 154-file codemod, which is
+    the owner's call, not a probe's.
+
+    So it now measures the two things this repository can actually be held to:
+    the debt is capped by a gate that has been proven able to fail, and the
+    worst instance is gone. FIXED still means zero, and only zero.
+    """
+    ratchet = "scripts/frontend_emoji_ratchet.py"
+    baseline = "docs/FRONTEND_EMOJI_DEBT.json"
+    wired = "frontend-emoji-ratchet" in _read(".pre-commit-config.yaml")
+    evidenced = "frontend-emoji-ratchet" in _read("docs/GATE_EVIDENCE.toml")
+
+    if not (_exists(ratchet) and _exists(baseline) and wired and evidenced):
+        return OPEN, (
+            "no ratchet: emoji can be added to frontend/src without anything noticing "
+            f"(script {_exists(ratchet)}, baseline {_exists(baseline)}, "
+            f"pre-commit {wired}, evidence {evidenced})"
+        )
+
+    try:
+        recorded = json.loads(_read(baseline)).get("files", {})
+    except ValueError:
+        return UNVERIFIED, f"{baseline} is not readable JSON"
+
+    total = sum(recorded.values())
+    palette = "frontend/src/components/CommandPalette.tsx"
+    palette_clean = palette not in recorded
+    derives = "buildNavCommands" in _code(palette) and "buildStaticCommands" not in _code(palette)
+
+    if not total:
+        return FIXED, "no emoji remain in frontend/src"
+    if not (palette_clean and derives):
+        return OPEN, (
+            f"{total} emoji across {len(recorded)} files, and CommandPalette still carries its own navigation list"
+        )
+    return PARTIAL, (
+        f"{total} emoji across {len(recorded)} files remain, capped: the ratchet is "
+        "wired into pre-commit and proven able to fail, so the number can only go "
+        "down. CommandPalette's 60 are gone — its hand-written nav list, which had "
+        "drifted from NAV_ITEMS (Dashboard to /home, 2FA Setup to a route that does "
+        "not exist, eleven sidebar pages never added), is now derived from NAV_ITEMS "
+        "with its Lucide icons. Converting the remaining 154 files is a codemod and "
+        "an owner decision"
     )
 
 
@@ -1821,9 +1864,18 @@ FINDINGS: list[Finding] = [
         "P3",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "Done for `frontend/src`: no source file carries emoji. `ui-ux-pro-max` forbids "
-        "emoji as icons; use the SVG set.",
-        "n/a",
+        "The plan recorded this as done for `frontend/src` — 'no source file carries "
+        "emoji'. It was not: 1,389 across 145 files on 2026-09-13, concentrated exactly "
+        "where icons live (PlatformConfiguration.tsx 136, SystemReliabilitySection.tsx "
+        "62, Settings.tsx 52). `ui-ux-pro-max` forbids emoji as icons and navConfig.ts "
+        "already records the cost (F170): no `currentColor`, so they ignore theme, hover "
+        "and disabled state; per-platform rendering; announced literally by a screen "
+        "reader. Capped by a ratchet rather than closed by a 154-file codemod, which is "
+        "the owner's call.",
+        "Carried by test_frontend_emoji_ratchet.py (five injections plus the exclusion "
+        "test that keeps 79,148 box-drawing characters out of scope) and "
+        "command_palette_follows_nav.test.tsx (the palette follows NAV_ITEMS and renders "
+        "no emoji; four of its five assertions fail against the pre-fix component).",
         "python scripts/correction_register.py --id F175",
         _p_f175,
         [S_UI],

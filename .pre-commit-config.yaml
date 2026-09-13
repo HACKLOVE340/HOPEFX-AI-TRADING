@@ -310,6 +310,21 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # Same shape, different debt. navConfig.ts records why emoji cannot be
+      # icons -- no currentColor, so they ignore theme, hover and disabled
+      # state, and a screen reader announces them literally (F170) -- and the
+      # sidebar was converted to Lucide on that basis. 1,389 emoji across 145
+      # other files were not, concentrated exactly where icons live. Converting
+      # them is a codemod; keeping the number from growing is not. Reads the
+      # whole tree for the same reason the colour ratchet does.
+      - id: frontend-emoji-ratchet
+        name: Frontend emoji may only decrease
+        language: system
+        entry: python scripts/frontend_emoji_ratchet.py --check
+        files: '^(frontend/src/.*\.(tsx?|jsx?|css)$|docs/FRONTEND_EMOJI_DEBT\.json$|scripts/frontend_emoji_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
       # The AOS specification's §30 register maps 26 named invariants onto what
       # this repository enforces. Every claim in it names a live predicate or a
       # file on disk, so a rename anywhere under invariants/ can turn a row into
