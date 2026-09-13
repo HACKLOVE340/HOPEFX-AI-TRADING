@@ -1273,6 +1273,13 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/audit/LANDING_PLAN.md"
+tier = "T2"
+subject = "landing_plan"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/audit/CORRECTION_REGISTER.md"
 tier = "T1"
 subject = "correction_register"
