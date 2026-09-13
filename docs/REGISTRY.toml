@@ -1471,6 +1471,13 @@ owner = "hacklove340"
 state = "active"
 
 [[document]]
+path = "docs/decisions/0019-drift-blocking-model-quality-blocking-and-the-z-threshold.md"
+tier = "T3"
+subject = "decision-0019"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
 path = "docs/decisions/README.md"
 tier = "T2"
 subject = "decision-records"

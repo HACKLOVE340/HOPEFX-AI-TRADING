@@ -278,9 +278,9 @@ and every step of it has caught something here at least once.
 #### F146 · Drift is measured and does not block by default
 
 - **Priority** OWNER · **Area** ML
-- **Measured now** the block path exists and DRIFT_BLOCK defaults to false, so drift is advisory in the shipped configuration. Turning it on is a trading-behaviour decision
-- **Fix** The block path now exists — `DRIFT_BLOCK` — but ships false, so drift is advisory in the deployed configuration. Turning it on stops inference when the feature distribution moves, which is a trading-behaviour decision with a real cost either way: block and you halt on a regime change; do not and you trade a model outside its training distribution. The code is ready for either.
-- **Write this test first** Whichever default is chosen: a test that shifts a feature past the z-threshold and asserts the configured behaviour.
+- **Measured now** the block path exists; code defaults DRIFT_BLOCK=false, MODEL_QUALITY_BLOCK=false, DRIFT_Z_THRESHOLD=4.0, while 4 of 4 deployment surface(s) set DRIFT_BLOCK=true and the deployed chart sets DRIFT_Z_THRESHOLD=3.0, not 4.0. ADR 0019 is proposed, not accepted — the decision is the owner's and the measured z is dominated by zero-filled features (python scripts/drift_guard_report.py)
+- **Fix** The block path exists and works — proven in both directions by injection — but the code default ships false while all four deployment surfaces set it true. Recorded for decision in ADR 0019, which also carries the two riders this finding omitted: `MODEL_QUALITY_BLOCK` is advisory for the same reason and its own comment ties it to this default, and `DRIFT_Z_THRESHOLD` is 4.0 in code against 3.0 in the deployed chart. The decision is not the one-line flip it looks like: measured 2026-09-13, 12 of the 14 features over the threshold had a live value of exactly 0.0, because a feature the pipeline cannot supply is zero-filled before the guard sees it. The guard is largely measuring imputation, so blocking on it today converts a feed outage into a total trading halt reported as `feature_drift`. Separate the two before flipping the default — `python scripts/drift_guard_report.py` shows the split.
+- **Write this test first** Whichever default is chosen: a test that shifts a feature past the z-threshold and asserts the configured behaviour — and one that asserts a zero-filled feature is not counted as drift, which is the half that decides whether blocking is safe.
 - **Verify** `python scripts/correction_register.py --id F146`
 - **Skills** `hopefx-dead-controls`
 - **Full evidence** docs/audit/REMEDIATION_PLAN.md — Phase 1
@@ -867,6 +867,7 @@ and every step of it has caught something here at least once.
 - **Verify** `python scripts/correction_register.py --id F210`
 - **Skills** `ui-ux-pro-max`
 - **Full evidence** docs/audit/REMEDIATION_PLAN.md — Phase 6
+
 
 
 ## 4. Owner decisions — engineering must not default these

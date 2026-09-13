@@ -922,18 +922,108 @@ def _p_f159() -> tuple[str, str]:
     )
 
 
+_F146_ADR = "docs/decisions/0019-drift-blocking-model-quality-blocking-and-the-z-threshold.md"
+
+# The surfaces that deploy this system. The code default is the fifth, and the
+# finding is that it disagrees with all four of these.
+_F146_SURFACES = (
+    "helm/hopefx/values.yaml",
+    "k8s/k8s-configmap.yaml",
+    "deployments/k8s/configmap.yaml",
+    ".env.example",
+)
+
+
+def _yaml_key(rel: str, key: str) -> str | None:
+    """Read a scalar key, ignoring any mention of it inside a comment.
+
+    `_code()` only strips prose for `.py`, and these files discuss their own
+    flags at length — `deployments/k8s/configmap.yaml` carries the sentence
+    "and DRIFT_BLOCK defaults to FALSE" in a comment explaining why the key is
+    stated explicitly. A probe that greps raw text reads that as the setting and
+    reports the opposite of the truth.
+    """
+    text = _read(rel)
+    if not text:
+        return None
+    body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    # `.env.example` is KEY=value; the manifests are `KEY: "value"`.
+    match = re.search(rf'(?m)^\s*{re.escape(key)}\s*[:=]\s*["\']?([A-Za-z0-9_.]+)', body)
+    return match.group(1).lower() if match else None
+
+
 def _p_f146() -> tuple[str, str]:
-    """Drift is measured; whether it blocks is a deliberate default."""
+    """Drift blocking: one default, two riders, and the ADR that decides them.
+
+    The previous probe asked a single question — does `DRIFT_BLOCK` default to
+    true? — so FIXED was reachable by flipping one line. Measured 2026-09-13,
+    that flip would have stopped inference outright: 12 of the 14 features over
+    the z threshold had a live value of exactly 0.0, because a feature the
+    pipeline cannot supply is zero-filled before the guard sees it. The guard
+    was therefore measuring imputation far more than drift, and blocking on it
+    turns a feed outage into a total halt reported as `feature_drift`. A probe
+    that green-lights that flip is recommending it. See ADR 0019 and
+    `scripts/drift_guard_report.py`.
+
+    So this measures what the decision actually spans — the code default, its
+    two riders, and whether the deployment surfaces agree — and takes its
+    verdict from ADR 0019's status line. While the ADR is `proposed` the finding
+    is OWNER, which is honest: nobody has decided. Once it is `accepted` the
+    probe enforces the decision, so a choice made cannot quietly drift back.
+    """
     body = _code("ml/inference_engine.py")
     if "_DRIFT_BLOCK" not in body:
         return OPEN, "no block path exists — drift is computed and gates nothing"
-    default_on = re.search(r'DRIFT_BLOCK",\s*"(true|1|yes)"', body) is not None
+
+    def _default(name: str) -> bool:
+        return re.search(rf'{name}",\s*"(true|1|yes)"', body) is not None
+
+    drift_on = _default("DRIFT_BLOCK")
+    quality_on = _default("MODEL_QUALITY_BLOCK")
+    z_match = re.search(r'DRIFT_Z_THRESHOLD",\s*"([0-9.]+)"', body)
+    code_z = z_match.group(1) if z_match else "?"
+
+    # Which surfaces disagree with the code default, and how.
+    surfaces = {rel: _yaml_key(rel, "DRIFT_BLOCK") for rel in _F146_SURFACES}
+    set_true = sorted(rel for rel, val in surfaces.items() if val in {"true", "1", "yes"})
+    helm_z = _yaml_key("helm/hopefx/values.yaml", "DRIFT_Z_THRESHOLD")
+    z_agree = helm_z is None or helm_z == code_z
+
+    adr = _read(_F146_ADR)
+    accepted = bool(re.search(r"(?m)^-\s*Status:\s*accepted\b", adr))
+
+    if not accepted:
+        detail = (
+            f"the block path exists; code defaults DRIFT_BLOCK={str(drift_on).lower()}, "
+            f"MODEL_QUALITY_BLOCK={str(quality_on).lower()}, DRIFT_Z_THRESHOLD={code_z}, "
+            f"while {len(set_true)} of {len(_F146_SURFACES)} deployment surface(s) set "
+            f"DRIFT_BLOCK=true"
+        )
+        if not z_agree:
+            detail += f" and the deployed chart sets DRIFT_Z_THRESHOLD={helm_z}, not {code_z}"
+        if not adr:
+            return _named(OWNER, detail + ". No ADR records the decision")
+        return _named(
+            OWNER,
+            detail + ". ADR 0019 is proposed, not accepted — the decision is the owner's and the "
+            "measured z is dominated by zero-filled features "
+            "(python scripts/drift_guard_report.py)",
+        )
+
+    # Accepted: the ADR's decision is now the requirement.
+    missing = []
+    if not drift_on:
+        missing.append("DRIFT_BLOCK still defaults false")
+    if not quality_on:
+        missing.append("MODEL_QUALITY_BLOCK still defaults false (ADR 0019 rider 1)")
+    if not z_agree:
+        missing.append(f"chart DRIFT_Z_THRESHOLD={helm_z} disagrees with code {code_z} (rider 2)")
+    if missing:
+        return _named(OPEN, "ADR 0019 is accepted but " + "; ".join(missing))
     return _named(
-        FIXED if default_on else OWNER,
-        "DRIFT_BLOCK defaults on"
-        if default_on
-        else "the block path exists and DRIFT_BLOCK defaults to false, so drift is advisory "
-        "in the shipped configuration. Turning it on is a trading-behaviour decision",
+        FIXED,
+        f"ADR 0019 accepted and honoured: DRIFT_BLOCK and MODEL_QUALITY_BLOCK default on, "
+        f"threshold {code_z} agrees across code and the deployed chart",
     )
 
 
@@ -2371,13 +2461,20 @@ FINDINGS: list[Finding] = [
         "OWNER",
         "ML",
         "docs/audit/REMEDIATION_PLAN.md — Phase 1",
-        "The block path now exists — `DRIFT_BLOCK` — but ships false, so drift is advisory "
-        "in the deployed configuration. Turning it on stops inference when the feature "
-        "distribution moves, which is a trading-behaviour decision with a real cost either "
-        "way: block and you halt on a regime change; do not and you trade a model outside "
-        "its training distribution. The code is ready for either.",
+        "The block path exists and works — proven in both directions by injection — but the "
+        "code default ships false while all four deployment surfaces set it true. Recorded "
+        "for decision in ADR 0019, which also carries the two riders this finding omitted: "
+        "`MODEL_QUALITY_BLOCK` is advisory for the same reason and its own comment ties it "
+        "to this default, and `DRIFT_Z_THRESHOLD` is 4.0 in code against 3.0 in the deployed "
+        "chart. The decision is not the one-line flip it looks like: measured 2026-09-13, "
+        "12 of the 14 features over the threshold had a live value of exactly 0.0, because a "
+        "feature the pipeline cannot supply is zero-filled before the guard sees it. The "
+        "guard is largely measuring imputation, so blocking on it today converts a feed "
+        "outage into a total trading halt reported as `feature_drift`. Separate the two "
+        "before flipping the default — `python scripts/drift_guard_report.py` shows the split.",
         "Whichever default is chosen: a test that shifts a feature past the z-threshold and "
-        "asserts the configured behaviour.",
+        "asserts the configured behaviour — and one that asserts a zero-filled feature is "
+        "not counted as drift, which is the half that decides whether blocking is safe.",
         "python scripts/correction_register.py --id F146",
         _p_f146,
         [S_DEAD],

@@ -38,6 +38,7 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `ml/train_advanced.py` | Offline training: XGBoost + LightGBM + RF + ET stacking, walk-forward CV |
 | `ml/cached_series.py` | The committed daily CSVs, loaded with their age and OHLC integrity attached. Returns `CachedSeries`, never a bare DataFrame — deliberately **not** wired into the live path, so cached history cannot satisfy a freshness check |
 | `scripts/predict_offline.py` | Run the model on that cached series with no market feed. Defaults to `CLEAN_SINCE` (2020+); `--full-history` opts into the pre-2020 bars |
+| `scripts/drift_guard_report.py` | Whether the feature-drift guard is live (stats loaded, coverage above floor, buffer filled) and what its z is made of. Splits features over the threshold into zero-filled and genuinely drifted, because `DRIFT_BLOCK` acting on the first halts trading for a feed outage. Reports; changes nothing |
 | `scripts/clamp_ohlc.py` | Reconstruct impossible OHLC bars into a *separate* file with a provenance sidecar recording every edit. Never overwrites the source |
 | `scripts/model_provenance_report.py` | Whether every committed model artifact still hashes to its recorded digest, which directories the integrity gate actually guarantees, and which loaders reach a check at all. Reports; repairs nothing, and never recomputes a mismatched checksum |
 | `scripts/adr.py` | Architecture Decision Records (Group 3 Ch 6) — numbered, immutable, two-options-minimum. `--check` runs in pre-commit; immutability is enforced against git |
@@ -175,6 +176,7 @@ this file. Each is a **command**, so its answer is current rather than a snapsho
 |---|---|
 | `python scripts/backlog_report.py` | What is left to build or fix, measured from the code |
 | `python scripts/gate_evidence.py` | Which safety gates have been proven able to fail |
+| `python scripts/drift_guard_report.py` | Whether the drift guard is running, and how much of its z is missing data rather than drift |
 | `python scripts/frontend_colour_ratchet.py --check` | Hardcoded colour literals in `frontend/src`; the count may only fall |
 | `python scripts/frontend_emoji_ratchet.py --check` | Emoji in `frontend/src`; the count may only fall. Emoji cannot inherit `currentColor`, so they ignore theme, hover and disabled state (F170, F175) |
 | `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
