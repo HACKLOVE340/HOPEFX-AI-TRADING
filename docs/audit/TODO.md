@@ -179,6 +179,12 @@ scratch project. It builds no code in this repository.
 **Do:** confirm with the repo owner, then disconnect the integration or mark the
 check non-required. **Done when:** it no longer reports on this repo's PRs.
 
+**Note (2026-09-11):** the standalone `index.ts` / `package.json` "Vercel AI
+Gateway example" at repo root has been removed at the owner's request. It never
+built or deployed anything and is unrelated to the `v0-new-project-8ud36nesln3`
+check above, which still requires the owner to disconnect it in Vercel/GitHub
+integration settings — that is not a code change.
+
 ---
 
 ## P1 — Money and correctness

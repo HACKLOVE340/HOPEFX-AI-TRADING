@@ -1891,7 +1891,7 @@ class WorldMonitorAPIClient:
     For self-hosting:
     1. Clone: git clone https://github.com/koala73/worldmonitor.git
     2. Install: npm install
-    3. Run: npm run dev (or deploy to Vercel)
+    3. Run: npm run dev (or deploy to a Node.js host)
     4. Set self_hosted_url in config
     """
 
@@ -2168,7 +2168,7 @@ class WorldMonitorSelfHostConfig:
 
     Requirements:
     - Node.js 18+
-    - Vercel CLI (for local dev) or any Node.js hosting
+    - Any Node.js hosting provider (for local dev or deployment)
     - Optional: Redis for caching (Upstash recommended)
     - Optional: API keys for external services
 
