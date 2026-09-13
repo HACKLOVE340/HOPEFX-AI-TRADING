@@ -410,28 +410,47 @@ def _p_f175() -> tuple[str, str]:
 
 
 def _p_f198() -> tuple[str, str]:
-    body = _code("api/kyc.py")
-    if not body:
-        return UNVERIFIED, "api/kyc.py not found"
-    bare = 'prefix="/kyc"' in body
-    alias = "kyc_alias_router" in body
-    if bare and alias:
-        return PARTIAL, "the /api/kyc alias exists; the bare /kyc router still shadows the SPA route"
-    return _named(FIXED if not bare else OPEN, f"bare-prefix router present={bare}")
+    """`/kyc` and `/mobile` returned raw JSON 404 on direct navigation."""
+    page = _code("core/page_routes.py")
+    proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py")
+    fixed_by_route_table = "_claimed_by_a_real_route" in page
+    if not (proven and fixed_by_route_table):
+        return OPEN, "the catch-all still refuses page paths on a prefix string alone"
+    return PARTIAL, (
+        "/kyc serves the SPA again — nothing claimed it, and only the string in "
+        "_passthrough_prefixes was refusing it. /mobile remains a genuine collision: "
+        "App.tsx declares the page AND router_registry mounts the mobile API "
+        "sub-application at the same path (measured: one exact route, one Mount). "
+        "Serving the SPA there would shadow a live API, so resolving it means renaming "
+        "the page or moving the mount to /api/mobile — a product choice, pinned by a "
+        "test so the exemption cannot quietly become permanent"
+    )
 
 
 def _p_f199() -> tuple[str, str]:
-    spa = _grep(r"_SPA_ROUTES\s*=", *_tracked("core/*.py"), *_tracked("api/*.py"))
-    app = _read("frontend/src/App.tsx")
-    declared = len(re.findall(r"<Route\s", app))
-    if not spa:
-        return UNVERIFIED, f"_SPA_ROUTES not found; App.tsx declares {declared} <Route> elements"
-    src = spa[0].split(":")[0]
-    listed = len(re.findall(r'"/[^"]*"', _code(src).split("_SPA_ROUTES", 1)[-1].split("]", 1)[0]))
-    return _named(
-        OPEN if listed != declared else FIXED,
-        f"{src} lists {listed}; App.tsx declares {declared} — hand-maintained",
-    )
+    """Every declared SPA route must serve the app on a direct GET.
+
+    The original probe compared the hand-maintained `_SPA_ROUTES` list (60) to
+    App.tsx (88) and called the gap the defect. It is not: an unlisted path
+    still reaches the `/{full_path:path}` catch-all and still gets index.html,
+    so the list is an optimisation. What matters is whether anything CLAIMS a
+    page path ahead of it — which is what F198 actually was.
+    """
+    page = _code("core/page_routes.py")
+    if not page:
+        return UNVERIFIED, "core/page_routes.py not found"
+    proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py")
+    # The bare-name entries in _passthrough_prefixes used to 404 a page path
+    # purely on a string match, with no route behind it.
+    asks_the_route_table = "_claimed_by_a_real_route" in page
+    if proven and asks_the_route_table:
+        return FIXED, (
+            "the catch-all passes a bare page path through only when a route or mount "
+            "really claims it, instead of guessing from a prefix string; and every path "
+            "App.tsx declares is fetched directly in a test built on the real router "
+            "registry, so a future router mounted at a bare prefix fails immediately"
+        )
+    return OPEN, f"direct_get_test={proven} route_table_check={asks_the_route_table}"
 
 
 def _p_f200() -> tuple[str, str]:
@@ -1683,12 +1702,22 @@ FINDINGS: list[Finding] = [
         "P1",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "`api/kyc.py` mounts a router at the bare `/kyc` prefix, which shadows the SPA "
-        "route. The correctly-prefixed `/api/kyc` alias already exists, so the fix is to "
-        "drop the bare mount. KYC is a regulatory gate — a user following a verification "
-        "email currently gets a JSON error.",
-        "A direct-`GET` probe asserting every SPA route returns 200 with an HTML content type, not JSON.",
-        "python scripts/correction_register.py --id F198",
+        "Half done. `/kyc` serves the SPA again: measured, nothing claimed that path at "
+        "all — zero exact routes, zero sub-routes — and the only thing refusing it was the "
+        "string `kyc` in the catch-all's `_passthrough_prefixes`. A user following a "
+        'verification email got `{"detail":"No route for GET /kyc"}` on a regulatory '
+        "gate. Sub-paths still pass through on the prefix, so `/kyc/webhooks/sumsub` keeps "
+        "reaching its handler — answering a provider webhook with the SPA shell would be "
+        "worse than 404ing it. **`/mobile` is a real collision and stays open**: App.tsx "
+        "declares the page and `core/router_registry.py` mounts the mobile API "
+        "sub-application at the same path, so serving the SPA there would shadow a live "
+        "API. Renaming the page or moving the mount to `/api/mobile` is a product choice.",
+        "tests/unit/test_every_spa_route_serves_the_app.py found both routes "
+        "independently, without being told the finding existed, by asking whether a direct "
+        "GET returns HTML. `/mobile` is exempted with its reason and pinned by "
+        "test_the_mobile_collision_is_still_a_collision, so the exemption fails the day it "
+        "stops being true.",
+        "pytest tests/unit/test_every_spa_route_serves_the_app.py -q",
         _p_f198,
         [S_UI, S_TDD],
     ),
@@ -1698,11 +1727,21 @@ FINDINGS: list[Finding] = [
         "P2",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "Generate the list from `App.tsx`, or add the direct-`GET`-returns-200 test that "
-        "found F198 — either removes the hand-maintenance. Prefer the test: it catches "
-        "the class, not just the drift.",
-        "The same direct-GET probe as F198.",
-        "python scripts/correction_register.py --id F199",
+        "Done 2026-09-13, by testing the property instead of syncing the list. The gap "
+        "between `_SPA_ROUTES` (60) and App.tsx (88) was never the defect: an unlisted "
+        "path reaches the `/{full_path:path}` catch-all and still gets index.html, so the "
+        "list is an optimisation. The defect was that the catch-all decided what is a "
+        "server path from a hand-maintained prefix STRING — and `kyc`, `mobile` and "
+        "`godmode` are both API namespaces and page names, so `/kyc` 404ed with nothing "
+        "behind it. It now asks the route table: a bare page path passes through only "
+        "when a route or mount really claims it. Every path App.tsx declares is fetched "
+        "directly in a test built on the real router registry, so the next router mounted "
+        "at a bare prefix fails immediately rather than shadowing a page silently.",
+        "tests/unit/test_every_spa_route_serves_the_app.py — extracts the routes from "
+        "App.tsx rather than restating them, guards that the extraction still works "
+        "before trusting what it reports, and checks the converse (that /api/ is not "
+        "swallowed by the SPA).",
+        "pytest tests/unit/test_every_spa_route_serves_the_app.py -q",
         _p_f199,
         [S_UI, S_TDD],
     ),
