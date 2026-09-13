@@ -1644,19 +1644,60 @@ def _p_f81() -> tuple[str, str]:
 
 
 def _p_ai_gate() -> tuple[str, str]:
-    """An agent acting outside its scope must fail the build, not a review."""
-    scope = [
-        f for f in _tracked("tests/**/*.py") if re.search(r"agent.*(scope|authoriz|permission)|enforce_agent_action", f)
+    """An agent acting outside its scope must fail the build, not a review.
+
+    Measured by CONTENT. The first version matched filenames — a path containing
+    "approval" or "proposal" alongside "ai" — and reported OPEN while both
+    acceptance tests had existed for some time in
+    `test_agent_actions_are_enforced_not_prompted.py`, which is named after the
+    behaviour instead. A probe satisfied by vocabulary answers a different
+    question than the one it was asked, and here it answered "no" to a question
+    whose answer was "yes".
+
+    The third condition is the one worth keeping. A suite can drive
+    `enforce_agent_action` through every branch and still not prove the tool
+    layer asks it: the predicate could stay flawless while `ToolBus.invoke`
+    stops honouring the answer, and those tests would all still pass. A gate
+    nobody invokes refuses nothing — the first sub-shape in
+    `hopefx-dead-controls`.
+
+    Proven by injection rather than assumed. Replacing `invoke`'s
+    `if result.blocking or not result.allowed:` with `if False:` leaves all
+    thirteen predicate tests green and turns five in `test_ai_tool_bus.py` red,
+    including `test_a_refusal_never_runs_the_tool` and
+    `test_the_bus_refuses_even_in_monitor_mode`. So the bus condition below is
+    genuinely covered — by a file that already existed. Nothing needed writing
+    here; the probe needed fixing.
+    """
+    scope = approval = bus = None
+    for f in _tracked("tests/**/*.py"):
+        body = _code(f)
+        if "enforce_agent_action" not in body and "ToolBus" not in body:
+            continue
+        refuses = "allowed is False" in body or "ToolDenied" in body
+        if scope is None and "allowed_actions" in body and refuses:
+            scope = f
+        if approval is None and "approval_required" in body and refuses:
+            approval = f
+        if bus is None and "ToolBus" in body and "ToolDenied" in body:
+            bus = f
+
+    missing = [
+        name for name, found in (("out-of-scope action", scope), ("execution-without-approval", approval)) if not found
     ]
-    approval = [f for f in _tracked("tests/**/*.py") if re.search(r"approval|proposal", f) and "ai" in f.lower()]
-    if scope and approval:
-        return FIXED, f"scope: {scope[0]} · approval: {approval[0]}"
-    return OPEN, (
-        f"acceptance tests present — out-of-scope action: {bool(scope)}, "
-        f"execution-without-approval: {bool(approval)}. `enforce_agent_action` and "
-        "`ToolBus.invoke` exist and are called; what is missing is the pair of build-"
-        "failing tests that keep them that way as the AI layer grows"
-    )
+    if missing:
+        return OPEN, (
+            f"acceptance tests absent: {', '.join(missing)}. `enforce_agent_action` and "
+            "`ToolBus.invoke` exist and are called; what is missing is the pair of build-"
+            "failing tests that keep them that way as the AI layer grows"
+        )
+    if bus is None:
+        return PARTIAL, (
+            f"both acceptance tests exist (scope: {scope}, approval: {approval}), but nothing "
+            "drives them through ToolBus.invoke — the predicate is proven, the tool layer's "
+            "call to it is not, so a bus that stopped honouring the gate would keep the suite green"
+        )
+    return FIXED, f"scope: {scope} · approval: {approval} · enforced through the bus: {bus}"
 
 
 def _p_ai_surface() -> tuple[str, str]:
