@@ -672,6 +672,15 @@ def _p_f218() -> tuple[str, str]:
     except Exception as exc:
         return UNVERIFIED, f"schema_migration_check unavailable: {type(exc).__name__}: {exc}"
 
+    # Read the inputs through THIS module's readers first. The helper opens the
+    # filesystem directly, which is correct for a standalone gate and wrong
+    # here: it made this probe unreachable by
+    # tests/unit/test_correction_register_gate.py's starvation audit, which
+    # blanks _read/_code/_glob and asserts no probe still says FIXED. A probe
+    # the audit cannot starve is a probe nobody can check for the F255 class.
+    if not _code("database/models.py") or not _glob("alembic/versions/*.py"):
+        return UNVERIFIED, "the schema scan found no models or no migrations — broken scan, not a clean tree"
+
     declared = mod.declared_tables(ROOT)
     created = mod.migrated_tables(ROOT)
     if not declared or not created:
