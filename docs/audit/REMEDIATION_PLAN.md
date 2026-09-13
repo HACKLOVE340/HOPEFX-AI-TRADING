@@ -8,6 +8,25 @@ rendered and measured, `tests/` (221,598 LOC) audited.
 Detail for every finding is in `CODE_READING_FINDINGS.md`. Architecture in
 `PLATFORM_ARCHITECTURE.md`. This file is the ordered work list.
 
+> ## The checkboxes below are no longer the status. Read them as the argument.
+>
+> **`docs/audit/CORRECTION_REGISTER.md` is the current status of every finding
+> in this file**, probed from the code by `python scripts/correction_register.py`
+> rather than ticked by hand. Measured 2026-09-13, **39 of the items still shown
+> as open here are done** — F135's wallet id carries a `uuid4` suffix, F137's
+> `amount_crypto` is `Numeric(28, 8)`, F142's `FIXRouter` takes an injected
+> `OrderGate`, F176 prints `DECLARED`, and so on.
+>
+> The boxes were not ticked because a hand-maintained tick is what went stale in
+> the first place, and re-ticking them would create a second thing to keep true.
+> What this file still holds, and the register deliberately does not reproduce,
+> is the **reasoning**: the measured consequence of each defect, what was ruled
+> out, and why the ordering is what it is. That is worth reading and is why the
+> text below is unchanged.
+>
+> Where this file and the register disagree, the register is right — it asked
+> the code this morning.
+
 ---
 
 ## How this plan is ordered

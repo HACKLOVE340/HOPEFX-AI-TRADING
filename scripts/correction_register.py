@@ -101,7 +101,10 @@ def _code(rel: str) -> str:
         text = re.sub(r"(?m)^\s*#.*$", "", text)
     elif rel.endswith((".ts", ".tsx", ".js", ".jsx")):
         text = re.sub(r"/\*[\s\S]*?\*/", "", text)
-        text = re.sub(r"(?m)//.*$", "", text)
+        # Only a comment that OWNS its line. An inline `//` is far more often the
+        # middle of a URL — stripping those truncated every file at its first
+        # https:// and emptied the TSX probes without failing anything.
+        text = re.sub(r"(?m)^\s*//.*$", "", text)
     return text
 
 
@@ -522,6 +525,670 @@ def _p_smoke_leak() -> tuple[str, str]:
     )
 
 
+# ── Batch 2 probes: the remainder of REMEDIATION_PLAN.md ────────────────────
+#
+# Each of these was written after reading what the finding actually cites, not
+# from its one-line summary. Several summaries are now out of date, which is the
+# whole reason the status column is probed rather than copied.
+
+
+def _p_f103() -> tuple[str, str]:
+    """brain/ and news/ must be inside the coverage source set to be gateable."""
+    run_block = _code(".coveragerc").split("[run]", 1)[-1].split("omit", 1)[0]
+    named = {p for p in ("brain", "news") if re.search(rf"^\s+{p}\s*$", run_block, re.M)}
+    return _named(
+        FIXED if named == {"brain", "news"} else OPEN,
+        f"in [run] source: {sorted(named) or 'neither'} — a package outside the source "
+        "set cannot fail a coverage gate, whatever percentage the job prints",
+    )
+
+
+def _p_f214() -> tuple[str, str]:
+    """The Phase-3 gate must decide whether the online learner is returned."""
+    guarded = _tracked("tests/unit/test_phase_gates_actually_gate.py")
+    return _named(
+        FIXED if guarded else OPEN,
+        "test_phase_gates_actually_gate.py pins that the store is withheld until the "
+        "gate is met, and that a gate which raises fails closed"
+        if guarded
+        else "nothing asserts the gate changes what _get_online_learner_store returns",
+    )
+
+
+def _p_f215() -> tuple[str, str]:
+    """.env.example must not enable a flag whose code default is False."""
+    m = re.search(r"^FEATURE_ONLINE_LEARNING\s*=\s*(\w+)", _read(".env.example"), re.M)
+    if not m:
+        return UNVERIFIED, "FEATURE_ONLINE_LEARNING not present in .env.example"
+    on = m.group(1).strip().lower() in {"1", "true", "yes"}
+    return _named(
+        OPEN if on else FIXED,
+        f"FEATURE_ONLINE_LEARNING={m.group(1)} — an unvalidated model blended into live signals by default"
+        if on
+        else f"FEATURE_ONLINE_LEARNING={m.group(1)}, matching the code default",
+    )
+
+
+def _p_f219() -> tuple[str, str]:
+    """A push that reached no device must not report success."""
+    body = _code("mobile/push_notifications.py")
+    if not body:
+        return UNVERIFIED, "mobile/push_notifications.py not found"
+    m = re.search(r"if not self\.fcm_enabled or not tokens:(.*?)(?=\n        \S)", body, re.S)
+    if not m:
+        return UNVERIFIED, "the disabled/no-token branch was not found"
+    returns_false = re.search(r"return\s+False", m.group(1)) is not None
+    return _named(
+        FIXED if returns_false else OPEN,
+        "the disabled/no-token branch returns False"
+        if returns_false
+        else "the disabled/no-token branch still reports success",
+    )
+
+
+def _p_f160() -> tuple[str, str]:
+    """The broker probe must ask the broker, not read the config."""
+    body = _code("api/broker.py")
+    live = bool(re.search(r"get_account_info|account_info|get_positions", body))
+    return _named(
+        FIXED if live else OPEN,
+        "broker_status calls the connector for account info and positions"
+        if live
+        else "broker_status reports from configuration alone",
+    )
+
+
+def _p_f159() -> tuple[str, str]:
+    """The alert engine's delivery guard must be able to open."""
+    body = _code("notifications/alert_engine.py")
+    if not body:
+        return UNVERIFIED, "notifications/alert_engine.py not found"
+    dead = "is not self" in body
+    return _named(
+        OPEN if dead else FIXED,
+        "the `singleton is not self` guard is back — it can never open, so emergency "
+        "stops and drawdown breaches are log lines"
+        if dead
+        else "no self-comparison guard stands between an alert and its delivery",
+    )
+
+
+def _p_f146() -> tuple[str, str]:
+    """Drift is measured; whether it blocks is a deliberate default."""
+    body = _code("ml/inference_engine.py")
+    if "_DRIFT_BLOCK" not in body:
+        return OPEN, "no block path exists — drift is computed and gates nothing"
+    default_on = re.search(r'DRIFT_BLOCK",\s*"(true|1|yes)"', body) is not None
+    return _named(
+        FIXED if default_on else OWNER,
+        "DRIFT_BLOCK defaults on"
+        if default_on
+        else "the block path exists and DRIFT_BLOCK defaults to false, so drift is advisory "
+        "in the shipped configuration. Turning it on is a trading-behaviour decision",
+    )
+
+
+def _p_f205() -> tuple[str, str]:
+    """A log call with more placeholders than arguments cannot emit."""
+    # Counted with `ast`, not a regex. The first version of this probe stopped
+    # its argument list at the first `)`, so `float(applied)` ended the match and
+    # a correct three-argument call read as one — it reported six defects that
+    # were not there. Balanced parentheses are not a regular language.
+    import ast
+
+    bad = []
+    for rel in _tracked("monetization/*.py") + _tracked("payments/**/*.py"):
+        try:
+            tree = ast.parse(_read(rel))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr not in {"exception", "error", "warning", "info", "critical", "debug"}:
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            fmt = node.args[0].value
+            if not isinstance(fmt, str):
+                continue
+            holders = len(re.findall(r"%(?:\(\w+\))?[-+ #0-9.]*[sdifreg]", fmt))
+            supplied = len(node.args) - 1
+            if holders > supplied and not node.keywords:
+                bad.append(f"{rel}:{node.lineno}: {holders} placeholders, {supplied} args")
+    return _named(
+        OPEN if bad else FIXED,
+        f"{len(bad)} log call(s) cannot emit — the record is lost while the caller reports a reason: {bad[0]}"
+        if bad
+        else "no money-module log call has more placeholders than arguments",
+    )
+
+
+def _p_f136() -> tuple[str, str]:
+    """A balance read-modify-write must hold a lock."""
+    body = _code("payments/wallet.py")
+    locked = "RLock(" in body or "threading.Lock(" in body
+    return _named(
+        FIXED if locked else OPEN,
+        "wallet balance mutation is serialised by a lock"
+        if locked
+        else "the balance is an unlocked read-modify-write; two concurrent movements lose one",
+    )
+
+
+def _p_f206() -> tuple[str, str]:
+    """Truncating to the cent always takes the creator's side of the rounding."""
+    bad = _grep(r"int\(\s*amount\s*\*\s*100\s*\)", *_tracked("monetization/*.py"), *_tracked("payments/**/*.py"))
+    return _named(
+        PARTIAL if bad else FIXED,
+        f"{len(bad)} site(s) still truncate: {bad[0]} — revenue_split now quantizes "
+        "ROUND_HALF_UP, so this is the remainder, not the whole finding"
+        if bad
+        else "every amount-to-cents conversion rounds rather than truncates",
+    )
+
+
+def _p_f207() -> tuple[str, str]:
+    """A payout must claim only transactions since the last one."""
+    body = _code("monetization/revenue_split.py")
+    scoped = "last_payout_at" in body
+    return _named(
+        FIXED if scoped else OPEN,
+        "payouts are scoped by last_payout_at"
+        if scoped
+        else "every payout claims every historical transaction; reconciliation double-counts",
+    )
+
+
+def _p_f31() -> tuple[str, str]:
+    """Affiliate money state must survive a restart, as revenue_split's now does."""
+    body = _code("monetization/affiliate.py")
+    if not body:
+        return UNVERIFIED, "monetization/affiliate.py not found"
+    persisted = "session_factory" in body or "session.commit" in body
+    locked = "RLock(" in body or "threading.Lock(" in body
+    if persisted and locked:
+        return FIXED, "affiliate state is persisted and serialised"
+    return OPEN, (
+        f"persisted={persisted} locked={locked} — the same two defects fixed in "
+        "revenue_split.py (F203/F208) are still live here, and the payout is a TOCTOU: "
+        "eligibility is read, then the balance is zeroed, with no lock between"
+    )
+
+
+def _p_f220() -> tuple[str, str]:
+    """Device tokens in a module dict are lost on every deploy."""
+    body = _code("mobile/push_notifications.py")
+    in_ram = re.search(r"^_device_tokens\s*:\s*dict", body, re.M) is not None
+    persisted = "session_factory" in body or "redis" in body.lower()
+    if in_ram and not persisted:
+        return OPEN, (
+            "_device_tokens is a module-level dict with no backing store — a correctly "
+            "configured FCM stops delivering after a deploy, and each worker holds a "
+            "different set"
+        )
+    return _named(FIXED if persisted else UNVERIFIED, f"in_ram={in_ram} persisted={persisted}")
+
+
+def _p_f130() -> tuple[str, str]:
+    """Self-healer patch signing must be more than a named constant."""
+    body = _code("ai/improve/proposal.py")
+    if not body:
+        return UNVERIFIED, "ai/improve/proposal.py not found"
+    wired = "HEAL_PATCH_SIGNING_KEY" in body
+    return _named(
+        FIXED if wired else OPEN,
+        "the module reads the signing key"
+        if wired
+        else "the module never names HEAL_PATCH_SIGNING_KEY and never writes a signature — "
+        "the agent sandbox ships with an unsigned patch path",
+    )
+
+
+def _p_f184() -> tuple[str, str]:
+    """'Could not run tests' must never be recorded as 'tests passed'."""
+    t = _tracked("tests/unit/test_self_healer_fails_closed.py")
+    return _named(
+        FIXED if t else OPEN,
+        "test_self_healer_fails_closed.py pins the distinction"
+        if t
+        else "nothing asserts a test run that could not execute is recorded as a failure",
+    )
+
+
+def _p_f216() -> tuple[str, str]:
+    """CLAUDE.md must not tell contributors that `data/` is legacy."""
+    body = _read("CLAUDE.md")
+    corrected = "live runtime infrastructure" in body
+    return _named(
+        FIXED if corrected else OPEN,
+        "CLAUDE.md describes data/ as live runtime infrastructure, with the measured LOC and importer counts"
+        if corrected
+        else "CLAUDE.md still calls data/ legacy, which routes new tick-feed work into "
+        "the wrong package from the top of every assistant's context",
+    )
+
+
+def _p_f217() -> tuple[str, str]:
+    """The market-data package boundary must be decided somewhere citable."""
+    adr = [p for p in _glob("docs/decisions/*.md") if "data" in p and "layer" in p]
+    return _named(
+        FIXED if adr else OPEN,
+        f"decided in {adr[0]}" if adr else "no ADR draws the boundary between the packages",
+    )
+
+
+def _p_f180() -> tuple[str, str]:
+    """Only one SecureVault may be reachable; the others destroy credentials."""
+    classes = _grep(r"^class SecureVault\b", *_tracked("**/*.py"))
+    others = [c for c in classes if not c.startswith("config/vault.py")]
+    if len(classes) <= 1:
+        return FIXED, "one SecureVault, in config/vault.py"
+    return PARTIAL, (
+        f"{len(classes)} classes named SecureVault ({len(others)} besides the live one in "
+        f"config/vault.py): {others[0] if others else ''}. Down from three, but a name "
+        "collision on a credential store is how the wrong one gets imported — "
+        "`rotate_key()` on the unreferenced copy returns True and destroys every credential"
+    )
+
+
+def _p_f144() -> tuple[str, str]:
+    """Login must take the same time whether or not the user exists."""
+    body = _code("auth/service.py")
+    if not body:
+        return UNVERIFIED, "auth/service.py not found"
+    equalised = bool(re.search(r"_DUMMY_HASH|dummy_hash|_dummy_verify|compare_digest", body))
+    return _named(
+        FIXED if equalised else OPEN,
+        "the unknown-user path performs an equivalent hash"
+        if equalised
+        else "the unknown-user path returns before verify_password, so a 268 ms gap "
+        "enumerates registered accounts — STRIDE-I, and it needs no credentials",
+    )
+
+
+def _p_f99() -> tuple[str, str]:
+    """The placeholder-secret test must cover the variables it exempted."""
+    body = _read("tests/unit/test_placeholder_secrets_are_rejected.py")
+    if not body:
+        return OPEN, "the placeholder-secret test does not exist"
+    covered = [v for v in ("DB_ENCRYPTION_KEY", "POSTGRES_PASSWORD") if v in body]
+    return _named(
+        FIXED if len(covered) == 2 else OPEN,
+        f"covers {covered}" if len(covered) == 2 else f"covers only {covered}",
+    )
+
+
+def _p_f223() -> tuple[str, str]:
+    """Tests named after the coverage metric hide the behaviour they protect."""
+    files = [f for f in _tracked("tests/**/*.py") if re.search(r"(coverage_boost|coverage\d|_coverage)\.py$", f)]
+    return _named(
+        OPEN if files else FIXED,
+        f"{len(files)} test file(s) named after the metric rather than the behaviour "
+        "(was 75) — these hold the highest concentration of assertion-free tests"
+        if files
+        else "no test file is named after the coverage metric",
+    )
+
+
+def _p_f108() -> tuple[str, str]:
+    """A test file with no assertion asserts nothing, whatever it is named."""
+    empty = []
+    for f in _tracked("tests/unit/*.py"):
+        if f.endswith("conftest.py"):
+            continue  # fixtures, not tests — nothing to assert
+        body = _code(f)
+        if "def test" in body and not re.search(r"\bassert\b|pytest\.raises", body):
+            empty.append(f)
+    return _named(
+        OPEN if empty else FIXED,
+        f"{len(empty)} test file(s) define tests and assert nothing: {', '.join(empty[:3])}"
+        if empty
+        else "every unit-test file that defines a test also asserts",
+    )
+
+
+def _p_f106() -> tuple[str, str]:
+    """Nothing exercises TradeExecutor against a real connector."""
+    joined = [
+        f for f in _tracked("tests/**/*.py") if "executor" in f and re.search(r"connector|integration|oanda|ibkr", f)
+    ]
+    return _named(
+        FIXED if joined else OPEN,
+        f"joined by {joined[0]}"
+        if joined
+        else "TradeExecutor is tested against MagicMock brokers only. A mock with no spec "
+        "agrees with every call, so the signature mismatch that F61 describes survives "
+        "the whole suite",
+    )
+
+
+def _p_f119() -> tuple[str, str]:
+    """Annualisation must use the bar frequency, not the sample length."""
+    bad = _grep(r"252\s*/\s*len\(", *_tracked("backtesting/*.py"), *_tracked("risk/*.py"), *_tracked("analytics/*.py"))
+    return _named(
+        OPEN if bad else FIXED,
+        bad[0]
+        if bad
+        else "no annualisation divides 252 by the sample length; backtesting/metrics.py scales by sqrt(252)",
+    )
+
+
+def _p_f120() -> tuple[str, str]:
+    """Sortino's denominator is downside deviation, not the std of losses."""
+    body = _code("risk/advanced_analytics.py")
+    proper = "downside_deviation" in body
+    return _named(
+        FIXED if proper else OPEN,
+        "calculate_sortino_ratio uses downside_deviation about the target"
+        if proper
+        else "the denominator is the std of losing observations, whose bias flips sign with the return distribution",
+    )
+
+
+def _p_f125() -> tuple[str, str]:
+    """An EMA must weight the newest bar most."""
+    body = _code("strategies/regime_router.py")
+    if "_ema" not in body:
+        return UNVERIFIED, "no _ema in strategies/regime_router.py"
+    m = re.search(r"def _ema.*?(?=\ndef |\Z)", body, re.S)
+    reversed_iter = "reversed(" in (m.group(0) if m else "")
+    return _named(
+        OPEN if reversed_iter else FIXED,
+        "the EMA iterates reversed(), weighting the oldest bar most"
+        if reversed_iter
+        else "_ema recurses forward over the series, so the newest bar carries alpha",
+    )
+
+
+def _p_f145() -> tuple[str, str]:
+    """A missing feature must reach the model as neutral, not as -15 sigma."""
+    # The evidence is a comment naming the finding and the reasoning behind the
+    # fix, so this one reads the RAW file — _code() would strip exactly what it
+    # is looking for.
+    raw = _read("ml/inference_engine.py")
+    aware = "F145" in raw or "is not neutral in this feature space" in raw
+    return _named(
+        FIXED if aware else OPEN,
+        "the imputation happens in scaled space, so a missing feature arrives neutral"
+        if aware
+        else "missing features are zero-filled before scaling — measured -15 sigma "
+        "for price with 48.2% of the vector missing",
+    )
+
+
+def _p_f80() -> tuple[str, str]:
+    """Severity scoring must match words, not substrings."""
+    scorer = [f for f in _tracked("**/*.py") if "wordmap" in f.lower() and "scorer" in f.lower()]
+    if not scorer:
+        return UNVERIFIED, "no wordmap scorer module found"
+    body = _code(scorer[0])
+    # The scorer builds `re.compile(rf"\b{body}\b")`. Look for that construction
+    # rather than trying to write a regex that matches a regex — the first
+    # version of this probe accepted any call to split() as evidence of word
+    # boundaries, then over-corrected and missed the real one.
+    bounded = "re.escape" in body and r"\b" in body and "re.compile" in body
+    return _named(
+        FIXED if bounded else OPEN,
+        f"{scorer[0]} matches on word boundaries"
+        if bounded
+        else f"{scorer[0]} matches by bare substring — a headline containing 'coupon' "
+        "scores 'coup' and can trip hedge mode",
+    )
+
+
+def _p_f94() -> tuple[str, str]:
+    """Regime must be detected, or every position is sized at the unknown multiplier."""
+    # F94's harm was specific: an unrouted regime left every position at the
+    # 0.5x "unknown" multiplier. Counting any module that mentions a regime is
+    # not that question — the first version of this probe answered FIXED by
+    # citing core/analytics/realtime_heatmap.py, which sizes nothing.
+    consumers = _grep(
+        r"get_current_regime|RegimeRouter\(|detect_regime|regime\.",
+        *_tracked("core/**/*.py"),
+        *_tracked("strategies/*.py"),
+        *_tracked("nuclear/*.py"),
+    )
+    sizing = _grep(r"regime", *_tracked("risk/manager.py"), *_tracked("risk/position_sizing.py"))
+    multiplier = _grep(r"0\.5.*unknown|unknown.*0\.5|REGIME_MULT", *_tracked("risk/*.py"), *_tracked("strategies/*.py"))
+    if multiplier:
+        return OPEN, f"the unknown-regime multiplier is still applied: {multiplier[0]}"
+    if not consumers:
+        return OPEN, "nothing consumes a detected regime anywhere"
+    return PARTIAL, (
+        f"the 0.5x unknown-regime multiplier is gone from risk/, and {len(consumers)} "
+        f"module(s) consume a regime (e.g. {consumers[0].split(':')[0]}), but "
+        f"{'no' if not sizing else str(len(sizing))} reference(s) reach risk/manager.py or "
+        "risk/position_sizing.py. Whether sizing SHOULD be regime-aware is a strategy "
+        "decision, so this is reported as measured rather than closed"
+    )
+
+
+def _p_f123() -> tuple[str, str]:
+    """/walk-forward/run must perform walk-forward analysis."""
+    body = _code("api/backtesting.py")
+    if "run_walk_forward" not in body:
+        return UNVERIFIED, "no run_walk_forward endpoint found"
+    uses_real = bool(re.search(r"backtesting[\.\s]+walk_forward|WalkForwardAnalyzer|purge", body))
+    return _named(
+        FIXED if uses_real else OPEN,
+        "the endpoint delegates to the real analyser"
+        if uses_real
+        else "api/backtesting.py never imports backtesting/walk_forward.py, which already "
+        "implements this correctly with a purge gap. The endpoint reports results "
+        "from a procedure that is not walk-forward",
+    )
+
+
+def _p_f147() -> tuple[str, str]:
+    """A mounted subsystem that is never fed reports zeros as data."""
+    body = _code("core/startup_factories.py")
+    constructed = "init_order_flow" in body
+    fed = bool(re.search(r"order_flow.*(on_tick|subscribe|feed|ingest)", body, re.I))
+    if constructed and fed:
+        return FIXED, "the order-flow analyser is constructed and subscribed to a feed"
+    return _named(
+        PARTIAL if constructed else OPEN,
+        f"constructed={constructed} fed={fed} — 2,791 LOC mounted behind three routers "
+        "with no tick source, so its endpoints return empty structures that read as "
+        "'no imbalance' rather than 'not measured'",
+    )
+
+
+def _p_f149() -> tuple[str, str]:
+    """A sparkline drawn from Math.random() is a fabricated readout."""
+    # Element ids, reconnect jitter and backoff are legitimate. A *plotted* value
+    # is not. The first version of this probe flagged
+    # `const jitter = delay * Math.random()` in useWebSocket.ts, which is correct
+    # code doing exactly what backoff should.
+    bad = [
+        h
+        for h in _grep(r"Math\.random\(\)", *[f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))])
+        if not re.search(r"id\b|key|uuid|nonce|jitter|backoff|delay|seed|shuffle", h, re.I)
+        and "/test" not in h
+        and not h.split(":")[0].endswith((".test.ts", ".test.tsx"))
+    ]
+    return _named(
+        OPEN if bad else FIXED,
+        f"{len(bad)} Math.random() in rendered values: {bad[0]}"
+        if bad
+        else "Math.random() survives only for element ids, never for a plotted value",
+    )
+
+
+def _p_f150() -> tuple[str, str]:
+    """A key built in the browser can never authenticate."""
+    # `generateApiKey: (id) => api.post(...)` asks the SERVER for a key, which is
+    # the correct shape — the first version of this probe matched the name and
+    # called it a defect. What F150 describes is a key *assembled in the browser*:
+    # a template literal or concatenation producing the key value itself.
+    bad = _grep(
+        r"(api[_-]?key)\s*[:=]\s*[`'\"][^`'\"]*\$\{|btoa\([^)]*api[_-]?key",
+        *[f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))],
+    )
+    return _named(
+        OPEN if bad else FIXED,
+        bad[0] if bad else "no client-side API-key construction remains",
+    )
+
+
+def _p_f209() -> tuple[str, str]:
+    """Two dashboards, with the nav pointing at the weaker one."""
+    app = _code("frontend/src/App.tsx")
+    redirected = bool(re.search(r'path="/home"[^>]*Navigate to="/dashboard"', app))
+    return _named(
+        FIXED if redirected else OPEN,
+        "/home redirects to /dashboard — one canonical dashboard"
+        if redirected
+        else "/dashboard and /home render different pages and the sidebar labels the richer one 'Live Feed'",
+    )
+
+
+def _p_f210() -> tuple[str, str]:
+    """Duplicate aliases break breadcrumbs and active-nav."""
+    app = _read("frontend/src/App.tsx")
+    paths = re.findall(r'path="(/[^"]*)"', app)
+    dupes = sorted({p for p in paths if paths.count(p) > 1})
+    return _named(
+        OPEN if dupes else FIXED,
+        f"{len(dupes)} duplicated path(s): {dupes[:5]}"
+        if dupes
+        else f"{len(set(paths))} distinct paths, none declared twice",
+    )
+
+
+def _p_f201() -> tuple[str, str]:
+    """Telling a subscriber 15 courses are available when all are placeholders."""
+    bad = _grep(
+        r"COMING SOON|available on your plan",
+        *[f for f in _tracked("frontend/src/**") if f.endswith((".tsx", ".ts"))],
+        code_only=False,
+    )
+    return _named(
+        OPEN if bad else FIXED,
+        bad[0] if bad else "no page advertises unavailable content as available",
+    )
+
+
+def _p_f173() -> tuple[str, str]:
+    """A page with no heading has no document outline."""
+    page = next((f for f in _tracked("frontend/src/pages/*.tsx") if re.search(r"/(Trading)?Dashboard\.tsx$", f)), None)
+    if not page:
+        return UNVERIFIED, "no Dashboard page found"
+    n = len(re.findall(r"<h[123]\b", _code(page)))
+    return _named(
+        OPEN if n == 0 else FIXED,
+        f"{page} renders {n} h1-h3 elements — a screen reader gets no outline"
+        if n == 0
+        else f"{page} renders {n} h1-h3 elements",
+    )
+
+
+def _p_f187() -> tuple[str, str]:
+    """Metrics nobody can act on are a readout, not an application."""
+    page = next((f for f in _tracked("frontend/src/pages/*.tsx") if re.search(r"/(Trading)?Dashboard\.tsx$", f)), None)
+    if not page:
+        return UNVERIFIED, "no Dashboard page found"
+    clickable = len(re.findall(r"onClick", _code(page)))
+    return _named(
+        OPEN if clickable < 5 else FIXED,
+        f"{page} has {clickable} onClick handler(s) — the metrics do not drill through"
+        if clickable < 5
+        else f"{page} has {clickable} onClick handlers",
+    )
+
+
+def _p_f172() -> tuple[str, str]:
+    """Icon-only buttons without an accessible name — NOT measurable here.
+
+    Two regex attempts both produced confident wrong answers, and the reason is
+    structural rather than a slip: a JSX opening tag cannot be bracketed by
+    `<button\b([^>]*)>`, because an attribute may contain `>` —
+    `onClick={() => navigate('/x')}` ends the match at the arrow. Everything
+    after it reads as the button's children, so "does this button contain text"
+    is answered from the wrong span. One version reported FIXED across 552
+    buttons; the other reported 9 offending files. Neither had measured
+    anything.
+
+    Reporting UNVERIFIED is the honest outcome. `eslint-plugin-jsx-a11y`'s
+    `control-has-associated-label` parses the JSX properly and is the way to
+    make this a real gate; adding it is the fix, and the count comes with it.
+    """
+    return UNVERIFIED, (
+        "not decidable by regex — a JSX attribute containing `>` breaks any "
+        "attempt to bracket the opening tag. Wire eslint-plugin-jsx-a11y and "
+        "this becomes a real measurement"
+    )
+
+
+def _p_f84() -> tuple[str, str]:
+    """The data-layer gate must not be conditioned on a flag that is False when it matters."""
+    body = _code("execution/engine.py")
+    if not body:
+        return UNVERIFIED, "execution/engine.py not found"
+    dead = re.search(r"_started\s+and\s+not\s+\w*\.?is_safe_to_trade", body) is not None
+    return _named(
+        OPEN if dead else FIXED,
+        "the `_started and not is_safe_to_trade()` conjunct is back — `_started = True` is "
+        "the last line of start(), so a startup failure skips the gate in exactly the state "
+        "it exists for"
+        if dead
+        else "is_safe_to_trade() is consulted without an _started conjunct",
+    )
+
+
+def _p_f81() -> tuple[str, str]:
+    """A hedge must be recorded from the broker's answer, not before asking."""
+    body = _code("risk/orchestrator.py")
+    if not body:
+        return UNVERIFIED, "risk/orchestrator.py not found"
+    m = re.search(r"self\._hedge_active\s*=\s*True", body)
+    if not m:
+        return UNVERIFIED, "no hedge activation found"
+    before = body[: m.start()]
+    # The failure path must return before the activation line is reached.
+    guarded = re.search(r"return\s+False", before[-1500:]) is not None
+    return _named(
+        FIXED if guarded else OPEN,
+        "the failure path returns before _hedge_active is set, so a failed hedge is a real "
+        "retry rather than a latched success"
+        if guarded
+        else "_hedge_active is set before the broker answers — the account is unhedged while "
+        "every dashboard says hedged, and the duplicate-activation guard blocks retry",
+    )
+
+
+def _p_ai_gate() -> tuple[str, str]:
+    """An agent acting outside its scope must fail the build, not a review."""
+    scope = [
+        f for f in _tracked("tests/**/*.py") if re.search(r"agent.*(scope|authoriz|permission)|enforce_agent_action", f)
+    ]
+    approval = [f for f in _tracked("tests/**/*.py") if re.search(r"approval|proposal", f) and "ai" in f.lower()]
+    if scope and approval:
+        return FIXED, f"scope: {scope[0]} · approval: {approval[0]}"
+    return OPEN, (
+        f"acceptance tests present — out-of-scope action: {bool(scope)}, "
+        f"execution-without-approval: {bool(approval)}. `enforce_agent_action` and "
+        "`ToolBus.invoke` exist and are called; what is missing is the pair of build-"
+        "failing tests that keep them that way as the AI layer grows"
+    )
+
+
+def _p_ai_surface() -> tuple[str, str]:
+    """Superadmin capability must be enforced on the server, not by a UI branch."""
+    t = _tracked("tests/unit/test_superadmin_capabilities_are_server_enforced.py")
+    if not t:
+        return OPEN, "nothing asserts a non-superadmin is refused server-side"
+    body = _read(t[0])
+    has_403 = "403" in body
+    return _named(
+        FIXED if has_403 else PARTIAL,
+        "server-side capability enforcement is pinned with a 403 assertion"
+        if has_403
+        else "the test exists but asserts no refusal status",
+    )
+
+
 def _p_unmeasurable(reason: str) -> Callable[[], tuple[str, str]]:
     def probe() -> tuple[str, str]:
         return UNVERIFIED, reason
@@ -891,6 +1558,647 @@ FINDINGS: list[Finding] = [
         _p_smoke_leak,
         [S_DEAD, S_TDD],
     ),
+    # ── Batch 2: the remainder of REMEDIATION_PLAN.md ──────────────────────
+    Finding(
+        "F103/F104",
+        "`brain/` and `news/` coverage gates could not pass",
+        "P2",
+        "Tests",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 0",
+        "Done: both packages are inside `[run] source`. A package outside the source set "
+        "cannot fail a coverage gate whatever percentage the job prints.",
+        "n/a",
+        "python scripts/correction_register.py --id F103/F104",
+        _p_f103,
+        [S_DEAD],
+    ),
+    Finding(
+        "F214",
+        "The Phase-3 paper-trading gate gated nothing",
+        "P1",
+        "Dead controls",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 1",
+        "Done: `test_phase_gates_actually_gate.py` pins that the online-learner store is "
+        "withheld until the gate is met, and that a gate which raises fails closed.",
+        "n/a",
+        "pytest tests/unit/test_phase_gates_actually_gate.py -q",
+        _p_f214,
+        [S_DEAD],
+    ),
+    Finding(
+        "F215",
+        "`.env.example` enabled the one flag whose code default is False",
+        "P1",
+        "Config",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 1",
+        "Done: `FEATURE_ONLINE_LEARNING=false`, matching the code default. It had been "
+        "blending an unvalidated model at 30% weight into live signals on a fresh install.",
+        "The `.env.example`-matches-code-default test in the Phase C plan.",
+        "python scripts/correction_register.py --id F215",
+        _p_f215,
+        [S_DEAD],
+    ),
+    Finding(
+        "F219",
+        "Push notifications returned True while sending nothing",
+        "P1",
+        "Dead controls",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 1",
+        "Done: the disabled/no-token branch returns False. With all three Firebase "
+        "variables blank by default, every push on a fresh deployment used to report "
+        "success and reach no device.",
+        "n/a",
+        "python scripts/correction_register.py --id F219",
+        _p_f219,
+        [S_DEAD],
+    ),
+    Finding(
+        "F160",
+        "The broker probe reported `ok` from configuration",
+        "P1",
+        "Dead controls",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 1",
+        "Done: `broker_status` calls the connector for account info and positions, so an "
+        "unreachable venue can no longer read as healthy.",
+        "n/a",
+        "python scripts/correction_register.py --id F160",
+        _p_f160,
+        [S_DEAD],
+    ),
+    Finding(
+        "F159",
+        "Critical alerts never left the log",
+        "P0",
+        "Dead controls",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 1",
+        "Done: the `singleton is not self` guard is gone. It could never open, because the "
+        "guard and the delivery were the same branch — emergency stops, drawdown breaches "
+        "and circuit-breaker trips were log lines for the life of the module.",
+        "An injection test: trip a breaker with a stub transport and assert the transport was called.",
+        "python scripts/correction_register.py --id F159",
+        _p_f159,
+        [S_DEAD],
+    ),
+    Finding(
+        "F146",
+        "Drift is measured and does not block by default",
+        "OWNER",
+        "ML",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 1",
+        "The block path now exists — `DRIFT_BLOCK` — but ships false, so drift is advisory "
+        "in the deployed configuration. Turning it on stops inference when the feature "
+        "distribution moves, which is a trading-behaviour decision with a real cost either "
+        "way: block and you halt on a regime change; do not and you trade a model outside "
+        "its training distribution. The code is ready for either.",
+        "Whichever default is chosen: a test that shifts a feature past the z-threshold and "
+        "asserts the configured behaviour.",
+        "python scripts/correction_register.py --id F146",
+        _p_f146,
+        [S_DEAD],
+    ),
+    Finding(
+        "F205",
+        "A log call with more placeholders than arguments cannot emit",
+        "P2",
+        "Money",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 2",
+        "Done across `monetization/` and `payments/`. The failing record was the one a "
+        "`failure_reason` told the operator to go and read.",
+        "n/a",
+        "python scripts/correction_register.py --id F205",
+        _p_f205,
+        [S_DEAD],
+    ),
+    Finding(
+        "F136",
+        "The wallet balance was an unlocked read-modify-write",
+        "P0",
+        "Money",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 2",
+        "Done: mutation is serialised by an `RLock`.",
+        "A concurrency test: two simultaneous movements, assert the total is conserved.",
+        "python scripts/correction_register.py --id F136",
+        _p_f136,
+        [S_MONEY],
+    ),
+    Finding(
+        "F206",
+        "`int(amount * 100)` truncates cents against the payee",
+        "P1",
+        "Money",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 2",
+        "`revenue_split.py` now quantizes ROUND_HALF_UP; `monetization/stripe_integration.py` "
+        "still truncates. Truncation toward zero always takes the same side of the rounding, "
+        "so the loss accumulates in one direction. Use the same helper.",
+        "A test asserting 0.999 becomes 100 cents, not 99 — and watch it fail on the truncating call site.",
+        "python scripts/correction_register.py --id F206",
+        _p_f206,
+        [S_MONEY],
+    ),
+    Finding(
+        "F207",
+        "Every payout claimed every historical transaction",
+        "P0",
+        "Money",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 2",
+        "Done: payouts are scoped by `last_payout_at`, so reconciliation no longer double-counts.",
+        "n/a",
+        "python scripts/correction_register.py --id F207",
+        _p_f207,
+        [S_MONEY],
+    ),
+    Finding(
+        "F31/F32",
+        "Affiliate money state is in memory, and the payout is a TOCTOU",
+        "P0",
+        "Money",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 2",
+        "`monetization/affiliate.py` (750 LOC) has neither a session factory nor a lock — "
+        "the same two defects that were fixed in `revenue_split.py` as F203 and F208, still "
+        "live one module over. Every restart erases what affiliates are owed, each worker "
+        "holds a different balance, and eligibility is read before the balance is zeroed "
+        "with nothing in between. Port the revenue_split fix: persist through a session "
+        "factory, decrement under an `RLock` rather than assigning zero.",
+        "The two tests that caught it there: a sale recorded during a payout must survive "
+        "(assert conservation), and a balance must survive a simulated restart. Run both "
+        "against affiliate.py first and watch them fail.",
+        "python scripts/correction_register.py --id F31/F32",
+        _p_f31,
+        [S_MONEY],
+    ),
+    Finding(
+        "F220",
+        "Device tokens live in a module dict",
+        "P1",
+        "Money",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "`_device_tokens` is a module-level dict with no backing store, so a correctly "
+        "configured FCM stops delivering after a deploy and each worker holds a different "
+        "set. This is what makes F219's fix incomplete: the send now reports honestly, and "
+        "still has nobody to send to.",
+        "Register a token, simulate a restart by reimporting the module, assert the token is still there.",
+        "python scripts/correction_register.py --id F220",
+        _p_f220,
+        [S_DEAD],
+    ),
+    Finding(
+        "F130",
+        "Self-healer patch signing is off and set nowhere",
+        "P0",
+        "Security",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "`ai/improve/proposal.py` never names `HEAL_PATCH_SIGNING_KEY` and never writes a "
+        "signature. The AI layer's agent sandbox therefore ships with an unsigned patch "
+        "path — the spec's approval queue is the same shape as F176, a control described "
+        "accurately and enforced by convention.",
+        "A test that submits an unsigned patch and asserts it is refused, not applied.",
+        "python scripts/correction_register.py --id F130",
+        _p_f130,
+        [S_DEAD, S_INV],
+    ),
+    Finding(
+        "F184",
+        "The self-healer counted 'could not run tests' as 'tests passed'",
+        "P0",
+        "Dead controls",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "Done: `test_self_healer_fails_closed.py` pins the distinction.",
+        "n/a",
+        "pytest tests/unit/test_self_healer_fails_closed.py -q",
+        _p_f184,
+        [S_DEAD],
+    ),
+    Finding(
+        "F216",
+        "`CLAUDE.md` called `data/` legacy",
+        "P2",
+        "Docs",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "Done: it now describes `data/` as live runtime infrastructure with measured LOC "
+        "and importer counts. The old text sat at the top of every assistant's context and "
+        "routed new tick-feed work into the wrong package.",
+        "n/a",
+        "python scripts/correction_register.py --id F216",
+        _p_f216,
+        [S_DOC],
+    ),
+    Finding(
+        "F217",
+        "Four packages owned 'market data' and no document drew the boundary",
+        "P2",
+        "Docs",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "Done: ADR 0013 decides it. It is a rule describing what the code already does, not "
+        "a licence to move the 106 production importers.",
+        "n/a",
+        "python scripts/adr.py --list",
+        _p_f217,
+        [S_DOC],
+    ),
+    Finding(
+        "F180/F181/F182/F183",
+        "Two classes named `SecureVault`",
+        "P1",
+        "Security",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "Down from three; `config/vault.py` is the live one and is genuinely good "
+        "(Argon2id, crash-safe rotation). `security/encryption.py` still defines a second. "
+        "A name collision on a credential store is how the wrong one gets imported, and the "
+        "unreferenced copy is dangerous rather than merely redundant: `rotate_key()` returns "
+        "True and destroys every credential, a random salt when `HOPEFX_SALT` is unset loses "
+        "everything on restart, and `encrypt()` falls back to base64 while `decrypt()` "
+        "honours it. Delete it or rename it; do not leave two importable.",
+        "A test asserting exactly one importable `SecureVault`, and that it is the config/vault.py one.",
+        "python scripts/correction_register.py --id F180/F181/F182/F183",
+        _p_f180,
+        [S_DEAD],
+    ),
+    Finding(
+        "F144",
+        "Login is user-enumerable by timing",
+        "P1",
+        "Security",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "The unknown-user path returns before `verify_password`, so the response is fast for "
+        "an address that is not registered and slow for one that is — a 268.74 ms measured "
+        "gap. STRIDE-I, and it needs no credentials to exploit. Hash a fixed dummy password "
+        "on the unknown-user path so both branches do the same work.",
+        "Time both paths over N attempts and assert the medians are within a stated bound. "
+        "Run it before the fix and watch the gap.",
+        "python scripts/correction_register.py --id F144",
+        _p_f144,
+        ["threat-modelling"],
+    ),
+    Finding(
+        "F99",
+        "The placeholder-secret test skipped the case it exists for",
+        "P1",
+        "Security",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "Done: `DB_ENCRYPTION_KEY` and `POSTGRES_PASSWORD` are both covered.",
+        "n/a",
+        "pytest tests/unit/test_placeholder_secrets_are_rejected.py -q",
+        _p_f99,
+        [S_DEAD],
+    ),
+    Finding(
+        "F223",
+        "Test files named after the coverage metric",
+        "P3",
+        "Tests",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Down from 75. A file called `*_coverage_boost.py` says what it was written for "
+        "rather than what it protects, and these hold the highest concentration of "
+        "assertion-free tests. Rename to the behaviour; where a name already claims one "
+        "(`..._skips_outside_pod`), assert that behaviour.",
+        "None — this is a rename. The value is that the next reader can tell what breaking the test would mean.",
+        "python scripts/correction_register.py --id F223",
+        _p_f223,
+        [S_TDD],
+    ),
+    Finding(
+        "F108",
+        "Test files that define tests and assert nothing",
+        "P2",
+        "Tests",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Two files remain. A test that cannot fail is a measurement that cannot fail — the "
+        "defining defect of this codebase, in the suite that is supposed to catch it. Give "
+        "each an assertion or delete it.",
+        "The probe is the test: assert no unit-test file defines a test without asserting.",
+        "python scripts/correction_register.py --id F108",
+        _p_f108,
+        [S_DEAD, S_TDD],
+    ),
+    Finding(
+        "F106",
+        "Nothing tests the TradeExecutor ↔ real-connector join",
+        "P1",
+        "Tests",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "`TradeExecutor` is tested against `MagicMock` brokers. A mock with no spec agrees "
+        "with every call, which is exactly how F61's signature mismatch — `place_order` "
+        "versus `place_market_order` — survives the whole suite and surfaces at the first "
+        "live order. Use `create_autospec(RealConnector)` so the mock rejects what the real "
+        "class would.",
+        "Re-run the existing executor tests against an autospec of each connector and watch "
+        "the ones with wrong signatures fail.",
+        "python scripts/correction_register.py --id F106",
+        _p_f106,
+        [S_DEAD, S_TDD],
+    ),
+    Finding(
+        "F119",
+        "Annualised return divided 252 by the sample length",
+        "P1",
+        "Quant",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Done: `backtesting/metrics.py` scales by `sqrt(252)`. The old form understated by "
+        "34x on hourly bars, and Calmar inherited it.",
+        "n/a",
+        "python scripts/correction_register.py --id F119",
+        _p_f119,
+        ["risk-metrics-calculation"],
+    ),
+    Finding(
+        "F120",
+        "Sortino's denominator was the std of losing observations",
+        "P1",
+        "Quant",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Done: `calculate_sortino_ratio` uses downside deviation about the target. The old "
+        "form measured dispersion *among* losses rather than shortfall below target, so its "
+        "bias flipped sign with the return distribution.",
+        "n/a",
+        "python scripts/correction_register.py --id F120",
+        _p_f120,
+        ["risk-metrics-calculation"],
+    ),
+    Finding(
+        "F125",
+        "The regime EMA weighted the oldest bar most",
+        "P1",
+        "Quant",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Done: `_ema` recurses forward, so alpha lands on the newest bar. The `reversed()` "
+        "that remains in `ml/regime.py` is `_calculate_duration` counting backwards through "
+        "state history, which is correct.",
+        "n/a",
+        "python scripts/correction_register.py --id F125",
+        _p_f125,
+        ["risk-metrics-calculation"],
+    ),
+    Finding(
+        "F145",
+        "Missing features were zero-filled before scaling",
+        "P0",
+        "ML",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Done: imputation happens in scaled space, so a missing feature reaches the model as "
+        "neutral rather than -15 sigma. It was measured at -15σ for price and -3.3σ for RSI "
+        "with 48.2% of the vector missing — a confident prediction from a vector the model "
+        "had never seen the like of.",
+        "n/a",
+        "python scripts/correction_register.py --id F145",
+        _p_f145,
+        ["ml-pipeline-workflow"],
+    ),
+    Finding(
+        "F80",
+        "The nuclear wordmap matched by bare substring",
+        "P1",
+        "Quant",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Done: the scorer compiles `\\b...\\b` patterns from escaped terms, so a headline "
+        "containing 'coupon' no longer scores 'coup' and trips hedge mode.",
+        "n/a",
+        "python scripts/correction_register.py --id F80",
+        _p_f80,
+        [S_DEAD],
+    ),
+    Finding(
+        "F81",
+        "The hedge was marked active before the broker call",
+        "P0",
+        "Risk",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "Done: `_hedge_active` is set after a successful placement, and the failure path "
+        "returns without recording anything, so the next call is a real retry. The account "
+        "used to be unhedged while every dashboard said hedged, with the duplicate-"
+        "activation guard latched so no retry was possible.",
+        "Already carried by the orchestrator's hedge tests.",
+        "python scripts/correction_register.py --id F81",
+        _p_f81,
+        [S_DEAD],
+    ),
+    Finding(
+        "F84",
+        "The data-layer safety gate was skipped in the condition it exists for",
+        "P0",
+        "Risk",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "Done: the `_started` conjunct is gone. `_started = True` is the last line of "
+        "`start()`, so a failure anywhere in startup left it False and the gate was skipped "
+        "in exactly the state it was written to catch.",
+        "Already carried; `execution/engine.py` documents the removal at the call site.",
+        "python scripts/correction_register.py --id F84",
+        _p_f84,
+        [S_DEAD],
+    ),
+    Finding(
+        "F94",
+        "Regime detection and position sizing",
+        "P2",
+        "Quant",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 3",
+        "The specific harm F94 named — an unrouted regime leaving every position at the 0.5x "
+        "'unknown' multiplier — is gone: no such multiplier exists in `risk/`. Regimes are "
+        "consumed elsewhere (signal composition, analytics). Whether *sizing* should be "
+        "regime-aware at all is a strategy question, not a defect, so this is reported as "
+        "measured rather than closed. Decide it deliberately or close it.",
+        "If sizing becomes regime-aware: a test asserting the size differs between a known "
+        "and an unknown regime, and that unknown is the conservative one.",
+        "python scripts/correction_register.py --id F94",
+        _p_f94,
+        ["risk-metrics-calculation"],
+    ),
+    Finding(
+        "F123",
+        "`/walk-forward/run` performs no walk-forward analysis",
+        "P1",
+        "Quant",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "`api/backtesting.py` never imports `backtesting/walk_forward.py`, which already "
+        "implements this correctly with a purge gap. The endpoint returns results labelled "
+        "walk-forward from a procedure that is not one — the worst kind of backtest defect, "
+        "because look-ahead leakage shows up as a good number. Delegate to the existing "
+        "analyser.",
+        "A leakage test: construct a series where an in-sample-fit strategy scores well and "
+        "a purged walk-forward does not, and assert the endpoint reports the second.",
+        "python scripts/correction_register.py --id F123",
+        _p_f123,
+        ["backtesting-frameworks"],
+    ),
+    Finding(
+        "F147",
+        "The order-flow subsystem is mounted and never fed",
+        "P1",
+        "Dead controls",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 5",
+        "2,791 LOC constructed in `startup_factories.py` and mounted behind three routers, "
+        "with no tick source attached. Its endpoints return empty structures, which a "
+        "caller reads as 'no imbalance' rather than 'not measured' — a zero produced from "
+        "missing measurement, which the audit plan's own decision rules call misleading "
+        "rather than neutral. Either subscribe it to the tick feed or make its endpoints "
+        "report unavailability.",
+        "Assert the endpoint reports 'not measured' with no feed attached, rather than a zero-valued structure.",
+        "python scripts/correction_register.py --id F147",
+        _p_f147,
+        [S_DEAD],
+    ),
+    Finding(
+        "F149",
+        "The GodMode watchlist sparkline was `Math.random()`",
+        "P1",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "Done: `Math.random()` survives only for element ids and reconnect jitter, never for a plotted value.",
+        "n/a",
+        "python scripts/correction_register.py --id F149",
+        _p_f149,
+        [S_UI, S_DEAD],
+    ),
+    Finding(
+        "F150",
+        "'Copy API key' built the key client-side",
+        "P1",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "Done: the client asks the server to mint a key rather than assembling one that could never authenticate.",
+        "n/a",
+        "python scripts/correction_register.py --id F150",
+        _p_f150,
+        [S_UI],
+    ),
+    Finding(
+        "F201",
+        "`/academy` advertised 15 unavailable courses as available",
+        "P2",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "Done: no page advertises unavailable content as included in a plan. That was a "
+        "false statement to a paying subscriber.",
+        "n/a",
+        "python scripts/correction_register.py --id F201",
+        _p_f201,
+        [S_UI],
+    ),
+    Finding(
+        "F209",
+        "Two dashboards, with the nav pointing at the weaker one",
+        "P2",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "Done: `/home` redirects to `/dashboard`, so there is one canonical dashboard.",
+        "n/a",
+        "python scripts/correction_register.py --id F209",
+        _p_f209,
+        [S_UI],
+    ),
+    Finding(
+        "F210",
+        "Duplicate route aliases rendering identical pages",
+        "P3",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "Done: 88 distinct paths, none declared twice, so breadcrumbs and active-nav agree.",
+        "n/a",
+        "python scripts/correction_register.py --id F210",
+        _p_f210,
+        [S_UI],
+    ),
+    Finding(
+        "F173",
+        "`/dashboard` renders no headings",
+        "P2",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "`Dashboard.tsx` renders zero `h1`–`h3` across 1,027 lines, so a screen reader gets "
+        "no document outline for the product's main page. `/landing` renders 24.",
+        "A render test asserting the page exposes exactly one `h1` and a sensible heading order.",
+        "python scripts/correction_register.py --id F173",
+        _p_f173,
+        [S_UI],
+    ),
+    Finding(
+        "F187",
+        "Dashboard metrics do not drill through",
+        "P2",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "One `onClick` in the whole page. A dashboard whose numbers cannot be opened is a "
+        "readout, not an application — and per F185 the endpoints behind them "
+        "(`/equity-curve`, `/history`, `/depth/{symbol}`, `/microstructure`) already exist. "
+        "Both halves are built; nothing joins them.",
+        "For each metric tile, a test asserting a click navigates to the page that explains it.",
+        "python scripts/correction_register.py --id F187",
+        _p_f187,
+        [S_UI],
+    ),
+    Finding(
+        "F172",
+        "Icon-only buttons without an accessible name",
+        "P2",
+        "Frontend",
+        "docs/audit/REMEDIATION_PLAN.md — Phase 6",
+        "Deliberately UNVERIFIED. Two regex attempts each produced a confident wrong answer "
+        "(one said FIXED across 552 buttons, the other found 9 offending files) because a "
+        "JSX opening tag cannot be bracketed by a regex — an attribute may contain `>`, and "
+        "`onClick={() => nav('/x')}` ends the match at the arrow. Add "
+        "`eslint-plugin-jsx-a11y` and let a real parser answer it; that lint rule IS the "
+        "fix, and the count comes with it.",
+        "The lint rule itself, run in CI. Break one button's label and watch it fail.",
+        "npm run lint  (once jsx-a11y is wired)",
+        _p_f172,
+        [S_UI],
+    ),
+    Finding(
+        "AI-GATE",
+        "Two acceptance tests the AI layer must not ship without",
+        "P1",
+        "AI authority",
+        "docs/audit/REMEDIATION_PLAN.md — AI Core section",
+        "Adopt both before writing more agent code: an agent calling an action outside its "
+        "scope must FAIL THE BUILD, and a proposal executing without an approval record "
+        "must fail the build. `enforce_agent_action` and `ToolBus.invoke` already run "
+        "outside tests, so this is about keeping them enforced as the layer grows — without "
+        "these, the spec's approval queue is the same shape as F176: a control described "
+        "accurately and enforced by convention. Note the inherited prerequisites, each "
+        "tracked here: the AI kill switch depends on F139 (now fixed), and the agent "
+        "sandbox on F130 (open — unsigned patches) and F184 (fixed).",
+        "The two tests are the deliverable. Write them red: grant an agent a narrow scope, "
+        "call outside it, assert refusal; submit a proposal with no approval record, assert "
+        "it does not execute.",
+        "python scripts/correction_register.py --id AI-GATE",
+        _p_ai_gate,
+        [S_DEAD, S_INV, "threat-modelling"],
+    ),
+    Finding(
+        "AI-SURFACE",
+        "Superadmin surface must differ by capability, not by a UI branch",
+        "P1",
+        "AI authority",
+        "docs/audit/REMEDIATION_PLAN.md — AI Core section",
+        "Done for the enforcement half: server-side capability is pinned with a 403 "
+        "assertion. The remaining work is structural — separate components rather than "
+        "`if (isSuperAdmin)` branches, plus the direct-GET probe from F198 applied to the "
+        "operator routes, so an unprivileged user cannot reach an admin view by typing its "
+        "URL.",
+        "A 403 test per privileged endpoint, and a direct-GET probe per operator route.",
+        "pytest tests/unit/test_superadmin_capabilities_are_server_enforced.py -q",
+        _p_ai_surface,
+        ["threat-modelling", S_UI],
+    ),
+    Finding(
+        "AI-SCOPE",
+        "AI Core scope questions the owner has not settled",
+        "OWNER",
+        "AI authority",
+        "docs/audit/REMEDIATION_PLAN.md — AI Core section",
+        "Four decisions, none of which engineering should default. (a) Confirm the six "
+        "Business Operations department names before rebuilding Figma — the Starter-plan "
+        "rate limit makes iteration expensive and the current file is already out of date. "
+        "(b) Confirm VPS RAM/VRAM before locking a local model size, and settle F178/F98 "
+        "first so 'what is deployed' is a known quantity. (c) Decide whether customizable "
+        "settings return to scope — theme, department visibility, notification thresholds, "
+        "default autonomy per department — dropped from later spec drafts and distinct from "
+        "the per-action autonomy dial. (d) Sequence the AI Gateway, internal MCP tool bus, "
+        "response cache, guardrails-as-pipeline and formalised evals.",
+        "None — these are scope decisions. Each becomes a plan once chosen.",
+        "docs/audit/plans/2026-09-05-ai-core.md",
+        _p_owner("scope and hardware questions the owner has not answered"),
+        [],
+    ),
     # ── Owner decisions ────────────────────────────────────────────────────
     Finding(
         "A8",
@@ -941,7 +2249,11 @@ FINDINGS: list[Finding] = [
         "OWNER",
         "Security",
         "docs/audit/REMEDIATION_PLAN.md — spec item 6; this session",
-        "A Vercel token (`vck_…`) was pasted into a chat session. It was never written "
+        "Two credentials. (a) The superadmin credential named in the AI Core spec as item "
+        "6 — 'above everything in this plan'. Its location is still unconfirmed: the tracked "
+        "working tree reads as placeholders, so the file or commit holding it has to be "
+        "named before it can be rotated. (b) A Vercel token (`vck_…`) was pasted into a chat "
+        "session. It was never written "
         "to disk or into any commit — verified — but it left the machine, so it must be "
         "rotated. The tracked working tree reads as placeholders; `prop_firm_mode.json` "
         "and `.env.example` are committed deliberately and must stay placeholder-only.",
