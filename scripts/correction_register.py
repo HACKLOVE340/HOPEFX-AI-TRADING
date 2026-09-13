@@ -707,12 +707,27 @@ def _p_f31() -> tuple[str, str]:
         return UNVERIFIED, "monetization/affiliate.py not found"
     persisted = "session_factory" in body or "session.commit" in body
     locked = "RLock(" in body or "threading.Lock(" in body
-    if persisted and locked:
-        return FIXED, "affiliate state is persisted and serialised"
+    # Partial settlement is what stops a withdrawal consuming the referral that
+    # crosses the requested total. Without it a lock alone still destroys money,
+    # deterministically, so both halves are checked.
+    conserves = (
+        "outstanding_commission" in body
+        and "def settle" in body
+        and "def unsettle" in body  # a failed payout must give the money back
+        and "payout.reversed" in body  # ...exactly once
+    )
+    if persisted and locked and conserves:
+        return FIXED, "affiliate commissions are conserved, serialised and persisted"
+    if locked and conserves:
+        return PARTIAL, (
+            "commissions are conserved and serialised — a withdrawal settles exactly what "
+            "it pays, and both payout paths hold the manager lock across the whole "
+            "read-modify-write. Persistence is still absent: the ledger is module dicts, "
+            "so a restart erases what affiliates are owed and each worker holds its own"
+        )
     return OPEN, (
-        f"persisted={persisted} locked={locked} — the same two defects fixed in "
-        "revenue_split.py (F203/F208) are still live here, and the payout is a TOCTOU: "
-        "eligibility is read, then the balance is zeroed, with no lock between"
+        f"conserves={conserves} locked={locked} persisted={persisted} — the defects fixed "
+        "in revenue_split.py (F203/F208) are still live here"
     )
 
 
@@ -1186,6 +1201,24 @@ def _p_ai_surface() -> tuple[str, str]:
         "server-side capability enforcement is pinned with a 403 assertion"
         if has_403
         else "the test exists but asserts no refusal status",
+    )
+
+
+def _p_tier_skip() -> tuple[str, str]:
+    """An affiliate clearing two tiers at once should not be granted only one."""
+    body = _code("monetization/affiliate.py")
+    m = re.search(r"def check_level_upgrade.*?(?=\n    def )", body, re.S)
+    if not m:
+        return UNVERIFIED, "check_level_upgrade not found"
+    # Returning inside the ascending loop grants the FIRST qualifying tier.
+    first_match = re.search(r"for level in .*?:\s*.*?return level", m.group(0), re.S)
+    return _named(
+        OPEN if first_match else FIXED,
+        "check_level_upgrade returns the first qualifying tier above the current one, so "
+        "an affiliate whose numbers already clear a higher tier is granted the next one up "
+        "and earns the lower commission rate until the following conversion"
+        if first_match
+        else "the highest qualifying tier is granted",
     )
 
 
@@ -1713,15 +1746,24 @@ FINDINGS: list[Finding] = [
         "P0",
         "Money",
         "docs/audit/REMEDIATION_PLAN.md — Phase 2",
-        "`monetization/affiliate.py` (750 LOC) has neither a session factory nor a lock — "
-        "the same two defects that were fixed in `revenue_split.py` as F203 and F208, still "
-        "live one module over. Every restart erases what affiliates are owed, each worker "
-        "holds a different balance, and eligibility is read before the balance is zeroed "
-        "with nothing in between. Port the revenue_split fix: persist through a session "
-        "factory, decrement under an `RLock` rather than assigning zero.",
-        "The two tests that caught it there: a sale recorded during a payout must survive "
-        "(assert conservation), and a balance must survive a simulated restart. Run both "
-        "against affiliate.py first and watch them fail.",
+        "**Money conservation is fixed** (2026-09-13). Three ways commission left the ledger "
+        "without being paid, all reproduced before the fix and all now covered by "
+        "`tests/unit/test_affiliate_commissions_conserve.py`: (1) `request_withdrawal` "
+        "tested its running total *before* adding each referral, so the one that crossed "
+        "the requested amount was marked PAID in full — two 60.00 commissions against a "
+        "100.00 withdrawal **destroyed 20.00**, deterministically, behind a live endpoint "
+        "at `api/monetization.py:1542`; (2) a conversion landing between a payout's total "
+        "and its settlement pass was settled without being in the total — **70.00 "
+        "destroyed**, F203's shape one module over; (3) two concurrent payout requests each "
+        "saw the full balance — **300.00 paid against 150.00 earned**. Referrals now carry "
+        "`commission_paid` so a withdrawal can settle part of one, and both payout paths "
+        "plus `convert_referral` hold an `RLock` across the whole read-modify-write. "
+        "**Persistence remains**: the ledger is still module dicts, so a restart erases "
+        "what affiliates are owed and each worker holds its own. That half needs schema — "
+        "revenue_split writes through a session factory into ledger tables — and lands in "
+        "F218 territory, so it is deliberately not bundled here.",
+        "For the remaining half: credit a commission, rebuild the manager from its store, "
+        "and assert the balance survived. It will fail today.",
         "python scripts/correction_register.py --id F31/F32",
         _p_f31,
         [S_MONEY],
@@ -2198,6 +2240,25 @@ FINDINGS: list[Finding] = [
         "docs/audit/plans/2026-09-05-ai-core.md",
         _p_owner("scope and hardware questions the owner has not answered"),
         [],
+    ),
+    Finding(
+        "AFF-TIER",
+        "A level upgrade advances one tier per conversion",
+        "P3",
+        "Money",
+        "This session, 2026-09-13 — found while covering affiliate.py",
+        "`check_level_upgrade` walks the levels above the current one and returns the "
+        "FIRST that qualifies, so an affiliate whose referral count and revenue already "
+        "clear a higher tier is granted only the next one up. They earn the lower "
+        "commission rate until the following conversion triggers another check. Whether "
+        "tiers should be skippable is a commercial decision rather than a bug, so the "
+        "behaviour is pinned by a test that says so rather than quietly changed — if the "
+        "policy changes, that test should fail and be rewritten.",
+        "tests/unit/test_affiliate_commissions_conserve.py"
+        "::test_check_level_upgrade_advances_one_tier_per_call pins today's behaviour.",
+        "python scripts/correction_register.py --id AFF-TIER",
+        _p_tier_skip,
+        [S_MONEY],
     ),
     # ── Owner decisions ────────────────────────────────────────────────────
     Finding(

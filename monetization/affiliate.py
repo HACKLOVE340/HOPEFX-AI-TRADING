@@ -17,6 +17,7 @@ This module handles:
 import logging
 import secrets
 import string
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -206,6 +207,13 @@ class Referral:
         self.expires_at = datetime.now(UTC) + timedelta(days=90)  # 90-day cookie
         self.subscription_amount: Decimal | None = None
         self.commission_amount: Decimal | None = None
+        #: How much of ``commission_amount`` has actually been paid out. A
+        #: withdrawal may cover part of a referral, so "paid" is an amount, not
+        #: a flag. It was a flag, and ``request_withdrawal`` therefore marked the
+        #: referral that crossed the requested total as fully paid: two 60.00
+        #: commissions against a 100.00 withdrawal settled 120.00 and paid 100.00
+        #: (F31/F32, reproduced at 20.00 destroyed).
+        self.commission_paid: Decimal = Decimal("0.00")
 
     def is_expired(self) -> bool:
         """Check if referral tracking has expired"""
@@ -232,8 +240,42 @@ class Referral:
         )
         return self.commission_amount
 
+    @property
+    def outstanding_commission(self) -> Decimal:
+        """Commission earned and not yet paid out."""
+        return (self.commission_amount or Decimal("0.00")) - self.commission_paid
+
+    def settle(self, amount: Decimal) -> Decimal:
+        """Record *amount* as paid against this referral; return what was taken.
+
+        Never settles more than is outstanding, so a caller that over-asks gets
+        a short answer rather than the ledger absorbing the difference.
+        """
+        taken = min(amount, self.outstanding_commission)
+        if taken <= Decimal("0.00"):
+            return Decimal("0.00")
+        self.commission_paid += taken
+        if self.outstanding_commission <= Decimal("0.00"):
+            self.status = ReferralStatus.PAID
+        return taken
+
+    def unsettle(self, amount: Decimal) -> Decimal:
+        """Give *amount* back to the outstanding balance; return what was returned.
+
+        Never returns more than was settled, so a duplicated failure notice
+        cannot credit the affiliate twice.
+        """
+        given_back = min(amount, self.commission_paid)
+        if given_back <= Decimal("0.00"):
+            return Decimal("0.00")
+        self.commission_paid -= given_back
+        if self.outstanding_commission > Decimal("0.00"):
+            self.status = ReferralStatus.CONVERTED
+        return given_back
+
     def mark_paid(self) -> None:
-        """Mark referral commission as paid"""
+        """Settle the whole outstanding commission and mark the referral paid."""
+        self.settle(self.outstanding_commission)
         self.status = ReferralStatus.PAID
 
     def to_dict(self) -> dict[str, Any]:
@@ -246,6 +288,8 @@ class Referral:
             "tier": self.tier.value if self.tier else None,
             "subscription_amount": float(self.subscription_amount) if self.subscription_amount else None,
             "commission_amount": float(self.commission_amount) if self.commission_amount else None,
+            "commission_paid": float(self.commission_paid),
+            "commission_outstanding": float(self.outstanding_commission),
             "created_at": self.created_at.isoformat(),
             "converted_at": self.converted_at.isoformat() if self.converted_at else None,
             "expires_at": self.expires_at.isoformat(),
@@ -272,6 +316,14 @@ class Payout:
         self.processed_at: datetime | None = None
         self.transaction_id: str | None = None
         self.notes: str = ""
+        #: (referral_id, amount) for every commission this payout consumed.
+        #: Recorded so a failure can return exactly what it took — reversing by
+        #: re-reading the ledger would credit back whatever happens to be
+        #: outstanding at failure time, which is a different number.
+        self.settlements: list[tuple[str, Decimal]] = []
+        #: Set once the settlements have been returned, so a duplicated failure
+        #: notice is not a second credit.
+        self.reversed: bool = False
 
     def process(self, transaction_id: str) -> None:
         """Process payout"""
@@ -318,6 +370,15 @@ class AffiliateManager:
         self._payouts: dict[str, Payout] = {}
         self._affiliate_codes: dict[str, str] = {}  # code -> affiliate_id
         self._user_affiliates: dict[str, str] = {}  # user_id -> affiliate_id
+        # Both payout paths total the outstanding commissions, then walk the
+        # referrals settling them. There was no lock anywhere in this module, so
+        # that read-modify-write raced two ways: two concurrent requests each
+        # saw the full balance and paid it (measured: 300.00 paid against 150.00
+        # earned), and a conversion landing between the total and the settlement
+        # was marked paid without being in the total — F203's shape, one module
+        # over. Re-entrant because request_withdrawal reads through
+        # _calculate_pending_commission while already holding it.
+        self._lock = threading.RLock()
 
     def _generate_affiliate_code(self, length: int = 8) -> str:
         """Generate unique affiliate code"""
@@ -439,7 +500,22 @@ class AffiliateManager:
         tier: SubscriptionTier,
         subscription_amount: Decimal,
     ) -> Decimal | None:
-        """Convert a referral when user subscribes"""
+        """Convert a referral when user subscribes.
+
+        Holds the manager lock: this credits a commission that a payout running
+        concurrently is in the middle of totalling and settling. Without it, a
+        conversion could be settled by that payout without ever being in its
+        total — the sale recorded and then erased.
+        """
+        with self._lock:
+            return self._convert_referral_locked(referred_user_id, tier, subscription_amount)
+
+    def _convert_referral_locked(
+        self,
+        referred_user_id: str,
+        tier: SubscriptionTier,
+        subscription_amount: Decimal,
+    ) -> Decimal | None:
         # Find active referral for user
         referral = None
         for ref in self._referrals.values():
@@ -496,44 +572,72 @@ class AffiliateManager:
         """Request affiliate payout"""
         import uuid
 
-        affiliate = self.get_affiliate(affiliate_id)
-        if not affiliate or not affiliate.is_active():
-            return None
+        # The whole read-modify-write is one critical section. Totalling the
+        # commissions and settling them used to be two separate passes over the
+        # ledger, so a conversion landing between them was settled without ever
+        # being in the total.
+        with self._lock:
+            affiliate = self.get_affiliate(affiliate_id)
+            if not affiliate or not affiliate.is_active():
+                return None
 
-        # Calculate pending commissions
-        pending = self._calculate_pending_commission(affiliate_id)
+            # Snapshot the referrals this payout covers, and total THAT list.
+            # Re-reading the ledger to settle is what lost the conversion.
+            covered = [
+                ref
+                for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED)
+                if ref.outstanding_commission > Decimal("0.00")
+            ]
+            pending = sum((ref.outstanding_commission for ref in covered), Decimal("0.00"))
 
-        if pending < self.MIN_PAYOUT:
-            logger.warning("Payout below minimum: $%s < $%s", pending, self.MIN_PAYOUT)
+            if pending < self.MIN_PAYOUT:
+                logger.warning("Payout below minimum: $%s < $%s", pending, self.MIN_PAYOUT)
 
-            return None
+                return None
 
-        payout_id = f"PAY-{uuid.uuid4().hex[:12].upper()}"
-        payout = Payout(
-            payout_id=payout_id,
-            affiliate_id=affiliate_id,
-            amount=pending,
-            payment_method=payment_method,
-            status=PayoutStatus.PENDING,
-        )
+            payout_id = f"PAY-{uuid.uuid4().hex[:12].upper()}"
+            payout = Payout(
+                payout_id=payout_id,
+                affiliate_id=affiliate_id,
+                amount=pending,
+                payment_method=payment_method,
+                status=PayoutStatus.PENDING,
+            )
 
-        self._payouts[payout_id] = payout
+            self._payouts[payout_id] = payout
 
-        # Mark referrals as paid
-        for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
-            ref.mark_paid()
+            settled = Decimal("0.00")
+            for ref in covered:
+                taken = ref.settle(ref.outstanding_commission)
+                if taken > Decimal("0.00"):
+                    payout.settlements.append((ref.referral_id, taken))
+                    settled += taken
+            if settled != pending:
+                # Cannot happen while the lock is held; asserted rather than
+                # assumed, because the failure mode is silent money loss.
+                logger.error(
+                    "Payout %s settled $%s against a total of $%s — ledger not conserved",
+                    payout_id,
+                    settled,
+                    pending,
+                )
 
-        logger.info("Created payout request %s for $%s", payout_id, pending)
+            logger.info("Created payout request %s for $%s", payout_id, pending)
 
-        return payout
+            return payout
 
     def _calculate_pending_commission(self, affiliate_id: str) -> Decimal:
-        """Calculate total pending commission for affiliate"""
-        total = Decimal("0.00")
-        for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
-            if ref.commission_amount:
-                total += ref.commission_amount
-        return total
+        """Total commission earned by this affiliate and not yet paid out.
+
+        Sums what is *outstanding* rather than the full commission of every
+        CONVERTED referral, so a referral that a withdrawal covered part of
+        contributes only its remainder.
+        """
+        with self._lock:
+            total = Decimal("0.00")
+            for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
+                total += ref.outstanding_commission
+            return total
 
     def process_payout(self, payout_id: str, transaction_id: str) -> bool:
         """Process a payout request"""
@@ -554,13 +658,49 @@ class AffiliateManager:
         return True
 
     def fail_payout(self, payout_id: str, reason: str) -> bool:
-        """Mark payout as failed"""
-        payout = self._payouts.get(payout_id)
-        if not payout:
-            return False
+        """Mark a payout failed and return the commissions it had consumed.
 
-        payout.fail(reason)
-        return True
+        The referrals are settled when the payout is *requested*, so marking it
+        failed and stopping left the money neither paid nor owed. Measured
+        before this returned anything: 150.00 earned, the payout failed, 0.00
+        still owed — a bank rejection erased the affiliate's whole commission.
+
+        Reversal uses the amounts this payout recorded, not whatever is
+        outstanding now, and runs once: a duplicated failure notice is not a
+        second credit.
+        """
+        with self._lock:
+            payout = self._payouts.get(payout_id)
+            if not payout:
+                return False
+
+            payout.fail(reason)
+
+            if payout.reversed:
+                return True
+            payout.reversed = True
+
+            returned = Decimal("0.00")
+            for referral_id, amount in payout.settlements:
+                ref = self._referrals.get(referral_id)
+                if ref is None:
+                    logger.error(
+                        "Payout %s settled referral %s, which no longer exists — $%s cannot be returned",
+                        payout_id,
+                        referral_id,
+                        amount,
+                    )
+                    continue
+                returned += ref.unsettle(amount)
+
+            if returned:
+                logger.info(
+                    "Payout %s failed (%s) — returned $%s to outstanding commissions",
+                    payout_id,
+                    reason,
+                    returned,
+                )
+            return True
 
     def get_affiliate_metrics(self, affiliate_id: str) -> AffiliateMetrics | None:
         """Get comprehensive affiliate metrics"""
@@ -572,9 +712,12 @@ class AffiliateManager:
         converted = [r for r in referrals if r.status in [ReferralStatus.CONVERTED, ReferralStatus.PAID]]
 
         pending_commission = self._calculate_pending_commission(affiliate_id)
-        paid_commission = sum(
-            ref.commission_amount or Decimal(0) for ref in referrals if ref.status == ReferralStatus.PAID
-        )
+        # Sum what was actually paid, not the full commission of every referral
+        # whose status reached PAID. Since a withdrawal may settle part of a
+        # referral, "paid" is an amount and the status is a consequence of it —
+        # totalling by status under-reported a part-settled referral as zero and
+        # over-reported a fully-settled one that had been part-paid earlier.
+        paid_commission = sum((ref.commission_paid for ref in referrals), Decimal("0.00"))
 
         conversion_rate = len(converted) / len(referrals) * 100 if referrals else 0.0
 
@@ -617,6 +760,8 @@ class AffiliateManager:
                         "affiliate_id": ref.affiliate_id,
                         "referred_user_id": ref.referred_user_id,
                         "commission_amount": float(ref.commission_amount),
+                        "commission_paid": float(ref.commission_paid),
+                        "commission_outstanding": float(ref.outstanding_commission),
                         "subscription_amount": float(ref.subscription_amount) if ref.subscription_amount else None,
                         "tier": ref.tier.value if ref.tier else None,
                         "status": ref.status.value,
@@ -633,42 +778,59 @@ class AffiliateManager:
         """
         import uuid
 
-        affiliate = self.get_affiliate(affiliate_id)
-        if not affiliate:
-            raise ValueError(f"Affiliate {affiliate_id} not found")
-        if not affiliate.is_active():
-            raise ValueError(f"Affiliate {affiliate_id} is not active")
+        with self._lock:
+            affiliate = self.get_affiliate(affiliate_id)
+            if not affiliate:
+                raise ValueError(f"Affiliate {affiliate_id} not found")
+            if not affiliate.is_active():
+                raise ValueError(f"Affiliate {affiliate_id} is not active")
 
-        requested = Decimal(str(amount))
-        pending = self._calculate_pending_commission(affiliate_id)
-        if requested > pending:
-            raise ValueError(f"Requested withdrawal ${requested} exceeds pending commissions ${pending}")
-        if requested < self.MIN_PAYOUT:
-            raise ValueError(f"Withdrawal amount ${requested} is below minimum ${self.MIN_PAYOUT}")
+            # `amount` arrives as a float from api/monetization.py. Decimal(str(x))
+            # rather than Decimal(x), which would inherit the binary error verbatim.
+            requested = Decimal(str(amount))
+            pending = self._calculate_pending_commission(affiliate_id)
+            if requested > pending:
+                raise ValueError(f"Requested withdrawal ${requested} exceeds pending commissions ${pending}")
+            if requested < self.MIN_PAYOUT:
+                raise ValueError(f"Withdrawal amount ${requested} is below minimum ${self.MIN_PAYOUT}")
 
-        payment_method = affiliate.payment_details.get("method", "bank_transfer")
-        payout_id = f"WD-{uuid.uuid4().hex[:12].upper()}"
-        payout = Payout(
-            payout_id=payout_id,
-            affiliate_id=affiliate_id,
-            amount=requested,
-            payment_method=payment_method,
-            status=PayoutStatus.PENDING,
-        )
-        payout.withdrawal_id = payout_id  # type: ignore[attr-defined]
-        self._payouts[payout_id] = payout
+            payment_method = affiliate.payment_details.get("method", "bank_transfer")
+            payout_id = f"WD-{uuid.uuid4().hex[:12].upper()}"
+            payout = Payout(
+                payout_id=payout_id,
+                affiliate_id=affiliate_id,
+                amount=requested,
+                payment_method=payment_method,
+                status=PayoutStatus.PENDING,
+            )
+            payout.withdrawal_id = payout_id  # type: ignore[attr-defined]
+            self._payouts[payout_id] = payout
 
-        # Mark enough converted referrals as paid to cover the withdrawal
-        covered = Decimal("0.00")
-        for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
-            if covered >= requested:
-                break
-            if ref.commission_amount:
-                covered += ref.commission_amount
-                ref.mark_paid()
+            # Settle exactly the requested amount. This walked the referrals
+            # marking each one PAID in full until the running total reached the
+            # request, testing the total BEFORE adding the current referral — so
+            # the one that crossed the line was consumed whole and its remainder
+            # ceased to exist. Two 60.00 commissions against a 100.00 withdrawal
+            # destroyed 20.00, with no concurrency involved.
+            remaining = requested
+            for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
+                if remaining <= Decimal("0.00"):
+                    break
+                taken = ref.settle(remaining)
+                if taken > Decimal("0.00"):
+                    payout.settlements.append((ref.referral_id, taken))
+                    remaining -= taken
 
-        logger.info("Withdrawal %s created for affiliate %s: $%s", payout_id, affiliate_id, requested)
-        return payout
+            if remaining > Decimal("0.00"):
+                logger.error(
+                    "Withdrawal %s could only settle $%s of $%s — ledger not conserved",
+                    payout_id,
+                    requested - remaining,
+                    requested,
+                )
+
+            logger.info("Withdrawal %s created for affiliate %s: $%s", payout_id, affiliate_id, requested)
+            return payout
 
     def update_payment_method(self, affiliate_id: str, payment_details: dict[str, Any]) -> bool:
         """Update payment/payout details for an affiliate."""
