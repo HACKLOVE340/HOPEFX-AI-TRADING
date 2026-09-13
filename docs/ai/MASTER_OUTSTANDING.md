@@ -3117,6 +3117,43 @@ that one fact:
 codemod that would actually revive the three features is **owner's call** — see
 §A.
 
+### The tests verify manifests the deployer does not use (DEPLOY-CHART, KS-SELFHEAL)
+
+Found 2026-09-13 while closing F178/F98, by asking what `spec.source.path` says
+instead of which directory the tests read.
+
+Twenty-three passing tests cover `k8s/` and `deployments/k8s/`:
+`HOPEFX_INVARIANT_MODE`, `DRIFT_BLOCK`, `STALE_MODEL_BLOCK`, the kill-switch
+ConfigMap, its RBAC, the ServiceAccount the RoleBinding names. All correct.
+`k8s/argocd-app.yaml` syncs **`helm/hopefx`**, which is neither tree.
+
+| Control | `k8s/` | `helm/hopefx` (deployed) |
+|---|---|---|
+| `HOPEFX_INVARIANT_MODE` | `enforce` | **unset** → `monitor` |
+| `DRIFT_BLOCK` | `true` | **unset** → `false` |
+| `STALE_MODEL_BLOCK` | `true` | **unset** → `true` |
+| kill-switch ConfigMap | present | **absent** |
+| kill-switch RBAC + ServiceAccount | present | **absent** |
+
+Defaults proven by execution: `invariants.enforcement._DEFAULT_MODE` is
+`'monitor'`; `ml.inference_engine._DRIFT_BLOCK` is `False`. So the cluster
+ArgoCD builds ran its constitutional invariants in observe-only, traded on
+drifted models, and had no object for the kill switch's Redis-outage fallback to
+patch — and `prune: true` **deleted** one applied by hand from `k8s/`.
+
+Second, separately: layer 5 engages by a pod *patching* that ConfigMap, and
+`selfHeal: true` exists to *"revert any manual changes made directly to live
+resources."* The control of last resort was switched back off by the deployment
+controller, every time it was engaged.
+
+**Closed this session.** `helm/hopefx/values.yaml` states all three keys;
+`helm/hopefx/templates/kill-switch.yaml` ships the ConfigMap, ServiceAccount,
+Role and RoleBinding at the same least privilege as `k8s/`; and
+`k8s/argocd-app.yaml` exempts that ConfigMap's `/data` from self-heal. Seven
+assertions fail on the pre-fix tree. The new suite reads `spec.source.path`
+rather than naming a directory, so repointing ArgoCD moves the assertions with
+it instead of silently emptying them.
+
 ### Emoji as icons — the same shape, capped the same way (F175)
 
 The plan recorded this as done for `frontend/src`: *"no source file carries

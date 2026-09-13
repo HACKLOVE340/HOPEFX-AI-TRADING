@@ -291,15 +291,216 @@ def _p_f142() -> tuple[str, str]:
     )
 
 
+def _chart_env_for_argocd() -> dict[str, str] | None:
+    """`.Values.env` of the chart every ArgoCD Application syncs.
+
+    `templates/deployment.yaml` expands `.Values.env` wholesale, so values.yaml
+    is the whole answer and no `helm` binary is needed.
+    """
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover
+        return None
+    env: dict[str, str] = {}
+    found = False
+    for rel in _glob("k8s/*.yaml") + _glob("deployments/k8s/*.yaml"):
+        try:
+            docs = list(yaml.safe_load_all(_read(rel)))
+        except yaml.YAMLError:
+            continue
+        for doc in docs:
+            if not isinstance(doc, dict) or doc.get("kind") != "Application":
+                continue
+            path = ((doc.get("spec") or {}).get("source") or {}).get("path")
+            if not path:
+                continue
+            values = ROOT / str(path).strip("/") / "values.yaml"
+            if not values.is_file():
+                continue
+            found = True
+            try:
+                loaded = [d for d in yaml.safe_load_all(values.read_text(encoding="utf-8")) if isinstance(d, dict)]
+            except yaml.YAMLError:
+                continue
+            block = (loaded[0].get("env") if loaded else None) or {}
+            if isinstance(block, dict):
+                env.update({str(k): str(v) for k, v in block.items()})
+    return env if found else None
+
+
+def _p_deploy_chart() -> tuple[str, str]:
+    """The chart ArgoCD syncs must carry the safety posture the trees declare."""
+    env = _chart_env_for_argocd()
+    if env is None:
+        return UNVERIFIED, "no ArgoCD Application names a chart with a values.yaml"
+    absent = [k for k in ("HOPEFX_INVARIANT_MODE", "DRIFT_BLOCK", "STALE_MODEL_BLOCK") if k not in env]
+    if absent:
+        return OPEN, f"the deployed chart declares none of {absent} — each falls back to a code default"
+
+    weak = [f"{k}={env[k]}" for k in ("DRIFT_BLOCK", "STALE_MODEL_BLOCK") if env.get(k, "").strip().lower() != "true"]
+    mode = env.get("HOPEFX_INVARIANT_MODE", "").strip().lower()
+    if mode != "enforce" and not env.get("HOPEFX_INVARIANT_ENFORCE_KINDS", "").strip():
+        weak.append(f"HOPEFX_INVARIANT_MODE={mode} enforces no kinds")
+    if weak:
+        return OPEN, "the deployed chart ships a weakened value: " + ", ".join(weak)
+
+    # _glob, not _tracked: git ls-files cannot see a template added in the same
+    # commit as this probe, and a probe that reports a fix as absent because the
+    # file is not yet staged is a probe measuring the index, not the tree.
+    templates = "\n".join(_read(f) for f in _glob("helm/hopefx/templates/*.yaml"))
+    if not templates:
+        return UNVERIFIED, "no chart templates found — the scan is broken, not the chart"
+    missing = []
+    if "hopefx-kill-switch" not in templates:
+        missing.append("the kill-switch ConfigMap")
+    if "kind: RoleBinding" not in templates or "serviceAccountName:" not in templates:
+        missing.append("RBAC/ServiceAccount to reach it")
+    if missing:
+        return OPEN, f"the deployed chart omits {' and '.join(missing)}"
+
+    return FIXED, (
+        "the chart ArgoCD syncs states all three safety keys at safe values and ships "
+        "the kill switch's layer-5 ConfigMap with least-privilege RBAC"
+    )
+
+
+def _p_ks_selfheal() -> tuple[str, str]:
+    """A GitOps sync must not revert a pod-engaged kill switch."""
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover
+        return UNVERIFIED, "PyYAML unavailable"
+
+    apps = 0
+    unprotected: list[str] = []
+    for rel in _glob("k8s/*.yaml") + _glob("deployments/k8s/*.yaml"):
+        try:
+            docs = list(yaml.safe_load_all(_read(rel)))
+        except yaml.YAMLError:
+            continue
+        for doc in docs:
+            if not isinstance(doc, dict) or doc.get("kind") != "Application":
+                continue
+            apps += 1
+            spec = doc.get("spec") or {}
+            policy = (spec.get("syncPolicy") or {}).get("automated") or {}
+            if not policy.get("selfHeal"):
+                continue
+            options = [str(o) for o in ((spec.get("syncPolicy") or {}).get("syncOptions") or [])]
+            covered = any(
+                e.get("kind") == "ConfigMap"
+                and e.get("name") == "hopefx-kill-switch"
+                and any(str(ptr).rstrip("/") == "/data" for ptr in (e.get("jsonPointers") or []))
+                for e in (spec.get("ignoreDifferences") or [])
+                if isinstance(e, dict)
+            )
+            if not covered:
+                unprotected.append(f"{rel}: selfHeal on, /data of hopefx-kill-switch not exempt")
+            elif "RespectIgnoreDifferences=true" not in options:
+                unprotected.append(f"{rel}: exempt in Git but RespectIgnoreDifferences is not set, so sync ignores it")
+
+    if not apps:
+        return UNVERIFIED, "no ArgoCD Application parsed — the scan is broken, not the config"
+    if unprotected:
+        return OPEN, "; ".join(unprotected)
+    return FIXED, f"{apps} ArgoCD Application(s): a sync cannot revert an engaged kill switch"
+
+
 def _p_f178() -> tuple[str, str]:
-    modes = set()
-    for f in _glob("k8s/*.yaml") + _glob("deployments/k8s/*.yaml"):
-        for m in re.finditer(r'HOPEFX_INVARIANT_MODE:\s*"?(\w+)"?', _code(f)):
-            modes.add((f, m.group(1)))
-    values = {v for _, v in modes}
-    if len(values) > 1:
-        return OPEN, f"contradictory values across ConfigMaps: {sorted(modes)}"
-    return _named(FIXED if values else UNVERIFIED, f"single value {values or 'none found'}")
+    """Two ConfigMaps named `hopefx-config` with contradictory safety values.
+
+    The first version of this probe collected every `HOPEFX_INVARIANT_MODE`
+    across both manifest trees and reported OPEN whenever two differed. That
+    measured the wrong thing, and kept reporting the finding as open after it
+    was fixed: the defect was never that the two files disagreed, it was that
+    they carried the SAME NAME in the same namespace, so `kubectl apply`
+    replaced one's `data` with the other's and whichever went last defined the
+    safety posture for both deployments.
+
+    Once renamed, a difference is not a contradiction. `k8s/` runs full
+    enforcement against a live broker; `deployments/k8s/` runs the staged
+    rollout documented in docs/INVARIANT_ROLLOUT.md, where the global mode stays
+    `monitor` while HOPEFX_INVARIANT_ENFORCE_KINDS turns kinds on one at a time.
+    Reporting that as a defect asks a contributor to delete a deliberate lever.
+
+    So this probes the three rules that are actually load-bearing, each pinned by
+    tests/unit/test_configmaps_do_not_contradict_on_safety.py:
+
+      1. no ConfigMap name is declared twice — the structural fix;
+      2. a manifest below full enforcement names the kinds it still enforces,
+         since without them the same file enforces nothing;
+      3. a manifest below full enforcement names its broker, since the rule
+         "enforce wherever a live broker is" cannot be evaluated against a
+         broker that arrives from a code default.
+    """
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - PyYAML is a hard dependency here
+        return UNVERIFIED, "PyYAML unavailable, cannot parse the manifests"
+
+    seen: dict[str, list[str]] = {}
+    data_by_name: dict[str, dict[str, str]] = {}
+    weak: list[str] = []
+    parsed = 0
+    for rel in _glob("k8s/*.yaml") + _glob("deployments/k8s/*.yaml"):
+        try:
+            docs = list(yaml.safe_load_all(_read(rel)))
+        except yaml.YAMLError:
+            continue
+        for doc in docs:
+            if not isinstance(doc, dict) or doc.get("kind") != "ConfigMap":
+                continue
+            parsed += 1
+            meta = doc.get("metadata") or {}
+            name = meta.get("name")
+            data = doc.get("data") or {}
+            if name:
+                seen.setdefault(str(name), []).append(rel)
+                data_by_name.setdefault(str(name), {})[rel] = json.dumps(data, sort_keys=True)
+            mode = str(data.get("HOPEFX_INVARIANT_MODE", "")).strip().lower()
+            if not mode or mode == "enforce":
+                continue
+            if not str(data.get("HOPEFX_INVARIANT_ENFORCE_KINDS", "")).strip():
+                weak.append(f"{rel}: mode={mode} enforces no kinds")
+            if not str(data.get("BROKER_TYPE", "")).strip():
+                weak.append(f"{rel}: mode={mode} names no broker")
+
+    if not parsed:
+        # A scan that matched nothing agrees with every rule below (F255).
+        return UNVERIFIED, "no ConfigMap documents parsed — the scan is broken, not the manifests"
+
+    # A shared name is not itself the defect. `hopefx-kill-switch` is declared in
+    # both trees on purpose — it is one cross-pod STATE object that every pod
+    # reads by that exact name and whose RBAC grants it by name. Divergent data
+    # under a shared name is the defect, because apply order then decides the
+    # contents. Same rule as
+    # tests/unit/test_configmaps_do_not_contradict_on_safety.py.
+    collisions = {
+        name: sorted(files)
+        for name, files in seen.items()
+        if len(files) > 1 and len({data_by_name[name][f] for f in files}) > 1
+    }
+    if collisions:
+        return OPEN, f"{len(collisions)} ConfigMap name(s) declared twice with different data: {collisions}"
+    if weak:
+        return OPEN, "; ".join(sorted(weak))
+
+    # The manifests above are not what the deployer syncs. k8s/argocd-app.yaml
+    # points at helm/hopefx, which carried none of this posture — measured, and
+    # fixed, in the same commit as this probe. Ask the deployed chart directly,
+    # or this probe certifies trees nothing applies.
+    chart_env = _chart_env_for_argocd()
+    if chart_env is None:
+        return UNVERIFIED, "could not read the chart the ArgoCD Application syncs"
+    absent = [k for k in ("HOPEFX_INVARIANT_MODE", "DRIFT_BLOCK", "STALE_MODEL_BLOCK") if k not in chart_env]
+    if absent:
+        return OPEN, f"the deployed chart does not declare {absent} — each falls back to a code default"
+
+    return FIXED, (
+        f"{parsed} ConfigMap(s), {len(seen)} distinct names, no divergent duplicate. "
+        f"The staged set runs monitor + enforce-kinds by design and names its broker, "
+        f"and the chart ArgoCD syncs states all three safety keys"
+    )
 
 
 def _p_f221() -> tuple[str, str]:
@@ -1500,6 +1701,58 @@ S_DOC = "doc-freshness-review"
 
 FINDINGS: list[Finding] = [
     # ── Verification capability ────────────────────────────────────────────
+    Finding(
+        "DEPLOY-CHART",
+        "The chart ArgoCD deploys carried none of the safety posture the tests verify",
+        "P0",
+        "Config",
+        "This session, 2026-09-13 — found by following spec.source.path instead of a directory",
+        "Twenty-three tests over `k8s/` and `deployments/k8s/` proved HOPEFX_INVARIANT_MODE, "
+        "DRIFT_BLOCK, STALE_MODEL_BLOCK, the kill-switch ConfigMap and its RBAC were all "
+        "correct. `k8s/argocd-app.yaml` syncs `spec.source.path: helm/hopefx`, which is "
+        "neither tree and carried none of them — so the cluster ArgoCD builds ran with "
+        "invariants in `monitor` (they observe and never refuse), DRIFT_BLOCK false "
+        "(inference continues on a drifted feature distribution), no object for the kill "
+        "switch's Redis-outage fallback to patch, and no RBAC to reach one. Worse, "
+        "`prune: true` DELETES a kill-switch ConfigMap applied by hand from `k8s/`, "
+        "because it is not in the chart. Defaults proven by execution, not read: "
+        "`invariants.enforcement._DEFAULT_MODE == 'monitor'`, "
+        "`ml.inference_engine._DRIFT_BLOCK is False`. Fixed: values.yaml states all "
+        "three keys, and helm/hopefx/templates/kill-switch.yaml ships the ConfigMap, "
+        "ServiceAccount, Role and RoleBinding with the same least privilege as `k8s/`.",
+        "Carried by tests/unit/test_the_deployed_chart_carries_the_safety_posture.py, which "
+        "reads `spec.source.path` rather than naming a directory — so repointing ArgoCD "
+        "moves the assertions with it instead of silently emptying them. Five of its seven "
+        "assertions fail on the pre-fix tree; its positive control fails if the scan "
+        "matches no Application, which is how the first draft's harness bug was caught.",
+        "python scripts/correction_register.py --id DEPLOY-CHART",
+        _p_deploy_chart,
+        [S_DEAD, S_INV, S_TDD],
+    ),
+    Finding(
+        "KS-SELFHEAL",
+        "ArgoCD self-heal reverts a pod-engaged kill switch",
+        "P0",
+        "Config",
+        "This session, 2026-09-13 — found while closing F178/F98",
+        "Layer 5 of the kill switch engages by a pod PATCHING the `hopefx-kill-switch` "
+        'ConfigMap to `kill_switch_active: "true"` through the Kubernetes API. '
+        "`k8s/argocd-app.yaml` sets `syncPolicy.automated.selfHeal: true`, whose purpose "
+        "in that file's own words is to *revert any manual changes made directly to live "
+        "resources* — and a pod's API patch is exactly that, while Git says `false`. The "
+        "control of last resort was switched back off by the deployment controller, on the "
+        "next reconciliation and again every time it was re-engaged, while every manifest, "
+        "RBAC rule and test read correct. Fixed with an `ignoreDifferences` entry on that "
+        "ConfigMap's `/data`, which fails safe in both directions: an engaged switch "
+        "survives a sync, and the documented reset is a `kubectl patch`, not a Git commit.",
+        "Carried by test_kill_switch_layers_survive_deployment.py::"
+        "test_self_heal_cannot_revert_an_engaged_kill_switch, plus a companion asserting "
+        "RespectIgnoreDifferences stays set — without it the exemption applies only to the "
+        "diff view and the defect returns while the Git entry still reads correct.",
+        "python scripts/correction_register.py --id KS-SELFHEAL",
+        _p_ks_selfheal,
+        [S_DEAD, S_INV],
+    ),
     Finding(
         "F95",
         "GitHub Actions does not run — every gate below is unverified until it does",

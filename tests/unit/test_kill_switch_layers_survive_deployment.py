@@ -220,3 +220,102 @@ def test_an_unwritable_flag_file_is_reported_as_a_lost_layer(monkeypatch, tmp_pa
     assert switch.is_active(), "activation must not depend on the flag file being writable"
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert errors, "a kill-switch layer failed and nothing was logged at ERROR"
+
+
+# ── Layer 5 versus the GitOps controller ──────────────────────────────────────
+#
+# The tests above prove layer 5 is *reachable*: the ConfigMap exists, RBAC
+# grants get/patch, and the Deployment runs as the ServiceAccount the
+# RoleBinding names. None of them asks what happens after a pod uses it.
+#
+# `k8s/argocd-app.yaml` declares `syncPolicy.automated.selfHeal: true`, whose
+# documented purpose — in that file's own comment — is to *"revert any manual
+# changes made directly to live resources."* Layer 5 activates by a pod patching
+# `hopefx-kill-switch` to `kill_switch_active: "true"` through the Kubernetes
+# API. To ArgoCD that patch is indistinguishable from a manual change, and Git
+# says the value is `"false"`.
+#
+# So the control of last resort, on the path that exists specifically for a
+# Redis outage, is reverted by the deployment controller — on its next
+# reconciliation, and then again every time it is re-engaged. The switch is not
+# merely dead; it is switched back off by infrastructure, while every manifest,
+# every RBAC rule and every test above reads correct.
+#
+# `RespectIgnoreDifferences=true` is already in `syncOptions`, so an
+# `ignoreDifferences` entry is honoured during sync rather than only in the diff
+# view. That is what makes this fixable in one place.
+
+
+def _argocd_applications():
+    """Every ArgoCD Application across the manifest sets."""
+    apps = []
+    for manifest_set in MANIFEST_SETS:
+        base = REPO_ROOT / manifest_set
+        if not base.is_dir():
+            continue
+        # _yaml_docs yields (filename, doc) pairs. Iterating it as bare docs
+        # matched nothing and every assertion below passed vacuously — caught
+        # only by the positive control, which is the whole reason it is there.
+        for filename, doc in _yaml_docs(base):
+            if doc.get("kind") == "Application":
+                apps.append((f"{manifest_set}/{filename}", doc))
+    return apps
+
+
+def test_the_scan_finds_an_argocd_application():
+    """A scan that matches nothing agrees with the assertions below (F255)."""
+    assert _argocd_applications(), "no ArgoCD Application found — the scan is wrong, or the deployer changed"
+
+
+def test_self_heal_cannot_revert_an_engaged_kill_switch():
+    """The one that matters: a GitOps sync must not un-engage the kill switch.
+
+    If `selfHeal` is on, the Application must ignore differences on the
+    kill-switch ConfigMap's `/data`. Ignoring fails safe in both directions:
+    an engaged switch survives a sync, and the documented reset is a
+    `kubectl patch` rather than a Git commit, so nothing legitimate is lost.
+    """
+    failures = []
+    for manifest_set, app in _argocd_applications():
+        spec = app.get("spec") or {}
+        policy = (spec.get("syncPolicy") or {}).get("automated") or {}
+        if not policy.get("selfHeal"):
+            continue
+
+        ignored = spec.get("ignoreDifferences") or []
+        covered = any(
+            entry.get("kind") == "ConfigMap"
+            and entry.get("name") == KILL_SWITCH_CONFIGMAP
+            and any(str(p).rstrip("/") == "/data" for p in (entry.get("jsonPointers") or []))
+            for entry in ignored
+            if isinstance(entry, dict)
+        )
+        if not covered:
+            failures.append(
+                f"{manifest_set}: selfHeal is on and nothing exempts "
+                f"ConfigMap/{KILL_SWITCH_CONFIGMAP} /data — a sync reverts an engaged kill switch"
+            )
+
+    assert not failures, "the GitOps controller can un-engage the kill switch:\n  " + "\n  ".join(failures)
+
+
+def test_an_exemption_is_honoured_during_sync_not_only_in_the_diff():
+    """`ignoreDifferences` without `RespectIgnoreDifferences` is decoration.
+
+    By default ArgoCD applies `ignoreDifferences` when computing whether an app
+    is OutOfSync, but still sends the full Git manifest on sync. The exemption
+    above only survives contact with selfHeal when this sync option is set — so
+    removing it silently restores the defect while the exemption still reads
+    correct in Git.
+    """
+    failures = []
+    for manifest_set, app in _argocd_applications():
+        spec = app.get("spec") or {}
+        policy = (spec.get("syncPolicy") or {}).get("automated") or {}
+        if not policy.get("selfHeal"):
+            continue
+        options = [str(o) for o in ((spec.get("syncPolicy") or {}).get("syncOptions") or [])]
+        if "RespectIgnoreDifferences=true" not in options:
+            failures.append(f"{manifest_set}: selfHeal is on but RespectIgnoreDifferences is not set")
+
+    assert not failures, "an ignoreDifferences exemption would not be honoured on sync:\n  " + "\n  ".join(failures)

@@ -181,3 +181,73 @@ def test_enforce_is_set_wherever_a_live_broker_is():
             if broker and broker != "paper" and mode != "enforce":
                 violations.append(f"{filename} (ConfigMap {name}): BROKER_TYPE={broker} but mode={mode or 'unset'}")
     assert not violations, "a live broker is configured without invariant enforcement:\n  " + "\n  ".join(violations)
+
+
+def test_a_configmap_below_full_enforcement_states_its_broker_explicitly():
+    """The hole the rule above leaves, and the one the rename did not close.
+
+    `test_enforce_is_set_wherever_a_live_broker_is` evaluates its rule only when
+    a manifest declares `BROKER_TYPE`. A manifest that omits the key escapes the
+    check entirely — and `hopefx-config-staged` omitted it while running
+    `HOPEFX_INVARIANT_MODE: monitor`.
+
+    That is safe **today** only because eight independent call sites happen to
+    agree on the same fallback:
+
+        (os.getenv("BROKER_TYPE") or os.getenv("BROKER") or "paper")
+
+    Nothing holds them to it. One of those defaults changing to a live broker
+    would arm real-money trading under `monitor` without a single line of any
+    manifest changing, and the guard above would stay green throughout because
+    it has nothing to read. This is the same shape as the finding that produced
+    this file: absence is the dangerous half, because a missing key falls back
+    to a code default nobody reading the manifest can see.
+
+    So the rule is: a manifest may run below full enforcement, but it must then
+    say out loud which broker it is running against.
+    """
+    silent = []
+    for name, docs in _configmaps().items():
+        for filename, doc in docs:
+            data = doc.get("data") or {}
+            mode = str(data.get("HOPEFX_INVARIANT_MODE", "")).strip().lower()
+            if not mode or mode == "enforce":
+                continue
+            if not str(data.get("BROKER_TYPE", "")).strip():
+                silent.append(
+                    f"{filename} (ConfigMap {name}): HOPEFX_INVARIANT_MODE={mode} "
+                    f"with no BROKER_TYPE — the broker comes from a code default"
+                )
+    assert not silent, "a manifest runs below full enforcement without declaring its broker:\n  " + "\n  ".join(silent)
+
+
+def test_a_weaker_global_mode_declares_the_kinds_it_still_enforces():
+    """`monitor` is legitimate as a staged rollout, and only as one.
+
+    `deployments/k8s/configmap.yaml` runs the documented rollout from
+    `docs/INVARIANT_ROLLOUT.md`: the global mode stays `monitor` while
+    `HOPEFX_INVARIANT_ENFORCE_KINDS` turns enforcement on one kind at a time.
+    That is a lever, not a downgrade.
+
+    Without the kinds list, the identical manifest is a platform enforcing
+    nothing — and the two are one deleted line apart. The correction register's
+    probe used to read this difference as the F98 defect itself, which is how a
+    deliberate, documented posture gets reported as a contradiction: it compared
+    the mode strings and never looked at what made them different.
+    """
+    unstaged = []
+    for name, docs in _configmaps().items():
+        for filename, doc in docs:
+            data = doc.get("data") or {}
+            mode = str(data.get("HOPEFX_INVARIANT_MODE", "")).strip().lower()
+            if not mode or mode == "enforce":
+                continue
+            kinds = str(data.get("HOPEFX_INVARIANT_ENFORCE_KINDS", "")).strip()
+            if not kinds:
+                unstaged.append(
+                    f"{filename} (ConfigMap {name}): HOPEFX_INVARIANT_MODE={mode} "
+                    f"with no HOPEFX_INVARIANT_ENFORCE_KINDS — nothing is enforced"
+                )
+    assert not unstaged, "a manifest weakens the global invariant mode without staging anything:\n  " + "\n  ".join(
+        unstaged
+    )

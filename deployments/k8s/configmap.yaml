@@ -21,23 +21,37 @@ data:
   APP_ENV: "production"
   LOG_LEVEL: "INFO"
   TRADING_MODE: "paper"
+  # Stated explicitly, not inherited. This set runs below full enforcement
+  # (HOPEFX_INVARIANT_MODE: monitor, below), and the rule "enforce wherever a
+  # live broker is" can only be checked against a broker this file names. Omit
+  # it and the broker comes from `(BROKER_TYPE or BROKER or "paper")`, agreed by
+  # eight independent call sites and held to it by nothing — one of them
+  # changing would arm real-money trading under `monitor` without a line of this
+  # file changing. Pinned by
+  # tests/unit/test_configmaps_do_not_contradict_on_safety.py
+  # ::test_a_configmap_below_full_enforcement_states_its_broker_explicitly.
+  BROKER_TYPE: "paper"
   DB_POOL_SIZE: "20"
   REDIS_SOCKET_TIMEOUT: "5"
   # ── Safety posture ────────────────────────────────────────────────────────
-  # k8s/k8s-configmap.yaml declares a ConfigMap with THIS SAME NAME in THIS SAME
-  # NAMESPACE, and `kubectl apply` replaces `data` wholesale — so whichever file
-  # was applied last decides the safety posture for both deployments (F98).
+  # This block used to say that k8s/k8s-configmap.yaml declares a ConfigMap with
+  # THIS SAME NAME in THIS SAME NAMESPACE. It no longer does — the rename above
+  # is the fix for F98/F178, and leaving the warning in the present tense told
+  # readers the collision was still live.
   #
-  # Every key below must therefore be stated explicitly and at a value no weaker
-  # than its sibling's. Absence is the dangerous half: a missing key falls back
-  # to a code default nobody reading this file can see, and DRIFT_BLOCK defaults
-  # to FALSE. Applying this file used to delete both ML safety blocks and
-  # downgrade enforcement, leaving the platform trading on drifted models while
-  # the sibling file's own comment called that combination CRITICAL.
+  # The reason every key below is stated explicitly outlived the collision.
+  # Absence is the dangerous half: a missing key falls back to a code default
+  # nobody reading this file can see, and DRIFT_BLOCK defaults to FALSE.
+  # Applying this file used to delete both ML safety blocks and downgrade
+  # enforcement, leaving the platform trading on drifted models while the
+  # sibling file's own comment called that combination CRITICAL. The rename
+  # stops one file overwriting the other; it does not make an omitted key safe.
   #
-  # tests/unit/test_configmaps_do_not_contradict_on_safety.py fails if these
-  # drift apart again. Broker selection may legitimately differ between the two
-  # sets; the safety posture may not.
+  # tests/unit/test_configmaps_do_not_contradict_on_safety.py holds all of it:
+  # no two ConfigMaps may share a name, every safety key must be stated, and a
+  # manifest below full enforcement must name its broker and the kinds it still
+  # enforces. Broker selection may legitimately differ between the two sets; the
+  # safety posture may not.
 
   # Constitutional invariant enforcement — see docs/INVARIANT_ROLLOUT.md.
   # "monitor" is this set's DELIBERATE staged posture: the global mode stays
