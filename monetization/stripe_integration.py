@@ -42,6 +42,7 @@ UTC = timezone.utc
 from decimal import Decimal
 from typing import Any, ClassVar
 
+from .payment_processor import to_cents
 from .pricing import BillingCycle, SubscriptionTier
 
 logger = logging.getLogger(__name__)
@@ -326,7 +327,10 @@ class StripeIntegration:
         """Create a Stripe PaymentIntent and return the domain model."""
         self._require_stripe()
         try:
-            amount_cents = int(amount * 100)
+            # int(amount * 100) truncated: a charge of $10.999 was collected
+            # as $10.99. Truncation always takes the same side, so the loss
+            # accumulates rather than averaging out (F206).
+            amount_cents = to_cents(amount)
             intent_metadata: dict[str, Any] = {
                 "tier": tier.value if tier else "",
                 "billing_cycle": billing_cycle.value,
@@ -521,7 +525,10 @@ class StripeIntegration:
         try:
             params: dict[str, Any] = {"payment_intent": payment_intent_id}
             if amount is not None:
-                params["amount"] = int(amount * 100)
+                # The direction that matters most: truncating a REFUND keeps
+                # the remainder on the platform's side, against the person
+                # owed the money. $24.995 was refunded as $24.99 (F206).
+                params["amount"] = to_cents(amount)
             refund = _stripe.Refund.create(**params)
             logger.info("Refunded payment %s: refund_id=%s", payment_intent_id, refund.id)
             return {

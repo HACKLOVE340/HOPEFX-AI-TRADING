@@ -104,6 +104,31 @@
 #   social/marketplace.py   59%  (up from 55% — the split_revenue tests added
 #                                 in the same commit raised it)
 
+# ── Added 2026-09-13 — monetization/stripe_integration.py, under ADR 0017 ────
+#
+# Recorded so a three-line money fix could land in a 696-line module, and
+# recorded WITH the four conditions ADR 0017 requires, because growth without
+# them is an allowlist and the difference is evidence:
+#
+#   1. already below the floor before the change — 49.36%, measured on a
+#      worktree at HEAD (6390816b), not asserted;
+#   2. the change does not lower it — 49.52% after, marginally HIGHER, because
+#      the added import line is covered;
+#   3. the measured number is written above; and
+#   4. ADR 0017 is cited as the standing agreement.
+#
+# What the change was: F206, `int(amount * 100)` truncating to the cent in
+# `create_payment_intent` and `refund_payment`. Truncating a REFUND keeps the
+# remainder on the platform's side — $24.995 repaid as $24.99 — so this is the
+# customer's cent, not an accounting nicety. Two lines and one import.
+#
+# Route for whoever raises it: the uncovered span is almost entirely the
+# subscription and webhook surface (lines 451-558, 630-696) — customer
+# lifecycle, checkout sessions, portal links and the webhook dispatch. None of
+# it needs the network; `tests/unit/test_stripe_webhook_handlers_do_the_work.py`
+# already shows the stubbing pattern, and the capturing double in
+# `tests/unit/test_money_rounds_to_cents_never_truncates.py` covers the rest.
+
 # ── Removed 2026-09-10 — api/ws_live.py reached the floor ────────────────────
 #
 # `api/ws_live.py` was the sixth entry, and the one that forced the rule above
@@ -394,6 +419,7 @@ monetization/commission.py
 monetization/license.py
 monetization/marketplace.py
 monetization/payment_processor.py
+monetization/stripe_integration.py
 monetization/stripe_live.py
 monetization/subscription.py
 notifications/__init__.py

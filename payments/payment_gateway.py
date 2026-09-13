@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,15 @@ class PaymentGateway:
 
         _stripe.api_key = secret_key
         intent = _stripe.PaymentIntent.create(
-            amount=int(payment.amount * 100),  # Stripe expects cents
+            # Rounds half-up to the cent. `int(payment.amount * 100)`
+            # truncated, under-billing by a cent on any sub-cent amount
+            # (F206). `payment.amount` is a float, so it crosses to Decimal
+            # via str() — the pattern this file already uses below and the
+            # one `payments/fintech/paystack.py` uses. Deliberately NOT
+            # importing monetization.to_cents: `payments/` and
+            # `monetization/` have no dependency in either direction today,
+            # and inventing one to share six lines is not this fix's call.
+            amount=int((Decimal(str(payment.amount)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
             currency="usd",
             metadata={
                 "hopefx_payment_id": payment.id,
