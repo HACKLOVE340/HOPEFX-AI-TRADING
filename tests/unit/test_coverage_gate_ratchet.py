@@ -375,3 +375,43 @@ class TestAPackageInitIsImportedByImportingThePackage:
         assert hook._imports_module("from risk.manager import RiskManager\n", module)
         assert hook._imports_module("from risk import manager\n", module)
         assert not hook._imports_module("from risk import gatekeeper\n", module)
+
+
+# ── the message must not attribute N files' coverage to one ──────────────────
+
+
+class TestTheMessageNamesHowManyTestsWereUsed:
+    """`_run_coverage` measures across EVERY resolved test; the message named one.
+
+    `main()` resolves the test files for a module, hands the whole list to
+    `_run_coverage`, and then passes `test_files[0]` to `_judge` — which prints
+    "(test: X)". So a percentage measured across twenty files was attributed to
+    whichever happened to sort first.
+
+    Measured 2026-09-13: `infrastructure/__init__.py` resolves to 20 test files
+    and the hook reported `tests/e2e/test_trading_flow.py`, the alphabetically
+    first. Read literally that says an e2e test — one CI always skips — is what
+    covers the module, and a reader who opens it finds a file that barely
+    mentions it. `data_layer/feeds/macro/store_bridge.py` reported
+    `test_agent_singleton_symbol_and_task_refs.py` while two obviously relevant
+    files, `test_macro_bridge_staleness.py` and
+    `test_stale_macro_does_not_reach_the_model.py`, went unnamed.
+
+    The number was right. The attribution sent the reader to the wrong file,
+    which is how a correct gate earns a reputation for being wrong.
+    """
+
+    def test_it_says_how_many_files_the_figure_came_from(self, hook):
+        verdict = hook._judge(PATH, TEST, 21.0, recorded=False, test_count=20)
+        assert "20" in verdict.message, f"the file count is not stated: {verdict.message}"
+        assert str(TEST) in verdict.message, "the example file should still be named"
+
+    def test_one_file_is_not_reported_as_a_count(self, hook):
+        """A module genuinely covered by one file should read naturally."""
+        verdict = hook._judge(PATH, TEST, 21.0, recorded=False, test_count=1)
+        assert str(TEST) in verdict.message
+        assert "1 test file" not in verdict.message, "a single file needs no count"
+
+    def test_the_count_is_optional_so_existing_callers_keep_working(self, hook):
+        verdict = hook._judge(PATH, TEST, 21.0, recorded=False)
+        assert str(TEST) in verdict.message

@@ -429,7 +429,15 @@ def _records_debt(pct: float | None) -> bool:
     return pct is None or pct < _THRESHOLD
 
 
-def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: bool, omitted: bool = False) -> Verdict:
+def _judge(
+    module_path: Path,
+    test_path: Path,
+    pct: float | None,
+    *,
+    recorded: bool,
+    omitted: bool = False,
+    test_count: int | None = None,
+) -> Verdict:
     """Decide one module. Pure — no I/O, so the decision can be asserted.
 
     Four states, and the recorded list changes only two of them:
@@ -450,13 +458,21 @@ def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: b
     nobody notices the gate stopped saying anything.
     """
     shown = f"{module_path}"
+    # `_run_coverage` measures across EVERY resolved test file; `main` passes
+    # `test_files[0]`. Naming just that one attributed a figure measured over
+    # twenty files to whichever sorted first — `infrastructure/__init__.py`
+    # reported `tests/e2e/test_trading_flow.py`, an e2e test CI always skips, so
+    # the message read as though a skipped test were the module's coverage. The
+    # number was right; the attribution sent the reader to the wrong file, which
+    # is how a correct gate earns a reputation for being wrong.
+    where = f"test: {test_path}" if not test_count or test_count == 1 else f"{test_count} test files, e.g. {test_path}"
     if pct is None:
         why = (
             f"{shown}: EXCLUDED by .coveragerc [run] omit, so it cannot be measured. "
             "Remove its line from the omit list (and add the tests it then needs) "
             "rather than looking for a missing import."
             if omitted
-            else f"{shown}: coverage could not be measured (test: {test_path}) — "
+            else f"{shown}: coverage could not be measured ({where}) — "
             "the test may not import the module, or may fail to collect"
         )
         if recorded:
@@ -477,11 +493,11 @@ def _judge(module_path: Path, test_path: Path, pct: float | None, *, recorded: b
     if recorded:
         return Verdict(
             True,
-            f"DEBT {shown}: {pct:.0f}% < {_THRESHOLD}% (test: {test_path}). Recorded in "
+            f"DEBT {shown}: {pct:.0f}% < {_THRESHOLD}% ({where}). Recorded in "
             f"docs/{BASELINE_PATH.name}. Not permission — raise it and delete the line.",
             debt=True,
         )
-    return Verdict(False, f"{shown}: coverage {pct:.0f}% < {_THRESHOLD}% threshold (test: {test_path})")
+    return Verdict(False, f"{shown}: coverage {pct:.0f}% < {_THRESHOLD}% threshold ({where})")
 
 
 def main(argv: list[str]) -> int:
@@ -521,6 +537,7 @@ def main(argv: list[str]) -> int:
             coverage_pct,
             recorded=str(path).replace("\\", "/") in _load_baseline(),
             omitted=_coveragerc_omits(path),
+            test_count=len(test_files),
         )
 
         if verdict.ok:
