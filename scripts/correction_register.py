@@ -85,23 +85,43 @@ def _read(rel: str) -> str:
     return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 
 
+def _blank(match: re.Match[str]) -> str:
+    """Replace a stripped region with its own newlines, so lines do not move.
+
+    Deleting a triple-quoted block removed its newlines with it, and `_grep`
+    numbers lines against this output. Every location the register printed was
+    therefore short by however much prose sat above the hit — F206 reported
+    `monetization/stripe_integration.py:297` for code on line 329, a 32-line
+    error, and fifteen probes report locations this way. The register's whole
+    proposition is "here is the evidence, go and look"; a coordinate that lands
+    thirty lines away spends the reader's trust for nothing.
+
+    Blanking keeps the file's shape while still removing the prose, which is the
+    only reason this function exists.
+    """
+    return "\n" * match.group(0).count("\n")
+
+
 def _code(rel: str) -> str:
-    """Source with comments and docstrings removed.
+    """Source with comments and docstrings removed, line numbers preserved.
 
     A probe that greps raw text finds the defect quoted inside the comment that
-    explains its fix. Strip prose first, always.
+    explains its fix. Strip prose first, always — but strip it in place: see
+    `_blank`, and `tests/unit/test_correction_register_gate.py` for the
+    assertion that a reported line still resolves in the real file.
     """
     text = _read(rel)
     if not text:
         return ""
     if rel.endswith((".py",)):
-        text = re.sub(r'"""[\s\S]*?"""', "", text)
-        text = re.sub(r"'''[\s\S]*?'''", "", text)
+        text = re.sub(r'"""[\s\S]*?"""', _blank, text)
+        text = re.sub(r"'''[\s\S]*?'''", _blank, text)
+        # Line-preserving already: `#.*$` stops before the newline.
         text = re.sub(r"(?m)#.*$", "", text)
     elif rel.endswith((".yml", ".yaml", ".cfg", ".coveragerc", ".ini", ".toml")):
         text = re.sub(r"(?m)^\s*#.*$", "", text)
     elif rel.endswith((".ts", ".tsx", ".js", ".jsx")):
-        text = re.sub(r"/\*[\s\S]*?\*/", "", text)
+        text = re.sub(r"/\*[\s\S]*?\*/", _blank, text)
         # Only a comment that OWNS its line. An inline `//` is far more often the
         # middle of a URL — stripping those truncated every file at its first
         # https:// and emptied the TSX probes without failing anything.
@@ -1129,8 +1149,28 @@ def _p_f136() -> tuple[str, str]:
 
 
 def _p_f206() -> tuple[str, str]:
-    """Truncating to the cent always takes the creator's side of the rounding."""
-    bad = _grep(r"int\(\s*amount\s*\*\s*100\s*\)", *_tracked("monetization/*.py"), *_tracked("payments/**/*.py"))
+    """Truncating to the cent always takes the creator's side of the rounding.
+
+    The pattern was anchored to the literal name `amount`, so
+    `int(payment.amount * 100)` in `payments/payment_gateway.py` was invisible —
+    the same truncation, spelled with a dot. Fixing only the two sites the probe
+    could see would have turned this finding FIXED with a live truncation still
+    in the payment path: a probe satisfied by vocabulary rather than by
+    behaviour, which is the defect class F108, F106 and AI-GATE each turned out
+    to be.
+
+    It now matches any dotted or underscored name truncated to cents by `int()`,
+    and is asserted NOT to match the two correct spellings already in the tree —
+    `to_cents`'s `int(amount.quantize(...) * 100)` and stripe_live's
+    `int((converted * 100).quantize(...))` — because a probe that flags the fix
+    is worse than one that misses the defect.
+    """
+    bad = _grep(
+        r"int\(\s*[A-Za-z_][A-Za-z0-9_.]*\s*\*\s*100\s*\)",
+        *_tracked("monetization/*.py"),
+        *_tracked("payments/**/*.py"),
+        *_tracked("payments/*.py"),
+    )
     return _named(
         PARTIAL if bad else FIXED,
         f"{len(bad)} site(s) still truncate: {bad[0]} — revenue_split now quantizes "

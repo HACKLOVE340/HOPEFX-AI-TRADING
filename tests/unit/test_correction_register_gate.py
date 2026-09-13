@@ -142,3 +142,101 @@ def test_a_probe_that_raises_does_not_report_the_finding_fixed():
         assert "RuntimeError" in evidence
     finally:
         sys.path.remove(str(ROOT))
+
+
+# ── the evidence must be findable ─────────────────────────────────────────────
+#
+# `_grep` reports `path:line` and numbers the lines against `_code()`, which
+# strips comments and docstrings so a probe cannot match the prose that
+# EXPLAINS a defect. Stripping a triple-quoted block removed its newlines too,
+# so every line number the register printed was short by however much prose sat
+# above the hit. F206 reported monetization/stripe_integration.py:297; the code
+# is at 329. Fifteen probes report locations this way.
+#
+# The register's whole proposition is "here is the evidence, go and look", and a
+# coordinate that lands 32 lines away costs the reader the trust that makes the
+# document worth keeping. Stripping must blank a region, never delete it.
+
+
+def _register_module():
+    """Import the register as a module so its helpers can be called directly.
+
+    It must be registered in `sys.modules` BEFORE exec_module: the script
+    defines dataclasses, and `dataclasses` resolves field types by looking its
+    own module up in `sys.modules`. Without that the import raises
+    AttributeError on None, which fails every test here for a reason that has
+    nothing to do with what they assert.
+    """
+    import importlib.util
+
+    name = "_cr_under_test"
+    spec = importlib.util.spec_from_file_location(name, SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(name, None)
+        raise
+    return module
+
+
+def test_code_stripping_preserves_line_numbers():
+    """A line's number in the stripped body is its number in the file."""
+    cr = _register_module()
+    source = 'x = 1\n"""\na docstring\nspanning several\nlines\n"""\nTARGET = 2\n'
+    path = ROOT / "monetization" / "stripe_integration.py"
+    real = path.read_text(encoding="utf-8")
+    stripped = cr._code("monetization/stripe_integration.py")
+    assert len(stripped.splitlines()) == len(real.splitlines()), (
+        "stripping changed the line count, so every reported line number is offset"
+    )
+
+    # And the specific regression, against the live file rather than a fixture.
+    rx = re.compile(r"int\(\s*amount\s*\*\s*100\s*\)")
+    real_lines = [n for n, line in enumerate(real.splitlines(), 1) if rx.search(line)]
+    strip_lines = [n for n, line in enumerate(stripped.splitlines(), 1) if rx.search(line)]
+    assert real_lines, "the fixture line vanished from the file; re-point this test"
+    assert real_lines == strip_lines, f"reported {strip_lines}, file has {real_lines}"
+    assert source  # documents the shape above; the live-file assertion is the test
+
+
+def test_code_still_strips_prose():
+    """The reason `_code` exists must survive the line-preserving fix."""
+    cr = _register_module()
+    body = cr._code("scripts/correction_register.py")
+    # This very file's probes quote patterns inside docstrings. If stripping
+    # stopped working, those quotes would be matchable and half the probes here
+    # would start finding themselves.
+    assert '"""' not in body, "docstrings are no longer stripped"
+
+
+def test_grep_reports_a_line_that_exists_in_the_file():
+    """Every location the register prints must resolve in the real file."""
+    cr = _register_module()
+    hits = cr._grep(
+        r"int\(\s*[A-Za-z_][A-Za-z0-9_.]*\s*\*\s*100\s*\)",
+        *cr._tracked("monetization/*.py"),
+    )
+    assert hits, "nothing matched; the assertion below would be vacuous"
+    for hit in hits:
+        rel, line_no, _ = hit.split(":", 2)
+        actual = (ROOT / rel).read_text(encoding="utf-8").splitlines()[int(line_no) - 1]
+        assert "100" in actual, f"{rel}:{line_no} does not point at the reported code: {actual!r}"
+
+
+def test_the_cent_truncation_probe_sees_a_dotted_expression():
+    """`int(payment.amount * 100)` truncates exactly as `int(amount * 100)` does.
+
+    The probe's pattern was anchored to the literal name `amount`, so a call
+    site spelling it `payment.amount` was invisible. Fixing only what the probe
+    could see would have turned F206 green with a live truncation still in
+    `payments/payment_gateway.py` — a probe satisfied by vocabulary, which is
+    the same defect as a test satisfied by a mock.
+    """
+    cr = _register_module()
+    status, evidence = cr._p_f206()
+    assert status in {"PARTIAL", "OPEN"}, f"reported {status} while a truncation remains"
+    assert "payment_gateway" in evidence or "3 site" in evidence, (
+        f"the dotted call site is still invisible to the probe: {evidence}"
+    )

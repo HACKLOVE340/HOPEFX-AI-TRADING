@@ -177,7 +177,7 @@ and every step of it has caught something here at least once.
 #### F180/F181/F182/F183 · Two classes named `SecureVault`
 
 - **Priority** P1 · **Area** Security
-- **Measured now** 2 classes named SecureVault (1 besides the live one in config/vault.py): security/encryption.py:40: class SecureVault:. Down from three, but a name collision on a credential store is how the wrong one gets imported — `rotate_key()` on the unreferenced copy returns True and destroys every credential
+- **Measured now** 2 classes named SecureVault (1 besides the live one in config/vault.py): security/encryption.py:43: class SecureVault:. Down from three, but a name collision on a credential store is how the wrong one gets imported — `rotate_key()` on the unreferenced copy returns True and destroys every credential
 - **Fix** Down from three; `config/vault.py` is the live one and is genuinely good (Argon2id, crash-safe rotation). `security/encryption.py` still defines a second. A name collision on a credential store is how the wrong one gets imported, and the unreferenced copy is dangerous rather than merely redundant: `rotate_key()` returns True and destroys every credential, a random salt when `HOPEFX_SALT` is unset loses everything on restart, and `encrypt()` falls back to base64 while `decrypt()` honours it. Delete it or rename it; do not leave two importable.
 - **Write this test first** A test asserting exactly one importable `SecureVault`, and that it is the config/vault.py one.
 - **Verify** `python scripts/correction_register.py --id F180/F181/F182/F183`
@@ -197,7 +197,7 @@ and every step of it has caught something here at least once.
 #### F206 · `int(amount * 100)` truncates cents against the payee
 
 - **Priority** P1 · **Area** Money
-- **Measured now** 2 site(s) still truncate: monetization/stripe_integration.py:297: amount_cents = int(amount * 100) — revenue_split now quantizes ROUND_HALF_UP, so this is the remainder, not the whole finding
+- **Measured now** 3 site(s) still truncate: monetization/stripe_integration.py:329: amount_cents = int(amount * 100) — revenue_split now quantizes ROUND_HALF_UP, so this is the remainder, not the whole finding
 - **Fix** `revenue_split.py` now quantizes ROUND_HALF_UP; `monetization/stripe_integration.py` still truncates. Truncation toward zero always takes the same side of the rounding, so the loss accumulates in one direction. Use the same helper.
 - **Write this test first** A test asserting 0.999 becomes 100 cents, not 99 — and watch it fail on the truncating call site.
 - **Verify** `python scripts/correction_register.py --id F206`
@@ -351,7 +351,7 @@ and every step of it has caught something here at least once.
 #### F135 · Wallet ledger `transaction_id` collided at one-second resolution
 
 - **Priority** P0 · **Area** Money
-- **Measured now** payments/wallet.py:99: return f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+- **Measured now** payments/wallet.py:119: return f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 - **Fix** Done: the id carries a `uuid4` suffix, so two movements in the same second no longer collide and drop a row.
 - **Write this test first** Carried by the wallet ledger tests.
 - **Verify** `python scripts/correction_register.py --id F135`
@@ -371,7 +371,7 @@ and every step of it has caught something here at least once.
 #### F138 · `verify_balance_after` was never called — the check that catches F135/F136
 
 - **Priority** P0 · **Area** Invariants
-- **Measured now** 4 production caller(s): invariants/enforcement.py:46: verify_balance_after,
+- **Measured now** 4 production caller(s): invariants/enforcement.py:78: verify_balance_after,
 - **Fix** Done: the predicate has production callers. An invariant with no call site is not a control, however correct the predicate.
 - **Write this test first** An injection test: break the balance arithmetic and watch the invariant refuse.
 - **Verify** `python scripts/correction_register.py --id F138`
@@ -611,7 +611,7 @@ and every step of it has caught something here at least once.
 #### F137 · `amount_crypto` was a `Float` and could not hold 18-decimal tokens
 
 - **Priority** P1 · **Area** Money
-- **Measured now** database/models.py:1144: amount_crypto = Column(Numeric(28, 8), nullable=False)
+- **Measured now** database/models.py:1210: amount_crypto = Column(Numeric(28, 8), nullable=False)
 - **Fix** Done: the column is `Numeric(28, 8)`.
 - **Write this test first** n/a
 - **Verify** `python scripts/correction_register.py --id F137`
