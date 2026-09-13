@@ -4262,6 +4262,58 @@ tests across the affected areas.
 
 ---
 
+## §A8 — DECIDE: the model checksum manifest has never been correct, and nothing reads it
+
+**Measured 2026-09-13.** `python scripts/model_provenance_report.py`:
+
+    LISTED BUT ABSENT: 1 · MISMATCH: 2 · NOT LISTED: 7 · ok: 8
+    2 of 14 modules reach an integrity check
+
+`ml/saved_models/model_checksums.json` lists 12 artifacts. Two fail their
+recorded sha256 (`feature_scaler.pkl`, `stacking_ensemble.pkl`), one is listed
+and absent (`lstm_signal.pt`), and seven artifacts on disk are not listed at
+all, including everything under `ml/rl_models/`.
+
+**It was never right.** The manifest has exactly one commit in its history --
+`334e50f3`, 2026-08-13 -- and recomputing every entry against the tree *at that
+commit* gives 7 match, 3 mismatch, 2 absent. It did not go stale; it was
+committed wrong and nothing has read it since.
+
+**Nothing reads it.** No workflow and no pre-commit hook references
+`model_checksums.json` or `model_provenance_report.py`. What CI does run is
+`python -m ml.verify_model` (`ci.yml:398`), which sha256-checks the single
+**active** model from `registry.json` -- a different file. Run locally it exits
+0 and prints `OK -- active=xgb_horizon5_v3`, while two shipped artifacts fail
+their recorded hash. The gate is real; its scope is one model.
+
+Separately, the report's reach line reads `SELF-BASELINES, then allows` for all
+five model directories, and 12 of 14 ML modules load with **NO INTEGRITY
+CHECK** -- `ml/inference_engine.py` among them, which `CLAUDE.md` names as a key
+entry point. `ml/advanced_predictor.py` and `ml/continuous_learning.py` are the
+two that reach one.
+
+**The decision is what the manifest is for**, and it is the owner's because
+every option changes what a safety artifact means:
+
+1. **Regenerate it from the tree.** Cheapest, and normally forbidden --
+   `scripts/model_provenance_report.py` says so itself: "a mismatched checksum
+   is never recomputed: the recorded hash is the claim and the file is the
+   evidence." The argument for it here is narrow but real: a manifest that never
+   matched holds no evidence to destroy. It only becomes a control once it is
+   also read by something.
+2. **Wire it into pre-commit or CI.** The durable fix, and it blocks on the
+   first commit unless the current state is adopted as a baseline that may only
+   shrink -- the shape `FRESHNESS_BASELINE.toml` and
+   `COVERAGE_UNMEASURABLE.txt` already use here.
+3. **Investigate the two mismatches as possible substitution before doing
+   either.** They are on the money path; `feature_scaler.pkl` conditions every
+   inference. Nothing observed suggests tampering, and nothing rules it out,
+   because there is no correct hash on record to compare against.
+
+Engineering should not pick between these silently. `CLAUDE.md`'s claim that the
+artifacts are "checksum-verified in CI" is corrected in the same commit as this
+entry; the correction is not the fix.
+
 ## §A7 — APPROVED 2026-09-10: the operator console is built
 
 **All four verdicts approved by the owner in conversation** — queue triage,

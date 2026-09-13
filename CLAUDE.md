@@ -365,9 +365,21 @@ they are the ones most often skipped under time pressure:
   under an interpreter neither CI nor production ever loaded. If you change the
   Dockerfile's Python, change the retrain workflows in the same commit.
 - Model `.pkl`/`.zip` artifacts under `ml/saved_models/` and `ml/rl_models/`
-  are **intentionally committed** (whitelisted in `.gitignore`, checksum-verified
-  in CI). `dashboard/dist/` is **intentionally committed** so the server can
-  serve the UI without a build step. Don't "clean these up."
+  are **intentionally committed** (whitelisted in `.gitignore`).
+  `dashboard/dist/` is **intentionally committed** so the server can serve the
+  UI without a build step. Don't "clean these up."
+- **Only one model artifact is checksum-verified in CI.** This line used to say
+  the artifacts under both directories were, which is not what runs.
+  `ci.yml:398` runs `python -m ml.verify_model`, and that verifies the sha256 of
+  the single **active** model named in `ml/saved_models/registry.json`. Nothing
+  verifies `ml/rl_models/` at all, and nothing reads
+  `ml/saved_models/model_checksums.json` — no workflow, no hook. Measured with
+  `python scripts/model_provenance_report.py`, that 12-entry manifest currently
+  reports 2 mismatches, 1 listed-but-absent and 7 artifacts it does not list;
+  `python -m ml.verify_model` exits 0 regardless, because it is not looking at
+  it. The manifest has one commit in its whole history and already carried 3
+  mismatches at that commit, so it has never been correct. See §A8 — do not
+  regenerate it without reading that first.
 - `WORDMAP.json` is gitignored; copy from `WORDMAP.json.example` locally.
   `prop_firm_mode.json` is **not** — `.gitignore` commits it deliberately with
   placeholder credentials so CI has a config to load. This file previously said
