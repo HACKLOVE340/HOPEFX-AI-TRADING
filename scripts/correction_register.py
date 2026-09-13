@@ -729,17 +729,31 @@ def _p_f31() -> tuple[str, str]:
 
 
 def _p_f220() -> tuple[str, str]:
-    """Device tokens in a module dict are lost on every deploy."""
+    """Device tokens must outlive the process and cross workers."""
     body = _code("mobile/push_notifications.py")
-    in_ram = re.search(r"^_device_tokens\s*:\s*dict", body, re.M) is not None
-    persisted = "session_factory" in body or "redis" in body.lower()
-    if in_ram and not persisted:
-        return OPEN, (
-            "_device_tokens is a module-level dict with no backing store — a correctly "
-            "configured FCM stops delivering after a deploy, and each worker holds a "
-            "different set"
+    api = _code("api/mobile.py")
+    if not body:
+        return UNVERIFIED, "mobile/push_notifications.py not found"
+
+    shared = "_token_store()" in body and "_TOKEN_KEY_PREFIX" in body
+    # The broadcast enumerated the local dict, so persisting per-user lookup
+    # alone would have left it silently empty after every deploy.
+    broadcast_shared = "for user_id in self.registered_users()" in body
+    reports_durability = "durable" in api
+    proven = _exists("tests/unit/test_device_tokens_survive_a_restart.py")
+
+    if shared and broadcast_shared and reports_durability and proven:
+        return FIXED, (
+            "tokens are held in a shared store keyed per user, the broadcast enumerates it "
+            "rather than this process's dict, and POST /register-push reports `durable` so "
+            "a registration that will not survive a restart is not answered with an "
+            "unqualified `registered: true`. Falls back to process memory when no store is "
+            "reachable — degraded, and loud about it"
         )
-    return _named(FIXED if persisted else UNVERIFIED, f"in_ram={in_ram} persisted={persisted}")
+    return OPEN, (
+        f"shared_store={shared} broadcast_uses_it={broadcast_shared} "
+        f"api_reports_durability={reports_durability} test={proven}"
+    )
 
 
 def _p_f130() -> tuple[str, str]:
@@ -1878,15 +1892,36 @@ FINDINGS: list[Finding] = [
     ),
     Finding(
         "F220",
-        "Device tokens live in a module dict",
+        "Device tokens were lost on every deploy",
         "P1",
         "Money",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "`_device_tokens` is a module-level dict with no backing store, so a correctly "
-        "configured FCM stops delivering after a deploy and each worker holds a different "
-        "set. This is what makes F219's fix incomplete: the send now reports honestly, and "
-        "still has nobody to send to.",
-        "Register a token, simulate a restart by reimporting the module, assert the token is still there.",
+        "Done 2026-09-13. `_device_tokens` was a module-level dict and nothing else, so "
+        "**every deploy silently unregistered every device** — a correctly configured FCM "
+        "with real credentials and real tokens simply stopped delivering, with no error, "
+        "because the server believed the user had no devices. Each worker also held its own "
+        "set, so registering through one and sending from another found nothing and looked "
+        "like a flaky client. This is what made the F219 fix incomplete: the send became "
+        "honest and still had nobody to reach. Tokens now live in a shared store (Redis, "
+        "the same resolved-once pattern as `core/idempotency.py`; a table would need a "
+        "migration and F218 says 36 of 44 have none), with process memory as a loud "
+        "fallback. `register_device` returns whether the registration is DURABLE rather "
+        "than an unconditional True, and `POST /register-push` passes that through as "
+        "`durable` — it answered `registered: true` for registrations it knew would not "
+        "outlive the process. **`broadcast_signal` mattered as much as the lookup**: it "
+        'enumerated `_device_tokens.keys()` under the docstring "all registered users", '
+        "so after a deploy it reached nobody and returned `notified: 0` as a success. "
+        "Persisting per-user lookup alone would have made the endpoints look right and "
+        "left the broadcast silently empty. `registered_users()` scans the token keys "
+        "rather than maintaining a parallel index — a second copy that must be kept in "
+        "step is this repository's most repeated defect, and a scan cannot disagree with "
+        "the keys it scans.",
+        "Carried by tests/unit/test_device_tokens_survive_a_restart.py — survival across a "
+        "simulated restart, cross-worker visibility of both registration and revocation, "
+        "no duplicate on a retried register, the durability signal, a failing store "
+        "degrading rather than dropping the device, and the broadcast reaching users this "
+        "process never registered. The two cross-worker tests initially passed against the "
+        "defect because both `workers` shared the module dict; they clear it now.",
         "python scripts/correction_register.py --id F220",
         _p_f220,
         [S_DEAD],

@@ -40,7 +40,65 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # In-memory device token registry: user_id → list of FCM tokens
+#: In-process fallback. Authoritative only when no shared store is reachable —
+#: which is the normal state in dev and test, and a degraded one in production.
 _device_tokens: dict[str, list[str]] = {}
+
+#: Resolved once, like core/idempotency.py's client: a deployment without Redis
+#: falls back permanently rather than re-probing on every registration.
+_TOKEN_STORE: Any | None = None
+_TOKEN_STORE_RESOLVED: bool = False
+
+# A Redis key namespace, not a credential — "token" here is an FCM device
+# token, which is an address the sender pushes to, not a secret it holds.
+_TOKEN_KEY_PREFIX = "hopefx:push:tokens:"  # noqa: S105
+
+
+def _resolve_token_store() -> Any | None:
+    """A Redis client for device tokens, or None to use process memory.
+
+    Device tokens were held in a module-level dict and nothing else (F220), so
+    every deploy silently unregistered every device — a correctly configured
+    FCM with real credentials and real tokens simply stopped delivering, with
+    no error, because the server believed the user had no devices. Each worker
+    also held its own set, so registering through one and sending from another
+    found nothing and looked like a flaky client.
+
+    Redis rather than a table: the tokens are shared state that must cross
+    workers, they already have a natural key shape, and a new table would need
+    a migration (F218 — 36 of 44 model tables have none).
+    """
+    url = os.getenv("REDIS_URL", "")
+    if not url:
+        return None
+    try:
+        import redis as _redis_lib
+
+        client = _redis_lib.from_url(url, decode_responses=True, socket_timeout=1.0)
+        client.ping()
+    except Exception as exc:
+        logger.info(
+            "Push tokens: no shared store (%s) — device registrations will not "
+            "survive a restart and are not visible to other workers",
+            exc,
+        )
+        return None
+    return client
+
+
+def _token_store() -> Any | None:
+    global _TOKEN_STORE, _TOKEN_STORE_RESOLVED
+    if not _TOKEN_STORE_RESOLVED:
+        _TOKEN_STORE = _resolve_token_store()
+        _TOKEN_STORE_RESOLVED = True
+    return _TOKEN_STORE
+
+
+def _reset_token_store_for_tests() -> None:
+    """Forget the resolved client so a test can supply its own."""
+    global _TOKEN_STORE, _TOKEN_STORE_RESOLVED
+    _TOKEN_STORE = None
+    _TOKEN_STORE_RESOLVED = False
 
 
 def _load_firebase_admin() -> Any | None:
@@ -143,20 +201,124 @@ class PushNotificationManager:
     # ── Device token management ───────────────────────────────────────────────
 
     def register_device(self, user_id: str, fcm_token: str) -> bool:
+        """Register a device token. Returns whether the registration is DURABLE.
+
+        Not "did it work" — it always works, in the sense that the token is
+        usable by this process either way. False means the registration lives
+        only in this process's memory and will be lost on the next deploy, so a
+        caller can say so rather than answering an unqualified `registered:
+        true` for something it knows will not last.
+
+        The in-process copy is written in both cases. Refusing to register a
+        device because Redis is unreachable would convert a delivery gap into an
+        outage.
+        """
         tokens = _device_tokens.setdefault(user_id, [])
         if fcm_token not in tokens:
             tokens.append(fcm_token)
-            logger.info("Registered FCM token for user %s", user_id)
+
+        store = _token_store()
+        if store is None:
+            logger.warning(
+                "Registered FCM token for user %s in process memory only — it will "
+                "not survive a restart and other workers cannot see it",
+                user_id,
+            )
+            return False
+        try:
+            store.sadd(f"{_TOKEN_KEY_PREFIX}{user_id}", fcm_token)
+        except Exception as exc:
+            logger.error(
+                "Could not persist the FCM token for user %s (%s) — the device is "
+                "registered in this process only and will be lost on restart",
+                user_id,
+                exc,
+            )
+            return False
+        logger.info("Registered FCM token for user %s", user_id)
         return True
 
     def unregister_device(self, user_id: str, fcm_token: str) -> bool:
+        """Remove a token everywhere it is held.
+
+        Removed from the shared store first: a revoked device that keeps
+        receiving is the failure that matters, and dropping only the local copy
+        would leave every other worker still delivering to it.
+        """
         tokens = _device_tokens.get(user_id, [])
         if fcm_token in tokens:
             tokens.remove(fcm_token)
+
+        store = _token_store()
+        if store is None:
+            return False
+        try:
+            store.srem(f"{_TOKEN_KEY_PREFIX}{user_id}", fcm_token)
+        except Exception as exc:
+            logger.error(
+                "Could not remove the FCM token for user %s from the shared store "
+                "(%s) — other workers may keep delivering to it",
+                user_id,
+                exc,
+            )
+            return False
         return True
 
     def get_tokens(self, user_id: str) -> list[str]:
-        return _device_tokens.get(user_id, [])
+        """Every token registered for *user_id*, from the shared store if there is one.
+
+        The shared store is authoritative when reachable, so a process that
+        never saw the registration still finds it. The in-process copy is the
+        fallback, and is unioned in rather than ignored: a token registered
+        while the store was down is still deliverable from this worker.
+        """
+        local = list(_device_tokens.get(user_id, []))
+        store = _token_store()
+        if store is None:
+            return local
+        try:
+            shared = store.smembers(f"{_TOKEN_KEY_PREFIX}{user_id}")
+        except Exception as exc:
+            logger.error(
+                "Could not read FCM tokens for user %s from the shared store (%s) — "
+                "falling back to this process's own registrations",
+                user_id,
+                exc,
+            )
+            return local
+        merged = list(shared)
+        merged.extend(t for t in local if t not in shared)
+        return merged
+
+    def registered_users(self) -> list[str]:
+        """Every user with at least one registered device, across all workers.
+
+        Discovered by scanning the token keys rather than kept in a second set
+        alongside them. A parallel index has to be maintained in step with every
+        register and unregister, and this repository's recurring defect is
+        exactly that: a second copy that drifts and that nothing notices. A scan
+        cannot disagree with the keys it is scanning.
+
+        `broadcast_signal` used `_device_tokens.keys()`, so "all registered
+        users" meant "users who happened to register through this process". A
+        deploy emptied that dict, and the broadcast then reached nobody and
+        returned a notified count of zero as a successful send (F220).
+        """
+        local = list(_device_tokens.keys())
+        store = _token_store()
+        if store is None:
+            return local
+        try:
+            users = {key[len(_TOKEN_KEY_PREFIX) :] for key in store.scan_iter(match=f"{_TOKEN_KEY_PREFIX}*")}
+        except Exception as exc:
+            logger.error(
+                "Could not enumerate registered devices from the shared store (%s) — "
+                "a broadcast will reach only this process's own registrations",
+                exc,
+            )
+            return local
+        users.update(local)
+        return sorted(users)
 
     # ── Core send ─────────────────────────────────────────────────────────────
 
@@ -363,7 +525,7 @@ class PushNotificationManager:
         Returns the number of users notified.
         """
         notified = 0
-        for user_id in list(_device_tokens.keys()):
+        for user_id in self.registered_users():
             ok = self.send_new_signal(
                 user_id=user_id,
                 symbol=symbol,

@@ -52,9 +52,14 @@ async def register_push(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Register a device FCM token for the authenticated user."""
-    push_manager.register_device(user.sub, body.fcm_token)
+    durable = push_manager.register_device(user.sub, body.fcm_token)
     return {
         "registered": True,
+        # Whether the registration outlives this process. It was reported as an
+        # unqualified `registered: true` while device tokens lived in a
+        # module-level dict, so every deploy silently unregistered every device
+        # and the client had been told it was done (F220).
+        "durable": durable,
         "user_id": user.sub,
         "platform": body.platform,
         "fcm_enabled": push_manager.fcm_enabled,
@@ -67,8 +72,14 @@ async def unregister_push(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Remove a device FCM token for the authenticated user."""
-    push_manager.unregister_device(user.sub, body.fcm_token)
-    return {"unregistered": True, "user_id": user.sub}
+    removed_everywhere = push_manager.unregister_device(user.sub, body.fcm_token)
+    return {
+        "unregistered": True,
+        # False means the token is gone from this process but may still be held
+        # by others, so delivery to a revoked device can continue.
+        "removed_everywhere": removed_everywhere,
+        "user_id": user.sub,
+    }
 
 
 @router.post("/test-push")
