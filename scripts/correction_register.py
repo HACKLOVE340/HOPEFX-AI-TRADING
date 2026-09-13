@@ -3144,11 +3144,20 @@ FINDINGS: list[Finding] = [
         "P3",
         "Tests",
         "docs/audit/REMEDIATION_PLAN.md — Phase 5",
-        "Down from 75. A file called `*_coverage_boost.py` says what it was written for "
-        "rather than what it protects, and these hold the highest concentration of "
-        "assertion-free tests. Rename to the behaviour; where a name already claims one "
-        "(`..._skips_outside_pod`), assert that behaviour.",
-        "None — this is a rename. The value is that the next reader can tell what breaking the test would mean.",
+        "**Done 2026-09-13.** A file called `*_coverage_boost.py` says what it was written "
+        "for rather than what it protects. The last 39 are renamed after the behaviour they "
+        "assert, derived from their own test names — `test_execution_coverage6.py` asserts "
+        "stop-loss and take-profit breaches, `test_kill_switch_coverage2.py` asserts the "
+        "Redis latch, `test_risk_modules_coverage.py` asserts self-trade prevention. The "
+        "original finding also said these held the highest concentration of assertion-free "
+        "tests; that was true when written and is not now — F108 measures it, and every "
+        "unit-test file that defines a test asserts. `docs/audit/CODE_READING_FINDINGS.md` "
+        "keeps the original list as the evidence, with a note that the names in it no longer "
+        "exist and that `git log --follow` resolves any of them.",
+        "None — this is a rename, so the tests are their own regression: all 2,611 in the "
+        "renamed files pass and the suite still collects 24,169. The coverage gate pairs a "
+        "module to its tests by IMPORT as well as by filename (`_find_test_files`), which is "
+        "why renaming does not orphan a module's coverage — verified rather than assumed.",
         "python scripts/correction_register.py --id F223",
         _p_f223,
         [S_TDD],

@@ -2224,7 +2224,7 @@ brokers/oanda.py is in .coveragerc omit (:35), so no coverage gate touches it.
 Corroborates and sharpens my F61.
 
 ## F108 — 14 of 37 tests in one file assert nothing, against a class that never existed · HIGH (agent-reported)
-tests/unit/test_auth_analytics_backtest_coverage.py wraps whole test bodies —
+tests/unit/test_auth_analytics_backtest_exports.py wraps whole test bodies —
 assertion included — in `except (ImportError, AttributeError): pytest.skip(...)`
 (e.g. :245-267). The agent verified `PerformanceAnalyzer` does not exist in
 analytics/performance.py (the real class is `PerformanceAnalytics`, :173) and
@@ -6172,6 +6172,18 @@ address is an irrecoverable loss, and it has no test.
 
 ## F223 — 75 test files are named after the coverage metric, not behaviour · HIGH
 
+> **Closed 2026-09-13.** All of them are renamed after the behaviour they
+> protect — the last 39 in one commit, the earlier 36 before it. The list below
+> is left as it was written, because it is the evidence for the finding; the
+> names in it no longer exist. `git log --follow -- tests/unit/<new name>`
+> resolves any of them, and the full mapping is in that commit's message.
+>
+> The sentence after the list — *"exactly where the weakest tests cluster… 1,125
+> test functions carrying no assertion"* — is also no longer true of this tree.
+> F108 measures it, and every unit-test file that defines a test now asserts.
+> Both claims were accurate when written and neither is now.
+
+
 ```
 test_coverage_boost_execution.py     test_brokers_low_coverage.py
 test_execution_coverage4.py          test_brokers_deep_coverage.py
@@ -8254,7 +8266,7 @@ because the corrected comment quotes the claim it retracts (F255 again).
 
 ## F108 — 14 tests in one file skip on API names that never existed · HIGH
 
-`tests/unit/test_auth_analytics_backtest_coverage.py` wrapped whole test bodies
+`tests/unit/test_auth_analytics_backtest_exports.py` wrapped whole test bodies
 — assertion included — in `except (ImportError, AttributeError): pytest.skip()`.
 Fourteen of its 37 tests skipped on every run since they were written. The names
 they import do not exist and never have:

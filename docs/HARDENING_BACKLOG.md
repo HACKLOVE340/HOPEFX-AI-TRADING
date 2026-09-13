@@ -371,7 +371,7 @@ assignment (`execution/trade_executor.py:500,508,592`).
 `0 >= 3` and never fires, so the decision engine opens an unbounded number of
 concurrent positions. `RiskManager.on_fill()` (`risk/manager.py:1103`) exists
 for this purpose but has **no production caller at all** — only
-`tests/unit/test_risk_manager_coverage.py:474`.
+`tests/unit/test_position_size_recommendations.py:474`.
 
 **Minimal fix:** call `notify_position_opened/closed` from `TradeExecutor` on
 fill and on close, or derive the count from `position_tracker` inside
@@ -956,7 +956,7 @@ The single remaining failure of the Round 3 sweep, and it was not flakiness.
 passed alone and failed in the full run with `assert 200 in (401, 400, ...)` —
 `POST /api/auth/login` returned **200 OK for invalid credentials**.
 
-Bisected to `tests/unit/test_auth_coverage.py`. Its `client` fixture calls
+Bisected to `tests/unit/test_password_hashing_and_jwt_lifecycle.py`. Its `client` fixture calls
 `auth.router.set_auth_service(mock_svc)` — a **module global** — with a mock
 whose `login()` returns `(True, "Login successful", {...})` unconditionally, and
 never restores it. From that fixture onward, every login in the process was
@@ -966,7 +966,7 @@ Three test files installed an auth service; none restored it:
 
 | File | set | restore |
 |---|---|---|
-| `tests/unit/test_auth_coverage.py` | 2 | 0 |
+| `tests/unit/test_password_hashing_and_jwt_lifecycle.py` | 2 | 0 |
 | `tests/integration/test_auth_flow.py` | 1 | 0 |
 | `tests/e2e/test_auth_billing_trading.py` | 2 | 0 |
 
@@ -6429,8 +6429,8 @@ migration, then delete the matching `KNOWN_BROKEN` entry.
 
 ### S-42 — ten tests had never executed, and were redundant — FIXED (deleted)
 
-`tests/unit/test_auth_analytics_backtest_coverage.py` (8) and
-`tests/unit/test_risk_coverage.py` (2) import module-level functions that do not
+`tests/unit/test_auth_analytics_backtest_exports.py` (8) and
+`tests/unit/test_risk_scenario_and_position_value.py` (2) import module-level functions that do not
 exist, inside `try/except ImportError -> pytest.skip`. They have always skipped,
 so they contribute nothing while reading as coverage:
 
