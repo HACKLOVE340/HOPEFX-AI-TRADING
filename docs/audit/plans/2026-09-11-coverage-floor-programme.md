@@ -117,10 +117,10 @@ weaken anything — the handler still swallows, so the engine loop is unaffected
 and it is the same remedy F248 took. **Cost of not doing it:** a fill whose cache
 or replay write fails stays invisible. Task 2 implements this on a yes.
 
-- [ ] **0b. The omit-list sanity floor** —
-      `tests/unit/test_coverage_gate_states_its_scope.py:65`
+- [x] **0b. The omit-list sanity floor** — DONE 2026-09-13,
+      `tests/unit/test_coverage_gate_states_its_scope.py::test_the_safety_modules_are_not_omitted`
 
-`assert report["omitted_from_source_loc"] > 1_000` measures **806**. Red since
+`assert report["omitted_from_source_loc"] > 1_000` measured **806**. Red since
 2026-09-10, caused by `7af5af33` cutting the omit list from 23 exclusions to 4 —
 a real improvement that fell through a floor calibrated against the old list.
 
@@ -128,8 +128,20 @@ a real improvement that fell through a floor calibrated against the old list.
 rather than pinning its size (e.g. assert it equals the sum of the omitted
 modules the report enumerates). **Do not simply lower 1_000 to 800** — that is
 weakening a check to match the code, which the Global Constraints forbid.
-*Alternative:* leave it red as honest signal. Task 4 implements the re-expression
-on a yes.
+*Alternative:* leave it red as honest signal.
+
+*Done, on an owner decision.* The counted-ness half of the recommendation was
+already covered: `test_the_report_measures_rather_than_declares` asserts
+`measured_loc == in_source_loc - omitted_from_source_loc`, so the arithmetic
+never went unguarded. What was missing was the property the floor stood in for,
+so the replacement asserts it directly — `risk/manager.py`,
+`risk/pre_trade_gate.py`, `execution/engine.py`, `execution/fix_router.py` and
+`core/decision/HOPEFXDecisionEngine.py` are absent from `omit`. Matched with
+fnmatch, so `risk/*` is caught as well as the literal name. 1_000 was not
+lowered; the assertion it belonged to is gone. Proven able to fail by injecting
+both shapes into `.coveragerc`: the literal entry flagged one module, the glob
+flagged two. The line reference above is replaced by the test name, because a
+line number is what went stale here in the first place.
 
 - [ ] **0c. GitHub Actions assigns no runners**
 

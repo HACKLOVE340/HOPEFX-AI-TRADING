@@ -58,12 +58,57 @@ def test_the_report_measures_rather_than_declares(report):
     assert report["measured_loc"] == report["in_source_loc"] - report["omitted_from_source_loc"]
 
 
-def test_the_report_subtracts_the_omit_list(report):
-    """F221 named the omit list but did not weigh it. It is not a rounding
-    error: it removes the risk manager, the pre-trade gate, the execution engine
-    and the decision engine from inside packages that ARE measured."""
-    assert report["omitted_from_source_loc"] > 1_000, (
-        "the omit list weighs nothing, which would mean the risk and execution exclusions are not being counted"
+#: The modules F105 and §E49 fought to get measured. `.coveragerc` once removed
+#: each of these from inside a package that IS measured, so "risk/ >= 80%" was a
+#: true statement about the part of risk/ that does not move money.
+SAFETY_MODULES_THAT_MUST_STAY_MEASURED = (
+    "risk/manager.py",
+    "risk/pre_trade_gate.py",
+    "execution/engine.py",
+    "execution/fix_router.py",
+    "core/decision/HOPEFXDecisionEngine.py",
+)
+
+
+def _omit_patterns() -> list[str]:
+    """The omit list as coverage.py sees it — comments stripped by configparser."""
+    import configparser
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    parser = configparser.ConfigParser()
+    parser.read(root / ".coveragerc")
+    return [s.strip() for s in parser.get("run", "omit", fallback="").splitlines() if s.strip()]
+
+
+def test_the_safety_modules_are_not_omitted():
+    """The code that moves money stays inside the gate that guards it.
+
+    This replaces `test_the_report_subtracts_the_omit_list`, which asserted
+    `omitted_from_source_loc > 1_000`. That was a proxy, written while the
+    exclusions were live, for "the exclusions are being counted". §E49 lifted
+    them on 2026-09-10, the weight fell to 806, and the proxy went red — while
+    the defect it stood for had been *fixed*. Read literally it required that
+    over a thousand statements of in-source code stay hidden from the gate,
+    which is the defect rather than the requirement.
+
+    Matched with fnmatch, not equality: `risk/*` hides `risk/manager.py` just
+    as effectively as naming it, and an assertion that only checks for the
+    literal string is one rename away from proving nothing.
+    """
+    from fnmatch import fnmatch
+
+    patterns = _omit_patterns()
+    hidden = {
+        module: [p for p in patterns if fnmatch(module, p) or fnmatch(module, p.lstrip("*/"))]
+        for module in SAFETY_MODULES_THAT_MUST_STAY_MEASURED
+    }
+    hidden = {m: p for m, p in hidden.items() if p}
+    assert not hidden, (
+        "`.coveragerc` omits code on the money path, so its coverage figure is a "
+        f"statement about everything except the dangerous part: {hidden}. "
+        "F105 and §E49 removed these exclusions deliberately; re-adding one needs "
+        "an owner decision, not a quiet commit."
     )
 
 
