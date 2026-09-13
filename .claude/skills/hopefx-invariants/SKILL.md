@@ -8,7 +8,7 @@ description: Use when adding or changing a `verify_*` or `catastrophic_*` predic
 ## Overview
 
 `invariants/` is this platform's constitution expressed as **pure, testable
-predicates** — currently **339 predicates across 34 modules**. It is the layer
+predicates** — currently **345 predicates across 35 modules**. It is the layer
 that refuses an action rather than logging that the action looked wrong.
 
 **Core principle:** predicates are pure and side-effect free; only

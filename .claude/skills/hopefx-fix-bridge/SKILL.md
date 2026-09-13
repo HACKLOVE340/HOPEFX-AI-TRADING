@@ -74,6 +74,24 @@ expects seq N, you send seq 1, the session is rejected.
 **If you change `reset_on_logon`, you must also move `IBKR_FIX_STORE_PATH` to a
 persistent volume in the same change.** They are one decision, not two.
 
+**Since 2026-09-13 that is enforced, not merely documented.**
+`IBKRFIXBridge._refuse_ephemeral_sequence_store()` runs inside `start()`, after
+the `IBKR_FIX_ALLOW_START` gate, and raises if `reset_on_logon=False` while
+`store_path` resolves under `tempfile.gettempdir()`. Until then this paragraph
+was the whole control: the combination was constructible, `generate_quickfix_cfg`
+rendered it happily, and `start()` dialled the gateway — the
+`../hopefx-dead-controls/SKILL.md` shape where the rule is correct and nothing
+runs it.
+
+The check sits in `start()` rather than in `IBKRFIXConfig.__post_init__` on
+purpose: rendering the config for inspection is not the hazard, and
+`test_reset_on_logon_false` legitimately builds the combination to assert
+`ResetOnLogon=N` reaches the cfg string. Logging on is the hazard. It is proven
+by `tests/unit/test_ibkr_fix_bridge.py::TestStart::test_start_refuses_session_continuity_on_an_ephemeral_store`,
+paired with `..._allows_session_continuity_on_a_persistent_store` so the guard
+cannot be satisfied by banning `reset_on_logon=False` outright — which would
+forbid the very configuration this section says you want.
+
 ## Latency is a safety control, not a metric
 
 The docstring targets **<50 ms round trip**, and `latency_threshold_ms=100.0`
@@ -140,7 +158,7 @@ quickfix path with the stand-in in `tests/unit/test_execution_fix_adapter.py`.
 
 | Mistake | Consequence |
 |---|---|
-| Changing `reset_on_logon` without a persistent store | Logon rejected on next restart |
+| Changing `reset_on_logon` without a persistent store | `start()` now refuses; before 2026-09-13, logon rejected on next restart |
 | Raising `latency_threshold_ms` to stop breaker trips | Degraded session keeps trading |
 | Hardcoding comp IDs or credentials | Secrets in a tracked file; `detect-secrets` will block, and rightly |
 | Testing against port 4001/7496 | That is **live**; use 4002/7497 |

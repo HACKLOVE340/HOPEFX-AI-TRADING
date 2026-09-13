@@ -63,10 +63,10 @@ of the codebase rather than by guesswork.
 
 | Skill | Covers |
 |---|---|
-| `hopefx-money-precision` | The Decimal/float split (payments+OMS are Decimal, `risk/manager.py` and the FIX wire are float), the conversion boundary at `execution/oms.py:254,258,411,412`, why the `tol=0.01` reconciliation tolerances exist and must never be widened, and the 841 `==` monetary assertions in `tests/` |
+| `hopefx-money-precision` | The Decimal/float split (payments+OMS are Decimal, `risk/manager.py` and the FIX wire are float), the conversion boundary at `execution/oms.py:254,258,411,412`, why the `tol=0.01` reconciliation tolerances exist and must never be widened, and the ~1,000 `==` monetary assertions in `tests/` — a re-measurable figure, deliberately not gated |
 | `hopefx-invariants` | The constitution: pure `verify_*` predicates → `enforcement.py` decides; auto-discovery by naming convention; `CONSTITUTIONAL`/`CRITICAL` block and `WARNING` does not; `HOPEFX_INVARIANT_MODE` defaults to `monitor`; finite-guard-before-compare because `NaN > tol` is `False` |
 | `hopefx-dead-controls` | The audit's signature defect: a control that exists, is documented accurately, and is never invoked — or reports success for work that did not happen. Four sub-shapes with confirmed instances (a guard that can never open, state mutated before the work, a report that counts hand-typed `True`, evidence swallowed at DEBUG), plus the two traps that make a suite agree with you: tests that assert the defect as the requirement, and harnesses that never ran. `references/catalogue.md` carries the file-level evidence |
-| `hopefx-fix-bridge` | Session state lifetime — `IBKR_FIX_STORE_PATH` defaults under `$TMPDIR`, so changing `reset_on_logon` without moving it to a persistent volume is a live outage; port 4001/7496 vs 4002/7497 is the only thing separating live from paper; `latency_threshold_ms` is a risk limit, not a metric |
+| `hopefx-fix-bridge` | Session state lifetime — `IBKR_FIX_STORE_PATH` defaults under `$TMPDIR`, so changing `reset_on_logon` without moving it to a persistent volume was a live outage that nothing checked; `start()` now refuses that pairing (2026-09-13); port 4001/7496 vs 4002/7497 is the only thing separating live from paper; `latency_threshold_ms` is a risk limit, not a metric |
 
 Every mechanically checkable claim in these four is verified against the
 codebase by **`scripts/verify_skill_claims.py`** — 53 checks: predicate and

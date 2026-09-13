@@ -204,6 +204,38 @@ class IBKRFIXBridge:
     # Lifecycle
     # ------------------------------------------------------------------
 
+    def _refuse_ephemeral_sequence_store(self) -> None:
+        """Refuse session continuity backed by a store that will not survive.
+
+        `reset_on_logon=False` is what you set for true FIX session continuity
+        and gap-fill: it tells IBKR the sequence numbers carry across logons.
+        The store defaults under `tempfile.gettempdir()`, which a container
+        restart wipes, so the session comes back at seq 1 against a gateway
+        expecting seq N and the logon is rejected.
+
+        The two are one decision, not two, and until this check nothing
+        enforced that — the combination was constructible and `start()` dialled
+        the gateway with it. Refusing here rather than in `IBKRFIXConfig` keeps
+        the config inspectable (rendering the cfg string is not the hazard);
+        logging on is.
+        """
+        if self._cfg.reset_on_logon:
+            return
+
+        tmp_root = Path(tempfile.gettempdir()).resolve()
+        store = Path(self._cfg.store_path).resolve()
+        if not store.is_relative_to(tmp_root):
+            return
+
+        raise RuntimeError(
+            "IBKR FIX session continuity needs a persistent sequence store: "
+            f"reset_on_logon=False with store_path={self._cfg.store_path!r}, "
+            f"which is under the ephemeral {str(tmp_root)!r}. The sequence "
+            "numbers vanish on restart and IBKR rejects the next logon. Point "
+            "IBKR_FIX_STORE_PATH at a persistent volume, or leave "
+            "reset_on_logon=True.",
+        )
+
     def start(self) -> None:
         """
         Start the FIX session.
@@ -220,6 +252,8 @@ class IBKRFIXBridge:
                 "IBKR FIX startup is disabled by default; set IBKR_FIX_ALLOW_START=true "
                 "only after broker credentials and gateway connectivity are verified",
             )
+
+        self._refuse_ephemeral_sequence_store()
 
         cfg_content = self._cfg.generate_quickfix_cfg()
 

@@ -1041,9 +1041,16 @@ async def place_order(
 
     # ── Idempotency ───────────────────────────────────────────────────────────
     # Claimed before any side effect, so a retry cannot slip past the checks and
-    # reach the broker a second time. UNIQUE(client_order_id) from migration
-    # b2c3d4e5f6a7 guards the engine→broker hop; this guards client→API, which
-    # nothing covered.
+    # reach the broker a second time. This guards client→API, which nothing
+    # covered.
+    #
+    # This block used to add that "UNIQUE(client_order_id) from migration
+    # b2c3d4e5f6a7 guards the engine→broker hop". It does not — see the column
+    # comment in database/models.py: no production writer sets it, so the
+    # constraint never fires. That hop is guarded by the write-ahead intent
+    # journal in execution/trade_executor.py::_journal_intent (S7-02). Naming a
+    # control that does not run is worse than recording the gap, because it
+    # closes the question.
     body = order.model_dump()
     if idempotency_key:
         try:

@@ -4262,6 +4262,51 @@ tests across the affected areas.
 
 ---
 
+## §A9 — DECIDE: `UNIQUE(client_order_id)` is documented as the duplicate-fill guard and never fires
+
+**Measured 2026-09-13.** Three sources described this constraint as the control
+on the engine→broker hop: the column comments at `database/models.py` on both
+`Trade` and `Order`, and the idempotency block in `api/trading.py`. It is not a
+control today.
+
+| Claim | Measured |
+|---|---|
+| "set before broker submission" | No production writer sets it. `brokers/__init__.py::_persist_trade_record` and `brokers/paper_trading.py` both insert a **closed** trade, after the fact, leaving it `NULL`. |
+| "UNIQUE prevents duplicate fills on network retry" | A `UNIQUE` column that is always `NULL` admits unlimited rows. Executed against the real model on SQLite: **500 inserts, 500 NULLs, 0 refusals.** |
+| A lookup consumes it | `TradeRepository.get_by_client_order_id` has exactly one caller in the repository, and it is a test. |
+| The `orders` table version | Worse — nothing in production imports the ORM `Order` model at all. |
+
+This is the `hopefx-dead-controls` "guard that can never open" shape: the
+constraint is well formed, the migration applied it, and nothing on the money
+path can reach it.
+
+**What does run**, and now has tests for the first time:
+`execution/trade_executor.py:430-432` mints `hopefx-<16 hex>` (64 bits) and
+writes a write-ahead intent record *before* calling the broker (S7-02), pinned
+by `tests/unit/test_trade_executor_comprehensive.py::TestOrderIntentJournal`.
+Reordering those two lines turns that test red — verified by injection.
+
+The comments have been corrected in place; the constraint has been left alone,
+per the skill's rule that a declaration of intent is legitimate and only the
+claim is false. **The decision is yours:**
+
+1. **Make it live** — have the trade writers persist `trade_executor`'s
+   `client_order_id`, and have the writer catch `IntegrityError` as the
+   duplicate signal. This is the design the comments described. It is a change
+   on the money path and needs its own red-green cycle.
+2. **Drop the constraint** in a migration and let the intent journal be the
+   single documented guard. Cheaper, and removes a trap for the next reader.
+3. **Leave it latent**, as it now stands, with the comments telling the truth.
+
+One thing not to do without deciding first: start populating the column from
+`execution/oms.py`. Its `client_order_id` is `str(uuid.uuid4())[:8]` — **32
+bits**, and the constraint is global across all users and all history, so a
+birthday collision reaches ~1% at about 9,000 rows. Under option 1 that would
+mean a genuine order being refused as somebody else's replay. `trade_executor`'s
+64-bit id is the one to use.
+
+---
+
 ## §A8 — DECIDE: the model checksum manifest has never been correct, and nothing reads it
 
 **Measured 2026-09-13.** `python scripts/model_provenance_report.py`:

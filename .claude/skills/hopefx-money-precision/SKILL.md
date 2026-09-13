@@ -75,7 +75,7 @@ These exist because float drift is real:
 | `verify_pnl_reconciliation` | `tol=0.01` | realized+unrealized vs total |
 | `verify_capital_conservation` | `tol=0.01` | allocated+available+reserved vs total |
 | `verify_ledger_*` | `tol=0.01` | opening+deposits+realized−withdrawals−fees vs closing |
-| `risk/manager.py:2020` | `tolerance=0.02` | risk reconciliation |
+| `risk/manager.py:2182` | `tolerance=0.02` | risk reconciliation |
 
 A `tol=0.01` on capital conservation means **up to one cent per check can vanish
 without tripping the invariant**. That is a deliberate trade, and it is fine — as
@@ -88,8 +88,24 @@ constitutional tolerance is weakening a risk gate — see `CLAUDE.md`.
 
 ## Tests
 
-841 assertions in `tests/` compare a monetary quantity with `==`. Do not add the
-842nd:
+Assertions in `tests/` compare a monetary quantity with `==` in the low
+thousands. This section used to say "841 … do not add the 842nd", which read as
+a tracked figure and was not one: no script measures it, nothing states how it
+was counted, and the phrasing invited a successor to treat 842 as a threshold.
+Re-measured 2026-09-13 with an explicit command, it is **1,032** — which does
+not make 841 wrong, only unreproducible:
+
+```bash
+grep -rEn "assert .*(price|qty|quantity|balance|equity|pnl|p_and_l|notional|\
+amount|commission|fee|margin|cost|value)[a-z_]*\s*==" tests/ --include="*.py" | wc -l
+```
+
+Counting them precisely is not mechanically decidable — deciding whether an
+identifier holds money needs the type, not the name — so this is deliberately
+not wired into `scripts/verify_skill_claims.py`; an over-broad regex reporting
+false drift is a defect class this repository has already hit three times. The
+number is context, not a gate. The rule does not depend on it: do not add
+another one.
 
 ```python
 # ❌ passes today, fails when an unrelated summation reorders

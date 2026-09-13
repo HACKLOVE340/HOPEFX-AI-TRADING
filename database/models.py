@@ -126,8 +126,19 @@ class Trade(Base):
 
     id = Column(Integer, primary_key=True)
     trade_id = Column(String(50), unique=True, nullable=True, index=True)
-    # Idempotency key — set before broker submission; UNIQUE prevents duplicate fills
-    # on network retry.  See Alembic migration b2c3d4e5f6a7.
+    # Idempotency key — LATENT, not live. Migration b2c3d4e5f6a7 added the
+    # UNIQUE constraint, and this comment used to say it "prevents duplicate
+    # fills on network retry". It cannot, today: no production writer sets the
+    # column. Both paths that insert here — brokers/__init__.py
+    # ::_persist_trade_record and brokers/paper_trading.py — persist a CLOSED
+    # trade after the fact and leave this NULL, and nothing calls
+    # TradeRepository.get_by_client_order_id. A UNIQUE column that is always
+    # NULL admits unlimited rows (measured: 500 inserts, 500 NULLs, 0 refusals).
+    # The engine→broker hop is actually guarded by the write-ahead intent
+    # journal in execution/trade_executor.py::_journal_intent (S7-02), pinned by
+    # tests/unit/test_trade_executor_comprehensive.py::TestOrderIntentJournal.
+    # Keep the constraint — it is a correct statement of intent and costs
+    # nothing — but do not count it as a control until a writer populates it.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True, index=True)
     # user_id links trades directly to the auth user without requiring an Account row.
@@ -210,8 +221,10 @@ class Order(Base):
 
     id = Column(Integer, primary_key=True)
     order_id = Column(String(50), unique=True, nullable=False, index=True)
-    # Idempotency key — UNIQUE constraint prevents duplicate broker submissions.
-    # Set by the trading engine before the first submission attempt.
+    # Idempotency key — LATENT, as on Trade above, and more so: nothing in
+    # production imports this model at all, so no row is ever written here by
+    # the trading engine. "Set by the trading engine before the first
+    # submission attempt" described an intent, never a code path.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
     # Owning user. The COLUMN has existed since migration o1p2q3r4s5t6, which
     # added it and indexed it — but this model never declared it, so the ORM had
