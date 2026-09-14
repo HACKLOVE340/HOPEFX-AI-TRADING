@@ -93,14 +93,14 @@ const CorrelationDashboard: React.FC = () => {
           <p style={s.subtitle}>Rolling correlations between gold, FX, equities, and macro indicators.</p>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-          <span style={{ fontSize:13, color:'#94a3b8' }}>Window:</span>
+          <span style={{ fontSize:13, color:'var(--text-dim)' }}>Window:</span>
           {[14,30,60,90].map(w => (
             <button key={w} style={{ ...s.wBtn, ...(window===w ? s.wBtnActive : {}) }} onClick={() => setWindow(w)}>{w}d</button>
           ))}
           <div style={{ width:1, height:24, background:'#334155', margin:'0 4px' }} />
           <button
             onClick={() => navigate('/ai-strategy')}
-            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'#a78bfa', fontSize:12, fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
+            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize:12, fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
           >
             🤖 Generate Strategy
           </button>
@@ -109,20 +109,20 @@ const CorrelationDashboard: React.FC = () => {
 
       {loading ? <div style={s.dim}>Loading…</div> : loadErr ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <span style={{ color: '#f87171' }}>⚠ {loadErr}</span>
-          <button onClick={load} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '6px 16px' }}>Retry</button>
+          <span style={{ color: 'var(--loss)' }}>⚠ {loadErr}</span>
+          <button onClick={load} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 16px' }}>Retry</button>
         </div>
       ) : (!corr && !cot) ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 36 }}>🔗</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>Correlation data unavailable</div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>Ensure the data layer is running, then retry.</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-dim)' }}>Correlation data unavailable</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ensure the data layer is running, then retry.</div>
           <button onClick={load}
-            style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+            style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
             ↻ Retry
           </button>
           <button onClick={() => navigate('/ai-chart')}
-            style={{ padding: '7px 18px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', borderRadius: 8, color: '#00d4ff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 18px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', borderRadius: 8, color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             📊 AI Chart
           </button>
         </div>
@@ -139,16 +139,16 @@ const CorrelationDashboard: React.FC = () => {
                   card while the remedy sat unread in the response. See F189. */}
               {(corr.symbols ?? []).length === 0 ? (
                 <div style={{ padding:'18px 4px', display:'flex', flexDirection:'column', gap:8 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color:'#94a3b8' }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:'var(--text-dim)' }}>
                     Not enough price history to correlate
                   </div>
                   {corr.note && (
-                    <div style={{ fontSize:12.5, color:'#64748b', lineHeight:1.55 }}>{corr.note}</div>
+                    <div style={{ fontSize:12.5, color:'var(--text-muted)', lineHeight:1.55 }}>{corr.note}</div>
                   )}
                   {(corr.symbols_missing_data ?? []).length > 0 && (
-                    <div style={{ fontSize:12, color:'#64748b' }}>
+                    <div style={{ fontSize:12, color:'var(--text-muted)' }}>
                       Missing history for:{' '}
-                      <span style={{ color:'#94a3b8', fontFamily:'ui-monospace, monospace' }}>
+                      <span style={{ color:'var(--text-dim)', fontFamily:'ui-monospace, monospace' }}>
                         {(corr.symbols_missing_data ?? []).join(', ')}
                       </span>
                     </div>
@@ -157,7 +157,7 @@ const CorrelationDashboard: React.FC = () => {
                     onClick={() => navigate('/settings')}
                     style={{ alignSelf:'flex-start', marginTop:4, padding:'6px 14px',
                              background:'rgba(59,130,246,0.15)', border:'1px solid rgba(59,130,246,0.4)',
-                             borderRadius:8, color:'#60a5fa', fontSize:12.5, fontWeight:700, cursor:'pointer' }}
+                             borderRadius:8, color:'var(--link)', fontSize:12.5, fontWeight:700, cursor:'pointer' }}
                   >
                     Connect a broker
                   </button>
@@ -174,7 +174,7 @@ const CorrelationDashboard: React.FC = () => {
                   <tbody>
                     {(corr.symbols ?? []).map(row => (
                       <tr key={row}>
-                        <td style={{ ...s.mtd, fontWeight:600, color:'#94a3b8', whiteSpace:'nowrap' }}>{row}</td>
+                        <td style={{ ...s.mtd, fontWeight:600, color:'var(--text-dim)', whiteSpace:'nowrap' }}>{row}</td>
                         {(corr.symbols ?? []).map(col => {
                           const raw = corr.matrix?.[row]?.[col];
                           const v = Number.isFinite(raw) ? (raw as number) : 0;
@@ -195,13 +195,13 @@ const CorrelationDashboard: React.FC = () => {
                   <div style={s.cardTitle}>Key Insights</div>
                   <button
                     onClick={() => navigate('/ai-strategy')}
-                    style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'#a78bfa', fontSize:11, fontWeight:700, padding:'4px 10px', cursor:'pointer' }}
+                    style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize:11, fontWeight:700, padding:'4px 10px', cursor:'pointer' }}
                   >
                     🤖 Build Strategy from Insights
                   </button>
                 </div>
                 {(corr.insights ?? []).map((ins, i) => (
-                  <div key={i} style={{ fontSize:13, color:'#94a3b8', padding:'4px 0', borderBottom:'1px solid #0f172a' }}>
+                  <div key={i} style={{ fontSize:13, color:'var(--text-dim)', padding:'4px 0', borderBottom:'1px solid #0f172a' }}>
                     • {ins}
                   </div>
                 ))}
@@ -211,7 +211,7 @@ const CorrelationDashboard: React.FC = () => {
                   ['-0.3–0.3','Weak / none','#94a3b8'],['-0.7–-0.3','Moderate negative','#fca5a5'],['≤ -0.7','Strong negative','#f87171']].map(([range,label,color]) => (
                   <div key={range} style={{ display:'flex', alignItems:'center', gap:6, fontSize:11 }}>
                     <div style={{ width:12, height:12, borderRadius:2, background: color as string }} />
-                    <span style={{ color:'#64748b' }}>{range} {label}</span>
+                    <span style={{ color:'var(--text-muted)' }}>{range} {label}</span>
                   </div>
                 ))}
               </div>
@@ -222,12 +222,12 @@ const CorrelationDashboard: React.FC = () => {
           {cotErr && !cot && (
             <div style={{ ...s.card }}>
               <div style={s.cardTitle}>COT Sentiment</div>
-              <div style={{ fontSize:12.5, color:'#94a3b8', padding:'12px 0' }}>{cotErr}</div>
+              <div style={{ fontSize:12.5, color:'var(--text-dim)', padding:'12px 0' }}>{cotErr}</div>
               <button
                 onClick={load}
                 style={{ padding:'6px 14px', background:'rgba(59,130,246,0.15)',
                          border:'1px solid rgba(59,130,246,0.4)', borderRadius:8,
-                         color:'#60a5fa', fontSize:12.5, fontWeight:700, cursor:'pointer' }}
+                         color:'var(--link)', fontSize:12.5, fontWeight:700, cursor:'pointer' }}
               >
                 Retry
               </button>
@@ -237,36 +237,36 @@ const CorrelationDashboard: React.FC = () => {
             <div style={s.card}>
               <div style={s.cardTitle}>CFTC COT — Gold Speculator Sentiment</div>
               <div style={{ textAlign:'center', padding:'16px 0' }}>
-                <div style={{ fontSize:36, fontWeight:800, color: cot.sentiment==='BULLISH' ? '#4ade80' : '#f87171' }}>
+                <div style={{ fontSize:36, fontWeight:800, color: cot.sentiment==='BULLISH' ? 'var(--gain)' : 'var(--loss)' }}>
                   {cot.sentiment}
                 </div>
-                <div style={{ fontSize:14, color:'#64748b', marginTop:4 }}>{cot.sentiment_strength}</div>
+                <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>{cot.sentiment_strength}</div>
               </div>
               <div style={s.cotRow}>
                 <span style={s.cotLabel}>Net Long</span>
-                <span style={{ fontSize:18, fontWeight:700, color: (cot.net_speculator_long ?? 0) > 0 ? '#4ade80' : '#f87171' }}>
+                <span style={{ fontSize:18, fontWeight:700, color: (cot.net_speculator_long ?? 0) > 0 ? 'var(--gain)' : 'var(--loss)' }}>
                   {(cot.net_speculator_long ?? 0) > 0 ? '+' : ''}{(cot.net_speculator_long ?? 0).toLocaleString()}
                 </span>
               </div>
               <div style={s.cotRow}>
                 <span style={s.cotLabel}>Long Positions</span>
-                <span style={{ color:'#4ade80' }}>{(cot.long_positions ?? 0).toLocaleString()}</span>
+                <span style={{ color:'var(--gain)' }}>{(cot.long_positions ?? 0).toLocaleString()}</span>
               </div>
               <div style={s.cotRow}>
                 <span style={s.cotLabel}>Short Positions</span>
-                <span style={{ color:'#f87171' }}>{(cot.short_positions ?? 0).toLocaleString()}</span>
+                <span style={{ color:'var(--loss)' }}>{(cot.short_positions ?? 0).toLocaleString()}</span>
               </div>
               {Number.isFinite(cot.weekly_change) && (
                 <div style={s.cotRow}>
                   <span style={s.cotLabel}>Weekly Change</span>
-                  <span style={{ color: cot.weekly_change! > 0 ? '#4ade80' : '#f87171' }}>
+                  <span style={{ color: cot.weekly_change! > 0 ? 'var(--gain)' : 'var(--loss)' }}>
                     {cot.weekly_change! > 0 ? '+' : ''}{cot.weekly_change!.toLocaleString()}
                   </span>
                 </div>
               )}
               <div style={s.cotRow}>
                 <span style={s.cotLabel}>Report Date</span>
-                <span style={{ color:'#94a3b8' }}>{cot.report_date}</span>
+                <span style={{ color:'var(--text-dim)' }}>{cot.report_date}</span>
               </div>
               <div style={{ fontSize:12, color:'#475569', marginTop:12, lineHeight:1.5 }}>{cot.note}</div>
               <div style={{ fontSize:11, color:'#334155', marginTop:8 }}>Source: {cot.source}</div>
@@ -278,7 +278,7 @@ const CorrelationDashboard: React.FC = () => {
                   marginTop:16, width:'100%', padding:'9px 0', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer',
                   background: cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
                   border: `1px solid ${cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-                  color: cot.sentiment === 'BULLISH' ? '#4ade80' : '#f87171',
+                  color: cot.sentiment === 'BULLISH' ? 'var(--gain)' : 'var(--loss)',
                 }}
               >
                 ⚡ Trade XAU/USD — {cot.sentiment}
@@ -292,18 +292,18 @@ const CorrelationDashboard: React.FC = () => {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight:'100vh', background:'#0f172a', color:'#f8fafc', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
+  page: { minHeight:'100vh', background:'#0f172a', color:'var(--text-strong)', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
   header: { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 },
   title: { fontSize:28, fontWeight:700, margin:0 },
-  subtitle: { fontSize:14, color:'#94a3b8', marginTop:4 },
+  subtitle: { fontSize:14, color:'var(--text-dim)', marginTop:4 },
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20 },
   card: { background:'#1e293b', borderRadius:12, padding:24, border:'1px solid #334155' },
-  cardTitle: { fontSize:13, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
-  mth: { padding:'8px 12px', color:'#64748b', fontWeight:600, textAlign:'center', whiteSpace:'nowrap', borderBottom:'1px solid #334155' },
+  cardTitle: { fontSize:13, fontWeight:600, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
+  mth: { padding:'8px 12px', color:'var(--text-muted)', fontWeight:600, textAlign:'center', whiteSpace:'nowrap', borderBottom:'1px solid #334155' },
   mtd: { padding:'8px 12px', textAlign:'center', borderBottom:'1px solid #0f172a' },
   cotRow: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #0f172a', fontSize:14 },
-  cotLabel: { color:'#64748b', fontSize:13 },
-  wBtn: { background:'#1e293b', border:'1px solid #334155', borderRadius:6, color:'#64748b', padding:'5px 10px', fontSize:12, cursor:'pointer' },
+  cotLabel: { color:'var(--text-muted)', fontSize:13 },
+  wBtn: { background:'#1e293b', border:'1px solid #334155', borderRadius:6, color:'var(--text-muted)', padding:'5px 10px', fontSize:12, cursor:'pointer' },
   wBtnActive: { background:'#3b82f6', border:'1px solid #3b82f6', color:'#fff' },
   dim: { color:'#475569', textAlign:'center', padding:48 },
 };

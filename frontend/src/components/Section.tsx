@@ -23,10 +23,10 @@ export const Section: React.FC<SectionProps> = ({
   title, description, actions, className = '', children,
 }) => (
   <section
-    className={`rounded-xl border border-[#1e2d3d] bg-[#0d1421] ${className}`}
+    className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] ${className}`}
   >
     {(title || actions) && (
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1e2d3d] px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
         <div className="min-w-0">
           {title && (
             <h2 className="truncate text-[13px] font-semibold uppercase tracking-wider text-slate-300">

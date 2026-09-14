@@ -23,7 +23,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ style }) => {
         background: 'transparent',
         border: '1px solid var(--border, #334155)',
         borderRadius: 8,
-        color: 'var(--text-muted, #94a3b8)',
+        color: 'var(--text-muted, var(--text-dim))',
         cursor: 'pointer',
         fontSize: 16,
         lineHeight: 1,

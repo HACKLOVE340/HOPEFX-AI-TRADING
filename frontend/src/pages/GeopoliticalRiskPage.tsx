@@ -318,21 +318,21 @@ const GeopoliticalRiskPage: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <Link to="/research"
-              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: 'var(--ai-model)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
               🔬 Research
             </Link>
             <Link to="/correlation"
-              style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: '#60a5fa', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: 'var(--link)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
               📊 Correlation
             </Link>
             <Link to="/nuclear"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: '#f87171', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: 'var(--loss)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
               ☢ Nuclear AI
             </Link>
             <Link
               to="/trade"
               state={{ signal: { symbol: 'XAU/USD', direction: 'BUY' } }}
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}
               title="Gold tends to rally during geopolitical risk — buy XAU/USD"
             >
               ⚡ Trade XAU/USD
@@ -387,14 +387,14 @@ const s: Record<string, React.CSSProperties> = {
     maxWidth: 1500,
     margin: '0 auto',
     fontFamily: 'monospace',
-    color: '#e2e8f0',
+    color: 'var(--text)',
   },
   pageHeader: { marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 },
   pageTitle: {
     margin: 0,
     fontSize: 22,
     fontWeight: 800,
-    color: '#e2e8f0',
+    color: 'var(--text)',
     letterSpacing: 0.5,
   },
   pageSubtitle: { margin: '6px 0 0', fontSize: 12, color: '#475569' },
@@ -427,7 +427,7 @@ const s: Record<string, React.CSSProperties> = {
 
   wmHeader: { display: 'flex', flexDirection: 'column', gap: 4 },
   wmTitleRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  wmTitle: { fontSize: 11, fontWeight: 800, letterSpacing: 2, color: '#64748b' },
+  wmTitle: { fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)' },
   liveDot: { color: '#00ff88', fontSize: 9, letterSpacing: 1, animation: 'pulse 2s infinite' },
   wmSubtitle: { margin: 0, fontSize: 11, color: '#334155' },
   wmExtLink: { fontSize: 11, color: '#3b82f6', textDecoration: 'none' },
@@ -438,7 +438,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(255,255,255,0.03)',
     border: '1px solid #1e3a5f',
     borderRadius: 6,
-    color: '#64748b',
+    color: 'var(--text-muted)',
     fontSize: 11,
     fontFamily: 'monospace',
     cursor: 'pointer',
@@ -458,7 +458,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(255,255,255,0.02)',
     border: '1px solid #1e3a5f',
     borderRadius: 5,
-    color: '#64748b',
+    color: 'var(--text-muted)',
     fontSize: 10,
     fontFamily: 'monospace',
     cursor: 'pointer',

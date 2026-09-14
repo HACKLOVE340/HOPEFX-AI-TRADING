@@ -87,7 +87,7 @@ function NumInput({
       min={min}
       disabled={disabled}
       className={cn(
-        'w-full bg-[#0d1421] border border-[#1e2d3d] rounded px-2.5 py-1.5',
+        'w-full bg-[var(--surface)] border border-[var(--border)] rounded px-2.5 py-1.5',
         'text-[12px] text-slate-200 placeholder-slate-600',
         'focus:outline-none focus:border-[#3b82f6] transition-colors',
         'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -132,17 +132,17 @@ function RiskPreview({
   if (!slDist && !tpDist) return null;
 
   return (
-    <div className="flex gap-3 px-2.5 py-2 rounded bg-[#0d1421] border border-[#1e2d3d] text-[10px]">
+    <div className="flex gap-3 px-2.5 py-2 rounded bg-[var(--surface)] border border-[var(--border)] text-[10px]">
       {maxLoss && (
         <div className="flex flex-col gap-0.5">
           <span className="text-slate-500">Max loss</span>
-          <span className="text-[#ff1744] font-semibold">${maxLoss}</span>
+          <span className="text-[var(--bear)] font-semibold">${maxLoss}</span>
         </div>
       )}
       {rr && (
         <div className="flex flex-col gap-0.5">
           <span className="text-slate-500">R:R</span>
-          <span className={cn('font-semibold', parseFloat(rr) >= 2 ? 'text-[#00e676]' : 'text-[#ffb800]')}>
+          <span className={cn('font-semibold', parseFloat(rr) >= 2 ? 'text-[var(--bull)]' : 'text-[#ffb800]')}>
             1:{rr}
           </span>
         </div>
@@ -443,7 +443,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
               id={`${uid}-sym`}
               value={symbol}
               onChange={(e) => setSymbol(e.target.value)}
-              className="w-full bg-[#0d1421] border border-[#1e2d3d] rounded px-2.5 py-1.5 text-[12px] text-slate-200 focus:outline-none focus:border-[#3b82f6]"
+              className="w-full bg-[var(--surface)] border border-[var(--border)] rounded px-2.5 py-1.5 text-[12px] text-slate-200 focus:outline-none focus:border-[#3b82f6]"
             >
               {symbols.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -454,14 +454,14 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
 
         {/* Live price strip */}
         {tick && (
-          <div className="flex gap-4 px-2.5 py-2 rounded bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+          <div className="flex gap-4 px-2.5 py-2 rounded bg-[var(--surface)] border border-[var(--border)] text-[11px]">
             <div className="flex flex-col gap-0.5">
               <span className="text-slate-500">Bid</span>
-              <span className="text-[#ff1744] font-semibold tabular-nums">{fmtPrice(tick.bid)}</span>
+              <span className="text-[var(--bear)] font-semibold tabular-nums">{fmtPrice(tick.bid)}</span>
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-slate-500">Ask</span>
-              <span className="text-[#00e676] font-semibold tabular-nums">{fmtPrice(tick.ask)}</span>
+              <span className="text-[var(--bull)] font-semibold tabular-nums">{fmtPrice(tick.ask)}</span>
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-slate-500">Spread</span>
@@ -493,10 +493,10 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
               className={cn(
                 'py-2 rounded font-bold text-[13px] border transition-colors',
                 side === s && s === 'buy'
-                  ? 'bg-[#00e676]/15 border-[#00e676]/50 text-[#00e676]'
+                  ? 'bg-[var(--bull)]/15 border-[var(--bull)]/50 text-[var(--bull)]'
                   : side === s && s === 'sell'
-                  ? 'bg-[#ff1744]/15 border-[#ff1744]/50 text-[#ff1744]'
-                  : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                  ? 'bg-[var(--bear)]/15 border-[var(--bear)]/50 text-[var(--bear)]'
+                  : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
               )}
             >
               {s === 'buy' ? '▲ Buy' : '▼ Sell'}
@@ -518,8 +518,8 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
               className={cn(
                 'flex-1 py-1 rounded text-[11px] font-semibold border transition-colors',
                 orderType === value
-                  ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                  : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                  ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                  : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
               )}
             >
               {label}
@@ -589,8 +589,8 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
             'w-full py-2.5 rounded font-bold text-[13px] border-none transition-colors',
             'disabled:opacity-40 disabled:cursor-not-allowed',
             side === 'buy'
-              ? 'bg-[#00e676] text-[#0d1421] hover:bg-[#00c853]'
-              : 'bg-[#ff1744] text-white hover:bg-[#d50000]',
+              ? 'bg-[var(--bull)] text-[var(--surface)] hover:bg-[#00c853]'
+              : 'bg-[var(--bear)] text-white hover:bg-[#d50000]',
           )}
         >
           {isBlackout
@@ -607,8 +607,8 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
             className={cn(
               'px-3 py-2 rounded text-[11px] font-medium border',
               result.ok
-                ? 'bg-[#00e676]/10 border-[#00e676]/20 text-[#00e676]'
-                : 'bg-[#ff1744]/10 border-[#ff1744]/20 text-[#ff1744]',
+                ? 'bg-[var(--bull)]/10 border-[var(--bull)]/20 text-[var(--bull)]'
+                : 'bg-[var(--bear)]/10 border-[var(--bear)]/20 text-[var(--bear)]',
             )}
           >
             {result.msg}

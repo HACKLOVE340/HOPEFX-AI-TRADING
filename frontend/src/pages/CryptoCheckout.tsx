@@ -167,9 +167,9 @@ const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }
       </div>
       <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
         ${plan.price_usd.toLocaleString()}
-        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>/mo</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>/mo</span>
       </div>
-      <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
+      <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }}>
         {plan.features.slice(0, 3).map(f => <li key={f}>{f}</li>)}
       </ul>
       {selected && (
@@ -192,8 +192,8 @@ const CryptoButton: React.FC<{ currency: CryptoOption; selected: boolean; onSele
     }}>
       <span style={{ fontSize: 22, color: meta.color }}>{meta.icon}</span>
       <div style={{ textAlign: 'left' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{meta.name}</div>
-        <div style={{ fontSize: 11, color: '#64748b' }}>{currency}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{meta.name}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currency}</div>
       </div>
     </button>
   );
@@ -420,7 +420,7 @@ const CryptoCheckout: React.FC = () => {
         <section style={st.section}>
           <h2 style={st.sectionTitle}>1. Choose a plan</h2>
           {plansLoading ? (
-            <div style={{ color: '#64748b', fontSize: 14 }}>Loading plans…</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading plans…</div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               {plans.map(p => (
@@ -441,13 +441,13 @@ const CryptoCheckout: React.FC = () => {
           </div>
           {selectedCrypto === 'USDT' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: '#64748b' }}>Network:</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Network:</span>
               {(['TRC20', 'ERC20', 'BEP20'] as USDTNetwork[]).map(n => (
                 <button key={n} onClick={() => setUsdtNetwork(n)} style={{
                   padding: '5px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                   background: usdtNetwork === n ? '#26a17b22' : 'transparent',
                   border: '1px solid ' + (usdtNetwork === n ? '#26a17b' : '#334155'),
-                  color: usdtNetwork === n ? '#26a17b' : '#94a3b8',
+                  color: usdtNetwork === n ? '#26a17b' : 'var(--text-dim)',
                 }}>{n}</button>
               ))}
             </div>
@@ -457,8 +457,8 @@ const CryptoCheckout: React.FC = () => {
         {flwEnabled && (
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
             padding: '20px 24px', marginBottom: 20 }}>
-            <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>Pay with Flutterwave</div>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 12px' }}>
+            <div style={{ fontWeight: 600, color: 'var(--text-strong)', marginBottom: 6 }}>Pay with Flutterwave</div>
+            <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: '0 0 12px' }}>
               Recommended for West &amp; Central Africa — card, bank transfer, mobile money.
             </p>
             <button onClick={handleFlutterwavePay} disabled={flwLoading} style={{
@@ -474,9 +474,9 @@ const CryptoCheckout: React.FC = () => {
           justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{selectedPlan.name}</span>
-            <span style={{ color: '#64748b' }}> — ${selectedPlan.price_usd.toLocaleString()}/mo</span>
+            <span style={{ color: 'var(--text-muted)' }}> — ${selectedPlan.price_usd.toLocaleString()}/mo</span>
             {cryptoAmount !== null && (
-              <span style={{ color: '#94a3b8', fontSize: 13 }}>
+              <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>
                 {' '}≈ {fmtCrypto(cryptoAmount, selectedCrypto)}
               </span>
             )}
@@ -509,11 +509,11 @@ const CryptoCheckout: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             <span style={{ color: meta.color, fontSize: 32 }}>{meta.icon}</span>
             <div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>Send exactly</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Send exactly</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-strong)' }}>
                 {fmtCrypto(depositInfo.amount_crypto, selectedCrypto)}
               </div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                 ≈ ${fmt(selectedPlan.price_usd)} · {depositInfo.network.toUpperCase()} network
               </div>
             </div>
@@ -532,7 +532,7 @@ const CryptoCheckout: React.FC = () => {
                   borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 8 }}>
                   <span style={{ fontSize: 32 }}>📷</span>
-                  <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', padding: '0 12px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '0 12px' }}>
                     QR unavailable — copy address below
                   </div>
                 </div>
@@ -545,7 +545,7 @@ const CryptoCheckout: React.FC = () => {
             padding: '12px 14px', marginBottom: 14 }}>
             <div style={{ fontSize: 11, color: '#475569', marginBottom: 6 }}>Deposit address</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <code style={{ flex: 1, fontSize: 12, color: '#94a3b8', wordBreak: 'break-all',
+              <code style={{ flex: 1, fontSize: 12, color: 'var(--text-dim)', wordBreak: 'break-all',
                 lineHeight: 1.5 }}>{depositInfo.address}</code>
               <button onClick={copyAddress} style={{ ...st.copyBtn, flexShrink: 0 }}>
                 {copied ? '✅' : 'Copy'}
@@ -554,15 +554,15 @@ const CryptoCheckout: React.FC = () => {
           </div>
 
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-            padding: '10px 14px', fontSize: 13, color: '#fbbf24', marginBottom: 14 }}>
+            padding: '10px 14px', fontSize: 13, color: 'var(--warn)', marginBottom: 14 }}>
             ⚠️ Send only <strong>{selectedCrypto}</strong> on the{' '}
             <strong>{depositInfo.network.toUpperCase()}</strong> network.
             Sending a different asset will result in permanent loss.
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13,
-            color: '#64748b', marginBottom: 20 }}>
-            <span>Confirmations required: <strong style={{ color: '#f8fafc' }}>{depositInfo.confirmations_required}</strong></span>
+            color: 'var(--text-muted)', marginBottom: 20 }}>
+            <span>Confirmations required: <strong style={{ color: 'var(--text-strong)' }}>{depositInfo.confirmations_required}</strong></span>
             <span>Expires in: <ExpiryCountdown expiresAt={depositInfo.expires_at} /></span>
           </div>
 
@@ -589,10 +589,10 @@ const CryptoCheckout: React.FC = () => {
         />
         <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: '#f8fafc', marginBottom: 8 }}>
+          <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
             Waiting for blockchain confirmations
           </div>
-          <div style={{ color: '#64748b', marginBottom: 24 }}>
+          <div style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
             {confirmed} / {required} confirmations
             {paymentStatus?.tx_hash && (
               <div style={{ fontSize: 12, marginTop: 6, wordBreak: 'break-all' }}>
@@ -605,7 +605,7 @@ const CryptoCheckout: React.FC = () => {
             <div style={{ height: '100%', borderRadius: 4, background: meta.color,
               width: pct + '%', transition: 'width 0.5s ease' }} />
           </div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             This typically takes {selectedCrypto === 'BTC' ? '30–60 minutes' : '2–5 minutes'}.
             {/* Only claim the poll is working while it is. Saying "polls
                 automatically" under a dead connection is the sentence that made
@@ -626,11 +626,11 @@ const CryptoCheckout: React.FC = () => {
         <PageHeader title="Payment Confirmed" breadcrumbs={breadcrumbs} />
         <div style={{ ...st.card, textAlign: 'center', padding: '48px 32px' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc', marginBottom: 8 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
             Payment confirmed!
           </h2>
-          <p style={{ color: '#94a3b8', marginBottom: 28 }}>
-            Your <strong style={{ color: '#f8fafc' }}>{selectedPlan.name}</strong> subscription is now active.
+          <p style={{ color: 'var(--text-dim)', marginBottom: 28 }}>
+            Your <strong style={{ color: 'var(--text-strong)' }}>{selectedPlan.name}</strong> subscription is now active.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/dashboard" style={{ ...st.proceedBtn, textDecoration: 'none', display: 'inline-block' }}>
@@ -663,10 +663,10 @@ const CryptoCheckout: React.FC = () => {
         {addressError ? (
           <>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#f87171', marginBottom: 8 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>
               Failed to generate deposit address
             </div>
-            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20 }}>{addressError}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20 }}>{addressError}</div>
             <button
               onClick={() => { setAddressError(null); setStep('select'); }}
               style={st.backBtn}
@@ -683,7 +683,7 @@ const CryptoCheckout: React.FC = () => {
               margin: '0 auto 16px',
             }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <div style={{ color: '#64748b', fontSize: 14 }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
               {loadingAddress ? 'Generating deposit address…' : 'Loading payment details…'}
             </div>
           </>
@@ -698,20 +698,20 @@ const CryptoCheckout: React.FC = () => {
 const st: Record<string, React.CSSProperties> = {
   page:       { maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: '#f1f5f9' },
   section:    { marginBottom: 28 },
-  sectionTitle: { fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: '0 0 12px' },
+  sectionTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: '0 0 12px' },
   card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 16 },
   proceedBtn: { padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none',
     borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   backBtn:    { background: 'none', border: '1px solid #334155', borderRadius: 6,
-    color: '#94a3b8', fontSize: 13, padding: '6px 14px', cursor: 'pointer' },
+    color: 'var(--text-dim)', fontSize: 13, padding: '6px 14px', cursor: 'pointer' },
   copyBtn:    { background: '#334155', border: 'none', borderRadius: 6,
-    color: '#e2e8f0', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
-  headerLink: { fontSize: 13, color: '#64748b', textDecoration: 'none',
+    color: 'var(--text)', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
+  headerLink: { fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
     padding: '6px 14px', border: '1px solid #334155', borderRadius: 6 },
   warnBox:    { background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-    padding: '10px 14px', color: '#fbbf24', fontSize: 13, marginBottom: 16 },
+    padding: '10px 14px', color: 'var(--warn)', fontSize: 13, marginBottom: 16 },
   errorBox:   { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
-    padding: '10px 14px', color: '#f87171', fontSize: 13, marginBottom: 16 },
+    padding: '10px 14px', color: 'var(--loss)', fontSize: 13, marginBottom: 16 },
 };
 
 export default CryptoCheckout;

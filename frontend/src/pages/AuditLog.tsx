@@ -82,7 +82,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortKey: 'created_at',
     sortable: true,
     render: (row) => (
-      <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>
+      <span style={{ color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 12 }}>
         {row.created_at ? fmtDate(row.created_at) : '—'}
       </span>
     ),
@@ -94,7 +94,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortKey: 'user_id',
     sortable: true,
     render: (row) => (
-      <span style={{ color: '#60a5fa', fontFamily: 'monospace', fontSize: 12 }}>
+      <span style={{ color: 'var(--link)', fontFamily: 'monospace', fontSize: 12 }}>
         {row.user_id || '—'}
       </span>
     ),
@@ -123,7 +123,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     header: 'IP',
     width: '130px',
     render: (row) => (
-      <span style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 12 }}>
+      <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 12 }}>
         {row.ip_address || '—'}
       </span>
     ),
@@ -237,11 +237,11 @@ const AuditLog: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button onClick={() => navigate('/security')}
-              style={{ padding: '6px 13px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 13px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🛡 Security
             </button>
             <button onClick={() => navigate('/auto-heal')}
-              style={{ padding: '6px 13px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 13px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🔧 Auto-Heal
             </button>
             <button
@@ -316,7 +316,7 @@ const AuditLog: React.FC = () => {
       {/* Manual pagination (server-side) */}
       {pages > 1 && !loading && (
         <div style={s.pagination}>
-          <span style={{ color: '#64748b', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
             Page {page} of {pages}
           </span>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -378,7 +378,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: '1px solid var(--border, #334155)',
     borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)',
+    color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
     fontSize: 13,
     padding: '7px 12px',
@@ -388,7 +388,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: '1px solid var(--border, #334155)',
     borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)',
+    color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
     display: 'flex',
     fontSize: 13,
@@ -406,7 +406,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: '1px solid var(--border, #334155)',
     borderRadius: 6,
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     cursor: 'pointer',
     fontSize: 12,
     padding: '5px 12px',

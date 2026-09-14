@@ -191,10 +191,10 @@ const SecuritySection: React.FC = () => {
               {events.slice(0, 50).map(ev => (
                 <tr key={ev.event_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px' }}><SeverityBadge severity={ev.severity} /></td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{ev.event_type}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12, fontFamily: 'monospace' }}>{ev.ip_address}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{ev.user_id ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{ev.event_type}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12, fontFamily: 'monospace' }}>{ev.ip_address}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{ev.user_id ?? '—'}</td>
                   <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12 }}>{timeAgo(ev.created_at)}</td>
                 </tr>
               ))}
@@ -228,10 +228,10 @@ const SecuritySection: React.FC = () => {
             <tbody>
               {blocked.map(b => (
                 <tr key={b.ip} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#f87171' }}>{b.ip}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{b.reason}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{b.blocked_by}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(b.blocked_at)}</td>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--loss)' }}>{b.ip}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{b.reason}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{b.blocked_by}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(b.blocked_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <ActionBtn
                       label="Unblock"
@@ -268,10 +268,10 @@ const SecuritySection: React.FC = () => {
               {sessions.map(s => (
                 <tr key={s.session_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{s.username}</td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#94a3b8', fontSize: 12 }}>{s.ip}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{s.device}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{timeAgo(s.last_active)}</td>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--text-dim)', fontSize: 12 }}>{s.ip}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{s.device}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{timeAgo(s.last_active)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <ActionBtn

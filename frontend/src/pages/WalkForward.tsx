@@ -137,11 +137,11 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
         alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 20, fontWeight: 800, color }}>{nf(score, 0)}</span>
-        <span style={{ fontSize: 10, color: '#64748b' }}>/ 100</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>/ 100</span>
       </div>
       <div>
         <div style={{ fontSize: 16, fontWeight: 700, color }}>{label}</div>
-        <div style={{ fontSize: 12, color: '#64748b', maxWidth: 180 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 180 }}>
           Consistency of returns across all folds
         </div>
       </div>
@@ -207,19 +207,19 @@ const WalkForward: React.FC = () => {
     return (
       <div className="page-content">
         <h1 style={s.title}>Walk-Forward Analysis</h1>
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: '#94a3b8', textAlign: 'center' }}>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: 'var(--text-dim)', textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
-          <div style={{ fontSize: 16, color: '#e2e8f0', marginBottom: 8 }}>
+          <div style={{ fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>
             {apiError ?? 'No walk-forward data available.'}
           </div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             Go to the Backtesting page and run a walk-forward analysis to see results here.
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>
             <button onClick={() => load()} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
               ↻ Retry
             </button>
-            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: 'var(--text-dim)', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
               📊 Go to Backtesting
             </button>
           </div>
@@ -244,7 +244,7 @@ const WalkForward: React.FC = () => {
             style={{
               padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
               background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-              color: '#a78bfa', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
             }}
           >
             🤖 Generate Strategy
@@ -285,7 +285,7 @@ const WalkForward: React.FC = () => {
                   background: visibleFolds.has(f.fold)
                     ? FOLD_COLORS[(f.fold - 1) % FOLD_COLORS.length]
                     : '#1e293b',
-                  color: visibleFolds.has(f.fold) ? '#0f172a' : '#64748b',
+                  color: visibleFolds.has(f.fold) ? '#0f172a' : 'var(--text-muted)',
                 }}
                 onClick={() => toggleFold(f.fold)}
               >
@@ -321,14 +321,14 @@ const WalkForward: React.FC = () => {
                     {f.fold}
                   </td>
                   <td style={s.td}>{f.test_start} → {f.test_end}</td>
-                  <td style={{ ...s.td, color: f.accuracy >= 55 ? '#4ade80' : '#f87171' }}>
+                  <td style={{ ...s.td, color: f.accuracy >= 55 ? 'var(--gain)' : 'var(--loss)' }}>
                     {nf(f.accuracy, 1)}%
                   </td>
-                  <td style={{ ...s.td, color: f.sharpe >= 1 ? '#4ade80' : '#facc15' }}>
+                  <td style={{ ...s.td, color: f.sharpe >= 1 ? 'var(--gain)' : '#facc15' }}>
                     {nf(f.sharpe, 2)}
                   </td>
-                  <td style={{ ...s.td, color: '#f87171' }}>{nf(f.max_drawdown, 1)}%</td>
-                  <td style={{ ...s.td, color: (f.total_return ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                  <td style={{ ...s.td, color: 'var(--loss)' }}>{nf(f.max_drawdown, 1)}%</td>
+                  <td style={{ ...s.td, color: (f.total_return ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                     {Number.isFinite(f.total_return) ? `${f.total_return >= 0 ? '+' : ''}${f.total_return.toFixed(1)}%` : '—'}
                   </td>
                   <td style={s.td}>{f.total_trades}</td>
@@ -368,7 +368,7 @@ const MetricCard: React.FC<{ label: string; value: string; color: string }> = ({
 
 const MCCard: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
   <div style={s.mcCard}>
-    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
   </div>
 );

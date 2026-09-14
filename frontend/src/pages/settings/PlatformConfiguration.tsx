@@ -850,7 +850,7 @@ const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ a
           padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
           fontSize: 12, fontWeight: active === t.id ? 700 : 500,
           background: active === t.id ? '#1e3a5f' : '#1e293b',
-          color: active === t.id ? '#60a5fa' : '#94a3b8',
+          color: active === t.id ? 'var(--link)' : 'var(--text-dim)',
           transition: 'all 0.15s',
         }}
       >{t.label}</button>
@@ -1385,8 +1385,8 @@ const HealingTab: React.FC<{
               { label: 'Last Test Failed', value: healerStatus.last_test_failed ?? '—' },
             ].map((kpi) => (
               <div key={kpi.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kpi.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#f8fafc', marginTop: 4 }}>{kpi.value}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kpi.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-strong)', marginTop: 4 }}>{kpi.value}</div>
               </div>
             ))}
           </div>
@@ -1456,7 +1456,7 @@ const HealingTab: React.FC<{
         <Tog id="par_tests" label="Run Tests in Parallel" desc="parallel_tests — uses pytest-xdist" checked={healer.parallel_tests} onChange={(v) => setHealer({ parallel_tests: v })} />
         <Num label="Scheduled Test Interval (min)" desc="test_schedule_interval_min — 0 = disabled" value={healer.test_schedule_interval_min} min={0} onChange={(v) => setHealer({ test_schedule_interval_min: v })} />
         <Divider />
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Test Execution Triggers
         </div>
         {['after_patch', 'on_drift', 'on_schedule', 'on_startup'].map((s) => (
@@ -1468,7 +1468,7 @@ const HealingTab: React.FC<{
           />
         ))}
         <Divider />
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Test Categories
         </div>
         {testIndex && (
@@ -1479,14 +1479,14 @@ const HealingTab: React.FC<{
         {TEST_CATEGORY_META.map((cat) => (
           <div key={cat.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
             <div>
-              <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.accent, display: 'inline-block' }} />
                 {cat.label}
                 {testIndex?.by_category[cat.key] !== undefined && (
                   <span style={{ fontSize: 11, color: '#475569' }}>({testIndex.by_category[cat.key]} tests)</span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{cat.desc}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{cat.desc}</div>
             </div>
             <Toggle
               id={`cat_${cat.key}`} label="" checked={!!healer.test_categories[cat.key]}
@@ -1495,7 +1495,7 @@ const HealingTab: React.FC<{
           </div>
         ))}
         <Divider />
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Require Manual Approval Before Patching
         </div>
         {['nuclear', 'e2e', 'security', 'risk'].map((s) => (
@@ -1517,7 +1517,7 @@ const HealingTab: React.FC<{
           <Button variant="secondary" onClick={onReindexTests}>Re-index Test Files</Button>
         </div>
         {actionMsg && (
-          <div style={{ fontSize: 13, color: '#60a5fa', padding: '8px 12px', background: '#0c1a2e', borderRadius: 6, border: '1px solid #1e3a5f' }}>
+          <div style={{ fontSize: 13, color: 'var(--link)', padding: '8px 12px', background: '#0c1a2e', borderRadius: 6, border: '1px solid #1e3a5f' }}>
             {actionMsg}
           </div>
         )}
@@ -1893,7 +1893,7 @@ const ChainLegRow: React.FC<{
       <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {index === 0 ? 'Primary' : `Fallback ${index}`}
       </div>
-      <div style={{ fontSize: 11, color: reachable === undefined ? '#475569' : reachable ? '#22c55e' : '#f87171', marginTop: 2 }}>
+      <div style={{ fontSize: 11, color: reachable === undefined ? '#475569' : reachable ? '#22c55e' : 'var(--loss)', marginTop: 2 }}>
         {reachable === undefined ? 'unknown' : reachable ? 'credential present' : 'no credential'}
       </div>
     </div>
@@ -2029,14 +2029,14 @@ const ModelChainEditor: React.FC<{
         return (
           <div key={role} style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-              <strong style={{ color: '#e2e8f0', fontSize: 14 }}>{title}</strong>
+              <strong style={{ color: 'var(--text)', fontSize: 14 }}>{title}</strong>
               <StatusBadge status={isOverridden(role) ? 'info' : 'ok'}
                 label={isOverridden(role) ? 'custom' : 'platform default'} />
             </div>
-            <p style={{ color: '#64748b', fontSize: 11, margin: '4px 0 6px', lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 11, margin: '4px 0 6px', lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>
 
             {legs.length === 0 ? (
-              <p style={{ color: '#f87171', fontSize: 12, margin: '6px 0' }}>
+              <p style={{ color: 'var(--loss)', fontSize: 12, margin: '6px 0' }}>
                 No legs configured for this role. Add one, or the committed default applies.
               </p>
             ) : legs.map((leg, index) => (
@@ -2423,7 +2423,7 @@ const InfrastructureTab: React.FC = () => {
                   background: '#0f172a', border: `1px solid ${statusColor(s)}33`,
                   borderRadius: 8, padding: '12px 14px',
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
                     {key.replace(/_/g, ' ')}
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: statusColor(s) }}>{s.toUpperCase()}</div>
@@ -2455,7 +2455,7 @@ const InfrastructureTab: React.FC = () => {
               { label: 'Commands/sec', value: String(cacheStats.instantaneous_ops_per_sec ?? '—') },
             ].map((m) => (
               <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{m.value}</div>
               </div>
             ))}
@@ -2505,7 +2505,7 @@ const InfrastructureTab: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(dbStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
               <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
               </div>
             ))}
@@ -2519,7 +2519,7 @@ const InfrastructureTab: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(queueStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
               <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
               </div>
             ))}
@@ -2604,7 +2604,7 @@ const DiagnosticsTab: React.FC = () => {
     <>
       <Card>
         <SectionHeader icon="🔬" title="Platform Diagnostics" />
-        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
           Run the full diagnostic suite across all 12 check categories. Auto-remediates critical findings.
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -2661,8 +2661,8 @@ const DiagnosticsTab: React.FC = () => {
           {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 8 }}>
               <div style={{ fontWeight: 600, fontSize: 13, color: '#fca5a5' }}>{issue.check_name}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{issue.message}</div>
-              {issue.remediation && <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Fix: {issue.remediation}</div>}
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
+              {issue.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
             </div>
           ))}
         </Card>
@@ -2670,7 +2670,7 @@ const DiagnosticsTab: React.FC = () => {
       {report && (
         <Card>
           <SectionHeader icon="📋" title="Last Diagnostic Report" />
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
             Completed: {String(report.completed_at ?? 'N/A')}
           </div>
           {(report.results as Array<Record<string,string>> ?? []).map((r, i) => (
@@ -2682,7 +2682,7 @@ const DiagnosticsTab: React.FC = () => {
             }}>
               <div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{r.check_name}</span>
-                <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.message}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.message}</div>
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444', textTransform: 'uppercase', flexShrink: 0, marginLeft: 12 }}>
                 {r.status}
@@ -2850,7 +2850,7 @@ const PlatformConfiguration: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 32 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 32 }}>
       <div style={{ width: 20, height: 20, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading platform configuration…
     </div>
@@ -2894,17 +2894,17 @@ const PlatformConfiguration: React.FC = () => {
           border: `1px solid ${validationResult.valid ? '#16a34a' : '#dc2626'}`,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: validationResult.issues.length > 0 ? 10 : 0 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: validationResult.valid ? '#4ade80' : '#f87171' }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: validationResult.valid ? 'var(--gain)' : 'var(--loss)' }}>
               {validationResult.valid ? '✓ Config valid' : `✗ ${validationResult.error_count} error(s), ${validationResult.warning_count} warning(s)`}
             </span>
-            <button onClick={() => setValidationResult(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>×</button>
+            <button onClick={() => setValidationResult(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>×</button>
           </div>
           {validationResult.issues.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {validationResult.issues.map((issue, i) => (
                 <div key={i} style={{ fontSize: 12, color: issue.severity === 'error' ? '#fca5a5' : '#fde68a' }}>
                   <span style={{ fontWeight: 700, textTransform: 'uppercase', marginRight: 6 }}>[{issue.severity}]</span>
-                  <span style={{ color: '#94a3b8', marginRight: 4 }}>{issue.field}:</span>
+                  <span style={{ color: 'var(--text-dim)', marginRight: 4 }}>{issue.field}:</span>
                   {issue.message}
                 </div>
               ))}

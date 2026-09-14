@@ -136,11 +136,11 @@ const Profile: React.FC = () => {
   // guarded route (F4-01).
   if (selfAlias) return <Navigate to="/profile" replace />;
 
-  if (loading) return <div className="page-content"><p style={{color:'#94a3b8'}}>Loading profile…</p></div>;
+  if (loading) return <div className="page-content"><p style={{color:'var(--text-dim)'}}>Loading profile…</p></div>;
   if (error)   return <div className="page-content"><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
   if (!profile) return (
     <div className="page-content">
-      <div style={{ textAlign: 'center', padding: '60px 24px', color: '#64748b' }}>
+      <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>👤</div>
         <div style={{ fontSize: 18, fontWeight: 600, color: '#f1f5f9', marginBottom: 8 }}>
           Profile not found
@@ -190,7 +190,7 @@ const Profile: React.FC = () => {
         </div>
         <div style={s.headerActions}>
           <button onClick={() => navigate('/trade')}
-            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ⚡ Trade
           </button>
           <button onClick={() => navigate('/leaderboard')}
@@ -203,7 +203,7 @@ const Profile: React.FC = () => {
                 href={`/profile/${profile.user_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}
+                style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: 'var(--link)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}
                 title="See how your profile looks to other traders"
               >
                 👁 View Public Profile
@@ -247,8 +247,8 @@ const Profile: React.FC = () => {
           {label:'Total P&L',    value:fmtPctRaw(st.total_return_pct, 1), positive: (st.total_return_pct ?? 0) >= 0},
         ].map(({label,value,positive})=>(
           <div key={label} style={s.statCard}>
-            <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>{label}</div>
-            <div style={{fontSize:20,fontWeight:700,color:positive===undefined?'#f1f5f9':positive?'#4ade80':'#f87171'}}>{value}</div>
+            <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:4}}>{label}</div>
+            <div style={{fontSize:20,fontWeight:700,color:positive===undefined?'#f1f5f9':positive?'var(--gain)':'var(--loss)'}}>{value}</div>
           </div>
         ))}
       </div>
@@ -261,7 +261,7 @@ const Profile: React.FC = () => {
             {profile.strategies?.map(str=>(
               <div key={str.strategy_id} style={s.stratRow}>
                 <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
-                <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers ?? 0} subscribers</span>
+                <span style={{fontSize:13,color:'var(--text-muted)'}}>{str.subscribers ?? 0} subscribers</span>
                 <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(str.rating != null && Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {str.rating != null && Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
               </div>
             ))}
@@ -279,9 +279,9 @@ const Profile: React.FC = () => {
               {(profile.recent_signals ?? []).map(sig=>(
                 <tr key={sig.signal_id} style={s.tr}>
                   <td style={s.td}>{sig.symbol}</td>
-                  <td style={s.td}><span style={{color:sig.direction==='BUY'?'#4ade80':'#f87171',fontWeight:600}}>{sig.direction}</span></td>
+                  <td style={s.td}><span style={{color:sig.direction==='BUY'?'var(--gain)':'var(--loss)',fontWeight:600}}>{sig.direction}</span></td>
                   <td style={s.td}>{fmtPct(sig.confidence, 0)}</td>
-                  <td style={{...s.td,color:sig.pnl==null?'#94a3b8':sig.pnl>=0?'#4ade80':'#f87171',fontWeight:600}}>{fmtPctRaw(sig.pnl, 2)}</td>
+                  <td style={{...s.td,color:sig.pnl==null?'var(--text-dim)':sig.pnl>=0?'var(--gain)':'var(--loss)',fontWeight:600}}>{fmtPctRaw(sig.pnl, 2)}</td>
                   <td style={s.td}>{sig.created_at ? new Date(sig.created_at).toLocaleDateString() : '—'}</td>
                 </tr>
               ))}
@@ -297,32 +297,32 @@ const s: Record<string,React.CSSProperties> = {
   header:{display:'flex',gap:20,alignItems:'flex-start',marginBottom:28,background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:'24px'},
   avatarWrap:{position:'relative',flexShrink:0},
   avatar:{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'2px solid #334155'},
-  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid #334155',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:700,color:'#60a5fa'},
+  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid #334155',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:700,color:'var(--link)'},
   avatarEditBtn:{position:'absolute',bottom:0,right:0,background:'#334155',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'},
   headerInfo:{flex:1},
-  name:{fontSize:22,fontWeight:700,color:'#f8fafc',margin:'0 0 4px'},
-  username:{fontSize:14,color:'#64748b',margin:'0 0 8px'},
-  bio:{fontSize:14,color:'#94a3b8',margin:'0 0 10px',lineHeight:1.5},
+  name:{fontSize:22,fontWeight:700,color:'var(--text-strong)',margin:'0 0 4px'},
+  username:{fontSize:14,color:'var(--text-muted)',margin:'0 0 8px'},
+  bio:{fontSize:14,color:'var(--text-dim)',margin:'0 0 10px',lineHeight:1.5},
   followRow:{display:'flex',gap:16},
-  followStat:{fontSize:13,color:'#64748b'},
+  followStat:{fontSize:13,color:'var(--text-muted)'},
   headerActions:{flexShrink:0},
   editBtn:{background:'#334155',border:'1px solid #475569',borderRadius:8,color:'#f1f5f9',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 16px'},
   followBtn:{border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 20px'},
   editCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:20},
-  cardTitle:{fontSize:16,fontWeight:600,color:'#e2e8f0',marginBottom:14,marginTop:0},
-  label:{display:'block',fontSize:13,color:'#94a3b8',marginBottom:6},
+  cardTitle:{fontSize:16,fontWeight:600,color:'var(--text)',marginBottom:14,marginTop:0},
+  label:{display:'block',fontSize:13,color:'var(--text-dim)',marginBottom:6},
   input:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
   textarea:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
-  inlineError:{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:6,padding:'6px 10px',fontSize:12,color:'#f87171',marginTop:8},
-  successMsg:{background:'rgba(74,222,128,0.1)',border:'1px solid #4ade80',borderRadius:6,padding:'6px 10px',fontSize:12,color:'#4ade80',marginTop:8},
+  inlineError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--loss)',marginTop:8},
+  successMsg:{background:'rgba(74,222,128,0.1)',border:'1px solid var(--gain)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--gain)',marginTop:8},
   saveBtn:{background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'9px 20px'},
-  cancelBtn:{background:'transparent',border:'1px solid #334155',borderRadius:8,color:'#94a3b8',cursor:'pointer',fontSize:13,padding:'9px 16px'},
+  cancelBtn:{background:'transparent',border:'1px solid #334155',borderRadius:8,color:'var(--text-dim)',cursor:'pointer',fontSize:13,padding:'9px 16px'},
   statsGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12,marginBottom:20},
   statCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:8,padding:'12px 16px'},
   card:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16},
   stratRow:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid #0f172a'},
   table:{width:'100%',borderCollapse:'collapse'},
-  th:{textAlign:'left',fontSize:12,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'},
+  th:{textAlign:'left',fontSize:12,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'},
   tr:{borderBottom:'1px solid #1e293b'},
   td:{padding:'10px 12px',fontSize:14,color:'#cbd5e1'},
   errorBox:{background:'#450a0a',border:'1px solid #dc2626',borderRadius:10,padding:'20px 24px',color:'#fca5a5'},

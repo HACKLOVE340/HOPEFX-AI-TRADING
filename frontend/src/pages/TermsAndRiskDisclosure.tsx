@@ -291,7 +291,7 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     background: '#0f172a',
-    color: '#e2e8f0',
+    color: 'var(--text)',
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   },
   header: {
@@ -314,7 +314,7 @@ const s: Record<string, React.CSSProperties> = {
   logo: {
     fontSize: 22,
     fontWeight: 800,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     background: 'none',
     border: 'none',
     cursor: 'pointer',
@@ -324,7 +324,7 @@ const s: Record<string, React.CSSProperties> = {
   navLink: {
     background: 'none',
     border: 'none',
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     fontSize: 14,
     cursor: 'pointer',
     padding: '6px 12px',
@@ -355,7 +355,7 @@ const s: Record<string, React.CSSProperties> = {
   tab: {
     background: 'none',
     border: 'none',
-    color: '#64748b',
+    color: 'var(--text-muted)',
     fontSize: 14,
     fontWeight: 500,
     cursor: 'pointer',
@@ -365,7 +365,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   tabActive: {
     background: '#0f172a',
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     fontWeight: 600,
     boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
   },
@@ -373,11 +373,11 @@ const s: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 32,
     fontWeight: 800,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     margin: '0 0 8px',
     letterSpacing: -0.5,
   },
-  subtitle: { fontSize: 15, color: '#64748b', margin: 0 },
+  subtitle: { fontSize: 15, color: 'var(--text-muted)', margin: 0 },
   sections: { display: 'flex', flexDirection: 'column', gap: 24 },
   section: {
     background: '#1e293b',
@@ -392,14 +392,14 @@ const s: Record<string, React.CSSProperties> = {
   sectionTitle: {
     fontSize: 17,
     fontWeight: 700,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     margin: '0 0 16px',
   },
   sectionBody: { display: 'flex', flexDirection: 'column', gap: 12 },
   para: {
     fontSize: 14,
     lineHeight: 1.7,
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     margin: 0,
     whiteSpace: 'pre-line',
   },

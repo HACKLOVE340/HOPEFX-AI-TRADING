@@ -14,10 +14,10 @@ import type { EngineSignal, SignalStrength } from '../../types';
 // ── Strength styling ──────────────────────────────────────────────────────────
 const STRENGTH_META: Record<SignalStrength, { label: string; color: string }> = {
   very_strong: { label: 'Very Strong', color: '#22c55e' },
-  strong:      { label: 'Strong',      color: '#4ade80' },
-  moderate:    { label: 'Moderate',    color: '#fbbf24' },
+  strong:      { label: 'Strong',      color: 'var(--gain)' },
+  moderate:    { label: 'Moderate',    color: 'var(--warn)' },
   weak:        { label: 'Weak',        color: '#fb923c' },
-  very_weak:   { label: 'Very Weak',   color: '#f87171' },
+  very_weak:   { label: 'Very Weak',   color: 'var(--loss)' },
 };
 
 const dirMeta = (d: EngineSignal['direction']) =>
@@ -64,7 +64,7 @@ const Chip: React.FC<{ children: React.ReactNode; title?: string; color?: string
   <span title={title} style={{
     fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 5,
     background: 'rgba(148,163,184,0.08)', border: '1px solid #1e293b',
-    color: color ?? '#94a3b8', whiteSpace: 'nowrap',
+    color: color ?? 'var(--text-dim)', whiteSpace: 'nowrap',
   }}>
     {children}
   </span>
@@ -83,7 +83,7 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
 
   return (
     <div className="hover-lift" style={{
-      background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12,
+      background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12,
       padding: 14, opacity: stale ? 0.6 : 1,
     }}>
       {/* Header: symbol + direction + strength */}
@@ -127,7 +127,7 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
         ))}
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>R:R</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: signal.risk_reward_ratio >= 1.5 ? '#22c55e' : '#fbbf24' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: signal.risk_reward_ratio >= 1.5 ? '#22c55e' : 'var(--warn)' }}>
             {num(signal.risk_reward_ratio, 2)}
           </div>
         </div>

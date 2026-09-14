@@ -133,7 +133,7 @@ const ApiKeysSection: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={() => setRevealedKey(null)}
-              style={{ color: '#64748b' }}
+              style={{ color: 'var(--text-muted)' }}
             >
               Dismiss
             </Button>
@@ -143,7 +143,7 @@ const ApiKeysSection: React.FC = () => {
 
       {/* Create new key */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Create new key
         </h3>
         <Field label="Key name" description="A label to identify this key (e.g. 'My trading bot').">
@@ -165,7 +165,7 @@ const ApiKeysSection: React.FC = () => {
                   cursor: 'pointer', transition: 'all 0.15s',
                   background: newKeyScopes.includes(scope) ? '#1e3a5f' : '#0f172a',
                   border: `1px solid ${newKeyScopes.includes(scope) ? '#3b82f6' : '#334155'}`,
-                  color: newKeyScopes.includes(scope) ? '#60a5fa' : '#64748b',
+                  color: newKeyScopes.includes(scope) ? 'var(--link)' : 'var(--text-muted)',
                 }}
               >
                 {scope}
@@ -173,7 +173,7 @@ const ApiKeysSection: React.FC = () => {
             ))}
           </div>
         </Field>
-        {createError && <div style={{ fontSize: 13, color: '#f87171', marginBottom: 10 }}>❌ {createError}</div>}
+        {createError && <div style={{ fontSize: 13, color: 'var(--loss)', marginBottom: 10 }}>❌ {createError}</div>}
         <Button
           onClick={handleCreate}
           loading={creating}
@@ -185,15 +185,15 @@ const ApiKeysSection: React.FC = () => {
 
       {/* Existing keys */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Active keys
         </h3>
         {loading ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>Loading keys…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading keys…</div>
         ) : loadError ? (
           <ErrorBanner message={`${loadError} This is not the same as having none — do not assume no keys are live.`} />
         ) : keys.length === 0 ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>No API keys yet.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No API keys yet.</div>
         ) : (
           keys.map((key) => (
             <div key={key.key_id} style={{
@@ -202,10 +202,10 @@ const ApiKeysSection: React.FC = () => {
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{key.name}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{key.name}</span>
                   <StatusBadge status="info" label={key.scopes.join(', ')} />
                 </div>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#64748b', marginBottom: 2 }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
                   {key.key_prefix}
                 </div>
                 <div style={{ fontSize: 11, color: '#475569' }}>

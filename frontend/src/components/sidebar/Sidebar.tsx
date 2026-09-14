@@ -19,7 +19,7 @@ import {
 import { ChevronDown, Star, Search, X, History, Power, LogIn, ArrowLeft } from 'lucide-react';
 import { ThemeToggle } from '../ThemeToggle';
 import { isAdmin, isSuperAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
-import { NAV_ITEMS, NAV_GROUPS } from './navConfig';
+import { NAV_ITEMS, NAV_GROUPS, HUBS, topLevelItems } from './navConfig';
 import type { NavItem } from './navConfig';
 import { authApi, notificationsApi } from '../../hooks/useApi';
 import type { Plan } from '../../lib/subscription';
@@ -50,7 +50,7 @@ const PlanBadge: React.FC<{ plan: Plan; role: string }> = ({ plan, role }) => {
     return (
       <span style={{
         fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-        background: '#1e3a5f', color: '#60a5fa', border: '1px solid #1e3a5f',
+        background: '#1e3a5f', color: 'var(--link)', border: '1px solid #1e3a5f',
         textTransform: 'uppercase', letterSpacing: '0.05em',
       }}>
         ADMIN
@@ -69,16 +69,37 @@ const PlanBadge: React.FC<{ plan: Plan; role: string }> = ({ plan, role }) => {
   );
 };
 
-// ── Lock badge ────────────────────────────────────────────────────────────────
-const LockBadge: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => (
-  <span style={{
-    fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4,
-    background: '#1e293b', color: '#475569', border: '1px solid #334155',
-    textTransform: 'uppercase', letterSpacing: '0.04em', marginLeft: 'auto',
-  }}>
-    {requiredPlan}
-  </span>
-);
+// ── Tier badge ────────────────────────────────────────────────────────────────
+//
+// The five tiers are a ladder, and the badge used to render all four paid ones
+// in the same muted slate — so the sidebar could tell you an item was locked
+// but not whether it was one step away or four. Each tier now carries its own
+// colour, ascending, so the shape of what is above you is readable at a glance
+// rather than by reading four words.
+//
+// Free never appears: an item unlocked at free is not locked at all.
+const TIER_INK: Record<string, string> = {
+  starter:      'var(--text-dim)',
+  professional: 'var(--accent)',
+  pro:          'var(--accent)',
+  enterprise:   'var(--ai-model)',
+  elite:        'var(--warn)',
+};
+
+const LockBadge: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => {
+  const ink = TIER_INK[requiredPlan.toLowerCase()] ?? 'var(--text-faint)';
+  return (
+    <span style={{
+      fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '1px 5px',
+      borderRadius: 'var(--r-sm)',
+      background: 'var(--sunken)', color: ink, border: `1px solid ${ink}`,
+      textTransform: 'uppercase', letterSpacing: 'var(--tracking-label)',
+      marginLeft: 'auto', flexShrink: 0, lineHeight: 1.5,
+    }}>
+      {requiredPlan}
+    </span>
+  );
+};
 
 // ── Trading mode badge ────────────────────────────────────────────────────────
 const TradingModeBadge: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
@@ -204,18 +225,28 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
        link would otherwise have no accessible name at all (F170/F172). */
     aria-label={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
     onClick={onNavigate}
+    /* Pro-max density. The row was 44px tall with 10px of padding, which is
+       right for a thumb and wasteful for a mouse: this sidebar carries eight
+       groups and the tail of the list was always below the fold. `min-height`
+       now comes from --nav-row, which the stylesheet sets to 32px on a fine
+       pointer and keeps at 44px on a coarse one, so a touch target is never
+       traded away for density. Roughly four more items per screen on a laptop.
+
+       `locked` used to dim the whole row to 0.6 opacity on top of an already
+       muted grey — under 3:1 against the sidebar, so the one state that most
+       needs reading was the hardest to read. The badge carries that meaning
+       now, in the tier's own colour, and the label keeps its contrast. */
     style={{
       display: 'flex', alignItems: 'center',
-      gap: 10, padding: '10px 14px',
-      minHeight: 44,
-      textDecoration: 'none', fontSize: 13, fontWeight: 500,
-      transition: 'background 0.15s, color 0.15s',
-      borderRadius: '0 6px 6px 0', marginRight: 8,
-      background:  active ? '#1e3a5f' : 'transparent',
-      color:       active ? '#60a5fa' : locked ? '#334155' : '#94a3b8',
-      borderLeft:  active ? '3px solid #3b82f6' : '3px solid transparent',
+      gap: 'var(--sp-3)', padding: '0 var(--sp-4)',
+      minHeight: 'var(--nav-row)',
+      textDecoration: 'none', fontSize: 'var(--fs-body)', fontWeight: 500,
+      transition: 'background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)',
+      borderRadius: '0 var(--r-sm) var(--r-sm) 0', marginRight: 8,
+      background:  active ? 'var(--accent-soft)' : 'transparent',
+      color:       active ? 'var(--link)' : locked ? 'var(--text-muted)' : 'var(--text-dim)',
+      borderLeft:  active ? '3px solid var(--link)' : '3px solid transparent',
       justifyContent: collapsed ? 'center' : 'flex-start',
-      opacity: locked ? 0.6 : 1,
       position: 'relative',
       cursor: locked ? 'not-allowed' : 'pointer',
     }}
@@ -254,7 +285,7 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(item.path); }}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
-              color: isFavorite ? '#fbbf24' : '#475569',
+              color: isFavorite ? 'var(--warn)' : '#475569',
               lineHeight: 1, padding: 2, flexShrink: 0,
               display: 'flex', alignItems: 'center',
             }}
@@ -293,7 +324,7 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
         onChange={(e) => onChange(e.target.value)}
         style={{
           background: 'transparent', border: 'none', outline: 'none',
-          color: '#e2e8f0', fontSize: 12, width: '100%',
+          color: 'var(--text)', fontSize: 12, width: '100%',
           fontFamily: 'inherit',
         }}
       />
@@ -376,7 +407,33 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
     return true;
   });
 
-  // Filter nav items by search query
+  /**
+   * What the column itself shows: the daily destinations, plus one entry per
+   * hub standing in for everything behind it.
+   *
+   * 61 items became 14. Nothing was removed — an item with a `hub` renders on
+   * that hub's page with a sentence describing it, which is more than a
+   * sidebar line could ever give it. Search below still reaches all 61, and
+   * that is deliberate: collapsing the column must not make anything harder
+   * to find for someone who already knows its name.
+   */
+  const sidebarItems = useMemo<NavItem[]>(
+    () => [
+      ...topLevelItems(),
+      ...HUBS.map((h) => ({
+        path: h.path,
+        label: h.label,
+        icon: h.icon,
+        group: h.group,
+        plan: h.plan,
+        adminOnly: h.adminOnly,
+      })),
+    ],
+    [],
+  );
+
+  // Filter nav items by search query. Deliberately over ALL items, including
+  // the ones the column no longer lists.
   const searchLower = search.toLowerCase().trim();
   const filteredItems = useMemo(() => {
     if (!searchLower) return null;
@@ -450,7 +507,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
           )
           : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-              <span style={{ fontSize: 18, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5, flexShrink: 0 }}>
+              <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5, flexShrink: 0 }}>
                 HOPE<span style={{ color: '#3b82f6' }}>FX</span>
               </span>
               <TradingModeBadge collapsed={false} />
@@ -463,7 +520,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={{
-            background: 'transparent', border: 'none', color: '#64748b',
+            background: 'transparent', border: 'none', color: 'var(--text-muted)',
             fontSize: 18, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             minWidth: 44, minHeight: 44, flexShrink: 0,
@@ -533,7 +590,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                   letterSpacing: '0.08em', padding: '8px 14px 4px',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                  <Star size={11} strokeWidth={2} fill="currentColor" aria-hidden style={{ color: '#fbbf24' }} /> Favorites
+                  <Star size={11} strokeWidth={2} fill="currentColor" aria-hidden style={{ color: 'var(--warn)' }} /> Favorites
                 </div>
                 {favoriteItems.map((item) => (
                   <NavItemRow
@@ -578,7 +635,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
             )}
 
             {visibleGroups.map((group) => {
-              const items = NAV_ITEMS.filter((item) => {
+              const items = sidebarItems.filter((item) => {
                 if (item.group !== group.id)  return false;
                 if (item.superAdminOnly)      return superAdmin;
                 if (item.adminOnly)           return admin;
@@ -654,7 +711,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                 aria-label="Sign in"
                 style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
-                  color: '#60a5fa', lineHeight: 1,
+                  color: 'var(--link)', lineHeight: 1,
                   padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderRadius: 6,
                 }}
@@ -671,7 +728,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <WsDot />
                   <span style={{
-                    fontSize: 12, color: '#94a3b8',
+                    fontSize: 12, color: 'var(--text-dim)',
                     overflow: 'hidden', textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap', flex: 1,
                   }}>
@@ -683,7 +740,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                   onClick={handleSignOut}
                   style={{
                     background: 'transparent', border: '1px solid #334155',
-                    borderRadius: 6, color: '#64748b', fontSize: 12,
+                    borderRadius: 6, color: 'var(--text-muted)', fontSize: 12,
                     cursor: 'pointer', padding: '4px 8px', textAlign: 'left',
                   }}
                 >
@@ -695,7 +752,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                 onClick={() => navigate('/login')}
                 style={{
                   background: '#1e3a5f', border: 'none', borderRadius: 6,
-                  color: '#60a5fa', fontSize: 12, cursor: 'pointer',
+                  color: 'var(--link)', fontSize: 12, cursor: 'pointer',
                   padding: '6px 10px', fontWeight: 600,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}

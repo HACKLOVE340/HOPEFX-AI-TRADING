@@ -56,7 +56,7 @@ export const RiskTransparencyStrip: React.FC = () => {
 
   return (
     <div style={{
-      background: '#0d1421',
+      background: 'var(--surface)',
       border: `1px solid ${killSwitch ? 'rgba(248,113,113,0.4)' : '#1e293b'}`,
       borderRadius: 12, padding: 16,
     }}>
@@ -65,7 +65,7 @@ export const RiskTransparencyStrip: React.FC = () => {
         <span style={{
           fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
-          color: killSwitch ? '#f87171' : '#22c55e',
+          color: killSwitch ? 'var(--loss)' : '#22c55e',
           background: killSwitch ? 'rgba(248,113,113,0.12)' : 'rgba(34,197,94,0.12)',
           border: `1px solid ${killSwitch ? 'rgba(248,113,113,0.35)' : 'rgba(34,197,94,0.3)'}`,
         }}>

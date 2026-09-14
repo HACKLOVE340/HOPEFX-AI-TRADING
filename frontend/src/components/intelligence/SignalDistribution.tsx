@@ -10,10 +10,10 @@ import type { SignalAnalyticsReport } from '../../types';
 
 const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div style={{
-    background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12,
+    background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12,
     padding: 14, flex: 1, minWidth: 240,
   }}>
-    <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>{title}</div>
+    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 10 }}>{title}</div>
     {children}
   </div>
 );
@@ -21,7 +21,7 @@ const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, 
 // Horizontal labelled bar.
 const Bar: React.FC<{ label: string; value: number; max: number; color: string }> = ({ label, value, max, color }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-    <span style={{ fontSize: 11, color: '#94a3b8', width: 78, flexShrink: 0, textTransform: 'capitalize' }}>{label}</span>
+    <span style={{ fontSize: 11, color: 'var(--text-dim)', width: 78, flexShrink: 0, textTransform: 'capitalize' }}>{label}</span>
     <div style={{ flex: 1, height: 8, background: '#1e293b', borderRadius: 4, overflow: 'hidden' }}>
       <div style={{ width: max > 0 ? `${(value / max) * 100}%` : '0%', height: '100%', background: color }} />
     </div>
@@ -38,9 +38,9 @@ type StrengthTier = (typeof STRENGTH_ORDER)[number];
 type Direction    = 'buy' | 'sell' | 'hold';
 
 const STRENGTH_COLOR: Record<StrengthTier, string> = {
-  very_strong: '#22c55e', strong: '#4ade80', moderate: '#fbbf24', weak: '#fb923c', very_weak: '#f87171',
+  very_strong: '#22c55e', strong: 'var(--gain)', moderate: 'var(--warn)', weak: '#fb923c', very_weak: 'var(--loss)',
 };
-const DIR_COLOR: Record<Direction, string> = { buy: '#22c55e', sell: '#f87171', hold: '#94a3b8' };
+const DIR_COLOR: Record<Direction, string> = { buy: '#22c55e', sell: 'var(--loss)', hold: 'var(--text-dim)' };
 
 export const SignalDistribution: React.FC<{ analytics: SignalAnalyticsReport }> = ({ analytics }) => {
   const strengthMax = Math.max(1, ...Object.values(analytics.signals_by_strength ?? {}));

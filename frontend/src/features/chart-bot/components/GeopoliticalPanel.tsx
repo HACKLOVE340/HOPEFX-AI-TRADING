@@ -35,7 +35,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 const OUTLOOK_COLORS: Record<string, string> = {
   strongly_bullish: '#00ff88',
   bullish:          '#00cc66',
-  neutral:          '#94a3b8',
+  neutral:          'var(--text-dim)',
   bearish:          '#ff6600',
   strongly_bearish: '#ff0033',
 };
@@ -233,7 +233,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(6,13,24,0.97)',
     border: '1px solid #1a2e4a',
     borderRadius: 8,
-    color: '#e2e8f0',
+    color: 'var(--text)',
     fontFamily: 'monospace',
     fontSize: 12,
     minWidth: 240,
@@ -242,7 +242,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
   },
   title: {
-    fontSize: 11, fontWeight: 800, letterSpacing: 2, color: '#64748b',
+    fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)',
   },
   timestamp: {
     fontSize: 10, color: '#334155',
@@ -277,7 +277,7 @@ const s: Record<string, React.CSSProperties> = {
   dirBadge: {
     padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800,
   },
-  signalMeta: { fontSize: 10, color: '#64748b' },
+  signalMeta: { fontSize: 10, color: 'var(--text-muted)' },
 
   // Counts
   countsGrid: { display: 'flex', gap: 12 },
@@ -290,7 +290,7 @@ const s: Record<string, React.CSSProperties> = {
   regionPill: {
     padding: '2px 8px', borderRadius: 10,
     background: 'rgba(255,255,255,0.04)', border: '1px solid #1e3a5f',
-    fontSize: 10, color: '#94a3b8',
+    fontSize: 10, color: 'var(--text-dim)',
   },
 
   // Events
@@ -304,5 +304,5 @@ const s: Record<string, React.CSSProperties> = {
 
   // Recommendations
   recsSection: { display: 'flex', flexDirection: 'column', gap: 4 },
-  recItem: { fontSize: 10, color: '#94a3b8', lineHeight: 1.4 },
+  recItem: { fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.4 },
 };

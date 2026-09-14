@@ -46,7 +46,7 @@ export function DataAge({
       style={{
         fontSize: 11,
         fontFamily: 'monospace',
-        color: stale ? '#ffb800' : '#64748b',
+        color: stale ? '#ffb800' : 'var(--text-muted)',
       }}
     >
       {label ? `${label} ` : ''}

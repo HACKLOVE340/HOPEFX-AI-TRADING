@@ -167,7 +167,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
           </style>
 
           <div style={{
-            background: '#0d1421', border: '1px solid #1e293b',
+            background: 'var(--surface)', border: '1px solid #1e293b',
             borderRadius: 14, padding: '28px 28px 24px',
             maxWidth: 420, width: '90%',
             boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
@@ -188,7 +188,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
             </h2>
 
             {opts.description && (
-              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px', lineHeight: 1.6 }}>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 24px', lineHeight: 1.6 }}>
                 {opts.description}
               </p>
             )}
@@ -199,7 +199,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 onClick={() => resolve(false)}
                 style={{
                   background: 'transparent', border: '1px solid #334155',
-                  borderRadius: 8, color: '#94a3b8', cursor: 'pointer',
+                  borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
                   fontSize: 13, fontWeight: 600, padding: '9px 18px',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#475569'; (e.currentTarget as HTMLButtonElement).style.color = '#f1f5f9'; }}

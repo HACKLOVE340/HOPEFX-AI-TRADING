@@ -256,16 +256,16 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
+  logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
   heading: { fontSize: 20, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', margin: '0 0 8px' },
-  subtext: { fontSize: 13, color: '#64748b', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
+  subtext: { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
   form:    { display: 'flex', flexDirection: 'column', gap: 16 },
   field:   { display: 'flex', flexDirection: 'column' },
-  label:   { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  label:   { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   input: {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
     padding: '12px 14px', fontSize: 16, /* prevents iOS zoom */
-    color: '#f8fafc', outline: 'none',
+    color: 'var(--text-strong)', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
     WebkitAppearance: 'none',
   },
@@ -279,7 +279,7 @@ const s: Record<string, React.CSSProperties> = {
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
-    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', lineHeight: 1.5,
+    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--loss)', lineHeight: 1.5,
   },
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
@@ -290,7 +290,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'opacity 0.15s', textDecoration: 'none', touchAction: 'manipulation',
   },
   footer:   { display: 'flex', justifyContent: 'center', marginTop: 20 },
-  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#64748b', textDecoration: 'none', minHeight: 44 },
+  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44 },
 };
 
 export default ResetPassword;

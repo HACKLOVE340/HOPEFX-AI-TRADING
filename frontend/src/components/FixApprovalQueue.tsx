@@ -172,7 +172,7 @@ const FixRow: React.FC<FixRowProps> = ({
           <span style={{ ...statusPillStyle, background: statusColour + '22', color: statusColour }}>
             {fix.status}
           </span>
-          <span style={{ color: '#64748b', fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
@@ -185,20 +185,20 @@ const FixRow: React.FC<FixRowProps> = ({
           </div>
           <div style={diffSectionStyle}>
             <div style={diffLabelStyle}>LLM Fix</div>
-            <pre style={{ ...codeStyle, borderLeft: '3px solid #4ade80' }}>{fix.fix}</pre>
+            <pre style={{ ...codeStyle, borderLeft: '3px solid var(--gain)' }}>{fix.fix}</pre>
           </div>
 
           {fix.status === 'pending' && (
             <div style={actionsStyle}>
               <button
-                style={btnStyle('#4ade80')}
+                style={btnStyle('var(--gain)')}
                 onClick={onApprove}
                 disabled={acting}
               >
                 {acting ? '…' : '✓ Approve'}
               </button>
               <button
-                style={btnStyle('#f87171')}
+                style={btnStyle('var(--loss)')}
                 onClick={onDecline}
                 disabled={acting}
               >
@@ -251,14 +251,14 @@ const errorStyle: React.CSSProperties = {
   background: '#ef444422',
   border: '1px solid #ef4444',
   borderRadius: 6,
-  color: '#f87171',
+  color: 'var(--loss)',
   fontSize: 12,
   margin: '8px 16px',
   padding: '8px 12px',
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--text-muted)',
   fontSize: 13,
   padding: '24px 16px',
   textAlign: 'center',
@@ -297,7 +297,7 @@ const endpointStyle: React.CSSProperties = {
 };
 
 const timeStyle: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--text-muted)',
   fontSize: 11,
   flexShrink: 0,
 };
@@ -325,7 +325,7 @@ const diffSectionStyle: React.CSSProperties = {
 };
 
 const diffLabelStyle: React.CSSProperties = {
-  color: '#94a3b8',
+  color: 'var(--text-dim)',
   fontSize: 10,
   fontWeight: 700,
   letterSpacing: 0.5,
@@ -335,7 +335,7 @@ const diffLabelStyle: React.CSSProperties = {
 const codeStyle: React.CSSProperties = {
   background: '#0f172a',
   borderRadius: 6,
-  color: '#e2e8f0',
+  color: 'var(--text)',
   fontFamily: 'monospace',
   fontSize: 11,
   lineHeight: 1.6,

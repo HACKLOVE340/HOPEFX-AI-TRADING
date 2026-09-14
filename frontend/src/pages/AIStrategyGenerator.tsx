@@ -178,7 +178,7 @@ const AIStrategyGenerator: React.FC = () => {
     <div className="page-content">
       {/* LLM health banner — shown while checking and when unavailable */}
       {llmStatus === 'checking' && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#94a3b8' }}>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: 'var(--text-dim)' }}>
           Checking AI backend availability…
         </div>
       )}
@@ -212,7 +212,7 @@ const AIStrategyGenerator: React.FC = () => {
           ))}
           <div style={{ width: 1, height: 20, background: '#334155' }} />
           <button onClick={() => navigate('/pattern-detector')}
-            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             🔍 Patterns
           </button>
           <button onClick={() => navigate('/ab-testing')}
@@ -231,7 +231,7 @@ const AIStrategyGenerator: React.FC = () => {
               {histLoading ? '⟳' : '↻'} Refresh
             </button>
           </div>
-          {histLoading && <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>}
+          {histLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>}
           {!histLoading && history.length === 0 && (
             <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>
               No strategies generated yet. Use the Generate tab to create your first strategy.
@@ -241,16 +241,16 @@ const AIStrategyGenerator: React.FC = () => {
             <div key={str.strategy_id} style={{ ...s.histRow }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>{str.strategy_name}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                   {str.symbol} · {str.timeframe} · {new Date(str.created_at).toLocaleDateString()}
                 </div>
                 {str.backtest && (
                   <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: (str.backtest.total_return_pct ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    <span style={{ fontSize: 11, color: (str.backtest.total_return_pct ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {pct(str.backtest.total_return_pct)} return
                     </span>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Sharpe {fmt(str.backtest.sharpe_ratio)}</span>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>WR {fmt(str.backtest.win_rate, 0)}%</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Sharpe {fmt(str.backtest.sharpe_ratio)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>WR {fmt(str.backtest.win_rate, 0)}%</span>
                   </div>
                 )}
               </div>
@@ -258,7 +258,7 @@ const AIStrategyGenerator: React.FC = () => {
                 <span style={{
                   fontSize: 11, padding: '2px 8px', borderRadius: 4,
                   background: str.status === 'active' ? '#14532d' : '#1e293b',
-                  color: str.status === 'active' ? '#4ade80' : '#64748b',
+                  color: str.status === 'active' ? 'var(--gain)' : 'var(--text-muted)',
                 }}>
                   {str.status}
                 </span>
@@ -354,7 +354,7 @@ const AIStrategyGenerator: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <button
                     onClick={() => setCodeExpanded(v => !v)}
-                    style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontWeight: 600 }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--link)', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontWeight: 600 }}
                   >
                     {codeExpanded ? '▼ Hide Python code' : '▶ Show generated Python code'}
                   </button>
@@ -368,7 +368,7 @@ const AIStrategyGenerator: React.FC = () => {
                     style={{
                       background: copied ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
                       border: `1px solid ${copied ? '#22c55e40' : '#3b82f640'}`,
-                      borderRadius: 5, color: copied ? '#22c55e' : '#60a5fa',
+                      borderRadius: 5, color: copied ? '#22c55e' : 'var(--link)',
                       fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 10px',
                       fontFamily: 'inherit', transition: 'all 0.2s',
                     }}
@@ -394,7 +394,7 @@ const AIStrategyGenerator: React.FC = () => {
                   onClick={() => navigate('/walk-forward')}
                   style={{
                     background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
-                    borderRadius: 8, color: '#a78bfa', fontSize: 13, fontWeight: 600,
+                    borderRadius: 8, color: 'var(--ai-model)', fontSize: 13, fontWeight: 600,
                     cursor: 'pointer', padding: '9px 16px', fontFamily: 'inherit',
                   }}
                   title="Validate this strategy with walk-forward testing"
@@ -402,7 +402,7 @@ const AIStrategyGenerator: React.FC = () => {
                   📈 Walk-Forward Validate
                 </button>
                 {deployMsg && (
-                  <span style={{ color: deployMsg.startsWith('Deploy failed') ? '#f87171' : '#4ade80', fontSize: 14 }}>
+                  <span style={{ color: deployMsg.startsWith('Deploy failed') ? 'var(--loss)' : 'var(--gain)', fontSize: 14 }}>
                     {deployMsg}
                   </span>
                 )}
@@ -411,7 +411,7 @@ const AIStrategyGenerator: React.FC = () => {
           ) : (
             <div style={s.errorBox}>
               <strong>Generation failed</strong>
-              <p style={{ margin: '8px 0 0', color: '#94a3b8' }}>{result.error}</p>
+              <p style={{ margin: '8px 0 0', color: 'var(--text-dim)' }}>{result.error}</p>
             </div>
           )}
         </div>
@@ -435,8 +435,8 @@ const AIStrategyGenerator: React.FC = () => {
 
 const MetricCard: React.FC<{ label: string; value: string; positive: boolean }> = ({ label, value, positive }) => (
   <div style={s.metricCard}>
-    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{label}</div>
-    <div style={{ fontSize: 20, fontWeight: 700, color: positive ? '#4ade80' : '#f87171' }}>{value}</div>
+    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 20, fontWeight: 700, color: positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
 
   </div>
 );
@@ -447,31 +447,31 @@ const s: Record<string, React.CSSProperties> = {
   page:          { padding: '24px', maxWidth: 900, margin: '0 auto' },
   header:        { marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 },
   title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
-  subtitle:      { fontSize: 14, color: '#64748b', margin: 0 },
+  subtitle:      { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   card:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 },
   row:           { display: 'flex', gap: 16, marginBottom: 16 },
-  label:         { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6, fontWeight: 500 },
+  label:         { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
   select:        { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
   textarea:      { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' },
   examples:      { display: 'flex', flexDirection: 'column', gap: 6, margin: '12px 0 16px' },
   examplesLabel: { fontSize: 12, color: '#475569', marginBottom: 4 },
-  exampleBtn:    { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', fontSize: 12, cursor: 'pointer', padding: '6px 10px', textAlign: 'left' },
+  exampleBtn:    { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', padding: '6px 10px', textAlign: 'left' },
   btn:           { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer', padding: '12px 24px', width: '100%' },
   resultHeader:  { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
   strategyName:  { fontSize: 18, fontWeight: 700, color: '#f1f5f9' },
-  badge:         { background: '#166534', color: '#4ade80', fontSize: 12, padding: '3px 10px', borderRadius: 20 },
+  badge:         { background: '#166534', color: 'var(--gain)', fontSize: 12, padding: '3px 10px', borderRadius: 20 },
   metricsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 20 },
   metricCard:    { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' },
   codeDetails:   { marginBottom: 20 },
-  codeSummary:   { cursor: 'pointer', color: '#60a5fa', fontSize: 14, padding: '8px 0' },
-  code:          { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: 16, fontSize: 12, color: '#94a3b8', overflowX: 'auto', marginTop: 8 },
+  codeSummary:   { cursor: 'pointer', color: 'var(--link)', fontSize: 14, padding: '8px 0' },
+  code:          { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: 16, fontSize: 12, color: 'var(--text-dim)', overflowX: 'auto', marginTop: 8 },
   deployRow:     { display: 'flex', alignItems: 'center', gap: 16 },
   deployBtn:     { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 20px' },
-  errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: 16, color: '#f87171' },
-  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
-  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
+  errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: 16, color: 'var(--loss)' },
+  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   histRow:       { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 0', borderBottom: '1px solid #1e293b' },
-  delBtn:        { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  delBtn:        { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
 };
 
 export default AIStrategyGenerator;

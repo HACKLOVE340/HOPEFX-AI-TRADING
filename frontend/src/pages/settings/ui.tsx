@@ -38,9 +38,9 @@ export const Toggle: React.FC<ToggleProps> = ({ id, label, description, checked,
     }}
   >
     <div>
-      <div id={`${id}-label`} style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 500 }}>{label}</div>
+      <div id={`${id}-label`} style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{label}</div>
       {description && (
-        <div id={`${id}-desc`} style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{description}</div>
+        <div id={`${id}-desc`} style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>
       )}
     </div>
     <div
@@ -62,7 +62,7 @@ export const Toggle: React.FC<ToggleProps> = ({ id, label, description, checked,
       // so a keyboard user could not see which toggle they were on
       // (rubric: focus-states, HIGH).
       className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1421]"
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
       style={{
         width: 44, height: 24, borderRadius: 12, flexShrink: 0, marginLeft: 16,
         background: checked ? '#22c55e' : '#374151',
@@ -90,10 +90,10 @@ interface FieldProps {
 
 export const Field: React.FC<FieldProps> = ({ label, description, children }) => (
   <div style={{ marginBottom: 20 }}>
-    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
       {label}
     </label>
-    {description && <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8, marginTop: 0 }}>{description}</p>}
+    {description && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, marginTop: 0 }}>{description}</p>}
     {children}
   </div>
 );
@@ -188,11 +188,11 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, description
   const subtitle = description ?? desc;
   return (
     <div style={{ marginBottom: 24 }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
         {icon && <span style={{ fontSize: 22 }}>{icon}</span>}
         {title}
       </h2>
-      {subtitle && <p style={{ fontSize: 14, color: '#64748b', marginTop: 6, marginBottom: 0 }}>{subtitle}</p>}
+      {subtitle && <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 6, marginBottom: 0 }}>{subtitle}</p>}
     </div>
   );
 };
@@ -226,7 +226,7 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
       disabled={disabled || loading}
       className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
       style={{
         padding, fontSize, fontWeight: 600, background: bg, border,
         minHeight: size === 'lg' ? 52 : 44,
@@ -295,7 +295,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({ onSave, saving, saved, error }
     gap: 12, marginTop: 24, paddingTop: 20, borderTop: '1px solid #1e293b',
   }}>
     {error && (
-      <span role="alert" style={{ fontSize: 13, color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span role="alert" style={{ fontSize: 13, color: 'var(--warn)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
         <AlertTriangle size={14} strokeWidth={2} aria-hidden /> {error}
       </span>
     )}

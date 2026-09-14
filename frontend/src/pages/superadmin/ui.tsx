@@ -38,7 +38,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
         }
       : {})}
     className={onClick
-      ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]'
+      ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]'
       : undefined}
     // The label alone ("Total Users") does not tell a screen-reader user what
     // activating the tile does. Carry the value and the destination.
@@ -60,19 +60,19 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     onMouseLeave={e => onClick && ((e.currentTarget as HTMLDivElement).style.borderColor = '#1e293b')}
   >
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {label}
       </div>
       {icon && <span style={{ fontSize: 18, opacity: 0.7 }}>{icon}</span>}
     </div>
-    <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc', marginTop: 8, letterSpacing: '-0.02em' }}>
+    <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-strong)', marginTop: 8, letterSpacing: '-0.02em' }}>
       {value}
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
       {trend && trendValue && (
         <span style={{
           fontSize: 11, fontWeight: 600,
-          color: trend === 'up' ? '#4ade80' : trend === 'down' ? '#f87171' : '#94a3b8',
+          color: trend === 'up' ? 'var(--gain)' : trend === 'down' ? 'var(--loss)' : 'var(--text-dim)',
         }}>
           {trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—'} {trendValue}
         </span>
@@ -138,23 +138,23 @@ export const SectionCard: React.FC<SectionCardProps> = ({
 // ── Status Badge ──────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  active:    { bg: '#052e16', color: '#4ade80' },
-  running:   { bg: '#052e16', color: '#4ade80' },
-  healthy:   { bg: '#052e16', color: '#4ade80' },
-  ok:        { bg: '#052e16', color: '#4ade80' },
-  online:    { bg: '#052e16', color: '#4ade80' },
-  banned:    { bg: '#450a0a', color: '#f87171' },
-  stopped:   { bg: '#450a0a', color: '#f87171' },
-  critical:  { bg: '#450a0a', color: '#f87171' },
-  error:     { bg: '#450a0a', color: '#f87171' },
-  paused:    { bg: '#78350f', color: '#fbbf24' },
-  degraded:  { bg: '#78350f', color: '#fbbf24' },
-  warn:      { bg: '#78350f', color: '#fbbf24' },
-  training:  { bg: '#1e3a5f', color: '#60a5fa' },
+  active:    { bg: '#052e16', color: 'var(--gain)' },
+  running:   { bg: '#052e16', color: 'var(--gain)' },
+  healthy:   { bg: '#052e16', color: 'var(--gain)' },
+  ok:        { bg: '#052e16', color: 'var(--gain)' },
+  online:    { bg: '#052e16', color: 'var(--gain)' },
+  banned:    { bg: '#450a0a', color: 'var(--loss)' },
+  stopped:   { bg: '#450a0a', color: 'var(--loss)' },
+  critical:  { bg: '#450a0a', color: 'var(--loss)' },
+  error:     { bg: '#450a0a', color: 'var(--loss)' },
+  paused:    { bg: '#78350f', color: 'var(--warn)' },
+  degraded:  { bg: '#78350f', color: 'var(--warn)' },
+  warn:      { bg: '#78350f', color: 'var(--warn)' },
+  training:  { bg: '#1e3a5f', color: 'var(--link)' },
   staged:    { bg: '#2e1065', color: '#c084fc' },
-  pending:   { bg: '#78350f', color: '#fbbf24' },
-  inactive:  { bg: '#1e293b', color: '#64748b' },
-  retired:   { bg: '#1e293b', color: '#64748b' },
+  pending:   { bg: '#78350f', color: 'var(--warn)' },
+  inactive:  { bg: '#1e293b', color: 'var(--text-muted)' },
+  retired:   { bg: '#1e293b', color: 'var(--text-muted)' },
 };
 
 export const StatusBadge: React.FC<{ status: string; size?: 'sm' | 'md' }> = ({ status, size = 'md' }) => {
@@ -182,13 +182,13 @@ export const StatusBadge: React.FC<{ status: string; size?: 'sm' | 'md' }> = ({ 
 /** Fallback for an unrecognised key. Named so it is not itself an
     index access, which `noUncheckedIndexedAccess` types as possibly
     undefined (audit #38). Value is unchanged. */
-const SEV_COLORS_DEFAULT = { bg: '#1e293b', color: '#94a3b8' };
+const SEV_COLORS_DEFAULT = { bg: '#1e293b', color: 'var(--text-dim)' };
 
 const SEV_COLORS: Record<string, { bg: string; color: string }> = {
   low: SEV_COLORS_DEFAULT,
-  medium:   { bg: '#78350f', color: '#fbbf24' },
+  medium:   { bg: '#78350f', color: 'var(--warn)' },
   high:     { bg: '#7c2d12', color: '#fb923c' },
-  critical: { bg: '#450a0a', color: '#f87171' },
+  critical: { bg: '#450a0a', color: 'var(--loss)' },
 };
 
 export const SeverityBadge: React.FC<{ severity: string }> = ({ severity }) => {
@@ -222,11 +222,11 @@ interface ActionBtnProps {
 }
 
 const BTN_VARIANTS = {
-  primary: { bg: '#1e3a5f', color: '#60a5fa', border: '#1d4ed8' },
-  danger:  { bg: '#450a0a', color: '#f87171', border: '#dc2626' },
-  ghost:   { bg: 'transparent', color: '#94a3b8', border: '#334155' },
-  warning: { bg: '#78350f', color: '#fbbf24', border: '#d97706' },
-  success: { bg: '#052e16', color: '#4ade80', border: '#16a34a' },
+  primary: { bg: '#1e3a5f', color: 'var(--link)', border: '#1d4ed8' },
+  danger:  { bg: '#450a0a', color: 'var(--loss)', border: '#dc2626' },
+  ghost:   { bg: 'transparent', color: 'var(--text-dim)', border: '#334155' },
+  warning: { bg: '#78350f', color: 'var(--warn)', border: '#d97706' },
+  success: { bg: '#052e16', color: 'var(--gain)', border: '#16a34a' },
 };
 
 export const ActionBtn: React.FC<ActionBtnProps> = ({
@@ -254,7 +254,7 @@ export const ActionBtn: React.FC<ActionBtnProps> = ({
         ...style,
       }}
       className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
     >
       {loading ? <Spinner size={12} /> : icon ? <span>{icon}</span> : null}
       {label}
@@ -283,7 +283,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const Input: React.FC<InputProps> = ({ label, style, ...rest }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>{label}</label>}
+    {label && <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
     <input
       {...rest}
       style={{
@@ -305,7 +305,7 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select: React.FC<SelectProps> = ({ label, options, style, ...rest }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>{label}</label>}
+    {label && <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
     <select
       {...rest}
       style={{
@@ -339,8 +339,8 @@ export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onC
     userSelect: 'none', opacity: disabled ? 0.5 : 1,
   }}>
     <div>
-      <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500 }}>{label}</div>
-      {description && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{description}</div>}
+      <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{label}</div>
+      {description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>}
     </div>
     <div
       role="switch"
@@ -390,11 +390,11 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
 export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
   <div style={{ textAlign: 'center', padding: '32px 20px' }}>
     <div style={{ fontSize: 28, marginBottom: 8 }}>⚠️</div>
-    <div style={{ fontSize: 13, color: '#f87171', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
+    <div style={{ fontSize: 13, color: 'var(--loss)', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
     {onRetry && (
       <button onClick={onRetry} style={{
         background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
-        color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '6px 14px',
+        color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '6px 14px',
       }}>
         Retry
       </button>
@@ -446,8 +446,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       background: '#0f172a', border: `1px solid ${resolvedVariant === 'danger' ? '#7f1d1d' : '#92400e'}`,
       borderRadius: 14, padding: '28px 32px', maxWidth: 420, width: '90%',
     }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', marginBottom: 10 }}>{title}</div>
-      <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, marginBottom: 24 }}>{message}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 10 }}>{title}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 24 }}>{message}</div>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <ActionBtn label="Cancel" onClick={onCancel} variant="ghost" />
         <ActionBtn label={confirmLabel} onClick={onConfirm} variant={resolvedVariant === 'danger' ? 'danger' : 'warning'} />

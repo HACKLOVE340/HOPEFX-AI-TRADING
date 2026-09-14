@@ -98,15 +98,15 @@ const ComponentCard: React.FC<{
         textTransform: 'uppercase',
       }}>{comp.status}</span>
     </div>
-    <div style={{ fontSize: 12, color: '#94a3b8' }}>{comp.detail}</div>
+    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{comp.detail}</div>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-      <span style={{ fontSize: 11, color: '#64748b' }}>{comp.latency_ms}ms</span>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{comp.latency_ms}ms</span>
       <button
         onClick={() => onProbe(comp.name)}
         disabled={probing}
         style={{
           fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid #334155',
-          background: '#1e293b', color: '#94a3b8', cursor: probing ? 'not-allowed' : 'pointer',
+          background: '#1e293b', color: 'var(--text-dim)', cursor: probing ? 'not-allowed' : 'pointer',
         }}
       >{probing ? '…' : 'Re-probe'}</button>
     </div>
@@ -119,9 +119,9 @@ const TraceRow: React.FC<{ span: TraceSpan }> = ({ span }) => (
   <div style={{
     display: 'grid', gridTemplateColumns: '1fr 80px 60px 80px',
     gap: 8, padding: '8px 12px', borderBottom: '1px solid #1e293b',
-    fontSize: 12, color: '#94a3b8',
+    fontSize: 12, color: 'var(--text-dim)',
   }}>
-    <span style={{ color: '#e2e8f0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    <span style={{ color: 'var(--text)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       {span.name}
     </span>
     <span style={{ color: span.status_code >= 400 ? '#ef4444' : '#22c55e' }}>{span.status_code}</span>
@@ -239,7 +239,7 @@ const HealthEnginePanel: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <SectionHeader icon="🏥" title="Auto-Discovering Health Engine" />
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
             {report ? `${report.total_components} components probed in ${report.probe_duration_ms}ms` : 'Probes all registered components concurrently'}
           </div>
         </div>
@@ -278,7 +278,7 @@ const HealthEnginePanel: React.FC = () => {
             padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#1e3a5f' : '#1e293b',
-            color: tab === t.id ? '#60a5fa' : '#94a3b8',
+            color: tab === t.id ? 'var(--link)' : 'var(--text-dim)',
           }}>{t.label}</button>
         ))}
       </div>
@@ -303,16 +303,16 @@ const HealthEnginePanel: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detail}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detail}</div>
               </div>
             </div>
           ))}
           {probeResult && (
             <div style={{ marginTop: 8, padding: '12px 14px', borderRadius: 8, background: '#0f172a', border: `1px solid ${statusColor(probeResult.status)}44` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 6 }}>Single probe result: {probeResult.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', marginBottom: 6 }}>Single probe result: {probeResult.label}</div>
               <div style={{ fontSize: 12, color: statusColor(probeResult.status), fontWeight: 700 }}>{probeResult.status.toUpperCase()} — {probeResult.detail}</div>
               {probeResult.extra && Object.keys(probeResult.extra).length > 0 && (
-                <pre style={{ fontSize: 11, color: '#64748b', marginTop: 6, overflow: 'auto', maxHeight: 120 }}>
+                <pre style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, overflow: 'auto', maxHeight: 120 }}>
                   {JSON.stringify(probeResult.extra, null, 2)}
                 </pre>
               )}
@@ -331,7 +331,7 @@ const HealthEnginePanel: React.FC = () => {
                 <span style={{ fontSize: 13, fontWeight: 700, color: statusColor(h.overall) }}>{h.overall.toUpperCase()}</span>
                 <span style={{ fontSize: 11, color: '#475569' }}>{h.checked_at}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                 {h.total_components} components — ✅ {h.ok_count} OK / ⚠️ {h.warning_count} warn / ❌ {h.error_count} err — {h.probe_duration_ms}ms
               </div>
             </div>
@@ -342,12 +342,12 @@ const HealthEnginePanel: React.FC = () => {
       {/* Probes management */}
       {tab === 'probes' && (
         <>
-          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
             {probes.length} probes registered. Add a custom HTTP probe below.
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
             {probes.map(p => (
-              <span key={p} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: '#94a3b8', fontFamily: 'monospace' }}>{p}</span>
+              <span key={p} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{p}</span>
             ))}
           </div>
           <div style={{ padding: '14px 16px', borderRadius: 8, background: '#0f172a', border: '1px solid #334155' }}>
@@ -359,7 +359,7 @@ const HealthEnginePanel: React.FC = () => {
                 style={{ flex: 2, minWidth: 200, padding: '7px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 12 }} />
               <Button onClick={registerProbe} disabled={!customName.trim() || !customUrl.trim()} size="sm">Register</Button>
             </div>
-            {registerMsg && <div style={{ fontSize: 12, color: '#94a3b8' }}>{registerMsg}</div>}
+            {registerMsg && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{registerMsg}</div>}
             <ActionBanner message={panelMsg} ok={panelOk} onDismiss={() => setPanelMsg('')} />
           </div>
         </>
@@ -495,7 +495,7 @@ const DiagnosticsPanel: React.FC = () => {
             padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#1e3a5f' : '#1e293b',
-            color: tab === t.id ? '#60a5fa' : '#94a3b8',
+            color: tab === t.id ? 'var(--link)' : 'var(--text-dim)',
           }}>{t.label}</button>
         ))}
       </div>
@@ -522,12 +522,12 @@ const DiagnosticsPanel: React.FC = () => {
           </div>
           {Array.isArray(summary.top_issues) && summary.top_issues.length > 0 && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8 }}>Top Issues</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Top Issues</div>
               {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
                 <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 6 }}>
                   <div style={{ fontWeight: 600, fontSize: 13, color: '#fca5a5' }}>{issue.check_name}</div>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{issue.message}</div>
-                  {issue.remediation && <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Fix: {issue.remediation}</div>}
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
+                  {issue.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
                 </div>
               ))}
             </div>
@@ -537,10 +537,10 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'report' && (
         <>
-          {!report && <div style={{ color: '#64748b', fontSize: 13, padding: '16px 0' }}>No report loaded. Run diagnostics first.</div>}
+          {!report && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '16px 0' }}>No report loaded. Run diagnostics first.</div>}
           {report && (
             <>
-              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>Completed: {String(report.completed_at ?? 'N/A')}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Completed: {String(report.completed_at ?? 'N/A')}</div>
               {(report.results as Array<Record<string,string>> ?? []).map((r, i) => (
                 <div key={i} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -550,8 +550,8 @@ const DiagnosticsPanel: React.FC = () => {
                 }}>
                   <div>
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{r.check_name}</span>
-                    <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.message}</div>
-                    {r.remediation && <div style={{ fontSize: 11, color: '#64748b' }}>Fix: {r.remediation}</div>}
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.message}</div>
+                    {r.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fix: {r.remediation}</div>}
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, marginLeft: 12,
                     color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444' }}>
@@ -566,7 +566,7 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'results' && (
         <>
-          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
             Latest diagnostic run results from the backend store ({latestResults.length} entries).
           </div>
           {latestResults.length === 0 && (
@@ -586,7 +586,7 @@ const DiagnosticsPanel: React.FC = () => {
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>
                     {String(r.check_name ?? r.name ?? `Check ${i + 1}`)}
                   </span>
-                  {Boolean(r.message) && <div style={{ fontSize: 12, color: '#94a3b8' }}>{String(r.message as string)}</div>}
+                  {Boolean(r.message) && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{String(r.message as string)}</div>}
                   {Boolean(r.duration_ms) && <div style={{ fontSize: 11, color: '#475569' }}>Duration: {String(r.duration_ms as number)}ms</div>}
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, marginLeft: 12, color: statusColor }}>
@@ -600,12 +600,12 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'checks' && (
         <>
-          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>Run a single diagnostic check and see results immediately.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Run a single diagnostic check and see results immediately.</div>
           {checkResult && (
             <div style={{ padding: '12px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #334155', marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 8 }}>Result: {String(checkResult.check_name)}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', marginBottom: 8 }}>Result: {String(checkResult.check_name)}</div>
               {(checkResult.results as Array<Record<string,string>> ?? []).map((r, i) => (
-                <div key={i} style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
+                <div key={i} style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444' }}>[{r.status}]</span>
                   {' '}{r.message}
                 </div>
@@ -617,7 +617,7 @@ const DiagnosticsPanel: React.FC = () => {
               <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', fontFamily: 'monospace' }}>{c.name}</div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>{c.description}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.description}</div>
                 </div>
                 <Button onClick={() => runCheck(c.name)} disabled={runningCheck === c.name} size="sm" variant="secondary">
                   {runningCheck === c.name ? '…' : '▶ Run'}
@@ -630,7 +630,7 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'remediation' && (
         <>
-          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>Auto-remediation actions taken by the diagnostics engine.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Auto-remediation actions taken by the diagnostics engine.</div>
           {remLog.length === 0 && <div style={{ color: '#475569', fontSize: 13 }}>No remediation actions recorded yet.</div>}
           {remLog.map((entry, i) => (
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b', marginBottom: 6 }}>
@@ -638,8 +638,8 @@ const DiagnosticsPanel: React.FC = () => {
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{String(entry.action ?? entry.type ?? 'action')}</span>
                 <span style={{ fontSize: 11, color: '#475569' }}>{String(entry.timestamp ?? entry.taken_at ?? '')}</span>
               </div>
-              {entry.detail != null && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{String(entry.detail)}</div>}
-              {entry.check_name != null && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Check: {String(entry.check_name)}</div>}
+              {entry.detail != null && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{String(entry.detail)}</div>}
+              {entry.check_name != null && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Check: {String(entry.check_name)}</div>}
             </div>
           ))}
         </>
@@ -704,7 +704,7 @@ const RoutesPanel: React.FC = () => {
           style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }}
         />
       </div>
-      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{filtered.length} routes{filter ? ` matching "${filter}"` : ''}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{filtered.length} routes{filter ? ` matching "${filter}"` : ''}</div>
       <div style={{ maxHeight: 500, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {filtered.map((r, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b' }}>
@@ -715,7 +715,7 @@ const RoutesPanel: React.FC = () => {
                 </span>
               ))}
             </div>
-            <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#e2e8f0', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {String(r.path ?? '')}
             </span>
             {r.tags != null && (
@@ -782,13 +782,13 @@ const ValidatePanel: React.FC = () => {
     <>
       <Card>
         <SectionHeader icon="✅" title="Setting Persistence Validator" />
-        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
           Verify that a config key is correctly persisted across Redis, config store, and app state.
         </p>
         <ActionBanner message={validateErr} ok={false} onDismiss={() => setValidateErr('')} />
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Config Key</label>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
             <input type="text" value={key} onChange={e => setKey(e.target.value)} placeholder="e.g. maintenance_mode"
               style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }} />
           </div>
@@ -799,20 +799,20 @@ const ValidatePanel: React.FC = () => {
         {result && (
           <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '14px 16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: '#f1f5f9' }}>Key: <code style={{ color: '#60a5fa' }}>{String(result.key)}</code></span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: '#f1f5f9' }}>Key: <code style={{ color: 'var(--link)' }}>{String(result.key)}</code></span>
               <span style={{ fontSize: 12, fontWeight: 700, color: result.consistent ? '#22c55e' : '#ef4444' }}>
                 {result.consistent ? '✅ Consistent' : '❌ Inconsistent'}
               </span>
             </div>
             {Object.entries(result.layers as Record<string, Record<string, unknown>> ?? {}).map(([layer, info]) => (
               <div key={layer} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: 6, background: '#1e293b', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: '#94a3b8', fontFamily: 'monospace' }}>{layer}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'monospace' }}>{layer}</span>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {info.error ? (
                     <span style={{ fontSize: 11, color: '#ef4444' }}>Error: {String(info.error)}</span>
                   ) : (
                     <>
-                      <span style={{ fontSize: 11, color: info.found ? '#22c55e' : '#64748b' }}>{info.found ? 'Found' : 'Not found'}</span>
+                      <span style={{ fontSize: 11, color: info.found ? '#22c55e' : 'var(--text-muted)' }}>{info.found ? 'Found' : 'Not found'}</span>
                       {info.found && <span style={{ fontSize: 11, color: layerColor(info) }}>{info.match ? '✓ Match' : '✗ Mismatch'}</span>}
                     </>
                   )}
@@ -825,17 +825,17 @@ const ValidatePanel: React.FC = () => {
 
       <Card>
         <SectionHeader icon="🔄" title="Toggle End-to-End Validator" />
-        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
           After changing a toggle or setting, verify the new value is correctly persisted end-to-end.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 160 }}>
-            <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Config Key</label>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
             <input type="text" value={toggleKey} onChange={e => setToggleKey(e.target.value)} placeholder="e.g. maintenance_mode"
               style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }} />
           </div>
           <div style={{ flex: 1, minWidth: 120 }}>
-            <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Expected Value</label>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Expected Value</label>
             <input type="text" value={toggleExpected} onChange={e => setToggleExpected(e.target.value)} placeholder="true / false / 42"
               style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }} />
           </div>
@@ -850,7 +850,7 @@ const ValidatePanel: React.FC = () => {
             </div>
             {Object.entries(toggleResult.layers as Record<string, Record<string, unknown>> ?? {}).map(([layer, info]) => (
               <div key={layer} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 10px', borderRadius: 6, background: '#1e293b', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: '#94a3b8', fontFamily: 'monospace' }}>{layer}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'monospace' }}>{layer}</span>
                 <span style={{ fontSize: 11, color: info.match ? '#22c55e' : info.error ? '#ef4444' : '#f59e0b' }}>
                   {info.error ? `Error: ${String(info.error)}` : info.match ? `✓ ${JSON.stringify(info.value)}` : `✗ got ${JSON.stringify(info.value)}`}
                 </span>
@@ -1055,7 +1055,7 @@ const SystemReliabilitySection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <SectionHeader icon="🔬" title="System Reliability Dashboard" />
-            <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
               Real-time connectivity status for every platform component. Auto-refreshes every 30s.
             </p>
           </div>
@@ -1115,7 +1115,7 @@ const SystemReliabilitySection: React.FC = () => {
             padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
             fontSize: 12, fontWeight: activeTab === t.id ? 700 : 500,
             background: activeTab === t.id ? '#1e3a5f' : '#1e293b',
-            color: activeTab === t.id ? '#60a5fa' : '#94a3b8',
+            color: activeTab === t.id ? 'var(--link)' : 'var(--text-dim)',
           }}>{t.label}</button>
         ))}
       </div>
@@ -1124,7 +1124,7 @@ const SystemReliabilitySection: React.FC = () => {
       {activeTab === 'components' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
           {loading && !status && (
-            <div style={{ gridColumn: '1/-1', textAlign: 'center', color: '#64748b', padding: 32 }}>
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>
               Loading component status…
             </div>
           )}
@@ -1225,7 +1225,7 @@ const SystemReliabilitySection: React.FC = () => {
                       <span style={{ fontWeight: 600, fontSize: 13, color: '#f1f5f9' }}>
                         {r.passed ? '✅' : '❌'} {r.test}
                       </span>
-                      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{r.detail}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{r.detail}</div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                       <div style={{ fontSize: 11, color: statusColor(r.status), fontWeight: 700 }}>{r.status}</div>
@@ -1270,12 +1270,12 @@ const SystemReliabilitySection: React.FC = () => {
           </div>
           {historyErr && <ActionBanner message={historyErr} ok={false} onDismiss={() => setHistoryErr('')} />}
           {statusHistory.length === 0 && !historyLoading && !historyErr && (
-            <div style={{ color: '#64748b', fontSize: 13, padding: '16px 0' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '16px 0' }}>
               No history yet. Trigger a status poll or click "Snapshot Now".
             </div>
           )}
           {historyLoading && (
-            <div style={{ color: '#64748b', fontSize: 13 }}>Loading history…</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading history…</div>
           )}
           {statusHistory.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1297,7 +1297,7 @@ const SystemReliabilitySection: React.FC = () => {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid #1e293b', color: '#64748b' }}>
+                    <tr style={{ borderBottom: '1px solid #1e293b', color: 'var(--text-muted)' }}>
                       <th style={{ textAlign: 'left', padding: '6px 10px' }}>Timestamp</th>
                       <th style={{ textAlign: 'left', padding: '6px 10px' }}>Overall</th>
                       <th style={{ textAlign: 'right', padding: '6px 10px' }}>✅ OK</th>
@@ -1312,7 +1312,7 @@ const SystemReliabilitySection: React.FC = () => {
                       const color = overall === 'ok' ? '#22c55e' : overall === 'warning' ? '#f59e0b' : '#ef4444';
                       return (
                         <tr key={i} style={{ borderBottom: '1px solid #0f172a' }}>
-                          <td style={{ padding: '5px 10px', color: '#94a3b8', fontFamily: 'monospace' }}>
+                          <td style={{ padding: '5px 10px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>
                             {String(snap.checked_at ?? '').replace('T', ' ').slice(0, 19)}
                           </td>
                           <td style={{ padding: '5px 10px' }}>
@@ -1321,7 +1321,7 @@ const SystemReliabilitySection: React.FC = () => {
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#22c55e' }}>{String(snap.ok_count ?? 0)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#f59e0b' }}>{String(snap.warning_count ?? 0)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#ef4444' }}>{String(snap.error_count ?? 0)}</td>
-                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b' }}>{String(snap.probe_duration_ms ?? '—')}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{String(snap.probe_duration_ms ?? '—')}</td>
                         </tr>
                       );
                     })}
@@ -1337,7 +1337,7 @@ const SystemReliabilitySection: React.FC = () => {
       {activeTab === 'env' && (
         <Card>
           <SectionHeader icon="🌍" title="Environment Variable Audit" />
-          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
             Shows presence/absence of environment variables. Values are never exposed.
           </p>
           {envErr && <ActionBanner message={envErr} ok={false} onDismiss={() => setEnvErr('')} />}
@@ -1362,16 +1362,16 @@ const SystemReliabilitySection: React.FC = () => {
                         border: `1px solid ${info.set ? '#16a34a33' : (info.required ? '#dc262633' : '#334155')}`,
                       }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#e2e8f0' }}>{key}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text)' }}>{key}</span>
                           {!info.set && info.effect && (
-                            <span style={{ fontSize: 10, color: '#64748b' }}>{info.effect}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{info.effect}</span>
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                           {info.required && (
-                            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#1e3a5f', color: '#60a5fa' }}>REQUIRED</span>
+                            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#1e3a5f', color: 'var(--link)' }}>REQUIRED</span>
                           )}
-                          <span style={{ fontSize: 12, fontWeight: 700, color: info.set ? '#22c55e' : (info.required ? '#ef4444' : '#64748b') }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: info.set ? '#22c55e' : (info.required ? '#ef4444' : 'var(--text-muted)') }}>
                             {info.set ? '✓ SET' : (info.required ? '✗ MISSING' : '— not set')}
                           </span>
                         </div>
@@ -1415,7 +1415,7 @@ const SystemReliabilitySection: React.FC = () => {
                 <div key={key} style={{
                   background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 16px',
                 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#60a5fa' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--link)' }}>
                     {typeof val === 'number' ? (Number.isFinite(val) ? (key.includes('pct') ? `${val}%` : val) : '—') : String(val)}
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1427,7 +1427,7 @@ const SystemReliabilitySection: React.FC = () => {
                 <div key={`redis_${key}`} style={{
                   background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 16px',
                 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#a78bfa' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--ai-model)' }}>
                     {typeof val === 'number' ? (Number.isFinite(val) ? val.toLocaleString() : '—') : String(val)}
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>

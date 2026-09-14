@@ -16,19 +16,19 @@ const fmtDate = (iso: string | null) =>
 
 const LEVEL_COLORS: Record<string, string> = {
   DEBUG:      '#475569',
-  INFO:       '#60a5fa',
-  COMPLIANCE: '#a78bfa',
-  CRITICAL:   '#f87171',
+  INFO:       'var(--link)',
+  COMPLIANCE: 'var(--ai-model)',
+  CRITICAL:   'var(--loss)',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
   ORDER:    '#22c55e',
-  RISK:     '#f87171',
-  STRATEGY: '#60a5fa',
-  GDPR:     '#a78bfa',
-  AUTH:     '#fbbf24',
+  RISK:     'var(--loss)',
+  STRATEGY: 'var(--link)',
+  GDPR:     'var(--ai-model)',
+  AUTH:     'var(--warn)',
   ADMIN:    '#f97316',
-  SYSTEM:   '#94a3b8',
+  SYSTEM:   'var(--text-dim)',
 };
 
 interface AuditRecord {
@@ -196,7 +196,7 @@ const AuditTrailSection: React.FC = () => {
       {/* Main tab switcher */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['compliance', 'system'] as const).map(t => (
-          <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? '#1e293b' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? '#f8fafc' : '#64748b', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
+          <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? '#1e293b' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
             {{ compliance: '🔗 Compliance Audit Trail', system: '📋 System Audit Log' }[t]}
           </button>
         ))}
@@ -208,7 +208,7 @@ const AuditTrailSection: React.FC = () => {
       <div style={{
         background: 'rgba(167,139,250,0.05)', border: '1px solid #4c1d95',
         borderRadius: 10, padding: '12px 16px', marginBottom: 16,
-        display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: '#a78bfa',
+        display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--ai-model)',
       }}>
         <span style={{ fontSize: 16 }}>🔒</span>
         <span>
@@ -269,8 +269,8 @@ const AuditTrailSection: React.FC = () => {
                   {/* Level */}
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
-                    background: `${LEVEL_COLORS[r.level] ?? '#94a3b8'}22`,
-                    color: LEVEL_COLORS[r.level] ?? '#94a3b8',
+                    background: `${LEVEL_COLORS[r.level] ?? 'var(--text-dim)'}22`,
+                    color: LEVEL_COLORS[r.level] ?? 'var(--text-dim)',
                     minWidth: 80, textAlign: 'center', flexShrink: 0,
                   }}>
                     {r.level}
@@ -278,15 +278,15 @@ const AuditTrailSection: React.FC = () => {
                   {/* Category */}
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
-                    background: `${CATEGORY_COLORS[r.category] ?? '#94a3b8'}22`,
-                    color: CATEGORY_COLORS[r.category] ?? '#94a3b8',
+                    background: `${CATEGORY_COLORS[r.category] ?? 'var(--text-dim)'}22`,
+                    color: CATEGORY_COLORS[r.category] ?? 'var(--text-dim)',
                     minWidth: 70, textAlign: 'center', flexShrink: 0,
                   }}>
                     {r.category}
                   </span>
                   {/* Actor + Action */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{r.actor}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.actor}</span>
                     <span style={{ fontSize: 12, color: '#475569', margin: '0 6px' }}>→</span>
                     <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600 }}>{r.action}</span>
                   </div>
@@ -303,19 +303,19 @@ const AuditTrailSection: React.FC = () => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
                       <div>
                         <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 4 }}>FULL HASH CHAIN</div>
-                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#a78bfa', wordBreak: 'break-all' }}>{r.hash_chain}</div>
+                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--ai-model)', wordBreak: 'break-all' }}>{r.hash_chain}</div>
                       </div>
                       {r.signature && (
                         <div>
                           <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 4 }}>SIGNATURE</div>
-                          <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#60a5fa', wordBreak: 'break-all' }}>{r.signature}</div>
+                          <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--link)', wordBreak: 'break-all' }}>{r.signature}</div>
                         </div>
                       )}
                     </div>
                     {Object.keys(r.data ?? {}).length > 0 && (
                       <div>
                         <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 4 }}>DATA PAYLOAD</div>
-                        <pre style={{ fontSize: 11, color: '#94a3b8', background: '#0f172a', padding: '8px 10px', borderRadius: 6, overflow: 'auto', margin: 0 }}>
+                        <pre style={{ fontSize: 11, color: 'var(--text-dim)', background: '#0f172a', padding: '8px 10px', borderRadius: 6, overflow: 'auto', margin: 0 }}>
                           {JSON.stringify(r.data, null, 2)}
                         </pre>
                       </div>
@@ -332,7 +332,7 @@ const AuditTrailSection: React.FC = () => {
       {total > 100 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, alignItems: 'center' }}>
           <ActionBtn label="← Prev" onClick={() => load(page - 1)} accent="#475569" size="sm" disabled={page <= 1} />
-          <span style={{ fontSize: 13, color: '#64748b' }}>Page {page} of {Math.ceil(total / 100)}</span>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / 100)}</span>
           <ActionBtn label="Next →" onClick={() => load(page + 1)} accent="#475569" size="sm" disabled={records.length < 100} />
         </div>
       )}
@@ -380,18 +380,18 @@ const AuditTrailSection: React.FC = () => {
                         <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{e.actor || '—'}</div>
                         <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{e.user_id}</div>
                       </td>
-                      <td style={{ padding: '8px 12px', fontWeight: 600, color: '#a78bfa', fontSize: 12 }}>
+                      <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--ai-model)', fontSize: 12 }}>
                         <div>{e.action || e.event_type || '—'}</div>
-                        {e.detail && <div style={{ fontSize: 10, fontWeight: 400, color: '#64748b' }}>{e.detail}</div>}
+                        {e.detail && <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>{e.detail}</div>}
                       </td>
                       <td style={{ padding: '8px 12px', fontSize: 11 }}>
                         {e.category
-                          ? <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 3, color: '#94a3b8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.category}</span>
+                          ? <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 3, color: 'var(--text-dim)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.category}</span>
                           : <span style={{ color: '#334155' }}>—</span>}
                       </td>
                       <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#334155' }}>{e.ip_address || '—'}</td>
                       <td style={{ padding: '8px 12px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: e.level === 'CRITICAL' ? '#f87171' : e.level === 'COMPLIANCE' ? '#fbbf24' : '#4ade80' }}>{e.level || '—'}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: e.level === 'CRITICAL' ? 'var(--loss)' : e.level === 'COMPLIANCE' ? 'var(--warn)' : 'var(--gain)' }}>{e.level || '—'}</span>
                       </td>
                       <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(e.created_at)}</td>
                     </tr>
@@ -404,7 +404,7 @@ const AuditTrailSection: React.FC = () => {
           {sysTotal > 50 && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, alignItems: 'center' }}>
               <ActionBtn label="← Prev" onClick={() => loadSysAudit(sysPage - 1)} accent="#475569" size="sm" disabled={sysPage <= 1} />
-              <span style={{ fontSize: 13, color: '#64748b' }}>Page {sysPage} of {Math.ceil(sysTotal / 50)}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Page {sysPage} of {Math.ceil(sysTotal / 50)}</span>
               <ActionBtn label="Next →" onClick={() => loadSysAudit(sysPage + 1)} accent="#475569" size="sm" disabled={sysEntries.length < 50} />
             </div>
           )}

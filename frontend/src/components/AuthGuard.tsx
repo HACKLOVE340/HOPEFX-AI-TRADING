@@ -183,10 +183,10 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>
             Access Denied
           </h2>
-          <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', textAlign: 'center', maxWidth: 360 }}>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-dim)', textAlign: 'center', maxWidth: 360 }}>
             This page requires the{' '}
-            <span style={{ color: '#60a5fa', fontWeight: 600 }}>{requiredRole}</span>{' '}
-            role. Your current role (<span style={{ color: '#94a3b8', fontWeight: 600 }}>{user.role}</span>)
+            <span style={{ color: 'var(--link)', fontWeight: 600 }}>{requiredRole}</span>{' '}
+            role. Your current role (<span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>{user.role}</span>)
             does not have sufficient permissions.
           </p>
         </div>

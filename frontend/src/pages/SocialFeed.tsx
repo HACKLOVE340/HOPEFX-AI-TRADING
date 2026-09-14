@@ -197,10 +197,10 @@ const SocialFeed: React.FC = () => {
                         font-semibold cursor-pointer transition-colors duration-150
                         disabled:cursor-not-allowed disabled:opacity-50
                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                        focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]
+                        focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
                         ${optedIn
                           ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/25'
-                          : 'text-slate-400 ring-1 ring-inset ring-[#1e2d3d] hover:bg-[#141c2b] hover:text-slate-200'}`}
+                          : 'text-slate-400 ring-1 ring-inset ring-[var(--border)] hover:bg-[var(--surface-hover)] hover:text-slate-200'}`}
           >
             {optLoading
               ? 'Saving…'
@@ -220,7 +220,7 @@ const SocialFeed: React.FC = () => {
             style={{
               padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13,
               background: symbolFilter === sym ? '#3b82f6' : '#1e293b',
-              color: symbolFilter === sym ? '#fff' : '#94a3b8',
+              color: symbolFilter === sym ? '#fff' : 'var(--text-dim)',
             }}
           >
             {sym}
@@ -229,7 +229,7 @@ const SocialFeed: React.FC = () => {
         <select
           value={sortBy}
           onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          style={{ marginLeft: 'auto', background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
+          style={{ marginLeft: 'auto', background: '#1e293b', color: 'var(--text-dim)', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
         >
           <option value="confidence">Sort: Confidence</option>
           <option value="return">Sort: Return</option>
@@ -260,21 +260,21 @@ const SocialFeed: React.FC = () => {
           <div key={item.signal_id} style={s.card}>
             <div style={s.cardTop}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...s.dirBadge, background: item.direction === 'BUY' ? '#14532d' : '#450a0a', color: item.direction === 'BUY' ? '#4ade80' : '#f87171' }}>
+                <span style={{ ...s.dirBadge, background: item.direction === 'BUY' ? '#14532d' : '#450a0a', color: item.direction === 'BUY' ? 'var(--gain)' : 'var(--loss)' }}>
                   {item.direction}
                 </span>
                 <span style={s.symbol}>{item.symbol}</span>
                 <span style={s.confidence}>{Number.isFinite(item.confidence) ? (item.confidence * 100).toFixed(0) : '—'}% conf</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, color: '#64748b' }}>by <strong style={{ color: '#94a3b8' }}>{item.username}</strong></span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>by <strong style={{ color: 'var(--text-dim)' }}>{item.username}</strong></span>
                 <span style={{ fontSize: 11, color: '#475569' }}>{fmtTime(item.created_at)}</span>
               </div>
             </div>
 
             <div style={s.metrics}>
               <span style={s.metric}>Entry: <strong>${fmtPrice(item.entry_price, 4)}</strong></span>
-              <span style={{ ...s.metric, color: (item.pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+              <span style={{ ...s.metric, color: (item.pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                 P&L: <strong>{fmtPctRaw(item.pnl, 2)}</strong>
               </span>
               <span style={s.metric}>Copies: <strong>{item.copies}</strong></span>
@@ -309,7 +309,7 @@ const SocialFeed: React.FC = () => {
                 aria-label={`${expanded === item.signal_id ? 'Hide' : 'Show'} ${item.comment_count} comments`}
                 className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]
                            text-slate-500 cursor-pointer transition-colors duration-150
-                           hover:bg-[#141c2b] hover:text-slate-300 focus-visible:outline-none
+                           hover:bg-[var(--surface-hover)] hover:text-slate-300 focus-visible:outline-none
                            focus-visible:ring-2 focus-visible:ring-sky-500"
               >
                 <MessageSquare size={14} strokeWidth={1.75} aria-hidden /> {item.comment_count}
@@ -323,7 +323,7 @@ const SocialFeed: React.FC = () => {
                 className={`ml-auto inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5
                             text-[12.5px] font-bold cursor-pointer transition-colors duration-150
                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
-                            focus-visible:ring-offset-[#0d1421]
+                            focus-visible:ring-offset-[var(--surface)]
                             ${item.direction === 'BUY'
                               ? 'bg-emerald-500/12 text-emerald-400 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/22 focus-visible:ring-emerald-500'
                               : 'bg-red-500/12 text-red-400 ring-1 ring-inset ring-red-500/40 hover:bg-red-500/22 focus-visible:ring-red-500'}`}
@@ -336,8 +336,8 @@ const SocialFeed: React.FC = () => {
               <div style={s.commentsSection}>
                 {(comments[item.signal_id] ?? []).map(c => (
                   <div key={c.comment_id} style={s.comment}>
-                    <strong style={{ color: '#94a3b8', fontSize: 12 }}>{c.username}</strong>
-                    <span style={{ color: '#64748b', fontSize: 11, marginLeft: 8 }}>{fmtTime(c.created_at)}</span>
+                    <strong style={{ color: 'var(--text-dim)', fontSize: 12 }}>{c.username}</strong>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 8 }}>{fmtTime(c.created_at)}</span>
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#cbd5e1' }}>{c.text}</p>
                   </div>
                 ))}
@@ -395,29 +395,29 @@ const SocialFeed: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:           { maxWidth: 800, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui,-apple-system,sans-serif', color: '#f1f5f9', background: '#0f172a', minHeight: '100vh' },
   header:         { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
-  title:          { fontSize: 24, fontWeight: 700, color: '#f8fafc', margin: '0 0 4px' },
-  subtitle:       { fontSize: 13, color: '#64748b', margin: 0 },
+  title:          { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 4px' },
+  subtitle:       { fontSize: 13, color: 'var(--text-muted)', margin: 0 },
   toggleBtn:      { border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px', transition: 'background 0.2s' },
-  errorBox:       { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#f87171' },
+  errorBox:       { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: 'var(--loss)' },
   empty:          { color: '#475569', fontSize: 14, textAlign: 'center', padding: 48 },
   feed:           { display: 'flex', flexDirection: 'column', gap: 12 },
   card:           { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
   cardTop:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   dirBadge:       { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 },
   symbol:         { fontSize: 15, fontWeight: 700, color: '#f1f5f9' },
-  confidence:     { fontSize: 11, background: '#1e3a5f', color: '#60a5fa', padding: '2px 8px', borderRadius: 10 },
+  confidence:     { fontSize: 11, background: '#1e3a5f', color: 'var(--link)', padding: '2px 8px', borderRadius: 10 },
   metrics:        { display: 'flex', gap: 20, marginBottom: 10 },
-  metric:         { fontSize: 13, color: '#64748b' },
+  metric:         { fontSize: 13, color: 'var(--text-muted)' },
   actions:        { display: 'flex', gap: 8 },
   reactBtn:       { background: 'transparent', border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '4px 10px' },
-  commentToggle:  { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 13, padding: '4px 10px', marginLeft: 'auto' },
+  commentToggle:  { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '4px 10px', marginLeft: 'auto' },
   commentsSection:{ borderTop: '1px solid #334155', marginTop: 12, paddingTop: 12 },
   comment:        { padding: '6px 0', borderBottom: '1px solid #0f172a' },
   commentInput:   { flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 13, padding: '6px 10px', outline: 'none' },
   commentBtn:     { background: '#3b82f6', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 13, padding: '6px 14px' },
   dim:            { color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 },
-  loadMoreBtn:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 14, padding: '10px 28px' },
-  infoBanner:     { marginTop: 24, background: '#1e293b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#94a3b8', border: '1px solid #334155' },
+  loadMoreBtn:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 14, padding: '10px 28px' },
+  infoBanner:     { marginTop: 24, background: '#1e293b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)', border: '1px solid #334155' },
 };
 
 export default SocialFeed;

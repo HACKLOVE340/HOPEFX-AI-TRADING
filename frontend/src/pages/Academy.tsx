@@ -63,7 +63,7 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
       onClick={() => onOpen(ep)}
       style={{
         textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-        background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 12,
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
         overflow: 'hidden', transition: 'border-color 0.15s, transform 0.15s',
       }}
       onMouseEnter={(e) => { e.currentTarget.style.borderColor = ep.locked ? '#334155' : '#3b82f6'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
@@ -73,11 +73,11 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
       <div style={{
         position: 'relative', height: 116, display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 14, background: 'linear-gradient(135deg, #0a1628 0%, #0d1f33 100%)',
-        borderBottom: '1px solid #1e2d3d',
+        borderBottom: '1px solid var(--border)',
       }}>
         <span style={{
           position: 'absolute', top: 8, left: 10, fontSize: 11, fontWeight: 800,
-          color: '#64748b', letterSpacing: '0.08em',
+          color: 'var(--text-muted)', letterSpacing: '0.08em',
         }}>
           EP {ep.episode.toString().padStart(2, '0')}
         </span>
@@ -106,7 +106,7 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
             {ep.title}
           </span>
         </div>
-        <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5, margin: 0, flex: 1 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0, flex: 1 }}>
           {ep.summary}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
@@ -122,11 +122,11 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
               🔒 {PLAN_LABELS[ep.plan]}
             </span>
           ) : ep.published ? (
-            <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.35)', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: 'rgba(74,222,128,0.12)', color: 'var(--gain)', border: '1px solid rgba(74,222,128,0.35)', textTransform: 'uppercase' }}>
               Watch
             </span>
           ) : (
-            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#1e293b', color: 'var(--text-dim)', border: '1px solid #334155', textTransform: 'uppercase' }}>
               Coming soon
             </span>
           )}
@@ -154,9 +154,9 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
     <Modal open onClose={onClose} maxWidth={760}>
       <div>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 14, borderBottom: '1px solid #1e2d3d' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
               EPISODE {ep.episode.toString().padStart(2, '0')} · {ep.level} · {ep.duration_min} min
             </span>
             <h2 id="academy-detail-title" style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9', margin: '4px 0 0' }}>
@@ -164,7 +164,7 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
             </h2>
           </div>
           <button onClick={onClose} aria-label="Close"
-            style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 0 }}>
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 0 }}>
             ×
           </button>
         </div>
@@ -185,18 +185,18 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: 8, padding: '36px 20px', background: 'linear-gradient(135deg, #0a1628 0%, #0d1f33 100%)',
-              borderRadius: 10, border: '1px dashed #1e2d3d',
+              borderRadius: 10, border: '1px dashed var(--border)',
             }}>
               <span style={{ fontSize: 28 }}>🎬</span>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#cbd5e1' }}>Coming soon</span>
-              <span style={{ fontSize: 12, color: '#64748b', textAlign: 'center', maxWidth: 420 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 420 }}>
                 This episode is scripted and in production. The full chapter outline is below so you
                 can preview what it covers.
               </span>
             </div>
           )}
 
-          <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>{ep.summary}</p>
+          <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6, margin: 0 }}>{ep.summary}</p>
 
           {/* Chapters */}
           <div>
@@ -214,7 +214,7 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
                 const title = m ? m[2] : c.trim();
                 return (
                   <div key={c} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid #0f1a2a' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{time}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{time}</span>
                     <span style={{ fontSize: 12, color: '#cbd5e1' }}>{title}</span>
                   </div>
                 );
@@ -303,23 +303,23 @@ const Academy: React.FC = () => {
 
       <div style={{ padding: 16, flex: 1, minHeight: 0 }}>
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: '#64748b', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: 'var(--text-muted)', fontSize: 13 }}>
             Loading tutorials…
           </div>
         ) : error ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: 48 }}>
-            <span style={{ color: '#f87171', fontSize: 13 }}>⚠ {error}</span>
-            <button onClick={() => void load()} style={{ background: '#1e2d3d', border: '1px solid #334155', borderRadius: 6, color: '#cbd5e1', fontSize: 12, fontWeight: 600, padding: '6px 14px', cursor: 'pointer' }}>
+            <span style={{ color: 'var(--loss)', fontSize: 13 }}>⚠ {error}</span>
+            <button onClick={() => void load()} style={{ background: 'var(--border)', border: '1px solid #334155', borderRadius: 6, color: '#cbd5e1', fontSize: 12, fontWeight: 600, padding: '6px 14px', cursor: 'pointer' }}>
               Retry
             </button>
           </div>
         ) : episodes.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: '#64748b', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: 'var(--text-muted)', fontSize: 13 }}>
             No tutorials available yet.
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
               {episodes.length} episodes ·{' '}
               {watchableCount > 0
                 ? `${watchableCount} available to watch now`
@@ -330,7 +330,7 @@ const Academy: React.FC = () => {
                 <>
                   {' · '}
                   <button onClick={() => navigate('/upgrade')}
-                    style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                    style={{ background: 'transparent', border: 'none', color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
                     Upgrade to unlock all
                   </button>
                 </>

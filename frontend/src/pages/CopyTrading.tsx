@@ -89,14 +89,14 @@ const LeaderCard: React.FC<{
     <div style={s.leaderTop}>
       <div>
         <div style={s.leaderName}>{leader.name}</div>
-        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
           👥 {leader.followers.toLocaleString()} followers
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
         {/* Sign and colour both from the number: a trader down 12% used to be
             shown as a green "+-12%" at the top of their card. */}
-        <div style={{ fontSize: 24, fontWeight: 700, color: leader.return_3m >= 0 ? '#4ade80' : '#f87171' }}>
+        <div style={{ fontSize: 24, fontWeight: 700, color: leader.return_3m >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
           {fmtPctRaw(leader.return_3m, 1)}
         </div>
         <div style={{ fontSize: 11, color: '#475569' }}>3M Return</div>
@@ -109,7 +109,7 @@ const LeaderCard: React.FC<{
         <div style={s.metricLbl}>Sharpe</div>
       </div>
       <div style={s.metric}>
-        <div style={{ ...s.metricVal, color: '#f87171' }}>-{Math.abs(leader.max_dd)}%</div>
+        <div style={{ ...s.metricVal, color: 'var(--loss)' }}>-{Math.abs(leader.max_dd)}%</div>
         <div style={s.metricLbl}>Max DD</div>
       </div>
       <div style={s.metric}>
@@ -119,10 +119,10 @@ const LeaderCard: React.FC<{
     </div>
 
     <div style={s.leaderFooter}>
-      <span style={{ fontSize: 13, color: '#94a3b8' }}>
+      <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
         AUM: <strong>${(leader.aum / 1_000_000).toFixed(2)}M</strong>
       </span>
-      <span style={{ fontSize: 13, color: '#94a3b8' }}>
+      <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
         Fee: <strong>{leader.fee != null ? `${leader.fee}%` : 'not published'}</strong>
       </span>
     </div>
@@ -276,7 +276,7 @@ const CopyTrading: React.FC = () => {
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Copy Trading Marketplace</h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
             Mirror top traders automatically. Allocate capital and start earning.
           </p>
         </div>
@@ -292,7 +292,7 @@ const CopyTrading: React.FC = () => {
           <div style={{ width: 1, height: 24, background: '#334155' }} />
           <button
             onClick={() => navigate('/leaderboard')}
-            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
           >
             🏆 Leaderboard
           </button>
@@ -309,11 +309,11 @@ const CopyTrading: React.FC = () => {
               <ActionBanner message={copyMsg} ok={copyOk} onDismiss={() => setCopyMsg('')} />
             </div>
           )}
-          {sessionsLoading && <p style={{ color: '#64748b' }}>Loading sessions…</p>}
+          {sessionsLoading && <p style={{ color: 'var(--text-muted)' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-              <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 8 }}>No active copy sessions</div>
+              <div style={{ fontSize: 15, color: 'var(--text-dim)', marginBottom: 8 }}>No active copy sessions</div>
               <div style={{ fontSize: 13, marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
               <button
                 onClick={() => setActiveTab('browse')}
@@ -330,33 +330,33 @@ const CopyTrading: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{sess.trader_name}</div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                       Started {new Date(sess.started_at).toLocaleDateString()} ·{' '}
-                      <span style={{ color: sess.status === 'active' ? '#4ade80' : '#f59e0b' }}>{sess.status}</span>
+                      <span style={{ color: sess.status === 'active' ? 'var(--gain)' : '#f59e0b' }}>{sess.status}</span>
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: (totalPnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: (totalPnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {fmtPnl(totalPnl)}
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Total P&L</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total P&L</div>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, margin: '16px 0' }}>
                   <div style={s.sessMetric}>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Allocation</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Allocation</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>${fmtPrice(sess.allocation_amount)}</div>
                   </div>
                   <div style={s.sessMetric}>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Unrealised P&L</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.unrealised_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unrealised P&L</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.unrealised_pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {sess.unrealised_pnl != null ? `${sess.unrealised_pnl >= 0 ? '+' : ''}$${sess.unrealised_pnl.toFixed(2)}` : '—'}
                     </div>
                   </div>
                   <div style={s.sessMetric}>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Realised P&L</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.realised_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Realised P&L</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.realised_pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {sess.realised_pnl != null ? `${sess.realised_pnl >= 0 ? '+' : ''}$${sess.realised_pnl.toFixed(2)}` : '—'}
                     </div>
                   </div>
@@ -383,7 +383,7 @@ const CopyTrading: React.FC = () => {
                 <button
                   onClick={() => handleStopCopy(sess.trader_id)}
                   disabled={stoppingId === sess.trader_id}
-                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
+                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
                 >
                   {stoppingId === sess.trader_id ? 'Stopping…' : '⏹ Stop Copying'}
                 </button>
@@ -406,11 +406,11 @@ const CopyTrading: React.FC = () => {
       </div>
       {/* Leader cards */}
       {loading ? (
-        <p style={{ color: '#64748b', padding: '40px 0' }}>Loading traders…</p>
+        <p style={{ color: 'var(--text-muted)', padding: '40px 0' }}>Loading traders…</p>
       ) : loadErr ? (
-        <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
+        <p style={{ color: 'var(--loss)', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : leaders.length === 0 ? (
-        <p style={{ color: '#64748b', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
+        <p style={{ color: 'var(--text-muted)', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
       ) : (
         <div style={s.grid}>
           {sorted.map((leader) => (
@@ -463,7 +463,7 @@ const CopyTrading: React.FC = () => {
               </div>
               <div style={s.summaryRow}>
                 <span style={s.summaryLabel}>Max Drawdown Stop</span>
-                <span style={{ ...s.summaryVal, color: '#f87171' }}>
+                <span style={{ ...s.summaryVal, color: 'var(--loss)' }}>
                   ${Number.isFinite(allocation * Math.abs(selectedLeader.max_dd) / 100) ? (allocation * Math.abs(selectedLeader.max_dd) / 100).toFixed(0) : '—'}
                 </span>
               </div>
@@ -492,7 +492,7 @@ const CopyTrading: React.FC = () => {
           {copyMsg && (
             <div style={{
               marginTop: 12, fontSize: 14,
-              color: copyOk ? '#4ade80' : '#f87171',
+              color: copyOk ? 'var(--gain)' : 'var(--loss)',
             }}>
               {copyMsg}
             </div>
@@ -524,16 +524,16 @@ const s: Record<string, React.CSSProperties> = {
   allocationCard:{ background: '#1e293b', border: '1px solid #f59e0b55', borderRadius: 12, padding: 24 },
   cardTitle:     { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 20px' },
   allocationGrid:{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 },
-  label:         { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 8 },
+  label:         { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 },
   input:         { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
   summaryBox:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: 16 },
   summaryRow:    { display: 'flex', justifyContent: 'space-between', marginBottom: 10 },
-  summaryLabel:  { fontSize: 13, color: '#64748b' },
+  summaryLabel:  { fontSize: 13, color: 'var(--text-muted)' },
   summaryVal:    { fontSize: 13, fontWeight: 600, color: '#f1f5f9' },
   copyBtn:       { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '12px 24px' },
-  cancelBtn:     { background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
-  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
-  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
+  cancelBtn:     { background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
+  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   sessMetric:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' },
 };
 

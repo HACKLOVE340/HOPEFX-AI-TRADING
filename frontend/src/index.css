@@ -41,6 +41,10 @@
     --gain:          #4ade80;
     --loss:          #f87171;
     --warn:          #fbbf24;   /* needs attention, not yet a loss          */
+    /* Navigation row height. Pro-max on a mouse, thumb-sized on touch — the
+       media query below raises it rather than the sidebar guessing which it
+       has. A touch target is never traded away for density. */
+    --nav-row:       32px;
     --sidebar-w:     224px;
     --sidebar-w-collapsed: 60px;
     --topbar-h:      56px;
@@ -88,6 +92,16 @@
        receding. Fainter than --text-muted, for a label whose value is the
        thing being read. */
     --text-faint:    #56627a;
+
+    /* ── Service health ────────────────────────────────────────────────────
+       Separate names from --gain/--loss even where the hue is close, for the
+       same reason the --q-* set exists: these describe a SERVICE, and money
+       and health must be able to be restyled independently. A palette change
+       to the P&L ramp should never silently repaint a provider's status, and
+       a control plane going red should never read as a price falling. */
+    --ok:            #42d392;
+    --degraded:      #f5b84b;
+    --failed:        #f36d78;
 
     /* Type scale. Seven steps, each with a job. A page picks a role, never a
        number — which is the only way 72 of them stay in agreement. */
@@ -207,6 +221,9 @@
     --q-on-accent:   #ffffff;
 
     --ai-model: #6d43d6;
+    --ok:       #0f8b5f;
+    --degraded: #9a6206;
+    --failed:   #c0303c;
 
     /* A shadow tuned for a dark ground is a smudge on a white one. */
     --e-1: 0 1px 2px rgba(15, 23, 42, .07);
@@ -257,6 +274,9 @@
     --link:          #8bb8ff;
     --focus:         #5eeaff;
     --ai-model:      #a78bfa;
+    --ok:            #4ce0a3;
+    --degraded:      #ffc766;
+    --failed:        #ff7a86;
     --e-1: 0 1px 2px rgba(0, 0, 0, .55);
     --e-2: 0 1px 2px rgba(0, 0, 0, .55), 0 10px 30px -14px rgba(0, 0, 0, .85);
     --e-3: 0 28px 70px -24px rgba(0, 0, 0, .90);
@@ -266,6 +286,83 @@
     --ai-grid:
       repeating-linear-gradient(to right,  var(--hairline) 0 1px, transparent 1px 32px),
       repeating-linear-gradient(to bottom, var(--hairline) 0 1px, transparent 1px 32px);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     DENSITY TIERS
+
+     Set data-density on any element and everything inside it retunes. Same
+     mechanism as the AI surface: a scoped token override, no second component
+     library, no per-page pixel decisions.
+
+       comfortable  reading surfaces — docs, academy, legal, onboarding
+       promax       the default, and what :root already declares
+       ultra        data surfaces — tables, terminals, books, audit logs
+
+     Ultra is not "promax but smaller". It is the density a professional tool
+     reaches when the reader is scanning rows rather than reading sentences:
+     the type scale compresses at the bottom, where labels and units live, and
+     barely moves at the top, because the one figure a screen is about should
+     not shrink when you ask for more rows. Padding is what actually buys the
+     rows, so padding moves most.
+
+     Nothing here touches a colour. Density and palette are independent, which
+     is why an ultra-dense AI page is one attribute on each, not a fourth
+     palette.
+     ═══════════════════════════════════════════════════════════════════════ */
+  [data-density="promax"] {
+    /* Explicit affirmation of the default, so a page can state its intent and
+       a nested region can return to it from either neighbour. */
+    --fs-micro: 10.5px;
+    --fs-label: 11.5px;
+    --fs-body:    13px;
+    --fs-value:   15px;
+    --fs-title:   17px;
+    --fs-head:    21px;
+    --fs-hero:    28px;
+    --pad-card:   14px;
+    --pad-row:     9px;
+    --gap-grid:   10px;
+    --lh-body:    1.5;
+  }
+
+  [data-density="ultra"] {
+    --fs-micro:   10px;
+    --fs-label:   11px;
+    --fs-body:    12px;
+    --fs-value: 13.5px;
+    --fs-title:   15px;
+    --fs-head:    19px;
+    --fs-hero:    26px;
+    --pad-card:   10px;
+    --pad-row:     5px;
+    --gap-grid:    7px;
+    --sp-4:        9px;
+    --sp-5:       12px;
+    --sp-6:       16px;
+    --lh-body:   1.42;
+  }
+
+  [data-density="comfortable"] {
+    --fs-micro:   11px;
+    --fs-label: 12.5px;
+    --fs-body:    15px;
+    --fs-value:   17px;
+    --fs-title:   19px;
+    --fs-head:    24px;
+    --fs-hero:    32px;
+    --pad-card:   20px;
+    --pad-row:    12px;
+    --gap-grid:   16px;
+    --sp-4:       14px;
+    --sp-5:       20px;
+    --sp-6:       26px;
+    --lh-body:   1.62;
+  }
+
+  /* Coarse pointer: a finger needs 44px whatever the density says. */
+  @media (pointer: coarse) {
+    :root { --nav-row: 44px; }
   }
 
   /* One place to honour a reduced-motion preference. Every transition and

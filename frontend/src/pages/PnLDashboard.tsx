@@ -135,7 +135,7 @@ function StatCard({
   to?: string;
   toHint?: string;
 }) {
-  const cls = `bg-[#0d1421] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[#1e2d3d]'}`;
+  const cls = `bg-[var(--surface)] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[var(--border)]'}`;
   const body = (
     <>
       <div className="flex items-center justify-between mb-3">
@@ -157,9 +157,9 @@ function StatCard({
       aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
       title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
       className={`${cls} block no-underline cursor-pointer transition-colors duration-150
-                  hover:border-[#2b3f56] hover:bg-[#111827] focus-visible:outline-none
+                  hover:border-[var(--border-strong)] hover:bg-[var(--raised)] focus-visible:outline-none
                   focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2
-                  focus-visible:ring-offset-[#080c14]`}
+                  focus-visible:ring-offset-[var(--bg)]`}
     >
       {body}
     </Link>
@@ -318,7 +318,7 @@ const LiveEquityBadge: React.FC<{ equity: number | undefined }> = ({ equity }) =
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
         background: flash !== 'transparent' ? flash : 'rgba(0,230,118,0.08)',
-        color: '#00e676', border: '1px solid rgba(0,230,118,0.2)',
+        color: 'var(--bull)', border: '1px solid rgba(0,230,118,0.2)',
         transition: 'background 0.4s ease',
       }}
     >
@@ -427,9 +427,9 @@ const ExecutionQualityPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {metrics.map(({ label, value, warn }) => (
-        <div key={label} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
+        <div key={label} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0a0f1a] border border-[var(--border)]">
           <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-          <span className={`text-[14px] font-bold tabular-nums ${warn ? 'text-[#ff1744]' : 'text-slate-200'}`}>{value}</span>
+          <span className={`text-[14px] font-bold tabular-nums ${warn ? 'text-[var(--bear)]' : 'text-slate-200'}`}>{value}</span>
         </div>
       ))}
     </div>
@@ -580,7 +580,7 @@ const PnLDashboard: React.FC = () => {
               onClick={() => void handleExport('csv')}
               disabled={exporting}
               className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
-                         font-semibold text-slate-300 ring-1 ring-inset ring-[#1e2d3d] cursor-pointer
+                         font-semibold text-slate-300 ring-1 ring-inset ring-[var(--border)] cursor-pointer
                          transition-colors duration-150 hover:bg-[#243447]
                          disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none
                          focus-visible:ring-2 focus-visible:ring-sky-500"
@@ -592,7 +592,7 @@ const PnLDashboard: React.FC = () => {
               onClick={handleRefresh}
               disabled={isLoading}
               aria-label={lastUpdated ? `Refresh — last updated ${lastUpdated}` : 'Refresh P&L data'}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#1e2d3d] px-3.5
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--border)] px-3.5
                          text-xs text-slate-300 cursor-pointer transition-colors duration-150
                          hover:bg-[#243447] disabled:cursor-not-allowed disabled:opacity-50
                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
@@ -709,7 +709,7 @@ const PnLDashboard: React.FC = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">Equity Curve</h3>
             <span className="text-xs text-slate-500">Account currency</span>
@@ -724,7 +724,7 @@ const PnLDashboard: React.FC = () => {
           )}
           {!equityQ.isLoading && !equityQ.isError && <EquitySparkline data={equityData} />}
         </div>
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">Drawdown Curve</h3>
             <span className="text-xs text-slate-500">% from peak equity</span>
@@ -743,14 +743,14 @@ const PnLDashboard: React.FC = () => {
 
       {/* Open positions */}
       {positions.length > 0 && (
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#1e2d3d]">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="font-semibold text-slate-200">Open Positions ({positions.length})</h3>
           </div>
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-sm min-w-[640px]">
               <thead>
-                <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
+                <tr className="text-xs text-slate-500 uppercase border-b border-[var(--border)]">
                   {['Symbol', 'Direction', 'Qty', 'Entry', 'Current', 'Unrealised P&L', 'SL', 'TP', 'Opened'].map((h) => (
                     <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                   ))}
@@ -760,7 +760,7 @@ const PnLDashboard: React.FC = () => {
                 {positions.map((pos, i) => {
                   const side = positionSide(pos);
                   return (
-                    <tr key={i} className="border-b border-[#1e2d3d]/50 hover:bg-[#1e2d3d]/30">
+                    <tr key={i} className="border-b border-[var(--border)]/50 hover:bg-[var(--border)]/30">
                       <td className="px-4 py-3 font-mono text-amber-400">{pos.symbol}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -794,8 +794,8 @@ const PnLDashboard: React.FC = () => {
       )}
 
       {/* Auditable trade log */}
-      <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#1e2d3d] flex items-center justify-between">
+      <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-slate-200">Auditable Trade Log</h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -825,7 +825,7 @@ const PnLDashboard: React.FC = () => {
             <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
               <table className="w-full text-sm min-w-[700px]">
                 <thead>
-                  <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
+                  <tr className="text-xs text-slate-500 uppercase border-b border-[var(--border)]">
                     {['Time', 'Symbol', 'Dir', 'Qty', 'Fill Price', 'Expected', 'Slippage', 'Latency', 'Broker', 'Fill ID'].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
@@ -833,7 +833,7 @@ const PnLDashboard: React.FC = () => {
                 </thead>
                 <tbody>
                   {fills.map((f) => (
-                    <tr key={f.fill_id} className="border-b border-[#1e2d3d]/50 hover:bg-[#1e2d3d]/30">
+                    <tr key={f.fill_id} className="border-b border-[var(--border)]/50 hover:bg-[var(--border)]/30">
                       <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                         {fmtDateTime(f.filled_at)}
                       </td>
@@ -873,13 +873,13 @@ const PnLDashboard: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-5 py-3 border-t border-[#1e2d3d] flex items-center justify-between text-sm text-slate-400">
+              <div className="px-5 py-3 border-t border-[var(--border)] flex items-center justify-between text-sm text-slate-400">
                 <span>Page {page + 1} of {totalPages}</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
                     disabled={page === 0}
-                    className="p-1.5 rounded hover:bg-[#1e2d3d] disabled:opacity-30"
+                    className="p-1.5 rounded hover:bg-[var(--border)] disabled:opacity-30"
                     aria-label="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -887,7 +887,7 @@ const PnLDashboard: React.FC = () => {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
-                    className="p-1.5 rounded hover:bg-[#1e2d3d] disabled:opacity-30"
+                    className="p-1.5 rounded hover:bg-[var(--border)] disabled:opacity-30"
                     aria-label="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -900,7 +900,7 @@ const PnLDashboard: React.FC = () => {
 
         {/* MAE/MFE analysis */}
         {fills.length > 0 && (
-          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <h3 className="text-[13px] font-semibold text-slate-200 mb-3">MAE / MFE Analysis</h3>
             <ExecutionQualityPanel fills={fills} />
           </div>
@@ -908,7 +908,7 @@ const PnLDashboard: React.FC = () => {
 
         {/* Trade distribution histogram */}
         {fills.length >= 5 && (
-          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <h3 className="text-[13px] font-semibold text-slate-200 mb-3">Trade Distribution</h3>
             <TradeHistogram fills={fills} />
           </div>

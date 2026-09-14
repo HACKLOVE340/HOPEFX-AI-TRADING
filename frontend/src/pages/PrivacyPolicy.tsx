@@ -198,7 +198,7 @@ const PrivacyPolicy: React.FC = () => {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page:       { minHeight: '100vh', background: '#0f172a', color: '#e2e8f0' },
+  page:       { minHeight: '100vh', background: '#0f172a', color: 'var(--text)' },
   header:     { background: '#1e293b', borderBottom: '1px solid #334155', position: 'sticky', top: 0, zIndex: 10 },
   headerInner: {
     maxWidth: 800, margin: '0 auto', padding: '0 24px',
@@ -210,20 +210,20 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
-  logo:       { fontSize: 18, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
-  backLink:   { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b', textDecoration: 'none' },
+  logo:       { fontSize: 18, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
+  backLink:   { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' },
   container:  { maxWidth: 800, margin: '0 auto', padding: '48px 24px 80px' },
   titleBlock: { marginBottom: 48 },
   badge: {
     display: 'inline-flex', alignItems: 'center', gap: 6,
     background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
-    color: '#60a5fa', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+    color: 'var(--link)', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
     padding: '4px 12px', borderRadius: 20, marginBottom: 16,
     textTransform: 'uppercase',
   },
   title:      { fontSize: 36, fontWeight: 800, color: '#f1f5f9', margin: '0 0 8px', letterSpacing: -0.5 },
-  subtitle:   { fontSize: 13, color: '#64748b', margin: '0 0 16px' },
-  intro:      { fontSize: 15, color: '#94a3b8', lineHeight: 1.7, margin: 0 },
+  subtitle:   { fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px' },
+  intro:      { fontSize: 15, color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
   sections:   { display: 'flex', flexDirection: 'column', gap: 32 },
   section:    {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
@@ -234,15 +234,15 @@ const s: Record<string, React.CSSProperties> = {
     width: 32, height: 32, borderRadius: 8,
     background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: '#60a5fa', flexShrink: 0,
+    color: 'var(--link)', flexShrink: 0,
   },
   sectionTitle: { fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 },
-  sectionBody:  { fontSize: 14, color: '#94a3b8', lineHeight: 1.7 },
+  sectionBody:  { fontSize: 14, color: 'var(--text-dim)', lineHeight: 1.7 },
   bullet:       { display: 'flex', gap: 8, marginBottom: 6 },
   bulletDot:    { color: '#3b82f6', flexShrink: 0, fontWeight: 700 },
   para:         { margin: '0 0 8px' },
   footerLinks:  { display: 'flex', justifyContent: 'center', gap: 16, marginTop: 48, fontSize: 13 },
-  footerLink:   { color: '#64748b', textDecoration: 'none' },
+  footerLink:   { color: 'var(--text-muted)', textDecoration: 'none' },
 };
 
 export default PrivacyPolicy;

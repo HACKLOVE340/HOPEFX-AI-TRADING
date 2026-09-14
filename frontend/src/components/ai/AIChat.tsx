@@ -156,7 +156,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: compact ? '12px 14px' : '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {empty && (
-          <div style={{ color: '#94a3b8', fontSize: fs, lineHeight: 1.6 }}>
+          <div style={{ color: 'var(--text-dim)', fontSize: fs, lineHeight: 1.6 }}>
             <div style={{ marginBottom: suggestions?.length ? 14 : 0 }}>{renderText(intro ?? 'Hi — how can I help?')}</div>
             {suggestions?.map(s => (
               <button
@@ -185,7 +185,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
                 background: own ? '#1e3a5f' : '#16233a',
                 border: `1px solid ${own ? '#1e4a7f' : '#243b5a'}`,
                 borderRadius: own ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                padding: pad, fontSize: fs, color: '#e2e8f0', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                padding: pad, fontSize: fs, color: 'var(--text)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               }}>
                 {renderText(t.content)}
               </div>
@@ -193,7 +193,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
           );
         })}
         {sending && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#64748b', fontSize: fs }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', fontSize: fs }}>
             <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: '#16233a' }}>🤖</div>
             <span>Thinking…</span>
           </div>
@@ -226,7 +226,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
               style={{
                 background: voice.listening ? '#dc2626' : '#1e293b',
                 border: `1px solid ${voice.listening ? '#ef4444' : '#334155'}`, borderRadius: 10,
-                color: voice.listening ? '#fff' : '#94a3b8', cursor: 'pointer',
+                color: voice.listening ? '#fff' : 'var(--text-dim)', cursor: 'pointer',
                 fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
               }}
             >
@@ -243,7 +243,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
               style={{
                 background: speakReplies ? '#1e3a5f' : '#1e293b',
                 border: `1px solid ${speakReplies ? '#1d4ed8' : '#334155'}`, borderRadius: 10,
-                color: speakReplies ? '#60a5fa' : '#94a3b8', cursor: 'pointer',
+                color: speakReplies ? 'var(--link)' : 'var(--text-dim)', cursor: 'pointer',
                 fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
               }}
             >

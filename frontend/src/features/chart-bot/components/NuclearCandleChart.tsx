@@ -59,7 +59,7 @@ const TimeframeSelector = memo(({
         style={{
           ...s.tfBtn,
           background: active === tf ? '#1e3a5f' : 'transparent',
-          color: active === tf ? '#60a5fa' : '#475569',
+          color: active === tf ? 'var(--link)' : '#475569',
           borderColor: active === tf ? '#3b82f6' : '#1a2e4a',
         }}
         onClick={() => onChange(tf)}

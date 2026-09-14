@@ -340,12 +340,12 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     flexShrink: 0,
   },
-  logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 24px' },
+  logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
+  tagline: { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 24px' },
   form:    { display: 'flex', flexDirection: 'column', gap: 16 },
   field:   { display: 'flex', flexDirection: 'column' },
   label: {
-    fontSize: 11, fontWeight: 700, color: '#94a3b8',
+    fontSize: 11, fontWeight: 700, color: 'var(--text-dim)',
     textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6,
   },
   input: {
@@ -355,7 +355,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: '12px 14px',
     /* 16px prevents iOS Safari from zooming on focus */
     fontSize: 16,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     outline: 'none',
     transition: 'border-color 0.15s, box-shadow 0.15s',
     width: '100%',
@@ -371,14 +371,14 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     touchAction: 'manipulation',
   },
-  forgotLink: { fontSize: 13, color: '#60a5fa', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
-  totpHint:   { fontSize: 11, color: '#64748b', marginTop: 6 },
+  forgotLink: { fontSize: 13, color: 'var(--link)', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  totpHint:   { fontSize: 11, color: 'var(--text-muted)', marginTop: 6 },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)',
     border: '1px solid rgba(248,113,113,0.25)',
     borderRadius: 8, padding: '10px 14px',
-    fontSize: 13, color: '#f87171', lineHeight: 1.5,
+    fontSize: 13, color: 'var(--loss)', lineHeight: 1.5,
   },
   btn: {
     background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -396,7 +396,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
     gap: '8px 12px', marginTop: 24, fontSize: 13,
   },
-  link: { color: '#64748b', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  link: { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 
 export default Login;

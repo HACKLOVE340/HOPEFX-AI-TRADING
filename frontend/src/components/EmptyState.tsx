@@ -53,7 +53,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   <div
     style={{
       alignItems: 'center',
-      color: '#64748b',
+      color: 'var(--text-muted)',
       display: 'flex',
       flexDirection: 'column',
       gap: 10,
@@ -75,17 +75,17 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         ? icon                                  /* legacy emoji call sites */
         : React.createElement(icon, { size: 26, strokeWidth: 1.5, 'aria-hidden': true })}
     </div>
-    <p style={{ color: '#94a3b8', fontSize: 15, fontWeight: 600, margin: 0 }}>{title}</p>
+    <p style={{ color: 'var(--text-dim)', fontSize: 15, fontWeight: 600, margin: 0 }}>{title}</p>
     {description && (
-      <p style={{ fontSize: 13, margin: 0, maxWidth: 360, lineHeight: 1.6, color: '#64748b' }}>
+      <p style={{ fontSize: 13, margin: 0, maxWidth: 360, lineHeight: 1.6, color: 'var(--text-muted)' }}>
         {description}
       </p>
     )}
     {serverNote && (
       <p style={{
         fontSize: 12.5, margin: 0, maxWidth: 520, lineHeight: 1.6,
-        color: '#94a3b8', textAlign: 'left',
-        background: '#0b1220', border: '1px solid #1e2d3d',
+        color: 'var(--text-dim)', textAlign: 'left',
+        background: '#0b1220', border: '1px solid var(--border)',
         borderRadius: 8, padding: '8px 12px',
       }}>
         {serverNote}
@@ -105,7 +105,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
             // These links were ~26px tall and are the primary way out of an
             // empty screen, so they are exactly the ones that must be tappable.
             className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                       focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1421]"
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
               minHeight: 44, fontSize: 12, color: '#475569',

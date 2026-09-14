@@ -38,11 +38,11 @@ export const RelatedPages: React.FC<{ links: RelatedLink[]; title?: string }> = 
             <Link
               to={l.to}
               className="group flex min-h-[44px] items-center gap-3 rounded-lg border
-                         border-[#1e2d3d] bg-[#0d1421] px-3 py-2.5 cursor-pointer
-                         transition-colors duration-150 hover:border-[#2b3f56] hover:bg-[#111827]
+                         border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 cursor-pointer
+                         transition-colors duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--raised)]
                          focus-visible:outline-none focus-visible:ring-2
                          focus-visible:ring-sky-500 focus-visible:ring-offset-2
-                         focus-visible:ring-offset-[#080c14]"
+                         focus-visible:ring-offset-[var(--bg)]"
             >
               {l.icon && (
                 <span aria-hidden className="shrink-0 text-slate-600 transition-colors group-hover:text-sky-400">

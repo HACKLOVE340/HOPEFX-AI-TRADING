@@ -145,26 +145,26 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
     onClick={onClose}
   >
     <div
-      style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 12, maxWidth: 860, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, maxWidth: 860, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       onClick={e => e.stopPropagation()}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #1e2d3d' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
         <div>
           <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>Patch Diff — {patch.file}</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {patch.endpoint} · {new Date(patch.applied_at).toLocaleString()}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? '#4ade80' : '#f87171' }}>
+          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? 'var(--gain)' : 'var(--loss)' }}>
             {patch.success ? '✅ Applied' : '❌ Failed'}
           </span>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
       </div>
       <div style={{ overflowY: 'auto', padding: '16px 20px', flex: 1 }}>
         {patch.message && (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
+          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 12 }}>
             {patch.message}
           </div>
         )}
@@ -173,7 +173,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
             {patch.diff.split('\n').map((line, i) => (
               <span key={i} style={{
                 display: 'block',
-                color: line.startsWith('+') ? '#4ade80' : line.startsWith('-') ? '#f87171' : line.startsWith('@@') ? '#60a5fa' : '#94a3b8',
+                color: line.startsWith('+') ? 'var(--gain)' : line.startsWith('-') ? 'var(--loss)' : line.startsWith('@@') ? 'var(--link)' : 'var(--text-dim)',
                 background: line.startsWith('+') ? 'rgba(74,222,128,0.05)' : line.startsWith('-') ? 'rgba(248,113,113,0.05)' : 'transparent',
               }}>
                 {line}
@@ -239,7 +239,7 @@ const ThreatTable: React.FC<{
             <span style={severityBadgeStyle(t.severity)}>{t.severity}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={monoStyle}>{t.path}</div>
-              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>{t.detail}</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 2 }}>{t.detail}</div>
             </div>
             {!t.quarantined ? (
               <button
@@ -355,11 +355,11 @@ const AutoHealDashboard: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/security')}
-              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🛡 Security
             </button>
             <button onClick={() => navigate('/')}
-              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📊 Dashboard
             </button>
           </div>
@@ -506,7 +506,7 @@ const actionBtnStyle: React.CSSProperties = {
 };
 
 const sectionLabelStyle: React.CSSProperties = {
-  color: '#64748b', fontSize: 11, fontWeight: 700,
+  color: 'var(--text-muted)', fontSize: 11, fontWeight: 700,
   letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 4,
 };
 
@@ -536,12 +536,12 @@ const panelTitleStyle: React.CSSProperties = {
 };
 
 const panelCountStyle: React.CSSProperties = {
-  background: '#334155', borderRadius: 10, color: '#94a3b8',
+  background: '#334155', borderRadius: 10, color: 'var(--text-dim)',
   fontSize: 11, fontWeight: 700, padding: '2px 8px',
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: '#64748b', fontSize: 12, padding: '20px 16px', textAlign: 'center',
+  color: 'var(--text-muted)', fontSize: 12, padding: '20px 16px', textAlign: 'center',
 };
 
 const tableWrapStyle: React.CSSProperties = {
@@ -559,11 +559,11 @@ const monoStyle: React.CSSProperties = {
 };
 
 const timeStyle: React.CSSProperties = {
-  color: '#64748b', fontSize: 11, flexShrink: 0,
+  color: 'var(--text-muted)', fontSize: 11, flexShrink: 0,
 };
 
 const diffStyle: React.CSSProperties = {
-  background: '#0f172a', color: '#94a3b8', fontFamily: 'monospace',
+  background: '#0f172a', color: 'var(--text-dim)', fontFamily: 'monospace',
   fontSize: 10, margin: 0, maxHeight: 200, overflowY: 'auto',
   padding: '8px 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
 };
@@ -604,13 +604,13 @@ function severityBadgeStyle(sev: string): React.CSSProperties {
 
 const quarantineBtnStyle: React.CSSProperties = {
   background: '#7c3aed22', border: '1px solid #7c3aed', borderRadius: 6,
-  color: '#a78bfa', cursor: 'pointer', fontSize: 11,
+  color: 'var(--ai-model)', cursor: 'pointer', fontSize: 11,
   fontWeight: 700, padding: '3px 10px', flexShrink: 0,
 };
 
 const quarantinedBadgeStyle: React.CSSProperties = {
   background: '#33415522', border: '1px solid #475569', borderRadius: 10,
-  color: '#64748b', fontSize: 10, fontWeight: 700, padding: '2px 7px', flexShrink: 0,
+  color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, padding: '2px 7px', flexShrink: 0,
 };
 
 export default AutoHealDashboard;

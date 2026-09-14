@@ -164,8 +164,8 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 16 }}>
               {(['Balance', 'P&L', 'Win Rate'] as const).map((label) => (
                 <div key={label} style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>{label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>—</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>—</div>
                 </div>
               ))}
             </div>
@@ -212,7 +212,7 @@ const TenantRow: React.FC<{
           <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {tenant.name}
           </div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>{tenant.owner_email}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tenant.owner_email}</div>
         </div>
       </div>
 
@@ -220,7 +220,7 @@ const TenantRow: React.FC<{
         <span style={{ ...s.statusBadge, color: statusColor(tenant.status), border: `1px solid ${statusColor(tenant.status)}` }}>
           {tenant.status}
         </span>
-        <span style={{ fontSize: 12, color: '#64748b' }}>{tenant.features.length} features</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tenant.features.length} features</span>
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -229,10 +229,10 @@ const TenantRow: React.FC<{
           {tenant.has_api_key ? 'Regen Key' : 'Gen Key'}
         </button>
         {tenant.status === 'suspended'
-          ? <button style={{ ...s.actionBtn, color: '#4ade80' }} onClick={() => onAction(tenant.tenant_id, 'activate')}>Activate</button>
-          : <button style={{ ...s.actionBtn, color: '#f87171' }} onClick={() => onAction(tenant.tenant_id, 'suspend')}>Suspend</button>
+          ? <button style={{ ...s.actionBtn, color: 'var(--gain)' }} onClick={() => onAction(tenant.tenant_id, 'activate')}>Activate</button>
+          : <button style={{ ...s.actionBtn, color: 'var(--loss)' }} onClick={() => onAction(tenant.tenant_id, 'suspend')}>Suspend</button>
         }
-        <button style={{ ...s.actionBtn, color: '#f87171' }} onClick={() => onAction(tenant.tenant_id, 'delete')}>Delete</button>
+        <button style={{ ...s.actionBtn, color: 'var(--loss)' }} onClick={() => onAction(tenant.tenant_id, 'delete')}>Delete</button>
       </div>
     </div>
   );
@@ -319,7 +319,7 @@ const WhitelabelAdmin: React.FC = () => {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/trade')}
-            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ⚡ Trade
           </button>
           <button onClick={() => navigate('/performance')}
@@ -362,8 +362,8 @@ const WhitelabelAdmin: React.FC = () => {
               style={{ ...s.statCard, ...(filter === f ? { border: '1px solid #3b82f6' } : {}) }}
               onClick={() => setFilter(f)}
             >
-              <div style={{ fontSize: 24, fontWeight: 800, color: f === 'all' ? '#f8fafc' : statusColor(f) }}>{count}</div>
-              <div style={{ fontSize: 12, color: '#64748b', textTransform: 'capitalize' }}>{f}</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: f === 'all' ? 'var(--text-strong)' : statusColor(f) }}>{count}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{f}</div>
             </button>
           );
         })}
@@ -388,7 +388,7 @@ const WhitelabelAdmin: React.FC = () => {
 
       {/* Info */}
       <div style={s.infoBanner}>
-        <span style={{ color: '#60a5fa', fontWeight: 600 }}>ℹ Prop firm partnerships:</span>
+        <span style={{ color: 'var(--link)', fontWeight: 600 }}>ℹ Prop firm partnerships:</span>
         {' '}Each tenant gets a branded dashboard, their own API key, and configurable feature flags.
         Email FTMO / The5ers / Funded Next with the preview link to close deals.
       </div>
@@ -400,7 +400,7 @@ const WhitelabelAdmin: React.FC = () => {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100vh', background: '#0f172a', color: '#f8fafc',
+    minHeight: '100vh', background: '#0f172a', color: 'var(--text-strong)',
     fontFamily: "'Inter', system-ui, sans-serif", padding: '24px',
   },
   header: {
@@ -408,7 +408,7 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: 24, flexWrap: 'wrap', gap: 12,
   },
   title:    { fontSize: 28, fontWeight: 700, margin: 0 },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
+  subtitle: { fontSize: 14, color: 'var(--text-dim)', marginTop: 4 },
   createBtn: {
     background: '#3b82f6', border: 'none', borderRadius: 8,
     color: '#fff', padding: '10px 20px', fontSize: 14, cursor: 'pointer', fontWeight: 600,
@@ -432,25 +432,25 @@ const s: Record<string, React.CSSProperties> = {
   },
   actionBtn: {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-    color: '#94a3b8', padding: '5px 10px', fontSize: 12, cursor: 'pointer',
+    color: 'var(--text-dim)', padding: '5px 10px', fontSize: 12, cursor: 'pointer',
   },
   dim:   { color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 },
   empty: { color: '#475569', fontSize: 14, textAlign: 'center', padding: 48 },
   apiKeyBanner: {
-    background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: 8,
-    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#4ade80',
+    background: 'rgba(74,222,128,0.1)', border: '1px solid var(--gain)', borderRadius: 8,
+    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: 'var(--gain)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
   errorBanner: {
-    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
-    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#f87171',
+    background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8,
+    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: 'var(--loss)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
   infoBanner: {
     background: '#1e293b', borderRadius: 8, padding: '12px 16px',
-    fontSize: 13, color: '#94a3b8', border: '1px solid #334155',
+    fontSize: 13, color: 'var(--text-dim)', border: '1px solid #334155',
   },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -466,17 +466,17 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20,
   },
   closeBtn: {
-    background: 'transparent', border: 'none', color: '#64748b', fontSize: 18, cursor: 'pointer',
+    background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer',
   },
   fieldLabel: {
-    fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 6, marginTop: 14,
+    fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 6, marginTop: 14,
   },
   textInput: {
     width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-    color: '#f8fafc', padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+    color: 'var(--text-strong)', padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
   },
   featureGrid: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  featureCheck: { display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, color: '#94a3b8' },
+  featureCheck: { display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, color: 'var(--text-dim)' },
   featurePill: {
     fontSize: 11, padding: '2px 8px', borderRadius: 4,
   },
@@ -486,7 +486,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     flex: 1, background: '#334155', border: 'none', borderRadius: 8,
-    color: '#94a3b8', padding: '10px', fontSize: 14, cursor: 'pointer',
+    color: 'var(--text-dim)', padding: '10px', fontSize: 14, cursor: 'pointer',
   },
 };
 

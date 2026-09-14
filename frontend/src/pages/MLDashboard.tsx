@@ -139,7 +139,7 @@ const MLDashboard: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: '#e2e8f0' }}>
+    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: 'var(--text)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Cpu size={18} strokeWidth={1.75} aria-hidden /> ML-Ops
@@ -149,7 +149,7 @@ const MLDashboard: React.FC = () => {
             onClick={load}
             aria-label="Refresh ML-Ops status"
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
-                       font-bold text-[#60a5fa] cursor-pointer transition-colors duration-150
+                       font-bold text-[var(--link)] cursor-pointer transition-colors duration-150
                        hover:bg-[rgba(59,130,246,0.25)] focus-visible:outline-none
                        focus-visible:ring-2 focus-visible:ring-sky-500"
             style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)' }}
@@ -157,14 +157,14 @@ const MLDashboard: React.FC = () => {
             <RefreshCw size={13} strokeWidth={2} aria-hidden /> Refresh
           </button>
           <button onClick={retrain} disabled={busy === 'retrain' || health?.can_retrain === false}
-            style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, cursor: busy === 'retrain' ? 'default' : 'pointer', opacity: health?.can_retrain === false ? 0.5 : 1 }}>
+            style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, cursor: busy === 'retrain' ? 'default' : 'pointer', opacity: health?.can_retrain === false ? 0.5 : 1 }}>
             {busy === 'retrain' ? 'Retraining…' : 'Trigger Retrain'}
           </button>
         </div>
       </div>
 
-      {msg && <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: '#60a5fa', marginBottom: 16 }}>{msg}</div>}
-      {loading && <div style={{ color: '#64748b', padding: 20 }}>Loading pipeline…</div>}
+      {msg && <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: 'var(--link)', marginBottom: 16 }}>{msg}</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading pipeline…</div>}
       {!loading && err && (
         <div style={{ padding: '12px 16px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: failedParts.length ? 4 : 0 }}>{err}</div>
@@ -183,23 +183,23 @@ const MLDashboard: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
               <div key={t.label} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>{t.value}</div>
               </div>
             ))}
           </div>
 
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8', margin: '0 0 10px' }}>Shadow Models</h2>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Shadow Models</h2>
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12, marginBottom: 20 }}>
             {Object.keys(shadows).length === 0 ? (
-              <div style={{ color: '#64748b', padding: 8 }}>No shadow deployments.</div>
+              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No shadow deployments.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Object.entries(shadows).map(([id]) => (
                   <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: '#0f172a', borderRadius: 8 }}>
                     <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 12 }}>{id}</span>
                     <button onClick={() => promote(id)} disabled={busy === `promote:${id}`}
-                      style={{ padding: '4px 12px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: '#4ade80', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                      style={{ padding: '4px 12px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: 'var(--gain)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                       {busy === `promote:${id}` ? 'Promoting…' : 'Promote'}
                     </button>
                   </div>
@@ -208,14 +208,14 @@ const MLDashboard: React.FC = () => {
             )}
           </div>
 
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8', margin: '0 0 10px' }}>Retrain / Promotion History</h2>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Retrain / Promotion History</h2>
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12 }}>
             {history.length === 0 ? (
-              <div style={{ color: '#64748b', padding: 8 }}>No retrain history yet.</div>
+              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No retrain history yet.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {history.map((h, i) => (
-                  <div key={i} style={{ padding: '6px 10px', background: '#0f172a', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', color: '#94a3b8', wordBreak: 'break-all' }}>
+                  <div key={i} style={{ padding: '6px 10px', background: '#0f172a', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-dim)', wordBreak: 'break-all' }}>
                     {typeof h === 'string' ? h : JSON.stringify(h)}
                   </div>
                 ))}

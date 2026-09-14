@@ -77,7 +77,7 @@ const SystemSection: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading system settings…
     </div>
@@ -101,12 +101,12 @@ const SystemSection: React.FC = () => {
       {healthErr && <ErrorBanner message={healthErr} onDismiss={() => setHealthErr('')} />}
       {healthData && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 14 }}>System Health</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>System Health</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
             {Object.entries(healthData).slice(0, 6).map(([k, v]) => (
               <div key={k} style={{ background: '#0f172a', borderRadius: 8, padding: '10px 14px', border: '1px solid #1e293b' }}>
-                <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{k.replace(/_/g, ' ')}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{String(v)}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{k.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{String(v)}</div>
               </div>
             ))}
           </div>
@@ -115,7 +115,7 @@ const SystemSection: React.FC = () => {
 
       {/* Trading engine */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 4 }}>Trading Engine</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Trading Engine</h3>
         <Toggle id="paper-trading" label="Enable paper trading" description="Allow users to trade with simulated funds." checked={form.enable_paper_trading} onChange={(v) => update({ enable_paper_trading: v })} />
         <Toggle id="live-trading" label="Enable live trading" description="Allow users to execute real-money trades." checked={form.enable_live_trading} onChange={(v) => update({ enable_live_trading: v })} />
         <Toggle id="maintenance" label="Maintenance mode" description="Block all trading and show a maintenance banner to users." checked={form.maintenance_mode} onChange={(v) => update({ maintenance_mode: v })} />
@@ -127,7 +127,7 @@ const SystemSection: React.FC = () => {
 
       {/* Performance */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 4 }}>Performance</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Performance</h3>
         <Field label="Data refresh interval (seconds)" description="How often the dashboard polls for new data.">
           <Input type="number" min={5} max={300} value={form.data_refresh_interval} onChange={(e) => update({ data_refresh_interval: Number(e.target.value) })} />
         </Field>
@@ -144,7 +144,7 @@ const SystemSection: React.FC = () => {
 
       {/* Logging */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 14 }}>Logging</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>Logging</h3>
         <Field label="Log level">
           <Select
             value={form.log_level}
@@ -161,7 +161,7 @@ const SystemSection: React.FC = () => {
 
       {/* Backup */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 4 }}>Backup</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Backup</h3>
         <Toggle id="backup-enabled" label="Automated backups" description="Automatically back up the database on schedule." checked={form.backup_enabled} onChange={(v) => update({ backup_enabled: v })} />
         {form.backup_enabled && (
           <>
@@ -184,7 +184,7 @@ const SystemSection: React.FC = () => {
             Run backup now
           </Button>
           {backupMsg && (
-            <span style={{ fontSize: 13, color: backupMsg.includes('success') ? '#22c55e' : '#f87171' }}>
+            <span style={{ fontSize: 13, color: backupMsg.includes('success') ? '#22c55e' : 'var(--loss)' }}>
               {backupMsg}
             </span>
           )}

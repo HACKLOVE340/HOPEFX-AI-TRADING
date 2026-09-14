@@ -166,16 +166,16 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{tenant.name}</div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>{tenant.domain}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tenant.domain}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20 }}>×</button>
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 18 }}>
           {(['overview', 'keys', 'usage'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? '#f8fafc' : '#64748b', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
               {{ overview: 'Overview', keys: 'API Keys', usage: 'Usage' }[t]}
             </button>
           ))}
@@ -193,7 +193,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
               ].map(m => (
                 <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px' }}>
                   <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>{m.label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{m.value}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.value}</div>
                 </div>
               ))}
             </div>
@@ -208,12 +208,12 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
 
             {/* Branding */}
             <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Branding</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10 }}>Branding</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <Input label="Company Name" value={form.company_name ?? ''} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} />
                 <Input label="Logo URL"     value={form.logo_url ?? ''}     onChange={e => setForm(f => ({ ...f, logo_url: e.target.value }))} />
                 <div>
-                  <label style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Primary Colour</label>
+                  <label style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Primary Colour</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input type="color" value={form.primary_color ?? '#3b82f6'} onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))}
                       style={{ width: 40, height: 32, border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
@@ -250,8 +250,8 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
               keys.map(k => (
                 <div key={k.key_id} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#a78bfa' }}>{k.prefix}…</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: k.active ? '#4ade80' : '#f87171' }}>{k.active ? 'Active' : 'Revoked'}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--ai-model)' }}>{k.prefix}…</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: k.active ? 'var(--gain)' : 'var(--loss)' }}>{k.active ? 'Active' : 'Revoked'}</span>
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
                     Created: {fmtDate(k.created_at)} · Last used: {k.last_used ? fmtDate(k.last_used) : 'Never'}
@@ -321,8 +321,8 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
       <div style={{ position: 'fixed', inset: 0, zIndex: 800, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)' }} onClick={onClose} />
       <div style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 801, width: 420, background: '#0a1628', border: '1px solid #1e293b', borderRadius: 14, padding: 28, animation: 'sa-fadein 0.2s ease' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>Create New Tenant</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>×</button>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>Create New Tenant</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20 }}>×</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Input label="Tenant Name *"   value={form.name}         onChange={e => set('name', e.target.value)}         placeholder="Acme Capital" />
@@ -331,7 +331,7 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
           <Select label="Plan" value={form.plan} onChange={e => set('plan', e.target.value)}
             options={[{ value: 'starter', label: 'Starter' }, { value: 'professional', label: 'Professional' }, { value: 'enterprise', label: 'Enterprise' }]} />
           <div>
-            <label style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Primary Colour</label>
+            <label style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Primary Colour</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="color" value={form.primary_color} onChange={e => set('primary_color', e.target.value)}
                 style={{ width: 40, height: 32, border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
@@ -339,7 +339,7 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
             </div>
           </div>
         </div>
-        {err && <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6, background: '#450a0a', color: '#f87171', fontSize: 12 }}>{err}</div>}
+        {err && <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6, background: '#450a0a', color: 'var(--loss)', fontSize: 12 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           <ActionBtn label="Cancel" onClick={onClose} variant="ghost" style={{ flex: 1 }} />
           <ActionBtn label={saving ? 'Creating…' : 'Create Tenant'} onClick={create} variant="primary" loading={saving} style={{ flex: 2 }} />
@@ -432,7 +432,7 @@ const WhiteLabelSection: React.FC = () => {
                 ].map(m => (
                   <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '6px 8px' }}>
                     <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{m.value}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>{m.value}</div>
                   </div>
                 ))}
               </div>

@@ -62,8 +62,8 @@ export const MlSafetyStrip: React.FC = () => {
   if (isError || !data) {
     return (
       <div style={{
-        padding: '12px 16px', fontSize: 13, color: '#94a3b8',
-        background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10,
+        padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)',
+        background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 10,
       }}>
         Model health unavailable.
       </div>
@@ -80,7 +80,7 @@ export const MlSafetyStrip: React.FC = () => {
 
   return (
     <div style={{
-      background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12,
+      background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12,
       padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -88,7 +88,7 @@ export const MlSafetyStrip: React.FC = () => {
         <span style={{
           fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
-          color: statusTone === 'ok' ? '#22c55e' : statusTone === 'warn' ? '#fbbf24' : '#f87171',
+          color: statusTone === 'ok' ? '#22c55e' : statusTone === 'warn' ? 'var(--warn)' : 'var(--loss)',
           background: statusTone === 'ok' ? 'rgba(34,197,94,0.12)' : statusTone === 'warn' ? 'rgba(251,191,36,0.12)' : 'rgba(248,113,113,0.12)',
           border: `1px solid ${statusTone === 'ok' ? 'rgba(34,197,94,0.3)' : statusTone === 'warn' ? 'rgba(251,191,36,0.3)' : 'rgba(248,113,113,0.3)'}`,
         }}>
@@ -148,10 +148,10 @@ export const MlSafetyStrip: React.FC = () => {
       </div>
 
       <div style={{ marginTop: 10, fontSize: 11, color: '#334155', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <span>Long threshold: <strong style={{ color: '#64748b' }}>{data.threshold_long.toFixed(3)}</strong></span>
-        <span>Short threshold: <strong style={{ color: '#64748b' }}>{data.threshold_short.toFixed(3)}</strong></span>
+        <span>Long threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_long.toFixed(3)}</strong></span>
+        <span>Short threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_short.toFixed(3)}</strong></span>
         {data.last_trained_at && (
-          <span>Trained: <strong style={{ color: '#64748b' }}>{new Date(data.last_trained_at).toLocaleDateString()}</strong></span>
+          <span>Trained: <strong style={{ color: 'var(--text-muted)' }}>{new Date(data.last_trained_at).toLocaleDateString()}</strong></span>
         )}
         <span style={{ marginLeft: 'auto' }}>
           Updated {new Date(data.checked_at).toLocaleTimeString()}

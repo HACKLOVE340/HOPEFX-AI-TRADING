@@ -162,11 +162,11 @@ const BrokerManagementSection: React.FC = () => {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3 }}>Latency</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Latency</div>
                   <LatencyBar ms={b.latency_ms} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3 }}>Fill Rate</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Fill Rate</div>
                   <FillRateBar pct={b.fill_rate_pct} />
                 </div>
               </div>
@@ -178,7 +178,7 @@ const BrokerManagementSection: React.FC = () => {
                 ].map(m => (
                   <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '6px 8px' }}>
                     <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{m.value}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>{m.value}</div>
                   </div>
                 ))}
               </div>
@@ -213,16 +213,16 @@ const BrokerManagementSection: React.FC = () => {
               {tca.map(t => (
                 <tr key={t.broker_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{t.broker_name}</td>
-                  <td style={{ padding: '10px 12px', color: t.avg_slippage_pips < 1 ? '#4ade80' : t.avg_slippage_pips < 3 ? '#fbbf24' : '#f87171', fontWeight: 700 }}>
+                  <td style={{ padding: '10px 12px', color: t.avg_slippage_pips < 1 ? 'var(--gain)' : t.avg_slippage_pips < 3 ? 'var(--warn)' : 'var(--loss)', fontWeight: 700 }}>
                     {t.avg_slippage_pips.toFixed(2)} pips
                   </td>
                   <td style={{ padding: '10px 12px', minWidth: 120 }}><FillRateBar pct={t.fill_rate_pct} /></td>
-                  <td style={{ padding: '10px 12px', color: t.rejection_rate_pct < 1 ? '#4ade80' : '#f87171', fontWeight: 700 }}>
+                  <td style={{ padding: '10px 12px', color: t.rejection_rate_pct < 1 ? 'var(--gain)' : 'var(--loss)', fontWeight: 700 }}>
                     {t.rejection_rate_pct.toFixed(2)}%
                   </td>
                   <td style={{ padding: '10px 12px', minWidth: 120 }}><LatencyBar ms={t.avg_execution_ms} /></td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{t.total_orders.toLocaleString()}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{t.period}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{t.total_orders.toLocaleString()}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{t.period}</td>
                 </tr>
               ))}
             </tbody>

@@ -73,10 +73,10 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
             SUPERADMIN ONLY
           </span>
         </div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: '0 0 10px' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' }}>
           {isAdminUser ? 'Insufficient privilege level' : 'Access denied'}
         </h2>
-        <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 28px', lineHeight: 1.6 }}>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 0 28px', lineHeight: 1.6 }}>
           {isAdminUser
             ? 'This area requires superadmin privileges. Admin accounts cannot access the master control center.'
             : 'This area is restricted to superadmin accounts only. Your current role does not have permission to view this page.'}
@@ -86,7 +86,7 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
             onClick={() => navigate('/dashboard')}
             style={{
               background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
-              color: '#94a3b8', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+              color: 'var(--text-dim)', cursor: 'pointer', fontSize: 14, fontWeight: 600,
               padding: '10px 20px',
             }}
           >
@@ -97,7 +97,7 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
               onClick={() => navigate('/admin')}
               style={{
                 background: '#1e3a5f', border: '1px solid #1e3a5f', borderRadius: 8,
-                color: '#60a5fa', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                color: 'var(--link)', cursor: 'pointer', fontSize: 14, fontWeight: 600,
                 padding: '10px 20px',
               }}
             >

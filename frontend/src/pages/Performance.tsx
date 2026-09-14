@@ -164,9 +164,9 @@ function StatCard({
       aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
       title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
       className="group block min-h-[44px] cursor-pointer no-underline transition-colors duration-150
-                 hover:bg-[#141c2b] focus-visible:outline-none focus-visible:ring-2
+                 hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2
                  focus-visible:ring-sky-500 focus-visible:ring-offset-2
-                 focus-visible:ring-offset-[#080c14]"
+                 focus-visible:ring-offset-[var(--bg)]"
     >
       {body}
     </Link>
@@ -182,7 +182,7 @@ function TradeRow({ trade }: { trade: Trade }) {
     <tr style={{ borderBottom: '1px solid #1e293b' }}>
       <td style={s.td}><strong style={{ color: '#f1f5f9' }}>{trade.symbol}</strong></td>
       <td style={s.td}>
-        <span style={{ color: isLong ? '#00e676' : '#ff1744', fontWeight: 700, fontSize: 11 }}>
+        <span style={{ color: isLong ? 'var(--bull)' : 'var(--bear)', fontWeight: 700, fontSize: 11 }}>
           {isLong ? '▲' : '▼'} {trade.side.toUpperCase()}
         </span>
       </td>
@@ -190,12 +190,12 @@ function TradeRow({ trade }: { trade: Trade }) {
       <td style={{ ...s.td, fontFamily: 'monospace' }}>{fmtPrice(trade.entry_price)}</td>
       <td style={{ ...s.td, fontFamily: 'monospace' }}>{trade.exit_price ? fmtPrice(trade.exit_price) : '—'}</td>
       <td style={s.td}>
-        <span style={{ color: won ? '#00e676' : '#ff1744', fontWeight: 600, fontFamily: 'monospace' }}>
+        <span style={{ color: won ? 'var(--bull)' : 'var(--bear)', fontWeight: 600, fontFamily: 'monospace' }}>
           {fmtPnl(trade.realized_pnl)}
         </span>
       </td>
-      <td style={{ ...s.td, color: '#64748b' }}>{trade.strategy || '—'}</td>
-      <td style={{ ...s.td, color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDateTime(trade.entry_time)}</td>
+      <td style={{ ...s.td, color: 'var(--text-muted)' }}>{trade.strategy || '—'}</td>
+      <td style={{ ...s.td, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDateTime(trade.entry_time)}</td>
     </tr>
   );
 }
@@ -242,7 +242,7 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
         <h3 style={s.cardTitle}>Trade Breakdown</h3>
         {rows.map(({ label, value, color }) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 12, color: '#64748b' }}>{label}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
             <span style={{ fontSize: 12, fontWeight: 600, color, fontFamily: 'monospace' }}>{value}</span>
           </div>
         ))}
@@ -253,9 +253,9 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
           <div key={sym} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', width: 72 }}>{sym}</span>
             <div style={{ flex: 1, height: 6, background: '#0f172a', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', borderRadius: 3, background: pnl >= 0 ? '#00e676' : '#ff1744', width: `${Math.min(100, Math.abs(pnl) / maxAbsPnl * 100)}%` }} />
+              <div style={{ height: '100%', borderRadius: 3, background: pnl >= 0 ? 'var(--bull)' : 'var(--bear)', width: `${Math.min(100, Math.abs(pnl) / maxAbsPnl * 100)}%` }} />
             </div>
-            <span style={{ fontSize: 11, fontFamily: 'monospace', color: pnl >= 0 ? '#00e676' : '#ff1744', width: 72, textAlign: 'right' }}>{fmtPnl(pnl)}</span>
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: pnl >= 0 ? 'var(--bull)' : 'var(--bear)', width: 72, textAlign: 'right' }}>{fmtPnl(pnl)}</span>
             <span style={{ fontSize: 10, color: '#475569', width: 24, textAlign: 'right' }}>{count}x</span>
           </div>
         ))}
@@ -411,7 +411,7 @@ const Performance: React.FC = () => {
                   className={`inline-flex min-h-[44px] items-center rounded px-3 text-[11px] font-semibold
                               cursor-pointer transition-colors duration-150 focus-visible:outline-none
                               focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-inset
-                              ${period === p ? 'bg-[#1e3a5f] text-[#60a5fa]' : 'text-slate-600 hover:text-slate-300'}`}
+                              ${period === p ? 'bg-[#1e3a5f] text-[var(--link)]' : 'text-slate-600 hover:text-slate-300'}`}
                 >
                   {p.charAt(0).toUpperCase() + p.slice(1)}
                 </button>
@@ -424,7 +424,7 @@ const Performance: React.FC = () => {
               disabled={publicQ.isFetching}
               aria-label="Refresh performance data"
               className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
-                         font-semibold text-slate-300 ring-1 ring-inset ring-[#1e2d3d] cursor-pointer
+                         font-semibold text-slate-300 ring-1 ring-inset ring-[var(--border)] cursor-pointer
                          transition-colors duration-150 hover:bg-[#243447]
                          disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none
                          focus-visible:ring-2 focus-visible:ring-sky-500"
@@ -455,7 +455,7 @@ const Performance: React.FC = () => {
                   <Link to="/trade" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
                     ⚡ Start Trading
                   </Link>
-                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>
+                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-dim)', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>
                     🧠 AI Strategy
                   </Link>
                 </div>
@@ -478,7 +478,7 @@ const Performance: React.FC = () => {
                 <StatCard label="Max Drawdown"  value={pub.max_drawdown_pct != null ? `${pub.max_drawdown_pct}%` : '—'} sub="Peak-to-trough" color="#ff1744" to="/pnl" toHint="the drawdown curve" />
               </div>
               <div style={s.noteBox}>
-                <span style={{ color: '#fbbf24', marginRight: 8 }}>⏱</span>
+                <span style={{ color: 'var(--warn)', marginRight: 8 }}>⏱</span>
                 <strong style={{ color: '#f1f5f9' }}>Transparency: </strong>
                 {pub.note}
                 {/* Guarded against the '—' sentinel but not against the field
@@ -494,14 +494,14 @@ const Performance: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={s.cardTitle}>Equity Curve</h3>
               {equityChange && (
-                <span style={{ fontSize: 12, fontWeight: 600, color: equityChange.pct >= 0 ? '#00e676' : '#ff1744' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: equityChange.pct >= 0 ? 'var(--bull)' : 'var(--bear)' }}>
                   {equityChange.pct >= 0 ? '+' : ''}{equityChange.pct.toFixed(2)}%
                 </span>
               )}
             </div>
             {equityQ.isLoading && <PanelSkeleton rows={3} />}
             {equityQ.isError && (
-              <div style={{ textAlign: 'center', color: '#f87171', padding: 40, fontSize: 13 }}>
+              <div style={{ textAlign: 'center', color: 'var(--loss)', padding: 40, fontSize: 13 }}>
                 Failed to load equity curve — {extractApiError(equityQ.error, 'check your connection')}
               </div>
             )}
@@ -524,17 +524,17 @@ const Performance: React.FC = () => {
                   return (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', width: 80, flexShrink: 0 }}>HOPEFX</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', width: 80, flexShrink: 0 }}>HOPEFX</span>
                         <div style={{ flex: 1, height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 4, background: stratReturn >= 0 ? '#00e676' : '#ff1744', width: `${Math.abs(stratReturn) / maxReturn * 100}%`, transition: 'width 0.6s ease' }} />
+                          <div style={{ height: '100%', borderRadius: 4, background: stratReturn >= 0 ? 'var(--bull)' : 'var(--bear)', width: `${Math.abs(stratReturn) / maxReturn * 100}%`, transition: 'width 0.6s ease' }} />
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: stratReturn >= 0 ? '#00e676' : '#ff1744', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: stratReturn >= 0 ? 'var(--bull)' : 'var(--bear)', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>
                           {stratReturn >= 0 ? '+' : ''}{stratReturn.toFixed(2)}%
                         </span>
                       </div>
                       {Object.entries(BENCHMARKS).map(([name, ret]) => (
                         <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 12, color: '#64748b', width: 80, flexShrink: 0 }}>{name}</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 80, flexShrink: 0 }}>{name}</span>
                           <div style={{ flex: 1, height: 6, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
                             <div style={{ height: '100%', borderRadius: 4, background: '#475569', width: `${Math.abs(ret) / maxReturn * 100}%` }} />
                           </div>
@@ -573,7 +573,7 @@ const Performance: React.FC = () => {
           </div>
           {tradesQ.isLoading && <PanelSkeleton rows={6} />}
           {tradesQ.isError && (
-            <div style={{ color: '#f87171', fontSize: 13 }}>
+            <div style={{ color: 'var(--loss)', fontSize: 13 }}>
               Failed to load trades — {extractApiError(tradesQ.error, 'authentication required')}
             </div>
           )}
@@ -611,7 +611,7 @@ const Performance: React.FC = () => {
           </div>
           {weeklyQ.isLoading && <PanelSkeleton rows={4} />}
           {weeklyQ.isError && (
-            <div style={{ color: '#f87171', fontSize: 13, padding: '12px 0' }}>
+            <div style={{ color: 'var(--loss)', fontSize: 13, padding: '12px 0' }}>
               No weekly report available yet. Reports are generated automatically each Sunday.
             </div>
           )}
@@ -632,15 +632,15 @@ const Performance: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12, marginBottom: 20 }}>
                   {rows.map(({ label, value, positive }) => (
                     <div key={label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-                      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: positive === undefined ? '#f1f5f9' : positive ? '#4ade80' : '#f87171' }}>{value}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: positive === undefined ? '#f1f5f9' : positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
                     </div>
                   ))}
                 </div>
                 {wr.ai_commentary && (
                   <div style={{ background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 12, color: '#60a5fa', marginBottom: 6, fontWeight: 600 }}>🤖 AI Commentary</div>
-                    <p style={{ fontSize: 13, color: '#94a3b8', margin: 0, lineHeight: 1.6 }}>{String(wr.ai_commentary)}</p>
+                    <div style={{ fontSize: 12, color: 'var(--link)', marginBottom: 6, fontWeight: 600 }}>🤖 AI Commentary</div>
+                    <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0, lineHeight: 1.6 }}>{String(wr.ai_commentary)}</p>
                   </div>
                 )}
               </>
@@ -650,7 +650,7 @@ const Performance: React.FC = () => {
       )}
 
       <div style={s.apiNote}>
-        Raw data: <a href="/api/performance/public" target="_blank" rel="noopener noreferrer" style={{ color: '#fbbf24', fontFamily: 'monospace' }}>/api/performance/public</a> — no authentication required.
+        Raw data: <a href="/api/performance/public" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--warn)', fontFamily: 'monospace' }}>/api/performance/public</a> — no authentication required.
       </div>
 
       <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
@@ -680,24 +680,24 @@ const s: Record<string, React.CSSProperties> = {
   page:        { padding: 'clamp(12px,4vw,24px)', maxWidth: 1100, margin: '0 auto' },
   header:      { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 },
   title:       { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
-  subtitle:    { fontSize: 14, color: '#64748b', margin: 0 },
-  tabBtn:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '6px 12px' },
-  tabBtnActive:{ background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  refreshBtn:  { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '6px 12px' },
-  errorBox:    { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', fontSize: 13, padding: '12px 16px', marginBottom: 16 },
+  subtitle:    { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
+  tabBtn:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '6px 12px' },
+  tabBtnActive:{ background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
+  refreshBtn:  { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 12px' },
+  errorBox:    { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', fontSize: 13, padding: '12px 16px', marginBottom: 16 },
   statsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 },
   statCard:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
-  statLabel:   { fontSize: 11, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' },
+  statLabel:   { fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' },
   statValue:   { fontSize: 22, fontWeight: 700 },
   statSub:     { fontSize: 11, color: '#475569', marginTop: 4 },
-  noteBox:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#94a3b8', marginBottom: 20 },
+  noteBox:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 20 },
   card:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 16, marginBottom: 16 },
   cardTitle:   { fontSize: 13, fontWeight: 700, color: '#f1f5f9', margin: '0 0 12px' },
   table:       { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th:          { textAlign: 'left', color: '#475569', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', padding: '6px 10px', borderBottom: '1px solid #334155' },
-  td:          { padding: '8px 10px', color: '#94a3b8', fontSize: 12 },
+  td:          { padding: '8px 10px', color: 'var(--text-dim)', fontSize: 12 },
   filterInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px', fontSize: 16, outline: 'none', width: '100%', maxWidth: 160, WebkitAppearance: 'none' },
-  apiNote:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#64748b', marginTop: 16 },
+  apiNote:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-muted)', marginTop: 16 },
 };
 
 export default Performance;

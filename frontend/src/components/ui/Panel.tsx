@@ -34,14 +34,14 @@ export function Panel({
   const inner = (
     <div
       className={cn(
-        'flex flex-col bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden',
+        'flex flex-col bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden',
         maximized ? 'fixed inset-4 z-[9000] rounded-xl shadow-2xl' : '',
         !maximized ? className : '',
       )}
       style={maximized ? { boxShadow: '0 0 0 9999px rgba(0,0,0,0.7)' } : undefined}
     >
       {(title || headerRight || maximizable) && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1e2d3d] shrink-0">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] shrink-0">
           <div className="flex items-center gap-2">
             {title && (
               <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
@@ -60,7 +60,7 @@ export function Panel({
                 title={maximized ? 'Restore' : 'Maximize panel'}
                 style={{
                   background: 'transparent', border: 'none',
-                  color: maximized ? '#60a5fa' : '#334155',
+                  color: maximized ? 'var(--link)' : '#334155',
                   fontSize: 13, cursor: 'pointer', padding: '2px 4px',
                   lineHeight: 1, borderRadius: 4,
                   transition: 'color 0.15s ease',

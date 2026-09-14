@@ -119,7 +119,7 @@ const BillingSection: React.FC = () => {
       {/* Current plan */}
       <Card>
         {loading ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>Loading subscription…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading subscription…</div>
         ) : billingErr ? (
           <div>
             <ErrorBanner message={`${billingErr}. If you have an active plan it is unaffected — this is a display problem.`} />
@@ -144,13 +144,13 @@ const BillingSection: React.FC = () => {
                   />
                 </div>
                 {billing.renewal_date && (
-                  <div style={{ fontSize: 13, color: '#64748b' }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                     Renews {new Date(billing.renewal_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                   </div>
                 )}
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Wallet balance</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Wallet balance</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: '#22c55e', fontFamily: 'JetBrains Mono, monospace' }}>
                   {billing.currency} {billing.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
                 </div>
@@ -162,7 +162,7 @@ const BillingSection: React.FC = () => {
                 <Divider />
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                   {billing.features.map((f) => (
-                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#94a3b8' }}>
+                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
                       <span style={{ color: '#22c55e', fontSize: 12 }}>✓</span> {f}
                     </div>
                   ))}
@@ -181,7 +181,7 @@ const BillingSection: React.FC = () => {
             </div>
           </>
         ) : (
-          <div style={{ color: '#64748b', fontSize: 13 }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
             No subscription found.{' '}
             <button
               onClick={() => navigate('/checkout')}
@@ -195,7 +195,7 @@ const BillingSection: React.FC = () => {
 
       {/* Plan comparison */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Available plans</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Available plans</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
           {plans.map(({ id, name, price, features, highlight }) => (
             <div key={id} style={{
@@ -214,11 +214,11 @@ const BillingSection: React.FC = () => {
                 </div>
               )}
               <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{name}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: PLAN_COLORS[id] ?? '#94a3b8', marginBottom: 10 }}>
-                {price}<span style={{ fontSize: 11, fontWeight: 400, color: '#64748b' }}>/mo</span>
+              <div style={{ fontSize: 18, fontWeight: 800, color: PLAN_COLORS[id] ?? 'var(--text-dim)', marginBottom: 10 }}>
+                {price}<span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>/mo</span>
               </div>
               {features.map((f) => (
-                <div key={f} style={{ fontSize: 11, color: '#94a3b8', marginBottom: 3, display: 'flex', gap: 5 }}>
+                <div key={f} style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, display: 'flex', gap: 5 }}>
                   <span style={{ color: '#22c55e' }}>✓</span> {f}
                 </div>
               ))}
@@ -237,11 +237,11 @@ const BillingSection: React.FC = () => {
 
       {/* Transaction history */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Transaction history
         </h3>
         {txLoading ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>Loading transactions…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading transactions…</div>
         ) : txErr ? (
           <div>
             <ErrorBanner message={txErr} />
@@ -250,7 +250,7 @@ const BillingSection: React.FC = () => {
             </div>
           </div>
         ) : transactions.length === 0 ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>No transactions yet.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No transactions yet.</div>
         ) : (
           transactions.map((tx) => (
             <div key={tx.id} style={{
@@ -258,13 +258,13 @@ const BillingSection: React.FC = () => {
               padding: '12px 0', borderBottom: '1px solid #1e293b',
             }}>
               <div>
-                <div style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 500 }}>{tx.description}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{tx.description}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                   {new Date(tx.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: tx.amount >= 0 ? '#22c55e' : '#f87171', fontFamily: 'JetBrains Mono, monospace' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: tx.amount >= 0 ? '#22c55e' : 'var(--loss)', fontFamily: 'JetBrains Mono, monospace' }}>
                   {tx.amount >= 0 ? '+' : ''}{tx.currency} {Math.abs(tx.amount).toFixed(2)}
                 </div>
                 <StatusBadge

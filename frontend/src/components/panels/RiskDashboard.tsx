@@ -21,11 +21,11 @@ function KillSwitchBadge({ active }: { active: boolean }) {
       className={cn(
         'flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-semibold uppercase tracking-wider',
         active
-          ? 'bg-[#ff1744]/10 border-[#ff1744]/30 text-[#ff1744] animate-pulse'
-          : 'bg-[#00e676]/5 border-[#00e676]/20 text-[#00e676]',
+          ? 'bg-[var(--bear)]/10 border-[var(--bear)]/30 text-[var(--bear)] animate-pulse'
+          : 'bg-[var(--bull)]/5 border-[var(--bull)]/20 text-[var(--bull)]',
       )}
     >
-      <span className={cn('w-1.5 h-1.5 rounded-full', active ? 'bg-[#ff1744]' : 'bg-[#00e676]')} />
+      <span className={cn('w-1.5 h-1.5 rounded-full', active ? 'bg-[var(--bear)]' : 'bg-[var(--bull)]')} />
       {active ? 'KILL SWITCH ACTIVE' : 'TRADING ENABLED'}
     </div>
   );
@@ -39,7 +39,7 @@ function SourceHealthRow({ name, health }: { name: string; health: Record<string
   const conf    = health.confidence as number | undefined;
 
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d3d] last:border-0">
+    <div className="flex items-center justify-between py-1.5 border-b border-[var(--border)] last:border-0">
       <div className="flex items-center gap-2">
         <StatusDot status={isAlive ? 'ok' : 'offline'} />
         <span className="text-[11px] text-slate-300 font-mono">{name}</span>
@@ -53,7 +53,7 @@ function SourceHealthRow({ name, health }: { name: string; health: Record<string
         {conf != null && (
           <span
             className="text-[10px] font-mono tabular-nums"
-            style={{ color: conf > 0.8 ? '#00e676' : conf > 0.5 ? '#ffb800' : '#ff3b5c' }}
+            style={{ color: conf > 0.8 ? 'var(--bull)' : conf > 0.5 ? '#ffb800' : '#ff3b5c' }}
           >
             {(conf * 100).toFixed(0)}%
           </span>
@@ -90,7 +90,7 @@ export function RiskDashboard() {
         <button
           onClick={() => navigate('/risk-calculator')}
           className="text-[10px] font-bold px-2 py-0.5 rounded"
-          style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', cursor: 'pointer' }}
+          style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: 'var(--warn)', cursor: 'pointer' }}
         >
           🛡 Calculator
         </button>
@@ -99,12 +99,12 @@ export function RiskDashboard() {
       <div className="flex flex-col h-full overflow-y-auto scrollbar-terminal">
 
         {/* Kill switch */}
-        <div className="px-4 py-3 border-b border-[#1e2d3d]">
+        <div className="px-4 py-3 border-b border-[var(--border)]">
           <KillSwitchBadge active={killSwitch} />
         </div>
 
         {/* Account risk metrics */}
-        <div className="grid grid-cols-2 gap-px bg-[#1e2d3d] border-b border-[#1e2d3d]">
+        <div className="grid grid-cols-2 gap-px bg-[var(--border)] border-b border-[var(--border)]">
           {[
             {
               label: 'Balance',
@@ -127,21 +127,21 @@ export function RiskDashboard() {
               color: account?.total_pnl == null ? '#475569' : account.total_pnl >= 0 ? '#00e676' : '#ff1744',
             },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-[#0d1421] px-2 py-3 min-w-0">
+            <div key={label} className="bg-[var(--surface)] px-2 py-3 min-w-0">
               <MetricTile label={label} value={value} valueColor={color} compact />
             </div>
           ))}
         </div>
 
         {/* Margin level */}
-        <div className="px-4 py-3 border-b border-[#1e2d3d]">
+        <div className="px-4 py-3 border-b border-[var(--border)]">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider">Margin Level</span>
             <span className="font-mono tabular-nums text-xs font-semibold" style={{ color: marginColor }}>
               {account ? fmtMarginLevel(marginLevel, account.margin_used) : '—'}
             </span>
           </div>
-          <div className="h-1.5 bg-[#1e2d3d] rounded-full overflow-hidden">
+          <div className="h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{
@@ -157,7 +157,7 @@ export function RiskDashboard() {
         </div>
 
         {/* Risk ratios */}
-        <div className="px-4 py-3 border-b border-[#1e2d3d] grid grid-cols-2 gap-3">
+        <div className="px-4 py-3 border-b border-[var(--border)] grid grid-cols-2 gap-3">
           <MetricTile
             label="CVaR 95%"
             to="/risk-calculator"
@@ -194,12 +194,12 @@ export function RiskDashboard() {
 
         {/* Data quality score */}
         {qualityScore != null && (
-          <div className="px-4 py-3 border-b border-[#1e2d3d]">
+          <div className="px-4 py-3 border-b border-[var(--border)]">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] text-slate-500 uppercase tracking-wider">Data Quality Score</span>
               <span
                 className="font-mono tabular-nums text-xs font-semibold"
-                style={{ color: qualityScore > 0.8 ? '#00e676' : qualityScore > 0.5 ? '#ffb800' : '#ff3b5c' }}
+                style={{ color: qualityScore > 0.8 ? 'var(--bull)' : qualityScore > 0.5 ? '#ffb800' : '#ff3b5c' }}
               >
                 {(qualityScore * 100).toFixed(0)}%
               </span>

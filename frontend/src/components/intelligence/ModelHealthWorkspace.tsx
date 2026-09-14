@@ -58,7 +58,7 @@ import type { EngineSignal, SignalAnalyticsReport } from '../../types';
 
 const Stat: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color }) => (
   <div style={{
-    background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10,
+    background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 10,
     padding: '12px 14px', flex: 1, minWidth: 130,
   }}>
     <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
@@ -69,7 +69,7 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; color?: strin
 
 const SectionTitle: React.FC<{ children: React.ReactNode; right?: React.ReactNode }> = ({ children, right }) => (
   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-    <h2 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: 0 }}>{children}</h2>
+    <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{children}</h2>
     {right && <div style={{ marginLeft: 'auto' }}>{right}</div>}
   </div>
 );
@@ -166,9 +166,9 @@ export const ModelHealthWorkspace: React.FC = () => {
                   { k: 'OOS accuracy',    v: engine.oos_accuracy != null ? `${(engine.oos_accuracy * 100).toFixed(2)}%` : '—' },
                   { k: 'Last trained',    v: engine.last_trained_at ? new Date(engine.last_trained_at).toLocaleDateString() : '—' },
                 ].map(({ k, v }) => (
-                  <div key={k} style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 10, padding: '10px 12px' }}>
+                  <div key={k} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>{k}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0', fontFamily: 'ui-monospace, monospace', marginTop: 3 }}>{v}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'ui-monospace, monospace', marginTop: 3 }}>{v}</div>
                   </div>
                 ))}
               </div>
@@ -197,22 +197,22 @@ export const ModelHealthWorkspace: React.FC = () => {
                   />
                 ) : imp && imp.features?.length ? (
                   <>
-                    <p style={{ fontSize: 11.5, color: '#64748b', margin: '0 0 8px' }}>
-                      Derived by <strong style={{ color: '#94a3b8' }}>{imp.method}</strong> for model{' '}
-                      <strong style={{ color: '#94a3b8' }}>{imp.model}</strong>.
+                    <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                      Derived by <strong style={{ color: 'var(--text-dim)' }}>{imp.method}</strong> for model{' '}
+                      <strong style={{ color: 'var(--text-dim)' }}>{imp.model}</strong>.
                     </p>
                     <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
                       {imp.features.slice(0, 12).map((f) => {
                         const max = imp.features[0]?.importance || 1;
                         return (
                           <li key={f.feature} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ width: 130, flexShrink: 0, fontSize: 11.5, color: '#94a3b8', fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <span style={{ width: 130, flexShrink: 0, fontSize: 11.5, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {f.feature}
                             </span>
-                            <span style={{ flex: 1, height: 6, background: '#1e2d3d', borderRadius: 3, overflow: 'hidden' }}>
-                              <span style={{ display: 'block', height: '100%', width: `${(f.importance / max) * 100}%`, background: '#00d4ff' }} />
+                            <span style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                              <span style={{ display: 'block', height: '100%', width: `${(f.importance / max) * 100}%`, background: 'var(--accent)' }} />
                             </span>
-                            <span style={{ width: 52, textAlign: 'right', fontSize: 11, color: '#64748b', fontFamily: 'ui-monospace, monospace' }}>
+                            <span style={{ width: 52, textAlign: 'right', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'ui-monospace, monospace' }}>
                               {f.importance.toFixed(4)}
                             </span>
                           </li>
@@ -231,7 +231,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                   Feature drift
                 </div>
                 {drift?.overall_status && drift.overall_status !== 'unknown' ? (
-                  <p style={{ fontSize: 12.5, color: '#94a3b8', margin: 0 }}>
+                  <p style={{ fontSize: 12.5, color: 'var(--text-dim)', margin: 0 }}>
                     Status: <strong>{drift.overall_status}</strong>
                     {drift.requires_retrain ? ' — retrain recommended' : ''}
                   </p>

@@ -203,7 +203,7 @@ const SecurityInfraSection: React.FC = () => {
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? '#1e293b' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
-            borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
+            borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
             padding: '7px 14px', fontSize: 13, cursor: 'pointer',
           }}>
             {{ healer: 'Self-Healer', av: 'Antivirus', hsm: 'HSM Vault', log: 'Infra Log', threat: 'Threat Intel' }[t]}
@@ -228,18 +228,18 @@ const SecurityInfraSection: React.FC = () => {
                 { label: 'Violations',      value: healer.violations?.length ?? 0,   color: healer.violations?.length ? '#f87171' : '#22c55e' },
               ].map(item => (
                 <div key={item.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: item.color, marginTop: 4 }}>{String(item.value)}</div>
                 </div>
               ))}
             </div>
             {healer.violations?.length > 0 && (
               <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#f87171', marginBottom: 8 }}>⚠️ Integrity Violations</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>⚠️ Integrity Violations</div>
                 {healer.violations.map((v, i) => (
                   <div key={i} style={{ background: 'rgba(248,113,113,0.05)', border: '1px solid #7f1d1d', borderRadius: 6, padding: '8px 12px', marginBottom: 6 }}>
-                    <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#f87171' }}>{v.file}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{v.reason} · {fmtDate(v.detected_at)}</div>
+                    <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--loss)' }}>{v.file}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{v.reason} · {fmtDate(v.detected_at)}</div>
                   </div>
                 ))}
               </div>
@@ -268,7 +268,7 @@ const SecurityInfraSection: React.FC = () => {
               { label: 'YARA Rules',      value: av.yara_rules_loaded ?? '—',                   color: '#a78bfa' },
             ].map(item => (
               <div key={item.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: item.color, marginTop: 4 }}>{String(item.value)}</div>
               </div>
             ))}
@@ -292,18 +292,18 @@ const SecurityInfraSection: React.FC = () => {
               <thead>
                 <tr>
                   {['Key ID', 'Created', 'Size', 'Active', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {(hsm.keys ?? []).map(k => (
                   <tr key={k.key_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: '#a78bfa' }}>{k.key_id}</td>
-                    <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(k.created_at)}</td>
-                    <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{k.size_bytes} B</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--ai-model)' }}>{k.key_id}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.created_at)}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{k.size_bytes} B</td>
                     <td style={{ padding: '10px 16px' }}>
-                      <span style={{ color: k.active ? '#4ade80' : '#f87171', fontSize: 12, fontWeight: 700 }}>
+                      <span style={{ color: k.active ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 700 }}>
                         {k.active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
@@ -333,10 +333,10 @@ const SecurityInfraSection: React.FC = () => {
               <div key={i} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid #0f172a', alignItems: 'flex-start' }}>
                 <div style={{
                   width: 8, height: 8, borderRadius: '50%', marginTop: 5, flexShrink: 0,
-                  background: entry.severity === 'critical' ? '#f87171' : entry.severity === 'warning' ? '#fbbf24' : '#4ade80',
+                  background: entry.severity === 'critical' ? 'var(--loss)' : entry.severity === 'warning' ? 'var(--warn)' : 'var(--gain)',
                 }} />
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>[{entry.component}]</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>[{entry.component}]</span>
                   {' '}
                   <span style={{ fontSize: 12, color: '#cbd5e1' }}>{entry.event}</span>
                 </div>
@@ -378,17 +378,17 @@ const SecurityInfraSection: React.FC = () => {
                     return (
                       <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                         <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: '#1e293b', color: '#60a5fa', textTransform: 'uppercase' }}>{ti.type}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: '#1e293b', color: 'var(--link)', textTransform: 'uppercase' }}>{ti.type}</span>
                         </td>
                         <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 12, color: '#f1f5f9', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ti.value}>{ti.value}</td>
                         <td style={{ padding: '8px 12px' }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: sevColor }}>{ti.severity.toUpperCase()}</span>
                         </td>
-                        <td style={{ padding: '8px 12px', fontSize: 11, color: '#64748b' }}>{ti.source}</td>
+                        <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)' }}>{ti.source}</td>
                         <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(ti.first_seen)}</td>
                         <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(ti.last_seen)}</td>
                         <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: ti.blocked ? '#4ade80' : '#f87171' }}>{ti.blocked ? '✅ Yes' : '❌ No'}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: ti.blocked ? 'var(--gain)' : 'var(--loss)' }}>{ti.blocked ? '✅ Yes' : '❌ No'}</span>
                         </td>
                       </tr>
                     );

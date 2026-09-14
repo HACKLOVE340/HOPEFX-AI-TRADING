@@ -157,7 +157,7 @@ const TradingEngineSection: React.FC = () => {
           border: `1px solid ${borderColor}`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotColor, display: 'inline-block', boxShadow: isRunning ? '0 0 6px #4ade80' : 'none' }} />
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotColor, display: 'inline-block', boxShadow: isRunning ? '0 0 6px var(--gain)' : 'none' }} />
             <span style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
               Engine {label}
             </span>
@@ -169,7 +169,7 @@ const TradingEngineSection: React.FC = () => {
             { label: 'Last Signal',    value: status.last_signal_at ? new Date(status.last_signal_at).toLocaleTimeString() : 'N/A' },
             { label: 'Heartbeat',      value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
           ].map(s => (
-            <div key={s.label} style={{ fontSize: 12, color: '#94a3b8' }}>
+            <div key={s.label} style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               <span style={{ color: '#475569' }}>{s.label}: </span>
               <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{s.value}</span>
             </div>
@@ -181,7 +181,7 @@ const TradingEngineSection: React.FC = () => {
               <span style={{
                 fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
                 background: status.last_signal_direction === 'buy' ? '#052e1688' : '#450a0a88',
-                color: status.last_signal_direction === 'buy' ? '#4ade80' : '#f87171',
+                color: status.last_signal_direction === 'buy' ? 'var(--gain)' : 'var(--loss)',
                 border: `1px solid ${status.last_signal_direction === 'buy' ? '#16a34a' : '#dc2626'}`,
                 textTransform: 'uppercase' as const,
               }}>
@@ -193,11 +193,11 @@ const TradingEngineSection: React.FC = () => {
                     <div style={{
                       width: `${Math.round(status.last_signal_confidence * 100)}%`,
                       height: '100%',
-                      background: status.last_signal_confidence >= 0.7 ? '#4ade80' : status.last_signal_confidence >= 0.55 ? '#fbbf24' : '#f87171',
+                      background: status.last_signal_confidence >= 0.7 ? 'var(--gain)' : status.last_signal_confidence >= 0.55 ? 'var(--warn)' : 'var(--loss)',
                       borderRadius: 3,
                     }} />
                   </div>
-                  <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                     {Math.round(status.last_signal_confidence * 100)}%
                   </span>
                 </div>
@@ -241,7 +241,7 @@ const TradingEngineSection: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>🛑</span>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#f87171' }}>KILL SWITCH ACTIVE</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--loss)' }}>KILL SWITCH ACTIVE</div>
               <div style={{ fontSize: 12, color: '#fca5a5' }}>All trading is halted across the entire platform</div>
             </div>
           </div>
@@ -372,8 +372,8 @@ const DecisionEnginePanel: React.FC = () => {
     <>
       <SectionCard title="Decision Engine Pipeline" icon="⚡" accent="#f59e0b">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: '#64748b' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
-          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
+          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
             {loading ? '…' : '↻'}
           </button>
         </div>
@@ -381,12 +381,12 @@ const DecisionEnginePanel: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {phases.map(p => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#60a5fa', flexShrink: 0 }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--link)', flexShrink: 0 }}>
                 {p.id}
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.desc}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
               </div>
             </div>
           ))}
@@ -395,7 +395,7 @@ const DecisionEnginePanel: React.FC = () => {
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
             {Object.entries(status as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
               <div key={key} style={{ background: '#1e293b', borderRadius: 6, padding: '8px 12px' }}>
-                <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
               </div>
             ))}
@@ -404,7 +404,7 @@ const DecisionEnginePanel: React.FC = () => {
       </SectionCard>
 
       <SectionCard title="Gatekeeper Checks (11)" icon="🛡️" accent="#22c55e">
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
           Reference list of the checks the gatekeeper applies — all 11 must pass before any trade is
           executed, and failures are logged to the audit trail. This panel does not report live check
           state; see the engine status above.
@@ -413,7 +413,7 @@ const DecisionEnginePanel: React.FC = () => {
           {gatekeeperChecks.map((check, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b' }}>
               <span style={{ color: '#475569', fontSize: 14 }}>•</span>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>{check}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{check}</span>
             </div>
           ))}
         </div>
@@ -421,7 +421,7 @@ const DecisionEnginePanel: React.FC = () => {
           <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>Decision Outcomes</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {['NO_SIGNAL', 'ML_FILTERED', 'RISK_BLOCKED', 'SIZING_REJECTED', 'EXECUTED', 'EXECUTION_ERROR'].map(o => (
-              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: '#94a3b8', fontFamily: 'monospace' }}>{o}</span>
+              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{o}</span>
             ))}
           </div>
         </div>

@@ -85,7 +85,7 @@ const ProfileSection: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
       <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading profile…
     </div>
@@ -121,10 +121,10 @@ const ProfileSection: React.FC = () => {
             }
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 4 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
               {form.username || 'Your Name'}
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>{form.email}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{form.email}</div>
             <Input
               placeholder="https://example.com/avatar.jpg"
               value={form.avatar_url}
@@ -213,7 +213,7 @@ const ProfileSection: React.FC = () => {
       {/* Quick actions */}
       <Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: 1, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
             Quick Actions
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -222,7 +222,7 @@ const ProfileSection: React.FC = () => {
               style={{
                 padding: '8px 16px', borderRadius: 8,
                 background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-                color: '#60a5fa', fontSize: 13, cursor: 'pointer',
+                color: 'var(--link)', fontSize: 13, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 fontFamily: 'inherit',
               }}
@@ -237,7 +237,7 @@ const ProfileSection: React.FC = () => {
               style={{
                 padding: '8px 16px', borderRadius: 8,
                 background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
-                color: '#a78bfa', fontSize: 13, cursor: 'pointer',
+                color: 'var(--ai-model)', fontSize: 13, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >

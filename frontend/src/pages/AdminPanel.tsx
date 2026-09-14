@@ -111,11 +111,11 @@ const KpiCard: React.FC<{
     background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
     padding: '18px 20px', borderTop: accent ? `3px solid ${accent}` : undefined,
   }}>
-    <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
       {label}
     </div>
-    <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc', lineHeight: 1 }}>{value}</div>
-    {sub && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{sub}</div>}
+    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-strong)', lineHeight: 1 }}>{value}</div>
+    {sub && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{sub}</div>}
   </div>
 );
 
@@ -139,8 +139,8 @@ const QuickAction: React.FC<{
     }}
   >
     <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
-    <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>{label}</div>
-    <div style={{ fontSize: 11, color: '#64748b' }}>{desc}</div>
+    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 2 }}>{label}</div>
+    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
   </button>
 );
 
@@ -212,8 +212,8 @@ const MaintenanceBroadcastPanel: React.FC = () => {
       <div style={{ background: '#1e293b', border: `1px solid ${maint.maintenance_mode ? '#f59e0b' : '#334155'}`, borderRadius: 10, padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>🔧 Maintenance Mode</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>🔧 Maintenance Mode</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
               {maint.maintenance_mode ? '⚠️ ACTIVE — users see downtime page' : 'Platform is live'}
             </div>
           </div>
@@ -227,7 +227,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
           </div>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Message shown to users</label>
+          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message shown to users</label>
           <input
             style={inputStyle}
             value={maint.maintenance_message}
@@ -251,13 +251,13 @@ const MaintenanceBroadcastPanel: React.FC = () => {
 
       {/* Broadcast */}
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', marginBottom: 14 }}>📡 Broadcast Message</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 14 }}>📡 Broadcast Message</div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Title</label>
+          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Title</label>
           <input style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
         </div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Message</label>
+          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message</label>
           <textarea
             style={{ ...inputStyle, resize: 'vertical' as const }}
             rows={3}
@@ -296,7 +296,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
           gridColumn: '1 / -1',
           padding: '10px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
           background: statusMsg.includes('failed') || statusMsg.includes('Failed') ? '#450a0a' : '#052e16',
-          color: statusMsg.includes('failed') || statusMsg.includes('Failed') ? '#f87171' : '#4ade80',
+          color: statusMsg.includes('failed') || statusMsg.includes('Failed') ? 'var(--loss)' : 'var(--gain)',
         }}>
           {statusMsg}
         </div>
@@ -378,7 +378,7 @@ const AdminPanel: React.FC = () => {
         actions={
           <button
             onClick={load}
-            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: '#60a5fa', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
+            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: 'var(--link)', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
           >
             ↻ Refresh
           </button>
@@ -406,7 +406,7 @@ const AdminPanel: React.FC = () => {
             <div style={sectionStyle}>
               <div style={sectionHeader}>
                 <span>⚠️ Active Alerts</span>
-                <span style={{ fontSize: 11, color: '#f87171' }}>{activeAlerts.length} unresolved</span>
+                <span style={{ fontSize: 11, color: 'var(--loss)' }}>{activeAlerts.length} unresolved</span>
               </div>
               {activeAlerts.map(alert => (
                 <div key={alert.id} style={{ ...rowStyle, borderLeft: `3px solid ${severityColor(alert.severity)}`, background: `${severityColor(alert.severity)}08` }}>
@@ -414,8 +414,8 @@ const AdminPanel: React.FC = () => {
                     {alert.severity}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: 13 }}>{alert.title}</div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{alert.message}</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 13 }}>{alert.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{alert.message}</div>
                   </div>
                   <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(alert.created_at)}</span>
                 </div>
@@ -437,7 +437,7 @@ const AdminPanel: React.FC = () => {
               <div key={ev.event_id} style={rowStyle}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: eventColor(ev.event_type), flexShrink: 0 }} />
                 <span style={{ fontSize: 11, fontWeight: 600, color: eventColor(ev.event_type), minWidth: 160, flexShrink: 0 }}>{ev.event_type}</span>
-                <span style={{ flex: 1, color: '#94a3b8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
+                <span style={{ flex: 1, color: 'var(--text-dim)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
                 <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{ev.ip_address}</span>
                 <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(ev.created_at)}</span>
               </div>

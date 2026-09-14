@@ -61,7 +61,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
   const isIos = platform === 'ios';
   return (
     <div style={{
-      background: '#0d1421', border: '1px solid #1e293b',
+      background: 'var(--surface)', border: '1px solid #1e293b',
       borderRadius: 14, padding: '28px 24px', textAlign: 'center',
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
     }}>
@@ -69,7 +69,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
       <div style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
         {isIos ? 'iOS App' : 'Android App'}
       </div>
-      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 18 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
         {loading ? '…' : `v${version || 'N/A'}`} · {isIos ? 'iPhone & iPad' : 'Android 8+'}
       </div>
 
@@ -130,12 +130,12 @@ const SessionRow: React.FC<{
       <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
         {session.device_name || 'Unknown Device'}
         {session.is_current && (
-          <span style={{ fontSize: 10, color: '#4ade80', background: '#14532d', border: '1px solid #166534', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: 'var(--gain)', background: '#14532d', border: '1px solid #166534', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
             Current
           </span>
         )}
       </div>
-      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <span>{session.device_os}</span>
         <span>IP: {session.ip_address}</span>
         <span>Last active: {new Date(session.last_active).toLocaleString()}</span>
@@ -148,7 +148,7 @@ const SessionRow: React.FC<{
       style={{
         background: 'transparent',
         border: `1px solid ${session.is_current ? '#1e293b' : '#7f1d1d'}`,
-        borderRadius: 7, color: session.is_current ? '#334155' : '#f87171',
+        borderRadius: 7, color: session.is_current ? '#334155' : 'var(--loss)',
         cursor: session.is_current ? 'not-allowed' : 'pointer',
         fontSize: 12, padding: '5px 12px', flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 5,
@@ -248,7 +248,7 @@ const MobilePage: React.FC = () => {
             disabled={loading}
             style={{
               background: 'transparent', border: '1px solid #334155',
-              borderRadius: 8, color: '#94a3b8', cursor: 'pointer',
+              borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
               fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
@@ -278,18 +278,18 @@ const MobilePage: React.FC = () => {
       </div>
 
       {/* Features */}
-      <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>⚡</span> Mobile Features
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
           {features.map(f => (
-            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#94a3b8' }}>
+            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text-dim)' }}>
               <span style={{
                 width: 20, height: 20, borderRadius: '50%',
                 background: '#14532d', border: '1px solid #166534',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10, color: '#4ade80', flexShrink: 0, fontWeight: 700,
+                fontSize: 10, color: 'var(--gain)', flexShrink: 0, fontWeight: 700,
               }}>✓</span>
               {f}
             </div>
@@ -298,11 +298,11 @@ const MobilePage: React.FC = () => {
       </div>
 
       {/* Push token registration */}
-      <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>🔔</span> Push Notifications
         </h3>
-        <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px', lineHeight: 1.5 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
           Register a device push token to receive trade alerts, signal notifications, and account updates on your mobile device.
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -312,7 +312,7 @@ const MobilePage: React.FC = () => {
             onChange={e => setPushToken(e.target.value)}
             placeholder="Paste device push token…"
             style={{
-              flex: 1, background: '#111827', border: '1px solid #334155',
+              flex: 1, background: 'var(--raised)', border: '1px solid #334155',
               borderRadius: 8, color: '#f1f5f9', fontSize: 13, padding: '9px 14px',
               outline: 'none', fontFamily: 'JetBrains Mono, monospace',
             }}
@@ -338,7 +338,7 @@ const MobilePage: React.FC = () => {
             marginTop: 10, fontSize: 12, padding: '8px 12px', borderRadius: 7,
             background: tokenOk ? '#052e16' : '#450a0a',
             border: `1px solid ${tokenOk ? '#166534' : '#7f1d1d'}`,
-            color: tokenOk ? '#4ade80' : '#f87171',
+            color: tokenOk ? 'var(--gain)' : 'var(--loss)',
           }}>
             {tokenMsg}
           </div>
@@ -346,18 +346,18 @@ const MobilePage: React.FC = () => {
       </div>
 
       {/* Active sessions */}
-      <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>📲</span> Active Mobile Sessions
           </h3>
           {sessions.length > 0 && (
-            <span style={{ fontSize: 12, color: '#64748b' }}>{sessions.length} device{sessions.length !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sessions.length} device{sessions.length !== 1 ? 's' : ''}</span>
           )}
         </div>
 
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0', color: '#64748b', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0', color: 'var(--text-muted)', gap: 10 }}>
             <Spinner size="sm" /> Loading sessions…
           </div>
         ) : sessions.length === 0 ? (

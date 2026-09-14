@@ -43,6 +43,8 @@ import { getCsrfToken } from './hooks/useApi';
 import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
+import { PageSurface } from './components/system/PageSurface';
+
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
 const Login                   = React.lazy(() => import('./pages/Login'));
 const Register                = React.lazy(() => import('./pages/Register'));
@@ -60,6 +62,8 @@ const TradingDashboard = React.lazy(() => import('./pages/TradingDashboard'));
 const TradingTerminal  = React.lazy(() => import('./pages/Trading'));
 const Trade            = React.lazy(() => import('./pages/Trade'));
 const Portfolio        = React.lazy(() => import('./pages/Portfolio'));
+const PositionDetail   = React.lazy(() => import('./pages/PositionDetail'));
+const Hub              = React.lazy(() => import('./pages/Hub'));
 const WatchlistPage    = React.lazy(() => import('./pages/Watchlist'));
 const EconomicCalendar = React.lazy(() => import('./pages/EconomicCalendar'));
 const PriceAlerts      = React.lazy(() => import('./pages/PriceAlerts'));
@@ -239,7 +243,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        background: '#080c14', color: '#e2e8f0', padding: 40, textAlign: 'center',
+        background: 'var(--bg)', color: 'var(--text)', padding: 40, textAlign: 'center',
         fontFamily: "'Inter', system-ui, sans-serif",
       }}>
         {/* Logo */}
@@ -259,15 +263,15 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>
           {this.state.isChunk ? 'Updating to the latest version' : 'Something went wrong'}
         </h2>
-        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24, maxWidth: 420, lineHeight: 1.6 }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24, maxWidth: 420, lineHeight: 1.6 }}>
           {this.state.message || 'An unexpected error occurred. The page will reload when you click Retry.'}
         </p>
 
         {/* Stack trace — dev only */}
         {_IS_DEV && this.state.stack && (
           <pre style={{
-            background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 8,
-            color: '#94a3b8', fontSize: 11, lineHeight: 1.5, maxWidth: 640,
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
+            color: 'var(--text-dim)', fontSize: 11, lineHeight: 1.5, maxWidth: 640,
             maxHeight: 200, overflow: 'auto', padding: '12px 16px',
             textAlign: 'left', marginBottom: 24, whiteSpace: 'pre-wrap',
           }}>
@@ -372,7 +376,15 @@ const NoLiveFeedBanner: React.FC = () => {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const wrap = (el: React.ReactNode) => <ErrorBoundary>{el}</ErrorBoundary>;
+// Every route passes through PageSurface, which stamps data-density and
+// data-surface from the path. That is why a redesign of 72 pages did not need
+// 72 edits: density and palette are scoped token overrides declared once in
+// index.css, and this is the single place that chooses between them.
+const wrap = (el: React.ReactNode) => (
+  <ErrorBoundary>
+    <PageSurface>{el}</PageSurface>
+  </ErrorBoundary>
+);
 
 const gated = (featureKey: string, el: React.ReactNode) => (
   <AuthGuard>
@@ -423,7 +435,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({ onMenuOpen }) => (
       onClick={onMenuOpen}
       aria-label="Open navigation menu"
       style={{
-        background: 'transparent', border: 'none', color: '#94a3b8',
+        background: 'transparent', border: 'none', color: 'var(--text-dim)',
         cursor: 'pointer', padding: '8px', borderRadius: 6,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         minWidth: 44, minHeight: 44,
@@ -436,7 +448,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({ onMenuOpen }) => (
         <rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor" />
       </svg>
     </button>
-    <span style={{ fontSize: 17, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 }}>
+    <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 }}>
       HOPE<span style={{ color: '#3b82f6' }}>FX</span>
     </span>
     {/* Right side spacer to keep title centred */}
@@ -556,6 +568,21 @@ const AppShell: React.FC = () => {
             <Route path="/home"         element={<Navigate to="/dashboard" replace />} />
             <Route path="/trade"        element={wrap(gated('trade',        <Trade />))} />
             <Route path="/portfolio"    element={wrap(gated('portfolio',    <Portfolio />))} />
+            {/* The first drill-down in the app. 87 routes and, until this one,
+                exactly one took a parameter — which is why a large product read
+                as a shallow one. Gated as portfolio: a position detail is
+                portfolio content. */}
+            <Route path="/positions/:id" element={wrap(gated('portfolio',    <PositionDetail />))} />
+
+            {/* Hubs. One component, five routes: the page behind a sidebar
+                entry, listing what used to be fifty more sidebar entries.
+                Content comes from navConfig, so a page cannot exist in the
+                app while being invisible in it. */}
+            <Route path="/ai"          element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/analytics"   element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/community"   element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/account"     element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/operations"  element={wrap(adminOnly(<Hub />))} />
             <Route path="/watchlist"    element={wrap(gated('watchlist',    <WatchlistPage />))} />
             <Route path="/calendar"     element={wrap(gated('calendar',     <EconomicCalendar />))} />
             <Route path="/alerts"       element={wrap(gated('alerts',       <PriceAlerts />))} />

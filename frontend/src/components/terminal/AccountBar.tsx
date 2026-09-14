@@ -68,7 +68,7 @@ export function AccountBar() {
 
   if (!account) {
     return (
-      <div className="flex items-center gap-6 px-5 py-2.5 bg-[#0d1421] border-b border-[#1e2d3d]">
+      <div className="flex items-center gap-6 px-5 py-2.5 bg-[var(--surface)] border-b border-[var(--border)]">
         <span className="text-[10px] text-slate-600 font-mono animate-pulse">
           Loading account data…
         </span>
@@ -84,7 +84,7 @@ export function AccountBar() {
     (account.margin_level ?? 0) > 100 ? '#ffb800' : '#ff3b5c';
 
   return (
-    <div className="flex items-center gap-6 px-5 py-2.5 bg-[#0d1421] border-b border-[#1e2d3d] overflow-x-auto scrollbar-terminal shrink-0">
+    <div className="flex items-center gap-6 px-5 py-2.5 bg-[var(--surface)] border-b border-[var(--border)] overflow-x-auto scrollbar-terminal shrink-0">
       <MetricTile
         label="Balance"
         to="/wallet"
@@ -92,7 +92,7 @@ export function AccountBar() {
         value={`$${fmtPrice(account.balance)}`}
         compact
       />
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Equity"
         to="/portfolio"
@@ -101,7 +101,7 @@ export function AccountBar() {
         valueColor="#00d4ff"
         compact
       />
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Daily P&L"
         to="/pnl"
@@ -111,7 +111,7 @@ export function AccountBar() {
         valueColor={(account.daily_pnl ?? 0) >= 0 ? '#00e676' : '#ff1744'}
         compact
       />
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Total P&L"
         to="/pnl"
@@ -120,7 +120,7 @@ export function AccountBar() {
         valueColor={pnlColor(account.total_pnl)}
         compact
       />
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Margin"
         to="/risk-calculator"
@@ -130,7 +130,7 @@ export function AccountBar() {
         valueColor={marginColor}
         compact
       />
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Win Rate"
         to="/journal"
@@ -139,7 +139,7 @@ export function AccountBar() {
         valueColor="#00e676"
         compact
       />
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Max DD"
         to="/performance"
@@ -148,7 +148,7 @@ export function AccountBar() {
         valueColor="#ff3b5c"
         compact
       />
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Sharpe"
         to="/performance"
@@ -159,7 +159,7 @@ export function AccountBar() {
       />
       {account.sortino_ratio != null && (
         <>
-          <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+          <div className="w-px h-6 bg-[var(--border)] shrink-0" />
           <MetricTile
             label="Sortino"
         to="/performance"
@@ -170,7 +170,7 @@ export function AccountBar() {
           />
         </>
       )}
-      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <div className="w-px h-6 bg-[var(--border)] shrink-0" />
       <MetricTile
         label="Open Trades"
         to="/portfolio"
@@ -180,10 +180,10 @@ export function AccountBar() {
       />
       {killSwitch && (
         <>
-          <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-[#ff1744]/10 border border-[#ff1744]/30 rounded animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#ff1744]" />
-            <span className="text-[10px] font-semibold text-[#ff1744] uppercase tracking-wider">
+          <div className="w-px h-6 bg-[var(--border)] shrink-0" />
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-[var(--bear)]/10 border border-[var(--bear)]/30 rounded animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--bear)]" />
+            <span className="text-[10px] font-semibold text-[var(--bear)] uppercase tracking-wider">
               Kill Switch
             </span>
           </div>

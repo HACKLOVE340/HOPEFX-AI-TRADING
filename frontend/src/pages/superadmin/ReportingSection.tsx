@@ -15,10 +15,10 @@ const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const TYPE_COLORS: Record<string, string> = {
-  weekly:     '#60a5fa',
-  monthly:    '#a78bfa',
-  regulatory: '#fbbf24',
-  custom:     '#94a3b8',
+  weekly:     'var(--link)',
+  monthly:    'var(--ai-model)',
+  regulatory: 'var(--warn)',
+  custom:     'var(--text-dim)',
 };
 
 const ReportingSection: React.FC = () => {
@@ -171,7 +171,7 @@ const ReportingSection: React.FC = () => {
             <thead>
               <tr>
                 {['Report', 'Type', 'Status', 'Generated', 'Size', 'Actions'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -179,22 +179,22 @@ const ReportingSection: React.FC = () => {
               {reports.map(r => (
                 <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 16px' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, fontFamily: 'monospace', color: '#f8fafc' }}>{r.report_id}</div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{r.period}</div>
+                    <div style={{ fontWeight: 600, fontSize: 13, fontFamily: 'monospace', color: 'var(--text-strong)' }}>{r.report_id}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{r.period}</div>
                   </td>
                   <td style={{ padding: '10px 16px' }}>
                     <span style={{
                       fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                      background: `${TYPE_COLORS[r.type] ?? '#94a3b8'}22`,
-                      color: TYPE_COLORS[r.type] ?? '#94a3b8',
-                      border: `1px solid ${TYPE_COLORS[r.type] ?? '#94a3b8'}44`,
+                      background: `${TYPE_COLORS[r.type] ?? 'var(--text-dim)'}22`,
+                      color: TYPE_COLORS[r.type] ?? 'var(--text-dim)',
+                      border: `1px solid ${TYPE_COLORS[r.type] ?? 'var(--text-dim)'}44`,
                     }}>
                       {r.type.toUpperCase()}
                     </span>
                   </td>
                   <td style={{ padding: '10px 16px' }}><StatusBadge status={r.status} /></td>
-                  <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(r.generated_at)}</td>
-                  <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.generated_at)}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>
                     {r.size_kb ? `${r.size_kb.toFixed(1)} KB` : '—'}
                   </td>
                   <td style={{ padding: '10px 16px' }}>

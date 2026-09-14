@@ -67,7 +67,7 @@ const DecisionTrace = memo(({ steps }: { steps: string[] }) => (
         >
           <span style={{
             ...s.traceText,
-            color: isDecision ? (isWarning ? '#fca5a5' : '#86efac') : '#94a3b8',
+            color: isDecision ? (isWarning ? '#fca5a5' : '#86efac') : 'var(--text-dim)',
             fontWeight: isDecision ? 700 : 400,
           }}>
             {step}
@@ -88,7 +88,7 @@ const ConfidenceBreakdown = memo(({ breakdown }: { breakdown: Record<string, num
       {entries.map(([key, val]) => (
         <div key={key} style={s.confCell}>
           <span style={s.confLabel}>{key.replace(/_/g, ' ')}</span>
-          <span style={{ ...s.confValue, color: val > 0.5 ? '#ef4444' : '#64748b' }}>
+          <span style={{ ...s.confValue, color: val > 0.5 ? '#ef4444' : 'var(--text-muted)' }}>
             {(val * 100).toFixed(0)}%
           </span>
         </div>
@@ -184,7 +184,7 @@ const s: Record<string, React.CSSProperties> = {
     position: 'relative', cursor: 'default',
   },
   featureName: {
-    fontSize: 9, color: '#64748b', width: 80, flexShrink: 0,
+    fontSize: 9, color: 'var(--text-muted)', width: 80, flexShrink: 0,
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     fontFamily: 'monospace',
   },
@@ -241,6 +241,6 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'all 0.4s ease',
   },
   adviceText: {
-    fontSize: 11, color: '#e2e8f0', lineHeight: 1.7, margin: 0,
+    fontSize: 11, color: 'var(--text)', lineHeight: 1.7, margin: 0,
   },
 };

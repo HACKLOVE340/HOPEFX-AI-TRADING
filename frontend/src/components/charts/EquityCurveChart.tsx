@@ -182,7 +182,7 @@ export function EquityCurveChart() {
             fontFamily: 'monospace', cursor: 'pointer', letterSpacing: 0.5,
             border: `1px solid ${range === r ? '#3b82f6' : '#1e293b'}`,
             background: range === r ? 'rgba(59,130,246,0.15)' : 'transparent',
-            color: range === r ? '#60a5fa' : '#475569',
+            color: range === r ? 'var(--link)' : '#475569',
             transition: 'all 0.15s ease',
           }}
         >
@@ -215,7 +215,7 @@ export function EquityCurveChart() {
           </div>
 
           {perf && (
-            <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[#1e2d3d] shrink-0">
+            <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[var(--border)] shrink-0">
               <MetricTile label="Win Rate" to="/journal" toHint="the trades behind it"      value={fmtPctRaw(perf.win_rate, 1)} valueColor="#00e676" compact />
               <MetricTile label="Profit Factor" to="/journal" toHint="the trades behind it" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
               <MetricTile label="Total Trades" to="/journal" toHint="the trade journal"  value={perf.total_trades?.toString() ?? '—'}            compact />

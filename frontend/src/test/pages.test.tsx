@@ -602,7 +602,7 @@ describe('Trading page', () => {
   it('1h timeframe button is active by default', async () => {
     await renderTrading();
     const btn = screen.getByRole('button', { name: '1h' });
-    expect(btn.className).toMatch(/text-\[#60a5fa\]/);
+    expect(btn.className).toMatch(/text-\[var\(--link\)\]/);
   });
 
   it('renders positions tab button', async () => {
@@ -750,7 +750,7 @@ describe('Trading page', () => {
     await renderTrading();
     const btn4h = screen.getByRole('button', { name: '4h' });
     fireEvent.click(btn4h);
-    expect(btn4h.className).toMatch(/text-\[#60a5fa\]/);
+    expect(btn4h.className).toMatch(/text-\[var\(--link\)\]/);
   });
 
   it('switching symbol updates selector value', async () => {

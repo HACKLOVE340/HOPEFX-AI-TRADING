@@ -210,7 +210,7 @@ const TAB_GROUPS: TabGroup[] = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const SectionFallback: React.FC = () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: '32px 0' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: '32px 0' }}>
     <div style={{
       width: 20, height: 20, border: '2px solid #334155',
       borderTopColor: '#3b82f6', borderRadius: '50%',
@@ -229,7 +229,7 @@ const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => 
     <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>
       {requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1)} Plan Required
     </div>
-    <div style={{ fontSize: 14, color: '#64748b', maxWidth: 360, margin: '0 auto 20px' }}>
+    <div style={{ fontSize: 14, color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto 20px' }}>
       Upgrade your subscription to unlock this feature.
     </div>
     <Link to="/pricing" style={{
@@ -364,7 +364,7 @@ const Settings: React.FC = () => {
             <h1 style={S.heading}>Settings</h1>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 ⚡ Trade
               </button>
               <button onClick={() => navigate('/journal')}
@@ -402,13 +402,13 @@ const Settings: React.FC = () => {
                   onChange={(e) => setSearch(e.target.value)}
                   style={{
                     background: 'transparent', border: 'none', outline: 'none',
-                    color: '#e2e8f0', fontSize: 13, width: '100%', fontFamily: 'inherit',
+                    color: 'var(--text)', fontSize: 13, width: '100%', fontFamily: 'inherit',
                   }}
                 />
                 {search && (
                   <button onClick={() => setSearch('')} style={{
                     background: 'transparent', border: 'none', cursor: 'pointer',
-                    color: '#64748b', fontSize: 16, padding: 0, lineHeight: 1,
+                    color: 'var(--text-muted)', fontSize: 16, padding: 0, lineHeight: 1,
                   }}>×</button>
                 )}
               </div>
@@ -435,7 +435,7 @@ const Settings: React.FC = () => {
                         background: activeTab === id ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
                         border: `1px solid ${activeTab === id ? '#3b82f6' : '#1e293b'}`,
                         borderRadius: 6,
-                        color: activeTab === id ? '#60a5fa' : '#64748b',
+                        color: activeTab === id ? 'var(--link)' : 'var(--text-muted)',
                         fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                         whiteSpace: 'nowrap',
                       }}
@@ -523,8 +523,8 @@ const S: Record<string, React.CSSProperties> = {
     padding: '32px 24px', boxSizing: 'border-box',
   },
   header:    { maxWidth: 1400, margin: '0 auto 28px' },
-  heading:   { fontSize: 28, fontWeight: 800, color: '#f8fafc', margin: 0, letterSpacing: '-0.02em' },
-  subheading: { fontSize: 14, color: '#64748b', marginTop: 6, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  heading:   { fontSize: 28, fontWeight: 800, color: 'var(--text-strong)', margin: 0, letterSpacing: '-0.02em' },
+  subheading: { fontSize: 14, color: 'var(--text-muted)', marginTop: 6, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   saBadge:   { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
   layout:    { maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start' },
   sidebar: {
@@ -545,7 +545,7 @@ const S: Record<string, React.CSSProperties> = {
     textAlign: 'left' as const, transition: 'background 0.15s, color 0.15s', borderRadius: 0,
   },
   tabIcon:     { fontSize: 13, flexShrink: 0, width: 16, textAlign: 'center' as const },
-  adminBadge:  { fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#1e3a5f', color: '#60a5fa', border: '1px solid #1e3a5f' },
+  adminBadge:  { fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#1e3a5f', color: 'var(--link)', border: '1px solid #1e3a5f' },
   saBadgeSmall: { fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
   content:     { flex: 1, minWidth: 0 },
 };

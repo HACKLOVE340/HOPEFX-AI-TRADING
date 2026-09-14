@@ -33,7 +33,7 @@ function ConfirmDialog({
   onCancel: () => void;
 }) {
   return (
-    <div className="mx-4 mt-3 px-3 py-2.5 rounded bg-[#1e2d3d] border border-[#ff1744]/30 flex items-center justify-between gap-3">
+    <div className="mx-4 mt-3 px-3 py-2.5 rounded bg-[var(--border)] border border-[var(--bear)]/30 flex items-center justify-between gap-3">
       <span className="text-[12px] text-slate-300">{message}</span>
       <div className="flex gap-2 shrink-0">
         <button
@@ -44,7 +44,7 @@ function ConfirmDialog({
         </button>
         <button
           onClick={onConfirm}
-          className="px-2.5 py-1 rounded text-[11px] font-semibold bg-[#ff1744]/20 border border-[#ff1744]/40 text-[#ff1744] hover:bg-[#ff1744]/30 transition-colors"
+          className="px-2.5 py-1 rounded text-[11px] font-semibold bg-[var(--bear)]/20 border border-[var(--bear)]/40 text-[var(--bear)] hover:bg-[var(--bear)]/30 transition-colors"
         >
           Confirm
         </button>
@@ -62,8 +62,8 @@ function PnlBadge({ value }: { value: number }) {
       className={cn(
         'inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold tabular-nums',
         positive
-          ? 'bg-[#00e676]/10 text-[#00e676]'
-          : 'bg-[#ff1744]/10 text-[#ff1744]',
+          ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+          : 'bg-[var(--bear)]/10 text-[var(--bear)]',
       )}
     >
       {fmtPnl(value)}
@@ -89,8 +89,8 @@ function SideBadge({ side }: { side: 'long' | 'short' | null }) {
       className={cn(
         'inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
         isLong
-          ? 'bg-[#00e676]/10 text-[#00e676]'
-          : 'bg-[#ff1744]/10 text-[#ff1744]',
+          ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+          : 'bg-[var(--bear)]/10 text-[var(--bear)]',
       )}
     >
       {isLong ? '▲ Long' : '▼ Short'}
@@ -119,7 +119,7 @@ function CloseBtn({
         'px-2 py-1 rounded text-[11px] font-semibold border transition-colors',
         'disabled:opacity-40 disabled:cursor-not-allowed',
         danger
-          ? 'border-[#ff1744]/40 text-[#ff1744] hover:bg-[#ff1744]/10'
+          ? 'border-[var(--bear)]/40 text-[var(--bear)] hover:bg-[var(--bear)]/10'
           : 'border-[#334155] text-slate-400 hover:text-slate-200 hover:border-[#475569]',
       )}
     >
@@ -267,7 +267,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
     <div className="flex items-center gap-3">
       <span className={cn(
         'text-[11px] font-semibold tabular-nums',
-        totalPnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
+        totalPnl >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
       )}>
         Total P&L: {fmtPnl(totalPnl)}
       </span>
@@ -295,7 +295,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       )}
 
       {error && (
-        <div className="mx-4 mt-3 px-3 py-2 rounded bg-[#ff1744]/10 border border-[#ff1744]/20 text-[#ff1744] text-[11px]">
+        <div className="mx-4 mt-3 px-3 py-2 rounded bg-[var(--bear)]/10 border border-[var(--bear)]/20 text-[var(--bear)] text-[11px]">
           {error}
         </div>
       )}
@@ -306,7 +306,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
-              <tr className="border-b border-[#1e2d3d]">
+              <tr className="border-b border-[var(--border)]">
                 {['Symbol', 'Side', 'Size', 'Entry', 'Current', 'SL', 'TP', 'P&L', 'Opened', ''].map((h) => (
                   <th
                     key={h}
@@ -360,7 +360,7 @@ function PositionRow({
       : null;
 
   return (
-    <tr className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/40 transition-colors">
+    <tr className="border-b border-[var(--surface)] hover:bg-[var(--border)]/40 transition-colors">
       <td className="px-3 py-2.5 font-semibold text-slate-200 whitespace-nowrap">
         {pos.symbol}
       </td>
@@ -394,7 +394,7 @@ function PositionRow({
           ) : (
             <span className={cn(
               'text-[10px] tabular-nums',
-              pnlPct >= 0 ? 'text-[#00e676]/70' : 'text-[#ff1744]/70',
+              pnlPct >= 0 ? 'text-[var(--bull)]/70' : 'text-[var(--bear)]/70',
             )}>
               {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
             </span>

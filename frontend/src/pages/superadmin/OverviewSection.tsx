@@ -79,7 +79,7 @@ const GaugeBar: React.FC<GaugeBarProps> = ({ label, value, max = 100, color = '#
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>{label}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
         <span style={{ fontSize: 12, fontWeight: 700, color: barColor }}>{value}{unit}</span>
       </div>
       <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
@@ -250,7 +250,7 @@ const OverviewSection: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <StatusBadge status={data.system_health} />
           <span style={{ fontSize: 12, color: '#475569' }}>
-            Uptime {fmtPct(data.uptime_pct ?? 0)} · Engine: <span style={{ color: data.engine_status === 'running' ? '#4ade80' : '#f87171' }}>{data.engine_status}</span>
+            Uptime {fmtPct(data.uptime_pct ?? 0)} · Engine: <span style={{ color: data.engine_status === 'running' ? 'var(--gain)' : 'var(--loss)' }}>{data.engine_status}</span>
           </span>
         </div>
         <ActionBtn
@@ -304,8 +304,8 @@ const OverviewSection: React.FC = () => {
                 background: '#1e293b', borderRadius: 8, padding: '12px 14px',
                 border: `1px solid ${m.ok ? '#16a34a33' : '#dc262633'}`,
               }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{m.label}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: m.ok ? '#4ade80' : '#f87171' }}>{m.value}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: m.ok ? 'var(--gain)' : 'var(--loss)' }}>{m.value}</div>
               </div>
             ))}
           </div>
@@ -364,7 +364,7 @@ const OverviewSection: React.FC = () => {
                     ].map(l => (
                       <div key={l.label} style={{ background: '#1e293b', borderRadius: 6, padding: '6px 10px', flex: 1 }}>
                         <div style={{ fontSize: 10, color: '#475569' }}>{l.label}</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{l.v}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dim)' }}>{l.v}</div>
                       </div>
                     ))}
                   </div>
@@ -432,10 +432,10 @@ const OverviewSection: React.FC = () => {
                       {infra.queues.map((q) => (
                         <tr key={q.name} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                           <td style={{ padding: '8px 12px', fontWeight: 600, color: '#f1f5f9' }}>{q.name}</td>
-                          <td style={{ padding: '8px 12px', color: (q.pending ?? 0) > 100 ? '#fbbf24' : '#94a3b8', fontWeight: (q.pending ?? 0) > 100 ? 700 : 400 }}>{(q.pending ?? 0).toLocaleString()}</td>
-                          <td style={{ padding: '8px 12px', color: '#60a5fa' }}>{(q.processing ?? 0).toLocaleString()}</td>
-                          <td style={{ padding: '8px 12px', color: (q.failed ?? 0) > 0 ? '#f87171' : '#4ade80', fontWeight: (q.failed ?? 0) > 0 ? 700 : 400 }}>{(q.failed ?? 0).toLocaleString()}</td>
-                          <td style={{ padding: '8px 12px', color: '#94a3b8' }}>{q.workers}</td>
+                          <td style={{ padding: '8px 12px', color: (q.pending ?? 0) > 100 ? 'var(--warn)' : 'var(--text-dim)', fontWeight: (q.pending ?? 0) > 100 ? 700 : 400 }}>{(q.pending ?? 0).toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: 'var(--link)' }}>{(q.processing ?? 0).toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: (q.failed ?? 0) > 0 ? 'var(--loss)' : 'var(--gain)', fontWeight: (q.failed ?? 0) > 0 ? 700 : 400 }}>{(q.failed ?? 0).toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: 'var(--text-dim)' }}>{q.workers}</td>
                         </tr>
                       ))}
                     </tbody>

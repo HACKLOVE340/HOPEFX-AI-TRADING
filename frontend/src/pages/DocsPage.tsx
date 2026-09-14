@@ -221,7 +221,7 @@ const DocsPage: React.FC = () => {
               onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
             >Home</Link>
             <ChevronRight size={12} style={{ color: '#334155' }} />
-            <span style={{ color: '#94a3b8', fontSize: 13 }}>Documentation</span>
+            <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>Documentation</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -230,14 +230,14 @@ const DocsPage: React.FC = () => {
               background: '#00d4ff18', border: '1px solid #00d4ff40',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <BookOpen size={20} style={{ color: '#00d4ff' }} />
+              <BookOpen size={20} style={{ color: 'var(--accent)' }} />
             </div>
             <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', margin: 0 }}>
-              HOPE<span style={{ color: '#00d4ff' }}>FX</span> Documentation
+              HOPE<span style={{ color: 'var(--accent)' }}>FX</span> Documentation
             </h1>
           </div>
 
-          <p style={{ color: '#64748b', fontSize: 15, margin: '0 0 28px', lineHeight: 1.6 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: 15, margin: '0 0 28px', lineHeight: 1.6 }}>
             AI-powered gold and forex trading platform. Automated strategies, real-time signals,
             and institutional-grade risk management.
           </p>
@@ -272,7 +272,7 @@ const DocsPage: React.FC = () => {
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: '#0f172a', border: '1px solid #1e293b',
-                borderRadius: 10, color: '#e2e8f0', fontSize: 14,
+                borderRadius: 10, color: 'var(--text)', fontSize: 14,
                 padding: '10px 14px 10px 40px', outline: 'none',
               }}
             />
@@ -309,7 +309,7 @@ const DocsPage: React.FC = () => {
                 }}>
                   {section.icon}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                   {section.title}
                 </span>
               </div>
@@ -324,7 +324,7 @@ const DocsPage: React.FC = () => {
                       rel={entry.external ? 'noopener noreferrer' : undefined}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
-                        color: '#94a3b8', fontSize: 13, textDecoration: 'none',
+                        color: 'var(--text-dim)', fontSize: 13, textDecoration: 'none',
                         padding: '5px 0',
                         transition: 'color 0.15s',
                       }}
@@ -363,7 +363,7 @@ const DocsPage: React.FC = () => {
               href={`${GITHUB_BASE}/FAQ.md`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#00d4ff', textDecoration: 'none' }}
+              style={{ color: 'var(--accent)', textDecoration: 'none' }}
             >
               Read the full FAQ on GitHub
             </a>

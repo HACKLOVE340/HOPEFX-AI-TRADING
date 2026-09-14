@@ -28,7 +28,7 @@ const SystemReliabilitySection = lazy(
 const Fallback: React.FC = () => (
   <div style={{
     display: 'flex', alignItems: 'center', gap: 10,
-    color: '#64748b', padding: '48px 0',
+    color: 'var(--text-muted)', padding: '48px 0',
     fontFamily: 'Inter, system-ui, sans-serif',
   }}>
     <div style={{
@@ -58,11 +58,11 @@ const SystemReliability: React.FC = () => (
           actions={
             <div style={{ display: 'flex', gap: 8 }}>
               <Link to="/superadmin"
-                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 ⚡ Super Admin
               </Link>
               <Link to="/status"
-                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 🟢 Status
               </Link>
             </div>

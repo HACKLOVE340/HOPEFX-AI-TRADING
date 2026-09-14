@@ -16,10 +16,10 @@ const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const REQUEST_TYPE_COLORS: Record<string, string> = {
-  export:        '#60a5fa',
-  erasure:       '#f87171',
-  rectification: '#fbbf24',
-  portability:   '#a78bfa',
+  export:        'var(--link)',
+  erasure:       'var(--loss)',
+  rectification: 'var(--warn)',
+  portability:   'var(--ai-model)',
 };
 
 interface RetentionPolicy { data_type: string; retention_days: number; legal_basis?: string }
@@ -188,7 +188,7 @@ const GDPRSection: React.FC = () => {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['requests', 'policies', 'consent'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
+          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
             {{ requests: 'Data Subject Requests', policies: 'Retention Policies', consent: 'Consent Log' }[t]}
           </button>
         ))}
@@ -227,7 +227,7 @@ const GDPRSection: React.FC = () => {
                 <thead>
                   <tr>
                     {['User', 'Type', 'Status', 'Submitted', 'Completed', 'Actions'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -236,16 +236,16 @@ const GDPRSection: React.FC = () => {
                     <tr key={r.request_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>{r.username || r.user_id}</div>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>{r.email}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.email}</div>
                       </td>
                       <td style={{ padding: '10px 16px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8'}22`, color: REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8', border: `1px solid ${REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8'}44` }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}22`, color: REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)', border: `1px solid ${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}44` }}>
                           {r.request_type.toUpperCase()}
                         </span>
                       </td>
                       <td style={{ padding: '10px 16px' }}><StatusBadge status={r.status} /></td>
-                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(r.submitted_at)}</td>
-                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(r.completed_at)}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.submitted_at)}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.completed_at)}</td>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {r.request_type === 'export' && (
@@ -276,7 +276,7 @@ const GDPRSection: React.FC = () => {
             <thead>
               <tr>
                 {['Data Type', 'Retention (days)', 'Legal Basis', ''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -297,7 +297,7 @@ const GDPRSection: React.FC = () => {
                         : 'days'}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{p.legal_basis ?? '—'}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{p.legal_basis ?? '—'}</td>
                   <td style={{ padding: '10px 16px' }}>
                     <ActionBtn
                       label="Save"
@@ -340,16 +340,16 @@ const GDPRSection: React.FC = () => {
               <thead>
                 <tr>
                   {['User', 'Event', 'Details', 'IP', 'Timestamp'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '8px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '8px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {consentLog.map((c, i) => (
                   <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 11, color: '#a78bfa' }}>{c.user_id}</td>
+                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--ai-model)' }}>{c.user_id}</td>
                     <td style={{ padding: '8px 16px', fontWeight: 600, color: '#f1f5f9' }}>{c.event}</td>
-                    <td style={{ padding: '8px 16px', color: '#64748b', fontSize: 12 }}>{c.details}</td>
+                    <td style={{ padding: '8px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{c.details}</td>
                     <td style={{ padding: '8px 16px', fontFamily: 'monospace', color: '#334155', fontSize: 11 }}>{c.ip ?? '—'}</td>
                     <td style={{ padding: '8px 16px', color: '#475569', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(c.timestamp)}</td>
                   </tr>

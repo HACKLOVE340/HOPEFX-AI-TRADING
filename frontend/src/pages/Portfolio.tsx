@@ -90,8 +90,8 @@ const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub, to, to
       <span
         className={cn(
           'text-[18px] font-bold tabular-nums',
-          positive === true  ? 'text-[#00e676]' :
-          positive === false ? 'text-[#ff1744]' :
+          positive === true  ? 'text-[var(--bull)]' :
+          positive === false ? 'text-[var(--bear)]' :
                                'text-slate-100',
         )}
       >
@@ -101,7 +101,7 @@ const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub, to, to
     </>
   );
 
-  const base = 'flex flex-col gap-1 px-4 py-3 rounded-lg bg-[#0d1421] border border-[#1e2d3d]';
+  const base = 'flex flex-col gap-1 px-4 py-3 rounded-lg bg-[var(--surface)] border border-[var(--border)]';
   if (!to) return <div className={base}>{body}</div>;
 
   return (
@@ -110,9 +110,9 @@ const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub, to, to
       aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
       title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
       className={cn(base, `group min-h-[44px] no-underline cursor-pointer transition-colors
-        duration-150 hover:border-[#2b3f56] hover:bg-[#111827] focus-visible:outline-none
+        duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--raised)] focus-visible:outline-none
         focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2
-        focus-visible:ring-offset-[#080c14]`)}
+        focus-visible:ring-offset-[var(--bg)]`)}
     >
       {body}
     </Link>
@@ -134,7 +134,7 @@ const AccountSummary: React.FC = () => {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-lg bg-[#0d1421] border border-[#1e2d3d] animate-pulse" />
+          <div key={i} className="h-20 rounded-lg bg-[var(--surface)] border border-[var(--border)] animate-pulse" />
         ))}
       </div>
     );
@@ -298,14 +298,14 @@ const TradeHistory: React.FC = () => {
           background: 'transparent', border: 'none', color: '#475569', fontSize: 10, cursor: 'pointer', padding: '0 2px',
         }} title="Clear date filter">✕</button>
       )}
-      <div style={{ width: 1, height: 14, background: '#1e2d3d' }} />
+      <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
       {/* Search */}
       <input
         type="text"
         placeholder="Symbol…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="bg-[#111827] border border-[#1e2d3d] rounded px-2 py-1 text-[11px] text-slate-300 outline-none w-20"
+        className="bg-[var(--raised)] border border-[var(--border)] rounded px-2 py-1 text-[11px] text-slate-300 outline-none w-20"
       />
       {/* Filter pills */}
       {FILTERS.map(({ id, label, color }) => (
@@ -315,7 +315,7 @@ const TradeHistory: React.FC = () => {
           style={{
             padding: '2px 8px', borderRadius: 4,
             background: filter === id ? `${color}18` : 'transparent',
-            border: `1px solid ${filter === id ? `${color}50` : '#1e2d3d'}`,
+            border: `1px solid ${filter === id ? `${color}50` : 'var(--border)'}`,
             color: filter === id ? color : '#475569',
             fontSize: 9, fontWeight: 700, letterSpacing: 0.8, cursor: 'pointer',
           }}
@@ -324,7 +324,7 @@ const TradeHistory: React.FC = () => {
         </button>
       ))}
       {filtered.length > 0 && (
-        <span style={{ fontSize: 10, color: totalPnl >= 0 ? '#00e676' : '#ff1744', fontFamily: 'monospace', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, color: totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)', fontFamily: 'monospace', fontWeight: 700 }}>
           {Number.isFinite(totalPnl) ? `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}` : '—'} ({wins}/{filtered.length})
         </span>
       )}
@@ -363,7 +363,7 @@ const TradeHistory: React.FC = () => {
               Closed trade history — symbol, side, size, entry and exit price, P&amp;L, and open and close times
             </caption>
             <thead>
-              <tr className="border-b border-[#1e2d3d]">
+              <tr className="border-b border-[var(--border)]">
                 {['Symbol', 'Side', 'Size', 'Entry', 'Exit', 'P&L', 'Opened', 'Closed'].map((h) => (
                   <th
                     key={h}
@@ -396,8 +396,8 @@ const TradeHistory: React.FC = () => {
                         navigate('/trade', { state: { signal: { symbol: t.symbol, direction: isLong ? 'BUY' : 'SELL' } } });
                       }
                     }}
-                    className="border-b border-[#0d1421] cursor-pointer transition-colors duration-150
-                               hover:bg-[#1e2d3d]/40 focus-visible:outline-none focus-visible:ring-2
+                    className="border-b border-[var(--surface)] cursor-pointer transition-colors duration-150
+                               hover:bg-[var(--border)]/40 focus-visible:outline-none focus-visible:ring-2
                                focus-visible:ring-inset focus-visible:ring-sky-500"
                   >
                     <td className="px-3 py-2.5 font-semibold text-slate-200 whitespace-nowrap">
@@ -408,8 +408,8 @@ const TradeHistory: React.FC = () => {
                         className={cn(
                           'inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
                           isLong
-                            ? 'bg-[#00e676]/10 text-[#00e676]'
-                            : 'bg-[#ff1744]/10 text-[#ff1744]',
+                            ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+                            : 'bg-[var(--bear)]/10 text-[var(--bear)]',
                         )}
                       >
                         {isLong ? '▲ Long' : '▼ Short'}
@@ -423,8 +423,8 @@ const TradeHistory: React.FC = () => {
                         className={cn(
                           'inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold tabular-nums',
                           pnlPos
-                            ? 'bg-[#00e676]/10 text-[#00e676]'
-                            : 'bg-[#ff1744]/10 text-[#ff1744]',
+                            ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+                            : 'bg-[var(--bear)]/10 text-[var(--bear)]',
                         )}
                       >
                         {fmtPnl(t.pnl)}
@@ -518,7 +518,7 @@ const DrawdownChart: React.FC<{ equityPoints: { t: number; v: number }[] }> = ({
     <div>
       <div className="flex justify-between text-[10px] text-slate-500 mb-1">
         <span>Drawdown</span>
-        <span className="text-[#ff1744] font-semibold">Max: -{maxDdPct}%</span>
+        <span className="text-[var(--bear)] font-semibold">Max: -{maxDdPct}%</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80 }} preserveAspectRatio="none">
         <defs>
@@ -562,16 +562,16 @@ const SymbolPnLSparklines: React.FC = () => {
           const totalPnl = entries.reduce((s, e) => s + e.pnl, 0);
           const isPos    = totalPnl >= 0;
           return (
-            <div key={sym} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d]">
+            <div key={sym} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[var(--surface)] border border-[var(--border)]">
               <div className="flex justify-between items-center">
                 <span className="text-[11px] font-bold text-slate-200">{sym}</span>
-                <span className={cn('text-[11px] font-semibold tabular-nums', isPos ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+                <span className={cn('text-[11px] font-semibold tabular-nums', isPos ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
                   {fmtPnl(totalPnl)}
                 </span>
               </div>
               <div className="flex gap-1 flex-wrap">
                 {entries.map((e, i) => (
-                  <span key={i} className={cn('text-[9px] px-1 py-0.5 rounded', e.side === 'long' ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]')}>
+                  <span key={i} className={cn('text-[9px] px-1 py-0.5 rounded', e.side === 'long' ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]')}>
                     {e.side === 'long' ? '▲' : '▼'} {Number.isFinite(e.pnl) ? `$${e.pnl.toFixed(2)}` : '—'}
                   </span>
                 ))}
@@ -581,12 +581,12 @@ const SymbolPnLSparklines: React.FC = () => {
                   denominator used to be a hardcoded $100, which pegged every
                   position over $100 at full width — on a real account that is
                   all of them, and the bar carried no information. */}
-              <div className="h-1 rounded bg-[#1e2d3d] overflow-hidden mt-1">
+              <div className="h-1 rounded bg-[var(--border)] overflow-hidden mt-1">
                 <div
                   className="h-1 rounded transition-all"
                   style={{
                     width: `${maxAbsPnl > 0 ? Math.min((Math.abs(totalPnl) / maxAbsPnl) * 100, 100) : 0}%`,
-                    background: isPos ? '#00e676' : '#ff1744',
+                    background: isPos ? 'var(--bull)' : 'var(--bear)',
                     marginLeft: isPos ? 0 : 'auto',
                   }}
                 />
@@ -631,7 +631,7 @@ const AllocationBreakdown: React.FC = () => {
             <div key={label} className="flex items-center gap-3">
               <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
               <span className="text-[12px] font-semibold text-slate-200 w-20 flex-shrink-0">{label}</span>
-              <div className="flex-1 h-1.5 rounded bg-[#0d1421] overflow-hidden">
+              <div className="flex-1 h-1.5 rounded bg-[var(--surface)] overflow-hidden">
                 <div className="h-1.5 rounded transition-all" style={{ width: `${pct}%`, background: PIE_COLORS[i % PIE_COLORS.length] }} />
               </div>
               <span className="text-[11px] text-slate-400 tabular-nums w-12 text-right">{pct.toFixed(1)}%</span>
@@ -701,7 +701,7 @@ const Portfolio: React.FC = () => {
           <button
             onClick={handleExport}
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-[11px]
-                       font-semibold bg-[#1e3a5f] text-[#60a5fa] ring-1 ring-inset ring-[#1d4ed8]
+                       font-semibold bg-[#1e3a5f] text-[var(--link)] ring-1 ring-inset ring-[#1d4ed8]
                        cursor-pointer transition-colors duration-150 hover:bg-[#1d4ed8]/30
                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
           >
@@ -718,7 +718,7 @@ const Portfolio: React.FC = () => {
       <AccountSummary />
 
       {equityQuery.isError && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] text-[12px]">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[var(--bear)]/10 border border-[var(--bear)]/30 text-[var(--bear)] text-[12px]">
           <span>⚠</span>
           <span>
             Equity curve unavailable — {extractApiError(equityQuery.error, 'check your connection')}

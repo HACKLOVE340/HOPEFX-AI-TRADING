@@ -54,7 +54,7 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
           // pills were ~26px tall and appear at the foot of most pages, so the
           // fix lifts every page using the bar rather than one.
           className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                     focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
+                     focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           style={{
             display: 'inline-flex',
             alignItems: 'center',

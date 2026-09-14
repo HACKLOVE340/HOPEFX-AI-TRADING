@@ -24,29 +24,29 @@ const fmtDate = (iso: string | null) =>
 /** Fallback for an unrecognised key. Named so it is not itself an
     index access, which `noUncheckedIndexedAccess` types as possibly
     undefined (audit #38). Value is unchanged. */
-const CB_COLORS_DEFAULT = { color: '#4ade80', bg: '#052e16' };
+const CB_COLORS_DEFAULT = { color: 'var(--gain)', bg: '#052e16' };
 
 const CB_COLORS: Record<string, { color: string; bg: string }> = {
   closed: CB_COLORS_DEFAULT,
-  open:      { color: '#f87171', bg: '#450a0a' },
-  half_open: { color: '#fbbf24', bg: '#78350f' },
+  open:      { color: 'var(--loss)', bg: '#450a0a' },
+  half_open: { color: 'var(--warn)', bg: '#78350f' },
 };
 
 /** Fallback for an unrecognised key. Named so it is not itself an
     index access, which `noUncheckedIndexedAccess` types as possibly
     undefined (audit #38). Value is unchanged. */
-const BREACH_SEVERITY_COLORS_DEFAULT = { color: '#fbbf24', bg: '#78350f' };
+const BREACH_SEVERITY_COLORS_DEFAULT = { color: 'var(--warn)', bg: '#78350f' };
 
 const BREACH_SEVERITY_COLORS: Record<string, { color: string; bg: string }> = {
   warning: BREACH_SEVERITY_COLORS_DEFAULT,
-  breach:       { color: '#f87171', bg: '#450a0a' },
+  breach:       { color: 'var(--loss)', bg: '#450a0a' },
   disqualified: { color: '#dc2626', bg: '#7f1d1d' },
 };
 
 const BREACH_STATUS_COLORS: Record<string, string> = {
-  open:         '#f87171',
-  reviewed:     '#fbbf24',
-  resolved:     '#4ade80',
+  open:         'var(--loss)',
+  reviewed:     'var(--warn)',
+  resolved:     'var(--gain)',
   disqualified: '#dc2626',
 };
 
@@ -190,7 +190,7 @@ const RiskManagementSection: React.FC = () => {
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             background: tab === t.id ? '#1e293b' : 'transparent',
             border: `1px solid ${tab === t.id ? '#475569' : '#1e293b'}`,
-            borderRadius: 8, color: tab === t.id ? '#f8fafc' : '#64748b',
+            borderRadius: 8, color: tab === t.id ? 'var(--text-strong)' : 'var(--text-muted)',
             padding: '7px 14px', fontSize: 13, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
@@ -215,7 +215,7 @@ const RiskManagementSection: React.FC = () => {
               { label: 'Calmar Ratio',       value: varMetrics.calmar_ratio.toFixed(2),                        color: '#06b6d4' },
             ].map(m => (
               <div key={m.label} style={{ background: '#1e293b', borderRadius: 8, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: m.color }}>{m.value}</div>
               </div>
             ))}
@@ -231,7 +231,7 @@ const RiskManagementSection: React.FC = () => {
           {openBreakers > 0 && (
             <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16 }}>🛑</span>
-              <span style={{ fontSize: 13, color: '#f87171', fontWeight: 600 }}>{openBreakers} circuit breaker{openBreakers > 1 ? 's' : ''} OPEN — affected services are failing fast</span>
+              <span style={{ fontSize: 13, color: 'var(--loss)', fontWeight: 600 }}>{openBreakers} circuit breaker{openBreakers > 1 ? 's' : ''} OPEN — affected services are failing fast</span>
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
@@ -254,7 +254,7 @@ const RiskManagementSection: React.FC = () => {
                     ].map(m => (
                       <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '6px 8px' }}>
                         <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
-                        <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{m.value}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 600 }}>{m.value}</div>
                       </div>
                     ))}
                   </div>
@@ -302,15 +302,15 @@ const RiskManagementSection: React.FC = () => {
                   {stressTests.map((t, i) => (
                     <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{t.name ?? t.scenario}</td>
-                      <td style={{ padding: '10px 12px', fontWeight: 700, color: (t.pnl_usd ?? t.pnl_impact ?? 0) < 0 ? '#f87171' : '#4ade80' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 700, color: (t.pnl_usd ?? t.pnl_impact ?? 0) < 0 ? 'var(--loss)' : 'var(--gain)' }}>
                         {t.pnl_usd != null ? fmtMoney(t.pnl_usd) : t.pnl_impact != null ? fmtMoney(t.pnl_impact) : '—'}
                       </td>
-                      <td style={{ padding: '10px 12px', color: t.pnl_pct < 0 ? '#f87171' : '#4ade80' }}>{fmtPct(t.pnl_pct)}</td>
-                      <td style={{ padding: '10px 12px', color: '#f87171' }}>{t.max_loss != null ? fmtMoney(t.max_loss) : '—'}</td>
-                      <td style={{ padding: '10px 12px', color: '#94a3b8' }}>
+                      <td style={{ padding: '10px 12px', color: t.pnl_pct < 0 ? 'var(--loss)' : 'var(--gain)' }}>{fmtPct(t.pnl_pct)}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--loss)' }}>{t.max_loss != null ? fmtMoney(t.max_loss) : '—'}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>
                         {t.probability != null ? fmtPct(t.probability * 100) : '—'}
                       </td>
-                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{t.run_at ? fmtDate(t.run_at) : '—'}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{t.run_at ? fmtDate(t.run_at) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -343,7 +343,7 @@ const RiskManagementSection: React.FC = () => {
               <button key={f.value} onClick={() => setBreachFilter(f.value)} style={{
                 background: breachFilter === f.value ? '#1e293b' : 'transparent',
                 border: `1px solid ${breachFilter === f.value ? '#475569' : '#1e293b'}`,
-                borderRadius: 6, color: breachFilter === f.value ? '#f8fafc' : '#64748b',
+                borderRadius: 6, color: breachFilter === f.value ? 'var(--text-strong)' : 'var(--text-muted)',
                 padding: '5px 12px', fontSize: 12, cursor: 'pointer',
               }}>
                 {f.label}
@@ -372,25 +372,25 @@ const RiskManagementSection: React.FC = () => {
                           <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{b.username}</div>
                           <div style={{ fontSize: 11, color: '#475569' }}>{b.user_id}</div>
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, fontFamily: 'monospace' }}>{b.account_id}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12, fontFamily: 'monospace' }}>{b.account_id}</td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{ fontSize: 11, color: '#cbd5e1', background: '#1e293b', borderRadius: 4, padding: '2px 7px' }}>
                             {b.breach_type.replace(/_/g, ' ')}
                           </span>
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{b.threshold}%</td>
-                        <td style={{ padding: '10px 12px', fontWeight: 700, color: '#f87171' }}>{b.actual_value.toFixed(2)}%</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{b.threshold}%</td>
+                        <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--loss)' }}>{b.actual_value.toFixed(2)}%</td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: sev.color, background: sev.bg, border: `1px solid ${sev.color}44`, borderRadius: 4, padding: '2px 8px' }}>
                             {b.severity.toUpperCase()}
                           </span>
                         </td>
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: BREACH_STATUS_COLORS[b.status] ?? '#94a3b8' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: BREACH_STATUS_COLORS[b.status] ?? 'var(--text-dim)' }}>
                             {b.status}
                           </span>
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(b.detected_at)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(b.detected_at)}</td>
                       </tr>
                     );
                   })}
@@ -420,7 +420,7 @@ const RiskManagementSection: React.FC = () => {
               {/* Drawdown distribution */}
               {drawdown.drawdown_distribution && drawdown.drawdown_distribution.length > 0 && (
                 <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 12 }}>Drawdown Distribution</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 12 }}>Drawdown Distribution</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {drawdown.drawdown_distribution.map(d => {
                       const maxCount = Math.max(...drawdown.drawdown_distribution.map(x => x.count), 1);
@@ -428,11 +428,11 @@ const RiskManagementSection: React.FC = () => {
                       const color = d.bucket.includes('>10') ? '#ef4444' : d.bucket.includes('5-10') ? '#f59e0b' : '#22c55e';
                       return (
                         <div key={d.bucket} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 80, fontSize: 11, color: '#64748b', flexShrink: 0 }}>{d.bucket}</div>
+                          <div style={{ width: 80, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{d.bucket}</div>
                           <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 16, overflow: 'hidden' }}>
                             <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s' }} />
                           </div>
-                          <div style={{ width: 32, fontSize: 11, color: '#94a3b8', textAlign: 'right', flexShrink: 0 }}>{d.count}</div>
+                          <div style={{ width: 32, fontSize: 11, color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>{d.count}</div>
                         </div>
                       );
                     })}

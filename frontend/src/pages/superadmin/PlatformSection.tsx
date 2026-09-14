@@ -309,7 +309,7 @@ const PlatformSection: React.FC = () => {
           />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, display: 'block', marginBottom: 5 }}>Message Body</label>
+          <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500, display: 'block', marginBottom: 5 }}>Message Body</label>
           <textarea
             value={broadcast.body}
             onChange={e => setBroadcast(b => ({ ...b, body: e.target.value }))}

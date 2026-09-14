@@ -101,7 +101,7 @@ const KillSwitchConfirm: React.FC<{
   return (
     <div className="fixed inset-0 bg-black/85 z-[2000] flex items-center justify-center p-4 sm:p-6"
       onClick={e => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div className={`bg-[#0d1421] border-2 rounded-xl p-6 sm:p-8 w-full max-w-sm shadow-2xl ${
+      <div className={`bg-[var(--surface)] border-2 rounded-xl p-6 sm:p-8 w-full max-w-sm shadow-2xl ${
         currentlyActive ? 'border-green-500' : 'border-red-500'
       }`}>
         <div className="text-4xl text-center mb-3">{currentlyActive ? '🔓' : '🛑'}</div>
@@ -517,7 +517,7 @@ const SuperAdminDashboard: React.FC = () => {
                     aria-label={killSwitchActive
                       ? 'Resume trading — the kill switch is currently active'
                       : 'Activate the kill switch and halt all trading'}
-                    className={`inline-flex min-h-[44px] items-center gap-1.5 px-3.5 rounded-lg border-0 text-2xs font-bold cursor-pointer transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14] ${
+                    className={`inline-flex min-h-[44px] items-center gap-1.5 px-3.5 rounded-lg border-0 text-2xs font-bold cursor-pointer transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
                       killSwitchActive
                         ? 'bg-green-950 text-green-400 hover:bg-green-900 focus-visible:ring-green-500'
                         : 'bg-red-950 text-red-400 hover:bg-red-900 focus-visible:ring-red-500'

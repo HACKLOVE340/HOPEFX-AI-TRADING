@@ -108,7 +108,7 @@ const FeatureFlagsSection: React.FC = () => {
             flex: 1, background: '#0f172a', border: '1px solid #1e293b',
             borderTop: `3px solid ${s.color}`, borderRadius: 10, padding: '14px 16px',
           }}>
-            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
           </div>
         ))}
@@ -128,7 +128,7 @@ const FeatureFlagsSection: React.FC = () => {
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{flag.name}</span>
                 {flag.user_overrides > 0 && (
                   <span style={{
-                    fontSize: 10, fontWeight: 700, color: '#fbbf24',
+                    fontSize: 10, fontWeight: 700, color: 'var(--warn)',
                     background: '#78350f', border: '1px solid #d97706',
                     borderRadius: 4, padding: '1px 6px',
                   }}>
@@ -137,7 +137,7 @@ const FeatureFlagsSection: React.FC = () => {
                 )}
                 {flag.rollout_pct < 100 && flag.enabled && (
                   <span style={{
-                    fontSize: 10, fontWeight: 700, color: '#60a5fa',
+                    fontSize: 10, fontWeight: 700, color: 'var(--link)',
                     background: '#1e3a5f', border: '1px solid #1d4ed8',
                     borderRadius: 4, padding: '1px 6px',
                   }}>
@@ -150,7 +150,7 @@ const FeatureFlagsSection: React.FC = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 16 }}>
               {busy === flag.name && (
-                <div style={{ width: 14, height: 14, border: '2px solid #334155', borderTopColor: '#60a5fa', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
+                <div style={{ width: 14, height: 14, border: '2px solid #334155', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
               )}
               <div
                 role="switch"
@@ -202,8 +202,8 @@ const FeatureFlagsSection: React.FC = () => {
 
         {userOverrides.length > 0 && (
           <div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-              Overrides for user: <span style={{ color: '#60a5fa', fontWeight: 600 }}>{userIdInput}</span>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Overrides for user: <span style={{ color: 'var(--link)', fontWeight: 600 }}>{userIdInput}</span>
             </div>
             {flags.map(flag => {
               const override = userOverrides.find(o => o.flag === flag.name);
@@ -217,7 +217,7 @@ const FeatureFlagsSection: React.FC = () => {
                   <div>
                     <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500 }}>{flag.name}</span>
                     {hasOverride && (
-                      <span style={{ marginLeft: 8, fontSize: 10, color: '#fbbf24', fontWeight: 700 }}>OVERRIDDEN</span>
+                      <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--warn)', fontWeight: 700 }}>OVERRIDDEN</span>
                     )}
                     <div style={{ fontSize: 11, color: '#475569' }}>
                       Global: {flag.enabled ? 'on' : 'off'} → User: {effectiveValue ? 'on' : 'off'}

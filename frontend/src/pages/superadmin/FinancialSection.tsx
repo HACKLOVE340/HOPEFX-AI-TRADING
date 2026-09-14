@@ -68,7 +68,7 @@ const Flash: React.FC<{ msg: string; ok: boolean; onClear: () => void }> = ({ ms
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '11px 16px', borderRadius: 8, marginBottom: 12,
       background: isErr ? '#450a0a' : '#052e16',
-      color: isErr ? '#f87171' : '#4ade80',
+      color: isErr ? 'var(--loss)' : 'var(--gain)',
       fontSize: 13, fontWeight: 600, border: `1px solid ${isErr ? '#dc262633' : '#16a34a33'}`,
     }}>
       <span>{msg}</span>
@@ -80,28 +80,28 @@ const Flash: React.FC<{ msg: string; ok: boolean; onClear: () => void }> = ({ ms
 // ── Chargeback status colours ─────────────────────────────────────────────────
 
 const CB_COLOR: Record<string, string> = {
-  open:              '#fbbf24',
-  won:               '#4ade80',
-  lost:              '#f87171',
-  pending_evidence:  '#60a5fa',
+  open:              'var(--warn)',
+  won:               'var(--gain)',
+  lost:              'var(--loss)',
+  pending_evidence:  'var(--link)',
 };
 
 // ── Tax-report status colours ─────────────────────────────────────────────────
 
 const TAX_COLOR: Record<string, string> = {
-  draft:   '#64748b',
-  filed:   '#60a5fa',
-  paid:    '#4ade80',
-  overdue: '#f87171',
+  draft:   'var(--text-muted)',
+  filed:   'var(--link)',
+  paid:    'var(--gain)',
+  overdue: 'var(--loss)',
 };
 
 // ── Reconciliation status colours ─────────────────────────────────────────────
 
 const RECON_COLOR: Record<string, string> = {
-  matched:     '#4ade80',
-  discrepancy: '#f87171',
-  pending:     '#fbbf24',
-  resolved:    '#94a3b8',
+  matched:     'var(--gain)',
+  discrepancy: 'var(--loss)',
+  pending:     'var(--warn)',
+  resolved:    'var(--text-dim)',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -206,14 +206,14 @@ const ChargebacksPanel: React.FC = () => {
                 <tr key={c.chargeback_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{c.username}</td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: '#fb923c' }}>{fmtMoney2(c.amount, c.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{c.provider}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{c.provider}</td>
                   <td style={{ padding: '10px 12px', color: '#cbd5e1', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: CB_COLOR[c.status] ?? '#94a3b8', background: `${CB_COLOR[c.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: CB_COLOR[c.status] ?? 'var(--text-dim)', background: `${CB_COLOR[c.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {c.status.replace(/_/g, ' ')}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDateShort(c.opened_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(c.opened_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {c.status === 'open' || c.status === 'pending_evidence' ? (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -327,14 +327,14 @@ const TaxReportsPanel: React.FC = () => {
               {reports.map(r => (
                 <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{r.period}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{r.jurisdiction}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.total_revenue, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.taxable_amount, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{Number.isFinite(r.tax_rate_pct) ? r.tax_rate_pct.toFixed(1) : '—'}%</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.status === 'overdue' ? '#f87171' : '#fbbf24' }}>{fmtMoney(r.tax_owed, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: r.status === 'overdue' ? '#f87171' : '#64748b', fontSize: 12 }}>{fmtDateShort(r.due_date)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{r.jurisdiction}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.total_revenue, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.taxable_amount, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{Number.isFinite(r.tax_rate_pct) ? r.tax_rate_pct.toFixed(1) : '—'}%</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.status === 'overdue' ? 'var(--loss)' : 'var(--warn)' }}>{fmtMoney(r.tax_owed, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: r.status === 'overdue' ? 'var(--loss)' : 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(r.due_date)}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: TAX_COLOR[r.status] ?? '#94a3b8', background: `${TAX_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: TAX_COLOR[r.status] ?? 'var(--text-dim)', background: `${TAX_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {r.status}
                     </span>
                   </td>
@@ -469,18 +469,18 @@ const ReconciliationPanel: React.FC = () => {
               {records.map(r => (
                 <tr key={r.recon_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{r.period}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{r.provider}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.expected_amount, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.actual_amount, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.discrepancy === 0 ? '#4ade80' : r.discrepancy > 0 ? '#4ade80' : '#f87171' }}>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{r.provider}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.expected_amount, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.actual_amount, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.discrepancy === 0 ? 'var(--gain)' : r.discrepancy > 0 ? 'var(--gain)' : 'var(--loss)' }}>
                     {r.discrepancy > 0 ? '+' : ''}{fmtMoney(r.discrepancy, r.currency)}
                   </td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: RECON_COLOR[r.status] ?? '#94a3b8', background: `${RECON_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: RECON_COLOR[r.status] ?? 'var(--text-dim)', background: `${RECON_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {r.status}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDateShort(r.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(r.created_at)}</td>
                   <td style={{ padding: '10px 12px', minWidth: 220 }}>
                     {r.status === 'discrepancy' && (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -551,7 +551,7 @@ const AffiliatePanel: React.FC = () => {
       {/* Top affiliates */}
       {stats.top_affiliates && stats.top_affiliates.length > 0 && (
         <>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
             Top Affiliates
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -566,14 +566,14 @@ const AffiliatePanel: React.FC = () => {
               <tbody>
                 {stats.top_affiliates.map((a, idx) => (
                   <tr key={a.affiliate_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? '#fbbf24' : idx === 1 ? '#94a3b8' : '#78350f', fontWeight: 700 }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? 'var(--warn)' : idx === 1 ? 'var(--text-dim)' : '#78350f', fontWeight: 700 }}>
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                     </td>
                     <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{a.username}</td>
-                    <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{a.referrals.toLocaleString()}</td>
-                    <td style={{ padding: '10px 12px', color: '#4ade80', fontWeight: 600 }}>{a.conversions.toLocaleString()}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{a.referrals.toLocaleString()}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--gain)', fontWeight: 600 }}>{a.conversions.toLocaleString()}</td>
                     <td style={{ padding: '10px 12px', fontWeight: 700, color: '#f59e0b' }}>{fmtMoney(a.commission_earned, stats.currency)}</td>
-                    <td style={{ padding: '10px 12px', color: '#fbbf24' }}>{fmtMoney(a.commission_pending, stats.currency)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--warn)' }}>{fmtMoney(a.commission_pending, stats.currency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -687,7 +687,7 @@ const RefundPolicyPanel: React.FC = () => {
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend style={{
           fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
-          color: '#64748b', marginBottom: 10, padding: 0,
+          color: 'var(--text-muted)', marginBottom: 10, padding: 0,
         }}>
           Recovery method
         </legend>
@@ -739,14 +739,14 @@ const RefundPolicyPanel: React.FC = () => {
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4,
                         fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
-                        color: '#60a5fa', background: '#60a5fa1a', border: '1px solid #60a5fa3a',
+                        color: 'var(--link)', background: '#60a5fa1a', border: '1px solid #60a5fa3a',
                         borderRadius: 999, padding: '2px 8px',
                       }}>
                         <Check size={10} aria-hidden="true" /> Current
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 4, lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.6 }}>
                     {opt.description}
                   </div>
                 </div>
@@ -871,7 +871,7 @@ const FinancialSection: React.FC = () => {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 14px', borderRadius: 7, border: 'none',
               background: activeTab === t.id ? '#0f1f35' : 'transparent',
-              color: activeTab === t.id ? '#f1f5f9' : '#64748b',
+              color: activeTab === t.id ? '#f1f5f9' : 'var(--text-muted)',
               fontWeight: activeTab === t.id ? 600 : 400,
               fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
               outline: activeTab === t.id ? '1px solid #1e3a5f' : 'none',
@@ -936,8 +936,8 @@ const FinancialSection: React.FC = () => {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
                       {Object.entries(revenue.plan_breakdown).map(([plan, amount]) => (
                         <div key={plan} style={{ background: '#1e293b', borderRadius: 8, padding: '14px 16px', borderLeft: `3px solid ${PLAN_COLORS[plan as Plan] ?? '#475569'}` }}>
-                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{PLAN_LABELS[plan as Plan] ?? plan}</div>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: PLAN_COLORS[plan as Plan] ?? '#94a3b8' }}>{fmtMoney(amount, revenue.currency)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{PLAN_LABELS[plan as Plan] ?? plan}</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: PLAN_COLORS[plan as Plan] ?? 'var(--text-dim)' }}>{fmtMoney(amount, revenue.currency)}</div>
                         </div>
                       ))}
                     </div>
@@ -960,15 +960,15 @@ const FinancialSection: React.FC = () => {
                       {payments.map(p => (
                         <tr key={p.payment_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                           <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{p.username}</td>
-                          <td style={{ padding: '10px 12px', fontWeight: 700, color: '#4ade80' }}>{fmtMoney(p.amount, p.currency)}</td>
+                          <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--gain)' }}>{fmtMoney(p.amount, p.currency)}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[p.plan as Plan] ?? '#94a3b8' }}>{PLAN_LABELS[p.plan as Plan] ?? p.plan}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[p.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[p.plan as Plan] ?? p.plan}</span>
                           </td>
-                          <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{p.provider}</td>
+                          <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{p.provider}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: p.status === 'completed' ? '#4ade80' : p.status === 'refunded' ? '#f87171' : '#fbbf24' }}>{p.status}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: p.status === 'completed' ? 'var(--gain)' : p.status === 'refunded' ? 'var(--loss)' : 'var(--warn)' }}>{p.status}</span>
                           </td>
-                          <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(p.created_at)}</td>
+                          <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(p.created_at)}</td>
                           <td style={{ padding: '10px 12px' }}>
                             {p.status === 'completed' && (
                               <>

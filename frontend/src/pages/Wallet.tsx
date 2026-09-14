@@ -71,11 +71,11 @@ const TYPE_ICON: Record<string, string> = {
   deposit: '↓', withdrawal: '↑', subscription: '🔄', copy_fee: '📊', refund: '↩',
 };
 const TYPE_COLOR: Record<string, string> = {
-  deposit: '#4ade80', withdrawal: '#f87171', subscription: '#94a3b8',
-  copy_fee: '#fbbf24', refund: '#60a5fa',
+  deposit: 'var(--gain)', withdrawal: 'var(--loss)', subscription: 'var(--text-dim)',
+  copy_fee: 'var(--warn)', refund: 'var(--link)',
 };
 const STATUS_COLOR: Record<string, string> = {
-  completed: '#4ade80', pending: '#fbbf24', failed: '#f87171',
+  completed: 'var(--gain)', pending: 'var(--warn)', failed: 'var(--loss)',
 };
 
 type WalletTab = 'overview' | 'transactions' | 'subscriptions' | 'payment-methods';
@@ -462,7 +462,7 @@ const Wallet: React.FC = () => {
               className="flex items-center gap-3 sm:gap-4 bg-terminal-surface border border-terminal-border rounded-xl px-3 sm:px-4 py-3 mb-2 hover:border-slate-600 transition-colors">
               {/* Icon */}
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
-                style={{ background: `${TYPE_COLOR[tx.type] ?? '#94a3b8'}22`, color: TYPE_COLOR[tx.type] ?? '#94a3b8' }}>
+                style={{ background: `${TYPE_COLOR[tx.type] ?? 'var(--text-dim)'}22`, color: TYPE_COLOR[tx.type] ?? 'var(--text-dim)' }}>
                 {TYPE_ICON[tx.type] ?? '•'}
               </div>
               {/* Info */}
@@ -480,7 +480,7 @@ const Wallet: React.FC = () => {
                   {fmtPnl(tx.amount)}
                 </div>
                 <div className="text-2xs font-semibold capitalize mt-0.5"
-                  style={{ color: STATUS_COLOR[tx.status] ?? '#64748b' }}>
+                  style={{ color: STATUS_COLOR[tx.status] ?? 'var(--text-muted)' }}>
                   {tx.status}
                 </div>
               </div>

@@ -50,7 +50,7 @@ interface GlobalAttackMapProps {
 const INTENT_COLOUR: Record<string, string> = {
   probe: '#facc15',       // yellow
   bruteforce: '#f97316',  // orange
-  unknown: '#94a3b8',     // slate
+  unknown: 'var(--text-dim)',     // slate
   exfil: '#ef4444',       // red
   ddos: '#dc2626',        // crimson
 };
@@ -202,7 +202,7 @@ export const GlobalAttackMap: React.FC<GlobalAttackMapProps> = ({
 
         {loading && (
           <div style={overlayStyle}>
-            <span style={{ color: '#94a3b8', fontSize: 13 }}>Loading attack data…</span>
+            <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>Loading attack data…</span>
           </div>
         )}
       </div>
@@ -296,7 +296,7 @@ const legendItemStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 5,
-  color: 'var(--text-muted, #94a3b8)',
+  color: 'var(--text-muted, var(--text-dim))',
   fontSize: 11,
   textTransform: 'capitalize',
 };

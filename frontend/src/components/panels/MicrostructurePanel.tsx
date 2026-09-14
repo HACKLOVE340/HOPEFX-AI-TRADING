@@ -53,8 +53,8 @@ function PressureGauge({ buy, sell }: { buy: number; sell: number }) {
         />
       </svg>
       <div className="flex items-center gap-3 text-[10px] font-mono">
-        <span className="text-[#00e676]">B {(buy * 100).toFixed(0)}%</span>
-        <span className="text-[#ff1744]">S {(sell * 100).toFixed(0)}%</span>
+        <span className="text-[var(--bull)]">B {(buy * 100).toFixed(0)}%</span>
+        <span className="text-[var(--bear)]">S {(sell * 100).toFixed(0)}%</span>
       </div>
     </div>
   );
@@ -76,14 +76,14 @@ function MicroRow({
   barColor?: string;
 }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d3d] last:border-0">
+    <div className="flex items-center justify-between py-1.5 border-b border-[var(--border)] last:border-0">
       <span className="text-[10px] text-slate-500 uppercase tracking-wider w-28 shrink-0">{label}</span>
       <div className="flex items-center gap-2 flex-1 justify-end">
         {bar != null && (
-          <div className="w-16 h-1 bg-[#1e2d3d] rounded-full overflow-hidden">
+          <div className="w-16 h-1 bg-[var(--border)] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(Math.abs(bar) * 100, 100)}%`, backgroundColor: barColor ?? '#00d4ff' }}
+              style={{ width: `${Math.min(Math.abs(bar) * 100, 100)}%`, backgroundColor: barColor ?? 'var(--accent)' }}
             />
           </div>
         )}
@@ -198,7 +198,7 @@ export function MicrostructurePanel() {
       <div className="flex flex-col h-full overflow-y-auto scrollbar-terminal">
 
         {/* Pressure gauges + spread */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e2d3d]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
           <PressureGauge buy={micro.buy_pressure} sell={micro.sell_pressure} />
 
           <div className="flex flex-col gap-2 flex-1 ml-4">
@@ -218,7 +218,7 @@ export function MicrostructurePanel() {
               <span className="text-[9px] text-slate-600 uppercase tracking-wider">VWAP Dev</span>
               <span
                 className="font-mono tabular-nums text-xs"
-                style={{ color: vwapDev >= 0 ? '#00e676' : '#ff1744' }}
+                style={{ color: vwapDev >= 0 ? 'var(--bull)' : 'var(--bear)' }}
               >
                 {vwapDev >= 0 ? '+' : ''}{vwapDev.toFixed(3)}%
               </span>
@@ -233,13 +233,13 @@ export function MicrostructurePanel() {
         </div>
 
         {/* Cumulative delta chart */}
-        <div className="px-4 pt-2 pb-1 border-b border-[#1e2d3d]">
+        <div className="px-4 pt-2 pb-1 border-b border-[var(--border)]">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[9px] text-slate-600 uppercase tracking-wider">Cumulative Delta</span>
             <span
               className={cn(
                 'font-mono tabular-nums text-xs font-semibold',
-                cumDelta >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
+                cumDelta >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
               )}
             >
               {cumDelta >= 0 ? '+' : ''}{cumDelta.toFixed(0)}

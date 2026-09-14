@@ -38,7 +38,7 @@ interface Trader {
 // Rank badges. Emoji medals render differently on every OS and cannot inherit
 // the colour map below; a single Lucide medal tinted per rank does (F170).
 const MEDAL_LABEL: Record<number, string> = { 1: 'First place', 2: 'Second place', 3: 'Third place' };
-const MEDAL_COLORS: Record<number, string> = { 1: '#eab308', 2: '#94a3b8', 3: '#b45309' };
+const MEDAL_COLORS: Record<number, string> = { 1: '#eab308', 2: 'var(--text-dim)', 3: '#b45309' };
 
 // ── Podium card ───────────────────────────────────────────────────────────────
 

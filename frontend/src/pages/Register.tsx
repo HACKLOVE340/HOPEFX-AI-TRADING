@@ -417,7 +417,7 @@ const Register: React.FC = () => {
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-                  padding: '10px 14px', color: '#fbbf24', fontSize: 13, marginBottom: 16,
+                  padding: '10px 14px', color: 'var(--warn)', fontSize: 13, marginBottom: 16,
                 }}
               >
                 <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -448,7 +448,7 @@ const Register: React.FC = () => {
 
         <div style={s.footer}>
           Already have an account?{' '}
-          <Link to="/login" style={{ ...s.link, color: '#60a5fa' }}>Sign in →</Link>
+          <Link to="/login" style={{ ...s.link, color: 'var(--link)' }}>Sign in →</Link>
         </div>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -480,8 +480,8 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 16px' },
+  logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
+  tagline: { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 16px' },
   planBadge: {
     fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
     borderRadius: 20, padding: '4px 14px',
@@ -490,13 +490,13 @@ const s: Record<string, React.CSSProperties> = {
   } as React.CSSProperties,
   form:      { display: 'flex', flexDirection: 'column', gap: 14 },
   field:     { display: 'flex', flexDirection: 'column' },
-  label:     { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
-  fieldHint: { fontSize: 11, color: '#64748b', marginTop: 4 },
+  label:     { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  fieldHint: { fontSize: 11, color: 'var(--text-muted)', marginTop: 4 },
   input: {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
     padding: '12px 14px',
     fontSize: 16, /* prevents iOS zoom on focus */
-    color: '#f8fafc', outline: 'none',
+    color: 'var(--text-strong)', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
     WebkitAppearance: 'none',
   },
@@ -510,7 +510,7 @@ const s: Record<string, React.CSSProperties> = {
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
-    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', lineHeight: 1.5,
+    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--loss)', lineHeight: 1.5,
   },
   successBox: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -532,8 +532,8 @@ const s: Record<string, React.CSSProperties> = {
     touchAction: 'manipulation',
   },
   terms:  { fontSize: 11, color: '#475569', textAlign: 'center', lineHeight: 1.6, margin: 0 },
-  footer: { textAlign: 'center', marginTop: 20, fontSize: 13, color: '#64748b' },
-  link:   { color: '#64748b', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  footer: { textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--text-muted)' },
+  link:   { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 
 export default Register;

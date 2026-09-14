@@ -15,9 +15,9 @@ const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const SCOPE_COLORS: Record<string, string> = {
-  global:   '#a78bfa',
-  per_user: '#60a5fa',
-  per_ip:   '#fbbf24',
+  global:   'var(--ai-model)',
+  per_user: 'var(--link)',
+  per_ip:   'var(--warn)',
 };
 
 interface Violation {
@@ -184,7 +184,7 @@ const RateLimitingSection: React.FC = () => {
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? '#1e293b' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
-            borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
+            borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
             padding: '7px 16px', fontSize: 13, cursor: 'pointer',
           }}>
             {t === 'rules' ? `Rules (${rules.length})` : `Violations (${violations.length})`}
@@ -223,7 +223,7 @@ const RateLimitingSection: React.FC = () => {
               <thead>
                 <tr>
                   {['Endpoint', 'Limit / Window', 'Scope', 'Hits', 'Enabled', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -236,7 +236,7 @@ const RateLimitingSection: React.FC = () => {
                   const draft = editing[rule.rule_id];
                   return (
                     <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: '#60a5fa' }}>{rule.endpoint}</td>
+                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--link)' }}>{rule.endpoint}</td>
                       <td style={{ padding: '10px 16px' }}>
                         {draft ? (
                           <div style={{ display: 'flex', gap: 6 }}>
@@ -244,19 +244,19 @@ const RateLimitingSection: React.FC = () => {
                               type="number"
                               value={draft.limit}
                               onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, limit: e.target.value } }))}
-                              style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#f8fafc', padding: '3px 6px', fontSize: 12 }}
+                              style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}
                             />
                             <span style={{ color: '#475569', alignSelf: 'center' }}>/</span>
                             <input
                               type="number"
                               value={draft.window_seconds}
                               onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, window_seconds: e.target.value } }))}
-                              style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#f8fafc', padding: '3px 6px', fontSize: 12 }}
+                              style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}
                             />
                             <span style={{ color: '#475569', alignSelf: 'center', fontSize: 11 }}>s</span>
                           </div>
                         ) : (
-                          <span style={{ color: '#f8fafc' }}>
+                          <span style={{ color: 'var(--text-strong)' }}>
                             {rule.limit} / {rule.window_seconds}s
                           </span>
                         )}
@@ -264,14 +264,14 @@ const RateLimitingSection: React.FC = () => {
                       <td style={{ padding: '10px 16px' }}>
                         <span style={{
                           fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
-                          background: `${SCOPE_COLORS[rule.scope] ?? '#94a3b8'}22`,
-                          color: SCOPE_COLORS[rule.scope] ?? '#94a3b8',
-                          border: `1px solid ${SCOPE_COLORS[rule.scope] ?? '#94a3b8'}44`,
+                          background: `${SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)'}22`,
+                          color: SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)',
+                          border: `1px solid ${SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)'}44`,
                         }}>
                           {rule.scope.replace('_', ' ').toUpperCase()}
                         </span>
                       </td>
-                      <td style={{ padding: '10px 16px', color: rule.current_hits > rule.limit * 0.8 ? '#f87171' : '#94a3b8', fontSize: 12 }}>
+                      <td style={{ padding: '10px 16px', color: rule.current_hits > rule.limit * 0.8 ? 'var(--loss)' : 'var(--text-dim)', fontSize: 12 }}>
                         {rule.current_hits.toLocaleString()}
                       </td>
                       <td style={{ padding: '10px 16px' }}>
@@ -310,17 +310,17 @@ const RateLimitingSection: React.FC = () => {
               <thead>
                 <tr>
                   {['Endpoint', 'IP / User', 'Count', 'Time'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {violations.slice(0, 100).map((v, i) => (
                   <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: '#f87171' }}>{v.endpoint}</td>
-                    <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{v.ip ?? v.user_id ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: '#fbbf24', fontWeight: 700 }}>{v.count}</td>
-                    <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(v.timestamp)}</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--loss)' }}>{v.endpoint}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{v.ip ?? v.user_id ?? '—'}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--warn)', fontWeight: 700 }}>{v.count}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(v.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -297,7 +297,7 @@ export const CommandPalette: React.FC = () => {
           title="Open command palette (Cmd+K)"
           style={{
             position: 'fixed', bottom: 24, left: 24, zIndex: 8000,
-            background: '#0d1421', border: '1px solid #1e293b',
+            background: 'var(--surface)', border: '1px solid #1e293b',
             borderRadius: 8, padding: '6px 10px',
             display: 'flex', alignItems: 'center', gap: 6,
             cursor: 'pointer', fontSize: 11, color: '#475569',
@@ -334,7 +334,7 @@ export const CommandPalette: React.FC = () => {
         style={{
           position: 'fixed', top: '18%', left: '50%', transform: 'translateX(-50%)',
           zIndex: 9001, width: '90%', maxWidth: 580,
-          background: '#0d1421', border: '1px solid #1e293b',
+          background: 'var(--surface)', border: '1px solid #1e293b',
           borderRadius: 14, boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
           overflow: 'hidden',
           animation: 'cmdSlideIn 0.18s cubic-bezier(0.34,1.56,0.64,1)',
@@ -368,7 +368,7 @@ export const CommandPalette: React.FC = () => {
         <div style={{ maxHeight: 380, overflowY: 'auto', padding: '8px 0' }}>
           {filtered.length === 0 ? (
             <div style={{ padding: '24px 16px', textAlign: 'center', color: '#475569', fontSize: 13 }}>
-              No results for <strong style={{ color: '#64748b' }}>"{query}"</strong>
+              No results for <strong style={{ color: 'var(--text-muted)' }}>"{query}"</strong>
             </div>
           ) : (
             Object.entries(groups).map(([cat, items]) => {

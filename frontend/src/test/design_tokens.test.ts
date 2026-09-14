@@ -79,6 +79,9 @@ function isColour(value: string): boolean {
 const base = declared(block(':root {'));
 const light = declared(block(':root[data-theme="light"]'));
 const ai = declared(block('[data-surface="ai"]'));
+const ultra = declared(block('[data-density="ultra"]'));
+const comfortable = declared(block('[data-density="comfortable"]'));
+const promax = declared(block('[data-density="promax"]'));
 
 describe('design tokens — index.css', () => {
   it('declares a base palette worth having', () => {
@@ -137,6 +140,40 @@ describe('design tokens — index.css', () => {
     // thing that must never be ambiguous.
     for (const token of ['--bull', '--bear', '--gain', '--loss']) {
       expect(ai.has(token), `${token} must not be redefined for the AI surface`).toBe(false);
+    }
+  });
+
+  it('gives each density tier the same tokens, only retuned', () => {
+    // A tier that sets a token the others do not is a page that changes shape
+    // depending on which ancestor won, which is the bug this mechanism exists
+    // to avoid. Promax restates the default deliberately, so it is the set.
+    for (const [name, tier] of [['ultra', ultra], ['comfortable', comfortable]] as const) {
+      const unknown = [...tier.keys()].filter((k) => !base.has(k));
+      expect(unknown, `[data-density="${name}"] invents ${unknown.join(', ')}`).toEqual([]);
+      const missing = [...promax.keys()].filter((k) => !tier.has(k));
+      expect(missing, `[data-density="${name}"] is missing ${missing.join(', ')}`).toEqual([]);
+    }
+  });
+
+  it('orders the tiers, and keeps the headline figure from collapsing', () => {
+    const px = (m: Map<string, string>, k: string) => parseFloat(m.get(k)!);
+    for (const step of ['--fs-body', '--pad-card', '--pad-row', '--gap-grid']) {
+      expect(px(ultra, step), `${step} must be tightest in ultra`).toBeLessThan(px(promax, step));
+      expect(px(comfortable, step), `${step} must be loosest in comfortable`).toBeGreaterThan(px(promax, step));
+    }
+    // Padding buys the rows; the hero figure is what the screen is about and
+    // must not pay for them. It may shrink, but nothing like as much.
+    const padShrink = 1 - px(ultra, '--pad-row') / px(promax, '--pad-row');
+    const heroShrink = 1 - px(ultra, '--fs-hero') / px(promax, '--fs-hero');
+    expect(heroShrink).toBeLessThan(padShrink / 3);
+  });
+
+  it('keeps density and palette independent', () => {
+    // A density tier that set a colour would mean "denser" also meant
+    // "different colour", and the two would stop composing.
+    for (const [name, tier] of [['ultra', ultra], ['comfortable', comfortable], ['promax', promax]] as const) {
+      const colours = [...tier].filter(([, v]) => isColour(v)).map(([k]) => k);
+      expect(colours, `[data-density="${name}"] sets colours: ${colours.join(', ')}`).toEqual([]);
     }
   });
 

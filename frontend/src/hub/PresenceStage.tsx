@@ -52,7 +52,7 @@ const C = {
   dim: '#a7b5c9',
   quiet: '#70809a',
   core: '#73a7ff',
-  bad: '#f36d78',
+  bad: 'var(--failed)',
 } as const;
 
 const label: React.CSSProperties = {

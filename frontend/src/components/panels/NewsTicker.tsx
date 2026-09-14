@@ -64,9 +64,9 @@ export function NewsTicker() {
         alignItems: 'center',
         gap: 5,
         flexShrink: 0,
-        background: '#0d1421',
+        background: 'var(--surface)',
       }}>
-        <span style={{ fontSize: 8, color: '#ff1744', fontWeight: 900, letterSpacing: 2 }}>● LIVE</span>
+        <span style={{ fontSize: 8, color: 'var(--bear)', fontWeight: 900, letterSpacing: 2 }}>● LIVE</span>
         <span style={{ fontSize: 9, color: '#475569', fontWeight: 700, letterSpacing: 1.5 }}>NEWS</span>
       </div>
 
@@ -94,7 +94,7 @@ export function NewsTicker() {
               return (
                 <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 24px' }}>
                   <span style={{ fontSize: 10, color, fontWeight: 700 }}>{sentimentLabel(item.sentiment)}</span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{text}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{text}</span>
                   {item.source && (
                     <span style={{ fontSize: 9, color: '#334155' }}>— {item.source}</span>
                   )}
@@ -114,7 +114,7 @@ export function NewsTicker() {
             return (
               <div key={i} style={{
                 display: 'flex', alignItems: 'flex-start', gap: 8,
-                padding: '5px 12px', borderBottom: '1px solid #0d1421',
+                padding: '5px 12px', borderBottom: '1px solid var(--surface)',
               }}>
                 <span style={{ fontSize: 11, color, flexShrink: 0, marginTop: 1 }}>{sentimentLabel(item.sentiment)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>

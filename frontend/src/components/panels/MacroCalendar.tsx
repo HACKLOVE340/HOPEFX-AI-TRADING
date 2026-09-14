@@ -18,7 +18,7 @@ function ImpactBar({ score, impact }: { score: number; impact: string }) {
   const color = impactColor(impact);
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-12 h-1 bg-[#1e2d3d] rounded-full overflow-hidden">
+      <div className="w-12 h-1 bg-[var(--border)] rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-300"
           style={{ width: `${score * 100}%`, backgroundColor: color }}
@@ -52,7 +52,7 @@ function EventRow({ event, onPlanTrade }: { event: MacroEvent; onPlanTrade?: () 
   return (
     <div
       className={cn(
-        'flex flex-col gap-1.5 py-2.5 px-4 border-b border-[#1e2d3d] last:border-0 transition-colors',
+        'flex flex-col gap-1.5 py-2.5 px-4 border-b border-[var(--border)] last:border-0 transition-colors',
         isPast      && 'opacity-50',
         isImminent  && 'bg-[#ffb800]/5 border-l-2 border-l-[#ffb800]',
       )}
@@ -159,7 +159,7 @@ export function MacroCalendar() {
 
         {/* Macro features strip */}
         {macro?.macro_features && Object.keys(macro.macro_features).length > 0 && (
-          <div className="flex items-center gap-4 px-4 py-2 border-b border-[#1e2d3d] overflow-x-auto scrollbar-terminal">
+          <div className="flex items-center gap-4 px-4 py-2 border-b border-[var(--border)] overflow-x-auto scrollbar-terminal">
             {Object.entries(macro.macro_features)
               .filter(([, v]) => v != null)
               .slice(0, 6)

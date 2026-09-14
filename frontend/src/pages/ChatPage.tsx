@@ -165,7 +165,7 @@ const ChatPage: React.FC = () => {
           <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Chat</h2>
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {loadingRooms && <div style={{ color: '#64748b', fontSize: 13, padding: 16 }}>Loading rooms…</div>}
+          {loadingRooms && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 16 }}>Loading rooms…</div>}
           {rooms.map(room => (
             <div
               key={room.id}
@@ -189,7 +189,7 @@ const ChatPage: React.FC = () => {
                 )}
               </div>
               {room.last_message && (
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {room.last_message}
                 </div>
               )}
@@ -207,16 +207,16 @@ const ChatPage: React.FC = () => {
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>{activeRoom.name}</div>
               {activeRoom.description && (
-                <div style={{ fontSize: 12, color: '#64748b' }}>{activeRoom.description}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{activeRoom.description}</div>
               )}
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
-                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
                 ⚡ Trade
               </button>
               <button onClick={() => navigate('/signals')}
-                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
                 📡 Signals
               </button>
             </div>
@@ -225,7 +225,7 @@ const ChatPage: React.FC = () => {
 
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {loadingMsgs && <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center' }}>Loading messages…</div>}
+          {loadingMsgs && <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>Loading messages…</div>}
           {!loadingMsgs && messages.length === 0 && (
             <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
               No messages yet. Be the first to say something!
@@ -234,12 +234,12 @@ const ChatPage: React.FC = () => {
           {messages.map(msg => (
             <div key={msg.id} style={{ display: 'flex', flexDirection: isOwn(msg) ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-end' }}>
               {/* Avatar */}
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: isOwn(msg) ? '#1e3a5f' : '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: isOwn(msg) ? '#60a5fa' : '#94a3b8', flexShrink: 0 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: isOwn(msg) ? '#1e3a5f' : '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: isOwn(msg) ? 'var(--link)' : 'var(--text-dim)', flexShrink: 0 }}>
                 {msg.username.charAt(0).toUpperCase()}
               </div>
               <div style={{ maxWidth: '70%' }}>
                 {!isOwn(msg) && (
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3 }}>{msg.username}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>{msg.username}</div>
                 )}
                 <div style={{
                   background: isOwn(msg) ? '#1e3a5f' : '#1e293b',

@@ -29,6 +29,7 @@ import {
   Coins, Database, KeyRound, Layers3, RefreshCw, ScrollText, ShieldCheck, XCircle,
 } from 'lucide-react';
 import { PageHeader, EmptyState, ErrorBanner } from '../components';
+import { InstrumentSurface } from '../components/system/InstrumentSurface';
 import { GenerationWorkbench } from '../components/ai/GenerationWorkbench';
 import { PresencePanel } from '../components/ai/PresencePanel';
 import { hubEnabled } from '../hub/flag';
@@ -37,34 +38,42 @@ import { aiCoreApi } from '../hooks/useApi';
 
 // ── shared visual language (matches the intelligence workspaces) ──────────────
 
+// Seven literals became seven tokens, so this page follows the instrument
+// palette rather than restating a private copy of it. Health is deliberately
+// --ok / --degraded / --failed and not the money ramp: a control plane going
+// red must not read as a price falling (same argument as the --q-* set).
 const COLOR = {
-  ok: '#42d392',
-  warn: '#f5b84b',
-  bad: '#f36d78',
-  info: '#73a7ff',
-  muted: '#70809a',
-  text: '#e7edf7',
-  dim: '#a7b5c9',
+  ok: 'var(--ok)',
+  warn: 'var(--degraded)',
+  bad: 'var(--failed)',
+  info: 'var(--accent)',
+  muted: 'var(--text-faint)',
+  text: 'var(--text-strong)',
+  dim: 'var(--text-dim)',
 } as const;
 
 const panel: React.CSSProperties = {
-  background: 'linear-gradient(145deg, rgba(16,25,42,.96), rgba(10,16,28,.96))',
-  border: '1px solid #20304a',
-  borderRadius: 12,
-  padding: 16,
+  // Translucent over the plotting field rather than opaque on top of it: the
+  // grid should read as the surface these panels are resting on.
+  background: 'color-mix(in srgb, var(--surface) 88%, transparent)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--r-md)',
+  padding: 'var(--pad-card)',
+  boxShadow: 'var(--e-1)',
+  backdropFilter: 'blur(6px)',
 };
 
 const label: React.CSSProperties = {
-  color: COLOR.muted, fontSize: 10, fontWeight: 800,
-  letterSpacing: '.09em', textTransform: 'uppercase',
+  color: COLOR.muted, fontSize: 'var(--fs-micro)', fontWeight: 700,
+  letterSpacing: 'var(--tracking-label)', textTransform: 'uppercase',
 };
 
 /** Wide content scrolls inside its own box; the page body never scrolls sideways. */
 const scrollBox: React.CSSProperties = { overflowX: 'auto', WebkitOverflowScrolling: 'touch' };
 
 const cell: React.CSSProperties = {
-  padding: '9px 10px', borderTop: '1px solid #1e2d44',
-  fontSize: 12, color: COLOR.dim, textAlign: 'left', whiteSpace: 'nowrap',
+  padding: 'var(--pad-row) var(--sp-3)', borderTop: '1px solid var(--hairline)',
+  fontSize: 'var(--fs-body)', color: COLOR.dim, textAlign: 'left', whiteSpace: 'nowrap',
 };
 
 const headCell: React.CSSProperties = { ...cell, ...label, borderTop: 'none', paddingBottom: 6 };
@@ -258,6 +267,7 @@ export const AICore: React.FC = () => {
   const s = summary.data;
 
   return (
+    <InstrumentSurface>
     <div style={{ padding: '18px 20px 40px', maxWidth: 1360, margin: '0 auto' }}>
       <PageHeader
         title="AI Core"
@@ -281,9 +291,9 @@ export const AICore: React.FC = () => {
             onClick={() => setTab(key)}
             style={{
               ...button,
-              background: tab === key ? '#1d3358' : '#121c2e',
-              borderColor: tab === key ? '#3a6099' : '#20304a',
-              color: tab === key ? '#dbe9ff' : COLOR.dim,
+              background: tab === key ? 'var(--accent-soft)' : 'var(--raised)',
+              borderColor: tab === key ? 'var(--accent)' : 'var(--border)',
+              color: tab === key ? 'var(--accent)' : COLOR.dim,
             }}
           >
             {text}
@@ -668,6 +678,7 @@ export const AICore: React.FC = () => {
         </>
       )}
     </div>
+    </InstrumentSurface>
   );
 };
 

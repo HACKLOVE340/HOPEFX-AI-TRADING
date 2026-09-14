@@ -140,7 +140,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         {plan.name}
       </div>
       {plan.tagline && (
-        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.4 }}>
           {plan.tagline}
         </div>
       )}
@@ -148,7 +148,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         <span style={{ fontSize: 36, fontWeight: 800, color: '#f1f5f9' }}>
           {fmtPrice(plan, annual)}
         </span>
-        {!isFree && <span style={{ fontSize: 13, color: '#64748b', marginLeft: 4 }}>/mo</span>}
+        {!isFree && <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 4 }}>/mo</span>}
       </div>
       {!isFree && annual && plan.price_usd_annual > 0 && (
         <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 4 }}>
@@ -161,7 +161,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
           {plan.annual_savings_pct != null && ` — save ${plan.annual_savings_pct}%`}
         </div>
       )}
-      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 20 }}>
         {fmtPctRaw((plan.commission_rate ?? 0) * 100, 1)} commission per trade
       </div>
       <button onClick={onSelect} style={{
@@ -181,8 +181,8 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
           ['Brokers',           fmtLimit(plan.limits?.max_brokers)],
         ] as [string, string][]).map(([label, val]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: '#64748b' }}>{label}</span>
-            <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{val}</span>
+            <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+            <span style={{ color: 'var(--text)', fontWeight: 600 }}>{val}</span>
           </div>
         ))}
       </div>
@@ -230,7 +230,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
         <thead>
           <tr>
             <th style={{ width: '20%', textAlign: 'left', padding: '12px 16px',
-              color: '#64748b', fontWeight: 600, borderBottom: '1px solid #334155' }}>
+              color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #334155' }}>
               Feature
             </th>
             {plans.map(p => {
@@ -255,12 +255,12 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
           </tr>
           {LIMIT_ROWS.map(({ label, key }, ri) => (
             <tr key={key} style={{ background: ri % 2 === 0 ? '#1e293b' : '#0f172a' }}>
-              <td style={{ padding: '10px 16px', color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>
+              <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid #1e293b' }}>
                 {label}
               </td>
               {plans.map(p => (
                 <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
-                  color: '#e2e8f0', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>
+                  color: 'var(--text)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>
                   {fmtLimit(p.limits?.[key])}
                 </td>
               ))}
@@ -275,7 +275,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
           </tr>
           {ALL_FEATURES.map((f, fi) => (
             <tr key={f} style={{ background: fi % 2 === 0 ? '#1e293b' : '#0f172a' }}>
-              <td style={{ padding: '10px 16px', color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>
+              <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid #1e293b' }}>
                 {FEATURE_LABELS[f] ?? f}
               </td>
               {plans.map(p => {
@@ -299,12 +299,12 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
             </td>
           </tr>
           <tr style={{ background: '#1e293b' }}>
-            <td style={{ padding: '10px 16px', color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>
+            <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid #1e293b' }}>
               Commission rate
             </td>
             {plans.map(p => (
               <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
-                color: '#e2e8f0', fontWeight: 700, borderBottom: '1px solid #1e293b' }}>
+                color: 'var(--text)', fontWeight: 700, borderBottom: '1px solid #1e293b' }}>
                 {fmtPctRaw((p.commission_rate ?? 0) * 100, 1)}
               </td>
             ))}
@@ -339,12 +339,12 @@ function FAQItem({ q, a }: { q: string; a: string }) {
         padding: '16px 0', cursor: 'pointer', display: 'flex',
         justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{q}</span>
-        <span style={{ color: '#64748b', fontSize: 18,
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{q}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 18,
           transform: open ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s' }}>+</span>
       </button>
       {open && (
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: '#94a3b8', lineHeight: 1.6 }}>{a}</p>
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>{a}</p>
       )}
     </div>
   );
@@ -401,14 +401,14 @@ const PricingPage: React.FC = () => {
         actions={
           isAuth ? (
             <Link to="/settings" style={{
-              fontSize: 13, color: '#64748b', textDecoration: 'none',
+              fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
               padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
             }}>
               Account Settings
             </Link>
           ) : (
             <Link to="/login" style={{
-              fontSize: 13, color: '#94a3b8', textDecoration: 'none',
+              fontSize: 13, color: 'var(--text-dim)', textDecoration: 'none',
               padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
             }}>
               Sign in
@@ -422,7 +422,7 @@ const PricingPage: React.FC = () => {
         <h1 style={{ margin: '0 0 12px', fontSize: 36, fontWeight: 800, color: '#f1f5f9' }}>
           Simple, transparent pricing
         </h1>
-        <p style={{ margin: '0 0 28px', fontSize: 16, color: '#94a3b8',
+        <p style={{ margin: '0 0 28px', fontSize: 16, color: 'var(--text-dim)',
           maxWidth: 520, marginInline: 'auto' }}>
           From paper trading to institutional-grade execution.
         </p>
@@ -431,12 +431,12 @@ const PricingPage: React.FC = () => {
           <button onClick={() => setAnnual(false)} style={{
             padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 13,
             fontWeight: 600, background: !annual ? '#334155' : 'transparent',
-            color: !annual ? '#e2e8f0' : '#64748b',
+            color: !annual ? 'var(--text)' : 'var(--text-muted)',
           }}>Monthly</button>
           <button onClick={() => setAnnual(true)} style={{
             padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 13,
             fontWeight: 600, background: annual ? '#334155' : 'transparent',
-            color: annual ? '#e2e8f0' : '#64748b',
+            color: annual ? 'var(--text)' : 'var(--text-muted)',
           }}>
             Annual
             <span style={{ marginLeft: 6, fontSize: 10, color: '#22c55e', fontWeight: 700 }}>−17%</span>
@@ -446,11 +446,11 @@ const PricingPage: React.FC = () => {
 
       {/* Plan grid */}
       {isLoading ? (
-        <div style={{ textAlign: 'center', color: '#64748b', padding: 40 }}>Loading plans…</div>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading plans…</div>
       ) : plans.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-          <div style={{ color: '#64748b', fontSize: 15 }}>Plans unavailable — please try again shortly.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 15 }}>Plans unavailable — please try again shortly.</div>
         </div>
       ) : (
         <>
@@ -474,7 +474,7 @@ const PricingPage: React.FC = () => {
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <button onClick={() => setShowTable(t => !t)} style={{
               background: 'none', border: '1px solid #334155', borderRadius: 8,
-              color: '#94a3b8', fontSize: 13, padding: '8px 20px', cursor: 'pointer',
+              color: 'var(--text-dim)', fontSize: 13, padding: '8px 20px', cursor: 'pointer',
             }}>
               {showTable ? 'Hide' : 'Show'} full feature comparison ↕
             </button>
@@ -486,7 +486,7 @@ const PricingPage: React.FC = () => {
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16,
             padding: '32px 28px', marginBottom: 64 }}>
             <h2 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 700,
-              color: '#e2e8f0', textAlign: 'center' }}>
+              color: 'var(--text)', textAlign: 'center' }}>
               Commission rates by plan
             </h2>
             <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden',
@@ -516,7 +516,7 @@ const PricingPage: React.FC = () => {
       {/* FAQ */}
       <div style={{ maxWidth: 720, margin: '0 auto 64px' }}>
         <h2 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 700,
-          color: '#e2e8f0', textAlign: 'center' }}>
+          color: 'var(--text)', textAlign: 'center' }}>
           Frequently asked questions
         </h2>
         {faqItems.map(item => (
@@ -534,7 +534,7 @@ const PricingPage: React.FC = () => {
 
       {/* CTA footer */}
       <div style={{ textAlign: 'center', padding: '40px 0', borderTop: '1px solid #1e293b' }}>
-        <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>
           Questions? Contact us at{' '}
           <a href="mailto:support@hopefx.io" style={{ color: '#8b5cf6', textDecoration: 'none' }}>
             support@hopefx.io
@@ -550,7 +550,7 @@ const PricingPage: React.FC = () => {
             </Link>
           )}
           <Link to={isAuth ? '/dashboard' : '/login'} style={{
-            padding: '12px 32px', background: 'transparent', color: '#94a3b8',
+            padding: '12px 32px', background: 'transparent', color: 'var(--text-dim)',
             border: '1px solid #334155', borderRadius: 8, fontSize: 15,
             fontWeight: 600, textDecoration: 'none', display: 'inline-block',
           }}>

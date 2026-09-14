@@ -129,7 +129,7 @@ const SecuritySection: React.FC = () => {
 
       {/* Password */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Change Password
         </h3>
         <Field label="Current password">
@@ -160,7 +160,7 @@ const SecuritySection: React.FC = () => {
           />
         </Field>
         {pwMsg && (
-          <div style={{ fontSize: 13, color: pwMsg.type === 'ok' ? '#22c55e' : '#f87171', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: pwMsg.type === 'ok' ? '#22c55e' : 'var(--loss)', marginBottom: 12 }}>
             {pwMsg.type === 'ok' ? '✅' : '❌'} {pwMsg.text}
           </div>
         )}
@@ -177,10 +177,10 @@ const SecuritySection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
               Two-Factor Authentication
             </h3>
-            <p style={{ fontSize: 13, color: '#64748b', marginTop: 4, marginBottom: 0 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
               Protect your account with a TOTP authenticator app.
             </p>
           </div>
@@ -221,7 +221,7 @@ const SecuritySection: React.FC = () => {
       {/* Sessions */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
             Active Sessions
           </h3>
           {sessions.length > 1 && (
@@ -244,7 +244,7 @@ const SecuritySection: React.FC = () => {
         )}
 
         {sessionsLoading ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>Loading sessions…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading sessions…</div>
         ) : sessionsErr ? (
           <div
             role="alert"
@@ -262,7 +262,7 @@ const SecuritySection: React.FC = () => {
             </button>
           </div>
         ) : sessions.length === 0 ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>No active sessions found.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No active sessions found.</div>
         ) : (
           sessions.map((session) => (
             <div key={session.session_id} style={{
@@ -271,12 +271,12 @@ const SecuritySection: React.FC = () => {
             }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 500 }}>
+                  <span style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>
                     {session.device_info || 'Unknown device'}
                   </span>
                   {session.current && <StatusBadge status="ok" label="This device" />}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   {session.ip_address} · Last active {new Date(session.last_active).toLocaleDateString()}
                 </div>
               </div>

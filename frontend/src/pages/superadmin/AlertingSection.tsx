@@ -169,11 +169,11 @@ const AlertingSection: React.FC = () => {
           display: 'flex', alignItems: 'center', gap: 12, fontSize: 13,
         }}>
           <span style={{ fontSize: 16 }}>{promStatus.available ? '✅' : '❌'}</span>
-          <span style={{ color: promStatus.available ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+          <span style={{ color: promStatus.available ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
             Prometheus {promStatus.available ? 'connected' : 'offline'}
           </span>
           {promStatus.available && (
-            <span style={{ color: '#64748b' }}>
+            <span style={{ color: 'var(--text-muted)' }}>
               — {promStatus.active_rules} rules · {promStatus.firing_alerts} firing
             </span>
           )}
@@ -185,7 +185,7 @@ const AlertingSection: React.FC = () => {
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? '#1e293b' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
-            borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
+            borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
             padding: '7px 16px', fontSize: 13, cursor: 'pointer',
           }}>
             {t === 'rules' ? `Rules (${rules.length})` : `Fired Alerts (${fired.length})`}
@@ -224,7 +224,7 @@ const AlertingSection: React.FC = () => {
               <thead>
                 <tr>
                   {['Name', 'Condition', 'Severity', 'Channels', 'Last Fired', 'Fires', 'Enabled', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -232,11 +232,11 @@ const AlertingSection: React.FC = () => {
                 {rules.map(rule => (
                   <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{rule.name}</td>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>{rule.condition}</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-dim)' }}>{rule.condition}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={rule.severity} /></td>
-                    <td style={{ padding: '10px 16px', fontSize: 11, color: '#64748b' }}>{rule.channels.join(', ')}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 11, color: '#64748b' }}>{fmtDate(rule.last_fired)}</td>
-                    <td style={{ padding: '10px 16px', color: rule.fire_count > 0 ? '#fbbf24' : '#475569' }}>{rule.fire_count}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{rule.channels.join(', ')}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(rule.last_fired)}</td>
+                    <td style={{ padding: '10px 16px', color: rule.fire_count > 0 ? 'var(--warn)' : '#475569' }}>{rule.fire_count}</td>
                     <td style={{ padding: '10px 16px' }}>
                       <Toggle checked={rule.enabled} onChange={() => toggleRule(rule)} disabled={busy === rule.rule_id} />
                     </td>
@@ -263,7 +263,7 @@ const AlertingSection: React.FC = () => {
               <thead>
                 <tr>
                   {['Rule', 'Severity', 'Message', 'Fired At'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -272,8 +272,8 @@ const AlertingSection: React.FC = () => {
                   <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{a.name}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={a.severity} /></td>
-                    <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{a.message ?? a.value ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(a.fired_at)}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{a.message ?? a.value ?? '—'}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(a.fired_at)}</td>
                   </tr>
                 ))}
               </tbody>

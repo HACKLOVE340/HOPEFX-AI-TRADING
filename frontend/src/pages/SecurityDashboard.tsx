@@ -192,11 +192,11 @@ const SecurityDashboard: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/')}
-              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📊 Dashboard
             </button>
             <button onClick={() => navigate('/audit-log')}
-              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📋 Audit Log
             </button>
           </div>
@@ -221,7 +221,7 @@ const SecurityDashboard: React.FC = () => {
           style={{
             background: lockdown.lockdown_active ? '#14532d' : '#450a0a',
             border: `1px solid ${lockdown.lockdown_active ? '#166534' : '#7f1d1d'}`,
-            borderRadius: 8, color: lockdown.lockdown_active ? '#4ade80' : '#f87171',
+            borderRadius: 8, color: lockdown.lockdown_active ? 'var(--gain)' : 'var(--loss)',
             cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '8px 18px',
             flexShrink: 0,
           }}
@@ -305,7 +305,7 @@ const SecurityDashboard: React.FC = () => {
             <span style={panelCountStyle}>{blockedIPs.length}</span>
           </div>
           {unblockErr && (
-            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 6, color: '#f87171', fontSize: 12, padding: '6px 10px', margin: '0 0 8px' }}>
+            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', fontSize: 12, padding: '6px 10px', margin: '0 0 8px' }}>
               {unblockErr}
             </div>
           )}
@@ -324,7 +324,7 @@ const SecurityDashboard: React.FC = () => {
                     disabled={unblockingIp === ip}
                     style={{
                       background: 'transparent', border: '1px solid #334155',
-                      borderRadius: 5, color: '#94a3b8', cursor: 'pointer',
+                      borderRadius: 5, color: 'var(--text-dim)', cursor: 'pointer',
                       fontSize: 11, padding: '2px 8px',
                     }}
                   >
@@ -351,7 +351,7 @@ const SecurityDashboard: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#ef4444', fontSize: 10 }}>⬤</span>
                     <span style={ipTextStyle}>{(alert.type ?? 'unknown').toUpperCase()}</span>
-                    <span style={{ color: '#94a3b8', fontSize: 11 }}>{alert.ip}</span>
+                    <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>{alert.ip}</span>
                   </div>
                   <span style={timeStyle}>
                     {alert.ts ? new Date(alert.ts).toLocaleTimeString() : '—'}
@@ -371,7 +371,7 @@ const SecurityDashboard: React.FC = () => {
 const INTENT_COLOUR: Record<string, string> = {
   probe: '#facc15',
   bruteforce: '#f97316',
-  unknown: '#94a3b8',
+  unknown: 'var(--text-dim)',
   exfil: '#ef4444',
   ddos: '#dc2626',
 };
@@ -484,14 +484,14 @@ const panelTitleStyle: React.CSSProperties = {
 const panelCountStyle: React.CSSProperties = {
   background: '#334155',
   borderRadius: 10,
-  color: '#94a3b8',
+  color: 'var(--text-dim)',
   fontSize: 11,
   fontWeight: 700,
   padding: '2px 8px',
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--text-muted)',
   fontSize: 12,
   padding: '20px 16px',
   textAlign: 'center',
@@ -530,14 +530,14 @@ const blockedBadgeStyle: React.CSSProperties = {
   background: '#ef444422',
   border: '1px solid #ef4444',
   borderRadius: 10,
-  color: '#f87171',
+  color: 'var(--loss)',
   fontSize: 10,
   fontWeight: 700,
   padding: '2px 7px',
 };
 
 const timeStyle: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--text-muted)',
   fontSize: 11,
   flexShrink: 0,
 };

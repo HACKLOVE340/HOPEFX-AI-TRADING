@@ -436,10 +436,10 @@ const TCADashboard: React.FC = () => {
         subtitle="Signal-price vs fill-price slippage across all brokers and sessions"
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {loading && <span style={{ color: '#64748b', fontSize: 11 }}>Updating…</span>}
+            {loading && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Updating…</span>}
             <button
               onClick={() => navigate('/pnl')}
-              style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
+              style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: 'var(--ai-model)' }}
             >
               💹 View P&L Impact
             </button>
@@ -452,7 +452,7 @@ const TCADashboard: React.FC = () => {
             )}
             {isAdmin && flushConfirm && (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <span style={{ color: '#f87171', fontSize: 11 }}>Confirm flush?</span>
+                <span style={{ color: 'var(--loss)', fontSize: 11 }}>Confirm flush?</span>
                 <button
                   style={{ ...pg.btnDanger, opacity: flushMutation.isPending ? 0.6 : 1 }}
                   onClick={() => flushMutation.mutate()}
@@ -524,7 +524,7 @@ const TCADashboard: React.FC = () => {
           <div style={pg.panel}>
             <div style={pg.panelHdr}>
               <span style={pg.panelTitle}>Latency Trend (last {trendPoints.length} fills)</span>
-              <span style={{ ...pg.badge, color: meanLatency > 100 ? '#f97316' : '#4ade80' }}>
+              <span style={{ ...pg.badge, color: meanLatency > 100 ? '#f97316' : 'var(--gain)' }}>
                 avg {meanLatency.toFixed(1)} ms
               </span>
             </div>
@@ -568,7 +568,7 @@ const TCADashboard: React.FC = () => {
                       </td>
                       <td style={pg.tdNum}>{r.p99_slippage_bps.toFixed(2)}</td>
                       <td style={pg.tdNum}>{(r.adverse_fill_rate * 100).toFixed(1)}%</td>
-                      <td style={{ ...pg.tdNum, color: r.mean_latency_ms > 100 ? '#f97316' : '#94a3b8' }}>
+                      <td style={{ ...pg.tdNum, color: r.mean_latency_ms > 100 ? '#f97316' : 'var(--text-dim)' }}>
                         {r.mean_latency_ms.toFixed(1)}
                       </td>
                       <td style={pg.tdNum}>${r.total_slippage_usd.toFixed(2)}</td>
@@ -601,13 +601,13 @@ const TCADashboard: React.FC = () => {
                     <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>
                       {session.replace('_', ' ')}
                     </span>
-                    <span style={{ color: '#64748b', fontSize: 11 }}>{s.n_trades} trades</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{s.n_trades} trades</span>
                   </div>
                   <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                     <span style={{ color: slippageColor(s.mean_slippage_bps), fontSize: 13, fontWeight: 600 }}>
                       {Number.isFinite(s.mean_slippage_bps) ? s.mean_slippage_bps.toFixed(2) : '—'} bps
                     </span>
-                    <span style={{ color: '#94a3b8', fontSize: 12 }}>
+                    <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>
                       {Number.isFinite(s.adverse_rate) ? (s.adverse_rate * 100).toFixed(0) : '—'}% adverse
                     </span>
                   </div>
@@ -620,7 +620,7 @@ const TCADashboard: React.FC = () => {
             <>
               <div style={{ ...pg.panelHdr, borderTop: '1px solid var(--border, #334155)', marginTop: 8 }}>
                 <span style={pg.panelTitle}>Active Alerts</span>
-                <span style={{ ...pg.badge, background: '#ef444422', color: '#f87171' }}>
+                <span style={{ ...pg.badge, background: '#ef444422', color: 'var(--loss)' }}>
                   {alerts.length}
                 </span>
               </div>
@@ -628,16 +628,16 @@ const TCADashboard: React.FC = () => {
                 <div key={i} style={pg.alertRow}>
                   <div>
                     <span style={pg.brokerBadge}>{a.broker}</span>
-                    {a.symbol && <span style={{ color: '#94a3b8', fontSize: 11, marginLeft: 6 }}>{a.symbol}</span>}
-                    <div style={{ color: '#64748b', fontSize: 10, marginTop: 2 }}>
+                    {a.symbol && <span style={{ color: 'var(--text-dim)', fontSize: 11, marginLeft: 6 }}>{a.symbol}</span>}
+                    <div style={{ color: 'var(--text-muted)', fontSize: 10, marginTop: 2 }}>
                       {new Date(a.generated_at).toLocaleTimeString()} · {a.n_trades} trades
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: '#f87171', fontSize: 13, fontWeight: 700 }}>
+                    <div style={{ color: 'var(--loss)', fontSize: 13, fontWeight: 700 }}>
                       {a.mean_slippage_bps.toFixed(2)} bps
                     </div>
-                    <div style={{ color: '#64748b', fontSize: 11 }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
                       threshold: {a.threshold_bps} bps
                     </div>
                   </div>
@@ -670,7 +670,7 @@ const TCADashboard: React.FC = () => {
             {/* Pagination */}
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <button style={pg.pageBtn} onClick={() => setRecordsPage(p => Math.max(0, p - 1))} disabled={recordsPage === 0}>‹</button>
-              <span style={{ color: '#94a3b8', fontSize: 12, padding: '0 4px' }}>
+              <span style={{ color: 'var(--text-dim)', fontSize: 12, padding: '0 4px' }}>
                 {recordsPage + 1}/{totalPages}
               </span>
               <button style={pg.pageBtn} onClick={() => setRecordsPage(p => Math.min(totalPages - 1, p + 1))} disabled={recordsPage >= totalPages - 1}>›</button>
@@ -681,17 +681,17 @@ const TCADashboard: React.FC = () => {
         {filteredRecords.length === 0 ? (
           <div style={{ ...pg.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 36 }}>📊</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-dim)' }}>
               {records.length === 0 ? 'No fill records yet' : 'No records match the current filters'}
             </div>
-            <div style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 360 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 360 }}>
               {records.length === 0
                 ? 'Trades will appear here once the execution engine records fills.'
                 : 'Try clearing your filters to see all records.'}
             </div>
             {records.length === 0 && (
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
                 ⚡ Start Trading
               </button>
             )}
@@ -710,7 +710,7 @@ const TCADashboard: React.FC = () => {
                 {pagedRecords.map((r, i) => (
                   <tr key={r.request_id} style={i % 2 === 0 ? pg.rowEven : pg.rowOdd}>
                     <td style={pg.td}>
-                      <span style={{ color: '#94a3b8', fontSize: 11 }}>
+                      <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>
                         {new Date(r.fill_time).toLocaleTimeString()}
                       </span>
                     </td>
@@ -718,7 +718,7 @@ const TCADashboard: React.FC = () => {
                       <span style={{ color: '#f1f5f9', fontFamily: 'monospace', fontSize: 12 }}>{r.symbol}</span>
                     </td>
                     <td style={pg.td}>
-                      <span style={{ color: r.side === 'BUY' ? '#4ade80' : '#f87171', fontSize: 12, fontWeight: 700 }}>
+                      <span style={{ color: r.side === 'BUY' ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 700 }}>
                         {r.side}
                       </span>
                     </td>
@@ -728,14 +728,14 @@ const TCADashboard: React.FC = () => {
                       {r.slippage_bps.toFixed(2)}
                     </td>
                     <td style={pg.tdNum}>${r.slippage_usd.toFixed(2)}</td>
-                    <td style={{ ...pg.tdNum, color: r.latency_ms > 100 ? '#f97316' : '#94a3b8' }}>
+                    <td style={{ ...pg.tdNum, color: r.latency_ms > 100 ? '#f97316' : 'var(--text-dim)' }}>
                       {r.latency_ms.toFixed(1)}
                     </td>
                     <td style={pg.tdNum}>{r.signal_to_fill_ms.toFixed(1)}</td>
                     <td style={pg.td}><span style={pg.brokerBadge}>{r.broker}</span></td>
                     <td style={pg.td}><span style={sessionChip(r.session)}>{r.session}</span></td>
                     <td style={pg.td}>
-                      <span style={{ color: '#64748b', fontSize: 10, fontFamily: 'monospace' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 10, fontFamily: 'monospace' }}>
                         {r.model_version}
                       </span>
                     </td>

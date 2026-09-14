@@ -243,12 +243,12 @@ const WatchlistPage: React.FC = () => {
     {
       key: 'bid', header: 'Bid', align: 'right', hideOnMobile: true,
       sortValue: (r) => r.bid,
-      render: (r) => <span className="text-[#f87171]">{formatPrice(r.symbol, r.bid)}</span>,
+      render: (r) => <span className="text-[var(--loss)]">{formatPrice(r.symbol, r.bid)}</span>,
     },
     {
       key: 'ask', header: 'Ask', align: 'right', hideOnMobile: true,
       sortValue: (r) => r.ask,
-      render: (r) => <span className="text-[#4ade80]">{formatPrice(r.symbol, r.ask)}</span>,
+      render: (r) => <span className="text-[var(--gain)]">{formatPrice(r.symbol, r.ask)}</span>,
     },
     {
       key: 'mid', header: 'Mid', align: 'right',
@@ -259,7 +259,7 @@ const WatchlistPage: React.FC = () => {
       key: 'change', header: '24h', align: 'right',
       sortValue: (r) => (Number.isFinite(r.change_pct) ? r.change_pct : 0),
       render: (r) => (
-        <span className={(r.change_pct ?? 0) >= 0 ? 'text-[#4ade80]' : 'text-[#f87171]'}>
+        <span className={(r.change_pct ?? 0) >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}>
           {Number.isFinite(r.change_pct)
             ? `${r.change_pct >= 0 ? '+' : ''}${r.change_pct.toFixed(2)}%`
             : '—'}
@@ -341,7 +341,7 @@ const WatchlistPage: React.FC = () => {
                 id="wl-add"
                 value={addSymbol}
                 onChange={(e) => setAddSymbol(e.target.value)}
-                className="min-h-[44px] rounded-lg border border-[#1e2d3d] bg-[#111827] px-3
+                className="min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--raised)] px-3
                            text-[12.5px] text-slate-200 cursor-pointer
                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
               >

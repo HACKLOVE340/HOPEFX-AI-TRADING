@@ -199,7 +199,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'color 0.4s ease',
   },
   actionLabel: {
-    fontSize: 10, color: '#64748b', letterSpacing: 1.5, fontWeight: 600,
+    fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1.5, fontWeight: 600,
   },
   centerSection: {
     flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0,
@@ -232,7 +232,7 @@ const s: Record<string, React.CSSProperties> = {
   termPill: {
     display: 'flex', alignItems: 'center', gap: 4,
     padding: '2px 8px', borderRadius: 10,
-    border: '1px solid', fontSize: 10, color: '#94a3b8',
+    border: '1px solid', fontSize: 10, color: 'var(--text-dim)',
     background: 'rgba(255,255,255,0.03)',
     fontFamily: 'monospace',
   },
@@ -255,7 +255,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'color 0.4s ease, border-color 0.4s ease',
   },
   rlConf: {
-    fontSize: 10, color: '#64748b', fontFamily: 'monospace',
+    fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace',
   },
   explainBtn: {
     background: 'transparent', border: '1px solid',

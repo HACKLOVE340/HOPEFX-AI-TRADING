@@ -39,7 +39,7 @@ const DriftBar: React.FC<{ value: number | null; state?: string }> = ({ value, s
       ? 'This version is not serving inference, so no drift is measured for it.'
       : 'The drift monitor could not be read — this is not a reading of zero drift.';
     return (
-      <span title={title} style={{ fontSize: 12, fontWeight: 600, color: '#64748b', fontStyle: 'italic' }}>
+      <span title={title} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', fontStyle: 'italic' }}>
         — {label}
       </span>
     );
@@ -242,7 +242,7 @@ const MLAISection: React.FC = () => {
               {models.map(m => (
                 <tr key={m.name} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '12px 12px', fontWeight: 600, color: '#f1f5f9' }}>{m.name}</td>
-                  <td style={{ padding: '12px 12px', color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '12px 12px', color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>
                     v{m.version}
                     {/* sha256[:8] identifies the artifact, not the row. Four
                         entries here share one file, so without this the table
@@ -250,7 +250,7 @@ const MLAISection: React.FC = () => {
                     {m.shares_artifact_with && m.shares_artifact_with.length > 0 && (
                       <span
                         title={`Same artifact as: ${m.shares_artifact_with.join(', ')}`}
-                        style={{ marginLeft: 6, color: '#fbbf24', fontWeight: 700 }}
+                        style={{ marginLeft: 6, color: 'var(--warn)', fontWeight: 700 }}
                       >
                         ×{m.shares_artifact_with.length + 1}
                       </span>
@@ -258,7 +258,7 @@ const MLAISection: React.FC = () => {
                     {m.metrics_conflict && (
                       <span
                         title="Entries over these identical bytes report different measured metrics — at least one is wrong"
-                        style={{ marginLeft: 6, color: '#f87171', fontWeight: 700 }}
+                        style={{ marginLeft: 6, color: 'var(--loss)', fontWeight: 700 }}
                       >
                         ⚠ conflict
                       </span>
@@ -267,8 +267,8 @@ const MLAISection: React.FC = () => {
                   <td style={{ padding: '12px 12px' }}><StatusBadge status={m.status} size="sm" /></td>
                   <td style={{ padding: '12px 12px', minWidth: 120 }}><AccuracyBar value={m.accuracy} /></td>
                   <td style={{ padding: '12px 12px', minWidth: 120 }}><DriftBar value={m.drift_score} state={m.drift_state} /></td>
-                  <td style={{ padding: '12px 12px', color: '#94a3b8' }}>{m.predictions_today.toLocaleString()}</td>
-                  <td style={{ padding: '12px 12px', color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(m.last_trained)}</td>
+                  <td style={{ padding: '12px 12px', color: 'var(--text-dim)' }}>{m.predictions_today.toLocaleString()}</td>
+                  <td style={{ padding: '12px 12px', color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(m.last_trained)}</td>
                   <td style={{ padding: '12px 12px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <ActionBtn
@@ -357,10 +357,10 @@ const MLSubsystemsPanel: React.FC = () => {
             padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#2e1065' : '#1e293b',
-            color: tab === t.id ? '#c084fc' : '#94a3b8',
+            color: tab === t.id ? '#c084fc' : 'var(--text-dim)',
           }}>{t.label}</button>
         ))}
-        <button onClick={load} disabled={loading} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>
+        <button onClick={load} disabled={loading} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
           {loading ? '…' : '↻'}
         </button>
       </div>
@@ -371,7 +371,7 @@ const MLSubsystemsPanel: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
           {Object.entries(filterStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
             <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#c084fc' }}>{String(val)}</div>
             </div>
           ))}
@@ -385,8 +385,8 @@ const MLSubsystemsPanel: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
           {Object.entries(onlineStatus as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
             <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#60a5fa' }}>{String(val)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--link)' }}>{String(val)}</div>
             </div>
           ))}
         </div>
@@ -399,8 +399,8 @@ const MLSubsystemsPanel: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
           {driftStatus && Object.entries(driftStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
             <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>{String(val)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--warn)' }}>{String(val)}</div>
             </div>
           ))}
           {sharpeStatus && (
@@ -409,8 +409,8 @@ const MLSubsystemsPanel: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
                 {Object.entries(sharpeStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
                   <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: (val as boolean) === true ? '#f87171' : '#4ade80' }}>{String(val)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: (val as boolean) === true ? 'var(--loss)' : 'var(--gain)' }}>{String(val)}</div>
                   </div>
                 ))}
               </div>
@@ -425,7 +425,7 @@ const MLSubsystemsPanel: React.FC = () => {
       )}
 
       {tab === 'features' && (
-        <div style={{ color: '#64748b', fontSize: 13 }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
           <p>The HOPEFX ML pipeline uses <strong style={{ color: '#f1f5f9' }}>176 engineered features</strong> including:</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 12 }}>
             {[
@@ -434,7 +434,7 @@ const MLSubsystemsPanel: React.FC = () => {
               'Regime Detection Features', 'Geopolitical Risk Score', 'Order Flow Imbalance',
               'GARCH Volatility Estimate', 'Correlation Features', 'COT Positioning',
             ].map(f => (
-              <div key={f} style={{ padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b', fontSize: 12, color: '#94a3b8' }}>
+              <div key={f} style={{ padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b', fontSize: 12, color: 'var(--text-dim)' }}>
                 ✓ {f}
               </div>
             ))}
@@ -452,8 +452,8 @@ const MLSubsystemsPanel: React.FC = () => {
               ].map(m => (
                 <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: '#1e293b' }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{m.name}</span>
-                  <span style={{ fontSize: 12, color: '#64748b' }}>{m.role}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa' }}>{m.weight}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.role}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ai-model)' }}>{m.weight}</span>
                 </div>
               ))}
             </div>

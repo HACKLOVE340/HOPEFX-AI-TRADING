@@ -26,7 +26,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
       alignItems: 'center',
       gap: 4,
       fontSize: 12,
-      color: '#64748b',
+      color: 'var(--text-muted)',
       marginBottom: 10,
       flexWrap: 'wrap',
       ...style,
@@ -64,9 +64,9 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
               // Breadcrumb links were ~16px tall. They appear on most pages, so
               // the target fix lifts all of them (rubric: touch-target-size).
               className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                         focus-visible:ring-offset-1 focus-visible:ring-offset-[#080c14] rounded"
+                         focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] rounded"
               style={{
-                color: '#64748b',
+                color: 'var(--text-muted)',
                 textDecoration: 'none',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -84,7 +84,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
           ) : (
             <span
               style={{
-                color: isLast ? '#94a3b8' : '#64748b',
+                color: isLast ? 'var(--text-dim)' : 'var(--text-muted)',
                 fontWeight: isLast ? 500 : 400,
                 display: 'flex',
                 alignItems: 'center',

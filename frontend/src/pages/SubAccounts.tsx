@@ -80,7 +80,7 @@ function buildAccCols(
     {
       key: 'broker',
       header: 'Broker',
-      render: (r) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{r.broker}</span>,
+      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{r.broker}</span>,
     },
     {
       key: 'balance',
@@ -105,7 +105,7 @@ function buildAccCols(
       sortKey: 'daily_pnl',
       sortable: true,
       render: (r) => (
-        <span style={{ color: r.daily_pnl >= 0 ? '#4ade80' : '#f87171', fontFamily: 'monospace', fontWeight: 600 }}>
+        <span style={{ color: r.daily_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontFamily: 'monospace', fontWeight: 600 }}>
           {r.daily_pnl >= 0 ? '+' : ''}{fmt(r.daily_pnl)}
         </span>
       ),
@@ -122,7 +122,7 @@ function buildAccCols(
       render: (r) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => onEdit(r)} style={btnStyle}>Edit</button>
-          <button onClick={() => onDelete(r)} style={{ ...btnStyle, color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>Del</button>
+          <button onClick={() => onDelete(r)} style={{ ...btnStyle, color: 'var(--loss)', border: '1px solid rgba(248,113,113,0.3)' }}>Del</button>
         </div>
       ),
     },
@@ -141,12 +141,12 @@ function buildMemberCols(
       header: 'Username',
       sortKey: 'username',
       sortable: true,
-      render: (r) => <span style={{ color: '#60a5fa', fontWeight: 600 }}>{r.username}</span>,
+      render: (r) => <span style={{ color: 'var(--link)', fontWeight: 600 }}>{r.username}</span>,
     },
     {
       key: 'email',
       header: 'Email',
-      render: (r) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{r.email}</span>,
+      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{r.email}</span>,
     },
     {
       key: 'role',
@@ -157,7 +157,7 @@ function buildMemberCols(
       key: 'joined_at',
       header: 'Joined',
       render: (r) => (
-        <span style={{ color: '#64748b', fontSize: 12 }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
           {new Date(r.joined_at).toLocaleDateString()}
         </span>
       ),
@@ -169,7 +169,7 @@ function buildMemberCols(
       render: (r) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => onRoleChange(r)} style={btnStyle}>Role</button>
-          <button onClick={() => onRemove(r)} style={{ ...btnStyle, color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>Remove</button>
+          <button onClick={() => onRemove(r)} style={{ ...btnStyle, color: 'var(--loss)', border: '1px solid rgba(248,113,113,0.3)' }}>Remove</button>
         </div>
       ),
     },
@@ -362,7 +362,7 @@ const SubAccounts: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/trade')}
-              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               ⚡ Trade
             </button>
             <button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>+ Sub-Account</button>
@@ -593,7 +593,7 @@ const btnStyle: React.CSSProperties = {
   background: 'transparent',
   border: '1px solid var(--border, #334155)',
   borderRadius: 5,
-  color: '#94a3b8',
+  color: 'var(--text-dim)',
   cursor: 'pointer',
   fontSize: 11,
   padding: '3px 8px',
@@ -611,14 +611,14 @@ const s: Record<string, React.CSSProperties> = {
   },
   secondaryBtn: {
     background: 'transparent', border: '1px solid var(--border, #334155)', borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
+    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
   },
   cancelBtn: {
     background: 'transparent', border: '1px solid var(--border, #334155)', borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
+    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
   },
   formGrid: { display: 'flex', flexDirection: 'column', gap: 10 },
-  label:    { color: 'var(--text-muted, #94a3b8)', fontSize: 12, fontWeight: 600 },
+  label:    { color: 'var(--text-muted, var(--text-dim))', fontSize: 12, fontWeight: 600 },
   input: {
     background: 'var(--surface-raised, #243044)', border: '1px solid var(--border, #334155)',
     borderRadius: 6, color: 'var(--text, #f1f5f9)', fontSize: 13, outline: 'none', padding: '8px 12px',

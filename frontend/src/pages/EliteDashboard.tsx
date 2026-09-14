@@ -31,22 +31,22 @@ import { extractApiError } from '../lib/utils';
 const s = {
   page:    { padding: '32px 40px', maxWidth: 1100, margin: '0 auto' } as React.CSSProperties,
   heading: { fontSize: 26, fontWeight: 800, color: '#f59e0b', marginBottom: 4 } as React.CSSProperties,
-  sub:     { fontSize: 14, color: '#94a3b8', marginBottom: 32 } as React.CSSProperties,
+  sub:     { fontSize: 14, color: 'var(--text-dim)', marginBottom: 32 } as React.CSSProperties,
   grid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 } as React.CSSProperties,
   card:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 12, padding: 24 } as React.CSSProperties,
-  cardH:   { fontSize: 16, fontWeight: 700, color: '#e2e8f0', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 } as React.CSSProperties,
-  label:   { fontSize: 12, color: '#64748b', marginBottom: 4, display: 'block' } as React.CSSProperties,
-  input:   { width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
-  textarea:{ width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 13, outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
-  select:  { width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 13, outline: 'none' } as React.CSSProperties,
+  cardH:   { fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 } as React.CSSProperties,
+  label:   { fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block' } as React.CSSProperties,
+  input:   { width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
+  textarea:{ width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
+  select:  { width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none' } as React.CSSProperties,
   btn:     { padding: '10px 20px', background: '#f59e0b', color: '#0a0e1a', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
-  btnSec:  { padding: '10px 20px', background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
+  btnSec:  { padding: '10px 20px', background: 'transparent', color: 'var(--text-dim)', border: '1px solid #334155', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
   field:   { marginBottom: 14 } as React.CSSProperties,
   row:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid #1e293b' } as React.CSSProperties,
-  amRow:   { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 13, color: '#94a3b8' } as React.CSSProperties,
-  amVal:   { color: '#e2e8f0', fontWeight: 500 } as React.CSSProperties,
-  success: { background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#4ade80', marginBottom: 16 } as React.CSSProperties,
-  error:   { background: '#450a0a', border: '1px solid #991b1b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#f87171', marginBottom: 16 } as React.CSSProperties,
+  amRow:   { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 13, color: 'var(--text-dim)' } as React.CSSProperties,
+  amVal:   { color: 'var(--text)', fontWeight: 500 } as React.CSSProperties,
+  success: { background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--gain)', marginBottom: 16 } as React.CSSProperties,
+  error:   { background: '#450a0a', border: '1px solid #991b1b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--loss)', marginBottom: 16 } as React.CSSProperties,
   gate:    { textAlign: 'center', padding: '80px 40px' } as React.CSSProperties,
 };
 
@@ -73,7 +73,7 @@ const STATUS_COLORS: Record<string, string> = {
   open:        '#3b82f6',
   in_progress: '#f59e0b',
   resolved:    '#22c55e',
-  closed:      '#64748b',
+  closed:      'var(--text-muted)',
   submitted:   '#8b5cf6',
 };
 
@@ -106,9 +106,9 @@ function AccountManagerCard() {
     <div style={s.card}>
       <div style={s.cardH}>🎯 Your Dedicated Account Manager</div>
       {loading ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
       ) : !am ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>Account manager details unavailable.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Account manager details unavailable.</div>
       ) : (
         <>
           <div style={{ fontSize: 18, fontWeight: 700, color: '#f59e0b', marginBottom: 16 }}>{am.name}</div>
@@ -139,16 +139,16 @@ function AccountManagerCard() {
             </div>
           )}
           <div style={{ marginTop: 16, padding: '12px', background: '#1e293b', borderRadius: 8 }}>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
             {Object.entries(am.response_sla ?? {}).map(([priority, time]) => (
               <div key={priority} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                <span style={badgeStyle(PRIORITY_COLORS[priority] ?? '#64748b')}>{priority}</span>
-                <span style={{ color: '#94a3b8' }}>{time}</span>
+                <span style={badgeStyle(PRIORITY_COLORS[priority] ?? 'var(--text-muted)')}>{priority}</span>
+                <span style={{ color: 'var(--text-dim)' }}>{time}</span>
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
-            Support hours: <span style={{ color: '#e2e8f0' }}>{am.support_hours}</span>
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+            Support hours: <span style={{ color: 'var(--text)' }}>{am.support_hours}</span>
           </div>
         </>
       )}
@@ -274,17 +274,17 @@ function TicketList({ refresh }: { refresh: number }) {
     <div style={s.card}>
       <div style={s.cardH}>📋 My Support Tickets</div>
       {loading ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
       ) : tickets.length === 0 ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>No tickets yet.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No tickets yet.</div>
       ) : (
         tickets.map(t => (
           <div key={t.ticket_id} style={s.row}>
             <div>
-              <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, marginBottom: 4 }}>{t.subject}</div>
+              <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, marginBottom: 4 }}>{t.subject}</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? '#64748b')}>{t.priority}</span>
-                <span style={badgeStyle(STATUS_COLORS[t.status] ?? '#64748b')}>{t.status}</span>
+                <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? 'var(--text-muted)')}>{t.priority}</span>
+                <span style={badgeStyle(STATUS_COLORS[t.status] ?? 'var(--text-muted)')}>{t.status}</span>
                 <span style={{ fontSize: 11, color: '#475569' }}>{t.category}</span>
               </div>
             </div>
@@ -347,7 +347,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
   return (
     <div style={s.card}>
       <div style={s.cardH}>🛠️ Custom Development Request</div>
-      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
         Request bespoke strategies, indicators, broker integrations, or API extensions.
         Our team will provide a scoping estimate within 2 business days.
       </div>
@@ -420,7 +420,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
             placeholder="Describe your requirements in detail: entry/exit logic, risk parameters, data sources, expected outputs…"
             required
           />
-          <div style={{ fontSize: 11, color: form.description.length < 50 ? '#ef4444' : '#64748b', marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: form.description.length < 50 ? '#ef4444' : 'var(--text-muted)', marginTop: 4 }}>
             {form.description.length}/50 minimum characters
           </div>
         </div>
@@ -461,17 +461,17 @@ function CustomDevList({ refresh }: { refresh: number }) {
     <div style={s.card}>
       <div style={s.cardH}>📦 My Development Requests</div>
       {loading ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
       ) : reqs.length === 0 ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>No requests yet.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No requests yet.</div>
       ) : (
         reqs.map(r => (
           <div key={r.request_id} style={s.row}>
             <div>
-              <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, marginBottom: 4 }}>{r.title}</div>
+              <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, marginBottom: 4 }}>{r.title}</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={badgeStyle('#8b5cf6')}>{r.request_type}</span>
-                <span style={badgeStyle(STATUS_COLORS[r.status] ?? '#64748b')}>{r.status}</span>
+                <span style={badgeStyle(STATUS_COLORS[r.status] ?? 'var(--text-muted)')}>{r.status}</span>
                 {r.budget_usd != null && (
                   <span style={{ fontSize: 11, color: '#475569' }}>${r.budget_usd.toLocaleString()}</span>
                 )}
@@ -510,7 +510,7 @@ const EliteDashboard: React.FC = () => {
         <div style={{ fontSize: 22, fontWeight: 800, color: '#f59e0b', marginBottom: 8 }}>
           Elite Plan Required
         </div>
-        <div style={{ fontSize: 14, color: '#94a3b8', maxWidth: 400, margin: '0 auto 24px' }}>
+        <div style={{ fontSize: 14, color: 'var(--text-dim)', maxWidth: 400, margin: '0 auto 24px' }}>
           Sub-accounts, dedicated support, and custom development are exclusive
           to Elite subscribers ($10,000/mo).
         </div>

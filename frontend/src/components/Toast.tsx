@@ -64,10 +64,10 @@ export function useToast(): ToastContextValue {
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const VARIANT_STYLES: Record<ToastVariant, { bg: string; border: string; icon: string; color: string }> = {
-  success: { bg: '#052e16', border: '#166534', icon: '✓', color: '#4ade80' },
-  error:   { bg: '#450a0a', border: '#7f1d1d', icon: '✕', color: '#f87171' },
+  success: { bg: '#052e16', border: '#166534', icon: '✓', color: 'var(--gain)' },
+  error:   { bg: '#450a0a', border: '#7f1d1d', icon: '✕', color: 'var(--loss)' },
   warning: { bg: '#431407', border: '#92400e', icon: '⚠', color: '#fb923c' },
-  info:    { bg: '#0c1a2e', border: '#1d4ed8', icon: 'ℹ', color: '#60a5fa' },
+  info:    { bg: '#0c1a2e', border: '#1d4ed8', icon: 'ℹ', color: 'var(--link)' },
 };
 
 // ── Single toast item ─────────────────────────────────────────────────────────

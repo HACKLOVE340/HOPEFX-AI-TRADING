@@ -216,7 +216,7 @@ const ResultRow: React.FC<{ label: string; value: string; highlight?: boolean }>
 }) => (
   <div style={{ ...s.resultRow, ...(highlight ? s.resultRowHighlight : {}) }}>
     <span style={s.resultLabel}>{label}</span>
-    <span style={{ ...s.resultValue, ...(highlight ? { color: '#f8fafc', fontWeight: 700 } : {}) }}>
+    <span style={{ ...s.resultValue, ...(highlight ? { color: 'var(--text-strong)', fontWeight: 700 } : {}) }}>
       {value}
     </span>
   </div>
@@ -402,16 +402,16 @@ const RiskCalculator: React.FC = () => {
               </div>
             )}
             <button onClick={() => setShowHistory(h => !h)}
-              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               📋 History {history.length > 0 ? `(${history.length})` : ''}
             </button>
-            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               ⚡ Trade
             </Link>
-            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               📓 Journal
             </Link>
-            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               🛡 Prop Firm
             </Link>
           </div>
@@ -548,7 +548,7 @@ const RiskCalculator: React.FC = () => {
                 style={{
                   display: 'block', width: '100%', padding: '10px 0', borderRadius: 8,
                   background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-                  color: '#60a5fa', fontSize: 14, fontWeight: 700, textDecoration: 'none',
+                  color: 'var(--link)', fontSize: 14, fontWeight: 700, textDecoration: 'none',
                   textAlign: 'center', marginBottom: 10, boxSizing: 'border-box',
                 }}
               >
@@ -560,13 +560,13 @@ const RiskCalculator: React.FC = () => {
                   value={calcLabel}
                   onChange={e => setCalcLabel(e.target.value)}
                   placeholder="Label (optional)"
-                  style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f8fafc', fontSize: 12, padding: '6px 10px', outline: 'none' }}
+                  style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12, padding: '6px 10px', outline: 'none' }}
                 />
                 <button onClick={() => void handleSave()} disabled={saving}
                   style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
                   {saving ? '…' : '💾 Save'}
                 </button>
-                {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('✓') ? '#22c55e' : '#f87171', alignSelf: 'center' }}>{saveMsg}</span>}
+                {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('✓') ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>{saveMsg}</span>}
               </div>
             </>
           )}
@@ -587,7 +587,7 @@ const RiskCalculator: React.FC = () => {
         <div style={{ marginTop: 24, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div style={s.cardTitle}>Saved Calculations</div>
-            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>✕</button>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
           {history.length === 0 ? (
             <EmptyState
@@ -601,10 +601,10 @@ const RiskCalculator: React.FC = () => {
               {history.map(h => (
                 <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
                       {h.label || h.symbol} · 1:{Number.isFinite(h.rr_ratio) ? h.rr_ratio.toFixed(2) : '—'} R:R
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       Entry {h.entry_price} · SL {h.stop_loss} · TP {h.take_profit} · {h.lot_size.toFixed(4)} lots
                     </div>
                     <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>
@@ -613,11 +613,11 @@ const RiskCalculator: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={() => loadFromHistory(h)}
-                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}>
+                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 11, cursor: 'pointer' }}>
                       Load
                     </button>
                     <button onClick={() => void handleDeleteHistory(h.id)}
-                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: '#f87171', fontSize: 11, cursor: 'pointer' }}>
+                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: 'var(--loss)', fontSize: 11, cursor: 'pointer' }}>
                       ✕
                     </button>
                   </div>
@@ -658,7 +658,7 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
           bottom: `${pct(Math.min(entry, tp))}%`,
           height: `${Math.abs(pct(tp) - pct(entry))}%`,
           background: isLong ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
-          borderLeft: `3px solid ${isLong ? '#4ade80' : '#f87171'}`,
+          borderLeft: `3px solid ${isLong ? 'var(--gain)' : 'var(--loss)'}`,
         }} />
         {/* SL zone */}
         <div style={{
@@ -666,7 +666,7 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
           bottom: `${pct(Math.min(entry, sl))}%`,
           height: `${Math.abs(pct(sl) - pct(entry))}%`,
           background: isLong ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)',
-          borderLeft: `3px solid ${isLong ? '#f87171' : '#4ade80'}`,
+          borderLeft: `3px solid ${isLong ? 'var(--loss)' : 'var(--gain)'}`,
         }} />
         {/* Price lines */}
         {levels.map((l) => (
@@ -704,13 +704,13 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     background: '#0f172a',
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     fontFamily: "'Inter', system-ui, sans-serif",
     padding: '24px',
   },
   header: { marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: 700, margin: 0, color: '#f8fafc' },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginTop: 8 },
+  title: { fontSize: 28, fontWeight: 700, margin: 0, color: 'var(--text-strong)' },
+  subtitle: { fontSize: 14, color: 'var(--text-dim)', marginTop: 8 },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
@@ -725,12 +725,12 @@ const s: Record<string, React.CSSProperties> = {
   cardTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     marginBottom: 16,
   },
-  label: { fontSize: 13, color: '#94a3b8', marginBottom: 6, marginTop: 12 },
+  label: { fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, marginTop: 12 },
   inputWrap: {
     display: 'flex',
     alignItems: 'center',
@@ -744,13 +744,13 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: 'none',
     outline: 'none',
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     fontSize: 15,
     padding: '10px 12px',
   },
   inputAddon: {
     padding: '0 10px',
-    color: '#64748b',
+    color: 'var(--text-muted)',
     fontSize: 13,
     background: '#1e293b',
     borderRight: '1px solid #334155',
@@ -763,16 +763,16 @@ const s: Record<string, React.CSSProperties> = {
     background: '#0f172a',
     border: '1px solid #334155',
     borderRadius: 8,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     fontSize: 15,
     padding: '10px 12px',
     outline: 'none',
   },
   divider: { height: 1, background: '#334155', margin: '20px 0' },
   rrDisplay: { textAlign: 'center', padding: '16px 0' },
-  rrLabel: { fontSize: 13, color: '#94a3b8', marginBottom: 8 },
+  rrLabel: { fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 },
   rrValue: { fontSize: 48, fontWeight: 800, lineHeight: 1 },
-  rrSub: { fontSize: 13, color: '#64748b', marginTop: 8 },
+  rrSub: { fontSize: 13, color: 'var(--text-muted)', marginTop: 8 },
   resultRow: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -781,7 +781,7 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid #1e293b',
   },
   resultRowHighlight: { background: '#1e293b', borderRadius: 6, padding: '8px 12px', marginBottom: 4 },
-  resultLabel: { fontSize: 13, color: '#94a3b8' },
+  resultLabel: { fontSize: 13, color: 'var(--text-dim)' },
   resultValue: { fontSize: 14, color: '#cbd5e1', fontWeight: 500 },
   placeholder: { color: '#475569', fontSize: 14, textAlign: 'center', padding: '32px 0' },
   vizWrap: { padding: '16px 0' },
@@ -807,7 +807,7 @@ const s: Record<string, React.CSSProperties> = {
   vizLineLabel: { fontSize: 11, fontWeight: 600 },
   vizLinePrice: { fontSize: 11 },
   tipList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  tip: { fontSize: 13, color: '#94a3b8', lineHeight: 1.5 },
+  tip: { fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5 },
 };
 
 export default RiskCalculator;

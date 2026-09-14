@@ -45,11 +45,11 @@ const MetricRow: React.FC<{ label: string; a: string; b: string; winner: string;
   label, a, b, winner, stratA, stratB,
 }) => (
   <div style={{ display:'flex', gap:8, padding:'8px 0', borderBottom:'1px solid #0f172a', alignItems:'center' }}>
-    <div style={{ width:140, fontSize:12, color:'#64748b' }}>{label}</div>
+    <div style={{ width:140, fontSize:12, color:'var(--text-muted)' }}>{label}</div>
     <div style={{ flex:1, textAlign:'center', fontSize:14, fontWeight:600,
-      color: winner === stratA ? '#4ade80' : '#f8fafc' }}>{a}</div>
+      color: winner === stratA ? 'var(--gain)' : 'var(--text-strong)' }}>{a}</div>
     <div style={{ flex:1, textAlign:'center', fontSize:14, fontWeight:600,
-      color: winner === stratB ? '#4ade80' : '#f8fafc' }}>{b}</div>
+      color: winner === stratB ? 'var(--gain)' : 'var(--text-strong)' }}>{b}</div>
   </div>
 );
 
@@ -150,20 +150,20 @@ const ABTesting: React.FC = () => {
         {sel && (
           <div style={s.card}>
             <div style={s.cardTitle}>Results — {sel.symbol}</div>
-            <div style={{ ...s.winnerBanner, border: `1px solid ${sel.significant ? '#4ade80' : '#facc15'}` }}>
-              <div style={{ fontSize:12, color:'#94a3b8' }}>Winner</div>
-              <div style={{ fontSize:20, fontWeight:800, color: sel.significant ? '#4ade80' : '#facc15' }}>
+            <div style={{ ...s.winnerBanner, border: `1px solid ${sel.significant ? 'var(--gain)' : '#facc15'}` }}>
+              <div style={{ fontSize:12, color:'var(--text-dim)' }}>Winner</div>
+              <div style={{ fontSize:20, fontWeight:800, color: sel.significant ? 'var(--gain)' : '#facc15' }}>
                 {sel.winner}
               </div>
-              <div style={{ fontSize:12, color:'#64748b' }}>
+              <div style={{ fontSize:12, color:'var(--text-muted)' }}>
                 p={Number.isFinite(sel.p_value) ? sel.p_value.toFixed(4) : '—'} · {sel.significant ? 'Statistically significant' : 'Not significant yet'}
               </div>
             </div>
-            <div style={{ fontSize:12, color:'#94a3b8', margin:'12px 0 4px' }}>{sel.recommendation}</div>
+            <div style={{ fontSize:12, color:'var(--text-dim)', margin:'12px 0 4px' }}>{sel.recommendation}</div>
             <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-              <div style={{ flex:1, textAlign:'center', fontSize:12, fontWeight:700, color:'#60a5fa' }}>{sel.strategy_a.strategy}</div>
+              <div style={{ flex:1, textAlign:'center', fontSize:12, fontWeight:700, color:'var(--link)' }}>{sel.strategy_a.strategy}</div>
               <div style={{ width:140 }} />
-              <div style={{ flex:1, textAlign:'center', fontSize:12, fontWeight:700, color:'#a78bfa' }}>{sel.strategy_b.strategy}</div>
+              <div style={{ flex:1, textAlign:'center', fontSize:12, fontWeight:700, color:'var(--ai-model)' }}>{sel.strategy_b.strategy}</div>
             </div>
             <MetricRow label="Total Return" a={`${sel.strategy_a.total_return}%`} b={`${sel.strategy_b.total_return}%`}
               winner={sel.winner} stratA={sel.strategy_a.strategy} stratB={sel.strategy_b.strategy} />
@@ -181,7 +181,7 @@ const ABTesting: React.FC = () => {
 
       {/* History */}
       {loadingTests && (
-        <div style={{ ...s.card, textAlign: 'center', color: '#64748b', padding: 24 }}>
+        <div style={{ ...s.card, textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>
           Loading test history…
         </div>
       )}
@@ -197,8 +197,8 @@ const ABTesting: React.FC = () => {
             <div key={t.test_id} style={{ ...s.histRow, background: sel?.test_id === t.test_id ? '#0f172a' : 'transparent' }}
               onClick={() => setSelected(t)}>
               <span style={{ fontSize:13 }}>{t.strategy_a.strategy} vs {t.strategy_b.strategy}</span>
-              <span style={{ fontSize:12, color:'#64748b' }}>{t.symbol}</span>
-              <span style={{ fontSize:12, color:'#4ade80' }}>Winner: {t.winner}</span>
+              <span style={{ fontSize:12, color:'var(--text-muted)' }}>{t.symbol}</span>
+              <span style={{ fontSize:12, color:'var(--gain)' }}>Winner: {t.winner}</span>
             </div>
           ))}
         </div>
@@ -217,22 +217,22 @@ const ABTesting: React.FC = () => {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight:'100vh', background:'#0f172a', color:'#f8fafc', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
+  page: { minHeight:'100vh', background:'#0f172a', color:'var(--text-strong)', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
   header: { marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 },
   title: { fontSize:28, fontWeight:700, margin:0 },
-  subtitle: { fontSize:14, color:'#94a3b8', marginTop:4 },
+  subtitle: { fontSize:14, color:'var(--text-dim)', marginTop:4 },
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20, marginBottom:20 },
   card: { background:'#1e293b', borderRadius:12, padding:24, border:'1px solid #334155', marginBottom:20 },
-  cardTitle: { fontSize:13, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
-  label: { fontSize:12, color:'#94a3b8', display:'block', marginBottom:6, marginTop:12 },
-  select: { width:'100%', background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'#f8fafc', padding:'9px 12px', fontSize:14, outline:'none' },
-  input: { width:'100%', background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'#f8fafc', padding:'9px 12px', fontSize:14, outline:'none', boxSizing:'border-box' },
+  cardTitle: { fontSize:13, fontWeight:600, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
+  label: { fontSize:12, color:'var(--text-dim)', display:'block', marginBottom:6, marginTop:12 },
+  select: { width:'100%', background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'var(--text-strong)', padding:'9px 12px', fontSize:14, outline:'none' },
+  input: { width:'100%', background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'var(--text-strong)', padding:'9px 12px', fontSize:14, outline:'none', boxSizing:'border-box' },
   btn: { width:'100%', background:'#3b82f6', border:'none', borderRadius:8, color:'#fff', padding:'10px', fontSize:14, cursor:'pointer', fontWeight:600 },
   winnerBanner: { background:'rgba(74,222,128,0.08)', border:'1px solid #334155', borderRadius:8, padding:'14px 16px', marginBottom:12 },
   histRow: { display:'flex', gap:16, alignItems:'center', padding:'10px 12px', borderRadius:6, cursor:'pointer', flexWrap:'wrap' },
   errorBox: {
-    background:'rgba(248,113,113,0.1)', border:'1px solid #f87171', borderRadius:6,
-    padding:'8px 12px', marginTop:12, fontSize:13, color:'#f87171',
+    background:'rgba(248,113,113,0.1)', border:'1px solid var(--loss)', borderRadius:6,
+    padding:'8px 12px', marginTop:12, fontSize:13, color:'var(--loss)',
   },
 };
 

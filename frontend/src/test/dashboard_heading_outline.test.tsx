@@ -28,6 +28,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Both API surfaces the page touches. `tradingApi.regime` was missed on the
 // first pass and every assertion failed on an unhandled rejection rather than
@@ -76,10 +77,18 @@ const seedAccount = () =>
 
 const renderDashboard = () => {
   seedAccount();
+  // App.tsx mounts a QueryClientProvider above every route, so this harness was
+  // under-specified rather than minimal: it happened to work only while the
+  // Dashboard owned no queries of its own. RiskHeadroomPanel added one, and a
+  // harness that does not mount what production always mounts fails for a
+  // reason the page does not have.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
-    <MemoryRouter>
-      <Dashboard />
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 };
 

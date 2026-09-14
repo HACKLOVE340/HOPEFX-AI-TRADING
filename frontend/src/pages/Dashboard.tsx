@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import { PageHeader, EmptyState, CrossLinkBar, Spinner, RelatedPages } from '../components';
+import { RiskHeadroomPanel } from '../components/system/RiskHeadroomPanel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { DataAge } from '../components/ui/DataAge';
 import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
@@ -182,7 +183,7 @@ const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
       <span style={s.tickerPrice}>
         {tick ? fmt(tick.mid, decimals) : '—'}
       </span>
-      <span style={{ ...s.tickerChange, color: up === true ? '#4ade80' : up === false ? '#f87171' : '#64748b' }}>
+      <span style={{ ...s.tickerChange, color: up === true ? 'var(--gain)' : up === false ? 'var(--loss)' : 'var(--text-muted)' }}>
         {tick ? fmtPct(tick.change_pct) : '—'}
       </span>
       {tick && (
@@ -337,22 +338,26 @@ const PositionsTable: React.FC = () => {
         </thead>
         <tbody>
           {positions.map((p) => (
-            // The row drills into the ticket for that instrument, carrying the
-            // symbol and side through router state — the mechanism Trade.tsx
-            // already reads (audit F225). Keyboard-operable, not mouse-only.
+            // The row opens the position, which is what clicking a position
+            // means. It used to go straight to the ticket with symbol and side
+            // in router state (audit F225) — useful, and one level too early:
+            // there was nowhere to go to READ a position, so the row had to
+            // double as a shortcut. That mechanism is not lost, it moved to an
+            // action on the detail page, where you press it already knowing
+            // what you are looking at. Keyboard-operable, not mouse-only.
             <tr
               key={p.id}
               role="link"
               tabIndex={0}
-              aria-label={`${p.symbol} ${p.side}, ${fmtUSD(p.unrealized_pnl)} unrealised — open the ticket`}
-              onClick={() => navigate('/trade', { state: { signal: { symbol: p.symbol, direction: p.side === 'long' ? 'BUY' : 'SELL' } } })}
+              aria-label={`${p.symbol} ${p.side}, ${fmtUSD(p.unrealized_pnl)} unrealised — open the position`}
+              onClick={() => navigate(`/positions/${encodeURIComponent(p.id)}`)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  navigate('/trade', { state: { signal: { symbol: p.symbol, direction: p.side === 'long' ? 'BUY' : 'SELL' } } });
+                  navigate(`/positions/${encodeURIComponent(p.id)}`);
                 }
               }}
-              className="cursor-pointer transition-colors duration-150 hover:bg-[#141c2b]
+              className="cursor-pointer transition-colors duration-150 hover:bg-[var(--surface-hover)]
                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset
                          focus-visible:ring-sky-500"
               style={{
@@ -361,17 +366,17 @@ const PositionsTable: React.FC = () => {
                 transition: 'background 0.4s ease',
               }}
             >
-              <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
-              <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
+              <td style={{ ...s.td, fontWeight: 600, color: 'var(--text)' }}>{p.symbol}</td>
+              <td style={{ ...s.td, color: p.side === 'long' ? 'var(--gain)' : 'var(--loss)', fontWeight: 600, textTransform: 'uppercase' }}>
                 {p.side}
               </td>
               <td style={s.td}>{fmt(p.size, 2)}</td>
               <td style={s.td}>{fmt(p.entry_price, 4)}</td>
               <td style={s.td}>{fmt(p.current_price, 4)}</td>
-              <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+              <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
                 {fmtUSD(p.unrealized_pnl)}
               </td>
-              <td style={{ ...s.td, color: '#64748b', fontSize: 12 }}>
+              <td style={{ ...s.td, color: 'var(--text-muted)', fontSize: 12 }}>
                 {new Date(p.opened_at).toLocaleString()}
               </td>
             </tr>
@@ -411,7 +416,7 @@ const SignalsPanel: React.FC = () => {
               style={{
                 ...s.signalBadge,
                 background: sig.direction === 'long' ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
-                color:      sig.direction === 'long' ? '#4ade80' : '#f87171',
+                color:      sig.direction === 'long' ? 'var(--gain)' : 'var(--loss)',
               }}
             >
               {sig.direction.toUpperCase()}
@@ -419,7 +424,7 @@ const SignalsPanel: React.FC = () => {
           </div>
           <div style={s.signalRow}>
             <span style={s.signalKey}>Confidence</span>
-            <span style={{ ...s.signalVal, color: sig.confidence > 0.75 ? '#4ade80' : sig.confidence > 0.55 ? '#fbbf24' : '#f87171' }}>
+            <span style={{ ...s.signalVal, color: sig.confidence > 0.75 ? 'var(--gain)' : sig.confidence > 0.55 ? 'var(--warn)' : 'var(--loss)' }}>
               {(sig.confidence * 100).toFixed(1)}%
             </span>
           </div>
@@ -429,16 +434,16 @@ const SignalsPanel: React.FC = () => {
           </div>
           <div style={s.signalRow}>
             <span style={s.signalKey}>SL / TP</span>
-            <span style={{ ...s.signalVal, color: '#f87171' }}>{fmt(sig.stop_loss, 4)}</span>
-            <span style={{ color: '#64748b', margin: '0 4px' }}>/</span>
-            <span style={{ ...s.signalVal, color: '#4ade80' }}>{fmt(sig.take_profit, 4)}</span>
+            <span style={{ ...s.signalVal, color: 'var(--loss)' }}>{fmt(sig.stop_loss, 4)}</span>
+            <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>/</span>
+            <span style={{ ...s.signalVal, color: 'var(--gain)' }}>{fmt(sig.take_profit, 4)}</span>
           </div>
           <div style={s.signalRow}>
             <span style={s.signalKey}>Model</span>
-            <span style={{ ...s.signalVal, color: '#94a3b8' }}>{sig.model}</span>
+            <span style={{ ...s.signalVal, color: 'var(--text-dim)' }}>{sig.model}</span>
           </div>
           <div style={{ background: '#1e293b', borderRadius: 4, height: 4, marginTop: 8 }}>
-            <div style={{ width: `${sig.confidence * 100}%`, height: 4, borderRadius: 4, background: sig.confidence > 0.75 ? '#4ade80' : sig.confidence > 0.55 ? '#fbbf24' : '#f87171', transition: 'width 0.4s ease' }} />
+            <div style={{ width: `${sig.confidence * 100}%`, height: 4, borderRadius: 4, background: sig.confidence > 0.75 ? 'var(--gain)' : sig.confidence > 0.55 ? 'var(--warn)' : 'var(--loss)', transition: 'width 0.4s ease' }} />
           </div>
         </div>
       ))}
@@ -482,7 +487,7 @@ const MlAccuracyCard: React.FC = () => {
   }, []);
 
   if (mlErr) {
-    return <p style={{ color: '#f87171', fontSize: 13, padding: '16px 0' }}>{mlErr}</p>;
+    return <p style={{ color: 'var(--loss)', fontSize: 13, padding: '16px 0' }}>{mlErr}</p>;
   }
   if (!data) {
     return (
@@ -527,7 +532,7 @@ const MlAccuracyCard: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{data.model_id ?? 'Model'}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{data.model_id ?? 'Model'}</div>
           <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
             {safeTotalSigs.toLocaleString()} signals · evaluated {evaluatedLabel}
           </div>
@@ -535,7 +540,7 @@ const MlAccuracyCard: React.FC = () => {
         <div style={{
           fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
           background: safeAccuracy >= 0.60 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.12)',
-          color: safeAccuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          color: safeAccuracy >= 0.60 ? 'var(--gain)' : 'var(--warn)',
           border: `1px solid ${safeAccuracy >= 0.60 ? '#4ade8044' : '#fbbf2444'}`,
         }}>
           {safeAccuracy >= 0.60 ? '✅ GATE PASSED' : '⚠️ BELOW THRESHOLD'}
@@ -546,7 +551,7 @@ const MlAccuracyCard: React.FC = () => {
           <div key={m.key} style={s.mlCard}>
             <div style={s.mlMetric}>
               <span style={s.mlKey}>{m.key}</span>
-              <span style={{ ...s.mlVal, color: m.good ? '#4ade80' : '#fbbf24' }}>{m.val}</span>
+              <span style={{ ...s.mlVal, color: m.good ? 'var(--gain)' : 'var(--warn)' }}>{m.val}</span>
             </div>
           </div>
         ))}
@@ -557,7 +562,7 @@ const MlAccuracyCard: React.FC = () => {
       <div style={{ background: '#0f172a', borderRadius: 4, height: 6, marginTop: 12 }}>
         <div style={{
           width: `${Math.min(safeAccuracy * 100, 100)}%`, height: 6, borderRadius: 4,
-          background: safeAccuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          background: safeAccuracy >= 0.60 ? 'var(--gain)' : 'var(--warn)',
           transition: 'width 0.6s ease',
         }} />
       </div>
@@ -613,25 +618,25 @@ const MarketRegimePanel: React.FC = () => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 16 }}>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regimeColor }}>
           {regime.regime.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
         </div>
-        {regime.description && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{regime.description}</div>}
+        {regime.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{regime.description}</div>}
       </div>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>{regime.confidence != null ? `${(regime.confidence * 100).toFixed(1)}%` : '—'}</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>{regime.confidence != null ? `${(regime.confidence * 100).toFixed(1)}%` : '—'}</div>
       </div>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: regime.volatility === 'high' ? '#f87171' : regime.volatility === 'medium' ? '#fbbf24' : '#4ade80' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: regime.volatility === 'high' ? 'var(--loss)' : regime.volatility === 'medium' ? 'var(--warn)' : 'var(--gain)' }}>
           {regime.volatility ? regime.volatility.charAt(0).toUpperCase() + regime.volatility.slice(1) : '—'}
         </div>
       </div>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Trend</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: regime.trend === 'up' ? '#4ade80' : regime.trend === 'down' ? '#f87171' : '#94a3b8' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Trend</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: regime.trend === 'up' ? 'var(--gain)' : regime.trend === 'down' ? 'var(--loss)' : 'var(--text-dim)' }}>
           {regime.trend === 'up' ? '↑ Bullish' : regime.trend === 'down' ? '↓ Bearish' : '→ Neutral'}
         </div>
       </div>
@@ -687,11 +692,11 @@ const RiskSnapshotPanel: React.FC = () => {
       ].map(({ label, value, warn }) => (
         <div key={label} style={{
           background: warn ? 'rgba(248,113,113,0.08)' : '#0f172a',
-          border: `1px solid ${warn ? '#f87171' : '#1e293b'}`,
+          border: `1px solid ${warn ? 'var(--loss)' : '#1e293b'}`,
           borderRadius: 8, padding: '10px 14px',
         }}>
-          <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: warn ? '#f87171' : '#f8fafc' }}>{value}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: warn ? 'var(--loss)' : 'var(--text-strong)' }}>{value}</div>
         </div>
       ))}
     </div>
@@ -722,10 +727,10 @@ const QuickNav: React.FC = () => (
         key={path}
         to={path}
         className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                   focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
         style={{
           background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-          minHeight: 44, padding: '0 14px', color: '#94a3b8',
+          minHeight: 44, padding: '0 14px', color: 'var(--text-dim)',
           fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
           textDecoration: 'none', cursor: 'pointer',
           transition: 'border-color 0.15s, color 0.15s',
@@ -767,7 +772,7 @@ const WsBadge: React.FC = () => {
   const dot = stalled ? '#ffb800' : (colors[status] ?? '#64748b');
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#94a3b8' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)' }}>
       <span style={{
         width: 8, height: 8, borderRadius: '50%',
         background: dot,
@@ -803,7 +808,7 @@ const Dashboard: React.FC = () => {
           <Link
             to="/trade"
             className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
-                       focus-visible:ring-offset-2 focus-visible:ring-offset-[#080c14]"
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
             style={{
               background: '#1d4ed8', border: '1px solid #3b82f6', borderRadius: 8,
               color: '#fff', fontSize: 13, fontWeight: 700,
@@ -846,7 +851,7 @@ const Dashboard: React.FC = () => {
           <h2 style={s.cardTitle}>Live Equity Curve</h2>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             {has(acc?.total_pnl) && (
-              <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+              <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
                 {fmtUSD(acc.total_pnl)}
               </span>
             )}
@@ -854,7 +859,7 @@ const Dashboard: React.FC = () => {
               to="/performance"
               className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
                          no-underline cursor-pointer transition-colors duration-150
-                         hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2
+                         hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2
                          focus-visible:ring-sky-500"
             >
               Full report <ArrowRight size={12} strokeWidth={2} aria-hidden />
@@ -874,6 +879,14 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
+      {/* How close is this account to being stopped out by a rule?
+          prop_firm_mode.json ships enabled with the FTMO ruleset, so a daily
+          loss limit and a maximum drawdown are live constraints on a fresh
+          deployment, and the margin call is a third. None of them appeared
+          anywhere in the UI: "margin level 1116.6%" is not what a trader is
+          afraid of. Renders nothing at all when nothing is measured. */}
+      <RiskHeadroomPanel />
+
       <div style={s.twoCol}>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 10 }}>
@@ -882,7 +895,7 @@ const Dashboard: React.FC = () => {
               to="/portfolio"
               className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
                          no-underline cursor-pointer transition-colors duration-150
-                         hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2
+                         hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2
                          focus-visible:ring-sky-500"
             >
               View all <ArrowRight size={12} strokeWidth={2} aria-hidden />
@@ -897,7 +910,7 @@ const Dashboard: React.FC = () => {
               to="/ai-strategy"
               className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
                          no-underline cursor-pointer transition-colors duration-150
-                         hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2
+                         hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2
                          focus-visible:ring-sky-500"
             >
               Strategy gen <ArrowRight size={12} strokeWidth={2} aria-hidden />
@@ -911,7 +924,7 @@ const Dashboard: React.FC = () => {
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
             <h2 style={s.cardTitle}>Market Regime — XAU/USD</h2>
-            <Link to="/ai-chart" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+            <Link to="/ai-chart" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
               AI Chart <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
           </div>
@@ -920,7 +933,7 @@ const Dashboard: React.FC = () => {
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
             <h2 style={s.cardTitle}>Risk Snapshot</h2>
-            <Link to="/risk-calculator" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+            <Link to="/risk-calculator" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
               Calculator <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
           </div>
@@ -931,7 +944,7 @@ const Dashboard: React.FC = () => {
       <div style={s.card}>
         <div style={{ ...s.cardHeader, marginBottom: 12 }}>
           <h2 style={s.cardTitle}>ML Model Accuracy</h2>
-          <Link to="/performance" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[#60a5fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+          <Link to="/performance" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
               Performance <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
         </div>

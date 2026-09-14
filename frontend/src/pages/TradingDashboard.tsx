@@ -86,7 +86,7 @@ const QuickActionBar: React.FC = () => {
           HOME
         </Link>
         <span style={{ fontSize: 10, color: '#1e293b' }}>›</span>
-        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
       </div>
 
       <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
@@ -99,7 +99,7 @@ const QuickActionBar: React.FC = () => {
         border: `1px solid ${pnlColor}30`,
         borderRadius: 6, flexShrink: 0,
       }}>
-        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
         <span style={{ fontSize: 13, fontWeight: 800, color: pnlColor, fontFamily: 'monospace' }}>
           {unrealisedPnl >= 0 ? '+' : ''}{Number(unrealisedPnl).toFixed(2)}
         </span>
@@ -119,7 +119,7 @@ const QuickActionBar: React.FC = () => {
             background: 'transparent',
             border: `1px solid ${color}30`,
             borderRadius: 6,
-            color: '#94a3b8',
+            color: 'var(--text-dim)',
             fontSize: 11,
             fontFamily: 'inherit',
             cursor: 'pointer',
@@ -168,7 +168,7 @@ function DashboardInner() {
 
   return (
     <div
-      className="flex flex-col bg-[#080c14] overflow-y-auto"
+      className="flex flex-col bg-[var(--bg)] overflow-y-auto"
       style={{ fontFamily: "'Inter', system-ui, sans-serif", flex: 1, minHeight: 0 }}
     >
       {/* ── Top: price ticker + account bar + quick actions ─────────────── */}

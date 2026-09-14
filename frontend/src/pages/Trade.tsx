@@ -98,7 +98,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
         'min-w-[148px] flex-shrink-0',
         selected
           ? 'bg-[#1e3a5f] border-[#3b82f6] shadow-[0_0_0_1px_#3b82f6]'
-          : 'bg-[#0d1421] border-[#1e2d3d] hover:border-[#334155]',
+          : 'bg-[var(--surface)] border-[var(--border)] hover:border-[#334155]',
       )}
     >
       {/* Symbol + change badge */}
@@ -108,7 +108,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
           <span
             className={cn(
               'text-[10px] font-semibold px-1.5 py-0.5 rounded',
-              isUp ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]',
+              isUp ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]',
             )}
           >
             {isUp ? '+' : ''}{change.toFixed(2)}%
@@ -134,7 +134,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-[8px] text-slate-600 uppercase">Ask</span>
-            <span className="text-[#00e676] font-semibold">{fmtPrice(tick.ask)}</span>
+            <span className="text-[var(--bull)] font-semibold">{fmtPrice(tick.ask)}</span>
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-[8px] text-slate-600 uppercase">Sprd</span>
@@ -194,7 +194,7 @@ const AccountBar: React.FC = () => {
   const pnl        = account.total_pnl   ?? 0;
 
   return (
-    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[11px]">
       {[
         { label: 'Balance',      value: `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
         { label: 'Equity',       value: `$${equity.toLocaleString('en-US',  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
@@ -202,14 +202,14 @@ const AccountBar: React.FC = () => {
         {
           label: 'Unrealized P&L',
           value: `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`,
-          color: pnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
+          color: pnl >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
         },
         {
           label: 'Margin Level',
           value: fmtMarginLevel(account.margin_level, account.margin_used),
           color:
-            marginLevelIsSafe(account.margin_level) ? 'text-[#00e676]' :
-            (account.margin_level ?? 300) > 100 ? 'text-[#ffb800]' : 'text-[#ff1744]',
+            marginLevelIsSafe(account.margin_level) ? 'text-[var(--bull)]' :
+            (account.margin_level ?? 300) > 100 ? 'text-[#ffb800]' : 'text-[var(--bear)]',
         },
       ].map(({ label, value, color }) => (
         <div key={label} className="flex flex-col gap-0.5">
@@ -222,7 +222,7 @@ const AccountBar: React.FC = () => {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            feedLive ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
+            feedLive ? 'bg-[var(--bull)] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
         <span className="text-[10px] text-slate-500 capitalize">
@@ -254,7 +254,7 @@ function TradeHistoryTab() {
   });
 
   if (isLoading) return <div className="p-4"><PanelSkeleton rows={5} /></div>;
-  if (isError)   return <div className="p-4 text-[11px] text-[#ff1744]">Failed to load trade history</div>;
+  if (isError)   return <div className="p-4 text-[11px] text-[var(--bear)]">Failed to load trade history</div>;
   if (!data?.length) return (
     <div className="flex items-center justify-center h-20 text-slate-600 text-[12px]">
       No closed trades yet
@@ -265,7 +265,7 @@ function TradeHistoryTab() {
     <div className="overflow-x-auto">
       <table className="w-full text-[11px]">
         <thead>
-          <tr className="border-b border-[#1e2d3d]">
+          <tr className="border-b border-[var(--border)]">
             {['Symbol','Side','Size','Entry','Exit','P&L','Opened','Closed','Duration'].map((h) => (
               <th
                 key={h}
@@ -281,12 +281,12 @@ function TradeHistoryTab() {
             const isLong = positionSide(t) === 'long';  // F5-02
             const pnlPos = t.realized_pnl >= 0;
             return (
-              <tr key={t.id} className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/30 transition-colors">
+              <tr key={t.id} className="border-b border-[var(--surface)] hover:bg-[var(--border)]/30 transition-colors">
                 <td className="px-3 py-2 font-semibold text-slate-200 whitespace-nowrap">{t.symbol}</td>
                 <td className="px-3 py-2">
                   <span className={cn(
                     'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase',
-                    isLong ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]',
+                    isLong ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]',
                   )}>
                     {isLong ? '▲ Long' : '▼ Short'}
                   </span>
@@ -295,7 +295,7 @@ function TradeHistoryTab() {
                 <td className="px-3 py-2 tabular-nums text-slate-300">{fmtPrice(t.entry_price)}</td>
                 <td className="px-3 py-2 tabular-nums text-slate-300">{fmtPrice(t.exit_price)}</td>
                 <td className="px-3 py-2">
-                  <span className={cn('font-semibold tabular-nums', pnlPos ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+                  <span className={cn('font-semibold tabular-nums', pnlPos ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
                     {fmtPnl(t.realized_pnl)}
                   </span>
                 </td>
@@ -335,10 +335,10 @@ const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
         const isLong = sig.direction === 'long';
         const conf   = (sig.confidence ?? 0) * 100;
         return (
-          <div key={sig.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
+          <div key={sig.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0a0f1a] border border-[var(--border)]">
             <span className={cn(
               'text-[10px] font-bold px-2 py-0.5 rounded uppercase',
-              isLong ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]',
+              isLong ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]',
             )}>
               {isLong ? '▲ Long' : '▼ Short'}
             </span>
@@ -346,15 +346,15 @@ const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
               <div className="flex gap-3 text-[10px] tabular-nums">
                 <span className="text-slate-500">Entry <span className="text-slate-300">{fmtPrice(sig.entry_price)}</span></span>
                 <span className="text-[#ff3b5c]">SL {fmtPrice(sig.stop_loss)}</span>
-                <span className="text-[#00e676]">TP {fmtPrice(sig.take_profit)}</span>
+                <span className="text-[var(--bull)]">TP {fmtPrice(sig.take_profit)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex-1 h-1 rounded bg-[#1e2d3d]">
+                <div className="flex-1 h-1 rounded bg-[var(--border)]">
                   <div
                     className="h-1 rounded transition-all"
                     style={{
                       width: `${conf}%`,
-                      background: conf >= 75 ? '#00e676' : conf >= 55 ? '#ffb800' : '#ff1744',
+                      background: conf >= 75 ? 'var(--bull)' : conf >= 55 ? '#ffb800' : 'var(--bear)',
                     }}
                   />
                 </div>
@@ -383,11 +383,11 @@ const RiskBar: React.FC = () => {
   ];
 
   return (
-    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[11px]">
       {items.map(({ label, value, warn }) => (
         <div key={label} className="flex flex-col gap-0.5">
           <span className="text-[9px] uppercase tracking-wider text-slate-500">{label}</span>
-          <span className={cn('font-semibold tabular-nums', warn ? 'text-[#ff1744]' : 'text-slate-300')}>{value}</span>
+          <span className={cn('font-semibold tabular-nums', warn ? 'text-[var(--bear)]' : 'text-slate-300')}>{value}</span>
         </div>
       ))}
     </div>
@@ -407,8 +407,8 @@ function BottomSection() {
   ];
 
   return (
-    <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden">
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-[#1e2d3d]">
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)]">
         {tabs.map(({ id, label }) => (
           <button
             key={id}
@@ -416,8 +416,8 @@ function BottomSection() {
             className={cn(
               'px-3 py-1 rounded text-[11px] font-semibold border transition-colors',
               tab === id
-                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
             )}
           >
             {label}
@@ -435,7 +435,7 @@ function BottomSection() {
 // ── Keyboard shortcut hint bar ────────────────────────────────────────────────
 
 const KeyboardHints: React.FC = () => (
-  <div className="flex flex-wrap gap-3 px-3 py-1.5 rounded bg-[#0a0f1a] border border-[#1e2d3d] text-[10px] text-slate-600">
+  <div className="flex flex-wrap gap-3 px-3 py-1.5 rounded bg-[#0a0f1a] border border-[var(--border)] text-[10px] text-slate-600">
     {[
       // Digits select from SYMBOLS, of which only the first nine are reachable
       // by a single keypress — the hint said 1–6 while twelve are listed.
@@ -449,7 +449,7 @@ const KeyboardHints: React.FC = () => (
       ['Cmd+K', 'Command palette'],
     ].map(([key, desc]) => (
       <span key={key} className="flex items-center gap-1">
-        <kbd className="px-1.5 py-0.5 rounded bg-[#1e2d3d] text-slate-400 font-mono text-[9px]">{key}</kbd>
+        <kbd className="px-1.5 py-0.5 rounded bg-[var(--border)] text-slate-400 font-mono text-[9px]">{key}</kbd>
         <span>{desc}</span>
       </span>
     ))}
@@ -544,21 +544,21 @@ const Trade: React.FC = () => {
           <div className="flex flex-wrap items-center gap-1.5">
             <Link
               to="/watchlist"
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[#38bdf8] hover:bg-[#1e3a5f]/40 transition-colors min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[var(--focus)] hover:bg-[#1e3a5f]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
               👁 <span className="hidden xs:inline ml-1">Watchlist</span>
             </Link>
             <Link
               to="/portfolio"
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[var(--ai-model)] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
               💼 <span className="hidden xs:inline ml-1">Portfolio</span>
             </Link>
             <Link
               to="/risk-calculator"
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/40 transition-colors min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[var(--text-dim)] hover:bg-[#334155]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
               🛡 <span className="hidden xs:inline ml-1">Risk Calc</span>
@@ -566,7 +566,7 @@ const Trade: React.FC = () => {
             <button
               onClick={handleCloseAll}
               disabled={closingAll}
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50 min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-bold bg-[var(--bear)]/10 border border-[var(--bear)]/30 text-[var(--bear)] hover:bg-[var(--bear)]/20 transition-colors disabled:opacity-50 min-h-[36px]"
             >
               {closingAll ? 'Closing…' : '✕ Close All'}
             </button>
@@ -587,7 +587,7 @@ const Trade: React.FC = () => {
       <KeyboardHints />
 
       {/* Symbol selector strip — numbers 1-6 select via keyboard */}
-      <div className="stagger flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#1e2d3d]">
+      <div className="stagger flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[var(--border)]">
         {SYMBOLS.map((sym, i) => (
           <SymbolCard
             key={sym}
@@ -619,7 +619,7 @@ const Trade: React.FC = () => {
         />
         <div className="flex flex-col gap-4">
           <PositionsTable symbol={selectedSymbol} />
-          <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg p-3">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
               AI Signals — {selectedSymbol}
             </div>

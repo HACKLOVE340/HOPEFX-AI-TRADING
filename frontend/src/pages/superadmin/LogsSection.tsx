@@ -13,13 +13,13 @@ import { ActionBanner } from '../../components/ActionBanner';
 /** Fallback for an unrecognised key. Named so it is not itself an
     index access, which `noUncheckedIndexedAccess` types as possibly
     undefined (audit #38). Value is unchanged. */
-const LEVEL_COLORS_DEFAULT = { color: '#60a5fa', bg: '#0c1a2e' };
+const LEVEL_COLORS_DEFAULT = { color: 'var(--link)', bg: '#0c1a2e' };
 
 const LEVEL_COLORS: Record<string, { color: string; bg: string }> = {
-  DEBUG:    { color: '#94a3b8', bg: '#1e293b' },
+  DEBUG:    { color: 'var(--text-dim)', bg: '#1e293b' },
   INFO: LEVEL_COLORS_DEFAULT,
-  WARNING:  { color: '#fbbf24', bg: '#1c1200' },
-  ERROR:    { color: '#f87171', bg: '#1a0000' },
+  WARNING:  { color: 'var(--warn)', bg: '#1c1200' },
+  ERROR:    { color: 'var(--loss)', bg: '#1a0000' },
   CRITICAL: { color: '#fca5a5', bg: '#2d0000' },
 };
 
@@ -116,14 +116,14 @@ const LogsSection: React.FC = () => {
                 display: 'flex', alignItems: 'center', gap: 8,
                 background: '#1e293b', borderRadius: 8, padding: '8px 12px',
               }}>
-                <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>{logger}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', minWidth: 120 }}>{logger}</span>
                 <select
                   value={level}
                   onChange={e => setLevel(logger, e.target.value)}
                   disabled={savingLevel === logger}
                   style={{
                     background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
-                    color: LEVEL_COLORS[level]?.color ?? '#94a3b8',
+                    color: LEVEL_COLORS[level]?.color ?? 'var(--text-dim)',
                     fontSize: 12, padding: '4px 8px', cursor: 'pointer',
                   }}
                 >
@@ -132,7 +132,7 @@ const LogsSection: React.FC = () => {
                   ))}
                 </select>
                 {savingLevel === logger && (
-                  <div style={{ width: 12, height: 12, border: '2px solid #334155', borderTopColor: '#60a5fa', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
+                  <div style={{ width: 12, height: 12, border: '2px solid #334155', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
                 )}
               </div>
             ))}
@@ -150,7 +150,7 @@ const LogsSection: React.FC = () => {
         noPad
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#64748b', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
               <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
               Auto-scroll
             </label>
@@ -222,7 +222,7 @@ const LogsSection: React.FC = () => {
                     <span style={{ color: '#475569', padding: '0 10px', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {l.logger}
                     </span>
-                    <span style={{ color: '#94a3b8', paddingRight: 12, flex: 1 }}>
+                    <span style={{ color: 'var(--text-dim)', paddingRight: 12, flex: 1 }}>
                       {l.message}
                     </span>
                     {l.trace_id && (

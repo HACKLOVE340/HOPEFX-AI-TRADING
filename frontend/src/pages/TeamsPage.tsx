@@ -58,7 +58,7 @@ interface TeamPerformance {
 
 /** Fallback for an unrecognised role, named so it is not itself an index
     access (audit #38). Value unchanged — same as `viewer`. */
-const ROLE_COLORS_DEFAULT = { bg: '#64748b22', color: '#94a3b8' };
+const ROLE_COLORS_DEFAULT = { bg: '#64748b22', color: 'var(--text-dim)' };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   owner:   { bg: '#f59e0b22', color: '#f59e0b' },
@@ -82,8 +82,8 @@ function RoleBadge({ role }: { role: string }) {
 function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 16px' }}>
-      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: color ?? '#e2e8f0' }}>{value}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: color ?? 'var(--text)' }}>{value}</div>
     </div>
   );
 }
@@ -137,11 +137,11 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
     <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>{detailData?.name}</h2>
-          <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>{detailData?.description}</p>
+          <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{detailData?.name}</h2>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{detailData?.description}</p>
         </div>
         <button onClick={onClose}
-          style={{ padding: '6px 10px', background: '#334155', color: '#94a3b8', border: 'none',
+          style={{ padding: '6px 10px', background: '#334155', color: 'var(--text-dim)', border: 'none',
             borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>✕</button>
       </div>
 
@@ -151,7 +151,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
               fontSize: 13, fontWeight: tab === t ? 600 : 400,
-              color: tab === t ? '#8b5cf6' : '#64748b',
+              color: tab === t ? '#8b5cf6' : 'var(--text-muted)',
               borderBottom: tab === t ? '2px solid #8b5cf6' : '2px solid transparent',
               textTransform: 'capitalize' }}>
             {t}
@@ -168,10 +168,10 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                 <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                   placeholder="Email address"
                   style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-                    padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }} />
+                    padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
                 <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                   style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-                    padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }}>
+                    padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
                   <option value="trader">Trader</option>
                   <option value="manager">Manager</option>
                   <option value="viewer">Viewer</option>
@@ -184,12 +184,12 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                 </button>
               </div>
               {inviteMut.isError && (
-                <div style={{ marginTop: 6, fontSize: 12, color: '#f87171' }}>
+                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--loss)' }}>
                   ⚠ {extractApiError(inviteMut.error, 'Invite failed')}
                 </div>
               )}
               {inviteMut.isSuccess && (
-                <div style={{ marginTop: 6, fontSize: 12, color: '#4ade80' }}>Invitation sent.</div>
+                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gain)' }}>Invitation sent.</div>
               )}
             </div>
           )}
@@ -197,7 +197,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
           {/* Member list */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {members.length === 0 && (
-              <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center', padding: 20 }}>No members yet</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>No members yet</div>
             )}
             {members.map(m => (
               <div key={m.user_id} style={{
@@ -206,12 +206,12 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
               }}>
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#334155',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, fontWeight: 700, color: '#94a3b8', flexShrink: 0 }}>
+                  fontSize: 13, fontWeight: 700, color: 'var(--text-dim)', flexShrink: 0 }}>
                   {m.username?.[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{m.username}</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{m.email}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.username}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.email}</div>
                 </div>
                 <RoleBadge role={m.role} />
                 <div style={{ fontSize: 12, color: (m.pnl_contribution ?? 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
@@ -246,7 +246,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
       )}
 
       {tab === 'performance' && !perf && (
-        <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center', padding: 30 }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 30 }}>
           No performance data available yet
         </div>
       )}
@@ -301,8 +301,8 @@ const TeamsPage: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#e2e8f0' }}>Teams</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>Teams</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
             Collaborative trading with shared strategies and P&L — enterprise tier
           </p>
         </div>
@@ -327,14 +327,14 @@ const TeamsPage: React.FC = () => {
       {showCreate && (
         <div style={{ background: '#1e293b', border: '1px solid #06b6d444', borderRadius: 12,
           padding: 20, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>Create Team</h3>
+          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Create Team</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Team name"
               style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-                padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }} />
+                padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
             <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)"
               style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-                padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }} />
+                padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => createMut.mutate()} disabled={!newName.trim() || createMut.isPending}
@@ -344,12 +344,12 @@ const TeamsPage: React.FC = () => {
               {createMut.isPending ? 'Creating…' : 'Create'}
             </button>
             <button onClick={() => setShowCreate(false)}
-              style={{ padding: '8px 14px', background: '#334155', color: '#94a3b8', border: 'none',
+              style={{ padding: '8px 14px', background: '#334155', color: 'var(--text-dim)', border: 'none',
                 borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
               Cancel
             </button>
             {createMut.isError && (
-              <span style={{ fontSize: 12, color: '#f87171' }}>
+              <span style={{ fontSize: 12, color: 'var(--loss)' }}>
                 ⚠ {extractApiError(createMut.error, 'Failed to create team')}
               </span>
             )}
@@ -360,13 +360,13 @@ const TeamsPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '280px 1fr' : '1fr', gap: 20 }}>
         {/* Team list */}
         <div>
-          {isLoading && <div style={{ color: '#64748b', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading…</div>}
+          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading…</div>}
           {!isLoading && teams.length === 0 && (
             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>👥</div>
-              <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>No teams yet</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Create a team to collaborate with other traders</div>
+              <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No teams yet</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Create a team to collaborate with other traders</div>
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -378,14 +378,14 @@ const TeamsPage: React.FC = () => {
                   borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{t.name}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t.name}</span>
                   <span style={{ fontSize: 11, color: t.status === 'active' ? '#22c55e' : '#ef4444',
                     background: t.status === 'active' ? '#22c55e22' : '#ef444422',
                     padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>
                     {t.status}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   {t.member_count} member{t.member_count !== 1 ? 's' : ''}
                 </div>
               </div>

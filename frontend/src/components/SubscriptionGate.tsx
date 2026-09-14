@@ -65,10 +65,10 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
           🔒
         </div>
 
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: '0 0 10px' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' }}>
           {neededLabel} plan required
         </h2>
-        <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 28px', lineHeight: 1.6 }}>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 0 28px', lineHeight: 1.6 }}>
           This feature is available on the{' '}
           <span style={{ color: neededColor, fontWeight: 600 }}>{neededLabel}</span> plan and above.
           Upgrade to unlock it.
@@ -89,7 +89,7 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
             onClick={() => navigate(-1)}
             style={{
               background: 'transparent', border: '1px solid #334155', borderRadius: 8,
-              color: '#94a3b8', cursor: 'pointer', fontSize: 14, fontWeight: 500,
+              color: 'var(--text-dim)', cursor: 'pointer', fontSize: 14, fontWeight: 500,
               padding: '10px 20px',
             }}
           >

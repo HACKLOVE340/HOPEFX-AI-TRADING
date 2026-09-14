@@ -39,15 +39,15 @@ const fmtDate = (iso: string | null) =>
 /** Fallback for an unrecognised key. Named so it is not itself an
     index access, which `noUncheckedIndexedAccess` types as possibly
     undefined (audit #38). Value is unchanged. */
-const KYC_STATUS_COLORS_DEFAULT = { color: '#64748b', bg: '#1e293b' };
+const KYC_STATUS_COLORS_DEFAULT = { color: 'var(--text-muted)', bg: '#1e293b' };
 
 const KYC_STATUS_COLORS: Record<string, { color: string; bg: string }> = {
   unverified: KYC_STATUS_COLORS_DEFAULT,
-  pending:      { color: '#fbbf24', bg: '#78350f' },
-  submitted:    { color: '#60a5fa', bg: '#1e3a5f' },
+  pending:      { color: 'var(--warn)', bg: '#78350f' },
+  submitted:    { color: 'var(--link)', bg: '#1e3a5f' },
   under_review: { color: '#c084fc', bg: '#2e1065' },
-  approved:     { color: '#4ade80', bg: '#052e16' },
-  rejected:     { color: '#f87171', bg: '#450a0a' },
+  approved:     { color: 'var(--gain)', bg: '#052e16' },
+  rejected:     { color: 'var(--loss)', bg: '#450a0a' },
 };
 
 const ComplianceSection: React.FC = () => {
@@ -216,10 +216,10 @@ const ComplianceSection: React.FC = () => {
                         {k.kyc_status.replace('_', ' ').toUpperCase()}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{k.document_type ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{k.country ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(k.submitted_at)}</td>
-                    <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(k.reviewed_at)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{k.document_type ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{k.country ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.submitted_at)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.reviewed_at)}</td>
                     <td style={{ padding: '10px 12px' }}>
                       {['pending', 'submitted', 'under_review'].includes(k.kyc_status) && (
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -258,12 +258,12 @@ const ComplianceSection: React.FC = () => {
               {aml.map(a => (
                 <tr key={a.alert_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{a.username}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{a.alert_type}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{a.alert_type}</td>
                   <td style={{ padding: '10px 12px' }}><SeverityBadge severity={a.severity} /></td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#f87171' }}>{a.amount.toLocaleString()} {a.currency}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--loss)' }}>{a.amount.toLocaleString()} {a.currency}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</td>
                   <td style={{ padding: '10px 12px' }}><StatusBadge status={a.status} size="sm" /></td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(a.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(a.created_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {a.status === 'open' && (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -302,17 +302,17 @@ const ComplianceSection: React.FC = () => {
               {sanctions.map(s => (
                 <tr key={s.hit_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{s.username}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{s.list_name}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{s.list_name}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ flex: 1, height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden', minWidth: 80 }}>
                         <div style={{ height: '100%', width: `${s.match_score * 100}%`, background: s.match_score > 0.8 ? '#ef4444' : s.match_score > 0.6 ? '#f59e0b' : '#22c55e', borderRadius: 3 }} />
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: s.match_score > 0.8 ? '#f87171' : '#fbbf24' }}>{(s.match_score * 100).toFixed(0)}%</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: s.match_score > 0.8 ? 'var(--loss)' : 'var(--warn)' }}>{(s.match_score * 100).toFixed(0)}%</span>
                     </div>
                   </td>
                   <td style={{ padding: '10px 12px' }}><StatusBadge status={s.status} size="sm" /></td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {s.status === 'pending' && (
                       <div style={{ display: 'flex', gap: 6 }}>

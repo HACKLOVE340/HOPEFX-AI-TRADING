@@ -31,9 +31,9 @@ import { aiCoreApi } from '../../hooks/useApi';
 import { useStore, selectAiJobs } from '../../store';
 
 const COLOR = {
-  ok: '#42d392',
-  warn: '#f5b84b',
-  bad: '#f36d78',
+  ok: 'var(--ok)',
+  warn: 'var(--degraded)',
+  bad: 'var(--failed)',
   info: '#73a7ff',
   muted: '#70809a',
   text: '#e7edf7',

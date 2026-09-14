@@ -381,7 +381,7 @@ const TestIntelligencePanel: React.FC<{
         ))}
         <div>
           <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Last Indexed</div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 4 }}>{fmtAgo(testIndex?.last_indexed ?? null)}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginTop: 4 }}>{fmtAgo(testIndex?.last_indexed ?? null)}</div>
         </div>
       </div>
 
@@ -399,7 +399,7 @@ const TestIntelligencePanel: React.FC<{
           {/* Master toggle + category grid */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Test Categories
               </div>
               <ActionBtn
@@ -424,7 +424,7 @@ const TestIntelligencePanel: React.FC<{
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{cat.icon}</span>
                         <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: enabled ? '#f1f5f9' : '#64748b' }}>{cat.label}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: enabled ? '#f1f5f9' : 'var(--text-muted)' }}>{cat.label}</div>
                           <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{cat.description}</div>
                         </div>
                       </div>
@@ -466,7 +466,7 @@ const TestIntelligencePanel: React.FC<{
 
           {/* Execution strategy */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               Test Execution Strategy
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -480,7 +480,7 @@ const TestIntelligencePanel: React.FC<{
                       padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                       cursor: 'pointer', transition: 'all 0.15s',
                       background: active ? '#1e3a5f' : '#1e293b',
-                      color: active ? '#60a5fa' : '#64748b',
+                      color: active ? 'var(--link)' : 'var(--text-muted)',
                       border: `1px solid ${active ? '#1d4ed8' : '#334155'}`,
                     }}
                   >{opt.label}</button>
@@ -562,7 +562,7 @@ const SafetyGatesPanel: React.FC<{
 
       {/* Aggressiveness */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Healing Aggressiveness
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -587,7 +587,7 @@ const SafetyGatesPanel: React.FC<{
                   boxShadow: active ? `0 0 8px ${opt.color}66` : 'none',
                   transition: 'all 0.15s',
                 }} />
-                <span style={{ fontSize: 13, color: active ? '#f1f5f9' : '#64748b', fontWeight: active ? 600 : 400 }}>
+                <span style={{ fontSize: 13, color: active ? '#f1f5f9' : 'var(--text-muted)', fontWeight: active ? 600 : 400 }}>
                   {opt.label}
                 </span>
                 {opt.value === 'nuclear' && active && (
@@ -607,7 +607,7 @@ const SafetyGatesPanel: React.FC<{
 
       {/* Approval matrix */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
           Smart Approval Matrix
         </div>
         <div style={{ fontSize: 11, color: '#475569', marginBottom: 10 }}>
@@ -624,7 +624,7 @@ const SafetyGatesPanel: React.FC<{
                   padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                   cursor: 'pointer', transition: 'all 0.15s',
                   background: required ? '#450a0a' : '#1e293b',
-                  color: required ? '#f87171' : '#64748b',
+                  color: required ? 'var(--loss)' : 'var(--text-muted)',
                   border: `1px solid ${required ? '#dc2626' : '#334155'}`,
                 }}
               >{cat.icon} {cat.label.split(' ')[0]} {required ? '🔒' : ''}</button>
@@ -637,7 +637,7 @@ const SafetyGatesPanel: React.FC<{
 
       {/* Protected paths */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
           Protected Paths
         </div>
         <div style={{ fontSize: 11, color: '#475569', marginBottom: 8 }}>
@@ -731,20 +731,20 @@ const DriftLogPanel: React.FC<{
           <tbody>
             {events.slice().reverse().map((e, i) => (
               <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                <td style={{ padding: '7px 10px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</td>
+                <td style={{ padding: '7px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</td>
                 <td style={{ padding: '7px 10px' }}>
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
                     background: `${DRIFT_TYPE_COLORS[e.type] ?? '#475569'}22`,
-                    color: DRIFT_TYPE_COLORS[e.type] ?? '#94a3b8',
+                    color: DRIFT_TYPE_COLORS[e.type] ?? 'var(--text-dim)',
                     textTransform: 'uppercase',
                   }}>{e.type}</span>
                 </td>
-                <td style={{ padding: '7px 10px', color: '#e2e8f0', fontFamily: 'monospace', fontSize: 11 }}>{e.path}</td>
+                <td style={{ padding: '7px 10px', color: 'var(--text)', fontFamily: 'monospace', fontSize: 11 }}>{e.path}</td>
                 <td style={{ padding: '7px 10px', textAlign: 'center' }}>
                   {e.protected && <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 700 }}>🔒</span>}
                 </td>
-                <td style={{ padding: '7px 10px', color: '#64748b', fontFamily: 'monospace', fontSize: 10 }}>
+                <td style={{ padding: '7px 10px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 10 }}>
                   {e.expected && e.actual ? `${e.expected}…→${e.actual}…` : '—'}
                 </td>
               </tr>
@@ -781,13 +781,13 @@ const PatchHistoryPanel: React.FC<{
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: p.success ? '#4ade80' : '#f87171' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: p.success ? 'var(--gain)' : 'var(--loss)' }}>
                       {p.success ? '✓ APPLIED' : '✗ REJECTED'}
                     </span>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>{fmtDate(p.applied_at)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(p.applied_at)}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace', marginBottom: 2 }}>{p.file}</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{p.message}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text)', fontFamily: 'monospace', marginBottom: 2 }}>{p.file}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.message}</div>
                 </div>
                 {p.diff && (
                   <ActionBtn
@@ -801,7 +801,7 @@ const PatchHistoryPanel: React.FC<{
                 <pre style={{
                   marginTop: 10, padding: '10px 12px', borderRadius: 6,
                   background: '#020817', border: '1px solid #1e293b',
-                  fontSize: 10, color: '#94a3b8', overflowX: 'auto',
+                  fontSize: 10, color: 'var(--text-dim)', overflowX: 'auto',
                   maxHeight: 300, lineHeight: 1.5,
                 }}>{p.diff}</pre>
               )}
@@ -834,8 +834,8 @@ const QuarantinePanel: React.FC<{
             background: '#0f172a', border: '1px solid #1e293b',
             fontSize: 11, alignItems: 'center',
           }}>
-            <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</span>
-            <span style={{ color: '#e2e8f0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.original}</span>
+            <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</span>
+            <span style={{ color: 'var(--text)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.original}</span>
             <span style={{ color: '#475569', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>→ {e.quarantined_to}</span>
           </div>
         ))}
@@ -869,13 +869,13 @@ const PendingApprovalPanel: React.FC<{
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 {p.category && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', background: '#2e1065', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--ai-model)', background: '#2e1065', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>
                     {p.category}
                   </span>
                 )}
-                <span style={{ fontSize: 11, color: '#64748b' }}>Queued {fmtDate(p.queued_at)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Queued {fmtDate(p.queued_at)}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace' }}>{p.endpoint}</div>
+              <div style={{ fontSize: 12, color: 'var(--text)', fontFamily: 'monospace' }}>{p.endpoint}</div>
             </div>
             <ActionBtn
               label={approvingIdx === i ? 'Approving…' : 'Approve'}
@@ -914,18 +914,18 @@ const TestRunPanel: React.FC<{
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{
               fontSize: 12, fontWeight: 700,
-              color: lastResult.success ? '#4ade80' : '#f87171',
+              color: lastResult.success ? 'var(--gain)' : 'var(--loss)',
             }}>
               {lastResult.success ? '✓ PASSED' : '✗ FAILED'}
             </span>
             {lastResult.passed != null && (
-              <span style={{ fontSize: 12, color: '#4ade80' }}>{lastResult.passed} passed</span>
+              <span style={{ fontSize: 12, color: 'var(--gain)' }}>{lastResult.passed} passed</span>
             )}
             {lastResult.failed != null && lastResult.failed > 0 && (
-              <span style={{ fontSize: 12, color: '#f87171' }}>{lastResult.failed} failed</span>
+              <span style={{ fontSize: 12, color: 'var(--loss)' }}>{lastResult.failed} failed</span>
             )}
             {lastResult.duration_sec != null && (
-              <span style={{ fontSize: 11, color: '#64748b' }}>{lastResult.duration_sec}s</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lastResult.duration_sec}s</span>
             )}
             {lastResult.ts && (
               <span style={{ fontSize: 11, color: '#475569' }}>{fmtAgo(lastResult.ts)}</span>
@@ -944,7 +944,7 @@ const TestRunPanel: React.FC<{
             <pre style={{
               marginTop: 10, padding: '12px 14px', borderRadius: 8,
               background: '#020817', border: '1px solid #1e293b',
-              fontSize: 10, color: '#94a3b8', overflowX: 'auto',
+              fontSize: 10, color: 'var(--text-dim)', overflowX: 'auto',
               maxHeight: 400, lineHeight: 1.6, whiteSpace: 'pre-wrap',
             }}>{lastResult.output}</pre>
           )}
@@ -1354,7 +1354,7 @@ const AutoHealingSection: React.FC = () => {
                   padding: '12px 18px', border: 'none', cursor: 'pointer',
                   background: active ? '#0f172a' : 'transparent',
                   borderBottom: `2px solid ${active ? tab.accent : 'transparent'}`,
-                  color: active ? '#f1f5f9' : '#64748b',
+                  color: active ? '#f1f5f9' : 'var(--text-muted)',
                   fontSize: 12, fontWeight: active ? 700 : 500,
                   whiteSpace: 'nowrap', transition: 'all 0.15s',
                 }}
@@ -1363,7 +1363,7 @@ const AutoHealingSection: React.FC = () => {
                 <span>{tab.label}</span>
                 {badge != null && (
                   <span style={{
-                    background: '#a78bfa', color: '#0f0a1e',
+                    background: 'var(--ai-model)', color: '#0f0a1e',
                     borderRadius: 10, fontSize: 10, fontWeight: 800,
                     padding: '1px 6px', minWidth: 18, textAlign: 'center',
                   }}>{badge}</span>
@@ -1440,7 +1440,7 @@ const AutoHealingSection: React.FC = () => {
         <div style={{
           marginTop: 12, padding: '12px 16px', borderRadius: 8,
           background: msgType === 'ok' ? '#052e16' : '#450a0a',
-          color: msgType === 'ok' ? '#4ade80' : '#f87171',
+          color: msgType === 'ok' ? 'var(--gain)' : 'var(--loss)',
           border: `1px solid ${msgType === 'ok' ? '#16a34a' : '#dc2626'}`,
           fontSize: 13, fontWeight: 600,
         }}>{msg}</div>
