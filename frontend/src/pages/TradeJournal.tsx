@@ -323,7 +323,7 @@ const TradeJournal: React.FC = () => {
       {tab === 'trades' && (
         <>
           <div style={s.filterRow}>
-            <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} style={s.select}>
+            <select aria-label="Filter by tag" value={filterTag} onChange={(e) => setFilterTag(e.target.value)} style={s.select}>
               <option value="">All tags</option>
               {TRADE_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>

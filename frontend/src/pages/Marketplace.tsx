@@ -245,7 +245,7 @@ const Marketplace: React.FC = () => {
         <>
           <div style={st.filterBar}>
             <input aria-label="Search strategies" type="search" placeholder="Search strategies…" value={search} onChange={e=>setSearch(e.target.value)} style={st.searchInput}/>
-            <select value={sortBy} onChange={e=>setSortBy(e.target.value as SortOption)} style={st.select}><option value="popular">Most popular</option><option value="rating">Highest rated</option><option value="newest">Newest</option><option value="price_low">Price: low → high</option><option value="price_high">Price: high → low</option></select>
+            <select aria-label="Sort strategies" value={sortBy} onChange={e=>setSortBy(e.target.value as SortOption)} style={st.select}><option value="popular">Most popular</option><option value="rating">Highest rated</option><option value="newest">Newest</option><option value="price_low">Price: low → high</option><option value="price_high">Price: high → low</option></select>
           </div>
           <div style={st.categoryRow}>{CATEGORIES.map(c=><button key={c} onClick={()=>setCategory(c)} style={{...st.categoryPill,background:category===c?'#3b82f6':'#1e293b',color:category===c?'#fff':'var(--text-dim)',border:`1px solid ${category===c?'#3b82f6':'#334155'}`}}>{c==='all'?'All':c.replace('_',' ')}</button>)}</div>
           {loadErr&&<div style={st.errorBox}>{loadErr}</div>}
