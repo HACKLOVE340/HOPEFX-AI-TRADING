@@ -10,11 +10,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-import {
-  BookOpen, Zap, BarChart2, Brain, Shield, Globe,
-  Code2, Settings, Users, ChevronRight, ExternalLink,
-  Search, Activity,
-} from 'lucide-react';
+import { Activity, Banknote, BarChart2, BarChart3, BookOpen, Bot, Brain, ChevronRight, CircleDot, Code2, ExternalLink, Globe, Search, Settings, Shield, Trophy, Users, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -372,12 +368,12 @@ const DocsPage: React.FC = () => {
 
         {/* Quick navigation */}
         <CrossLinkBar title="Quick Links" style={{ marginBottom: 32 }} links={[
-          { label: 'Dashboard',    href: '/dashboard',  icon: '📊', color: '#3b82f6' },
-          { label: 'Trade',        href: '/trade',      icon: '⚡', color: '#4ade80' },
-          { label: 'Pricing',      href: '/pricing',    icon: '💰', color: '#f59e0b' },
-          { label: 'Status',       href: '/status',     icon: '🟢', color: '#22c55e' },
-          { label: 'AI Strategy',  href: '/ai-strategy',icon: '🤖', color: '#a78bfa' },
-          { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#fbbf24' },
+          { label: 'Dashboard',    href: '/dashboard',  icon: BarChart3, color: '#3b82f6' },
+          { label: 'Trade',        href: '/trade',      icon: Zap, color: '#4ade80' },
+          { label: 'Pricing',      href: '/pricing',    icon: Banknote, color: '#f59e0b' },
+          { label: 'Status',       href: '/status',     icon: CircleDot, color: '#22c55e' },
+          { label: 'AI Strategy',  href: '/ai-strategy',icon: Bot, color: '#a78bfa' },
+          { label: 'Leaderboard',  href: '/leaderboard',icon: Trophy, color: '#fbbf24' },
         ]} />
 
         {/* Footer links */}

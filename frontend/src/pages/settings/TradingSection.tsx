@@ -7,6 +7,7 @@ import { SYMBOLS, TIMEFRAMES } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { TrendingUp } from 'lucide-react';
 
 const DEFAULT: TradingPreferences = {
   default_symbol: 'XAU_USD',
@@ -111,7 +112,7 @@ const TradingSection: React.FC = () => {
   // limits, and defaults are indistinguishable from saved values.
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="📈" title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
+      <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
       <ErrorBanner message="Couldn't load your trading preferences. Nothing has been changed — reload to try again." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -121,7 +122,7 @@ const TradingSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="📈" title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
+      <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
 
       {/* Account snapshot */}
       {account && (

@@ -10,6 +10,7 @@ import {
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { AlertTriangle, ArrowLeftRight, BarChart3, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, Radio, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -864,7 +865,7 @@ const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ a
 const PlatformTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🌐" title="Platform Identity" />
+      <SectionHeader icon={<Globe size={18} aria-hidden />} title="Platform Identity" />
       <Txt label="Platform Name" value={cfg.platform_name} onChange={(v) => set({ platform_name: v })} />
       <Txt label="Support Email" value={cfg.support_email} onChange={(v) => set({ support_email: v })} />
       <Sel label="Environment" value={cfg.env}
@@ -876,7 +877,7 @@ const PlatformTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
       <Tog id="debug" label="Debug Mode" desc="Enables verbose stack traces. Never enable in production." checked={cfg.debug} onChange={(v) => set({ debug: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="👥" title="User Registration" />
+      <SectionHeader icon={<Users size={18} aria-hidden />} title="User Registration" />
       <Tog id="allow_reg" label="Allow New Registrations" checked={cfg.allow_registrations} onChange={(v) => set({ allow_registrations: v })} />
       <Tog id="email_verify" label="Require Email Verification" checked={cfg.require_email_verification} onChange={(v) => set({ require_email_verification: v })} />
       <Sel label="Default New User Plan" value={cfg.default_new_user_plan}
@@ -891,7 +892,7 @@ const PlatformTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
       <Tog id="force_2fa" label="Force 2FA for Admins" checked={cfg.force_2fa_for_admins} onChange={(v) => set({ force_2fa_for_admins: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📢" title="Maintenance & Announcements" />
+      <SectionHeader icon={<Megaphone size={18} aria-hidden />} title="Maintenance & Announcements" />
       <Tog id="maint" label="Maintenance Mode" desc="Blocks all non-admin access." checked={cfg.maintenance_mode} onChange={(v) => set({ maintenance_mode: v })} />
       <Txt label="Maintenance Message" value={cfg.maintenance_message} placeholder="We'll be back shortly…" onChange={(v) => set({ maintenance_message: v })} />
       <Divider />
@@ -902,16 +903,16 @@ const PlatformTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
         onChange={(v) => set({ announcement_type: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🚦" title="Global Rate Limit" />
+      <SectionHeader icon={<TrafficCone size={18} aria-hidden />} title="Global Rate Limit" />
       <Num label="Rate Limit Per Minute (global)" value={cfg.rate_limit_per_minute} min={1} onChange={(v) => set({ rate_limit_per_minute: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🛡️" title="IP Whitelist" />
+      <SectionHeader icon={<Shield size={18} aria-hidden />} title="IP Whitelist" />
       <Tog id="ip_wl" label="Enable IP Whitelist" checked={cfg.ip_whitelist_enabled} onChange={(v) => set({ ip_whitelist_enabled: v })} />
       <Txt label="Allowed IPs (comma-separated)" value={cfg.ip_whitelist} placeholder="1.2.3.4, 5.6.7.8" onChange={(v) => set({ ip_whitelist: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="💱" title="Trading Mode" />
+      <SectionHeader icon={<ArrowLeftRight size={18} aria-hidden />} title="Trading Mode" />
       <Sel label="Default Trading Mode" value={cfg.trading_mode}
         options={[{ value: 'paper', label: 'Paper Trading' }, { value: 'live', label: 'Live Trading' }]}
         onChange={(v) => set({ trading_mode: v })} />
@@ -927,19 +928,19 @@ const PlatformTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
 const DatabaseTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🗄️" title="PostgreSQL / SQLAlchemy" desc="config/settings.py — DatabaseSettings" />
+      <SectionHeader icon={<Database size={18} aria-hidden />} title="PostgreSQL / SQLAlchemy" desc="config/settings.py — DatabaseSettings" />
       <Num label="Connection Pool Size" desc="DB_POOL_SIZE" value={cfg.db_pool_size} min={1} onChange={(v) => set({ db_pool_size: v })} />
       <Num label="Max Overflow" desc="DB_MAX_OVERFLOW" value={cfg.db_max_overflow} min={0} onChange={(v) => set({ db_max_overflow: v })} />
       <Tog id="db_echo" label="Echo SQL Queries" desc="DB_ECHO — never enable in production" checked={cfg.db_echo} onChange={(v) => set({ db_echo: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="⚡" title="Redis" desc="config/settings.py — RedisSettings" />
+      <SectionHeader icon={<Zap size={18} aria-hidden />} title="Redis" desc="config/settings.py — RedisSettings" />
       <Num label="Socket Timeout (s)" desc="REDIS_SOCKET_TIMEOUT" value={cfg.redis_socket_timeout} step={0.5} min={0.5} onChange={(v) => set({ redis_socket_timeout: v })} />
       <Num label="Health Check Interval (s)" desc="REDIS_HEALTH_CHECK_INTERVAL" value={cfg.redis_health_check_interval} min={5} onChange={(v) => set({ redis_health_check_interval: v })} />
       <Num label="Max Connections" desc="REDIS_MAX_CONNECTIONS" value={cfg.redis_max_connections} min={1} onChange={(v) => set({ redis_max_connections: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📦" title="OHLCV Store" desc="brokers/ohlcv_store.py" />
+      <SectionHeader icon={<Package size={18} aria-hidden />} title="OHLCV Store" desc="brokers/ohlcv_store.py" />
       <Sel label="Default Timeframe" desc="OHLCV_STORE_TIMEFRAME" value={cfg.ohlcv_store_timeframe}
         options={['M1','M5','M15','M30','H1','H4','D','W'].map((v) => ({ value: v, label: v }))}
         onChange={(v) => set({ ohlcv_store_timeframe: v })} />
@@ -951,7 +952,7 @@ const DatabaseTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
 const SecurityTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🔑" title="JWT / Auth" desc="config/settings.py — SecuritySettings" />
+      <SectionHeader icon={<KeyRound size={18} aria-hidden />} title="JWT / Auth" desc="config/settings.py — SecuritySettings" />
       <Sel label="JWT Algorithm" desc="SECURITY_JWT_ALGORITHM" value={cfg.jwt_algorithm}
         options={['HS256','HS384','HS512','RS256'].map((v) => ({ value: v, label: v }))}
         onChange={(v) => set({ jwt_algorithm: v })} />
@@ -959,7 +960,7 @@ const SecurityTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
       <Num label="Refresh Token Expiry (days)" desc="SECURITY_REFRESH_TOKEN_EXPIRE_DAYS" value={cfg.refresh_token_expire_days} min={1} onChange={(v) => set({ refresh_token_expire_days: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🚦" title="Auth Rate Limiting" desc="config/settings.py — SecuritySettings" />
+      <SectionHeader icon={<TrafficCone size={18} aria-hidden />} title="Auth Rate Limiting" desc="config/settings.py — SecuritySettings" />
       <Num label="Rate Limit Requests" desc="SECURITY_RATE_LIMIT_REQUESTS" value={cfg.security_rate_limit_requests} min={1} onChange={(v) => set({ security_rate_limit_requests: v })} />
       <Num label="Rate Limit Window (s)" desc="SECURITY_RATE_LIMIT_WINDOW" value={cfg.security_rate_limit_window} min={1} onChange={(v) => set({ security_rate_limit_window: v })} />
     </Card>
@@ -970,13 +971,13 @@ const SecurityTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
 const MLTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🧠" title="ML Core" desc="config/settings.py — MLSettings" />
+      <SectionHeader icon={<Brain size={18} aria-hidden />} title="ML Core" desc="config/settings.py — MLSettings" />
       <Num label="Retrain Interval (minutes)" desc="ML_RETRAIN_INTERVAL_MINUTES" value={cfg.ml_retrain_interval_minutes} min={1} onChange={(v) => set({ ml_retrain_interval_minutes: v })} />
       <Num label="Drift Threshold" desc="ML_DRIFT_THRESHOLD" value={cfg.ml_drift_threshold} step={0.01} min={0} max={1} onChange={(v) => set({ ml_drift_threshold: v })} />
       <Num label="Online Learning Rate" desc="ML_ONLINE_LEARNING_RATE" value={cfg.ml_online_learning_rate} step={0.001} min={0} onChange={(v) => set({ ml_online_learning_rate: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="⏱️" title="Hourly Trainer" desc="ml/hourly_trainer.py" />
+      <SectionHeader icon={<Timer size={18} aria-hidden />} title="Hourly Trainer" desc="ml/hourly_trainer.py" />
       <Tog id="ml_hourly" label="Enable Hourly Trainer" desc="ML_HOURLY_ENABLED" checked={cfg.ml_hourly_enabled} onChange={(v) => set({ ml_hourly_enabled: v })} />
       <Num label="Interval (seconds)" desc="ML_HOURLY_INTERVAL_SECONDS" value={cfg.ml_hourly_interval_seconds} min={60} onChange={(v) => set({ ml_hourly_interval_seconds: v })} />
       <Num label="Full Retrain Every N Hours" desc="ML_FULL_RETRAIN_HOURS" value={cfg.ml_full_retrain_hours} min={1} onChange={(v) => set({ ml_full_retrain_hours: v })} />
@@ -984,7 +985,7 @@ const MLTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) =
       <Txt label="Model Directory" desc="ML_MODEL_DIR" value={cfg.ml_model_dir} onChange={(v) => set({ ml_model_dir: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📡" title="Signal Filter" desc="ml/signal_filter.py + ml/advanced_predictor.py" />
+      <SectionHeader icon={<Radio size={18} aria-hidden />} title="Signal Filter" desc="ml/signal_filter.py + ml/advanced_predictor.py" />
       <Num label="Long Threshold" desc="SIGNAL_THRESHOLD_LONG" value={cfg.signal_threshold_long} step={0.01} min={0.5} max={1} onChange={(v) => set({ signal_threshold_long: v })} />
       <Num label="Short Threshold" desc="SIGNAL_THRESHOLD_SHORT" value={cfg.signal_threshold_short} step={0.01} min={0} max={0.5} onChange={(v) => set({ signal_threshold_short: v })} />
       <Num label="Abstain Low" desc="SIGNAL_ABSTAIN_LOW" value={cfg.signal_abstain_low} step={0.01} min={0} max={1} onChange={(v) => set({ signal_abstain_low: v })} />
@@ -1001,20 +1002,20 @@ const MLTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) =
       <Num label="CB Min Outcomes" desc="CB_MIN_OUTCOMES" value={cfg.cb_min_outcomes} min={1} onChange={(v) => set({ cb_min_outcomes: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📋" title="Model Registry" desc="ml/model_registry.py" />
+      <SectionHeader icon={<ClipboardList size={18} aria-hidden />} title="Model Registry" desc="ml/model_registry.py" />
       <Num label="Min OOS Accuracy" desc="REGISTRY_MIN_OOS_ACC" value={cfg.registry_min_oos_acc} step={0.01} min={0} max={1} onChange={(v) => set({ registry_min_oos_acc: v })} />
       <Num label="Max OOS P-Value" desc="REGISTRY_MAX_OOS_PVAL" value={cfg.registry_max_oos_pval} step={0.001} min={0} max={1} onChange={(v) => set({ registry_max_oos_pval: v })} />
       <Tog id="sharpe_gate" label="Require Sharpe Gate" desc="REGISTRY_REQUIRE_SHARPE_GATE" checked={cfg.registry_require_sharpe_gate} onChange={(v) => set({ registry_require_sharpe_gate: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📊" title="Performance Monitor" desc="ml/performance_monitor.py" />
+      <SectionHeader icon={<BarChart3 size={18} aria-hidden />} title="Performance Monitor" desc="ml/performance_monitor.py" />
       <Num label="Window Trades" desc="ML_MONITOR_WINDOW_TRADES" value={cfg.ml_monitor_window_trades} min={10} onChange={(v) => set({ ml_monitor_window_trades: v })} />
       <Num label="Check Interval (s)" desc="ML_MONITOR_CHECK_INTERVAL" value={cfg.ml_monitor_check_interval} min={30} onChange={(v) => set({ ml_monitor_check_interval: v })} />
       <Num label="Rollback Threshold" desc="ML_MONITOR_ROLLBACK_THRESH" value={cfg.ml_monitor_rollback_thresh} step={0.01} min={0} max={1} onChange={(v) => set({ ml_monitor_rollback_thresh: v })} />
       <Num label="Min Trades Before Eval" desc="ML_MONITOR_MIN_TRADES" value={cfg.ml_monitor_min_trades} min={1} onChange={(v) => set({ ml_monitor_min_trades: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📉" title="Sharpe Circuit Breaker" desc="ml/sharpe_circuit_breaker.py" />
+      <SectionHeader icon={<TrendingDown size={18} aria-hidden />} title="Sharpe Circuit Breaker" desc="ml/sharpe_circuit_breaker.py" />
       <Num label="Window Trades" desc="SHARPE_CB_WINDOW_TRADES" value={cfg.sharpe_cb_window_trades} min={10} onChange={(v) => set({ sharpe_cb_window_trades: v })} />
       <Num label="Min Sharpe Ratio" desc="SHARPE_CB_MIN_SHARPE" value={cfg.sharpe_cb_min_sharpe} step={0.1} onChange={(v) => set({ sharpe_cb_min_sharpe: v })} />
       <Num label="Consecutive Windows to Trip" desc="SHARPE_CB_CONSECUTIVE" value={cfg.sharpe_cb_consecutive} min={1} onChange={(v) => set({ sharpe_cb_consecutive: v })} />
@@ -1029,7 +1030,7 @@ const MLTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) =
 const RiskTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="⚖️" title="Risk Manager" desc="risk/manager.py" />
+      <SectionHeader icon={<Scale size={18} aria-hidden />} title="Risk Manager" desc="risk/manager.py" />
       <Num label="Account Equity (USD)" desc="RISK_ACCOUNT_EQUITY" value={cfg.risk_account_equity} step={1000} min={0} onChange={(v) => set({ risk_account_equity: v })} />
       <Num label="Max Position Size (%)" desc="RISK_MAX_POSITION_PCT" value={cfg.risk_max_position_pct} step={0.001} min={0} max={1} onChange={(v) => set({ risk_max_position_pct: v })} />
       <Num label="Min Position Size (%)" desc="RISK_MIN_POSITION_PCT" value={cfg.risk_min_position_pct} step={0.0001} min={0} onChange={(v) => set({ risk_min_position_pct: v })} />
@@ -1052,7 +1053,7 @@ const RiskTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
       <Num label="Max Risk Per Trade (%)" desc="MAX_RISK_PCT_PER_TRADE" value={cfg.max_risk_pct_per_trade} step={0.001} min={0} max={1} onChange={(v) => set({ max_risk_pct_per_trade: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🚧" title="Gatekeeper" desc="risk/gatekeeper.py" />
+      <SectionHeader icon={<Construction size={18} aria-hidden />} title="Gatekeeper" desc="risk/gatekeeper.py" />
       <Num label="Min Signal Confidence" desc="GATEKEEPER_MIN_CONF" value={cfg.gatekeeper_min_conf} step={0.01} min={0} max={1} onChange={(v) => set({ gatekeeper_min_conf: v })} />
       <Num label="Max Daily Trades" desc="GATEKEEPER_MAX_DAILY_TRADES" value={cfg.gatekeeper_max_daily_trades} min={1} onChange={(v) => set({ gatekeeper_max_daily_trades: v })} />
       <Num label="Pause After Breach (s)" desc="GATEKEEPER_PAUSE_S" value={cfg.gatekeeper_pause_s} min={0} onChange={(v) => set({ gatekeeper_pause_s: v })} />
@@ -1063,14 +1064,14 @@ const RiskTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
       <Num label="News Blackout Window (minutes)" desc="NEWS_BLACKOUT_MINUTES" value={cfg.news_blackout_minutes} min={0} onChange={(v) => set({ news_blackout_minutes: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔍" title="Intra-Trade Monitor" desc="risk/intra_trade_monitor.py" />
+      <SectionHeader icon={<Search size={18} aria-hidden />} title="Intra-Trade Monitor" desc="risk/intra_trade_monitor.py" />
       <Num label="Min Data Quality" desc="INTRA_MIN_DATA_QUALITY" value={cfg.intra_min_data_quality} step={0.01} min={0} max={1} onChange={(v) => set({ intra_min_data_quality: v })} />
       <Num label="CVaR Confidence" desc="INTRA_CVAR_CONFIDENCE" value={cfg.intra_cvar_confidence} step={0.01} min={0.5} max={0.999} onChange={(v) => set({ intra_cvar_confidence: v })} />
       <Num label="Returns Window" desc="INTRA_RETURNS_WINDOW" value={cfg.intra_returns_window} min={10} onChange={(v) => set({ intra_returns_window: v })} />
       <Num label="Vol Baseline Window" desc="INTRA_VOL_BASELINE_WINDOW" value={cfg.intra_vol_baseline_window} min={10} onChange={(v) => set({ intra_vol_baseline_window: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📜" title="FIA Compliance" desc="risk/gatekeeper.py — FIA limits" />
+      <SectionHeader icon={<Scroll size={18} aria-hidden />} title="FIA Compliance" desc="risk/gatekeeper.py — FIA limits" />
       <Num label="Max Order Size (lots)" desc="FIA_MAX_ORDER_SIZE" value={cfg.fia_max_order_size} min={0} onChange={(v) => set({ fia_max_order_size: v })} />
       <Num label="Max Intraday Position (lots)" desc="FIA_MAX_INTRADAY_POSITION" value={cfg.fia_max_intraday_position} min={0} onChange={(v) => set({ fia_max_intraday_position: v })} />
       <Num label="Price Tolerance" desc="FIA_PRICE_TOLERANCE" value={cfg.fia_price_tolerance} step={0.001} min={0} onChange={(v) => set({ fia_price_tolerance: v })} />
@@ -1084,7 +1085,7 @@ const RiskTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
 const ExecutionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="⚡" title="HOPEFX Engine" desc="execution/hopefx_engine.py" />
+      <SectionHeader icon={<Zap size={18} aria-hidden />} title="HOPEFX Engine" desc="execution/hopefx_engine.py" />
       <Num label="Min Signal Confidence" desc="ENGINE_MIN_CONFIDENCE" value={cfg.engine_min_confidence} step={0.01} min={0} max={1} onChange={(v) => set({ engine_min_confidence: v })} />
       <Num label="Min Data Quality" desc="ENGINE_MIN_DATA_QUALITY" value={cfg.engine_min_data_quality} step={0.01} min={0} max={1} onChange={(v) => set({ engine_min_data_quality: v })} />
       <Num label="Max Spread (USD)" desc="ENGINE_MAX_SPREAD_USD" value={cfg.engine_max_spread_usd} step={0.1} min={0} onChange={(v) => set({ engine_max_spread_usd: v })} />
@@ -1095,13 +1096,13 @@ const ExecutionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCon
       <Num label="Initial Equity (USD)" desc="ENGINE_INITIAL_EQUITY" value={cfg.engine_initial_equity} step={1000} min={0} onChange={(v) => set({ engine_initial_equity: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔌" title="Broker Circuit Breaker" desc="execution/broker_circuit_breaker.py" />
+      <SectionHeader icon={<Plug size={18} aria-hidden />} title="Broker Circuit Breaker" desc="execution/broker_circuit_breaker.py" />
       <Num label="Max Failures Before Open" desc="BROKER_CB_MAX_FAILURES" value={cfg.broker_cb_max_failures} min={1} onChange={(v) => set({ broker_cb_max_failures: v })} />
       <Num label="Reset Timeout (s)" desc="BROKER_CB_RESET_TIMEOUT" value={cfg.broker_cb_reset_timeout} min={1} onChange={(v) => set({ broker_cb_reset_timeout: v })} />
       <Num label="Half-Open Max Probes" desc="BROKER_CB_HALF_OPEN_MAX" value={cfg.broker_cb_half_open_max} min={1} onChange={(v) => set({ broker_cb_half_open_max: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔀" title="Order Algorithms (TWAP / VWAP)" desc="execution/order_algorithms.py + execution/algo_orders.py" />
+      <SectionHeader icon={<Shuffle size={18} aria-hidden />} title="Order Algorithms (TWAP / VWAP)" desc="execution/order_algorithms.py + execution/algo_orders.py" />
       <Num label="TWAP Default Slices" desc="TWAP_DEFAULT_SLICES" value={cfg.twap_default_slices} min={2} onChange={(v) => set({ twap_default_slices: v })} />
       <Num label="TWAP Default Duration (s)" desc="TWAP_DEFAULT_SECS" value={cfg.twap_default_secs} min={1} onChange={(v) => set({ twap_default_secs: v })} />
       <Num label="VWAP Slices" desc="VWAP_SLICES" value={cfg.vwap_slices} min={2} onChange={(v) => set({ vwap_slices: v })} />
@@ -1121,7 +1122,7 @@ const ExecutionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCon
       <Num label="Default Iceberg Peak (lots)" desc="ALGO_DEFAULT_ICEBERG_PEAK" value={cfg.algo_default_iceberg_peak} step={0.1} min={0} onChange={(v) => set({ algo_default_iceberg_peak: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📊" title="Market Impact (Almgren-Chriss)" desc="execution/market_impact.py" />
+      <SectionHeader icon={<BarChart3 size={18} aria-hidden />} title="Market Impact (Almgren-Chriss)" desc="execution/market_impact.py" />
       <Num label="Eta (temporary impact)" desc="AC_ETA" value={cfg.ac_eta} step={0.01} min={0} onChange={(v) => set({ ac_eta: v })} />
       <Num label="Gamma (permanent impact)" desc="AC_GAMMA" value={cfg.ac_gamma} step={0.01} min={0} onChange={(v) => set({ ac_gamma: v })} />
       <Num label="Max Participation Rate" desc="AC_MAX_PARTICIPATION" value={cfg.ac_max_participation} step={0.01} min={0} max={1} onChange={(v) => set({ ac_max_participation: v })} />
@@ -1129,20 +1130,20 @@ const ExecutionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCon
       <Num label="Queue Factor" desc="AC_QUEUE_FACTOR" value={cfg.ac_queue_factor} step={0.01} min={0} max={1} onChange={(v) => set({ ac_queue_factor: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📏" title="Spread Monitor" desc="execution/spread_monitor.py" />
+      <SectionHeader icon={<Ruler size={18} aria-hidden />} title="Spread Monitor" desc="execution/spread_monitor.py" />
       <Num label="Spike Multiplier" desc="SPREAD_SPIKE_MULTIPLIER" value={cfg.spread_spike_multiplier} step={0.1} min={1} onChange={(v) => set({ spread_spike_multiplier: v })} />
       <Num label="Baseline Window (ticks)" desc="SPREAD_BASELINE_WINDOW" value={cfg.spread_baseline_window} min={5} onChange={(v) => set({ spread_baseline_window: v })} />
       <Num label="Min Ticks Before Alert" desc="SPREAD_MIN_TICKS" value={cfg.spread_min_ticks} min={1} onChange={(v) => set({ spread_min_ticks: v })} />
       <Num label="Absolute Limit (USD)" desc="SPREAD_ABS_LIMIT_USD" value={cfg.spread_abs_limit_usd} step={0.1} min={0} onChange={(v) => set({ spread_abs_limit_usd: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🎯" title="SL/TP Monitor" desc="execution/sl_tp_monitor.py" />
+      <SectionHeader icon={<Target size={18} aria-hidden />} title="SL/TP Monitor" desc="execution/sl_tp_monitor.py" />
       <Num label="Poll Interval (ms)" desc="SLTP_POLL_INTERVAL_MS" value={cfg.sltp_poll_interval_ms} min={50} onChange={(v) => set({ sltp_poll_interval_ms: v })} />
       <Num label="Max Retries" desc="SLTP_MAX_RETRIES" value={cfg.sltp_max_retries} min={1} onChange={(v) => set({ sltp_max_retries: v })} />
       <Num label="Retry Delay (s)" desc="SLTP_RETRY_DELAY_S" value={cfg.sltp_retry_delay_s} step={0.1} min={0} onChange={(v) => set({ sltp_retry_delay_s: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📈" title="TCA Recorder" desc="execution/tca_recorder.py" />
+      <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="TCA Recorder" desc="execution/tca_recorder.py" />
       <Num label="Alert Threshold (bps)" desc="TCA_ALERT_THRESHOLD_BPS" value={cfg.tca_alert_threshold_bps} step={0.1} min={0} onChange={(v) => set({ tca_alert_threshold_bps: v })} />
       <Num label="Alert Window (trades)" desc="TCA_ALERT_WINDOW" value={cfg.tca_alert_window} min={1} onChange={(v) => set({ tca_alert_window: v })} />
       <Tog id="tca_redis" label="Persist to Redis" desc="TCA_PERSIST_REDIS" checked={cfg.tca_persist_redis} onChange={(v) => set({ tca_persist_redis: v })} />
@@ -1156,7 +1157,7 @@ const ExecutionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCon
 const BrokersTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="📡" title="FIX Router" desc="execution/fix_router.py" />
+      <SectionHeader icon={<Radio size={18} aria-hidden />} title="FIX Router" desc="execution/fix_router.py" />
       <Txt label="FIX Host" desc="FIX_HOST" value={cfg.fix_host} onChange={(v) => set({ fix_host: v })} />
       <Num label="FIX Port" desc="FIX_PORT" value={cfg.fix_port} min={1} max={65535} onChange={(v) => set({ fix_port: v })} />
       <Txt label="Sender Comp ID" desc="FIX_SENDER_COMP_ID" value={cfg.fix_sender_comp_id} onChange={(v) => set({ fix_sender_comp_id: v })} />
@@ -1165,7 +1166,7 @@ const BrokersTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfi
       <Num label="Default Units (lots)" desc="FIX_DEFAULT_UNITS" value={cfg.fix_default_units} step={100} min={0} onChange={(v) => set({ fix_default_units: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🏦" title="OANDA" desc="brokers/oanda.py" />
+      <SectionHeader icon={<Landmark size={18} aria-hidden />} title="OANDA" desc="brokers/oanda.py" />
       <Sel label="Environment" desc="OANDA_ENVIRONMENT" value={cfg.oanda_environment}
         options={[{ value: 'practice', label: 'Practice (fxpractice)' }, { value: 'live', label: 'Live (fxtrade)' }]}
         onChange={(v) => set({ oanda_environment: v })} />
@@ -1174,7 +1175,7 @@ const BrokersTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfi
       <Num label="Retry Backoff (s)" desc="OANDA_RETRY_BACKOFF_S" value={cfg.oanda_retry_backoff_s} step={0.1} min={0} onChange={(v) => set({ oanda_retry_backoff_s: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🏛️" title="Interactive Brokers (IBKR)" desc="brokers/ibkr.py" />
+      <SectionHeader icon={<Landmark size={18} aria-hidden />} title="Interactive Brokers (IBKR)" desc="brokers/ibkr.py" />
       <Txt label="TWS Host" desc="IBKR_HOST" value={cfg.ibkr_host} onChange={(v) => set({ ibkr_host: v })} />
       <Num label="Paper Port" desc="IBKR_PORT_PAPER" value={cfg.ibkr_port_paper} min={1} max={65535} onChange={(v) => set({ ibkr_port_paper: v })} />
       <Num label="Live Port" desc="IBKR_PORT_LIVE" value={cfg.ibkr_port_live} min={1} max={65535} onChange={(v) => set({ ibkr_port_live: v })} />
@@ -1185,7 +1186,7 @@ const BrokersTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfi
       <Num label="Max Reconnects" desc="IBKR_MAX_RECONNECTS" value={cfg.ibkr_max_reconnects} min={0} onChange={(v) => set({ ibkr_max_reconnects: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🏗️" title="CME / COMEX" desc="brokers/cme_comex.py" />
+      <SectionHeader icon={<Construction size={18} aria-hidden />} title="CME / COMEX" desc="brokers/cme_comex.py" />
       <Tog id="cme_en" label="Enable CME Connector" desc="CME_ENABLED" checked={cfg.cme_enabled} onChange={(v) => set({ cme_enabled: v })} />
       <Txt label="FIX Host" desc="CME_FIX_HOST" value={cfg.cme_fix_host} onChange={(v) => set({ cme_fix_host: v })} />
       <Num label="FIX Port" desc="CME_FIX_PORT" value={cfg.cme_fix_port} min={1} max={65535} onChange={(v) => set({ cme_fix_port: v })} />
@@ -1197,7 +1198,7 @@ const BrokersTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfi
       <Tog id="cme_paper_fb" label="Paper Fallback" desc="CME_PAPER_FALLBACK" checked={cfg.cme_paper_fallback} onChange={(v) => set({ cme_paper_fallback: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="⚙️" title="C++ Low-Latency Shim" desc="brokers/cpp_shim_connector.py" />
+      <SectionHeader icon={<Settings size={18} aria-hidden />} title="C++ Low-Latency Shim" desc="brokers/cpp_shim_connector.py" />
       <Tog id="cpp_en" label="Enable C++ Shim" desc="CPP_SHIM_ENABLED" checked={cfg.cpp_shim_enabled} onChange={(v) => set({ cpp_shim_enabled: v })} />
       <Txt label="ZMQ Command Address" desc="CPP_SHIM_ZMQ_CMD_ADDR" value={cfg.cpp_shim_zmq_cmd_addr} onChange={(v) => set({ cpp_shim_zmq_cmd_addr: v })} />
       <Txt label="ZMQ Response Address" desc="CPP_SHIM_ZMQ_RESP_ADDR" value={cfg.cpp_shim_zmq_resp_addr} onChange={(v) => set({ cpp_shim_zmq_resp_addr: v })} />
@@ -1209,7 +1210,7 @@ const BrokersTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfi
 
 const RateLimitTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <Card>
-    <SectionHeader icon="🚦" title="Per-Endpoint Rate Limits" desc="rate_limiting_configuration.py — format: N per minute/hour" />
+    <SectionHeader icon={<TrafficCone size={18} aria-hidden />} title="Per-Endpoint Rate Limits" desc="rate_limiting_configuration.py — format: N per minute/hour" />
     <Txt label="Global Default" desc="RATE_GLOBAL_DEFAULT" value={cfg.rate_global_default} placeholder="120 per minute" onChange={(v) => set({ rate_global_default: v })} />
     <Txt label="Auth (login/token)" desc="RATE_AUTH" value={cfg.rate_auth} placeholder="10 per minute" onChange={(v) => set({ rate_auth: v })} />
     <Txt label="Trading (orders)" desc="RATE_TRADING" value={cfg.rate_trading} placeholder="60 per minute" onChange={(v) => set({ rate_trading: v })} />
@@ -1224,12 +1225,12 @@ const RateLimitTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCon
 const NotifyTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="💓" title="Heartbeat Monitor" desc="notifications/heartbeat.py" />
+      <SectionHeader icon={<HeartPulse size={18} aria-hidden />} title="Heartbeat Monitor" desc="notifications/heartbeat.py" />
       <Tog id="hb_en" label="Enable Heartbeat" desc="HEARTBEAT_ENABLED" checked={cfg.heartbeat_enabled} onChange={(v) => set({ heartbeat_enabled: v })} />
       <Num label="Interval (hours)" desc="HEARTBEAT_INTERVAL_HOURS" value={cfg.heartbeat_interval_hours} step={0.5} min={0.1} onChange={(v) => set({ heartbeat_interval_hours: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🎮" title="Discord" desc="notifications/discord_bot.py" />
+      <SectionHeader icon={<Gamepad2 size={18} aria-hidden />} title="Discord" desc="notifications/discord_bot.py" />
       <Num label="Signal Cooldown (s)" desc="DISCORD_SIGNAL_COOLDOWN_SECONDS" value={cfg.discord_signal_cooldown_seconds} min={0} onChange={(v) => set({ discord_signal_cooldown_seconds: v })} />
       <Txt label="Bot Username" desc="DISCORD_BOT_USERNAME" value={cfg.discord_bot_username} onChange={(v) => set({ discord_bot_username: v })} />
     </Card>
@@ -1241,19 +1242,19 @@ const NotifyTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig
 const DecisionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🎯" title="Decision Engine" desc="core/decision/HOPEFXDecisionEngine.py — master signal routing brain" />
+      <SectionHeader icon={<Target size={18} aria-hidden />} title="Decision Engine" desc="core/decision/HOPEFXDecisionEngine.py — master signal routing brain" />
       <Tog id="de_en" label="Enable Decision Engine" desc="DECISION_ENGINE_ENABLED" checked={cfg.decision_engine_enabled} onChange={(v) => set({ decision_engine_enabled: v })} />
       <Num label="Min Signal Confidence" desc="DECISION_ENGINE_MIN_CONFIDENCE" value={cfg.decision_engine_min_confidence} step={0.01} min={0} max={1} onChange={(v) => set({ decision_engine_min_confidence: v })} />
       <Num label="Max Concurrent Positions" desc="DECISION_ENGINE_MAX_POSITIONS" value={cfg.decision_engine_max_positions} min={1} max={50} onChange={(v) => set({ decision_engine_max_positions: v })} />
       <Num label="Signal Cooldown (s)" desc="DECISION_ENGINE_COOLDOWN_S" value={cfg.decision_engine_cooldown_s} step={1} min={0} onChange={(v) => set({ decision_engine_cooldown_s: v })} />
       <Divider />
-      <SectionHeader icon="🔀" title="Feature Gating" desc="Which data sources feed the decision" />
+      <SectionHeader icon={<Shuffle size={18} aria-hidden />} title="Feature Gating" desc="Which data sources feed the decision" />
       <Tog id="de_regime" label="Use Regime Filter" desc="Blocks signals in unfavourable market regimes" checked={cfg.decision_engine_use_regime} onChange={(v) => set({ decision_engine_use_regime: v })} />
       <Tog id="de_sent" label="Use Sentiment Scaling" desc="Scales position size by news sentiment score" checked={cfg.decision_engine_use_sentiment} onChange={(v) => set({ decision_engine_use_sentiment: v })} />
       <Tog id="de_macro" label="Use Macro Impact" desc="Blocks/scales on macro event impact score" checked={cfg.decision_engine_use_macro} onChange={(v) => set({ decision_engine_use_macro: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔀" title="Smart Router" desc="execution/smart_router.py — broker routing and spread gate" />
+      <SectionHeader icon={<Shuffle size={18} aria-hidden />} title="Smart Router" desc="execution/smart_router.py — broker routing and spread gate" />
       <Num label="Max Spread (bps)" desc="ROUTER_MAX_SPREAD_BPS" value={cfg.router_max_spread_bps} step={0.5} min={0} onChange={(v) => set({ router_max_spread_bps: v })} />
       <Sel label="Primary Broker" desc="BROKER_PRIMARY" value={cfg.router_primary_broker}
         options={['oanda','ibkr','cme','cpp_shim','paper'].map((v) => ({ value: v, label: v.toUpperCase() }))}
@@ -1263,7 +1264,7 @@ const DecisionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
         onChange={(v) => set({ router_secondary_broker: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📡" title="Online Learner" desc="ml/online_learner.py — continuous model adaptation" />
+      <SectionHeader icon={<Radio size={18} aria-hidden />} title="Online Learner" desc="ml/online_learner.py — continuous model adaptation" />
       <Tog id="ol_en" label="Enable Online Learning" desc="ONLINE_LEARNER_ENABLED — adapts model weights on live fills" checked={cfg.online_learner_enabled} onChange={(v) => set({ online_learner_enabled: v })} />
       <Num label="Learning Rate" desc="ONLINE_LEARNER_LR" value={cfg.online_learner_lr} step={0.0001} min={0.00001} max={0.1} onChange={(v) => set({ online_learner_lr: v })} />
       <Num label="Batch Size" desc="ONLINE_LEARNER_BATCH_SIZE" value={cfg.online_learner_batch_size} min={1} max={512} onChange={(v) => set({ online_learner_batch_size: v })} />
@@ -1271,7 +1272,7 @@ const DecisionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
       <Num label="Max Buffer Size" desc="ONLINE_LEARNER_MAX_BUFFER" value={cfg.online_learner_max_buffer} min={100} onChange={(v) => set({ online_learner_max_buffer: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📉" title="Drift Monitor" desc="ml/drift_monitor.py — detects model distribution shift" />
+      <SectionHeader icon={<TrendingDown size={18} aria-hidden />} title="Drift Monitor" desc="ml/drift_monitor.py — detects model distribution shift" />
       <Tog id="dm_en" label="Enable Drift Monitor" desc="DRIFT_MONITOR_ENABLED" checked={cfg.drift_monitor_enabled} onChange={(v) => set({ drift_monitor_enabled: v })} />
       <Num label="Detection Window (samples)" desc="DRIFT_MONITOR_WINDOW" value={cfg.drift_monitor_window} min={10} onChange={(v) => set({ drift_monitor_window: v })} />
       <Num label="Drift Threshold" desc="DRIFT_MONITOR_THRESHOLD — PSI/KL divergence threshold" value={cfg.drift_monitor_threshold} step={0.005} min={0.001} max={1} onChange={(v) => set({ drift_monitor_threshold: v })} />
@@ -1286,7 +1287,7 @@ const DecisionTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
 const PaperTradingTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="📄" title="Paper Trading Slippage Model" desc="brokers/paper_trading.py — realistic fill simulation" />
+      <SectionHeader icon={<FileText size={18} aria-hidden />} title="Paper Trading Slippage Model" desc="brokers/paper_trading.py — realistic fill simulation" />
       <Sel label="Slippage Model" desc="PAPER_SLIPPAGE_MODEL" value={cfg.paper_slippage_model}
         options={[
           { value: 'fixed', label: 'Fixed (constant slippage %)' },
@@ -1305,7 +1306,7 @@ const PaperTradingTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<Platform
 
 const KillSwitchTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <Card danger>
-    <SectionHeader icon="🛑" title="Global Kill Switch" desc="kill_switch.py — immediately halts all trading across all pods" />
+    <SectionHeader icon={<OctagonAlert size={18} aria-hidden />} title="Global Kill Switch" desc="kill_switch.py — immediately halts all trading across all pods" />
     <div style={{ marginBottom: 12, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
       <div style={{ fontSize: 13, color: '#fca5a5', fontWeight: 600 }}>
         ⚠️ Activating the kill switch immediately stops all live trading, cancels pending orders, and blocks new order submission across all running pods.
@@ -1313,7 +1314,7 @@ const KillSwitchTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCo
     </div>
     <Tog id="ks" label="ACTIVATE GLOBAL KILL SWITCH" desc="HOPEFX_KILL_SWITCH — sets env var and propagates via Redis + K8s ConfigMap" checked={cfg.hopefx_kill_switch} onChange={(v) => set({ hopefx_kill_switch: v })} />
     <Divider />
-    <SectionHeader icon="☸️" title="Kubernetes ConfigMap Propagation" />
+    <SectionHeader icon={<Container size={18} aria-hidden />} title="Kubernetes ConfigMap Propagation" />
     <Txt label="K8s Namespace" desc="K8S_KS_NAMESPACE" value={cfg.k8s_ks_namespace} onChange={(v) => set({ k8s_ks_namespace: v })} />
     <Txt label="ConfigMap Name" desc="K8S_KS_CONFIGMAP_NAME" value={cfg.k8s_ks_configmap_name} onChange={(v) => set({ k8s_ks_configmap_name: v })} />
     <Num label="Poll Interval (s)" desc="K8S_KS_POLL_INTERVAL_S" value={cfg.k8s_ks_poll_interval_s} step={0.5} min={1} onChange={(v) => set({ k8s_ks_poll_interval_s: v })} />
@@ -1373,7 +1374,7 @@ const HealingTab: React.FC<{
       {/* Live status */}
       {healerStatus && (
         <Card>
-          <SectionHeader icon="📊" title="Live Healer Status" />
+          <SectionHeader icon={<BarChart3 size={18} aria-hidden />} title="Live Healer Status" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 8 }}>
             {[
               { label: 'Running',          value: healerStatus.running ? '✅ Yes' : '❌ No' },
@@ -1401,7 +1402,7 @@ const HealingTab: React.FC<{
 
       {/* Core config */}
       <Card>
-        <SectionHeader icon="🩺" title="Core Healer Config" desc="security/self_healer.py — SelfHealer.apply_config()" />
+        <SectionHeader icon={<Stethoscope size={18} aria-hidden />} title="Core Healer Config" desc="security/self_healer.py — SelfHealer.apply_config()" />
         <Tog id="heal_en" label="Enable Self-Healer" desc="enabled" checked={healer.enabled} onChange={(v) => setHealer({ enabled: v })} />
         <Sel label="Aggressiveness" desc="low = scan only | medium = patch approved | aggressive = auto-patch | nuclear = patch + force-restart"
           value={healer.aggressiveness}
@@ -1425,14 +1426,14 @@ const HealingTab: React.FC<{
 
       {/* Quarantine */}
       <Card>
-        <SectionHeader icon="🔒" title="Quarantine" desc="Files are copied to data/quarantine/ before any modification" />
+        <SectionHeader icon={<Lock size={18} aria-hidden />} title="Quarantine" desc="Files are copied to data/quarantine/ before any modification" />
         <Tog id="quar_en" label="Enable Quarantine" desc="quarantine_enabled" checked={healer.quarantine_enabled} onChange={(v) => setHealer({ quarantine_enabled: v })} />
         <Num label="Retention (days)" desc="quarantine_retention_days" value={healer.quarantine_retention_days} min={1} onChange={(v) => setHealer({ quarantine_retention_days: v })} />
       </Card>
 
       {/* Protected paths */}
       <Card>
-        <SectionHeader icon="🛡️" title="Protected Paths" desc="Files matching these paths are never auto-patched — comma-separated prefixes" />
+        <SectionHeader icon={<Shield size={18} aria-hidden />} title="Protected Paths" desc="Files matching these paths are never auto-patched — comma-separated prefixes" />
         <Field label="Protected Paths" description="e.g. live_trading.py,risk_manager.py,ml/models/,config/secrets/">
           <textarea
             value={healer.protected_paths}
@@ -1449,7 +1450,7 @@ const HealingTab: React.FC<{
 
       {/* Test integration */}
       <Card>
-        <SectionHeader icon="🧪" title="Test Integration" desc="Controls when and which tests run after healing events" />
+        <SectionHeader icon={<FlaskConical size={18} aria-hidden />} title="Test Integration" desc="Controls when and which tests run after healing events" />
         <Tog id="tests_en" label="Enable Test Runner" desc="tests_enabled" checked={healer.tests_enabled} onChange={(v) => setHealer({ tests_enabled: v })} />
         <Num label="Per-Test Timeout (s)" desc="test_timeout_sec" value={healer.test_timeout_sec} min={10} onChange={(v) => setHealer({ test_timeout_sec: v })} />
         <Num label="Global Test Suite Timeout (s)" desc="global_test_timeout_sec" value={healer.global_test_timeout_sec} min={60} onChange={(v) => setHealer({ global_test_timeout_sec: v })} />
@@ -1510,7 +1511,7 @@ const HealingTab: React.FC<{
 
       {/* Actions */}
       <Card>
-        <SectionHeader icon="🔧" title="Healer Actions" />
+        <SectionHeader icon={<Wrench size={18} aria-hidden />} title="Healer Actions" />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
           <Button variant="secondary" onClick={onRebuildBaseline}>Rebuild Integrity Baseline</Button>
           <Button variant="secondary" onClick={onRunTests}>Run Tests Now</Button>
@@ -1536,7 +1537,7 @@ const HealingTab: React.FC<{
 const LstmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🔁" title="LSTM Model" desc="Long Short-Term Memory sequence model. LSTM_*" />
+      <SectionHeader icon={<Repeat size={18} aria-hidden />} title="LSTM Model" desc="Long Short-Term Memory sequence model. LSTM_*" />
       <Tog id="lstm_en" label="Enable LSTM" desc="LSTM_ENABLED" checked={cfg.lstm_enabled} onChange={(v) => set({ lstm_enabled: v })} />
       <Divider />
       <Num label="Sequence Length" desc="LSTM_SEQUENCE_LENGTH" value={cfg.lstm_sequence_length} min={10} max={500} onChange={(v) => set({ lstm_sequence_length: v })} />
@@ -1564,7 +1565,7 @@ const LstmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
 const BrainTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="💡" title="AI Brain / Strategy Generator" desc="LLM-powered strategy generation engine. BRAIN_*" />
+      <SectionHeader icon={<Lightbulb size={18} aria-hidden />} title="AI Brain / Strategy Generator" desc="LLM-powered strategy generation engine. BRAIN_*" />
       <Tog id="brain_en" label="Enable AI Brain" desc="BRAIN_ENABLED" checked={cfg.brain_enabled} onChange={(v) => set({ brain_enabled: v })} />
       <Divider />
       <Txt label="LLM Model" desc="BRAIN_MODEL" value={cfg.brain_model} placeholder="gpt-4o" onChange={(v) => set({ brain_model: v })} />
@@ -1585,7 +1586,7 @@ const BrainTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>
 const AllocatorTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="📊" title="Portfolio Allocator" desc="Multi-asset portfolio allocation engine. ALLOCATOR_*" />
+      <SectionHeader icon={<BarChart3 size={18} aria-hidden />} title="Portfolio Allocator" desc="Multi-asset portfolio allocation engine. ALLOCATOR_*" />
       <Tog id="alloc_en" label="Enable Allocator" desc="ALLOCATOR_ENABLED" checked={cfg.allocator_enabled} onChange={(v) => set({ allocator_enabled: v })} />
       <Divider />
       <Sel label="Method" desc="ALLOCATOR_METHOD" value={cfg.allocator_method}
@@ -1609,7 +1610,7 @@ const AllocatorTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCon
 const AnomalyTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🚨" title="Anomaly Detection" desc="Detects abnormal market conditions and trading patterns. ANOMALY_*" />
+      <SectionHeader icon={<Siren size={18} aria-hidden />} title="Anomaly Detection" desc="Detects abnormal market conditions and trading patterns. ANOMALY_*" />
       <Tog id="anom_en" label="Enable Anomaly Detection" desc="ANOMALY_ENABLED" checked={cfg.anomaly_enabled} onChange={(v) => set({ anomaly_enabled: v })} />
       <Divider />
       <Sel label="Model" desc="ANOMALY_MODEL" value={cfg.anomaly_model}
@@ -1633,7 +1634,7 @@ const AnomalyTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfi
 const MacroTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🌍" title="Macro Overlay" desc="FRED / WGC macro data integration for signal weighting. MACRO_*" />
+      <SectionHeader icon={<Globe2 size={18} aria-hidden />} title="Macro Overlay" desc="FRED / WGC macro data integration for signal weighting. MACRO_*" />
       <Tog id="macro_en" label="Enable Macro Overlay" desc="MACRO_ENABLED" checked={cfg.macro_enabled} onChange={(v) => set({ macro_enabled: v })} />
       <Divider />
       <Txt label="FRED API Key" desc="MACRO_FRED_API_KEY" value={cfg.macro_fred_api_key} password placeholder="your-fred-api-key" onChange={(v) => set({ macro_fred_api_key: v })} />
@@ -1654,7 +1655,7 @@ const MacroTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>
 const OnlineTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="📡" title="Online Learner" desc="Continuous incremental model updates from live trade outcomes. ONLINE_LEARNER_*" />
+      <SectionHeader icon={<Radio size={18} aria-hidden />} title="Online Learner" desc="Continuous incremental model updates from live trade outcomes. ONLINE_LEARNER_*" />
       <Tog id="ol_en" label="Enable Online Learner" desc="ONLINE_LEARNER_ENABLED" checked={cfg.online_learner_enabled} onChange={(v) => set({ online_learner_enabled: v })} />
       <Divider />
       <Sel label="Algorithm" desc="ONLINE_LEARNER_ALGORITHM" value={cfg.online_learner_algorithm}
@@ -1676,7 +1677,7 @@ const OnlineTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig
 const SharpeTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="📈" title="Sharpe Circuit Breaker" desc="Halts trading when rolling Sharpe ratio falls below threshold. SHARPE_CB_*" />
+      <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Sharpe Circuit Breaker" desc="Halts trading when rolling Sharpe ratio falls below threshold. SHARPE_CB_*" />
       <Num label="Window Trades" desc="SHARPE_CB_WINDOW_TRADES" value={cfg.sharpe_cb_window_trades} min={5} onChange={(v) => set({ sharpe_cb_window_trades: v })} />
       <Num label="Min Sharpe" desc="SHARPE_CB_MIN_SHARPE — halt below this" value={cfg.sharpe_cb_min_sharpe} step={0.1} onChange={(v) => set({ sharpe_cb_min_sharpe: v })} />
       <Num label="Consecutive Breaches" desc="SHARPE_CB_CONSECUTIVE — N consecutive before halt" value={cfg.sharpe_cb_consecutive} min={1} onChange={(v) => set({ sharpe_cb_consecutive: v })} />
@@ -1692,7 +1693,7 @@ const SharpeTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig
 const RegimeTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🗺️" title="Regime Detection" desc="Market regime classification (trending/ranging/volatile). REGIME_*" />
+      <SectionHeader icon={<MapIcon size={18} aria-hidden />} title="Regime Detection" desc="Market regime classification (trending/ranging/volatile). REGIME_*" />
       <Tog id="regime_en" label="Enable Regime Detection" desc="REGIME_ENABLED" checked={cfg.regime_enabled} onChange={(v) => set({ regime_enabled: v })} />
       <Divider />
       <Sel label="Model" desc="REGIME_MODEL" value={cfg.regime_model}
@@ -1717,7 +1718,7 @@ const RegimeTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig
 const SignalEngineTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="⚡" title="Signal Engine" desc="Ensemble signal generation pipeline. SIGNAL_ENGINE_*" />
+      <SectionHeader icon={<Zap size={18} aria-hidden />} title="Signal Engine" desc="Ensemble signal generation pipeline. SIGNAL_ENGINE_*" />
       <Tog id="se_en" label="Enable Signal Engine" desc="SIGNAL_ENGINE_ENABLED" checked={cfg.signal_engine_enabled} onChange={(v) => set({ signal_engine_enabled: v })} />
       <Divider />
       <Sel label="Mode" desc="SIGNAL_ENGINE_MODE" value={cfg.signal_engine_mode}
@@ -1731,7 +1732,7 @@ const SignalEngineTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<Platform
       <Num label="Max Signals/Hour" desc="SIGNAL_ENGINE_MAX_SIGNALS_PER_HOUR" value={cfg.signal_engine_max_signals_per_hour} min={1} onChange={(v) => set({ signal_engine_max_signals_per_hour: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🧩" title="Model Components" desc="Which models contribute to the ensemble." />
+      <SectionHeader icon={<Puzzle size={18} aria-hidden />} title="Model Components" desc="Which models contribute to the ensemble." />
       <Tog id="se_lstm" label="Use LSTM" desc="SIGNAL_ENGINE_USE_LSTM" checked={cfg.signal_engine_use_lstm} onChange={(v) => set({ signal_engine_use_lstm: v })} />
       <Tog id="se_xgb" label="Use XGBoost" desc="SIGNAL_ENGINE_USE_XGB" checked={cfg.signal_engine_use_xgb} onChange={(v) => set({ signal_engine_use_xgb: v })} />
       <Tog id="se_rf" label="Use Random Forest" desc="SIGNAL_ENGINE_USE_RF" checked={cfg.signal_engine_use_rf} onChange={(v) => set({ signal_engine_use_rf: v })} />
@@ -1748,7 +1749,7 @@ const SignalEngineTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<Platform
 const TcaConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="💹" title="Transaction Cost Analysis" desc="TCA engine configuration and reporting. TCA_*" />
+      <SectionHeader icon={<CandlestickChart size={18} aria-hidden />} title="Transaction Cost Analysis" desc="TCA engine configuration and reporting. TCA_*" />
       <Tog id="tca_en" label="Enable TCA" desc="TCA_ENABLED" checked={cfg.tca_enabled} onChange={(v) => set({ tca_enabled: v })} />
       <Divider />
       <Num label="Alert Threshold (bps)" desc="TCA_ALERT_THRESHOLD_BPS" value={cfg.tca_alert_threshold_bps} step={0.5} min={0} onChange={(v) => set({ tca_alert_threshold_bps: v })} />
@@ -1776,7 +1777,7 @@ const TcaConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCon
 const BacktestConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🔄" title="Backtest Engine" desc="Backtesting engine parameters and defaults. BACKTEST_*" />
+      <SectionHeader icon={<RefreshCw size={18} aria-hidden />} title="Backtest Engine" desc="Backtesting engine parameters and defaults. BACKTEST_*" />
       <Sel label="Engine" desc="BACKTEST_ENGINE" value={cfg.backtest_engine}
         options={['vectorbt','backtesting_py','custom'].map((v) => ({ value: v, label: v }))}
         onChange={(v) => set({ backtest_engine: v })} />
@@ -1803,7 +1804,7 @@ const BacktestConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<Platfo
 const FeatureFlagsConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🚩" title="Feature Flags" desc="Enable or disable platform features globally. FEATURE_*" />
+      <SectionHeader icon={<Flag size={18} aria-hidden />} title="Feature Flags" desc="Enable or disable platform features globally. FEATURE_*" />
       <Tog id="ff_nuclear" label="Nuclear Dashboard" desc="FEATURE_NUCLEAR_ENABLED" checked={cfg.feature_nuclear_enabled} onChange={(v) => set({ feature_nuclear_enabled: v })} />
       <Tog id="ff_copy" label="Copy Trading" desc="FEATURE_COPY_TRADING_ENABLED" checked={cfg.feature_copy_trading_enabled} onChange={(v) => set({ feature_copy_trading_enabled: v })} />
       <Tog id="ff_social" label="Social Feed" desc="FEATURE_SOCIAL_FEED_ENABLED" checked={cfg.feature_social_feed_enabled} onChange={(v) => set({ feature_social_feed_enabled: v })} />
@@ -2011,7 +2012,7 @@ const ModelChainEditor: React.FC<{
 
   return (
     <Card>
-      <SectionHeader icon="🔗" title="Model chain (ordered, per role)"
+      <SectionHeader icon={<Link2 size={18} aria-hidden />} title="Model chain (ordered, per role)"
         desc="Primary first. Each leg is tried in order when the one before it cannot answer. What you save here is what the gateway calls." />
 
       {probeFailed && (
@@ -2087,7 +2088,7 @@ const LocalInferenceCard: React.FC<{
   set: (p: Partial<PlatformConfig>) => void;
 }> = ({ cfg, set }) => (
   <Card>
-    <SectionHeader icon="🖥️" title="Local inference (optional)"
+    <SectionHeader icon={<Monitor size={18} aria-hidden />} title="Local inference (optional)"
       desc="Off by default. Never a primary leg — the server appends it last whatever is configured." />
     <ErrorBanner
       level={cfg.llm_local_only ? 'warning' : 'info'}
@@ -2113,7 +2114,7 @@ const LlmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) 
     <ModelChainEditor cfg={cfg} set={set} />
     <LocalInferenceCard cfg={cfg} set={set} />
     <Card>
-      <SectionHeader icon="🤖" title="LLM / AI Provider"
+      <SectionHeader icon={<Bot size={18} aria-hidden />} title="LLM / AI Provider"
         desc="Primary LLM provider for AI features. LLM_* — these two fields still drive the reasoning chain; the editor above is more specific and wins where both are set." />
       <Sel label="Provider" desc="LLM_PROVIDER" value={cfg.llm_provider}
         options={['openai','anthropic','google','mistral','local'].map((v) => ({ value: v, label: v }))}
@@ -2127,14 +2128,14 @@ const LlmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) 
       <Num label="Max Retries" desc="LLM_MAX_RETRIES" value={cfg.llm_max_retries} min={0} max={10} onChange={(v) => set({ llm_max_retries: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔄" title="Fallback Provider" desc="Used when primary LLM is unavailable." />
+      <SectionHeader icon={<RefreshCw size={18} aria-hidden />} title="Fallback Provider" desc="Used when primary LLM is unavailable." />
       <Sel label="Fallback Provider" desc="LLM_FALLBACK_PROVIDER" value={cfg.llm_fallback_provider}
         options={['openai','anthropic','google','mistral','none'].map((v) => ({ value: v, label: v }))}
         onChange={(v) => set({ llm_fallback_provider: v })} />
       <Txt label="Fallback Model" desc="LLM_FALLBACK_MODEL" value={cfg.llm_fallback_model} placeholder="claude-3-5-sonnet-20241022" onChange={(v) => set({ llm_fallback_model: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔢" title="Embeddings" desc="Vector embedding model for semantic search and RAG." />
+      <SectionHeader icon={<Hash size={18} aria-hidden />} title="Embeddings" desc="Vector embedding model for semantic search and RAG." />
       <Txt label="Embedding Model" desc="LLM_EMBEDDING_MODEL" value={cfg.llm_embedding_model} placeholder="text-embedding-3-small" onChange={(v) => set({ llm_embedding_model: v })} />
       <Num label="Embedding Dimensions" desc="LLM_EMBEDDING_DIMENSIONS" value={cfg.llm_embedding_dimensions} min={64} max={4096} onChange={(v) => set({ llm_embedding_dimensions: v })} />
     </Card>
@@ -2146,7 +2147,7 @@ const LlmTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) 
 const DrawdownTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="📉" title="Drawdown Controls" desc="Hard/soft drawdown limits and recovery behaviour. DRAWDOWN_*" />
+      <SectionHeader icon={<TrendingDown size={18} aria-hidden />} title="Drawdown Controls" desc="Hard/soft drawdown limits and recovery behaviour. DRAWDOWN_*" />
       <Num label="Hard Stop (%)" desc="DRAWDOWN_HARD_STOP_PCT — halt all trading" value={cfg.drawdown_hard_stop_pct} step={0.01} min={0.01} max={1} onChange={(v) => set({ drawdown_hard_stop_pct: v })} />
       <Num label="Soft Warn (%)" desc="DRAWDOWN_SOFT_WARN_PCT — trigger warning + size reduction" value={cfg.drawdown_soft_warn_pct} step={0.01} min={0.01} max={1} onChange={(v) => set({ drawdown_soft_warn_pct: v })} />
       <Num label="Trailing Lookback Bars" desc="DRAWDOWN_TRAILING_LOOKBACK_BARS" value={cfg.drawdown_trailing_lookback_bars} min={10} onChange={(v) => set({ drawdown_trailing_lookback_bars: v })} />
@@ -2168,7 +2169,7 @@ const DrawdownTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConf
 const PropFirmConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🏆" title="Prop Firm Mode" desc="Enforce prop firm challenge rules automatically. PROP_FIRM_*" />
+      <SectionHeader icon={<Trophy size={18} aria-hidden />} title="Prop Firm Mode" desc="Enforce prop firm challenge rules automatically. PROP_FIRM_*" />
       <Tog id="pf_en" label="Enable Prop Firm Mode" desc="PROP_FIRM_ENABLED" checked={cfg.prop_firm_enabled} onChange={(v) => set({ prop_firm_enabled: v })} />
       <Divider />
       <Sel label="Provider" desc="PROP_FIRM_PROVIDER" value={cfg.prop_firm_provider}
@@ -2193,7 +2194,7 @@ const PropFirmConfigTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<Platfo
 const PositionSizingTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="📐" title="Position Sizing" desc="How trade size is calculated for each signal. POSITION_SIZING_*" />
+      <SectionHeader icon={<Ruler size={18} aria-hidden />} title="Position Sizing" desc="How trade size is calculated for each signal. POSITION_SIZING_*" />
       <Sel label="Method" desc="POSITION_SIZING_METHOD" value={cfg.position_sizing_method}
         options={['risk_pct','fixed_lots','kelly','volatility_target','atr_based'].map((v) => ({ value: v, label: v }))}
         onChange={(v) => set({ position_sizing_method: v })} />
@@ -2237,7 +2238,7 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
   return (
     <>
       <Card>
-        <SectionHeader icon="📧" title="SMTP Configuration" desc="Outbound email for notifications, password resets, and alerts." />
+        <SectionHeader icon={<Mail size={18} aria-hidden />} title="SMTP Configuration" desc="Outbound email for notifications, password resets, and alerts." />
         <Tog id="smtp_en" label="Enable SMTP" desc="Send transactional emails via SMTP" checked={cfg.smtp_enabled} onChange={(v) => set({ smtp_enabled: v })} />
         <Divider />
         <Txt label="SMTP Host" desc="SMTP_HOST" value={cfg.smtp_host} placeholder="smtp.gmail.com" onChange={(v) => set({ smtp_host: v })} />
@@ -2259,7 +2260,7 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
         </div>
       </Card>
       <Card>
-        <SectionHeader icon="🚨" title="Alertmanager SMTP" desc="SMTP relay used by Prometheus Alertmanager for alert emails." />
+        <SectionHeader icon={<Siren size={18} aria-hidden />} title="Alertmanager SMTP" desc="SMTP relay used by Prometheus Alertmanager for alert emails." />
         <Txt label="Alertmanager SMTP Host" desc="ALERTMANAGER_SMTP_HOST" value={cfg.alertmanager_smtp_host} placeholder="localhost:587" onChange={(v) => set({ alertmanager_smtp_host: v })} />
         <Txt label="Alert From Address" desc="ALERTMANAGER_SMTP_FROM" value={cfg.alertmanager_smtp_from} placeholder="alerts@hopefx.ai" onChange={(v) => set({ alertmanager_smtp_from: v })} />
         <Txt label="Alert To Address" desc="ALERTMANAGER_SMTP_TO" value={cfg.alertmanager_smtp_to} placeholder="ops@hopefx.ai" onChange={(v) => set({ alertmanager_smtp_to: v })} />
@@ -2273,7 +2274,7 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
 const MonitoringTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🐛" title="Sentry Error Tracking" desc="Distributed error tracking and performance monitoring." />
+      <SectionHeader icon={<Bug size={18} aria-hidden />} title="Sentry Error Tracking" desc="Distributed error tracking and performance monitoring." />
       <Txt label="Sentry DSN" desc="SENTRY_DSN — leave blank to disable" value={cfg.sentry_dsn} placeholder="https://xxx@sentry.io/yyy" onChange={(v) => set({ sentry_dsn: v })} />
       <Sel label="Sentry Environment" desc="SENTRY_ENVIRONMENT" value={cfg.sentry_environment}
         options={[
@@ -2286,7 +2287,7 @@ const MonitoringTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCo
       <Num label="Profiles Sample Rate" desc="SENTRY_PROFILES_SAMPLE_RATE (0.0–1.0)" value={cfg.sentry_profiles_sample_rate} step={0.01} min={0} max={1} onChange={(v) => set({ sentry_profiles_sample_rate: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📈" title="Prometheus Metrics" desc="Metrics scraping and alerting configuration." />
+      <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Prometheus Metrics" desc="Metrics scraping and alerting configuration." />
       <Txt label="Prometheus URL" desc="PROMETHEUS_URL" value={cfg.prometheus_url} placeholder="http://prometheus:9090" onChange={(v) => set({ prometheus_url: v })} />
       <Num label="Prometheus Port" desc="PROMETHEUS_PORT" value={cfg.prometheus_port} min={1} max={65535} onChange={(v) => set({ prometheus_port: v })} />
       <Num label="Scrape Interval (seconds)" desc="PROMETHEUS_SCRAPE_INTERVAL_SECONDS" value={cfg.prometheus_scrape_interval_seconds} min={5} max={300} onChange={(v) => set({ prometheus_scrape_interval_seconds: v })} />
@@ -2299,7 +2300,7 @@ const MonitoringTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCo
 const CeleryTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="⚙️" title="Celery Task Queue" desc="Async task processing for ML retraining, reports, and background jobs." />
+      <SectionHeader icon={<Settings size={18} aria-hidden />} title="Celery Task Queue" desc="Async task processing for ML retraining, reports, and background jobs." />
       <Txt label="Broker URL" desc="CELERY_BROKER_URL — Redis or RabbitMQ" value={cfg.celery_broker_url} placeholder="redis://redis:6379/1" onChange={(v) => set({ celery_broker_url: v })} />
       <Txt label="Result Backend" desc="CELERY_RESULT_BACKEND" value={cfg.celery_result_backend} placeholder="redis://redis:6379/2" onChange={(v) => set({ celery_result_backend: v })} />
       <Sel label="Task Serializer" desc="CELERY_TASK_SERIALIZER" value={cfg.celery_task_serializer}
@@ -2321,22 +2322,22 @@ const CeleryTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig
 const ComplianceTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>) => void }> = ({ cfg, set }) => (
   <>
     <Card>
-      <SectionHeader icon="🪪" title="KYC Requirements" desc="Know Your Customer verification gates." />
+      <SectionHeader icon={<IdCard size={18} aria-hidden />} title="KYC Requirements" desc="Know Your Customer verification gates." />
       <Tog id="kyc_live" label="Require KYC for Live Trading" desc="Block live trading until KYC is approved" checked={cfg.kyc_required_for_live} onChange={(v) => set({ kyc_required_for_live: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔍" title="AML Thresholds" desc="Anti-Money Laundering transaction monitoring limits." />
+      <SectionHeader icon={<Search size={18} aria-hidden />} title="AML Thresholds" desc="Anti-Money Laundering transaction monitoring limits." />
       <Num label="Single Transaction Threshold (USD)" desc="Transactions above this trigger AML review" value={cfg.aml_transaction_threshold} min={1000} step={1000} onChange={(v) => set({ aml_transaction_threshold: v })} />
       <Num label="Daily Volume Threshold (USD)" desc="Daily volume above this triggers AML review" value={cfg.aml_daily_volume_threshold} min={5000} step={5000} onChange={(v) => set({ aml_daily_volume_threshold: v })} />
       <Tog id="sanctions" label="Enable Sanctions Screening" desc="Screen all users against OFAC/UN sanctions lists" checked={cfg.sanctions_check_enabled} onChange={(v) => set({ sanctions_check_enabled: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="🔒" title="GDPR / Data Privacy" desc="Data retention and erasure policy configuration." />
+      <SectionHeader icon={<Lock size={18} aria-hidden />} title="GDPR / Data Privacy" desc="Data retention and erasure policy configuration." />
       <Num label="Data Retention (days)" desc="How long to retain user data after account closure" value={cfg.gdpr_data_retention_days} min={30} max={3650} onChange={(v) => set({ gdpr_data_retention_days: v })} />
       <Num label="Erasure Grace Period (days)" desc="Days before erasure request is executed" value={cfg.gdpr_erasure_grace_days} min={0} max={90} onChange={(v) => set({ gdpr_erasure_grace_days: v })} />
     </Card>
     <Card>
-      <SectionHeader icon="📋" title="Regulatory Reporting" desc="Automated regulatory report generation." />
+      <SectionHeader icon={<ClipboardList size={18} aria-hidden />} title="Regulatory Reporting" desc="Automated regulatory report generation." />
       <Tog id="reg_report" label="Enable Regulatory Reporting" desc="Auto-generate CFTC/FCA/MiFID II reports" checked={cfg.regulatory_reporting_enabled} onChange={(v) => set({ regulatory_reporting_enabled: v })} />
     </Card>
   </>
@@ -2407,7 +2408,7 @@ const InfrastructureTab: React.FC = () => {
     <>
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <SectionHeader icon="🏗️" title="Infrastructure Health" />
+          <SectionHeader icon={<Construction size={18} aria-hidden />} title="Infrastructure Health" />
           <Button onClick={load} disabled={loading} variant="secondary" size="sm">
             {loading ? '…' : '↻ Refresh'}
           </Button>
@@ -2443,7 +2444,7 @@ const InfrastructureTab: React.FC = () => {
       </Card>
 
       <Card>
-        <SectionHeader icon="⚡" title="Redis Cache Stats" />
+        <SectionHeader icon={<Zap size={18} aria-hidden />} title="Redis Cache Stats" />
         {cacheStats && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
             {[
@@ -2500,7 +2501,7 @@ const InfrastructureTab: React.FC = () => {
       </Card>
 
       <Card>
-        <SectionHeader icon="🗄️" title="Database Stats" />
+        <SectionHeader icon={<Database size={18} aria-hidden />} title="Database Stats" />
         {dbStats && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(dbStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
@@ -2514,7 +2515,7 @@ const InfrastructureTab: React.FC = () => {
       </Card>
 
       <Card>
-        <SectionHeader icon="📬" title="Task Queue Stats" />
+        <SectionHeader icon={<Inbox size={18} aria-hidden />} title="Task Queue Stats" />
         {queueStats && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(queueStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
@@ -2603,7 +2604,7 @@ const DiagnosticsTab: React.FC = () => {
   return (
     <>
       <Card>
-        <SectionHeader icon="🔬" title="Platform Diagnostics" />
+        <SectionHeader icon={<Microscope size={18} aria-hidden />} title="Platform Diagnostics" />
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
           Run the full diagnostic suite across all 12 check categories. Auto-remediates critical findings.
         </p>
@@ -2657,7 +2658,7 @@ const DiagnosticsTab: React.FC = () => {
       </Card>
       {summary?.top_issues && (Array.isArray(summary.top_issues) && summary.top_issues.length > 0) && (
         <Card>
-          <SectionHeader icon="⚠️" title="Top Issues" />
+          <SectionHeader icon={<AlertTriangle size={18} aria-hidden />} title="Top Issues" />
           {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 8 }}>
               <div style={{ fontWeight: 600, fontSize: 13, color: '#fca5a5' }}>{issue.check_name}</div>
@@ -2669,7 +2670,7 @@ const DiagnosticsTab: React.FC = () => {
       )}
       {report && (
         <Card>
-          <SectionHeader icon="📋" title="Last Diagnostic Report" />
+          <SectionHeader icon={<ClipboardList size={18} aria-hidden />} title="Last Diagnostic Report" />
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
             Completed: {String(report.completed_at ?? 'N/A')}
           </div>
@@ -2858,7 +2859,7 @@ const PlatformConfiguration: React.FC = () => {
 
   if (cfgLoadFailed) return (
     <div>
-      <SectionHeader icon="⚙️" title="Platform Configuration" desc="Every platform setting, parameter, threshold and flag." />
+      <SectionHeader icon={<Settings size={18} aria-hidden />} title="Platform Configuration" desc="Every platform setting, parameter, threshold and flag." />
       <ActionBanner
         message={
           'Couldn\'t load the platform configuration. Nothing has been changed — but saving from ' +
@@ -2876,7 +2877,7 @@ const PlatformConfiguration: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <SectionHeader
-          icon="🛠️"
+          icon={<Hammer size={18} aria-hidden />}
           title="Platform Configuration"
           description="Every setting, parameter, threshold, and flag across the entire HOPEFX platform. Super Admin only."
         />

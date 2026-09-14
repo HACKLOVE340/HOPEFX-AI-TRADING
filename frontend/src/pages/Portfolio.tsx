@@ -19,9 +19,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, CrossLinkBar, RelatedPages } from '../components';
-import {
-  Briefcase, Download, Inbox, Zap, BookOpen, LineChart, Trophy, Shield, Radar, ChevronRight,
-} from 'lucide-react';
+import { Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
@@ -742,12 +740,12 @@ const Portfolio: React.FC = () => {
       <TradeHistory />
 
       <CrossLinkBar title="Related" links={[
-        { label: 'AI Charts',       href: '/ai-chart',        icon: '📈', color: '#06b6d4' },
-        { label: 'Performance',     href: '/performance',     icon: '📊', color: '#4ade80' },
-        { label: 'P&L Dashboard',   href: '/pnl',             icon: '💰', color: '#f59e0b' },
-        { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡', color: '#f87171' },
-        { label: 'Trade Journal',   href: '/journal',         icon: '📓', color: '#a78bfa' },
-        { label: 'Watchlist',       href: '/watchlist',       icon: '👁', color: '#60a5fa' },
+        { label: 'AI Charts',       href: '/ai-chart',        icon: TrendingUp, color: '#06b6d4' },
+        { label: 'Performance',     href: '/performance',     icon: BarChart3, color: '#4ade80' },
+        { label: 'P&L Dashboard',   href: '/pnl',             icon: Banknote, color: '#f59e0b' },
+        { label: 'Risk Calculator', href: '/risk-calculator', icon: Shield, color: '#f87171' },
+        { label: 'Trade Journal',   href: '/journal',         icon: NotebookPen, color: '#a78bfa' },
+        { label: 'Watchlist',       href: '/watchlist',       icon: Eye, color: '#60a5fa' },
       ]} />
       <RelatedPages
         links={[

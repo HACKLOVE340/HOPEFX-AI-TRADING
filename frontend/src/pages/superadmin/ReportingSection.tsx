@@ -10,6 +10,7 @@ import {
 import type { ReportRecord } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { BarChart3, CheckCircle2, ClipboardList, Hourglass, Save, TrendingUp } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -116,14 +117,14 @@ const ReportingSection: React.FC = () => {
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Total Reports" value={reports.length} icon="📊" accent="#60a5fa" />
-        <KpiTile label="Completed" value={completed} icon="✅" accent="#22c55e" />
-        <KpiTile label="Generating" value={generating} icon="⏳" accent={generating > 0 ? '#fbbf24' : '#475569'} />
-        <KpiTile label="Total Size" value={`${(totalSizeKb / 1024).toFixed(1)} MB`} icon="💾" accent="#a78bfa" />
+        <KpiTile label="Total Reports" value={reports.length} icon={<BarChart3 size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Completed" value={completed} icon={<CheckCircle2 size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Generating" value={generating} icon={<Hourglass size={18} aria-hidden />} accent={generating > 0 ? '#fbbf24' : '#475569'} />
+        <KpiTile label="Total Size" value={`${(totalSizeKb / 1024).toFixed(1)} MB`} icon={<Save size={18} aria-hidden />} accent="#a78bfa" />
       </div>
 
       {/* Generate */}
-      <SectionCard title="Generate Report" icon="📈" accent="#60a5fa"
+      <SectionCard title="Generate Report" icon={<TrendingUp size={18} aria-hidden />} accent="#60a5fa"
         subtitle="Trigger on-demand report generation">
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ width: 180 }}>
@@ -158,7 +159,7 @@ const ReportingSection: React.FC = () => {
       </SectionCard>
 
       {/* Report list */}
-      <SectionCard title="Generated Reports" icon="📋" accent="#a78bfa" noPad
+      <SectionCard title="Generated Reports" icon={<ClipboardList size={18} aria-hidden />} accent="#a78bfa" noPad
         actions={
           <ActionBtn label="Refresh" onClick={load} accent="#475569" size="sm" />
         }>

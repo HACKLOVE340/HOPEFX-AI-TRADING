@@ -15,6 +15,7 @@ import { api } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
 import type { UserRole } from '../store';
+import { BarChart3, Play, Shield, TrendingUp, Zap } from 'lucide-react';
 
 function resolvePostOnboardingPath(role: UserRole | undefined): string {
   if (role === 'superadmin') return '/superadmin';
@@ -54,11 +55,11 @@ interface WizardState {
 }
 
 const STEPS = [
-  { icon: '⚡', label: 'Connect Broker' },
-  { icon: '🛡️', label: 'Risk Level' },
-  { icon: '📊', label: 'Prop Firm Rules' },
-  { icon: '▶', label: 'First Backtest' },
-  { icon: '📈', label: 'Paper Trading' },
+  { icon: <Zap size={16} aria-hidden />, label: 'Connect Broker' },
+  { icon: <Shield size={16} aria-hidden />, label: 'Risk Level' },
+  { icon: <BarChart3 size={16} aria-hidden />, label: 'Prop Firm Rules' },
+  { icon: <Play size={16} aria-hidden />, label: 'First Backtest' },
+  { icon: <TrendingUp size={16} aria-hidden />, label: 'Paper Trading' },
 ];
 
 // ── Step indicator ────────────────────────────────────────────────────────────

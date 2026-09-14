@@ -11,6 +11,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { AlertTriangle, Bandage, BarChart3, Brain, ClipboardList, Clock, FlaskConical, Folder, Globe, Hammer, Landmark, Lock, Microscope, Play, RefreshCw, Save, Search, Settings, Shield, ShieldCheck, Wrench, XCircle, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ interface TestCategory {
   label: string;
   description: string;
   accent: string;
-  icon: string;
+  icon: React.ReactNode;
 }
 
 interface TestIndex {
@@ -110,14 +111,14 @@ interface TestRunResult {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TEST_CATEGORIES: TestCategory[] = [
-  { key: 'unit',        label: 'Core Unit Tests',            description: 'Fast isolated unit tests for core modules', accent: '#3b82f6', icon: '🔬' },
-  { key: 'api',         label: 'API & Endpoint Tests',       description: 'FastAPI route and schema validation tests',  accent: '#8b5cf6', icon: '🌐' },
-  { key: 'broker',      label: 'Broker Integration Tests',   description: 'Broker connector and order routing tests',   accent: '#f59e0b', icon: '🏦' },
-  { key: 'risk',        label: 'Risk & Position Tests',      description: 'VaR, circuit breakers, position sizing',     accent: '#ef4444', icon: '⚡' },
-  { key: 'ml',          label: 'ML Model & Signal Tests',    description: 'Model inference, drift, signal pipeline',    accent: '#a78bfa', icon: '🧠' },
-  { key: 'security',    label: 'Security & Integrity Tests', description: 'Auth, JWT, self-healer, vault tests',        accent: '#f97316', icon: '🛡️' },
-  { key: 'performance', label: 'Performance & Load Tests',   description: 'Latency, throughput, k6 load scenarios',     accent: '#06b6d4', icon: '📊' },
-  { key: 'e2e',         label: 'End-to-End Trading Tests',   description: 'Full pipeline from signal to execution',     accent: '#22c55e', icon: '🔄' },
+  { key: 'unit',        label: 'Core Unit Tests',            description: 'Fast isolated unit tests for core modules', accent: '#3b82f6', icon: <Microscope size={16} aria-hidden /> },
+  { key: 'api',         label: 'API & Endpoint Tests',       description: 'FastAPI route and schema validation tests',  accent: '#8b5cf6', icon: <Globe size={16} aria-hidden /> },
+  { key: 'broker',      label: 'Broker Integration Tests',   description: 'Broker connector and order routing tests',   accent: '#f59e0b', icon: <Landmark size={16} aria-hidden /> },
+  { key: 'risk',        label: 'Risk & Position Tests',      description: 'VaR, circuit breakers, position sizing',     accent: '#ef4444', icon: <Zap size={16} aria-hidden /> },
+  { key: 'ml',          label: 'ML Model & Signal Tests',    description: 'Model inference, drift, signal pipeline',    accent: '#a78bfa', icon: <Brain size={16} aria-hidden /> },
+  { key: 'security',    label: 'Security & Integrity Tests', description: 'Auth, JWT, self-healer, vault tests',        accent: '#f97316', icon: <Shield size={16} aria-hidden /> },
+  { key: 'performance', label: 'Performance & Load Tests',   description: 'Latency, throughput, k6 load scenarios',     accent: '#06b6d4', icon: <BarChart3 size={16} aria-hidden /> },
+  { key: 'e2e',         label: 'End-to-End Trading Tests',   description: 'Full pipeline from signal to execution',     accent: '#22c55e', icon: <RefreshCw size={16} aria-hidden /> },
 ];
 
 const STRATEGY_OPTIONS = [
@@ -211,19 +212,19 @@ const LiveStatusCard: React.FC<{
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <StatusBadge status={healerState === 'running' ? 'running' : healerState === 'stopped' ? 'stopped' : 'degraded'} />
-          <ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={refreshing} />
+          <ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={refreshing} />
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
         {[
-          { label: 'Baseline Files',    value: status ? String(status.baseline_files) : '—',   icon: '📁', accent: '#3b82f6' },
-          { label: 'Drift Events',      value: status ? String(status.drift_events) : '—',      icon: '⚠️', accent: status?.drift_events ? '#f59e0b' : '#22c55e' },
-          { label: 'Patches Applied',   value: status ? String(status.patches_applied) : '—',   icon: '🔧', accent: '#22c55e' },
-          { label: 'Patches Failed',    value: status ? String(status.patches_failed) : '—',    icon: '❌', accent: status?.patches_failed ? '#ef4444' : '#475569' },
-          { label: 'Tests Indexed',     value: testIndex ? String(testIndex.total) : '—',       icon: '🧪', accent: '#8b5cf6' },
-          { label: 'Last Scan',         value: fmtAgo(status?.last_scan ?? null),               icon: '🕐', accent: '#06b6d4' },
-          { label: 'Last Test Run',     value: fmtAgo(testIndex?.last_run ?? null),             icon: '▶️', accent: '#a78bfa' },
-          { label: 'Last Run Result',   value: testIndex?.last_run_passed != null ? `${testIndex.last_run_passed}✓ ${testIndex.last_run_failed ?? 0}✗` : '—', icon: '📋', accent: testIndex?.last_run_failed ? '#ef4444' : '#22c55e' },
+          { label: 'Baseline Files',    value: status ? String(status.baseline_files) : '—',   icon: <Folder size={16} aria-hidden />, accent: '#3b82f6' },
+          { label: 'Drift Events',      value: status ? String(status.drift_events) : '—',      icon: <AlertTriangle size={16} aria-hidden />, accent: status?.drift_events ? '#f59e0b' : '#22c55e' },
+          { label: 'Patches Applied',   value: status ? String(status.patches_applied) : '—',   icon: <Wrench size={16} aria-hidden />, accent: '#22c55e' },
+          { label: 'Patches Failed',    value: status ? String(status.patches_failed) : '—',    icon: <XCircle size={16} aria-hidden />, accent: status?.patches_failed ? '#ef4444' : '#475569' },
+          { label: 'Tests Indexed',     value: testIndex ? String(testIndex.total) : '—',       icon: <FlaskConical size={16} aria-hidden />, accent: '#8b5cf6' },
+          { label: 'Last Scan',         value: fmtAgo(status?.last_scan ?? null),               icon: <Clock size={16} aria-hidden />, accent: '#06b6d4' },
+          { label: 'Last Test Run',     value: fmtAgo(testIndex?.last_run ?? null),             icon: <Play size={16} aria-hidden />, accent: '#a78bfa' },
+          { label: 'Last Run Result',   value: testIndex?.last_run_passed != null ? `${testIndex.last_run_passed}✓ ${testIndex.last_run_failed ?? 0}✗` : '—', icon: <ClipboardList size={16} aria-hidden />, accent: testIndex?.last_run_failed ? '#ef4444' : '#22c55e' },
         ].map(tile => (
           <KpiTile key={tile.label} label={tile.label} value={tile.value} icon={tile.icon} accent={tile.accent} />
         ))}
@@ -240,7 +241,7 @@ const HealingCorePanel: React.FC<{
   onRebuildBaseline: () => void;
   rebuildBusy: boolean;
 }> = ({ cfg, onChange, onRebuildBaseline, rebuildBusy }) => (
-  <SectionCard title="Healing Core Configuration" icon="⚙️" accent="#3b82f6"
+  <SectionCard title="Healing Core Configuration" icon={<Settings size={18} aria-hidden />} accent="#3b82f6"
     subtitle="Master controls for the autonomous healing engine">
     <Toggle
       label="Enable Self-Healing System"
@@ -291,7 +292,7 @@ const HealingCorePanel: React.FC<{
           label={rebuildBusy ? 'Rebuilding…' : 'Manual Rebuild Now'}
           onClick={onRebuildBaseline}
           variant="warning"
-          icon="🔨"
+          icon={<Hammer size={18} aria-hidden />}
           loading={rebuildBusy}
         />
       </div>
@@ -347,13 +348,13 @@ const TestIntelligencePanel: React.FC<{
   };
 
   return (
-    <SectionCard title="Intelligent Test Orchestration" icon="🧪" accent="#8b5cf6"
+    <SectionCard title="Intelligent Test Orchestration" icon={<FlaskConical size={18} aria-hidden />} accent="#8b5cf6"
       subtitle="Automated test discovery, categorization, and execution strategy"
       actions={
         <ActionBtn
           label={reindexBusy ? 'Scanning…' : 'Re-scan Tests'}
           onClick={onReindex}
-          icon="🔍"
+          icon={<Search size={18} aria-hidden />}
           size="sm"
           loading={reindexBusy}
           variant="primary"
@@ -558,7 +559,7 @@ const SafetyGatesPanel: React.FC<{
   };
 
   return (
-    <SectionCard title="Healing Intelligence & Safety Gates" icon="🔒" accent="#ef4444"
+    <SectionCard title="Healing Intelligence & Safety Gates" icon={<Lock size={18} aria-hidden />} accent="#ef4444"
       subtitle="Approval matrix, protected paths, rollback sensitivity, and operational limits">
 
       {/* Aggressiveness */}
@@ -712,9 +713,9 @@ const DriftLogPanel: React.FC<{
   loading: boolean;
   onRefresh: () => void;
 }> = ({ events, loading, onRefresh }) => (
-  <SectionCard title="Drift Event Log" icon="⚠️" accent="#f59e0b"
+  <SectionCard title="Drift Event Log" icon={<AlertTriangle size={18} aria-hidden />} accent="#f59e0b"
     subtitle="File integrity violations detected by the scan loop"
-    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {events.length === 0 ? (
       <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 13 }}>
         No drift events — all tracked files match baseline
@@ -766,11 +767,11 @@ const PatchHistoryPanel: React.FC<{
 }> = ({ patches, loading, onRefresh }) => {
   const [expandedDiff, setExpandedDiff] = useState<number | null>(null);
   return (
-    <SectionCard title="Patch History" icon="🔧" accent="#22c55e"
+    <SectionCard title="Patch History" icon={<Wrench size={18} aria-hidden />} accent="#22c55e"
       subtitle="All patch attempts — applied, rejected, and rolled back"
-      actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+      actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
       {patches.length === 0 ? (
-        <EmptyState compact icon="🩹" title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
+        <EmptyState compact icon={Bandage} title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {patches.slice().reverse().map((p, i) => (
@@ -821,11 +822,11 @@ const QuarantinePanel: React.FC<{
   loading: boolean;
   onRefresh: () => void;
 }> = ({ entries, loading, onRefresh }) => (
-  <SectionCard title="Quarantine Log" icon="🔐" accent="#f97316"
+  <SectionCard title="Quarantine Log" icon={<ShieldCheck size={18} aria-hidden />} accent="#f97316"
     subtitle="Files copied to quarantine before any modification"
-    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {entries.length === 0 ? (
-      <EmptyState compact icon="🔒" title="Quarantine is empty" description="Suspicious files and processes will be isolated here when detected." />
+      <EmptyState compact icon={Lock} title="Quarantine is empty" description="Suspicious files and processes will be isolated here when detected." />
     ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {entries.slice().reverse().map((e, i) => (
@@ -854,9 +855,9 @@ const PendingApprovalPanel: React.FC<{
   onApprove: (idx: number) => void;
   approvingIdx: number | null;
 }> = ({ patches, loading, onRefresh, onApprove, approvingIdx }) => (
-  <SectionCard title="Pending Approval Queue" icon="📋" accent="#a78bfa"
+  <SectionCard title="Pending Approval Queue" icon={<ClipboardList size={18} aria-hidden />} accent="#a78bfa"
     subtitle="Patches waiting for manual approval before the healer applies them"
-    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {patches.length === 0 ? (
       <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 13 }}>No patches awaiting approval</div>
     ) : (
@@ -901,14 +902,14 @@ const TestRunPanel: React.FC<{
 }> = ({ onRunTests, running, lastResult }) => {
   const [showOutput, setShowOutput] = useState(false);
   return (
-    <SectionCard title="Manual Test Trigger" icon="▶️" accent="#06b6d4"
+    <SectionCard title="Manual Test Trigger" icon={<Play size={18} aria-hidden />} accent="#06b6d4"
       subtitle="Run the enabled test suites immediately and see results">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: lastResult ? 16 : 0 }}>
         <ActionBtn
           label={running ? 'Running Tests…' : 'Run Tests Now'}
           onClick={onRunTests}
           variant="primary"
-          icon="▶️"
+          icon={<Play size={18} aria-hidden />}
           loading={running}
         />
         {lastResult && !running && (
@@ -961,11 +962,11 @@ const TestRunPanel: React.FC<{
 
 type LiveTab = 'drift' | 'patches' | 'quarantine' | 'approval';
 
-const LIVE_TABS: { id: LiveTab; label: string; icon: string; accent: string }[] = [
-  { id: 'drift',     label: 'Drift Events',      icon: '⚠️', accent: '#f59e0b' },
-  { id: 'patches',   label: 'Patch History',      icon: '🔧', accent: '#22c55e' },
-  { id: 'quarantine',label: 'Quarantine',         icon: '🔐', accent: '#f97316' },
-  { id: 'approval',  label: 'Pending Approval',   icon: '📋', accent: '#a78bfa' },
+const LIVE_TABS: { id: LiveTab; label: string; icon: React.ReactNode; accent: string }[] = [
+  { id: 'drift',     label: 'Drift Events',      icon: <AlertTriangle size={16} aria-hidden />, accent: '#f59e0b' },
+  { id: 'patches',   label: 'Patch History',      icon: <Wrench size={16} aria-hidden />, accent: '#22c55e' },
+  { id: 'quarantine',label: 'Quarantine',         icon: <ShieldCheck size={16} aria-hidden />, accent: '#f97316' },
+  { id: 'approval',  label: 'Pending Approval',   icon: <ClipboardList size={16} aria-hidden />, accent: '#a78bfa' },
 ];
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -1320,7 +1321,7 @@ const AutoHealingSection: React.FC = () => {
             onClick={() => handleSave()}
             variant="primary"
             loading={saving}
-            icon="💾"
+            icon={<Save size={18} aria-hidden />}
           />
         </div>
       </div>

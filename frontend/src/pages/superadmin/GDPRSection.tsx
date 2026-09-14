@@ -11,6 +11,7 @@ import {
 import type { DataSubjectRequest } from './types';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Calendar, CheckCircle2, ClipboardList, Hourglass, Scroll, Trash2 } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -179,10 +180,10 @@ const GDPRSection: React.FC = () => {
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Pending Requests"  value={pending}           icon="⏳" accent={pending > 0 ? '#fbbf24' : '#22c55e'} />
-        <KpiTile label="Total Requests"    value={requests.length}   icon="📋" accent="#60a5fa" />
-        <KpiTile label="Erasure Requests"  value={erasures}          icon="🗑️" accent="#f87171" />
-        <KpiTile label="Retention Policies" value={policies.length}  icon="📅" accent="#a78bfa" />
+        <KpiTile label="Pending Requests"  value={pending}           icon={<Hourglass size={18} aria-hidden />} accent={pending > 0 ? '#fbbf24' : '#22c55e'} />
+        <KpiTile label="Total Requests"    value={requests.length}   icon={<ClipboardList size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Erasure Requests"  value={erasures}          icon={<Trash2 size={18} aria-hidden />} accent="#f87171" />
+        <KpiTile label="Retention Policies" value={policies.length}  icon={<Calendar size={18} aria-hidden />} accent="#a78bfa" />
       </div>
 
       {/* Tabs */}
@@ -198,7 +199,7 @@ const GDPRSection: React.FC = () => {
       {tab === 'requests' && (
         <>
           {/* Manual Erasure */}
-          <SectionCard title="Manual Erasure (Art. 17)" icon="🗑️" accent="#f87171"
+          <SectionCard title="Manual Erasure (Art. 17)" icon={<Trash2 size={18} aria-hidden />} accent="#f87171"
             subtitle="Directly erase a user's PII without a formal request">
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: 200 }}>
@@ -219,7 +220,7 @@ const GDPRSection: React.FC = () => {
               options={[{ value: '', label: 'All types' }, { value: 'export', label: 'Export (Art. 15)' }, { value: 'erasure', label: 'Erasure (Art. 17)' }, { value: 'rectification', label: 'Rectification (Art. 16)' }, { value: 'portability', label: 'Portability (Art. 20)' }]} />
           </div>
 
-          <SectionCard title="Data Subject Requests" icon="📋" accent="#60a5fa" noPad>
+          <SectionCard title="Data Subject Requests" icon={<ClipboardList size={18} aria-hidden />} accent="#60a5fa" noPad>
             {requests.length === 0 ? (
               <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No requests match this filter</div>
             ) : (
@@ -270,7 +271,7 @@ const GDPRSection: React.FC = () => {
 
       {/* ── TAB: Retention Policies ── */}
       {tab === 'policies' && (
-        <SectionCard title="Data Retention Policies" icon="📅" accent="#a78bfa"
+        <SectionCard title="Data Retention Policies" icon={<Calendar size={18} aria-hidden />} accent="#a78bfa"
           subtitle="GDPR Art. 5(1)(e) — data minimisation and storage limitation. Edit retention days and save per row.">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -318,7 +319,7 @@ const GDPRSection: React.FC = () => {
 
       {/* ── TAB: Consent Log ── */}
       {tab === 'consent' && (
-        <SectionCard title="Consent Log" icon="✅" accent="#22c55e"
+        <SectionCard title="Consent Log" icon={<CheckCircle2 size={18} aria-hidden />} accent="#22c55e"
           subtitle="GDPR Art. 7 — audit trail of all consent events"
           actions={
             <div style={{ display: 'flex', gap: 8 }}>
@@ -335,7 +336,7 @@ const GDPRSection: React.FC = () => {
           {consentLoading ? (
             <LoadingRows rows={4} />
           ) : consentLog.length === 0 ? (
-            <EmptyState compact icon="📜" title="No consent events found" description="User consent records will appear here as users accept or withdraw consent." />
+            <EmptyState compact icon={Scroll} title="No consent events found" description="User consent records will appear here as users accept or withdraw consent." />
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>

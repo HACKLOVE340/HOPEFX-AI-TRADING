@@ -15,7 +15,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Play, Clapperboard } from 'lucide-react';
+import { Clapperboard, GraduationCap, Lock, Play } from 'lucide-react';
 import { tutorialsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
@@ -290,7 +290,7 @@ const Academy: React.FC = () => {
       <div style={{ padding: '12px 16px 0', flexShrink: 0 }}>
         <PageHeader
           title="🎓 HOPEFX Academy"
-          icon="🎓"
+          icon={GraduationCap}
           subtitle="Step-by-step video tutorials — from your first backtest to production deployment"
           breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Academy' }]}
           badge={

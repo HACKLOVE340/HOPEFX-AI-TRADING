@@ -6,6 +6,7 @@ import type { BillingInfo } from './types';
 import { Card, SectionHeader, Button, StatusBadge, Divider } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { CreditCard } from 'lucide-react';
 
 interface Transaction {
   id: string;
@@ -114,7 +115,7 @@ const BillingSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="💳" title="Billing & Subscription" description="Your current plan, usage, and payment history." />
+      <SectionHeader icon={<CreditCard size={18} aria-hidden />} title="Billing & Subscription" description="Your current plan, usage, and payment history." />
 
       {/* Current plan */}
       <Card>

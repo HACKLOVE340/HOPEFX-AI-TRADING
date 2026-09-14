@@ -5,6 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { asArray, extractApiError } from '../../lib/utils';
 import { Card, SectionHeader, Button } from '../settings/ui';
 import { ActionBanner } from '../../components/ActionBanner';
+import { BarChart3, CheckCircle2, FlaskConical, Globe2, Hospital, Map, Microscope, RefreshCw, Search, TrendingUp } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -238,7 +239,7 @@ const HealthEnginePanel: React.FC = () => {
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <SectionHeader icon="🏥" title="Auto-Discovering Health Engine" />
+          <SectionHeader icon={<Hospital size={18} aria-hidden />} title="Auto-Discovering Health Engine" />
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
             {report ? `${report.total_components} components probed in ${report.probe_duration_ms}ms` : 'Probes all registered components concurrently'}
           </div>
@@ -480,7 +481,7 @@ const DiagnosticsPanel: React.FC = () => {
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <SectionHeader icon="🔬" title="Platform Diagnostics Engine" />
+        <SectionHeader icon={<Microscope size={18} aria-hidden />} title="Platform Diagnostics Engine" />
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button onClick={runFull} disabled={running} size="sm">{running ? 'Running…' : '▶ Run All Checks'}</Button>
           <Button onClick={remediate} disabled={remediating} variant="secondary" size="sm">{remediating ? 'Remediating…' : '🔧 Auto-Remediate'}</Button>
@@ -695,7 +696,7 @@ const RoutesPanel: React.FC = () => {
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <SectionHeader icon="🗺️" title="API Route Inventory" />
+        <SectionHeader icon={<Map size={18} aria-hidden />} title="API Route Inventory" />
         <Button onClick={load} disabled={loading} variant="secondary" size="sm">{loading ? '…' : '↻'}</Button>
       </div>
       <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />
@@ -782,7 +783,7 @@ const ValidatePanel: React.FC = () => {
   return (
     <>
       <Card>
-        <SectionHeader icon="✅" title="Setting Persistence Validator" />
+        <SectionHeader icon={<CheckCircle2 size={18} aria-hidden />} title="Setting Persistence Validator" />
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
           Verify that a config key is correctly persisted across Redis, config store, and app state.
         </p>
@@ -825,7 +826,7 @@ const ValidatePanel: React.FC = () => {
       </Card>
 
       <Card>
-        <SectionHeader icon="🔄" title="Toggle End-to-End Validator" />
+        <SectionHeader icon={<RefreshCw size={18} aria-hidden />} title="Toggle End-to-End Validator" />
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
           After changing a toggle or setting, verify the new value is correctly persisted end-to-end.
         </p>
@@ -1054,7 +1055,7 @@ const SystemReliabilitySection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <SectionHeader icon="🔬" title="System Reliability Dashboard" />
+            <SectionHeader icon={<Microscope size={18} aria-hidden />} title="System Reliability Dashboard" />
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
               Real-time connectivity status for every platform component. Auto-refreshes every 30s.
             </p>
@@ -1149,7 +1150,7 @@ const SystemReliabilitySection: React.FC = () => {
       {activeTab === 'traces' && (
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <SectionHeader icon="🔍" title="Recent OTel Spans" />
+            <SectionHeader icon={<Search size={18} aria-hidden />} title="Recent OTel Spans" />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button onClick={handleTraceTest} disabled={traceTestRunning} variant="secondary">
                 {traceTestRunning ? 'Emitting…' : '⚡ Emit Test Trace'}
@@ -1190,7 +1191,7 @@ const SystemReliabilitySection: React.FC = () => {
       {activeTab === 'selftest' && (
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <SectionHeader icon="🧪" title="End-to-End Self-Test Suite" />
+            <SectionHeader icon={<FlaskConical size={18} aria-hidden />} title="End-to-End Self-Test Suite" />
             <Button onClick={handleSelfTest} disabled={selfTestRunning}>
               {selfTestRunning ? 'Running tests…' : '▶ Run All Tests'}
             </Button>
@@ -1247,7 +1248,7 @@ const SystemReliabilitySection: React.FC = () => {
       {/* Status history tab */}
       {activeTab === 'history' && (
         <Card>
-          <SectionHeader icon="📈" title="Status History" desc="Last 100 reliability snapshots — auto-recorded on every status poll" />
+          <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Status History" desc="Last 100 reliability snapshots — auto-recorded on every status poll" />
           <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
             <Button onClick={fetchHistory} disabled={historyLoading} size="sm">
               {historyLoading ? '…' : '🔄 Refresh'}
@@ -1336,7 +1337,7 @@ const SystemReliabilitySection: React.FC = () => {
       {/* Env audit tab */}
       {activeTab === 'env' && (
         <Card>
-          <SectionHeader icon="🌍" title="Environment Variable Audit" />
+          <SectionHeader icon={<Globe2 size={18} aria-hidden />} title="Environment Variable Audit" />
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
             Shows presence/absence of environment variables. Values are never exposed.
           </p>
@@ -1407,7 +1408,7 @@ const SystemReliabilitySection: React.FC = () => {
       {/* Metrics tab */}
       {activeTab === 'metrics' && (
         <Card>
-          <SectionHeader icon="📊" title="System Metrics" />
+          <SectionHeader icon={<BarChart3 size={18} aria-hidden />} title="System Metrics" />
           {metricsErr && <ActionBanner message={metricsErr} ok={false} onDismiss={() => setMetricsErr('')} />}
           {metrics && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 12 }}>

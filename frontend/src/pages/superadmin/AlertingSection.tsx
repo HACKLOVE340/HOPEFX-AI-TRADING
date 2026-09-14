@@ -10,6 +10,7 @@ import {
 import type { AlertRule } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Bell, Circle, Plus, Radio, Siren } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -176,10 +177,10 @@ const AlertingSection: React.FC = () => {
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon="🔔" accent="#60a5fa" />
-        <KpiTile label="Fired (24h)" value={fired.length} icon="🚨" accent={fired.length > 0 ? '#fbbf24' : '#22c55e'} />
-        <KpiTile label="Critical Firing" value={criticalFired} icon="🔴" accent={criticalFired > 0 ? '#ef4444' : '#22c55e'} />
-        <KpiTile label="Prometheus" value={promStatus?.available ? 'Connected' : 'Offline'} icon="📡" accent={promStatus?.available ? '#22c55e' : '#f87171'} />
+        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon={<Bell size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Fired (24h)" value={fired.length} icon={<Siren size={18} aria-hidden />} accent={fired.length > 0 ? '#fbbf24' : '#22c55e'} />
+        <KpiTile label="Critical Firing" value={criticalFired} icon={<Circle size={18} aria-hidden />} accent={criticalFired > 0 ? '#ef4444' : '#22c55e'} />
+        <KpiTile label="Prometheus" value={promStatus?.available ? 'Connected' : 'Offline'} icon={<Radio size={18} aria-hidden />} accent={promStatus?.available ? '#22c55e' : '#f87171'} />
       </div>
 
       {/* Prometheus status */}
@@ -220,7 +221,7 @@ const AlertingSection: React.FC = () => {
       {tab === 'rules' && (
         <>
           {showCreate && (
-            <SectionCard title="Create Alert Rule" icon="➕" accent="#3b82f6">
+            <SectionCard title="Create Alert Rule" icon={<Plus size={18} aria-hidden />} accent="#3b82f6">
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <Input label="Rule name" placeholder="High CPU Usage" value={newRule.name} onChange={e => setNewRule(p => ({ ...p, name: e.target.value }))} />
@@ -240,7 +241,7 @@ const AlertingSection: React.FC = () => {
             </SectionCard>
           )}
 
-          <SectionCard title="Alert Rules" icon="🔔" accent="#60a5fa" noPad>
+          <SectionCard title="Alert Rules" icon={<Bell size={18} aria-hidden />} accent="#60a5fa" noPad>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
@@ -276,7 +277,7 @@ const AlertingSection: React.FC = () => {
       )}
 
       {tab === 'fired' && (
-        <SectionCard title="Fired Alerts" icon="🚨" accent="#fbbf24" noPad>
+        <SectionCard title="Fired Alerts" icon={<Siren size={18} aria-hidden />} accent="#fbbf24" noPad>
           {fired.length === 0 ? (
             <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No alerts fired recently</div>
           ) : (

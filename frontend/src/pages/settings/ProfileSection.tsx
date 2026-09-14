@@ -8,6 +8,7 @@ import { TIMEZONES, LANGUAGES } from './types';
 import { Field, Input, Select, Toggle, Card, SectionHeader, SaveBar, Button } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Globe, Mail, User } from 'lucide-react';
 
 const DEFAULT: ProfileSettings = {
   username: '', email: '', bio: '', avatar_url: '',
@@ -93,7 +94,7 @@ const ProfileSection: React.FC = () => {
 
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="👤" title="Profile" description="Your public identity and account preferences." />
+      <SectionHeader icon={<User size={18} aria-hidden />} title="Profile" description="Your public identity and account preferences." />
       <ErrorBanner message="Couldn't load your profile. Nothing has been changed — saving now would clear your bio, website and avatar." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -103,7 +104,7 @@ const ProfileSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="👤" title="Profile" description="Your public identity and account preferences." />
+      <SectionHeader icon={<User size={18} aria-hidden />} title="Profile" description="Your public identity and account preferences." />
 
       {/* Avatar */}
       <Card>
@@ -151,7 +152,7 @@ const ProfileSection: React.FC = () => {
             value={form.email}
             onChange={(e) => update({ email: e.target.value })}
             placeholder="you@example.com"
-            icon="✉"
+            icon={<Mail size={18} aria-hidden />}
           />
         </Field>
         <Field label="Bio" description="Shown on your public profile (max 500 chars).">
@@ -178,7 +179,7 @@ const ProfileSection: React.FC = () => {
             value={form.website}
             onChange={(e) => update({ website: e.target.value })}
             placeholder="https://yoursite.com"
-            icon="🌐"
+            icon={<Globe size={18} aria-hidden />}
           />
         </Field>
       </Card>

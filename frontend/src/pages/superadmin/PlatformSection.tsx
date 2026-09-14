@@ -8,6 +8,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Mail, Megaphone, Radio, Settings, Wrench } from 'lucide-react';
 
 interface PlatformConfig {
   platform_name: string;
@@ -184,7 +185,7 @@ const PlatformSection: React.FC = () => {
       )}
 
       {/* General */}
-      <SectionCard title="General Settings" icon="⚙️" accent="#3b82f6"
+      <SectionCard title="General Settings" icon={<Settings size={18} aria-hidden />} accent="#3b82f6"
         actions={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <ActionBtn label={validating ? 'Validating…' : 'Validate'} onClick={validateConfig} variant="ghost" loading={validating} size="sm" />
@@ -230,7 +231,7 @@ const PlatformSection: React.FC = () => {
       </SectionCard>
 
       {/* SMTP Test */}
-      <SectionCard title="SMTP Configuration Test" icon="📧" accent="#06b6d4"
+      <SectionCard title="SMTP Configuration Test" icon={<Mail size={18} aria-hidden />} accent="#06b6d4"
         subtitle="Verify email delivery settings before saving">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <Input label="SMTP Host"  value={smtpTest.host}     onChange={e => setSmtpTest(s => ({ ...s, host: e.target.value }))} placeholder="smtp.example.com" />
@@ -245,14 +246,14 @@ const PlatformSection: React.FC = () => {
           label={testingSmtp ? 'Testing SMTP…' : 'Test SMTP Connection'}
           onClick={runSmtpTest}
           variant="ghost"
-          icon="📧"
+          icon={<Mail size={18} aria-hidden />}
           loading={testingSmtp}
           disabled={!smtpTest.host}
         />
       </SectionCard>
 
       {/* Maintenance */}
-      <SectionCard title="Maintenance Mode" icon="🔧" accent="#f59e0b"
+      <SectionCard title="Maintenance Mode" icon={<Wrench size={18} aria-hidden />} accent="#f59e0b"
         subtitle={cfg.maintenance_mode ? '⚠️ Currently ACTIVE — users see downtime page' : 'Platform is live'}>
         <div style={{ marginBottom: 14 }}>
           <Input
@@ -272,7 +273,7 @@ const PlatformSection: React.FC = () => {
       </SectionCard>
 
       {/* Announcement Banner */}
-      <SectionCard title="Announcement Banner" icon="📢" accent="#8b5cf6">
+      <SectionCard title="Announcement Banner" icon={<Megaphone size={18} aria-hidden />} accent="#8b5cf6">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <Select label="Type"
             value={cfg.announcement_type}
@@ -295,7 +296,7 @@ const PlatformSection: React.FC = () => {
       </SectionCard>
 
       {/* Broadcast */}
-      <SectionCard title="Broadcast Message" icon="📡" accent="#06b6d4"
+      <SectionCard title="Broadcast Message" icon={<Radio size={18} aria-hidden />} accent="#06b6d4"
         subtitle="Send an in-app notification to all active users">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <Input label="Title" value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
@@ -326,7 +327,7 @@ const PlatformSection: React.FC = () => {
           label="Send Broadcast"
           onClick={sendBroadcast}
           variant="primary"
-          icon="📡"
+          icon={<Radio size={18} aria-hidden />}
           loading={saving}
           disabled={!broadcast.title || !broadcast.body}
         />

@@ -9,6 +9,7 @@ import {
 import type { LogEntry } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { ClipboardList, Download, RefreshCw, SlidersHorizontal } from 'lucide-react';
 
 /** Fallback for an unrecognised key. Named so it is not itself an
     index access, which `noUncheckedIndexedAccess` types as possibly
@@ -108,7 +109,7 @@ const LogsSection: React.FC = () => {
 
       {/* Log level controls */}
       {Object.keys(logLevels).length > 0 && (
-        <SectionCard title="Log Level Controls" icon="🎚️" accent="#8b5cf6"
+        <SectionCard title="Log Level Controls" icon={<SlidersHorizontal size={18} aria-hidden />} accent="#8b5cf6"
           subtitle="Adjust verbosity per logger without restarting">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             {Object.entries(logLevels).map(([logger, level]) => (
@@ -144,7 +145,7 @@ const LogsSection: React.FC = () => {
       {/* Log viewer */}
       <SectionCard
         title="System Logs"
-        icon="📋"
+        icon={<ClipboardList size={18} aria-hidden />}
         accent="#3b82f6"
         subtitle={`${filteredLogs.length} entries · Auto-refresh 10s`}
         noPad
@@ -154,8 +155,8 @@ const LogsSection: React.FC = () => {
               <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
               Auto-scroll
             </label>
-            <ActionBtn label="Export" onClick={exportLogs} icon="⬇️" size="sm" />
-            <ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />
+            <ActionBtn label="Export" onClick={exportLogs} icon={<Download size={18} aria-hidden />} size="sm" />
+            <ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
           </div>
         }
       >

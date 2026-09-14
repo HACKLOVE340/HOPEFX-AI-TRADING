@@ -19,6 +19,7 @@ import { Badge, type BadgeVariant } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
+import { Search } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -297,7 +298,7 @@ const AuditLog: React.FC = () => {
 
       {!loading && events.length === 0 && !error ? (
         <EmptyState
-          icon="🔍"
+          icon={Search}
           title="No events match your filters"
           description="Try adjusting your filters or check back after some activity."
         />

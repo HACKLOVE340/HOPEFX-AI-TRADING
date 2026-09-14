@@ -9,6 +9,7 @@ import {
 import type { FeatureFlag } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Flag, RefreshCw, User } from 'lucide-react';
 
 interface UserOverride { flag: string; enabled: boolean }
 
@@ -115,9 +116,9 @@ const FeatureFlagsSection: React.FC = () => {
       </div>
 
       {/* Global flags */}
-      <SectionCard title="Global Feature Flags" icon="🚩" accent="#3b82f6"
+      <SectionCard title="Global Feature Flags" icon={<Flag size={18} aria-hidden />} accent="#3b82f6"
         subtitle="Changes take effect immediately for all users"
-        actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
         {flags.map(flag => (
           <div key={flag.name} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -183,7 +184,7 @@ const FeatureFlagsSection: React.FC = () => {
       </SectionCard>
 
       {/* Per-user overrides */}
-      <SectionCard title="Per-User Flag Overrides" icon="👤" accent="#f59e0b"
+      <SectionCard title="Per-User Flag Overrides" icon={<User size={18} aria-hidden />} accent="#f59e0b"
         subtitle="Override global flags for a specific user">
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
           <Input

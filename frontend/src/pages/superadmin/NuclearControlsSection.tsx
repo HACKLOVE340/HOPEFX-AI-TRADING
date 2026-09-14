@@ -9,6 +9,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { AlertTriangle, BarChart3, ClipboardList, OctagonAlert, Shield, Zap } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -149,13 +150,13 @@ const NuclearControlsSection: React.FC = () => {
       {/* Status KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KpiTile label="Platform Status" value={halted ? 'HALTED' : 'RUNNING'} icon={halted ? '🛑' : '✅'} accent={halted ? '#ef4444' : '#22c55e'} />
-        <KpiTile label="Kill Switch" value={status?.kill_switch_active ? 'ACTIVE' : 'INACTIVE'} icon="⚡" accent={status?.kill_switch_active ? '#ef4444' : '#22c55e'} />
-        <KpiTile label="Hedge" value={status?.hedge_active ? `${((status.hedge_ratio ?? 0) * 100).toFixed(0)}%` : 'OFF'} icon="🛡️" accent={status?.hedge_active ? '#fbbf24' : '#475569'} />
-        <KpiTile label="Risk Override" value={status?.risk_override ? `${((status.max_risk_fraction ?? 1) * 100).toFixed(0)}%` : 'NORMAL'} icon="⚠️" accent={status?.risk_override ? '#f97316' : '#475569'} />
+        <KpiTile label="Kill Switch" value={status?.kill_switch_active ? 'ACTIVE' : 'INACTIVE'} icon={<Zap size={18} aria-hidden />} accent={status?.kill_switch_active ? '#ef4444' : '#22c55e'} />
+        <KpiTile label="Hedge" value={status?.hedge_active ? `${((status.hedge_ratio ?? 0) * 100).toFixed(0)}%` : 'OFF'} icon={<Shield size={18} aria-hidden />} accent={status?.hedge_active ? '#fbbf24' : '#475569'} />
+        <KpiTile label="Risk Override" value={status?.risk_override ? `${((status.max_risk_fraction ?? 1) * 100).toFixed(0)}%` : 'NORMAL'} icon={<AlertTriangle size={18} aria-hidden />} accent={status?.risk_override ? '#f97316' : '#475569'} />
       </div>
 
       {/* Emergency Halt */}
-      <SectionCard title="Emergency Halt" icon="🛑" accent="#ef4444"
+      <SectionCard title="Emergency Halt" icon={<OctagonAlert size={18} aria-hidden />} accent="#ef4444"
         subtitle={halted ? `Halted: ${status?.halt_reason ?? 'unknown reason'}` : 'Immediately stops all trading platform-wide'}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 240 }}>
@@ -193,7 +194,7 @@ const NuclearControlsSection: React.FC = () => {
       </SectionCard>
 
       {/* Hedge Activation */}
-      <SectionCard title="Emergency Hedge" icon="🛡️" accent="#fbbf24"
+      <SectionCard title="Emergency Hedge" icon={<Shield size={18} aria-hidden />} accent="#fbbf24"
         subtitle="Activate a counter-position hedge to neutralise open exposure">
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ width: 160 }}>
@@ -236,7 +237,7 @@ const NuclearControlsSection: React.FC = () => {
       </SectionCard>
 
       {/* Max Risk Override */}
-      <SectionCard title="Max Risk Override" icon="⚠️" accent="#f97316"
+      <SectionCard title="Max Risk Override" icon={<AlertTriangle size={18} aria-hidden />} accent="#f97316"
         subtitle="Override the platform-wide maximum risk fraction for all new positions">
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ width: 200 }}>
@@ -268,7 +269,7 @@ const NuclearControlsSection: React.FC = () => {
       </SectionCard>
 
       {/* Nuclear Log */}
-      <SectionCard title="Nuclear Action Log" icon="📋" accent="#64748b"
+      <SectionCard title="Nuclear Action Log" icon={<ClipboardList size={18} aria-hidden />} accent="#64748b"
         subtitle="Immutable log of all emergency actions">
         {log.length === 0 ? (
           <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No nuclear actions recorded</div>
@@ -350,7 +351,7 @@ const PropFirmBreachPanel: React.FC = () => {
     s === 'disqualified' ? '#dc2626' : s === 'breach' ? '#ef4444' : '#f59e0b';
 
   return (
-    <SectionCard title="Prop Firm Breach Tracker" icon="📊" accent="#f59e0b">
+    <SectionCard title="Prop Firm Breach Tracker" icon={<BarChart3 size={18} aria-hidden />} accent="#f59e0b">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Real-time prop firm rule violation monitoring</div>
         <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>

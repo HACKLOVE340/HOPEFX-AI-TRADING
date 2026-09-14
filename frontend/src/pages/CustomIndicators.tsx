@@ -15,6 +15,7 @@ import { createChart, LineSeries, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
+import { BarChart3, Bot, Ruler, Search, ShoppingCart, TrendingUp } from 'lucide-react';
 
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
 interface PreviewPoint { index: number; value: number; }
@@ -192,7 +193,7 @@ const CustomIndicators: React.FC = () => {
   return (
     <PageShell width="wide"
         title="Custom Indicator Builder"
-        icon="📐"
+        icon={Ruler}
         subtitle="Define indicator formulas using EMA, SMA, RSI. Preview on chart. Save for use in strategies."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -313,11 +314,11 @@ const CustomIndicators: React.FC = () => {
       )}
 
       <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
-        { label: 'AI Strategy',     href: '/ai-strategy',      icon: '🤖', color: '#a78bfa' },
-        { label: 'AI Charts',       href: '/ai-chart',         icon: '📈', color: '#06b6d4' },
-        { label: 'Pattern Detector',href: '/pattern-detector', icon: '🔍', color: '#fbbf24' },
-        { label: 'Walk-Forward',    href: '/walk-forward',     icon: '📊', color: '#60a5fa' },
-        { label: 'Marketplace',     href: '/marketplace',      icon: '🛒', color: '#f97316' },
+        { label: 'AI Strategy',     href: '/ai-strategy',      icon: Bot, color: '#a78bfa' },
+        { label: 'AI Charts',       href: '/ai-chart',         icon: TrendingUp, color: '#06b6d4' },
+        { label: 'Pattern Detector',href: '/pattern-detector', icon: Search, color: '#fbbf24' },
+        { label: 'Walk-Forward',    href: '/walk-forward',     icon: BarChart3, color: '#60a5fa' },
+        { label: 'Marketplace',     href: '/marketplace',      icon: ShoppingCart, color: '#f97316' },
       ]} />
     </PageShell>
   );

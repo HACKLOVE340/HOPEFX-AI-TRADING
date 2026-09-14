@@ -5,6 +5,7 @@ import type { PrivacySettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { FileLock2 } from 'lucide-react';
 
 const DEFAULT: PrivacySettings = {
   share_performance: false,
@@ -81,7 +82,7 @@ const PrivacySection: React.FC = () => {
 
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="🔏" title="Privacy & Data" description="Control what you share with other traders and the platform." />
+      <SectionHeader icon={<FileLock2 size={18} aria-hidden />} title="Privacy & Data" description="Control what you share with other traders and the platform." />
       <ErrorBanner message="Couldn't load your privacy settings. Nothing has been changed — saving now would overwrite your data-sharing choices with defaults." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -91,7 +92,7 @@ const PrivacySection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🔏" title="Privacy & Data" description="Control what you share with other traders and the platform." />
+      <SectionHeader icon={<FileLock2 size={18} aria-hidden />} title="Privacy & Data" description="Control what you share with other traders and the platform." />
 
       {/* Social sharing */}
       <Card>

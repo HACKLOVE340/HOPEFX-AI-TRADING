@@ -14,6 +14,7 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
+import { CreditCard, Globe2, Hourglass, IdCard, Lock, Search, Settings, ShieldCheck, Timer, Trash2, User } from 'lucide-react';
 
 /**
  * `unknown` is not a server status — it is the client's answer when it could not
@@ -33,13 +34,13 @@ interface KYCState {
 }
 
 const STATUS_CONFIG: Record<KYCStatus, {
-  label: string; color: string; bg: string; border: string; icon: string;
+  label: string; color: string; bg: string; border: string; icon: React.ReactNode;
   badgeVariant: 'success' | 'warning' | 'info' | 'danger' | 'neutral';
 }> = {
   unknown:      { label: 'Status unavailable', color: '#ffb800', bg: '#78350f22', border: '#92400e', icon: '?', badgeVariant: 'warning' },
   not_started:  { label: 'Not Started',  color: '#94a3b8', bg: '#1e293b22', border: '#334155', icon: '○', badgeVariant: 'neutral' },
-  pending:      { label: 'Pending',       color: '#f59e0b', bg: '#78350f22', border: '#92400e', icon: '⏳', badgeVariant: 'warning' },
-  under_review: { label: 'Under Review',  color: '#60a5fa', bg: '#1e3a5f22', border: '#1d4ed8', icon: '🔍', badgeVariant: 'info' },
+  pending:      { label: 'Pending',       color: '#f59e0b', bg: '#78350f22', border: '#92400e', icon: <Hourglass size={16} aria-hidden />, badgeVariant: 'warning' },
+  under_review: { label: 'Under Review',  color: '#60a5fa', bg: '#1e3a5f22', border: '#1d4ed8', icon: <Search size={16} aria-hidden />, badgeVariant: 'info' },
   approved:     { label: 'Approved',      color: '#4ade80', bg: '#14532d22', border: '#166534', icon: '✓', badgeVariant: 'success' },
   rejected:     { label: 'Rejected',      color: '#f87171', bg: '#450a0a22', border: '#7f1d1d', icon: '✕', badgeVariant: 'danger' },
 };
@@ -227,7 +228,7 @@ const KYCPage: React.FC = () => {
   return (
     <PageShell width="wide"
         title="Identity Verification (KYC)"
-        icon="🪪"
+        icon={IdCard}
         subtitle="Complete verification to unlock full trading features and higher withdrawal limits."
         breadcrumbs={[
           { label: 'Home',    href: '/home' },
@@ -470,10 +471,10 @@ const KYCPage: React.FC = () => {
           {/* Info grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 28 }}>
             {[
-              { icon: '🔒', title: 'AES-256 Encrypted',  body: 'All documents are encrypted at rest and in transit.' },
-              { icon: '⏱️', title: '1–2 Business Days',  body: 'Most verifications are completed within 48 hours.' },
-              { icon: '🌍', title: '180+ Countries',      body: 'We accept IDs from 180+ countries and territories.' },
-              { icon: '🗑️', title: 'GDPR Compliant',     body: 'Documents are retained only as required by regulation.' },
+              { icon: <Lock size={16} aria-hidden />, title: 'AES-256 Encrypted',  body: 'All documents are encrypted at rest and in transit.' },
+              { icon: <Timer size={16} aria-hidden />, title: '1–2 Business Days',  body: 'Most verifications are completed within 48 hours.' },
+              { icon: <Globe2 size={16} aria-hidden />, title: '180+ Countries',      body: 'We accept IDs from 180+ countries and territories.' },
+              { icon: <Trash2 size={16} aria-hidden />, title: 'GDPR Compliant',     body: 'Documents are retained only as required by regulation.' },
             ].map(({ icon, title, body }) => (
               <div key={title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
@@ -484,10 +485,10 @@ const KYCPage: React.FC = () => {
           </div>
 
           <CrossLinkBar title="Related" style={{ marginTop: 20 }} links={[
-            { label: 'Profile',   href: '/profile',            icon: '👤', color: '#60a5fa' },
-            { label: 'Security',  href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
-            { label: 'Wallet',    href: '/wallet',             icon: '💳', color: '#4ade80' },
-            { label: 'Settings',  href: '/settings',           icon: '⚙️', color: '#94a3b8' },
+            { label: 'Profile',   href: '/profile',            icon: User, color: '#60a5fa' },
+            { label: 'Security',  href: '/settings?tab=security', icon: ShieldCheck, color: '#f87171' },
+            { label: 'Wallet',    href: '/wallet',             icon: CreditCard, color: '#4ade80' },
+            { label: 'Settings',  href: '/settings',           icon: Settings, color: '#94a3b8' },
           ]} />
         </>
       )}

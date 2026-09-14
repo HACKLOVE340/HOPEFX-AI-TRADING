@@ -21,6 +21,7 @@ import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { CircleDot, Search, Shield, Stethoscope, Tag, Zap } from 'lucide-react';
 
 // ── Maintenance / Broadcast types ─────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ const KpiCard: React.FC<{
 );
 
 const QuickAction: React.FC<{
-  icon: string; label: string; desc: string; path: string; onClick: (p: string) => void;
+  icon: React.ReactNode; label: string; desc: string; path: string; onClick: (p: string) => void;
 }> = ({ icon, label, desc, path, onClick }) => (
   <button
     onClick={() => onClick(path)}
@@ -456,12 +457,12 @@ const AdminPanel: React.FC = () => {
           <div style={sectionStyle}>
             <div style={sectionHeader}>Quick Actions</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, padding: '16px 20px' }}>
-              <QuickAction icon="🔍" label="Audit Log"      desc="Browse all platform events"       path="/audit"      onClick={go} />
-              <QuickAction icon="🛡️" label="Security Ops"   desc="Threats, IPs, sessions"           path="/security"   onClick={go} />
-              <QuickAction icon="🩺" label="Auto-Heal"      desc="Self-healing & circuit breakers"  path="/auto-heal"  onClick={go} />
-              <QuickAction icon="🏷️" label="Whitelabel"     desc="Branding & tenant config"         path="/whitelabel" onClick={go} />
-              <QuickAction icon="🟢" label="System Status"  desc="Health & uptime"                  path="/status"     onClick={go} />
-              <QuickAction icon="⚡" label="Super Admin"    desc="Master control panel"             path="/superadmin" onClick={go} />
+              <QuickAction icon={<Search size={18} aria-hidden />} label="Audit Log"      desc="Browse all platform events"       path="/audit"      onClick={go} />
+              <QuickAction icon={<Shield size={18} aria-hidden />} label="Security Ops"   desc="Threats, IPs, sessions"           path="/security"   onClick={go} />
+              <QuickAction icon={<Stethoscope size={18} aria-hidden />} label="Auto-Heal"      desc="Self-healing & circuit breakers"  path="/auto-heal"  onClick={go} />
+              <QuickAction icon={<Tag size={18} aria-hidden />} label="Whitelabel"     desc="Branding & tenant config"         path="/whitelabel" onClick={go} />
+              <QuickAction icon={<CircleDot size={18} aria-hidden />} label="System Status"  desc="Health & uptime"                  path="/status"     onClick={go} />
+              <QuickAction icon={<Zap size={18} aria-hidden />} label="Super Admin"    desc="Master control panel"             path="/superadmin" onClick={go} />
             </div>
           </div>
         </>

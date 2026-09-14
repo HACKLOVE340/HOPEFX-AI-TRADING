@@ -8,6 +8,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Ban, Banknote, BarChart3, OctagonAlert, Pause, Play, Settings, Shield, Target, Timer, TrendingUp, Zap } from 'lucide-react';
 
 interface EngineConfig {
   paper_trading_mode: boolean;
@@ -245,26 +246,26 @@ const TradingEngineSection: React.FC = () => {
               <div style={{ fontSize: 12, color: '#fca5a5' }}>All trading is halted across the entire platform</div>
             </div>
           </div>
-          <ActionBtn label="Resume Trading" onClick={() => setConfirm('kill')} variant="success" icon="▶️" loading={saving} />
+          <ActionBtn label="Resume Trading" onClick={() => setConfirm('kill')} variant="success" icon={<Play size={18} aria-hidden />} loading={saving} />
         </div>
       )}
 
       {/* Metrics */}
       {metrics && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 20 }}>
-          <KpiTile label="Trades Today"      value={metrics.trades_today}                    icon="📊" accent="#3b82f6" />
-          <KpiTile label="Open Positions"    value={metrics.open_positions}                  icon="📈" accent="#22c55e" />
-          <KpiTile label="PnL Today"         value={`$${metrics.pnl_today.toFixed(2)}`}      icon="💰" accent={metrics.pnl_today >= 0 ? '#22c55e' : '#ef4444'} />
-          <KpiTile label="Win Rate"          value={`${(metrics.win_rate_today * 100).toFixed(1)}%`} icon="🎯" accent="#8b5cf6" />
-          <KpiTile label="Avg Execution"     value={`${metrics.avg_execution_ms}ms`}         icon="⚡" accent="#f59e0b" />
-          <KpiTile label="Rejected Orders"   value={metrics.rejected_orders}                 icon="🚫" accent="#ef4444" />
-          <KpiTile label="Kill Triggers"     value={metrics.kill_switch_triggers}            icon="🛑" accent="#dc2626" />
-          <KpiTile label="Uptime"            value={`${metrics.uptime_hours.toFixed(1)}h`}   icon="⏱️" accent="#06b6d4" />
+          <KpiTile label="Trades Today"      value={metrics.trades_today}                    icon={<BarChart3 size={18} aria-hidden />} accent="#3b82f6" />
+          <KpiTile label="Open Positions"    value={metrics.open_positions}                  icon={<TrendingUp size={18} aria-hidden />} accent="#22c55e" />
+          <KpiTile label="PnL Today"         value={`$${metrics.pnl_today.toFixed(2)}`}      icon={<Banknote size={18} aria-hidden />} accent={metrics.pnl_today >= 0 ? '#22c55e' : '#ef4444'} />
+          <KpiTile label="Win Rate"          value={`${(metrics.win_rate_today * 100).toFixed(1)}%`} icon={<Target size={18} aria-hidden />} accent="#8b5cf6" />
+          <KpiTile label="Avg Execution"     value={`${metrics.avg_execution_ms}ms`}         icon={<Zap size={18} aria-hidden />} accent="#f59e0b" />
+          <KpiTile label="Rejected Orders"   value={metrics.rejected_orders}                 icon={<Ban size={18} aria-hidden />} accent="#ef4444" />
+          <KpiTile label="Kill Triggers"     value={metrics.kill_switch_triggers}            icon={<OctagonAlert size={18} aria-hidden />} accent="#dc2626" />
+          <KpiTile label="Uptime"            value={`${metrics.uptime_hours.toFixed(1)}h`}   icon={<Timer size={18} aria-hidden />} accent="#06b6d4" />
         </div>
       )}
 
       {/* Engine status + controls */}
-      <SectionCard title="Engine Controls" icon="⚙️" accent="#ef4444"
+      <SectionCard title="Engine Controls" icon={<Settings size={18} aria-hidden />} accent="#ef4444"
         subtitle={`Status: ${cfg.engine_status} · Broker: ${cfg.broker_type}`}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <StatusBadge status={cfg.engine_status} />
@@ -275,8 +276,8 @@ const TradingEngineSection: React.FC = () => {
             loading={saving}
           />
           {cfg.engine_status === 'running'
-            ? <ActionBtn label="Pause Engine" onClick={() => setConfirm('pause')} variant="warning" icon="⏸️" loading={saving} />
-            : <ActionBtn label="Resume Engine" onClick={() => pauseResume('resume')} variant="success" icon="▶️" loading={saving} />
+            ? <ActionBtn label="Pause Engine" onClick={() => setConfirm('pause')} variant="warning" icon={<Pause size={18} aria-hidden />} loading={saving} />
+            : <ActionBtn label="Resume Engine" onClick={() => pauseResume('resume')} variant="success" icon={<Play size={18} aria-hidden />} loading={saving} />
           }
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -287,7 +288,7 @@ const TradingEngineSection: React.FC = () => {
       </SectionCard>
 
       {/* Risk parameters */}
-      <SectionCard title="Risk Parameters" icon="🛡️" accent="#f59e0b"
+      <SectionCard title="Risk Parameters" icon={<Shield size={18} aria-hidden />} accent="#f59e0b"
         actions={<ActionBtn label={saving ? 'Saving…' : 'Save'} onClick={save} variant="primary" loading={saving} size="sm" />}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <Input label="Max Open Positions"        value={cfg.max_open_positions}           onChange={e => set('max_open_positions', Number(e.target.value))}           type="number" />
@@ -370,7 +371,7 @@ const DecisionEnginePanel: React.FC = () => {
 
   return (
     <>
-      <SectionCard title="Decision Engine Pipeline" icon="⚡" accent="#f59e0b">
+      <SectionCard title="Decision Engine Pipeline" icon={<Zap size={18} aria-hidden />} accent="#f59e0b">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
           <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
@@ -403,7 +404,7 @@ const DecisionEnginePanel: React.FC = () => {
         )}
       </SectionCard>
 
-      <SectionCard title="Gatekeeper Checks (11)" icon="🛡️" accent="#22c55e">
+      <SectionCard title="Gatekeeper Checks (11)" icon={<Shield size={18} aria-hidden />} accent="#22c55e">
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
           Reference list of the checks the gatekeeper applies — all 11 must pass before any trade is
           executed, and failures are logged to the audit trail. This panel does not report live check

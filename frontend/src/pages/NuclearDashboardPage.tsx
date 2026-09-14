@@ -7,10 +7,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  Zap, Globe, Newspaper, Sparkles,
-
-} from 'lucide-react';
+import { Globe, Newspaper, Radiation, Sparkles, Zap } from 'lucide-react';
 import { NuclearDashboard } from '../features/chart-bot';
 import { PageHeader } from '../components/PageHeader';
 
@@ -33,7 +30,7 @@ const NuclearDashboardPage: React.FC = () => (
     }}>
       <PageHeader
         title="☢ Nuclear AI Dashboard"
-        icon="☢️"
+        icon={Radiation}
         subtitle="Real-time nuclear risk intelligence · geopolitical threat scoring · XAU/USD safe-haven impact"
         breadcrumbs={[
           { label: 'Dashboard',    href: '/dashboard' },

@@ -21,6 +21,7 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 import { Card, SectionHeader, Button, StatusBadge, Divider, Input, Field } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { Lock } from 'lucide-react';
 
 const SecuritySection: React.FC = () => {
   const navigate = useNavigate();
@@ -125,7 +126,7 @@ const SecuritySection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🔒" title="Security" description="Password, two-factor authentication, and active sessions." />
+      <SectionHeader icon={<Lock size={18} aria-hidden />} title="Security" description="Password, two-factor authentication, and active sessions." />
 
       {/* Password */}
       <Card>

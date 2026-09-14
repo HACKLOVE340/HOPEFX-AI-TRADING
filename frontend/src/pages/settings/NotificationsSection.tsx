@@ -5,6 +5,7 @@ import type { NotificationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Bell } from 'lucide-react';
 
 const DEFAULT: NotificationSettings = {
   discord_enabled: false, discord_webhook_url: '',
@@ -131,7 +132,7 @@ const NotificationsSection: React.FC = () => {
 
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="🔔" title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
+      <SectionHeader icon={<Bell size={18} aria-hidden />} title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
       <ErrorBanner message="Couldn't load your notification settings. Nothing has been changed — saving now would turn your alerts off and clear your webhook endpoints." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -141,7 +142,7 @@ const NotificationsSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🔔" title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
+      <SectionHeader icon={<Bell size={18} aria-hidden />} title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
 
       {/* Discord */}
       <Card>

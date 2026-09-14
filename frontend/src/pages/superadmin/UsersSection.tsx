@@ -11,6 +11,7 @@ import { ROLE_BADGE_STYLES, ROLE_LABELS, PLAN_COLORS, PLAN_LABELS } from '../../
 import type { UserRole } from '../../store';
 import type { Plan } from '../../lib/subscription';
 import { asArray, extractApiError } from '../../lib/utils';
+import { Ban, CheckCircle2, Download, KeyRound, RefreshCw, Trash2, User, Users } from 'lucide-react';
 
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'Never';
@@ -212,14 +213,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <ActionBtn label="Reset Password"   onClick={() => setConfirm({ action: 'reset-pw',    label: 'Reset Password'   })} variant="warning" icon="🔑" />
-              <ActionBtn label="Impersonate User" onClick={() => setConfirm({ action: 'impersonate', label: 'Impersonate User' })} variant="primary" icon="👤" />
+              <ActionBtn label="Reset Password"   onClick={() => setConfirm({ action: 'reset-pw',    label: 'Reset Password'   })} variant="warning" icon={<KeyRound size={18} aria-hidden />} />
+              <ActionBtn label="Impersonate User" onClick={() => setConfirm({ action: 'impersonate', label: 'Impersonate User' })} variant="primary" icon={<User size={18} aria-hidden />} />
               {user.status === 'banned'
-                ? <ActionBtn label="Unban User" onClick={() => setConfirm({ action: 'unban', label: 'Unban User' })} variant="success" icon="✅" />
-                : <ActionBtn label="Ban User"   onClick={() => setConfirm({ action: 'ban',   label: 'Ban User'   })} variant="danger"  icon="🚫" />
+                ? <ActionBtn label="Unban User" onClick={() => setConfirm({ action: 'unban', label: 'Unban User' })} variant="success" icon={<CheckCircle2 size={18} aria-hidden />} />
+                : <ActionBtn label="Ban User"   onClick={() => setConfirm({ action: 'ban',   label: 'Ban User'   })} variant="danger"  icon={<Ban size={18} aria-hidden />} />
               }
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-                <ActionBtn label="Delete Account" onClick={() => setDeleteConfirm(true)} loading={deleting} icon="🗑️" variant="danger" />
+                <ActionBtn label="Delete Account" onClick={() => setDeleteConfirm(true)} loading={deleting} icon={<Trash2 size={18} aria-hidden />} variant="danger" />
               </div>
             </div>
           </>
@@ -416,10 +417,10 @@ const UsersSection: React.FC = () => {
 
       <SectionCard
         title="User Management"
-        icon="👥"
+        icon={<Users size={18} aria-hidden />}
         accent="#3b82f6"
         subtitle={`${users.length} users loaded`}
-        actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}
       >
         {/* Filters */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -463,9 +464,9 @@ const UsersSection: React.FC = () => {
               {checkedIds.size} selected
             </span>
             <div style={{ flex: 1 }} />
-            <ActionBtn label="Ban Selected"   onClick={() => setBulkConfirm({ action: 'ban',   label: 'Ban Users'   })} variant="danger"  size="sm" icon="🚫" loading={bulkBusy === 'ban'} />
-            <ActionBtn label="Unban Selected" onClick={() => setBulkConfirm({ action: 'unban', label: 'Unban Users' })} variant="success" size="sm" icon="✅" loading={bulkBusy === 'unban'} />
-            <ActionBtn label="Export CSV"     onClick={() => doBulkAction('export')}                                    variant="ghost"   size="sm" icon="⬇️" loading={bulkBusy === 'export'} />
+            <ActionBtn label="Ban Selected"   onClick={() => setBulkConfirm({ action: 'ban',   label: 'Ban Users'   })} variant="danger"  size="sm" icon={<Ban size={18} aria-hidden />} loading={bulkBusy === 'ban'} />
+            <ActionBtn label="Unban Selected" onClick={() => setBulkConfirm({ action: 'unban', label: 'Unban Users' })} variant="success" size="sm" icon={<CheckCircle2 size={18} aria-hidden />} loading={bulkBusy === 'unban'} />
+            <ActionBtn label="Export CSV"     onClick={() => doBulkAction('export')}                                    variant="ghost"   size="sm" icon={<Download size={18} aria-hidden />} loading={bulkBusy === 'export'} />
             <ActionBtn label="Clear"          onClick={() => setCheckedIds(new Set())}                                  variant="ghost"   size="sm" />
           </div>
         )}

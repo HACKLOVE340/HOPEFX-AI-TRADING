@@ -17,6 +17,7 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 import { Card, SectionHeader, Button, Divider } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { AlertTriangle } from 'lucide-react';
 
 const DangerSection: React.FC = () => {
   const navigate = useNavigate();
@@ -116,7 +117,7 @@ const DangerSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="⚠️" title="Danger Zone" description="Irreversible actions. Proceed with caution." />
+      <SectionHeader icon={<AlertTriangle size={18} aria-hidden />} title="Danger Zone" description="Irreversible actions. Proceed with caution." />
 
       {/* Export data */}
       <Card>

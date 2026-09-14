@@ -9,6 +9,7 @@ import {
 import type { MLModel } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { BarChart3, Bot, Brain, Package, Pause, Play, RefreshCw, Settings, Square, Target, TrendingUp, Zap } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -190,15 +191,15 @@ const MLAISection: React.FC = () => {
       {mlStatus && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20, padding: '14px 18px', background: mlStatus.status === 'healthy' ? '#052e16' : '#450a0a', borderRadius: 12, border: `1px solid ${mlStatus.status === 'healthy' ? '#16a34a44' : '#dc262644'}` }}>
           {[
-            { label: 'ML System',        value: mlStatus.status.toUpperCase(),                   color: mlStatus.status === 'healthy' ? '#4ade80' : '#f87171', icon: '🧠' },
-            { label: 'Active Model',     value: mlStatus.active_model,                           color: '#a78bfa', icon: '📦' },
-            { label: 'Latency',          value: `${mlStatus.inference_latency_ms.toFixed(0)}ms`, color: mlStatus.inference_latency_ms < 50 ? '#4ade80' : '#fbbf24', icon: '⚡' },
-            { label: 'Predictions Today', value: mlStatus.predictions_today.toLocaleString(),    color: '#60a5fa', icon: '📊' },
-            { label: '7-Day Accuracy',   value: `${mlStatus.accuracy_7d.toFixed(1)}%`,           color: mlStatus.accuracy_7d >= 65 ? '#4ade80' : '#f87171', icon: '🎯' },
+            { label: 'ML System',        value: mlStatus.status.toUpperCase(),                   color: mlStatus.status === 'healthy' ? '#4ade80' : '#f87171', icon: <Brain size={16} aria-hidden /> },
+            { label: 'Active Model',     value: mlStatus.active_model,                           color: '#a78bfa', icon: <Package size={16} aria-hidden /> },
+            { label: 'Latency',          value: `${mlStatus.inference_latency_ms.toFixed(0)}ms`, color: mlStatus.inference_latency_ms < 50 ? '#4ade80' : '#fbbf24', icon: <Zap size={16} aria-hidden /> },
+            { label: 'Predictions Today', value: mlStatus.predictions_today.toLocaleString(),    color: '#60a5fa', icon: <BarChart3 size={16} aria-hidden /> },
+            { label: '7-Day Accuracy',   value: `${mlStatus.accuracy_7d.toFixed(1)}%`,           color: mlStatus.accuracy_7d >= 65 ? '#4ade80' : '#f87171', icon: <Target size={16} aria-hidden /> },
             // Never renders a number the backend did not measure: an
             // unreachable drift monitor reads "not measured", in grey, not a
             // green 0.000.
-            { label: 'Drift Score',      value: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? 'not measured' : mlStatus.drift_score.toFixed(3), color: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? '#64748b' : mlStatus.drift_score < 0.1 ? '#4ade80' : mlStatus.drift_score < 0.3 ? '#fbbf24' : '#f87171', icon: '📈' },
+            { label: 'Drift Score',      value: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? 'not measured' : mlStatus.drift_score.toFixed(3), color: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? '#64748b' : mlStatus.drift_score < 0.1 ? '#4ade80' : mlStatus.drift_score < 0.3 ? '#fbbf24' : '#f87171', icon: <TrendingUp size={16} aria-hidden /> },
           ].map(m => (
             <div key={m.label}>
               <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 3 }}>{m.icon} {m.label}</div>
@@ -219,9 +220,9 @@ const MLAISection: React.FC = () => {
 
       {/* RL Agent */}
       {rlStatus && (
-        <SectionCard title="RL Agent" icon="🤖" accent="#a78bfa"
+        <SectionCard title="RL Agent" icon={<Bot size={18} aria-hidden />} accent="#a78bfa"
           subtitle={`Model v${rlStatus.model_version ?? '1.0'} · Last updated ${fmtDate(rlStatus.last_updated ?? null)}`}
-          actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+          actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
             {[
               { label: 'Status',       value: <StatusBadge status={rlStatus.status ?? 'unknown'} size="sm" /> },
@@ -236,18 +237,18 @@ const MLAISection: React.FC = () => {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <ActionBtn label="Start Training" onClick={() => rlControl('start')}  variant="success"  icon="▶️" loading={busy === 'rl-start'} />
-            <ActionBtn label="Pause"          onClick={() => rlControl('pause')}  variant="warning"  icon="⏸️" loading={busy === 'rl-pause'} />
-            <ActionBtn label="Stop"           onClick={() => rlControl('stop')}   variant="danger"   icon="⏹️" loading={busy === 'rl-stop'} />
-            <ActionBtn label="Reset"          onClick={() => rlControl('reset')}  variant="ghost"    icon="🔄" loading={busy === 'rl-reset'} />
+            <ActionBtn label="Start Training" onClick={() => rlControl('start')}  variant="success"  icon={<Play size={18} aria-hidden />} loading={busy === 'rl-start'} />
+            <ActionBtn label="Pause"          onClick={() => rlControl('pause')}  variant="warning"  icon={<Pause size={18} aria-hidden />} loading={busy === 'rl-pause'} />
+            <ActionBtn label="Stop"           onClick={() => rlControl('stop')}   variant="danger"   icon={<Square size={18} aria-hidden />} loading={busy === 'rl-stop'} />
+            <ActionBtn label="Reset"          onClick={() => rlControl('reset')}  variant="ghost"    icon={<RefreshCw size={18} aria-hidden />} loading={busy === 'rl-reset'} />
           </div>
         </SectionCard>
       )}
 
       {/* Models table */}
-      <SectionCard title="ML Models" icon="🧠" accent="#8b5cf6"
+      <SectionCard title="ML Models" icon={<Brain size={18} aria-hidden />} accent="#8b5cf6"
         subtitle={`${models.length} models registered`}
-        actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -383,7 +384,7 @@ const MLSubsystemsPanel: React.FC = () => {
   ] as const;
 
   return (
-    <SectionCard title="Advanced ML Subsystems" icon="⚙️" accent="#a78bfa">
+    <SectionCard title="Advanced ML Subsystems" icon={<Settings size={18} aria-hidden />} accent="#a78bfa">
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {STABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{

@@ -8,7 +8,7 @@ interface KpiTileProps {
   label: string;
   value: string | number;
   sub?: string;
-  icon?: string;
+  icon?: React.ReactNode;
   accent?: string;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;

@@ -4,6 +4,7 @@ import { api } from '../../hooks/useApi';
 import type { AccessibilitySettings } from './types';
 import { Card, SectionHeader, Field, Select, Toggle, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { Accessibility } from 'lucide-react';
 
 const DEFAULT: AccessibilitySettings = {
   reduce_motion: false,
@@ -70,7 +71,7 @@ const AccessibilitySection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="♿" title="Accessibility" description="Adjust the interface to suit your needs." />
+      <SectionHeader icon={<Accessibility size={18} aria-hidden />} title="Accessibility" description="Adjust the interface to suit your needs." />
 
       {/* Motion & display */}
       <Card>

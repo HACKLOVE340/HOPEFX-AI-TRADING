@@ -5,6 +5,7 @@ import type { AppearanceSettings } from './types';
 import { ACCENT_COLORS } from './types';
 import { Card, SectionHeader, Field, Select, Toggle, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { Palette } from 'lucide-react';
 
 const DEFAULT: AppearanceSettings = {
   theme: 'dark',
@@ -79,7 +80,7 @@ const AppearanceSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🎨" title="Appearance" description="Theme, colors, and display preferences." />
+      <SectionHeader icon={<Palette size={18} aria-hidden />} title="Appearance" description="Theme, colors, and display preferences." />
 
       {/* Theme */}
       <Card>

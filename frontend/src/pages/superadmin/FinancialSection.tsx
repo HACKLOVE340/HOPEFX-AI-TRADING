@@ -13,7 +13,7 @@ import type { RevenueStats, SubscriptionStats, Chargeback, TaxReport, Reconcilia
 import { PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { Plan } from '../../lib/subscription';
 import { asArray } from '../../lib/utils';
-import { Scale, Check, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Banknote, BarChart3, Check, CheckCircle2, CreditCard, Download, FileText, Files, FlaskConical, Handshake, Hourglass, Link2, Minus, Play, Plus, ReceiptText, RefreshCw, Scale, Send, Star, Target, TrendingDown, TrendingUp, Trophy, Users, XCircle } from 'lucide-react';
 
 interface Payment {
   payment_id: string;
@@ -172,7 +172,7 @@ const ChargebacksPanel: React.FC = () => {
   return (
     <SectionCard
       title="Chargebacks"
-      icon="🔄"
+      icon={<RefreshCw size={18} aria-hidden />}
       accent="#f97316"
       subtitle={`${items.length} total · ${openCount} open · ${fmtMoney(totalAtRisk)} at risk`}
       actions={
@@ -229,7 +229,7 @@ const ChargebacksPanel: React.FC = () => {
             </tbody>
           </table>
           {items.length === 0 && (
-            <EmptyState compact icon="✅" title="No chargebacks found" description="Chargeback disputes will appear here when reported." />
+            <EmptyState compact icon={CheckCircle2} title="No chargebacks found" description="Chargeback disputes will appear here when reported." />
           )}
         </div>
       )}
@@ -297,7 +297,7 @@ const TaxReportsPanel: React.FC = () => {
   return (
     <SectionCard
       title="Tax Reports"
-      icon="📑"
+      icon={<Files size={18} aria-hidden />}
       accent="#60a5fa"
       subtitle={`${reports.length} reports · ${overdueCount} overdue · ${fmtMoney(totalOwed)} total owed`}
       actions={
@@ -353,7 +353,7 @@ const TaxReportsPanel: React.FC = () => {
             </tbody>
           </table>
           {reports.length === 0 && (
-            <EmptyState compact icon="📄" title="No tax reports yet" description="Generated tax reports will appear here." />
+            <EmptyState compact icon={FileText} title="No tax reports yet" description="Generated tax reports will appear here." />
           )}
         </div>
       )}
@@ -431,7 +431,7 @@ const ReconciliationPanel: React.FC = () => {
   return (
     <SectionCard
       title="Payment Reconciliation"
-      icon="⚖️"
+      icon={<Scale size={18} aria-hidden />}
       accent="#a78bfa"
       subtitle={`${records.length} records · ${discrepancies.length} discrepancies · ${fmtMoney(totalDiscrepancy)} variance`}
       actions={
@@ -450,7 +450,7 @@ const ReconciliationPanel: React.FC = () => {
             options={[{ value: 'all', label: 'All Providers' }, ...providers.map(p => ({ value: p, label: p }))]}
             style={{ width: 160 }}
           />
-          <ActionBtn label="Run Reconciliation" onClick={runRecon} variant="primary" size="sm" loading={runBusy} icon="▶" disabled={!period} />
+          <ActionBtn label="Run Reconciliation" onClick={runRecon} variant="primary" size="sm" loading={runBusy} icon={<Play size={18} aria-hidden />} disabled={!period} />
         </div>
       }
     >
@@ -531,21 +531,21 @@ const AffiliatePanel: React.FC = () => {
   // Refresh every 60 s — compliance and financial data is not real-time.
   usePolling(load, 60_000);
 
-  if (loading) return <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"><LoadingRows rows={4} /></SectionCard>;
-  if (error)   return <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"><ErrorState message={error} onRetry={load} /></SectionCard>;
+  if (loading) return <SectionCard title="Affiliate Programme" icon={<Handshake size={18} aria-hidden />} accent="#22c55e"><LoadingRows rows={4} /></SectionCard>;
+  if (error)   return <SectionCard title="Affiliate Programme" icon={<Handshake size={18} aria-hidden />} accent="#22c55e"><ErrorState message={error} onRetry={load} /></SectionCard>;
   if (!stats)  return null;
 
   return (
-    <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"
+    <SectionCard title="Affiliate Programme" icon={<Handshake size={18} aria-hidden />} accent="#22c55e"
       subtitle={`${stats.active_affiliates} active / ${stats.total_affiliates} total affiliates`}>
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiTile label="Total Affiliates"    value={stats.total_affiliates}                                           icon="👥" accent="#22c55e" />
-        <KpiTile label="Active Affiliates"   value={stats.active_affiliates}                                          icon="✅" accent="#4ade80" />
-        <KpiTile label="Commissions Paid"    value={fmtMoney(stats.total_commissions_paid, stats.currency)}           icon="💸" accent="#f59e0b" />
-        <KpiTile label="Commissions Pending" value={fmtMoney(stats.commissions_pending, stats.currency)}             icon="⏳" accent="#fbbf24" />
-        <KpiTile label="Total Referrals"     value={stats.total_referrals}                                            icon="🔗" accent="#06b6d4" />
-        <KpiTile label="Conversions MTD"     value={stats.conversions_mtd}                                            icon="🎯" accent="#8b5cf6" />
+        <KpiTile label="Total Affiliates"    value={stats.total_affiliates}                                           icon={<Users size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Active Affiliates"   value={stats.active_affiliates}                                          icon={<CheckCircle2 size={18} aria-hidden />} accent="#4ade80" />
+        <KpiTile label="Commissions Paid"    value={fmtMoney(stats.total_commissions_paid, stats.currency)}           icon={<Send size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="Commissions Pending" value={fmtMoney(stats.commissions_pending, stats.currency)}             icon={<Hourglass size={18} aria-hidden />} accent="#fbbf24" />
+        <KpiTile label="Total Referrals"     value={stats.total_referrals}                                            icon={<Link2 size={18} aria-hidden />} accent="#06b6d4" />
+        <KpiTile label="Conversions MTD"     value={stats.conversions_mtd}                                            icon={<Target size={18} aria-hidden />} accent="#8b5cf6" />
       </div>
 
       {/* Top affiliates */}
@@ -782,13 +782,13 @@ const RefundPolicyPanel: React.FC = () => {
 
 type FinTab = 'overview' | 'chargebacks' | 'tax' | 'reconciliation' | 'affiliates' | 'policy';
 
-const FIN_TABS: { id: FinTab; label: string; icon: string }[] = [
-  { id: 'overview',       label: 'Overview',        icon: '💰' },
-  { id: 'chargebacks',    label: 'Chargebacks',     icon: '🔄' },
-  { id: 'tax',            label: 'Tax Reports',     icon: '📑' },
-  { id: 'reconciliation', label: 'Reconciliation',  icon: '⚖️' },
-  { id: 'affiliates',     label: 'Affiliates',      icon: '🤝' },
-  { id: 'policy',         label: 'Refund Policy',   icon: '⚖️' },
+const FIN_TABS: { id: FinTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'overview',       label: 'Overview',        icon: <Banknote size={16} aria-hidden /> },
+  { id: 'chargebacks',    label: 'Chargebacks',     icon: <RefreshCw size={16} aria-hidden /> },
+  { id: 'tax',            label: 'Tax Reports',     icon: <Files size={16} aria-hidden /> },
+  { id: 'reconciliation', label: 'Reconciliation',  icon: <Scale size={16} aria-hidden /> },
+  { id: 'affiliates',     label: 'Affiliates',      icon: <Handshake size={16} aria-hidden /> },
+  { id: 'policy',         label: 'Refund Policy',   icon: <Scale size={16} aria-hidden /> },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -901,7 +901,7 @@ const FinancialSection: React.FC = () => {
               ]}
               style={{ width: 180 }}
             />
-            <ActionBtn label="Export CSV" onClick={() => superadminApi.paymentHistory({ period, format: 'csv' })} icon="⬇️" size="sm" />
+            <ActionBtn label="Export CSV" onClick={() => superadminApi.paymentHistory({ period, format: 'csv' })} icon={<Download size={18} aria-hidden />} size="sm" />
           </div>
 
           {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
@@ -912,27 +912,27 @@ const FinancialSection: React.FC = () => {
               {revenue && (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-                    <KpiTile label="MRR"           value={fmtMoney(revenue.mrr, revenue.currency)}           icon="📈" accent="#22c55e" />
-                    <KpiTile label="ARR"           value={fmtMoney(revenue.arr, revenue.currency)}           icon="🏆" accent="#3b82f6" />
-                    <KpiTile label="Revenue Today" value={fmtMoney(revenue.revenue_today, revenue.currency)} icon="💰" accent="#f59e0b" />
-                    <KpiTile label="Revenue MTD"   value={fmtMoney(revenue.revenue_mtd, revenue.currency)}   icon="📊" accent="#8b5cf6" />
-                    <KpiTile label="New Subs MTD"  value={revenue.new_subs_mtd}                              icon="➕" accent="#06b6d4" />
-                    <KpiTile label="Cancelled MTD" value={revenue.cancelled_mtd}                             icon="➖" accent="#ef4444" />
-                    <KpiTile label="Churn Rate"    value={`${Number.isFinite(revenue.churn_rate_pct) ? revenue.churn_rate_pct.toFixed(2) : '—'}%`}           icon="📉" accent="#f87171" />
-                    <KpiTile label="Avg LTV"       value={fmtMoney(revenue.ltv_avg, revenue.currency)}       icon="⭐" accent="#fbbf24" />
+                    <KpiTile label="MRR"           value={fmtMoney(revenue.mrr, revenue.currency)}           icon={<TrendingUp size={18} aria-hidden />} accent="#22c55e" />
+                    <KpiTile label="ARR"           value={fmtMoney(revenue.arr, revenue.currency)}           icon={<Trophy size={18} aria-hidden />} accent="#3b82f6" />
+                    <KpiTile label="Revenue Today" value={fmtMoney(revenue.revenue_today, revenue.currency)} icon={<Banknote size={18} aria-hidden />} accent="#f59e0b" />
+                    <KpiTile label="Revenue MTD"   value={fmtMoney(revenue.revenue_mtd, revenue.currency)}   icon={<BarChart3 size={18} aria-hidden />} accent="#8b5cf6" />
+                    <KpiTile label="New Subs MTD"  value={revenue.new_subs_mtd}                              icon={<Plus size={18} aria-hidden />} accent="#06b6d4" />
+                    <KpiTile label="Cancelled MTD" value={revenue.cancelled_mtd}                             icon={<Minus size={18} aria-hidden />} accent="#ef4444" />
+                    <KpiTile label="Churn Rate"    value={`${Number.isFinite(revenue.churn_rate_pct) ? revenue.churn_rate_pct.toFixed(2) : '—'}%`}           icon={<TrendingDown size={18} aria-hidden />} accent="#f87171" />
+                    <KpiTile label="Avg LTV"       value={fmtMoney(revenue.ltv_avg, revenue.currency)}       icon={<Star size={18} aria-hidden />} accent="#fbbf24" />
                   </div>
 
                   {/* Subscription KPIs */}
                   {subStats && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-                      <KpiTile label="Active Subscriptions" value={subStats.total_active}    icon="✅" accent="#22c55e" />
-                      <KpiTile label="Trials"               value={subStats.trial_count}     icon="🧪" accent="#06b6d4" />
-                      <KpiTile label="Expiring Soon"        value={subStats.expiring_soon}   icon="⏳" accent="#f59e0b" />
-                      <KpiTile label="Cancelled"            value={subStats.cancelled_count} icon="❌" accent="#ef4444" />
+                      <KpiTile label="Active Subscriptions" value={subStats.total_active}    icon={<CheckCircle2 size={18} aria-hidden />} accent="#22c55e" />
+                      <KpiTile label="Trials"               value={subStats.trial_count}     icon={<FlaskConical size={18} aria-hidden />} accent="#06b6d4" />
+                      <KpiTile label="Expiring Soon"        value={subStats.expiring_soon}   icon={<Hourglass size={18} aria-hidden />} accent="#f59e0b" />
+                      <KpiTile label="Cancelled"            value={subStats.cancelled_count} icon={<XCircle size={18} aria-hidden />} accent="#ef4444" />
                     </div>
                   )}
 
-                  <SectionCard title="Revenue by Plan" icon="💳" accent="#8b5cf6">
+                  <SectionCard title="Revenue by Plan" icon={<CreditCard size={18} aria-hidden />} accent="#8b5cf6">
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
                       {Object.entries(revenue.plan_breakdown).map(([plan, amount]) => (
                         <div key={plan} style={{ background: 'var(--raised)', borderRadius: 8, padding: '14px 16px', borderLeft: `3px solid ${PLAN_COLORS[plan as Plan] ?? '#475569'}` }}>
@@ -946,7 +946,7 @@ const FinancialSection: React.FC = () => {
               )}
 
               {/* Payments table */}
-              <SectionCard title="Payment History" icon="🧾" accent="#3b82f6" subtitle={`${payments.length} transactions`}>
+              <SectionCard title="Payment History" icon={<ReceiptText size={18} aria-hidden />} accent="#3b82f6" subtitle={`${payments.length} transactions`}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
@@ -994,7 +994,7 @@ const FinancialSection: React.FC = () => {
                     </tbody>
                   </table>
                   {payments.length === 0 && (
-                    <EmptyState compact icon="💳" title="No payments found" description="No payment records match the selected period." />
+                    <EmptyState compact icon={CreditCard} title="No payments found" description="No payment records match the selected period." />
                   )}
                 </div>
               </SectionCard>

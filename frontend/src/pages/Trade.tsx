@@ -30,12 +30,12 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot, selectFeedLive } from '../store';
 
 const TRADE_CROSS_LINKS = [
-  { label: 'Trading Terminal', href: '/terminal',       icon: '🖥️', color: '#3b82f6' },
-  { label: 'Dashboard',        href: '/dashboard',      icon: '📊', color: '#60a5fa' },
-  { label: 'Watchlist',        href: '/watchlist',      icon: '👁',  color: '#34d399' },
-  { label: 'Risk Calculator',  href: '/risk-calculator',icon: '🛡',  color: '#f59e0b' },
-  { label: 'Trade Journal',    href: '/journal',        icon: '📓', color: '#a78bfa' },
-  { label: 'Copy Trading',     href: '/copy-trading',   icon: '🔁', color: '#f97316' },
+  { label: 'Trading Terminal', href: '/terminal',       icon: Monitor, color: '#3b82f6' },
+  { label: 'Dashboard',        href: '/dashboard',      icon: BarChart3, color: '#60a5fa' },
+  { label: 'Watchlist',        href: '/watchlist',      icon: Eye,  color: '#34d399' },
+  { label: 'Risk Calculator',  href: '/risk-calculator',icon: Shield,  color: '#f59e0b' },
+  { label: 'Trade Journal',    href: '/journal',        icon: NotebookPen, color: '#a78bfa' },
+  { label: 'Copy Trading',     href: '/copy-trading',   icon: Repeat, color: '#f97316' },
 ];
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
 import { tradingApi } from '../hooks/useApi';
@@ -45,6 +45,7 @@ import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol, describeCloseAll, positionSide } from '../lib/utils';
 import type { PriceTick } from '../types';
+import { BarChart3, CandlestickChart, Eye, Monitor, NotebookPen, Repeat, Shield } from 'lucide-react';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -534,7 +535,7 @@ const Trade: React.FC = () => {
 
       <PageHeader
         title="Trade"
-        icon="💹"
+        icon={CandlestickChart}
         subtitle="Real-time execution — market, limit and stop orders"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

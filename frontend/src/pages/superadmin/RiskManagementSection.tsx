@@ -14,6 +14,7 @@ import type {
 } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { AlertTriangle, BarChart3, CheckCircle2, CircleOff, FlaskConical, Microscope, Mountain, Play, RefreshCw, Shield, Star, TrendingDown, Users, Zap } from 'lucide-react';
 
 const fmtMoney = (n: number, cur = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
@@ -144,12 +145,12 @@ const RiskManagementSection: React.FC = () => {
   if (loading) return <><LoadingRows rows={8} /></>;
   if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
-  const TABS: { id: RiskTab; label: string; icon: string }[] = [
-    { id: 'overview',        label: 'Overview',       icon: '📊' },
-    { id: 'circuit-breakers',label: 'Circuit Breakers',icon: '⚡' },
-    { id: 'stress-tests',    label: 'Stress Tests',   icon: '🔬' },
-    { id: 'prop-breaches',   label: 'Prop Breaches',  icon: '🛡️' },
-    { id: 'drawdown',        label: 'Drawdown',       icon: '📉' },
+  const TABS: { id: RiskTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview',        label: 'Overview',       icon: <BarChart3 size={16} aria-hidden /> },
+    { id: 'circuit-breakers',label: 'Circuit Breakers',icon: <Zap size={16} aria-hidden /> },
+    { id: 'stress-tests',    label: 'Stress Tests',   icon: <Microscope size={16} aria-hidden /> },
+    { id: 'prop-breaches',   label: 'Prop Breaches',  icon: <Shield size={16} aria-hidden /> },
+    { id: 'drawdown',        label: 'Drawdown',       icon: <TrendingDown size={16} aria-hidden /> },
   ];
 
   return (
@@ -173,14 +174,14 @@ const RiskManagementSection: React.FC = () => {
       {/* VaR KPI strip — always visible */}
       {varMetrics && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-          <KpiTile label="VaR 95%"          value={fmtMoney(varMetrics.var_95, varMetrics.currency)}           icon="📉" accent="#ef4444" />
-          <KpiTile label="VaR 99%"          value={fmtMoney(varMetrics.var_99, varMetrics.currency)}           icon="📉" accent="#dc2626" />
-          <KpiTile label="Expected Shortfall" value={fmtMoney(varMetrics.expected_shortfall, varMetrics.currency)} icon="⚠️" accent="#f59e0b" />
-          <KpiTile label="Max Drawdown"     value={fmtPct(varMetrics.max_drawdown)}                            icon="📊" accent="#f87171" />
-          <KpiTile label="Current Drawdown" value={fmtPct(varMetrics.current_drawdown)}                        icon="📊" accent={varMetrics.current_drawdown > 5 ? '#ef4444' : '#22c55e'} />
-          <KpiTile label="Sharpe Ratio"     value={varMetrics.sharpe_ratio.toFixed(2)}                         icon="⭐" accent="#3b82f6" />
-          <KpiTile label="Open Breakers"    value={openBreakers}                                               icon="⚡" accent={openBreakers > 0 ? '#ef4444' : '#22c55e'} />
-          <KpiTile label="Prop Breaches"    value={propBreaches.filter(b => b.status === 'open').length}       icon="🛡️" accent={propBreaches.filter(b => b.status === 'open').length > 0 ? '#f59e0b' : '#22c55e'} />
+          <KpiTile label="VaR 95%"          value={fmtMoney(varMetrics.var_95, varMetrics.currency)}           icon={<TrendingDown size={18} aria-hidden />} accent="#ef4444" />
+          <KpiTile label="VaR 99%"          value={fmtMoney(varMetrics.var_99, varMetrics.currency)}           icon={<TrendingDown size={18} aria-hidden />} accent="#dc2626" />
+          <KpiTile label="Expected Shortfall" value={fmtMoney(varMetrics.expected_shortfall, varMetrics.currency)} icon={<AlertTriangle size={18} aria-hidden />} accent="#f59e0b" />
+          <KpiTile label="Max Drawdown"     value={fmtPct(varMetrics.max_drawdown)}                            icon={<BarChart3 size={18} aria-hidden />} accent="#f87171" />
+          <KpiTile label="Current Drawdown" value={fmtPct(varMetrics.current_drawdown)}                        icon={<BarChart3 size={18} aria-hidden />} accent={varMetrics.current_drawdown > 5 ? '#ef4444' : '#22c55e'} />
+          <KpiTile label="Sharpe Ratio"     value={varMetrics.sharpe_ratio.toFixed(2)}                         icon={<Star size={18} aria-hidden />} accent="#3b82f6" />
+          <KpiTile label="Open Breakers"    value={openBreakers}                                               icon={<Zap size={18} aria-hidden />} accent={openBreakers > 0 ? '#ef4444' : '#22c55e'} />
+          <KpiTile label="Prop Breaches"    value={propBreaches.filter(b => b.status === 'open').length}       icon={<Shield size={18} aria-hidden />} accent={propBreaches.filter(b => b.status === 'open').length > 0 ? '#f59e0b' : '#22c55e'} />
         </div>
       )}
 
@@ -201,7 +202,7 @@ const RiskManagementSection: React.FC = () => {
 
       {/* ── Overview ── */}
       {tab === 'overview' && varMetrics && (
-        <SectionCard title="Risk Overview" icon="📊" accent="#f97316" subtitle="Platform-wide risk metrics">
+        <SectionCard title="Risk Overview" icon={<BarChart3 size={18} aria-hidden />} accent="#f97316" subtitle="Platform-wide risk metrics">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
             {[
               { label: 'Portfolio Value',    value: fmtMoney(varMetrics.portfolio_value, varMetrics.currency), color: '#22c55e' },
@@ -225,9 +226,9 @@ const RiskManagementSection: React.FC = () => {
 
       {/* ── Circuit Breakers ── */}
       {tab === 'circuit-breakers' && (
-        <SectionCard title="Circuit Breakers" icon="⚡" accent="#ef4444"
+        <SectionCard title="Circuit Breakers" icon={<Zap size={18} aria-hidden />} accent="#ef4444"
           subtitle={`${openBreakers} open · ${breakers.length} total`}
-          actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+          actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
           {openBreakers > 0 && (
             <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16 }}>🛑</span>
@@ -274,7 +275,7 @@ const RiskManagementSection: React.FC = () => {
 
       {/* ── Stress Tests ── */}
       {tab === 'stress-tests' && (
-        <SectionCard title="Stress Testing" icon="🔬" accent="#8b5cf6"
+        <SectionCard title="Stress Testing" icon={<Microscope size={18} aria-hidden />} accent="#8b5cf6"
           subtitle="On-demand scenario analysis — results update in ~3s">
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
             {[
@@ -285,7 +286,7 @@ const RiskManagementSection: React.FC = () => {
               { label: 'USD Collapse -20%',      scenario: 'usd_collapse' },
               { label: 'Liquidity Crisis',       scenario: 'liquidity_crisis' },
             ].map(s => (
-              <ActionBtn key={s.scenario} label={s.label} onClick={() => runStressTest(s.scenario)} variant="ghost" icon="▶️" size="sm" loading={busy === `stress-${s.scenario}`} />
+              <ActionBtn key={s.scenario} label={s.label} onClick={() => runStressTest(s.scenario)} variant="ghost" icon={<Play size={18} aria-hidden />} size="sm" loading={busy === `stress-${s.scenario}`} />
             ))}
           </div>
           {stressTests.length > 0 && (
@@ -318,16 +319,16 @@ const RiskManagementSection: React.FC = () => {
             </div>
           )}
           {stressTests.length === 0 && (
-            <EmptyState compact icon="🧪" title="No stress test results yet" description="Run a scenario above to simulate portfolio stress conditions." />
+            <EmptyState compact icon={FlaskConical} title="No stress test results yet" description="Run a scenario above to simulate portfolio stress conditions." />
           )}
         </SectionCard>
       )}
 
       {/* ── Prop Firm Breaches ── */}
       {tab === 'prop-breaches' && (
-        <SectionCard title="Prop Firm Breach Tracker" icon="🛡️" accent="#f59e0b"
+        <SectionCard title="Prop Firm Breach Tracker" icon={<Shield size={18} aria-hidden />} accent="#f59e0b"
           subtitle={`${propBreaches.filter(b => b.status === 'open').length} open breaches · ${propBreaches.length} total`}
-          actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+          actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
 
           {/* Filter bar */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -352,7 +353,7 @@ const RiskManagementSection: React.FC = () => {
           </div>
 
           {filteredBreaches.length === 0 ? (
-            <EmptyState compact icon="✅" title="No prop firm breaches found" description="Breach events will appear here when traders exceed their risk thresholds." />
+            <EmptyState compact icon={CheckCircle2} title="No prop firm breaches found" description="Breach events will appear here when traders exceed their risk thresholds." />
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -403,18 +404,18 @@ const RiskManagementSection: React.FC = () => {
 
       {/* ── Drawdown Tracker ── */}
       {tab === 'drawdown' && (
-        <SectionCard title="Drawdown Tracker" icon="📉" accent="#f97316"
+        <SectionCard title="Drawdown Tracker" icon={<TrendingDown size={18} aria-hidden />} accent="#f97316"
           subtitle="Platform-wide drawdown statistics"
-          actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+          actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
           {drawdown ? (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-                <KpiTile label="Current Drawdown"     value={fmtPct(drawdown.current_drawdown_pct)}                                                  icon="📉" accent={drawdown.current_drawdown_pct > 10 ? '#ef4444' : drawdown.current_drawdown_pct > 5 ? '#f59e0b' : '#22c55e'} />
-                <KpiTile label="Max Drawdown"         value={fmtPct(drawdown.max_drawdown_pct)}                                                      icon="📊" accent="#f87171" />
-                <KpiTile label="Peak Equity"          value={fmtMoney(drawdown.peak_equity)}                                                         icon="🏔️" accent="#22c55e" />
-                <KpiTile label="Trough Equity"        value={fmtMoney(drawdown.trough_equity)}                                                       icon="🕳️" accent="#f87171" />
-                <KpiTile label="Accounts in Drawdown" value={drawdown.accounts_in_drawdown}                                                          icon="👥" accent="#f59e0b" />
-                <KpiTile label="Near Limit"           value={drawdown.accounts_near_limit}                                                           icon="⚠️" accent={drawdown.accounts_near_limit > 0 ? '#ef4444' : '#22c55e'} />
+                <KpiTile label="Current Drawdown"     value={fmtPct(drawdown.current_drawdown_pct)}                                                  icon={<TrendingDown size={18} aria-hidden />} accent={drawdown.current_drawdown_pct > 10 ? '#ef4444' : drawdown.current_drawdown_pct > 5 ? '#f59e0b' : '#22c55e'} />
+                <KpiTile label="Max Drawdown"         value={fmtPct(drawdown.max_drawdown_pct)}                                                      icon={<BarChart3 size={18} aria-hidden />} accent="#f87171" />
+                <KpiTile label="Peak Equity"          value={fmtMoney(drawdown.peak_equity)}                                                         icon={<Mountain size={18} aria-hidden />} accent="#22c55e" />
+                <KpiTile label="Trough Equity"        value={fmtMoney(drawdown.trough_equity)}                                                       icon={<CircleOff size={18} aria-hidden />} accent="#f87171" />
+                <KpiTile label="Accounts in Drawdown" value={drawdown.accounts_in_drawdown}                                                          icon={<Users size={18} aria-hidden />} accent="#f59e0b" />
+                <KpiTile label="Near Limit"           value={drawdown.accounts_near_limit}                                                           icon={<AlertTriangle size={18} aria-hidden />} accent={drawdown.accounts_near_limit > 0 ? '#ef4444' : '#22c55e'} />
               </div>
 
               {/* Drawdown distribution */}

@@ -18,6 +18,7 @@ import { useStore, selectIsAuth } from '../store';
 import { normalisePlan } from '../lib/subscription';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
+import { BarChart3, BookOpen, CircleDot, Handshake, Trophy } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -525,11 +526,11 @@ const PricingPage: React.FC = () => {
       </div>
 
       <CrossLinkBar title="Explore" links={[
-        { label: 'Dashboard',    href: '/dashboard',  icon: '📊', color: '#3b82f6' },
-        { label: 'Affiliate',    href: '/affiliate',  icon: '🤝', color: '#f97316' },
-        { label: 'Docs',         href: '/docs',       icon: '📖', color: '#94a3b8' },
-        { label: 'Status',       href: '/status',     icon: '🟢', color: '#22c55e' },
-        { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#f59e0b' },
+        { label: 'Dashboard',    href: '/dashboard',  icon: BarChart3, color: '#3b82f6' },
+        { label: 'Affiliate',    href: '/affiliate',  icon: Handshake, color: '#f97316' },
+        { label: 'Docs',         href: '/docs',       icon: BookOpen, color: '#94a3b8' },
+        { label: 'Status',       href: '/status',     icon: CircleDot, color: '#22c55e' },
+        { label: 'Leaderboard',  href: '/leaderboard',icon: Trophy, color: '#f59e0b' },
       ]} style={{ marginBottom: 32 }} />
 
       {/* CTA footer */}

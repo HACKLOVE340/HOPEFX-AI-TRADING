@@ -10,6 +10,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { ClipboardList, Link2, Search, Tag } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
@@ -187,10 +188,10 @@ const AuditTrailSection: React.FC = () => {
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Total Records" value={total.toLocaleString()} icon="📋" accent="#a78bfa" />
-        <KpiTile label="Showing" value={filtered.length} icon="🔍" accent="#60a5fa" />
-        <KpiTile label="Categories" value={categories.length} icon="🏷️" accent="#22c55e" />
-        <KpiTile label="Hash-Chained" value="Yes" icon="🔗" accent="#4ade80" sub="Tamper-evident" />
+        <KpiTile label="Total Records" value={total.toLocaleString()} icon={<ClipboardList size={18} aria-hidden />} accent="#a78bfa" />
+        <KpiTile label="Showing" value={filtered.length} icon={<Search size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Categories" value={categories.length} icon={<Tag size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Hash-Chained" value="Yes" icon={<Link2 size={18} aria-hidden />} accent="#4ade80" sub="Tamper-evident" />
       </div>
 
       {/* Main tab switcher */}
@@ -246,7 +247,7 @@ const AuditTrailSection: React.FC = () => {
         />
       </div>
 
-      <SectionCard title="Immutable Audit Trail" icon="🔗" accent="#a78bfa" noPad>
+      <SectionCard title="Immutable Audit Trail" icon={<Link2 size={18} aria-hidden />} accent="#a78bfa" noPad>
         {filtered.length === 0 ? (
           <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No audit records match this filter</div>
         ) : (
@@ -350,12 +351,12 @@ const AuditTrailSection: React.FC = () => {
             <ActionBtn label="Export CSV" onClick={exportSysAudit} loading={busy} accent="#60a5fa" size="sm" />
           </div>
 
-          <SectionCard title="System Audit Log" icon="📋" accent="#60a5fa"
+          <SectionCard title="System Audit Log" icon={<ClipboardList size={18} aria-hidden />} accent="#60a5fa"
             subtitle={`${sysTotal.toLocaleString()} total admin actions`} noPad>
             {sysLoading ? (
               <LoadingRows rows={6} />
             ) : sysEntries.length === 0 ? (
-              <EmptyState compact icon="📋" title="No audit entries found" description="System audit events will appear here as platform actions are recorded." links={[{ label: 'Audit Log', href: '/audit', icon: '🔍' }]} />
+              <EmptyState compact icon={ClipboardList} title="No audit entries found" description="System audit events will appear here as platform actions are recorded." links={[{ label: 'Audit Log', href: '/audit', icon: <Search size={16} aria-hidden /> }]} />
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>

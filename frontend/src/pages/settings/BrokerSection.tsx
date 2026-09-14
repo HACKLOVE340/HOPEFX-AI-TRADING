@@ -5,6 +5,7 @@ import type { BrokerSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Landmark } from 'lucide-react';
 
 const DEFAULT: BrokerSettings = {
   type: 'paper', api_key: '', account_id: '', practice: true, connected: false,
@@ -131,7 +132,7 @@ const BrokerSection: React.FC = () => {
 
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="🏦" title="Broker Connection" description="Connect your live or paper trading account." />
+      <SectionHeader icon={<Landmark size={18} aria-hidden />} title="Broker Connection" description="Connect your live or paper trading account." />
       <ErrorBanner message="Couldn't load your saved broker configuration. Nothing has been changed — saving now would post default values over it." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -141,7 +142,7 @@ const BrokerSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🏦" title="Broker Connection" description="Connect your live or paper trading account." />
+      <SectionHeader icon={<Landmark size={18} aria-hidden />} title="Broker Connection" description="Connect your live or paper trading account." />
 
       {statusErr && (
         <ErrorBanner

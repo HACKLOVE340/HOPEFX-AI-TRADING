@@ -43,9 +43,7 @@ interface DriftReport {
   live_samples?: number;
 }
 import { PageHeader, Section, RelatedPages } from '../../components';
-import {
-  Sparkles, Brain, AlertTriangle, Activity, LineChart, BookOpen, Radar, Cpu,
-} from 'lucide-react';
+import { Activity, AlertTriangle, BookOpen, Brain, Cpu, LineChart, Radar, Radio, Sparkles } from 'lucide-react';
 import { signalsApi, mlApi } from '../../hooks/useApi';
 import { MlSafetyStrip } from './MlSafetyStrip';
 import { RiskTransparencyStrip } from './RiskTransparencyStrip';
@@ -317,12 +315,12 @@ export const ModelHealthWorkspace: React.FC = () => {
           </div>
         ) : signals.length === 0 ? (
           <EmptyState
-            icon="📡"
+            icon={Radio}
             title="No active signals"
             description="The engine is monitoring the market — signals appear here as they fire."
             links={[
-              { label: 'Generate AI signals', href: '/ai-strategy', icon: '✨' },
-              { label: 'View signal feed', href: '/signals', icon: '📡' },
+              { label: 'Generate AI signals', href: '/ai-strategy', icon: <Sparkles size={16} aria-hidden /> },
+              { label: 'View signal feed', href: '/signals', icon: <Radio size={16} aria-hidden /> },
             ]}
           />
         ) : (

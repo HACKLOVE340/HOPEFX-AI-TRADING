@@ -5,6 +5,7 @@ import type { SystemSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Settings } from 'lucide-react';
 
 const DEFAULT: SystemSettings = {
   data_refresh_interval: 30,
@@ -85,7 +86,7 @@ const SystemSection: React.FC = () => {
 
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="⚙️" title="System" description="Platform-wide configuration. Changes affect all users." />
+      <SectionHeader icon={<Settings size={18} aria-hidden />} title="System" description="Platform-wide configuration. Changes affect all users." />
       <ErrorBanner message="Couldn't load the system configuration. Nothing has been changed — saving now would push default values, including disabling live trading, over the real settings." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -95,7 +96,7 @@ const SystemSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="⚙️" title="System" description="Platform-wide configuration. Changes affect all users." />
+      <SectionHeader icon={<Settings size={18} aria-hidden />} title="System" description="Platform-wide configuration. Changes affect all users." />
 
       {/* Health overview */}
       {healthErr && <ErrorBanner message={healthErr} onDismiss={() => setHealthErr('')} />}

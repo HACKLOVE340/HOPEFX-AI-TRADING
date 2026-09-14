@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
+import { Rewind } from 'lucide-react';
 
 // Playback speed options (ms between auto-step ticks)
 /** 1× — the speed used if an index somehow falls outside SPEED_OPTIONS. */
@@ -279,7 +280,7 @@ const ReplayPage: React.FC = () => {
   return (
     <PageShell width="wide"
         title="Market Replay"
-        icon="⏪"
+        icon={Rewind}
         subtitle="Bar-by-bar historical replay with live strategy testing — enterprise tier"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

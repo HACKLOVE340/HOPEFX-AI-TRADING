@@ -27,6 +27,7 @@ import { PageHeader } from '../components/PageHeader';
 import QRCode from '../components/QRCode';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { extractApiError } from '../lib/utils';
+import { ShieldCheck } from 'lucide-react';
 
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
@@ -283,7 +284,7 @@ const TwoFactorSetup: React.FC = () => {
     <div className="page-content">
       <PageHeader
         title="Two-Factor Authentication"
-        icon="🔐"
+        icon={ShieldCheck}
         subtitle="Add an extra layer of security using an authenticator app."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

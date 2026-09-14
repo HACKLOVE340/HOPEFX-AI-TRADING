@@ -8,6 +8,7 @@ import { Card, SectionHeader, Field, Input, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useStore, selectUser } from '../../store';
+import { KeyRound } from 'lucide-react';
 
 const ApiKeysSection: React.FC = () => {
   const confirm = useConfirm();
@@ -103,7 +104,7 @@ const ApiKeysSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🔑" title="API Keys" description="Generate keys to access HOPEFX programmatically. Keys are shown once — store them securely." />
+      <SectionHeader icon={<KeyRound size={18} aria-hidden />} title="API Keys" description="Generate keys to access HOPEFX programmatically. Keys are shown once — store them securely." />
 
       {/* Revealed key banner */}
       {revealedKey && (

@@ -84,7 +84,7 @@ const FALLBACK_PLANS: Plan[] = [
   { id: 'elite',        name: 'Elite',        price_usd: 10000, features: ['Everything in Enterprise', 'Dedicated support'] },
 ];
 
-const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: string; networks?: USDTNetwork[] }> = {
+const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: React.ReactNode; networks?: USDTNetwork[] }> = {
   BTC:  { name: 'Bitcoin',  color: '#f7931a', icon: '₿' },
   ETH:  { name: 'Ethereum', color: '#627eea', icon: 'Ξ' },
   USDT: { name: 'Tether',   color: '#26a17b', icon: '₮', networks: ['TRC20', 'ERC20', 'BEP20'] },

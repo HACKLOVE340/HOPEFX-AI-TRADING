@@ -12,10 +12,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  Zap, BookOpen, Shield,
-   Briefcase,
-} from 'lucide-react';
+import { BookOpen, Briefcase, Calculator, Shield, Zap } from 'lucide-react';
 import { EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
@@ -407,7 +404,7 @@ const RiskCalculator: React.FC = () => {
   return (
     <PageShell width="wide"
         title="Risk / Reward Calculator"
-        icon="🧮"
+        icon={Calculator}
         subtitle="Calculate position size, pip value, and margin before every trade."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -616,7 +613,7 @@ const RiskCalculator: React.FC = () => {
           </div>
           {history.length === 0 ? (
             <EmptyState
-              icon="🧮"
+              icon={Calculator}
               title="No saved calculations yet"
               description="Run a calculation above and save it to build your history."
               compact

@@ -27,14 +27,14 @@ import { useStore } from '../store';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 
 const TD_CROSS_LINKS = [
-  { label: 'Trade',           href: '/trade',           icon: '⚡', color: '#3b82f6' },
-  { label: 'Portfolio',       href: '/portfolio',       icon: '📊', color: '#8b5cf6' },
-  { label: 'Performance',     href: '/performance',     icon: '📈', color: '#06b6d4' },
-  { label: 'AI Strategy',     href: '/ai-strategy',     icon: '🤖', color: '#f59e0b' },
-  { label: 'Journal',         href: '/journal',         icon: '📓', color: '#10b981' },
-  { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡',  color: '#ec4899' },
-  { label: 'Watchlist',       href: '/watchlist',       icon: '👁',  color: '#38bdf8' },
-  { label: 'Signals',         href: '/signals',         icon: '📡', color: '#a78bfa' },
+  { label: 'Trade',           href: '/trade',           icon: Zap, color: '#3b82f6' },
+  { label: 'Portfolio',       href: '/portfolio',       icon: BarChart3, color: '#8b5cf6' },
+  { label: 'Performance',     href: '/performance',     icon: TrendingUp, color: '#06b6d4' },
+  { label: 'AI Strategy',     href: '/ai-strategy',     icon: Bot, color: '#f59e0b' },
+  { label: 'Journal',         href: '/journal',         icon: NotebookPen, color: '#10b981' },
+  { label: 'Risk Calculator', href: '/risk-calculator', icon: Shield,  color: '#ec4899' },
+  { label: 'Watchlist',       href: '/watchlist',       icon: Eye,  color: '#38bdf8' },
+  { label: 'Signals',         href: '/signals',         icon: Radio, color: '#a78bfa' },
 ];
 // useBootstrapData and useWebSocket are intentionally NOT imported here —
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
@@ -45,6 +45,7 @@ import { PanelSkeleton, ChartSkeleton } from '../components/ui/Skeleton';
 // ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
 import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
 import { AccountBar }       from '../components/terminal/AccountBar';
+import { BarChart3, Bot, Eye, NotebookPen, Radio, Shield, TrendingUp, Zap } from 'lucide-react';
 
 
 // ── Quick-action bar ──────────────────────────────────────────────────────────

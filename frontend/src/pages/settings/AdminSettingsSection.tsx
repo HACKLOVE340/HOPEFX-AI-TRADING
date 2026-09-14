@@ -5,6 +5,7 @@ import type { AdminSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Wrench } from 'lucide-react';
 
 const DEFAULT: AdminSettings = {
   allow_new_registrations: true,
@@ -119,7 +120,7 @@ const AdminSettingsSection: React.FC = () => {
   // configuration, and saving replaces the real values with them.
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="🔧" title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
+      <SectionHeader icon={<Wrench size={18} aria-hidden />} title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
       <ErrorBanner message="Couldn't load admin settings. Nothing has been changed — reload to try again." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -129,7 +130,7 @@ const AdminSettingsSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🔧" title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
+      <SectionHeader icon={<Wrench size={18} aria-hidden />} title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
 
       {/* Registration */}
       <Card>

@@ -11,6 +11,7 @@ import {
 import type { ServiceStatus, BackupRecord, ScheduledJob } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { AlarmClock, CheckCircle2, KeyRound, Package, Save, XCircle } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -145,10 +146,10 @@ const SystemHealthSection: React.FC = () => {
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Healthy Services" value={`${healthyServices}/${services.length}`} icon="✅" accent={downServices > 0 ? '#f87171' : '#22c55e'} />
-        <KpiTile label="Down Services" value={downServices} icon="❌" accent={downServices > 0 ? '#ef4444' : '#22c55e'} />
-        <KpiTile label="Active Jobs" value={activeJobs} icon="⏰" accent="#60a5fa" />
-        <KpiTile label="Active API Keys" value={activeKeys} icon="🔑" accent="#a78bfa" />
+        <KpiTile label="Healthy Services" value={`${healthyServices}/${services.length}`} icon={<CheckCircle2 size={18} aria-hidden />} accent={downServices > 0 ? '#f87171' : '#22c55e'} />
+        <KpiTile label="Down Services" value={downServices} icon={<XCircle size={18} aria-hidden />} accent={downServices > 0 ? '#ef4444' : '#22c55e'} />
+        <KpiTile label="Active Jobs" value={activeJobs} icon={<AlarmClock size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Active API Keys" value={activeKeys} icon={<KeyRound size={18} aria-hidden />} accent="#a78bfa" />
       </div>
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -203,7 +204,7 @@ const SystemHealthSection: React.FC = () => {
 
       {tab === 'backups' && (
         <>
-          <SectionCard title="Trigger Backup" icon="💾" accent="#22c55e">
+          <SectionCard title="Trigger Backup" icon={<Save size={18} aria-hidden />} accent="#22c55e">
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               {(['full', 'incremental', 'snapshot'] as const).map(t => (
                 <button key={t} onClick={() => setBackupType(t)} style={{
@@ -219,9 +220,9 @@ const SystemHealthSection: React.FC = () => {
             </div>
           </SectionCard>
 
-          <SectionCard title="Backup History" icon="📦" accent="#60a5fa" noPad>
+          <SectionCard title="Backup History" icon={<Package size={18} aria-hidden />} accent="#60a5fa" noPad>
             {backups.length === 0 ? (
-              <EmptyState compact icon="💾" title="No backups found" description="Database and config backups will appear here once scheduled jobs run." />
+              <EmptyState compact icon={Save} title="No backups found" description="Database and config backups will appear here once scheduled jobs run." />
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -249,7 +250,7 @@ const SystemHealthSection: React.FC = () => {
       )}
 
       {tab === 'jobs' && (
-        <SectionCard title="Scheduled Jobs" icon="⏰" accent="#fbbf24" noPad>
+        <SectionCard title="Scheduled Jobs" icon={<AlarmClock size={18} aria-hidden />} accent="#fbbf24" noPad>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr>
@@ -288,10 +289,10 @@ const SystemHealthSection: React.FC = () => {
       )}
 
       {tab === 'apikeys' && (
-        <SectionCard title="API Key Audit" icon="🔑" accent="#a78bfa" noPad
+        <SectionCard title="API Key Audit" icon={<KeyRound size={18} aria-hidden />} accent="#a78bfa" noPad
           subtitle="Cross-user API key inventory — revoke compromised keys immediately">
           {apiKeys.length === 0 ? (
-            <EmptyState compact icon="🔑" title="No API keys found" description="Platform API keys will appear here once created." />
+            <EmptyState compact icon={KeyRound} title="No API keys found" description="Platform API keys will appear here once created." />
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>

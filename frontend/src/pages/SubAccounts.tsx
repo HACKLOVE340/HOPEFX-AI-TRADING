@@ -19,6 +19,7 @@ import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
 import { MetricCard } from '../components/MetricCard';
+import { Banknote, BarChart3, FolderTree, TrendingUp, Users } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -374,17 +375,17 @@ const SubAccounts: React.FC = () => {
 
       {/* Summary metrics */}
       <div style={s.metrics}>
-        <MetricCard label="Total Balance"  value={fmt(totalBalance)}  icon="💰" loading={loading} />
-        <MetricCard label="Total Equity"   value={fmt(totalEquity)}   icon="📊" loading={loading} />
+        <MetricCard label="Total Balance"  value={fmt(totalBalance)}  icon={<Banknote size={18} aria-hidden />} loading={loading} />
+        <MetricCard label="Total Equity"   value={fmt(totalEquity)}   icon={<BarChart3 size={18} aria-hidden />} loading={loading} />
         <MetricCard
           label="Daily P&L"
           value={fmt(totalPnl)}
           delta={totalPnl >= 0 ? `+${fmt(totalPnl)}` : fmt(totalPnl)}
           deltaPositive={totalPnl >= 0}
-          icon="📈"
+          icon={<TrendingUp size={18} aria-hidden />}
           loading={loading}
         />
-        <MetricCard label="Sub-Accounts"   value={accounts.length}    icon="🗂️" loading={loading} />
+        <MetricCard label="Sub-Accounts"   value={accounts.length}    icon={<FolderTree size={18} aria-hidden />} loading={loading} />
       </div>
 
       {/* Sub-accounts table */}
@@ -392,7 +393,7 @@ const SubAccounts: React.FC = () => {
         <h2 style={s.sectionTitle}>Sub-Accounts</h2>
         {!loading && accounts.length === 0 ? (
           <EmptyState
-            icon="🗂️"
+            icon={FolderTree}
             title="No sub-accounts yet"
             description="Create a sub-account to track separate P&L, risk limits, or broker connections."
             action={<button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>Create Sub-Account</button>}
@@ -430,7 +431,7 @@ const SubAccounts: React.FC = () => {
 
         {!loading && teams.length === 0 ? (
           <EmptyState
-            icon="👥"
+            icon={Users}
             title="No teams yet"
             description="Create a team to collaborate with other traders and share strategies."
             action={<button onClick={() => setShowCreateTeam(true)} style={s.primaryBtn}>Create Team</button>}

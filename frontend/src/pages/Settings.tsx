@@ -18,6 +18,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isAdmin, isSuperAdmin, planRank } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
+import { Accessibility, AlertTriangle, Banknote, BarChart3, Bell, Brain, ClipboardList, CreditCard, FileLock2, Files, Flag, Globe, Hammer, HeartPulse, KeyRound, Landmark, Lock, Microscope, MoveHorizontal, Palette, Plug, Radiation, Scale, Scroll, Settings as SettingsIcon, Shield, ShieldCheck, Stethoscope, Tag, TrafficCone, TrendingUp, User, Users, Wrench, Zap } from 'lucide-react';
 
 // ── User-facing sections ──────────────────────────────────────────────────────
 const ProfileSection           = lazy(() => import('./settings/ProfileSection'));
@@ -68,7 +69,7 @@ const ProfessionalControlPlane = lazy(() => import('./settings/ProfessionalContr
 interface TabDef {
   id: SettingsTab;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   adminOnly?: boolean;
   superAdminOnly?: boolean;
   danger?: boolean;
@@ -95,27 +96,27 @@ const TAB_GROUPS: TabGroup[] = [
   {
     label: 'Account',
     tabs: [
-      { id: 'profile',       label: 'Profile',        icon: '👤', keywords: 'name username avatar bio timezone language' },
-      { id: 'security',      label: 'Security',       icon: '🔒', keywords: '2fa two-factor mfa password sessions devices login' },
-      { id: 'billing',       label: 'Billing',        icon: '💳', keywords: 'card payment invoice subscription plan upgrade receipt' },
-      { id: 'api-keys',      label: 'API Keys',       icon: '🔑', minPlan: 'professional', keywords: 'token secret credentials developer' },
+      { id: 'profile',       label: 'Profile',        icon: <User size={16} aria-hidden />, keywords: 'name username avatar bio timezone language' },
+      { id: 'security',      label: 'Security',       icon: <Lock size={16} aria-hidden />, keywords: '2fa two-factor mfa password sessions devices login' },
+      { id: 'billing',       label: 'Billing',        icon: <CreditCard size={16} aria-hidden />, keywords: 'card payment invoice subscription plan upgrade receipt' },
+      { id: 'api-keys',      label: 'API Keys',       icon: <KeyRound size={16} aria-hidden />, minPlan: 'professional', keywords: 'token secret credentials developer' },
     ],
   },
   {
     label: 'Trading',
     tabs: [
-      { id: 'broker',        label: 'Broker',         icon: '🏦', keywords: 'oanda alpaca paper account connection live' },
-      { id: 'trading',       label: 'Trading',        icon: '📈', minPlan: 'professional', keywords: 'risk drawdown lot leverage kill switch limits' },
-      { id: 'integrations',  label: 'Integrations',   icon: '🔌', minPlan: 'starter', keywords: 'webhook tradingview mt4 mt5 ctrader zapier sheets' },
+      { id: 'broker',        label: 'Broker',         icon: <Landmark size={16} aria-hidden />, keywords: 'oanda alpaca paper account connection live' },
+      { id: 'trading',       label: 'Trading',        icon: <TrendingUp size={16} aria-hidden />, minPlan: 'professional', keywords: 'risk drawdown lot leverage kill switch limits' },
+      { id: 'integrations',  label: 'Integrations',   icon: <Plug size={16} aria-hidden />, minPlan: 'starter', keywords: 'webhook tradingview mt4 mt5 ctrader zapier sheets' },
     ],
   },
   {
     label: 'Preferences',
     tabs: [
-      { id: 'appearance',    label: 'Appearance',     icon: '🎨', keywords: 'theme dark light colour color font display' },
-      { id: 'notifications', label: 'Notifications',  icon: '🔔', keywords: 'alerts email discord slack telegram webhook' },
-      { id: 'accessibility', label: 'Accessibility',  icon: '♿', keywords: 'contrast motion screen reader colour blind text size' },
-      { id: 'privacy',       label: 'Privacy & Data', icon: '🔏', keywords: 'gdpr export delete consent sharing leaderboard retention' },
+      { id: 'appearance',    label: 'Appearance',     icon: <Palette size={16} aria-hidden />, keywords: 'theme dark light colour color font display' },
+      { id: 'notifications', label: 'Notifications',  icon: <Bell size={16} aria-hidden />, keywords: 'alerts email discord slack telegram webhook' },
+      { id: 'accessibility', label: 'Accessibility',  icon: <Accessibility size={16} aria-hidden />, keywords: 'contrast motion screen reader colour blind text size' },
+      { id: 'privacy',       label: 'Privacy & Data', icon: <FileLock2 size={16} aria-hidden />, keywords: 'gdpr export delete consent sharing leaderboard retention' },
     ],
   },
   {
@@ -125,84 +126,84 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'control-brain', label: 'Core Brain', icon: '◎', adminOnly: true, keywords: 'brain policy approval' },
       { id: 'control-models', label: 'Models', icon: '⌁', adminOnly: true, keywords: 'model routing fallback provider' },
       { id: 'control-agents', label: 'Agents', icon: '◇', adminOnly: true, keywords: 'agents teams schedules' },
-      { id: 'control-connectors', label: 'Connectors', icon: '↔', adminOnly: true, keywords: 'plugins tools integrations' },
+      { id: 'control-connectors', label: 'Connectors', icon: <MoveHorizontal size={16} aria-hidden />, adminOnly: true, keywords: 'plugins tools integrations' },
       { id: 'control-sandbox', label: 'Sandbox', icon: '□', adminOnly: true, keywords: 'sandbox sessions limits network' },
       { id: 'control-startup', label: 'Startup', icon: '↻', adminOnly: true, keywords: 'lifecycle boot restart' },
       { id: 'control-audit', label: 'Config Audit', icon: '≡', adminOnly: true, keywords: 'audit versions revision rollback' },
       { id: 'safe-supervisor', label: 'Supervisor', icon: '◎', adminOnly: true, keywords: 'multi agent orchestration delegation' },
       { id: 'safe-agents', label: 'Specialist Agents', icon: '◇', adminOnly: true, keywords: 'agents teams capabilities' },
       { id: 'safe-models', label: 'Model Router', icon: '⌁', adminOnly: true, keywords: 'models fallback routing costs' },
-      { id: 'safe-integrations', label: 'External Access', icon: '↔', adminOnly: true, keywords: 'api tokens connectors vault scopes' },
-      { id: 'safe-repairs', label: 'Repairs & Upgrades', icon: '⚙', adminOnly: true, keywords: 'diagnostics repair upgrade rollback approval' },
+      { id: 'safe-integrations', label: 'External Access', icon: <MoveHorizontal size={16} aria-hidden />, adminOnly: true, keywords: 'api tokens connectors vault scopes' },
+      { id: 'safe-repairs', label: 'Repairs & Upgrades', icon: <SettingsIcon size={16} aria-hidden />, adminOnly: true, keywords: 'diagnostics repair upgrade rollback approval' },
       { id: 'safe-chat', label: 'Operator Chat', icon: '◌', adminOnly: true, keywords: 'chat voice tools citations' },
     ],
   },
   {
     label: 'Administration',
     tabs: [
-      { id: 'system',        label: 'System',         icon: '⚙️',  adminOnly: true },
-      { id: 'performance',   label: 'Performance',    icon: '📊',  adminOnly: true },
-      { id: 'admin',         label: 'Admin Settings', icon: '🔧',  adminOnly: true },
+      { id: 'system',        label: 'System',         icon: <SettingsIcon size={16} aria-hidden />,  adminOnly: true },
+      { id: 'performance',   label: 'Performance',    icon: <BarChart3 size={16} aria-hidden />,  adminOnly: true },
+      { id: 'admin',         label: 'Admin Settings', icon: <Wrench size={16} aria-hidden />,  adminOnly: true },
     ],
   },
   {
     label: 'SA — Overview',
     tabs: [
-      { id: 'sa-overview',       label: 'Overview',         icon: '📊',  superAdminOnly: true },
+      { id: 'sa-overview',       label: 'Overview',         icon: <BarChart3 size={16} aria-hidden />,  superAdminOnly: true },
     ],
   },
   {
     label: 'SA — Users & Access',
     tabs: [
-      { id: 'sa-users',          label: 'Users',            icon: '👥',  superAdminOnly: true },
-      { id: 'sa-feature-flags',  label: 'Feature Flags',    icon: '🚩',  superAdminOnly: true },
-      { id: 'sa-audit-trail',    label: 'Audit Trail',      icon: '📜',  superAdminOnly: true },
-      { id: 'sa-logs',           label: 'Logs',             icon: '📋',  superAdminOnly: true },
+      { id: 'sa-users',          label: 'Users',            icon: <Users size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-feature-flags',  label: 'Feature Flags',    icon: <Flag size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-audit-trail',    label: 'Audit Trail',      icon: <Scroll size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-logs',           label: 'Logs',             icon: <ClipboardList size={16} aria-hidden />,  superAdminOnly: true },
     ],
   },
   {
     label: 'SA — Platform',
     tabs: [
-      { id: 'sa-platform',       label: 'Platform',         icon: '🌐',  superAdminOnly: true },
-      { id: 'platform-config',   label: 'Platform Config',  icon: '🛠️',  superAdminOnly: true },
-      { id: 'sa-rate-limiting',  label: 'Rate Limiting',    icon: '🚦',  superAdminOnly: true },
-      { id: 'sa-alerting',       label: 'Alerting',         icon: '🔔',  superAdminOnly: true },
-      { id: 'sa-whitelabel',     label: 'White Label',      icon: '🏷️',  superAdminOnly: true },
-      { id: 'sa-reporting',      label: 'Reporting',        icon: '📑',  superAdminOnly: true },
+      { id: 'sa-platform',       label: 'Platform',         icon: <Globe size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'platform-config',   label: 'Platform Config',  icon: <Hammer size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-rate-limiting',  label: 'Rate Limiting',    icon: <TrafficCone size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-alerting',       label: 'Alerting',         icon: <Bell size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-whitelabel',     label: 'White Label',      icon: <Tag size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-reporting',      label: 'Reporting',        icon: <Files size={16} aria-hidden />,  superAdminOnly: true },
     ],
   },
   {
     label: 'SA — Trading Engine',
     tabs: [
-      { id: 'sa-trading-engine', label: 'Trading Engine',   icon: '⚡',  superAdminOnly: true },
-      { id: 'sa-ml-ai',          label: 'ML / AI',          icon: '🧠',  superAdminOnly: true },
-      { id: 'sa-risk',           label: 'Risk Management',  icon: '⚖️',  superAdminOnly: true },
-      { id: 'sa-broker-mgmt',    label: 'Broker Mgmt',      icon: '🏦',  superAdminOnly: true },
-      { id: 'sa-nuclear',        label: 'Nuclear Controls', icon: '☢️',  superAdminOnly: true },
+      { id: 'sa-trading-engine', label: 'Trading Engine',   icon: <Zap size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-ml-ai',          label: 'ML / AI',          icon: <Brain size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-risk',           label: 'Risk Management',  icon: <Scale size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-broker-mgmt',    label: 'Broker Mgmt',      icon: <Landmark size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-nuclear',        label: 'Nuclear Controls', icon: <Radiation size={16} aria-hidden />,  superAdminOnly: true },
     ],
   },
   {
     label: 'SA — Finance & Compliance',
     tabs: [
-      { id: 'sa-financial',      label: 'Financial',        icon: '💰',  superAdminOnly: true },
-      { id: 'sa-compliance',     label: 'Compliance',       icon: '📋',  superAdminOnly: true },
-      { id: 'sa-gdpr',           label: 'GDPR / Privacy',   icon: '🔏',  superAdminOnly: true },
+      { id: 'sa-financial',      label: 'Financial',        icon: <Banknote size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-compliance',     label: 'Compliance',       icon: <ClipboardList size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-gdpr',           label: 'GDPR / Privacy',   icon: <FileLock2 size={16} aria-hidden />,  superAdminOnly: true },
     ],
   },
   {
     label: 'SA — Security & Infra',
     tabs: [
-      { id: 'sa-security',       label: 'Security',         icon: '🛡️',  superAdminOnly: true },
-      { id: 'sa-security-infra', label: 'Security Infra',   icon: '🔐',  superAdminOnly: true },
-      { id: 'sa-auto-healing',   label: 'Auto-Healing',     icon: '🩺',  superAdminOnly: true },
-      { id: 'sa-system-health',  label: 'System Health',    icon: '💓',  superAdminOnly: true },
-      { id: 'sa-reliability',    label: 'Reliability',      icon: '🔬',  superAdminOnly: true },
+      { id: 'sa-security',       label: 'Security',         icon: <Shield size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-security-infra', label: 'Security Infra',   icon: <ShieldCheck size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-auto-healing',   label: 'Auto-Healing',     icon: <Stethoscope size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-system-health',  label: 'System Health',    icon: <HeartPulse size={16} aria-hidden />,  superAdminOnly: true },
+      { id: 'sa-reliability',    label: 'Reliability',      icon: <Microscope size={16} aria-hidden />,  superAdminOnly: true },
     ],
   },
   {
     label: 'Danger Zone',
     tabs: [
-      { id: 'danger',        label: 'Danger Zone',    icon: '⚠️',  danger: true },
+      { id: 'danger',        label: 'Danger Zone',    icon: <AlertTriangle size={16} aria-hidden />,  danger: true },
     ],
   },
 ];

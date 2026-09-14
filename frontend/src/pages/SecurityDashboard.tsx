@@ -20,6 +20,7 @@ import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
 import { PageShell } from '../components/system/PageShell';
 import { extractApiError } from '../lib/utils';
+import { Ban, Globe, Lock, Siren } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -249,7 +250,7 @@ const SecurityDashboard: React.FC = () => {
           value={error ? '—' : totalAttacks}
           delta={error ? 'Data unavailable' : highSeverity > 0 ? `${highSeverity} high severity` : undefined}
           deltaPositive={false}
-          icon="🌐"
+          icon={<Globe size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
@@ -257,14 +258,14 @@ const SecurityDashboard: React.FC = () => {
           value={error ? '—' : lockdown.lockdown_active ? 'ACTIVE' : 'Clear'}
           delta={error ? 'Status unknown' : lockdown.lockdown_active ? 'Trading paused' : 'All systems go'}
           deltaPositive={!error && !lockdown.lockdown_active}
-          icon="🔒"
+          icon={<Lock size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Blocked IPs"
           value={error ? '—' : blockedIPs.length}
           delta={error ? 'Data unavailable' : undefined}
-          icon="🚫"
+          icon={<Ban size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
@@ -272,7 +273,7 @@ const SecurityDashboard: React.FC = () => {
           value={error ? '—' : alerts.length}
           delta={error ? 'Data unavailable' : alerts.length > 0 ? 'Requires review' : undefined}
           deltaPositive={!error && alerts.length === 0}
-          icon="🚨"
+          icon={<Siren size={18} aria-hidden />}
           loading={loading}
         />
       </div>

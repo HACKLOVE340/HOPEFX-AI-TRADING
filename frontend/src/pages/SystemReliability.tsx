@@ -11,14 +11,15 @@ import { Link } from 'react-router-dom';
 import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
+import { CircleDot, Microscope, Search, Shield, Stethoscope, Wrench, Zap } from 'lucide-react';
 
 const SR_CROSS_LINKS = [
-  { label: 'Super Admin',         href: '/superadmin',         icon: '⚡', color: '#f87171' },
-  { label: 'System Status',       href: '/status',             icon: '🟢', color: '#4ade80' },
-  { label: 'Auto-Heal',           href: '/auto-heal',          icon: '🩺', color: '#34d399' },
-  { label: 'Security Dashboard',  href: '/security',           icon: '🛡️', color: '#f59e0b' },
-  { label: 'Audit Log',           href: '/audit',              icon: '🔍', color: '#a78bfa' },
-  { label: 'Admin Panel',         href: '/admin',              icon: '🔧', color: '#60a5fa' },
+  { label: 'Super Admin',         href: '/superadmin',         icon: Zap, color: '#f87171' },
+  { label: 'System Status',       href: '/status',             icon: CircleDot, color: '#4ade80' },
+  { label: 'Auto-Heal',           href: '/auto-heal',          icon: Stethoscope, color: '#34d399' },
+  { label: 'Security Dashboard',  href: '/security',           icon: Shield, color: '#f59e0b' },
+  { label: 'Audit Log',           href: '/audit',              icon: Search, color: '#a78bfa' },
+  { label: 'Admin Panel',         href: '/admin',              icon: Wrench, color: '#60a5fa' },
 ];
 
 const SystemReliabilitySection = lazy(
@@ -45,7 +46,7 @@ const SystemReliability: React.FC = () => (
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     <PageShell width="wide"
           title="System Reliability Dashboard"
-        icon="🔬"
+        icon={Microscope}
           subtitle="Real-time end-to-end connectivity, OTel tracing, self-test suite, environment audit, and system metrics for every platform component."
           breadcrumbs={[
             { label: 'Home',        href: '/home' },

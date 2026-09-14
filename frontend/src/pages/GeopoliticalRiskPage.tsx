@@ -13,10 +13,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-   Newspaper,
-  Radiation, CalendarDays, LineChart,
-} from 'lucide-react';
+import { Calendar, CalendarDays, Globe2, LineChart, Link2, Microscope, Newspaper, Radiation, Radio, Zap } from 'lucide-react';
 import { CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
@@ -308,7 +305,7 @@ const GeopoliticalRiskPage: React.FC = () => {
   return (
     <PageShell width="wide"
         title="Geopolitical Risk Intelligence"
-        icon="🌍"
+        icon={Globe2}
         subtitle="Live conflict, sanctions, nuclear, infrastructure and instability data — XAU/USD safe-haven impact"
         breadcrumbs={[
           { label: 'Dashboard',    href: '/dashboard' },
@@ -357,12 +354,12 @@ const GeopoliticalRiskPage: React.FC = () => {
       </div>
 
       <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
-        { label: 'Research',          href: '/research',    icon: '🔬', color: '#a78bfa' },
-        { label: 'Correlation',       href: '/correlation', icon: '🔗', color: '#60a5fa' },
-        { label: 'Economic Calendar', href: '/calendar',    icon: '📅', color: '#f97316' },
-        { label: 'Nuclear AI',        href: '/nuclear',     icon: '☢️', color: '#ef4444' },
-        { label: 'Signal Feed',       href: '/signals',     icon: '📡', color: '#4ade80' },
-        { label: 'Trade XAU/USD',     href: '/trade',       icon: '⚡', color: '#fbbf24' },
+        { label: 'Research',          href: '/research',    icon: Microscope, color: '#a78bfa' },
+        { label: 'Correlation',       href: '/correlation', icon: Link2, color: '#60a5fa' },
+        { label: 'Economic Calendar', href: '/calendar',    icon: Calendar, color: '#f97316' },
+        { label: 'Nuclear AI',        href: '/nuclear',     icon: Radiation, color: '#ef4444' },
+        { label: 'Signal Feed',       href: '/signals',     icon: Radio, color: '#4ade80' },
+        { label: 'Trade XAU/USD',     href: '/trade',       icon: Zap, color: '#fbbf24' },
       ]} />
       <RelatedPages
         links={[

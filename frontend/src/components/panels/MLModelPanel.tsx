@@ -17,7 +17,7 @@ import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { BarChart3, Bot, ChevronRight, Dna } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // ── Types (mirror backend Pydantic models) ────────────────────────────────────
@@ -200,10 +200,10 @@ function TabBar({
   modelCount?: number;
   featureCount?: number;
 }) {
-  const tabs: { id: Tab; icon: string; label: string; badge?: number; color: string }[] = [
-    { id: 'metrics',  icon: '📊', label: 'Metrics',  color: '#60a5fa' },
-    { id: 'features', icon: '🧬', label: 'Features', badge: featureCount, color: '#a78bfa' },
-    { id: 'models',   icon: '🤖', label: 'Models',   badge: modelCount,   color: '#34d399' },
+  const tabs: { id: Tab; icon: React.ReactNode; label: string; badge?: number; color: string }[] = [
+    { id: 'metrics',  icon: <BarChart3 size={16} aria-hidden />, label: 'Metrics',  color: '#60a5fa' },
+    { id: 'features', icon: <Dna size={16} aria-hidden />, label: 'Features', badge: featureCount, color: '#a78bfa' },
+    { id: 'models',   icon: <Bot size={16} aria-hidden />, label: 'Models',   badge: modelCount,   color: '#34d399' },
   ];
   return (
     <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 2 }}>

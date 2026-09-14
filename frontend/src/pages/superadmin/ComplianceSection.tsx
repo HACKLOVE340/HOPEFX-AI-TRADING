@@ -9,7 +9,7 @@ import {
 } from './ui';
 import type { KYCRecord, AMLAlert, SanctionsHit } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
-import { ClipboardList, FileText, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ClipboardList, FileText, Globe, IdCard, RefreshCw, Scroll, Siren } from 'lucide-react';
 import { ActionBanner } from '../../components/ActionBanner';
 
 interface RegulatoryReport {
@@ -214,14 +214,14 @@ const ComplianceSection: React.FC = () => {
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiTile label="KYC Pending"      value={pendingKyc}  icon="📋" accent="#f59e0b" />
-        <KpiTile label="AML Open Alerts"  value={openAml}     icon="🚨" accent="#ef4444" />
-        <KpiTile label="Sanctions Hits"   value={pendingSanc} icon="⚠️" accent="#dc2626" />
-        <KpiTile label="Total KYC"        value={kyc.length}  icon="🪪" accent="#3b82f6" />
+        <KpiTile label="KYC Pending"      value={pendingKyc}  icon={<ClipboardList size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="AML Open Alerts"  value={openAml}     icon={<Siren size={18} aria-hidden />} accent="#ef4444" />
+        <KpiTile label="Sanctions Hits"   value={pendingSanc} icon={<AlertTriangle size={18} aria-hidden />} accent="#dc2626" />
+        <KpiTile label="Total KYC"        value={kyc.length}  icon={<IdCard size={18} aria-hidden />} accent="#3b82f6" />
       </div>
 
       {/* KYC Queue */}
-      <SectionCard title="KYC Review Queue" icon="🪪" accent="#f59e0b"
+      <SectionCard title="KYC Review Queue" icon={<IdCard size={18} aria-hidden />} accent="#f59e0b"
         subtitle="Identity verification — dual-approval workflow"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
@@ -231,7 +231,7 @@ const ComplianceSection: React.FC = () => {
                 { value: 'submitted', label: 'Submitted' }, { value: 'under_review', label: 'Under Review' },
                 { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Rejected' },
               ]} style={{ width: 150 }} />
-            <ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />
+            <ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>
@@ -284,7 +284,7 @@ const ComplianceSection: React.FC = () => {
       </SectionCard>
 
       {/* AML Alerts */}
-      <SectionCard title="AML Alerts" icon="🚨" accent="#ef4444"
+      <SectionCard title="AML Alerts" icon={<Siren size={18} aria-hidden />} accent="#ef4444"
         subtitle="Anti-money laundering transaction monitoring">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -328,7 +328,7 @@ const ComplianceSection: React.FC = () => {
       </SectionCard>
 
       {/* Sanctions */}
-      <SectionCard title="Sanctions Screening" icon="🌐" accent="#dc2626"
+      <SectionCard title="Sanctions Screening" icon={<Globe size={18} aria-hidden />} accent="#dc2626"
         subtitle="OFAC / UN / EU sanctions list matches">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -384,7 +384,7 @@ const ComplianceSection: React.FC = () => {
           hardcoded to the current month, which is why `regType` and
           `regPeriod` existed and did nothing. Both are now the control. */}
       {shows('reports') && (
-      <SectionCard title="Regulatory Reporting" icon="📜" accent="#8b5cf6"
+      <SectionCard title="Regulatory Reporting" icon={<Scroll size={18} aria-hidden />} accent="#8b5cf6"
         subtitle="CFTC / MiFID II / CAT filing status"
         actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={13} aria-hidden />} size="sm" />}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>

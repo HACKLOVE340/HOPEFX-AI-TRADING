@@ -6,6 +6,7 @@ import type { IntegrationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Plug } from 'lucide-react';
 
 const DEFAULT: IntegrationSettings = {
   tradingview_enabled: false, tradingview_webhook_secret: '',
@@ -78,7 +79,7 @@ const IntegrationsSection: React.FC = () => {
 
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="🔌" title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
+      <SectionHeader icon={<Plug size={18} aria-hidden />} title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
       <ErrorBanner message="Couldn't load your integration settings. Nothing has been changed — saving now would overwrite your stored credentials with blanks." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -88,7 +89,7 @@ const IntegrationsSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🔌" title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
+      <SectionHeader icon={<Plug size={18} aria-hidden />} title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
 
       {/* TradingView */}
       <Card>

@@ -18,10 +18,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageShell } from '../components/system/PageShell';
 import { RelatedPages } from '../components';
-import {
-  Wallet as WalletIcon, ArrowDownToLine, ArrowUpFromLine,
-  Briefcase, CreditCard, Receipt, ShieldCheck,
-} from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, ClipboardList, CreditCard, Receipt, Send, ShieldCheck, Star, Wallet as WalletIcon } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -289,11 +286,11 @@ const Wallet: React.FC = () => {
   const hasDepositRows    = transactions.some(t => t.type === 'deposit');
   const hasWithdrawalRows = transactions.some(t => t.type === 'withdrawal');
 
-  const TABS: { id: WalletTab; label: string; icon: string }[] = [
-    { id: 'overview',         label: 'Overview',         icon: '📊' },
-    { id: 'transactions',     label: 'Transactions',     icon: '📋' },
-    { id: 'subscriptions',    label: 'Subscription',     icon: '⭐' },
-    { id: 'payment-methods',  label: 'Payment Methods',  icon: '💳' },
+  const TABS: { id: WalletTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview',         label: 'Overview',         icon: <BarChart3 size={16} aria-hidden /> },
+    { id: 'transactions',     label: 'Transactions',     icon: <ClipboardList size={16} aria-hidden /> },
+    { id: 'subscriptions',    label: 'Subscription',     icon: <Star size={16} aria-hidden /> },
+    { id: 'payment-methods',  label: 'Payment Methods',  icon: <CreditCard size={16} aria-hidden /> },
   ];
 
   return (
@@ -431,7 +428,7 @@ const Wallet: React.FC = () => {
                 ? `$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                 : '—'}
               accent="red" />
-            <MetricCard icon="💸" label="Total Fees Paid"
+            <MetricCard icon={<Send size={18} aria-hidden />} label="Total Fees Paid"
               value={`$${totalFees.toFixed(2)}`}
               accent="amber" />
           </div>
@@ -453,7 +450,7 @@ const Wallet: React.FC = () => {
           )}
           {!txLoading && txErr && <ErrorBanner message={txErr} onDismiss={() => setTxErr('')} />}
           {!txLoading && !txErr && transactions.length === 0 && (
-            <EmptyState icon="📋" title="No transactions yet"
+            <EmptyState icon={ClipboardList} title="No transactions yet"
               description="Your deposits, withdrawals, and subscription payments will appear here." />
           )}
           {!txLoading && transactions.map(tx => (
@@ -494,7 +491,7 @@ const Wallet: React.FC = () => {
           {subLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
           {!subLoading && subErr && <ErrorBanner message={subErr} onDismiss={() => setSubErr('')} />}
           {!subLoading && !subErr && !subscription && (
-            <EmptyState icon="⭐" title="No active subscription"
+            <EmptyState icon={Star} title="No active subscription"
               description="Subscribe to unlock AI signals, copy trading, and advanced analytics."
               action={
                 <Link to="/pricing"
@@ -581,7 +578,7 @@ const Wallet: React.FC = () => {
           {pmLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
           {!pmLoading && pmErr && <ErrorBanner message={pmErr} onDismiss={() => setPmErr('')} />}
           {!pmLoading && !pmErr && paymentMethods.length === 0 && (
-            <EmptyState icon="💳" title="No payment methods saved"
+            <EmptyState icon={CreditCard} title="No payment methods saved"
               description="Add a card or crypto wallet to enable deposits and withdrawals." />
           )}
           {!pmLoading && !pmErr && paymentMethods.length > 0 && (

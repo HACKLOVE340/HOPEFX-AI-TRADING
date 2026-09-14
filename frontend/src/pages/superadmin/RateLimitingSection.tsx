@@ -10,6 +10,7 @@ import {
 import type { RateLimitRule } from './types';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Ban, BarChart3, Lock, Plus, TrendingDown } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -173,10 +174,10 @@ const RateLimitingSection: React.FC = () => {
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon="🔒" accent="#60a5fa" />
-        <KpiTile label="Total Requests" value={stats.total_requests.toLocaleString()} icon="📊" accent="#22c55e" />
-        <KpiTile label="Blocked Requests" value={stats.blocked_requests.toLocaleString()} icon="🚫" accent="#f87171" />
-        <KpiTile label="Block Rate" value={`${blockRate}%`} icon="📉" accent={parseFloat(blockRate) > 5 ? '#f87171' : '#22c55e'} />
+        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon={<Lock size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Total Requests" value={stats.total_requests.toLocaleString()} icon={<BarChart3 size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Blocked Requests" value={stats.blocked_requests.toLocaleString()} icon={<Ban size={18} aria-hidden />} accent="#f87171" />
+        <KpiTile label="Block Rate" value={`${blockRate}%`} icon={<TrendingDown size={18} aria-hidden />} accent={parseFloat(blockRate) > 5 ? '#f87171' : '#22c55e'} />
       </div>
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
@@ -198,7 +199,7 @@ const RateLimitingSection: React.FC = () => {
       {tab === 'rules' && (
         <>
           {showCreate && (
-            <SectionCard title="Create Rate Limit Rule" icon="➕" accent="#3b82f6">
+            <SectionCard title="Create Rate Limit Rule" icon={<Plus size={18} aria-hidden />} accent="#3b82f6">
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 2, minWidth: 200 }}>
                   <Input label="Endpoint pattern" placeholder="/api/trading/orders or *" value={newRule.endpoint} onChange={e => setNewRule(p => ({ ...p, endpoint: e.target.value }))} />
@@ -218,7 +219,7 @@ const RateLimitingSection: React.FC = () => {
             </SectionCard>
           )}
 
-          <SectionCard title="Rate Limit Rules" icon="🔒" accent="#60a5fa" noPad>
+          <SectionCard title="Rate Limit Rules" icon={<Lock size={18} aria-hidden />} accent="#60a5fa" noPad>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
@@ -304,7 +305,7 @@ const RateLimitingSection: React.FC = () => {
       )}
 
       {tab === 'violations' && (
-        <SectionCard title="Rate Limit Violations" icon="🚫" accent="#f87171" noPad>
+        <SectionCard title="Rate Limit Violations" icon={<Ban size={18} aria-hidden />} accent="#f87171" noPad>
           {violations.length === 0 ? (
             <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No violations recorded</div>
           ) : (

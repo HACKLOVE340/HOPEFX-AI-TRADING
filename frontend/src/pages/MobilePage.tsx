@@ -15,6 +15,7 @@ import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
+import { BarChart3, Bell, Settings, ShieldCheck, Smartphone, User } from 'lucide-react';
 
 interface MobileConfig {
   ios_version: string;
@@ -360,7 +361,7 @@ const MobilePage: React.FC = () => {
           </div>
         ) : sessions.length === 0 ? (
           <EmptyState
-            icon="📱"
+            icon={Smartphone}
             title="No active mobile sessions"
             description="Download the app and sign in to see your active mobile sessions here."
           />
@@ -379,11 +380,11 @@ const MobilePage: React.FC = () => {
       </div>
 
       <CrossLinkBar title="Related" links={[
-        { label: 'Security',      href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
-        { label: 'Notifications', href: '/notifications',         icon: '🔔', color: '#f59e0b' },
-        { label: 'Profile',       href: '/profile',               icon: '👤', color: '#60a5fa' },
-        { label: 'Settings',      href: '/settings',              icon: '⚙️', color: '#94a3b8' },
-        { label: 'Dashboard',     href: '/dashboard',             icon: '📊', color: '#4ade80' },
+        { label: 'Security',      href: '/settings?tab=security', icon: ShieldCheck, color: '#f87171' },
+        { label: 'Notifications', href: '/notifications',         icon: Bell, color: '#f59e0b' },
+        { label: 'Profile',       href: '/profile',               icon: User, color: '#60a5fa' },
+        { label: 'Settings',      href: '/settings',              icon: Settings, color: '#94a3b8' },
+        { label: 'Dashboard',     href: '/dashboard',             icon: BarChart3, color: '#4ade80' },
       ]} />
     </PageShell>
   );

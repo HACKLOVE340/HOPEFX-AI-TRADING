@@ -10,6 +10,7 @@ import type { PlatformOverview } from './types';
 import { useSuperAdminNav } from './types';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { AlertTriangle, Banknote, BarChart3, Brain, CheckCircle2, CircleDot, ClipboardList, Flag, Info, Link2, Monitor, OctagonAlert, Play, Radio, RefreshCw, Shield, Siren, Trash2, TrendingUp, Users, Wrench, Zap } from 'lucide-react';
 
 // ── Infra detail types ────────────────────────────────────────────────────────
 interface InfraHealth {
@@ -95,9 +96,9 @@ const GaugeBar: React.FC<GaugeBarProps> = ({ label, value, max = 100, color = '#
 interface AlertRowProps { level: 'info' | 'warn' | 'critical'; message: string }
 const AlertRow: React.FC<AlertRowProps> = ({ level, message }) => {
   const colors = {
-    info:     { bg: '#0c1a2e', border: '#1d4ed8', icon: 'ℹ️', color: '#60a5fa' },
-    warn:     { bg: '#1c1200', border: '#d97706', icon: '⚠️', color: '#fbbf24' },
-    critical: { bg: '#1a0000', border: '#dc2626', icon: '🚨', color: '#f87171' },
+    info:     { bg: '#0c1a2e', border: '#1d4ed8', icon: <Info size={16} aria-hidden />, color: '#60a5fa' },
+    warn:     { bg: '#1c1200', border: '#d97706', icon: <AlertTriangle size={16} aria-hidden />, color: '#fbbf24' },
+    critical: { bg: '#1a0000', border: '#dc2626', icon: <Siren size={16} aria-hidden />, color: '#f87171' },
   }[level];
   return (
     <div style={{
@@ -257,7 +258,7 @@ const OverviewSection: React.FC = () => {
           label={refreshing ? 'Refreshing…' : 'Refresh'}
           onClick={() => load(true)}
           loading={refreshing}
-          icon="🔄"
+          icon={<RefreshCw size={18} aria-hidden />}
           size="sm"
         />
       </div>
@@ -271,28 +272,28 @@ const OverviewSection: React.FC = () => {
 
       {/* KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14, marginBottom: 24 }}>
-        <KpiTile label="Total Users" onClick={() => navigateTo('users')} title="Open Users"        value={fmt(data.total_users)}          icon="👥" accent="#3b82f6" sub="all time" />
+        <KpiTile label="Total Users" onClick={() => navigateTo('users')} title="Open Users"        value={fmt(data.total_users)}          icon={<Users size={18} aria-hidden />} accent="#3b82f6" sub="all time" />
         {/* trend was hardcoded "up", so a week with no signups still rendered an
             upward arrow next to "+0 this week". */}
-        <KpiTile label="Active (24h)" onClick={() => navigateTo('users')} title="Open Users"       value={fmt(data.active_users_24h)}     icon="🟢" accent="#22c55e" trend={data.new_users_7d > 0 ? "up" : data.new_users_7d < 0 ? "down" : undefined} trendValue={`${data.new_users_7d >= 0 ? "+" : ""}${data.new_users_7d} this week`} />
-        <KpiTile label="Revenue MTD" onClick={() => navigateTo('financial')} title="Open Financial"        value={fmtMoney(data.revenue_mtd, data.revenue_currency)} icon="💰" accent="#f59e0b" />
-        <KpiTile label="Trades Today" onClick={() => navigateTo('trading-engine')} title="Open Trading engine"       value={fmt(data.total_trades_today)}   icon="📊" accent="#8b5cf6" />
-        <KpiTile label="Open Positions" onClick={() => navigateTo('trading-engine')} title="Open Trading engine"     value={data.open_positions}            icon="📈" accent="#06b6d4" />
-        <KpiTile label="Active Sessions" onClick={() => navigateTo('security')} title="Open Security"    value={data.active_sessions}           icon="🔗" accent="#ec4899" />
-        <KpiTile label="ML Accuracy" onClick={() => navigateTo('ml-ai')} title="Open ML & AI"        value={fmtPct((data.ml_model_accuracy ?? 0) * 100)} icon="🧠" accent="#a78bfa" />
-        <KpiTile label="Signals Today" onClick={() => navigateTo('ml-ai')} title="Open ML & AI"      value={fmt(data.signals_generated_today)} icon="📡" accent="#34d399" />
+        <KpiTile label="Active (24h)" onClick={() => navigateTo('users')} title="Open Users"       value={fmt(data.active_users_24h)}     icon={<CircleDot size={18} aria-hidden />} accent="#22c55e" trend={data.new_users_7d > 0 ? "up" : data.new_users_7d < 0 ? "down" : undefined} trendValue={`${data.new_users_7d >= 0 ? "+" : ""}${data.new_users_7d} this week`} />
+        <KpiTile label="Revenue MTD" onClick={() => navigateTo('financial')} title="Open Financial"        value={fmtMoney(data.revenue_mtd, data.revenue_currency)} icon={<Banknote size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="Trades Today" onClick={() => navigateTo('trading-engine')} title="Open Trading engine"       value={fmt(data.total_trades_today)}   icon={<BarChart3 size={18} aria-hidden />} accent="#8b5cf6" />
+        <KpiTile label="Open Positions" onClick={() => navigateTo('trading-engine')} title="Open Trading engine"     value={data.open_positions}            icon={<TrendingUp size={18} aria-hidden />} accent="#06b6d4" />
+        <KpiTile label="Active Sessions" onClick={() => navigateTo('security')} title="Open Security"    value={data.active_sessions}           icon={<Link2 size={18} aria-hidden />} accent="#ec4899" />
+        <KpiTile label="ML Accuracy" onClick={() => navigateTo('ml-ai')} title="Open ML & AI"        value={fmtPct((data.ml_model_accuracy ?? 0) * 100)} icon={<Brain size={18} aria-hidden />} accent="#a78bfa" />
+        <KpiTile label="Signals Today" onClick={() => navigateTo('ml-ai')} title="Open ML & AI"      value={fmt(data.signals_generated_today)} icon={<Radio size={18} aria-hidden />} accent="#34d399" />
       </div>
 
       {/* Infrastructure + Response */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        <SectionCard title="Infrastructure" icon="🖥️" accent="#3b82f6">
+        <SectionCard title="Infrastructure" icon={<Monitor size={18} aria-hidden />} accent="#3b82f6">
           <GaugeBar label="CPU Usage"    value={data.cpu_pct}    color="#3b82f6" />
           <GaugeBar label="Memory"       value={data.memory_pct} color="#8b5cf6" />
           <GaugeBar label="DB Connections" value={data.db_connections} max={200} color="#06b6d4" unit="" />
           <GaugeBar label="Redis Memory" value={data.redis_memory_mb} max={2048} color="#f59e0b" unit=" MB" />
         </SectionCard>
 
-        <SectionCard title="API Performance" icon="⚡" accent="#f59e0b">
+        <SectionCard title="API Performance" icon={<Zap size={18} aria-hidden />} accent="#f59e0b">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
               { label: 'Avg Response', value: `${data.avg_response_ms ?? 0}ms`, ok: (data.avg_response_ms ?? 0) < 200 },
@@ -313,33 +314,33 @@ const OverviewSection: React.FC = () => {
       </div>
 
       {/* Quick actions */}
-      <SectionCard title="Quick Actions" icon="⚡" accent="#ef4444"
+      <SectionCard title="Quick Actions" icon={<Zap size={18} aria-hidden />} accent="#ef4444"
         subtitle="Immediate platform controls — use with caution">
         <ActionBanner message={actionMsg} ok={actionMsgOk} />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <ActionBtn label="View All Users"     onClick={() => navigateTo('users')}           icon="👥" variant="primary" />
-          <ActionBtn label="Feature Flags"      onClick={() => navigateTo('feature-flags')}   icon="🚩" variant="primary" />
-          <ActionBtn label="System Logs"        onClick={() => navigateTo('logs')}             icon="📋" variant="ghost" />
-          <ActionBtn label="ML Models"          onClick={() => navigateTo('ml-ai')}            icon="🧠" variant="ghost" />
-          <ActionBtn label="Security Events"    onClick={() => navigateTo('security')}         icon="🛡️" variant="ghost" />
+          <ActionBtn label="View All Users"     onClick={() => navigateTo('users')}           icon={<Users size={18} aria-hidden />} variant="primary" />
+          <ActionBtn label="Feature Flags"      onClick={() => navigateTo('feature-flags')}   icon={<Flag size={18} aria-hidden />} variant="primary" />
+          <ActionBtn label="System Logs"        onClick={() => navigateTo('logs')}             icon={<ClipboardList size={18} aria-hidden />} variant="ghost" />
+          <ActionBtn label="ML Models"          onClick={() => navigateTo('ml-ai')}            icon={<Brain size={18} aria-hidden />} variant="ghost" />
+          <ActionBtn label="Security Events"    onClick={() => navigateTo('security')}         icon={<Shield size={18} aria-hidden />} variant="ghost" />
           {data.kill_switch_active
-            ? <ActionBtn label="Resume Trading" onClick={toggleKillSwitch} loading={actionBusy === 'kill-switch'} icon="▶️" variant="success" />
-            : <ActionBtn label="Kill Switch"    onClick={toggleKillSwitch} loading={actionBusy === 'kill-switch'} icon="🛑" variant="danger" />
+            ? <ActionBtn label="Resume Trading" onClick={toggleKillSwitch} loading={actionBusy === 'kill-switch'} icon={<Play size={18} aria-hidden />} variant="success" />
+            : <ActionBtn label="Kill Switch"    onClick={toggleKillSwitch} loading={actionBusy === 'kill-switch'} icon={<OctagonAlert size={18} aria-hidden />} variant="danger" />
           }
           {data.maintenance_mode
-            ? <ActionBtn label="Disable Maintenance" onClick={toggleMaintenance} loading={actionBusy === 'maintenance'} icon="✅" variant="success" />
-            : <ActionBtn label="Maintenance Mode"    onClick={toggleMaintenance} loading={actionBusy === 'maintenance'} icon="🔧" variant="warning" />
+            ? <ActionBtn label="Disable Maintenance" onClick={toggleMaintenance} loading={actionBusy === 'maintenance'} icon={<CheckCircle2 size={18} aria-hidden />} variant="success" />
+            : <ActionBtn label="Maintenance Mode"    onClick={toggleMaintenance} loading={actionBusy === 'maintenance'} icon={<Wrench size={18} aria-hidden />} variant="warning" />
           }
         </div>
       </SectionCard>
 
       {/* ── Infrastructure Details ── */}
-      <SectionCard title="Infrastructure Details" icon="🖥️" accent="#06b6d4"
+      <SectionCard title="Infrastructure Details" icon={<Monitor size={18} aria-hidden />} accent="#06b6d4"
         subtitle="Live metrics from infraHealth, Redis cache, database, and task queues"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <ActionBtn label="Flush Cache" onClick={flushCache} loading={flushing} icon="🗑️" size="sm" variant="warning" />
-            <ActionBtn label="Refresh"     onClick={loadInfra}  loading={infraLoading} icon="🔄" size="sm" />
+            <ActionBtn label="Flush Cache" onClick={flushCache} loading={flushing} icon={<Trash2 size={18} aria-hidden />} size="sm" variant="warning" />
+            <ActionBtn label="Refresh"     onClick={loadInfra}  loading={infraLoading} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
           </div>
         }>
         {infraLoading ? <LoadingRows rows={3} /> : (

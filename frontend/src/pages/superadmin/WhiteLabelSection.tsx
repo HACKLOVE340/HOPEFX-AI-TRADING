@@ -11,6 +11,7 @@ import {
 import type { Tenant } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Banknote, BarChart3, Building2, CheckCircle2, KeyRound, Microscope, Plug, Plus, Radio, RefreshCw, Save, Tag, Trash2, Users } from 'lucide-react';
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -229,10 +230,10 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             {/* Danger zone */}
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {tenant.status === 'suspended'
-                ? <ActionBtn label="Activate Tenant" onClick={activate}                      variant="success" icon="✅" loading={busy === 'activate'} />
+                ? <ActionBtn label="Activate Tenant" onClick={activate}                      variant="success" icon={<CheckCircle2 size={18} aria-hidden />} loading={busy === 'activate'} />
                 : <ActionBtn label="Suspend Tenant"  onClick={() => setSuspendConfirm(true)} variant="warning" icon="��" loading={busy === 'suspend'} />
               }
-              <ActionBtn label="Delete Tenant" onClick={() => setDeleteConfirm(true)} variant="danger" icon="🗑️" loading={busy === 'delete'} />
+              <ActionBtn label="Delete Tenant" onClick={() => setDeleteConfirm(true)} variant="danger" icon={<Trash2 size={18} aria-hidden />} loading={busy === 'delete'} />
             </div>
           </>
         )}
@@ -241,12 +242,12 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
         {tab === 'keys' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-              <ActionBtn label="Rotate Key" onClick={rotateKey} loading={busy === 'rotate'} variant="warning" icon="🔄" size="sm" />
+              <ActionBtn label="Rotate Key" onClick={rotateKey} loading={busy === 'rotate'} variant="warning" icon={<RefreshCw size={18} aria-hidden />} size="sm" />
             </div>
             {keysLoading ? (
               <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: 24 }}>Loading keys…</div>
             ) : keys.length === 0 ? (
-              <EmptyState compact icon="🔑" title="No API keys found" description="Tenant API keys will appear here once generated." />
+              <EmptyState compact icon={KeyRound} title="No API keys found" description="Tenant API keys will appear here once generated." />
             ) : (
               keys.map(k => (
                 <div key={k.key_id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
@@ -273,11 +274,11 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
-                  { label: 'API Calls Today',  value: (usage.api_calls_today ?? 0).toLocaleString(), icon: '🔌', color: '#3b82f6' },
-                  { label: 'Active Users',     value: usage.active_users ?? 0,                       icon: '👥', color: '#22c55e' },
-                  { label: 'Storage',          value: `${(usage.storage_mb ?? 0).toFixed(1)} MB`,    icon: '💾', color: '#f59e0b' },
-                  { label: 'Bandwidth',        value: `${(usage.bandwidth_mb ?? 0).toFixed(1)} MB`,  icon: '📡', color: '#8b5cf6' },
-                  { label: 'Trades Today',     value: (usage.trades_today ?? 0).toLocaleString(),    icon: '📊', color: '#06b6d4' },
+                  { label: 'API Calls Today',  value: (usage.api_calls_today ?? 0).toLocaleString(), icon: <Plug size={16} aria-hidden />, color: '#3b82f6' },
+                  { label: 'Active Users',     value: usage.active_users ?? 0,                       icon: <Users size={16} aria-hidden />, color: '#22c55e' },
+                  { label: 'Storage',          value: `${(usage.storage_mb ?? 0).toFixed(1)} MB`,    icon: <Save size={16} aria-hidden />, color: '#f59e0b' },
+                  { label: 'Bandwidth',        value: `${(usage.bandwidth_mb ?? 0).toFixed(1)} MB`,  icon: <Radio size={16} aria-hidden />, color: '#8b5cf6' },
+                  { label: 'Trades Today',     value: (usage.trades_today ?? 0).toLocaleString(),    icon: <BarChart3 size={16} aria-hidden />, color: '#06b6d4' },
                 ].map(m => (
                   <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 6 }}>{m.icon} {m.label}</div>
@@ -395,19 +396,19 @@ const WhiteLabelSection: React.FC = () => {
       {creating  && <CreateTenantForm onClose={() => setCreating(false)} onCreated={load} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiTile label="Active Tenants"  value={activeCount}           icon="🏢" accent="#22c55e" />
-        <KpiTile label="Trial"           value={trialCount}            icon="🔬" accent="#f59e0b" />
-        <KpiTile label="Total Users"     value={totalUsers}            icon="👥" accent="#3b82f6" />
-        <KpiTile label="Monthly Revenue" value={fmtMoney(totalRevenue)} icon="💰" accent="#8b5cf6" />
+        <KpiTile label="Active Tenants"  value={activeCount}           icon={<Building2 size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Trial"           value={trialCount}            icon={<Microscope size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="Total Users"     value={totalUsers}            icon={<Users size={18} aria-hidden />} accent="#3b82f6" />
+        <KpiTile label="Monthly Revenue" value={fmtMoney(totalRevenue)} icon={<Banknote size={18} aria-hidden />} accent="#8b5cf6" />
       </div>
 
-      <SectionCard title="White-Label Tenants" icon="🏷️" accent="#8b5cf6"
+      <SectionCard title="White-Label Tenants" icon={<Tag size={18} aria-hidden />} accent="#8b5cf6"
         subtitle="Manage all white-label deployments"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <Input placeholder="Search tenants…" value={search} onChange={e => setSearch(e.target.value)} style={{ width: 200 }} />
-            <ActionBtn label="+ New Tenant" onClick={() => setCreating(true)} variant="primary" size="sm" icon="➕" />
-            <ActionBtn label="Refresh"      onClick={load} icon="🔄" size="sm" />
+            <ActionBtn label="+ New Tenant" onClick={() => setCreating(true)} variant="primary" size="sm" icon={<Plus size={18} aria-hidden />} />
+            <ActionBtn label="Refresh"      onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
           </div>
         }>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
@@ -440,7 +441,7 @@ const WhiteLabelSection: React.FC = () => {
               </div>
             </div>
           ))}
-          {tenants.length === 0 && <EmptyState compact icon="🏷️" title="No tenants found" description="Create a whitelabel tenant to deploy a branded instance." links={[{ label: 'Whitelabel Admin', href: '/whitelabel', icon: '🏷️' }]} />}
+          {tenants.length === 0 && <EmptyState compact icon={Tag} title="No tenants found" description="Create a whitelabel tenant to deploy a branded instance." links={[{ label: 'Whitelabel Admin', href: '/whitelabel', icon: <Tag size={16} aria-hidden /> }]} />}
         </div>
       </SectionCard>
     </div>

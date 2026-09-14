@@ -5,7 +5,7 @@
  */
 
 import React, { useState, Suspense, lazy, Component, useEffect, useCallback, useRef } from 'react';
-import { Play, OctagonX, RefreshCw } from 'lucide-react';
+import { Banknote, BarChart3, Bell, BookOpen, Brain, Building2, CircleDot, ClipboardList, Flag, Globe, Landmark, Laptop, Link2, Lock, Microscope, OctagonAlert, OctagonX, Play, RefreshCw, Scale, Search, Settings, Shield, Stethoscope, Tag, TrendingUp, Users, Wrench, Zap } from 'lucide-react';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import VoiceTradingPanel from '../components/voice/VoiceTradingPanel';
@@ -42,45 +42,45 @@ const AutoHealingSection     = lazy(() => import('./superadmin/AutoHealingSectio
 const SystemReliabilitySection = lazy(() => import('./superadmin/SystemReliabilitySection'));
 
 const SA_CROSS_LINKS = [
-  { label: 'Admin Panel',        href: '/admin',              icon: '🔧', color: '#60a5fa' },
-  { label: 'Audit Log',          href: '/audit',              icon: '🔍', color: '#a78bfa' },
-  { label: 'Security Dashboard', href: '/security',           icon: '🛡️', color: '#f59e0b' },
-  { label: 'Auto-Heal',          href: '/auto-heal',          icon: '🩺', color: '#4ade80' },
-  { label: 'Whitelabel Admin',   href: '/whitelabel',         icon: '🏷️', color: '#f97316' },
-  { label: 'System Reliability', href: '/system-reliability', icon: '🔬', color: '#38bdf8' },
-  { label: 'System Status',      href: '/status',             icon: '🟢', color: '#34d399' },
-  { label: 'Docs',               href: '/docs',               icon: '📖', color: '#94a3b8' },
+  { label: 'Admin Panel',        href: '/admin',              icon: Wrench, color: '#60a5fa' },
+  { label: 'Audit Log',          href: '/audit',              icon: Search, color: '#a78bfa' },
+  { label: 'Security Dashboard', href: '/security',           icon: Shield, color: '#f59e0b' },
+  { label: 'Auto-Heal',          href: '/auto-heal',          icon: Stethoscope, color: '#4ade80' },
+  { label: 'Whitelabel Admin',   href: '/whitelabel',         icon: Tag, color: '#f97316' },
+  { label: 'System Reliability', href: '/system-reliability', icon: Microscope, color: '#38bdf8' },
+  { label: 'System Status',      href: '/status',             icon: CircleDot, color: '#34d399' },
+  { label: 'Docs',               href: '/docs',               icon: BookOpen, color: '#94a3b8' },
 ];
-interface TabDef { id: SuperAdminTab; label: string; icon: string; description: string; accent: string; group: 'core'|'compliance'|'risk'|'ops'; }
+interface TabDef { id: SuperAdminTab; label: string; icon: React.ReactNode; description: string; accent: string; group: 'core'|'compliance'|'risk'|'ops'; }
 
 /** The tab shown when `activeTab` matches nothing. Named so the fallback is not
     itself an index access (audit #38). */
-const OVERVIEW_TAB: TabDef = { id: 'overview', label: 'Overview', icon: '🌐', description: 'Platform health & KPIs', accent: '#3b82f6', group: 'core' };
+const OVERVIEW_TAB: TabDef = { id: 'overview', label: 'Overview', icon: <Globe size={16} aria-hidden />, description: 'Platform health & KPIs', accent: '#3b82f6', group: 'core' };
 
 const TABS: TabDef[] = [
   OVERVIEW_TAB,
-  { id: 'users',             label: 'Users',          icon: '👥', description: 'User management & roles',         accent: '#22c55e', group: 'core' },
-  { id: 'platform',          label: 'Platform',       icon: '⚙️', description: 'Config, maintenance, banners',    accent: '#8b5cf6', group: 'core' },
-  { id: 'ml-ai',             label: 'ML / AI',        icon: '🧠', description: 'Models, RL agent, metrics',       accent: '#a78bfa', group: 'core' },
-  { id: 'trading-engine',    label: 'Trading Engine', icon: '📈', description: 'Engine, kill switch, risk',       accent: '#ef4444', group: 'core' },
-  { id: 'financial',         label: 'Financial',      icon: '💰', description: 'Revenue, payments, refunds',      accent: '#f59e0b', group: 'core' },
-  { id: 'security',          label: 'Security',       icon: '🛡️', description: 'Events, IPs, sessions',           accent: '#dc2626', group: 'core' },
-  { id: 'logs',              label: 'Logs',           icon: '📋', description: 'System logs & log levels',        accent: '#06b6d4', group: 'core' },
-  { id: 'feature-flags',     label: 'Feature Flags',  icon: '🚩', description: 'Global flags & overrides',        accent: '#f59e0b', group: 'core' },
-  { id: 'compliance',        label: 'Compliance',     icon: '⚖️', description: 'KYC, AML, sanctions',             accent: '#fbbf24', group: 'compliance' },
-  { id: 'audit-trail',       label: 'Audit Trail',    icon: '🔗', description: 'Immutable hash-chained log',      accent: '#a78bfa', group: 'compliance' },
-  { id: 'gdpr',              label: 'GDPR',           icon: '🔒', description: 'Data subject requests, erasure',  accent: '#60a5fa', group: 'compliance' },
-  { id: 'risk-management',   label: 'Risk',           icon: '⚡', description: 'Circuit breakers, VaR, stress',   accent: '#f97316', group: 'risk' },
-  { id: 'nuclear-controls',  label: 'Nuclear',        icon: '🛑', description: 'Emergency halt, hedge, override', accent: '#ef4444', group: 'risk' },
-  { id: 'broker-management', label: 'Brokers',        icon: '🏦', description: 'Health, TCA, routing',            accent: '#22c55e', group: 'risk' },
-  { id: 'whitelabel',        label: 'White-Label',    icon: '🏢', description: 'Tenants, branding, API keys',     accent: '#8b5cf6', group: 'ops' },
-  { id: 'alerting',          label: 'Alerting',       icon: '🔔', description: 'Alert rules, Prometheus',         accent: '#fbbf24', group: 'ops' },
-  { id: 'rate-limiting',     label: 'Rate Limits',    icon: '🔒', description: 'Per-endpoint throttling',         accent: '#60a5fa', group: 'ops' },
-  { id: 'reporting',         label: 'Reporting',      icon: '📊', description: 'Generate & download reports',     accent: '#22c55e', group: 'ops' },
-  { id: 'security-infra',    label: 'Sec. Infra',     icon: '🔧', description: 'SelfHealer, HSM, Antivirus',      accent: '#f97316', group: 'ops' },
-  { id: 'system-health',     label: 'System Health',  icon: '💻', description: 'Services, backups, jobs',         accent: '#06b6d4', group: 'ops' },
-  { id: 'auto-healing',      label: 'Auto Healing',   icon: '🛡️', description: 'Autonomous healing engine',       accent: '#22c55e', group: 'ops' },
-  { id: 'reliability',       label: 'Reliability',    icon: '🔬', description: 'E2E connectivity & health probes', accent: '#06b6d4', group: 'ops' },
+  { id: 'users',             label: 'Users',          icon: <Users size={16} aria-hidden />, description: 'User management & roles',         accent: '#22c55e', group: 'core' },
+  { id: 'platform',          label: 'Platform',       icon: <Settings size={16} aria-hidden />, description: 'Config, maintenance, banners',    accent: '#8b5cf6', group: 'core' },
+  { id: 'ml-ai',             label: 'ML / AI',        icon: <Brain size={16} aria-hidden />, description: 'Models, RL agent, metrics',       accent: '#a78bfa', group: 'core' },
+  { id: 'trading-engine',    label: 'Trading Engine', icon: <TrendingUp size={16} aria-hidden />, description: 'Engine, kill switch, risk',       accent: '#ef4444', group: 'core' },
+  { id: 'financial',         label: 'Financial',      icon: <Banknote size={16} aria-hidden />, description: 'Revenue, payments, refunds',      accent: '#f59e0b', group: 'core' },
+  { id: 'security',          label: 'Security',       icon: <Shield size={16} aria-hidden />, description: 'Events, IPs, sessions',           accent: '#dc2626', group: 'core' },
+  { id: 'logs',              label: 'Logs',           icon: <ClipboardList size={16} aria-hidden />, description: 'System logs & log levels',        accent: '#06b6d4', group: 'core' },
+  { id: 'feature-flags',     label: 'Feature Flags',  icon: <Flag size={16} aria-hidden />, description: 'Global flags & overrides',        accent: '#f59e0b', group: 'core' },
+  { id: 'compliance',        label: 'Compliance',     icon: <Scale size={16} aria-hidden />, description: 'KYC, AML, sanctions',             accent: '#fbbf24', group: 'compliance' },
+  { id: 'audit-trail',       label: 'Audit Trail',    icon: <Link2 size={16} aria-hidden />, description: 'Immutable hash-chained log',      accent: '#a78bfa', group: 'compliance' },
+  { id: 'gdpr',              label: 'GDPR',           icon: <Lock size={16} aria-hidden />, description: 'Data subject requests, erasure',  accent: '#60a5fa', group: 'compliance' },
+  { id: 'risk-management',   label: 'Risk',           icon: <Zap size={16} aria-hidden />, description: 'Circuit breakers, VaR, stress',   accent: '#f97316', group: 'risk' },
+  { id: 'nuclear-controls',  label: 'Nuclear',        icon: <OctagonAlert size={16} aria-hidden />, description: 'Emergency halt, hedge, override', accent: '#ef4444', group: 'risk' },
+  { id: 'broker-management', label: 'Brokers',        icon: <Landmark size={16} aria-hidden />, description: 'Health, TCA, routing',            accent: '#22c55e', group: 'risk' },
+  { id: 'whitelabel',        label: 'White-Label',    icon: <Building2 size={16} aria-hidden />, description: 'Tenants, branding, API keys',     accent: '#8b5cf6', group: 'ops' },
+  { id: 'alerting',          label: 'Alerting',       icon: <Bell size={16} aria-hidden />, description: 'Alert rules, Prometheus',         accent: '#fbbf24', group: 'ops' },
+  { id: 'rate-limiting',     label: 'Rate Limits',    icon: <Lock size={16} aria-hidden />, description: 'Per-endpoint throttling',         accent: '#60a5fa', group: 'ops' },
+  { id: 'reporting',         label: 'Reporting',      icon: <BarChart3 size={16} aria-hidden />, description: 'Generate & download reports',     accent: '#22c55e', group: 'ops' },
+  { id: 'security-infra',    label: 'Sec. Infra',     icon: <Wrench size={16} aria-hidden />, description: 'SelfHealer, HSM, Antivirus',      accent: '#f97316', group: 'ops' },
+  { id: 'system-health',     label: 'System Health',  icon: <Laptop size={16} aria-hidden />, description: 'Services, backups, jobs',         accent: '#06b6d4', group: 'ops' },
+  { id: 'auto-healing',      label: 'Auto Healing',   icon: <Shield size={16} aria-hidden />, description: 'Autonomous healing engine',       accent: '#22c55e', group: 'ops' },
+  { id: 'reliability',       label: 'Reliability',    icon: <Microscope size={16} aria-hidden />, description: 'E2E connectivity & health probes', accent: '#06b6d4', group: 'ops' },
 ];
 
 const GROUP_LABELS: Record<string, string> = {

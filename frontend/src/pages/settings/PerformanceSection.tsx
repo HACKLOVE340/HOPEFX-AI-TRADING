@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../hooks/useApi';
 import { Card, SectionHeader, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { BarChart3 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -210,7 +211,7 @@ const PerformanceSection: React.FC = () => {
   return (
     <div>
       <SectionHeader
-        icon="📊"
+        icon={<BarChart3 size={18} aria-hidden />}
         title="Performance"
         description="Live system resource usage. Auto-refreshes every 5 seconds."
       />

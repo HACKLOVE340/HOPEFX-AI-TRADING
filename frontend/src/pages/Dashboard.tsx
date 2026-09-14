@@ -17,9 +17,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import {
-  ArrowRight, BookOpen, Brain, Briefcase, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, Trophy, Zap,
-} from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, Brain, Briefcase, Calculator, Calendar, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import { PageHeader, EmptyState, CrossLinkBar, Spinner, RelatedPages } from '../components';
 import { RiskHeadroomPanel } from '../components/system/RiskHeadroomPanel';
@@ -801,7 +799,7 @@ const Dashboard: React.FC = () => {
       <PageHeader
         title="Dashboard"
         subtitle="Real-time trading overview"
-        icon="📊"
+        icon={BarChart3}
         breadcrumbs={[{ label: "Dashboard" }]}
         badge={<WsBadge />}
         actions={
@@ -868,7 +866,7 @@ const Dashboard: React.FC = () => {
         </div>
         {equityHistory.length === 0 ? (
           <EmptyState
-            icon="📈"
+            icon={TrendingUp}
             title="No equity history yet"
             description="Start trading to see your equity curve grow here."
             links={[{ label: '⚡ Start Trading', href: '/trade' }]}
@@ -957,14 +955,14 @@ const Dashboard: React.FC = () => {
       </div>
 
       <CrossLinkBar title="Explore" links={[
-        { label: 'Trade',           href: '/trade',            icon: '⚡', color: '#3b82f6' },
-        { label: 'Portfolio',       href: '/portfolio',        icon: '💼', color: '#4ade80' },
-        { label: 'AI Charts',       href: '/ai-chart',         icon: '📈', color: '#06b6d4' },
-        { label: 'Signals',         href: '/signals',          icon: '📡', color: '#a78bfa' },
-        { label: 'Risk Calculator', href: '/risk-calculator',  icon: '🧮', color: '#f59e0b' },
-        { label: 'Economic Calendar',href: '/calendar',        icon: '📅', color: '#f97316' },
-        { label: 'Leaderboard',     href: '/leaderboard',      icon: '🏆', color: '#fbbf24' },
-        { label: 'Performance',     href: '/performance',      icon: '📊', color: '#22c55e' },
+        { label: 'Trade',           href: '/trade',            icon: Zap, color: '#3b82f6' },
+        { label: 'Portfolio',       href: '/portfolio',        icon: Briefcase, color: '#4ade80' },
+        { label: 'AI Charts',       href: '/ai-chart',         icon: TrendingUp, color: '#06b6d4' },
+        { label: 'Signals',         href: '/signals',          icon: Radio, color: '#a78bfa' },
+        { label: 'Risk Calculator', href: '/risk-calculator',  icon: Calculator, color: '#f59e0b' },
+        { label: 'Economic Calendar',href: '/calendar',        icon: Calendar, color: '#f97316' },
+        { label: 'Leaderboard',     href: '/leaderboard',      icon: Trophy, color: '#fbbf24' },
+        { label: 'Performance',     href: '/performance',      icon: BarChart3, color: '#22c55e' },
       ]} />
       <RelatedPages
         links={[

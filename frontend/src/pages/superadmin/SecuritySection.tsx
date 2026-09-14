@@ -10,6 +10,7 @@ import {
 import type { SecurityEvent } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { AlertTriangle, Ban, Link2, RefreshCw, Search, Shield, Siren } from 'lucide-react';
 
 interface BlockedIP { ip: string; reason: string; blocked_at: string; blocked_by: string }
 interface Session   { session_id: string; user_id: string; username: string; ip: string; device: string; created_at: string; last_active: string }
@@ -149,15 +150,15 @@ const SecuritySection: React.FC = () => {
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiTile label="Total Events"    value={events.length}    icon="🔍" accent="#3b82f6" />
-        <KpiTile label="Critical"        value={criticalCount}    icon="🚨" accent="#ef4444" />
-        <KpiTile label="High Severity"   value={highCount}        icon="⚠️" accent="#f59e0b" />
-        <KpiTile label="Blocked IPs"     value={blocked.length}   icon="🚫" accent="#8b5cf6" />
-        <KpiTile label="Active Sessions" value={sessions.length}  icon="🔗" accent="#06b6d4" />
+        <KpiTile label="Total Events"    value={events.length}    icon={<Search size={18} aria-hidden />} accent="#3b82f6" />
+        <KpiTile label="Critical"        value={criticalCount}    icon={<Siren size={18} aria-hidden />} accent="#ef4444" />
+        <KpiTile label="High Severity"   value={highCount}        icon={<AlertTriangle size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="Blocked IPs"     value={blocked.length}   icon={<Ban size={18} aria-hidden />} accent="#8b5cf6" />
+        <KpiTile label="Active Sessions" value={sessions.length}  icon={<Link2 size={18} aria-hidden />} accent="#06b6d4" />
       </div>
 
       {/* Security events */}
-      <SectionCard title="Security Events" icon="🛡️" accent="#ef4444"
+      <SectionCard title="Security Events" icon={<Shield size={18} aria-hidden />} accent="#ef4444"
         subtitle="Real-time threat and anomaly log"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
@@ -173,7 +174,7 @@ const SecuritySection: React.FC = () => {
               ]}
               style={{ width: 140 }}
             />
-            <ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />
+            <ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>
@@ -201,18 +202,18 @@ const SecuritySection: React.FC = () => {
             </tbody>
           </table>
           {events.length === 0 && (
-            <EmptyState compact icon="🛡️" title="No security events found" description="Security events will appear here when threats are detected." links={[{ label: 'Security Dashboard', href: '/security', icon: '🔍' }]} />
+            <EmptyState compact icon={Shield} title="No security events found" description="Security events will appear here when threats are detected." links={[{ label: 'Security Dashboard', href: '/security', icon: <Search size={16} aria-hidden /> }]} />
           )}
         </div>
       </SectionCard>
 
       {/* Block IP */}
-      <SectionCard title="IP Blocklist" icon="🚫" accent="#8b5cf6"
+      <SectionCard title="IP Blocklist" icon={<Ban size={18} aria-hidden />} accent="#8b5cf6"
         subtitle={`${blocked.length} IPs currently blocked`}>
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <Input placeholder="IP address (e.g. 1.2.3.4)" value={newIP} onChange={e => setNewIP(e.target.value)} style={{ width: 200 }} />
           <Input placeholder="Reason" value={newIPReason} onChange={e => setNewIPReason(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
-          <ActionBtn label="Block IP" onClick={blockIP} variant="danger" icon="🚫" loading={busy === 'block-ip'} disabled={!newIP} />
+          <ActionBtn label="Block IP" onClick={blockIP} variant="danger" icon={<Ban size={18} aria-hidden />} loading={busy === 'block-ip'} disabled={!newIP} />
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -251,7 +252,7 @@ const SecuritySection: React.FC = () => {
       </SectionCard>
 
       {/* Active sessions */}
-      <SectionCard title="Active Sessions" icon="🔗" accent="#06b6d4"
+      <SectionCard title="Active Sessions" icon={<Link2 size={18} aria-hidden />} accent="#06b6d4"
         subtitle={`${sessions.length} sessions active`}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

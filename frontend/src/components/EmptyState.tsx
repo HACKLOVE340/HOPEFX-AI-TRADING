@@ -11,7 +11,7 @@ import { Inbox } from 'lucide-react';
 export interface EmptyStateLink {
   label: string;
   href: string;
-  icon?: string;
+  icon?: React.ReactNode;
 }
 
 interface EmptyStateProps {

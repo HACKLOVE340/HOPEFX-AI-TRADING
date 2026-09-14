@@ -9,6 +9,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Bug, ClipboardList, Folder, KeyRound, RefreshCw, Shield, Wrench } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -192,10 +193,10 @@ const SecurityInfraSection: React.FC = () => {
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Self-Healer" value={healer?.status ?? 'unknown'} icon="🔧" accent={STATUS_COLOR(healer?.status ?? '')} />
-        <KpiTile label="Tracked Files" value={healer?.tracked_files ?? 0} icon="📁" accent="#60a5fa" />
-        <KpiTile label="AV Threats" value={av?.threats_found ?? 0} icon="🦠" accent={av?.threats_found ? '#f87171' : '#22c55e'} />
-        <KpiTile label="HSM Keys" value={hsm?.key_count ?? 0} icon="🔑" accent="#a78bfa" />
+        <KpiTile label="Self-Healer" value={healer?.status ?? 'unknown'} icon={<Wrench size={18} aria-hidden />} accent={STATUS_COLOR(healer?.status ?? '')} />
+        <KpiTile label="Tracked Files" value={healer?.tracked_files ?? 0} icon={<Folder size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="AV Threats" value={av?.threats_found ?? 0} icon={<Bug size={18} aria-hidden />} accent={av?.threats_found ? '#f87171' : '#22c55e'} />
+        <KpiTile label="HSM Keys" value={hsm?.key_count ?? 0} icon={<KeyRound size={18} aria-hidden />} accent="#a78bfa" />
       </div>
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -213,7 +214,7 @@ const SecurityInfraSection: React.FC = () => {
 
       {tab === 'healer' && healer && (
         <>
-          <SectionCard title="File Integrity Monitor" icon="🔧" accent="#22c55e"
+          <SectionCard title="File Integrity Monitor" icon={<Wrench size={18} aria-hidden />} accent="#22c55e"
             subtitle="SHA-256 hash-chain integrity monitoring with auto-patch and rollback"
             actions={
               <ActionBtn label="Run Scan Now" onClick={() => triggerScan('integrity')} loading={busy === 'integrity'} accent="#22c55e" size="sm" />
@@ -249,7 +250,7 @@ const SecurityInfraSection: React.FC = () => {
       )}
 
       {tab === 'av' && av && (
-        <SectionCard title="Antivirus Scanner" icon="🦠" accent="#f97316"
+        <SectionCard title="Antivirus Scanner" icon={<Bug size={18} aria-hidden />} accent="#f97316"
           subtitle="YARA rules + ClamAV + entropy analysis + suspicious pattern detection"
           actions={
             <ActionBtn label="Run Full Scan" onClick={() => triggerScan('av')} loading={busy === 'av'} accent="#f97316" size="sm" />
@@ -277,7 +278,7 @@ const SecurityInfraSection: React.FC = () => {
       )}
 
       {tab === 'hsm' && hsm && (
-        <SectionCard title="HSM Vault — Key Management" icon="🔑" accent="#a78bfa"
+        <SectionCard title="HSM Vault — Key Management" icon={<KeyRound size={18} aria-hidden />} accent="#a78bfa"
           /* `hsm.hsm_type.toUpperCase()` crashed the entire section with
              "undefined is not an object": the API's field is `type`, not
              `hsm_type`, and `keys` was never sent at all. The backend now
@@ -325,7 +326,7 @@ const SecurityInfraSection: React.FC = () => {
       )}
 
       {tab === 'log' && (
-        <SectionCard title="Security Infrastructure Log" icon="📋" accent="#64748b">
+        <SectionCard title="Security Infrastructure Log" icon={<ClipboardList size={18} aria-hidden />} accent="#64748b">
           {infraLog.length === 0 ? (
             <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No log entries</div>
           ) : (
@@ -349,7 +350,7 @@ const SecurityInfraSection: React.FC = () => {
 
       {/* ── TAB: Threat Intelligence ── */}
       {tab === 'threat' && (
-        <SectionCard title="Threat Intelligence" icon="🛡️" accent="#ef4444"
+        <SectionCard title="Threat Intelligence" icon={<Shield size={18} aria-hidden />} accent="#ef4444"
           subtitle="Live IOC feed — blocked IPs, malicious domains, hash signatures"
           actions={<ActionBtn label="Refresh" onClick={() => {
             setThreatLoading(true);
@@ -357,7 +358,7 @@ const SecurityInfraSection: React.FC = () => {
               .then(r => setThreatIntel(r.data.indicators ?? r.data.threats ?? r.data ?? []))
               .catch(() => setThreatIntel([]))
               .finally(() => setThreatLoading(false));
-          }} loading={threatLoading} icon="🔄" size="sm" />}>
+          }} loading={threatLoading} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
           {threatLoading ? (
             <LoadingRows rows={4} />
           ) : threatIntel.length === 0 ? (

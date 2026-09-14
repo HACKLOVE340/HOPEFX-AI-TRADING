@@ -14,6 +14,7 @@ import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageShell } from '../components/system/PageShell';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
+import { AlertTriangle, Bandage, Bug, Folder, Microscope, Siren, XCircle, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -400,7 +401,7 @@ const AutoHealDashboard: React.FC = () => {
         <MetricCard
           label="Baseline Files"
           value={healStatus?.baseline_files ?? '—'}
-          icon="📁"
+          icon={<Folder size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
@@ -408,21 +409,21 @@ const AutoHealDashboard: React.FC = () => {
           value={healStatus?.drift_events ?? '—'}
           delta={healStatus && healStatus.drift_events > 0 ? 'Files changed unexpectedly' : undefined}
           deltaPositive={false}
-          icon="⚠️"
+          icon={<AlertTriangle size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Patches Applied"
           value={healStatus?.patches_applied ?? '—'}
           deltaPositive={true}
-          icon="🩹"
+          icon={<Bandage size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Patches Failed"
           value={healStatus?.patches_failed ?? '—'}
           deltaPositive={false}
-          icon="❌"
+          icon={<XCircle size={18} aria-hidden />}
           loading={loading}
         />
       </div>
@@ -435,21 +436,21 @@ const AutoHealDashboard: React.FC = () => {
           value={avStatus?.total_threats ?? '—'}
           delta={criticalThreats > 0 ? `${criticalThreats} critical` : undefined}
           deltaPositive={false}
-          icon="🦠"
+          icon={<Bug size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Critical"
           value={criticalThreats}
           deltaPositive={criticalThreats === 0}
-          icon="🚨"
+          icon={<Siren size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="High"
           value={highThreats}
           deltaPositive={highThreats === 0}
-          icon="⚡"
+          icon={<Zap size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
@@ -457,7 +458,7 @@ const AutoHealDashboard: React.FC = () => {
           value={avStatus?.yara_enabled ? 'ON' : 'OFF'}
           delta={avStatus?.clamd_enabled ? 'ClamAV ON' : 'ClamAV OFF'}
           deltaPositive={avStatus?.yara_enabled ?? false}
-          icon="🔬"
+          icon={<Microscope size={18} aria-hidden />}
           loading={loading}
         />
       </div>

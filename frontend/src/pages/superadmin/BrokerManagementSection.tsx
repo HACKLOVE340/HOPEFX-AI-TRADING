@@ -10,7 +10,7 @@ import {
 import type { BrokerHealth, TCAMetric } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { Shuffle, Pencil } from 'lucide-react';
+import { BarChart3, Circle, CircleDot, Landmark, Pencil, RefreshCw, Shuffle, Zap } from 'lucide-react';
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -138,16 +138,16 @@ const BrokerManagementSection: React.FC = () => {
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiTile label="Connected"    value={connectedCount}    icon="🟢" accent="#22c55e" />
-        <KpiTile label="Degraded"     value={degradedCount}     icon="🟡" accent="#f59e0b" />
-        <KpiTile label="Disconnected" value={disconnectedCount} icon="🔴" accent="#ef4444" />
-        <KpiTile label="Avg Latency"  value={`${avgLatency}ms`} icon="⚡" accent="#3b82f6" />
+        <KpiTile label="Connected"    value={connectedCount}    icon={<CircleDot size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Degraded"     value={degradedCount}     icon={<Circle size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="Disconnected" value={disconnectedCount} icon={<Circle size={18} aria-hidden />} accent="#ef4444" />
+        <KpiTile label="Avg Latency"  value={`${avgLatency}ms`} icon={<Zap size={18} aria-hidden />} accent="#3b82f6" />
       </div>
 
       {/* Broker health cards */}
-      <SectionCard title="Broker Connections" icon="🏦" accent="#3b82f6"
+      <SectionCard title="Broker Connections" icon={<Landmark size={18} aria-hidden />} accent="#3b82f6"
         subtitle="Real-time connection health per broker"
-        actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
           {brokers.map(b => (
             <div key={b.broker_id} style={{
@@ -199,7 +199,7 @@ const BrokerManagementSection: React.FC = () => {
       </SectionCard>
 
       {/* TCA Table */}
-      <SectionCard title="Transaction Cost Analysis" icon="📊" accent="#8b5cf6"
+      <SectionCard title="Transaction Cost Analysis" icon={<BarChart3 size={18} aria-hidden />} accent="#8b5cf6"
         subtitle="Execution quality comparison across brokers">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
