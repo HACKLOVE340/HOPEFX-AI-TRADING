@@ -39,7 +39,7 @@ const Harness: React.FC = () => {
       <button id="behind" onClick={() => void confirm({ title: 'Close everything?' })}>
         Close all
       </button>
-      <input id="other" />
+      <input id="other" aria-label="Another field on the page" />
     </div>
   );
 };

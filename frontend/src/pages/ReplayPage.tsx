@@ -470,7 +470,7 @@ const ReplayPage: React.FC = () => {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="number" value={runBars} onChange={e => setRunBars(Number(e.target.value))}
-                  min={1} max={500} style={{ width: 60, background: '#0f172a', border: '1px solid #334155',
+                  aria-label="Bars to advance" min={1} max={500} style={{ width: 60, background: '#0f172a', border: '1px solid #334155',
                     borderRadius: 6, padding: '7px 8px', color: 'var(--text)', fontSize: 13 }} />
                 <button onClick={() => runMut.mutate({ id: selected.session_id, bars: runBars })}
                   disabled={runMut.isPending || selected.status === 'completed'}

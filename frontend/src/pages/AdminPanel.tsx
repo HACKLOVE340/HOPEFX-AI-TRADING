@@ -253,8 +253,8 @@ const MaintenanceBroadcastPanel: React.FC = () => {
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 14 }}>📡 Broadcast Message</div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Title</label>
-          <input style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
+          <label id="adminpanel-title-label" htmlFor="adminpanel-title" style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Title</label>
+          <input id="adminpanel-title" aria-labelledby="adminpanel-title-label" style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
         </div>
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message</label>

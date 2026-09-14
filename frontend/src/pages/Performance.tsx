@@ -565,8 +565,10 @@ const Performance: React.FC = () => {
                 <option value="buy">Buy / Long</option>
                 <option value="sell">Sell / Short</option>
               </select>
-              <input type="date" value={tradeFrom} onChange={(e) => setTradeFrom(e.target.value)} style={s.filterInput} title="From date" />
-              <input type="date" value={tradeTo}   onChange={(e) => setTradeTo(e.target.value)}   style={s.filterInput} title="To date" />
+              <input type="date" value={tradeFrom} onChange={(e) => setTradeFrom(e.target.value)} style={s.filterInput}
+                     title="From date" aria-label="Trades from date" />
+              <input type="date" value={tradeTo}   onChange={(e) => setTradeTo(e.target.value)}   style={s.filterInput}
+                     title="To date" aria-label="Trades to date" />
               <button onClick={() => handleExport('csv')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 12 }}>⬇ CSV</button>
               <button onClick={() => handleExport('pdf')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 12 }}>⬇ PDF</button>
             </div>

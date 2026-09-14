@@ -213,9 +213,10 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
                 <Input label="Company Name" value={form.company_name ?? ''} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} />
                 <Input label="Logo URL"     value={form.logo_url ?? ''}     onChange={e => setForm(f => ({ ...f, logo_url: e.target.value }))} />
                 <div>
-                  <label style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Primary Colour</label>
+                  <label id="sa-whitelabel-primary-colour-label" style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Primary Colour</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input type="color" value={form.primary_color ?? '#3b82f6'} onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))}
+                      aria-labelledby="sa-whitelabel-primary-colour-label"
                       style={{ width: 40, height: 32, border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
                     <Input value={form.primary_color ?? ''} onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))} style={{ flex: 1 }} />
                   </div>
@@ -331,9 +332,10 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
           <Select label="Plan" value={form.plan} onChange={e => set('plan', e.target.value)}
             options={[{ value: 'starter', label: 'Starter' }, { value: 'professional', label: 'Professional' }, { value: 'enterprise', label: 'Enterprise' }]} />
           <div>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Primary Colour</label>
+            <label id="sa-whitelabel-create-colour-label" style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Primary Colour</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="color" value={form.primary_color} onChange={e => set('primary_color', e.target.value)}
+                aria-labelledby="sa-whitelabel-create-colour-label"
                 style={{ width: 40, height: 32, border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
               <Input value={form.primary_color} onChange={e => set('primary_color', e.target.value)} style={{ flex: 1 }} />
             </div>

@@ -242,8 +242,8 @@ const CustomIndicators: React.FC = () => {
               <button key={ex.label} style={s.exBtn} onClick={() => setFormula(ex.formula)}>{ex.label}</button>
             ))}
           </div>
-          <label style={s.label}>Formula</label>
-          <textarea
+          <label id="customindicators-formula-label" htmlFor="customindicators-formula" style={s.label}>Formula</label>
+          <textarea id="customindicators-formula" aria-labelledby="customindicators-formula-label"
             style={s.textarea}
             value={formula}
             onChange={e => setFormula(e.target.value)}
@@ -263,14 +263,15 @@ const CustomIndicators: React.FC = () => {
               {['XAU/USD','EUR/USD','GBP/USD','BTC/USD'].map(sym => <option key={sym} value={sym}>{sym}</option>)}
             </select>
             <input type="color" value={color} onChange={e => setColor(e.target.value)}
+              aria-label="Preview line colour"
               style={{ width:40, height:36, border:'none', background:'none', cursor:'pointer' }} />
           </div>
           <button style={{ ...s.btn, marginTop:12 }} onClick={() => void runPreview()} disabled={loading}>
             {loading ? 'Computing…' : '▶ Preview'}
           </button>
           <div style={s.divider} />
-          <label style={s.label}>Save as</label>
-          <input style={s.input} value={name} onChange={e => setName(e.target.value)} placeholder="My EMA Ratio" />
+          <label id="customindicators-save-as-label" htmlFor="customindicators-save-as" style={s.label}>Save as</label>
+          <input id="customindicators-save-as" aria-labelledby="customindicators-save-as-label" style={s.input} value={name} onChange={e => setName(e.target.value)} placeholder="My EMA Ratio" />
           <button style={{ ...s.btn, background:'#334155', marginTop:8 }} onClick={save}>Save Indicator</button>
         </div>
 

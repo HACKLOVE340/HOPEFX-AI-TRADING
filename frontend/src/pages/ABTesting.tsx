@@ -135,8 +135,8 @@ const ABTesting: React.FC = () => {
           <select style={s.select} value={symbol} onChange={e => setSymbol(e.target.value)}>
             {['XAU/USD','EUR/USD','GBP/USD','BTC/USD'].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <label style={s.label}>Duration (days)</label>
-          <input style={s.input} type="number" value={days} onChange={e => setDays(e.target.value)} min="1" max="365" />
+          <label id="abtesting-duration-days-label" htmlFor="abtesting-duration-days" style={s.label}>Duration (days)</label>
+          <input id="abtesting-duration-days" aria-labelledby="abtesting-duration-days-label" style={s.input} type="number" value={days} onChange={e => setDays(e.target.value)} min="1" max="365" />
           <button style={{ ...s.btn, marginTop:16, opacity: running ? 0.6 : 1 }} onClick={run} disabled={running}>
             {running ? 'Running…' : 'Run A/B Test'}
           </button>

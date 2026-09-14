@@ -479,6 +479,7 @@ const UsersSection: React.FC = () => {
                   <th style={{ padding: '8px 12px', width: 36 }}>
                     <input
                       type="checkbox"
+                      aria-label="Select all users on this page"
                       checked={allChecked}
                       ref={el => { if (el) el.indeterminate = someChecked; }}
                       onChange={toggleAll}
@@ -499,18 +500,34 @@ const UsersSection: React.FC = () => {
                   return (
                     <tr key={u.user_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a', transition: 'background 0.1s', background: isChecked ? '#0f1f35' : undefined }}>
                       <td style={{ padding: '10px 12px' }} onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(u.user_id)} style={{ cursor: 'pointer', accentColor: '#3b82f6' }} />
+                        {/* Named by its row. Twenty checkboxes all announced
+                            "checkbox" is a list nobody can act on. */}
+                        <input type="checkbox" aria-label={`Select ${u.username ?? u.email}`}
+                          checked={isChecked} onChange={() => toggleOne(u.user_id)} style={{ cursor: 'pointer', accentColor: '#3b82f6' }} />
                       </td>
-                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0 }}>
+                      {/* The row's ONE keyboard path. Eight cells carry the same
+                          onClick for mouse convenience, but a <td> is not
+                          focusable and cannot be reached by keyboard at all — so
+                          this table was operable only with a pointer. Making all
+                          eight focusable would put eight tab stops on every row;
+                          one, named by the user it opens, is the whole row. */}
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(u)}
+                          aria-label={`Open ${u.username ?? u.email}`}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                   background: 'none', border: 0, padding: 0, textAlign: 'left',
+                                   font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                        >
+                          <span style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0 }}>
                             {u.username?.[0]?.toUpperCase() ?? '?'}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{u.username}</div>
-                            <div style={{ fontSize: 11, color: '#475569' }}>{u.email}</div>
-                          </div>
-                        </div>
+                          </span>
+                          <span>
+                            <span style={{ display: 'block', fontWeight: 600, color: '#f1f5f9' }}>{u.username}</span>
+                            <span style={{ display: 'block', fontSize: 11, color: '#475569' }}>{u.email}</span>
+                          </span>
+                        </button>
                       </td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: rs.color, background: rs.bg, border: `1px solid ${rs.border}`, borderRadius: 4, padding: '2px 7px' }}>

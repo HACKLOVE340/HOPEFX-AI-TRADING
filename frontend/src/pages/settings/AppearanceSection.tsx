@@ -112,6 +112,10 @@ const AppearanceSection: React.FC = () => {
               <button
                 key={color}
                 onClick={() => update({ accent_color: color })}
+                // The only text here is a hex code, which says what the swatch
+                // is rather than what pressing it does.
+                aria-label={`Accent colour ${color}`}
+                aria-pressed={form.accent_color === color}
                 title={color}
                 style={{
                   width: 36, height: 36, borderRadius: '50%', background: color,
@@ -126,6 +130,7 @@ const AppearanceSection: React.FC = () => {
               type="color"
               value={form.accent_color}
               onChange={(e) => update({ accent_color: e.target.value })}
+              aria-label="Custom accent colour"
               title="Custom color"
               style={{
                 width: 36, height: 36, borderRadius: '50%', border: '2px solid #334155',

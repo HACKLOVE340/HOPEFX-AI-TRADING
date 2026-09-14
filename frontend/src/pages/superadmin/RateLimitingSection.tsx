@@ -242,6 +242,7 @@ const RateLimitingSection: React.FC = () => {
                           <div style={{ display: 'flex', gap: 6 }}>
                             <input
                               type="number"
+                              aria-label={`Request limit for ${rule.endpoint}`}
                               value={draft.limit}
                               onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, limit: e.target.value } }))}
                               style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}
@@ -249,6 +250,7 @@ const RateLimitingSection: React.FC = () => {
                             <span style={{ color: '#475569', alignSelf: 'center' }}>/</span>
                             <input
                               type="number"
+                              aria-label={`Window in seconds for ${rule.endpoint}`}
                               value={draft.window_seconds}
                               onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, window_seconds: e.target.value } }))}
                               style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}

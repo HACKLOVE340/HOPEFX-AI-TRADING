@@ -110,10 +110,10 @@ const AmountForm: React.FC<{
       <h3 className="text-slate-100 text-base font-semibold mb-4 mt-0">
         {mode === 'deposit' ? 'Deposit Funds' : 'Withdraw Funds'}
       </h3>
-      <label className="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">
+      <label id="wallet-amount-usd-label" htmlFor="wallet-amount-usd" className="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">
         Amount (USD)
       </label>
-      <input
+      <input id="wallet-amount-usd" aria-labelledby="wallet-amount-usd-label"
         type="number"
         min="1"
         value={amount}

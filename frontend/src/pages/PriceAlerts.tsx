@@ -197,8 +197,8 @@ const PriceAlerts: React.FC = () => {
 
           <div style={s.formGrid}>
             <div>
-              <label style={s.label}>Alert Name</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              <label id="pricealerts-alert-name-label" htmlFor="pricealerts-alert-name" style={s.label}>Alert Name</label>
+              <input id="pricealerts-alert-name" aria-labelledby="pricealerts-alert-name-label" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. Gold breaks 2100" style={s.input} />
             </div>
             <div>
@@ -214,8 +214,8 @@ const PriceAlerts: React.FC = () => {
               </select>
             </div>
             <div>
-              <label style={s.label}>Price / Level</label>
-              <input type="number" value={form.threshold} onChange={(e) => setForm({ ...form, threshold: e.target.value })}
+              <label id="pricealerts-price-level-label" htmlFor="pricealerts-price-level" style={s.label}>Price / Level</label>
+              <input id="pricealerts-price-level" aria-labelledby="pricealerts-price-level-label" type="number" value={form.threshold} onChange={(e) => setForm({ ...form, threshold: e.target.value })}
                 placeholder="e.g. 2100.00" style={s.input} />
             </div>
           </div>

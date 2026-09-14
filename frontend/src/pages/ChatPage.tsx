@@ -264,6 +264,7 @@ const ChatPage: React.FC = () => {
           <div style={{ padding: '12px 20px', borderTop: '1px solid #1e293b', display: 'flex', gap: 10 }}>
             <input
               ref={inputRef}
+              aria-label="Message"
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}

@@ -96,31 +96,40 @@ const CreateModal: React.FC<{
 
         {error && <div style={s.errorBanner}>{error}</div>}
 
-        <label style={s.fieldLabel}>Company Name *</label>
-        <input style={s.textInput} value={name} onChange={(e) => setName(e.target.value)} placeholder="PropFirm Alpha" />
+        <label id="whitelabeladmin-company-name-label" htmlFor="whitelabeladmin-company-name" style={s.fieldLabel}>Company Name *</label>
+        <input id="whitelabeladmin-company-name" aria-labelledby="whitelabeladmin-company-name-label" style={s.textInput} value={name} onChange={(e) => setName(e.target.value)} placeholder="PropFirm Alpha" />
 
-        <label style={s.fieldLabel}>Owner Email *</label>
-        <input style={s.textInput} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@propfirm.com" type="email" />
+        <label id="whitelabeladmin-owner-email-label" htmlFor="whitelabeladmin-owner-email" style={s.fieldLabel}>Owner Email *</label>
+        <input id="whitelabeladmin-owner-email" aria-labelledby="whitelabeladmin-owner-email-label" style={s.textInput} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@propfirm.com" type="email" />
 
-        <label style={s.fieldLabel}>Trial Days (0 = active immediately)</label>
-        <input style={s.textInput} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} type="number" min="0" max="365" />
+        <label id="whitelabeladmin-trial-days-0-active-immediately-label" htmlFor="whitelabeladmin-trial-days-0-active-immediately" style={s.fieldLabel}>Trial Days (0 = active immediately)</label>
+        <input id="whitelabeladmin-trial-days-0-active-immediately" aria-labelledby="whitelabeladmin-trial-days-0-active-immediately-label" style={s.textInput} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} type="number" min="0" max="365" />
 
-        <label style={s.fieldLabel}>Primary Brand Colour</label>
+        <label id="whitelabel-primary-colour-label" style={s.fieldLabel}>Primary Brand Colour</label>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Two controls, one visible label. Both reference it rather than
+              restating it; the colour well and the text box announce different
+              roles, which is what tells them apart. */}
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
+            aria-labelledby="whitelabel-primary-colour-label"
             style={{ width: 40, height: 36, border: 'none', background: 'none', cursor: 'pointer' }} />
-          <input style={{ ...s.textInput, flex: 1 }} value={color} onChange={(e) => setColor(e.target.value)} />
+          <input style={{ ...s.textInput, flex: 1 }} value={color} onChange={(e) => setColor(e.target.value)}
+            aria-labelledby="whitelabel-primary-colour-label" />
         </div>
 
-        <label style={s.fieldLabel}>Logo URL (optional)</label>
-        <input style={s.textInput} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
+        <label id="whitelabeladmin-logo-url-optional-label" htmlFor="whitelabeladmin-logo-url-optional" style={s.fieldLabel}>Logo URL (optional)</label>
+        <input id="whitelabeladmin-logo-url-optional" aria-labelledby="whitelabeladmin-logo-url-optional-label" style={s.textInput} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
 
         <label style={s.fieldLabel}>Features</label>
         <div style={s.featureGrid}>
           {ALL_FEATURES.map((f) => (
             <label key={f} style={s.featureCheck}>
-              <input type="checkbox" checked={features.includes(f)} onChange={() => toggleFeature(f)} />
-              <span style={{ marginLeft: 6, fontSize: 12 }}>{f}</span>
+              {/* The wrapping label already names this at runtime. The id makes
+                  that name readable from the control's own props, and it points
+                  at the same {f} the user sees, so the two cannot disagree. */}
+              <input type="checkbox" checked={features.includes(f)} onChange={() => toggleFeature(f)}
+                aria-labelledby={`whitelabel-feature-${f}-label`} />
+              <span id={`whitelabel-feature-${f}-label`} style={{ marginLeft: 6, fontSize: 12 }}>{f}</span>
             </label>
           ))}
         </div>

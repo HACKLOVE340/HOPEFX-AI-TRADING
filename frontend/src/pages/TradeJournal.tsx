@@ -392,8 +392,13 @@ const TradeJournal: React.FC = () => {
               {/* Edit form */}
               {editing === entry.trade_id && (
                 <div style={s.editForm}>
-                  <label style={s.label}>Notes</label>
-                  <textarea value={editForm.notes ?? ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  {/* The id carries the trade, because this form is rendered once
+                      per entry: a constant id would appear as many times as there
+                      are open rows, and htmlFor would then point at whichever the
+                      browser saw first. */}
+                  <label htmlFor={`journal-notes-${entry.trade_id}`} style={s.label}>Notes</label>
+                  <textarea id={`journal-notes-${entry.trade_id}`}
+                    value={editForm.notes ?? ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                     style={s.textarea} rows={3} />
 
                   <label style={s.label}>Tags</label>

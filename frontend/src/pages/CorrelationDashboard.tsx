@@ -166,7 +166,7 @@ const CorrelationDashboard: React.FC = () => {
                 <table style={{ borderCollapse:'collapse', fontSize:12 }}>
                   <thead>
                     <tr>
-                      <th style={s.mth} />
+                      <th style={s.mth} scope="col"><span className="sr-only">Symbol</span></th>
                       {(corr.symbols ?? []).map(sym => <th key={sym} style={s.mth}>{sym}</th>)}
                     </tr>
                   </thead>

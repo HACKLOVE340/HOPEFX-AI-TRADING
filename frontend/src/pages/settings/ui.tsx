@@ -88,14 +88,32 @@ interface FieldProps {
   children: React.ReactNode;
 }
 
+/**
+ * The label WRAPS the control, rather than sitting beside it.
+ *
+ * It used to render `<label>Protected Paths</label>` and then the control as a
+ * sibling, with no `for` and no id — so across the 60-odd places this is used,
+ * the settings pages showed a label and the control had no name at all. A
+ * screen reader reached each field as an unlabelled text box; clicking the
+ * label did nothing.
+ *
+ * Wrapping is the fix that needs no ids anywhere: the enclosing <label> is the
+ * accessible name of the first labelable control inside it, so every existing
+ * call site is corrected without touching one of them, and there is no second
+ * copy of the text to drift from what is on screen (WCAG 2.5.3).
+ *
+ * The inner elements are <span display:block> rather than <p>/<div> because a
+ * <label> takes phrasing content — a <p> nested in a label is invalid and
+ * parsers may close the label early, which would undo the association.
+ */
 export const Field: React.FC<FieldProps> = ({ label, description, children }) => (
-  <div style={{ marginBottom: 20 }}>
-    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+  <label style={{ display: 'block', marginBottom: 20 }}>
+    <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
       {label}
-    </label>
-    {description && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, marginTop: 0 }}>{description}</p>}
+    </span>
+    {description && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, marginTop: 0 }}>{description}</span>}
     {children}
-  </div>
+  </label>
 );
 
 // ── Input ─────────────────────────────────────────────────────────────────────

@@ -463,8 +463,8 @@ const SubAccounts: React.FC = () => {
         }
       >
         <div style={s.formGrid}>
-          <label style={s.label}>Label</label>
-          <input
+          <label id="subaccounts-label-label" htmlFor="subaccounts-label" style={s.label}>Label</label>
+          <input id="subaccounts-label" aria-labelledby="subaccounts-label-label"
             value={newAccLabel}
             onChange={(e) => setNewAccLabel(e.target.value)}
             placeholder="e.g. Paper Trading"
@@ -477,8 +477,8 @@ const SubAccounts: React.FC = () => {
             <option value="ibkr">Interactive Brokers</option>
             <option value="mt5">MetaTrader 5</option>
           </select>
-          <label style={s.label}>Initial Balance ($)</label>
-          <input
+          <label id="subaccounts-initial-balance-label" htmlFor="subaccounts-initial-balance" style={s.label}>Initial Balance ($)</label>
+          <input id="subaccounts-initial-balance" aria-labelledby="subaccounts-initial-balance-label"
             type="number"
             value={newAccBalance}
             onChange={(e) => setNewAccBalance(e.target.value)}
@@ -504,8 +504,8 @@ const SubAccounts: React.FC = () => {
       >
         {editAcc && (
           <div style={s.formGrid}>
-            <label style={s.label}>Label</label>
-            <input
+            <label id="subaccounts-label-2-label" htmlFor="subaccounts-label-2" style={s.label}>Label</label>
+            <input id="subaccounts-label-2" aria-labelledby="subaccounts-label-2-label"
               value={editAcc.label}
               onChange={(e) => setEditAcc({ ...editAcc, label: e.target.value })}
               style={s.input}
@@ -538,8 +538,8 @@ const SubAccounts: React.FC = () => {
         }
       >
         <div style={s.formGrid}>
-          <label style={s.label}>Team Name</label>
-          <input
+          <label id="subaccounts-team-name-label" htmlFor="subaccounts-team-name" style={s.label}>Team Name</label>
+          <input id="subaccounts-team-name" aria-labelledby="subaccounts-team-name-label"
             value={newTeamName}
             onChange={(e) => setNewTeamName(e.target.value)}
             placeholder="e.g. Alpha Desk"
@@ -567,12 +567,12 @@ const SubAccounts: React.FC = () => {
         }
       >
         <div style={s.formGrid}>
-          <label style={s.label}>User ID</label>
-          <input value={inviteUserId} onChange={(e) => setInviteUserId(e.target.value)} placeholder="user-xxx" style={s.input} />
-          <label style={s.label}>Username</label>
-          <input value={inviteUsername} onChange={(e) => setInviteUsername(e.target.value)} placeholder="trader_x" style={s.input} />
-          <label style={s.label}>Email</label>
-          <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="trader@example.com" style={s.input} />
+          <label id="subaccounts-user-id-label" htmlFor="subaccounts-user-id" style={s.label}>User ID</label>
+          <input id="subaccounts-user-id" aria-labelledby="subaccounts-user-id-label" value={inviteUserId} onChange={(e) => setInviteUserId(e.target.value)} placeholder="user-xxx" style={s.input} />
+          <label id="subaccounts-username-label" htmlFor="subaccounts-username" style={s.label}>Username</label>
+          <input id="subaccounts-username" aria-labelledby="subaccounts-username-label" value={inviteUsername} onChange={(e) => setInviteUsername(e.target.value)} placeholder="trader_x" style={s.input} />
+          <label id="subaccounts-email-label" htmlFor="subaccounts-email" style={s.label}>Email</label>
+          <input id="subaccounts-email" aria-labelledby="subaccounts-email-label" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="trader@example.com" style={s.input} />
           <label style={s.label}>Role</label>
           <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} style={s.input}>
             <option value="viewer">Viewer</option>

@@ -427,10 +427,11 @@ const CopyTrading: React.FC = () => {
 
           <div style={s.allocationGrid}>
             <div>
-              <label style={s.label}>Allocation Amount</label>
+              <label id="copytrading-allocation-label" style={s.label}>Allocation Amount</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <input
                   type="range"
+                  aria-labelledby="copytrading-allocation-label"
                   min={1000}
                   max={100000}
                   step={1000}
@@ -442,6 +443,7 @@ const CopyTrading: React.FC = () => {
                     not, so any figure could be typed straight past the range. */}
                 <input
                   type="number"
+                  aria-labelledby="copytrading-allocation-label"
                   min={MIN_ALLOCATION}
                   max={MAX_ALLOCATION}
                   step={1000}

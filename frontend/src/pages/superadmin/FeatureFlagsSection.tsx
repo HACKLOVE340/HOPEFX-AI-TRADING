@@ -155,6 +155,7 @@ const FeatureFlagsSection: React.FC = () => {
               <div
                 role="switch"
                 aria-checked={flag.enabled}
+                aria-label={`Enable ${flag.name}`}
                 tabIndex={0}
                 onClick={() => !busy && toggleFlag(flag.name, !flag.enabled)}
                 onKeyDown={e => !busy && (e.key === 'Enter' || e.key === ' ') && toggleFlag(flag.name, !flag.enabled)}
@@ -226,6 +227,7 @@ const FeatureFlagsSection: React.FC = () => {
                   <div
                     role="switch"
                     aria-checked={effectiveValue}
+                    aria-label={`Override ${flag.name} for this user`}
                     tabIndex={0}
                     onClick={() => !busy && setUserOverride(flag.name, !effectiveValue)}
                     onKeyDown={e => !busy && (e.key === 'Enter' || e.key === ' ') && setUserOverride(flag.name, !effectiveValue)}

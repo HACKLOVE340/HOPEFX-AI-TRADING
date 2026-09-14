@@ -188,8 +188,21 @@ export function explainMissingResult(
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const Label: React.FC<{ text: string }> = ({ text }) => (
-  <div style={s.label}>{text}</div>
+/**
+ * A real <label>, not a styled <div>.
+ *
+ * It rendered a <div>, so none of the seven fields on this page had an
+ * accessible name and clicking the text did not focus the field — on the page
+ * where a mistyped number changes a position size. `for` fixes both; the `id`
+ * lets the control also state the name on itself, as a reference rather than a
+ * copy, so the two can never disagree (WCAG 2.5.3).
+ */
+const Label: React.FC<{ text: string; htmlFor?: string }> = ({ text, htmlFor }) => (
+  // display:block because <label> is inline by default and s.label's vertical
+  // margins would stop applying — the <div> it replaces was block.
+  <label id={htmlFor && `${htmlFor}-label`} htmlFor={htmlFor} style={{ ...s.label, display: 'block' }}>
+    {text}
+  </label>
 );
 
 const Input: React.FC<{
@@ -198,10 +211,14 @@ const Input: React.FC<{
   placeholder?: string;
   prefix?: string;
   suffix?: string;
-}> = ({ value, onChange, placeholder, prefix, suffix }) => (
+  /** Ties this field to its <Label htmlFor={id} />. */
+  id?: string;
+}> = ({ value, onChange, placeholder, prefix, suffix, id }) => (
   <div style={s.inputWrap}>
     {prefix && <span style={s.inputAddon}>{prefix}</span>}
     <input
+      id={id}
+      aria-labelledby={id && `${id}-label`}
       style={s.input}
       type="number"
       value={value}
@@ -451,8 +468,10 @@ const RiskCalculator: React.FC = () => {
         <div style={s.card}>
           <div style={s.cardTitle}>Trade Setup</div>
 
-          <Label text="Symbol" />
+          <Label text="Symbol" htmlFor="risk-symbol" />
           <select
+            id="risk-symbol"
+            aria-labelledby="risk-symbol-label"
             style={s.select}
             value={state.symbol}
             onChange={(e) => setState((p) => ({ ...p, symbol: e.target.value }))}
@@ -462,25 +481,25 @@ const RiskCalculator: React.FC = () => {
             ))}
           </select>
 
-          <Label text="Account Balance" />
-          <Input value={state.accountBalance} onChange={set('accountBalance')} prefix="$" placeholder="10000" />
+          <Label text="Account Balance" htmlFor="risk-account-balance" />
+          <Input id="risk-account-balance" value={state.accountBalance} onChange={set('accountBalance')} prefix="$" placeholder="10000" />
 
-          <Label text="Risk Per Trade" />
-          <Input value={state.riskPercent} onChange={set('riskPercent')} suffix="%" placeholder="1" />
+          <Label text="Risk Per Trade" htmlFor="risk-per-trade" />
+          <Input id="risk-per-trade" value={state.riskPercent} onChange={set('riskPercent')} suffix="%" placeholder="1" />
 
-          <Label text="Leverage" />
-          <Input value={state.leverage} onChange={set('leverage')} suffix=":1" placeholder="100" />
+          <Label text="Leverage" htmlFor="risk-leverage" />
+          <Input id="risk-leverage" value={state.leverage} onChange={set('leverage')} suffix=":1" placeholder="100" />
 
           <div style={s.divider} />
 
-          <Label text="Entry Price" />
-          <Input value={state.entryPrice} onChange={set('entryPrice')} placeholder="2350.00" />
+          <Label text="Entry Price" htmlFor="risk-entry-price" />
+          <Input id="risk-entry-price" value={state.entryPrice} onChange={set('entryPrice')} placeholder="2350.00" />
 
-          <Label text="Stop Loss" />
-          <Input value={state.stopLoss} onChange={set('stopLoss')} placeholder="2340.00" />
+          <Label text="Stop Loss" htmlFor="risk-stop-loss" />
+          <Input id="risk-stop-loss" value={state.stopLoss} onChange={set('stopLoss')} placeholder="2340.00" />
 
-          <Label text="Take Profit" />
-          <Input value={state.takeProfit} onChange={set('takeProfit')} placeholder="2380.00" />
+          <Label text="Take Profit" htmlFor="risk-take-profit" />
+          <Input id="risk-take-profit" value={state.takeProfit} onChange={set('takeProfit')} placeholder="2380.00" />
         </div>
 
         {/* ── Results ── */}

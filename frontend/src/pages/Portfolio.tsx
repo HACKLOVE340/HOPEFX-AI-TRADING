@@ -289,9 +289,11 @@ const TradeHistory: React.FC = () => {
   const headerRight = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
       {/* Date range */}
-      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle} title="From date" />
+      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle}
+             title="From date" aria-label="From date" />
       <span style={{ fontSize: 10, color: '#334155' }}>→</span>
-      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle} title="To date" />
+      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle}
+             title="To date" aria-label="To date" />
       {(dateFrom || dateTo) && (
         <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
           background: 'transparent', border: 'none', color: '#475569', fontSize: 10, cursor: 'pointer', padding: '0 2px',

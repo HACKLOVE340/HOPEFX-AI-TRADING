@@ -50,7 +50,11 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      {/* The id lets NumInput point `aria-labelledby` here. htmlFor alone is a
+          sibling reference, which is correct at runtime but not verifiable from
+          the control's own props — so the control carries the name too, as a
+          REFERENCE to this element rather than a copy of its text. */}
+      <label id={`${id}-label`} htmlFor={id} className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
         {label}
       </label>
       {children}
@@ -79,6 +83,8 @@ function NumInput({
   return (
     <input
       id={id}
+      // Field renders `<label id={`${id}-label`}>` for this same id.
+      aria-labelledby={`${id}-label`}
       type="number"
       value={value}
       onChange={(e) => onChange(e.target.value)}

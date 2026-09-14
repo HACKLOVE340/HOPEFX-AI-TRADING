@@ -354,8 +354,8 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
       {msg && <div style={msg.type === 'ok' ? s.success : s.error}>{msg.text}</div>}
       <form onSubmit={submit}>
         <div style={s.field}>
-          <label style={s.label}>Title *</label>
-          <input
+          <label id="elitedashboard-title-label" htmlFor="elitedashboard-title" style={s.label}>Title *</label>
+          <input id="elitedashboard-title" aria-labelledby="elitedashboard-title-label"
             style={s.input}
             value={form.title}
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
@@ -380,8 +380,8 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
             </select>
           </div>
           <div>
-            <label style={s.label}>Budget (USD, optional)</label>
-            <input
+            <label id="elitedashboard-budget-usd-optional-label" htmlFor="elitedashboard-budget-usd-optional" style={s.label}>Budget (USD, optional)</label>
+            <input id="elitedashboard-budget-usd-optional" aria-labelledby="elitedashboard-budget-usd-optional-label"
               style={s.input}
               type="number"
               min={0}
@@ -402,8 +402,8 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
             />
           </div>
           <div>
-            <label style={s.label}>Deadline (optional)</label>
-            <input
+            <label id="elitedashboard-deadline-optional-label" htmlFor="elitedashboard-deadline-optional" style={s.label}>Deadline (optional)</label>
+            <input id="elitedashboard-deadline-optional" aria-labelledby="elitedashboard-deadline-optional-label"
               style={s.input}
               type="date"
               value={form.deadline ?? ''}

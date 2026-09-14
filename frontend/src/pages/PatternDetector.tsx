@@ -278,10 +278,10 @@ const PatternDetector: React.FC = () => {
 
           {/* Confidence threshold */}
           <div style={s.controlGroup}>
-            <label style={s.controlLabel}>
+            <label id="patterndetector-min-confidence-label" htmlFor="patterndetector-min-confidence" style={s.controlLabel}>
               Min Confidence: <span style={{ color: '#f1f5f9', fontWeight: 700 }}>{Math.round(minConf * 100)}%</span>
             </label>
-            <input
+            <input id="patterndetector-min-confidence" aria-labelledby="patterndetector-min-confidence-label"
               type="range"
               min={0}
               max={1}

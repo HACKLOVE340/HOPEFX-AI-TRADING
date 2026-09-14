@@ -166,7 +166,14 @@ const FixRow: React.FC<FixRowProps> = ({
     <div style={rowStyle}>
       {/* Row header */}
       <div style={rowHeaderStyle} onClick={onToggle} role="button" tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && onToggle()}>
+        aria-expanded={expanded}
+        aria-label={`Fix for ${fix.endpoint}`}
+        onKeyDown={e => {
+          // Space as well as Enter. A role="button" that ignores Space is not a
+          // button to anyone using a keyboard, and the default Space action on a
+          // focused div is to scroll the page away from the thing they pressed.
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
+        }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
           <span style={{ color: statusColour, fontSize: 10 }}>⬤</span>
           <span style={endpointStyle}>{fix.endpoint}</span>

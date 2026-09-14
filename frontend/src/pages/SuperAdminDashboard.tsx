@@ -121,10 +121,11 @@ const KillSwitchConfirm: React.FC<{
           </div>
         )}
         <div className="bg-terminal-bg border border-terminal-border rounded-lg px-3 py-3 mb-4">
-          <div className="text-slate-500 text-xs mb-2">
+          <div id="sa-confirm-phrase-label" className="text-slate-500 text-xs mb-2">
             Type <strong className={`font-mono ${currentlyActive ? 'text-green-400' : 'text-red-400'}`}>{required}</strong> to confirm:
           </div>
           <input
+            aria-labelledby="sa-confirm-phrase-label"
             autoFocus
             value={typed}
             onChange={e => setTyped(e.target.value)}

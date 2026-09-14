@@ -287,6 +287,7 @@ const GDPRSection: React.FC = () => {
                   <td style={{ padding: '10px 16px' }}>
                     <input
                       type="number" min={1} max={3650}
+                      aria-label={`Retention days for ${p.data_type.replace(/_/g, ' ')}`}
                       value={policyEdits[p.data_type] ?? p.retention_days}
                       onChange={e => setPolicyEdits(prev => ({ ...prev, [p.data_type]: Number(e.target.value) }))}
                       style={{ width: 80, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 8px', fontSize: 13 }}

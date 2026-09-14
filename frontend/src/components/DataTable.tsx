@@ -177,7 +177,10 @@ export function DataTable<T>({
           <tbody>
             {loading ? (
               Array.from({ length: Math.min(pageSize, 5) }).map((_, i) => (
-                <tr key={i}>
+                // Placeholders, not data. Without this a screen reader reads five
+                // rows of nothing and gives no hint that a load is in progress;
+                // aria-busy on the table says that instead.
+                <tr key={i} aria-hidden="true">
                   {columns.map((col) => (
                     <td
                       key={col.key}

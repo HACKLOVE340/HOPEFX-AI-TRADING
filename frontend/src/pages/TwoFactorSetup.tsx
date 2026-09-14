@@ -107,11 +107,18 @@ interface CodeInputProps {
   onChange: (v: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** id of the caller's visible <label>. The name is a reference to it. */
+  labelId?: string;
 }
 
-function CodeInput({ value, onChange, disabled, placeholder = '000000' }: CodeInputProps) {
+function CodeInput({ value, onChange, disabled, placeholder = '000000', labelId }: CodeInputProps) {
   return (
     <input
+      // The name comes from the caller's own visible label. This component is
+      // used twice with DIFFERENT wording ("Enter the 6-digit code from your
+      // app" / "Current TOTP code"), so a name baked in here would contradict
+      // what one of the two users can see (WCAG 2.5.3).
+      aria-labelledby={labelId}
       type="text"
       inputMode="numeric"
       maxLength={6}
@@ -401,8 +408,8 @@ const TwoFactorSetup: React.FC = () => {
             Algorithm: SHA1 · Digits: 6 · Period: 30s
           </div>
 
-          <label style={s.label}>Enter the 6-digit code from your app</label>
-          <CodeInput value={code} onChange={setCode} disabled={loading} />
+          <label id="totp-enroll-code-label" style={s.label}>Enter the 6-digit code from your app</label>
+          <CodeInput value={code} onChange={setCode} disabled={loading} labelId="totp-enroll-code-label" />
           <button
             onClick={handleVerify}
             disabled={loading || code.length !== 6}
@@ -485,8 +492,8 @@ const TwoFactorSetup: React.FC = () => {
             Enter your current authenticator code to disable 2FA. This will remove all
             backup codes and your TOTP secret.
           </p>
-          <label style={s.label}>Current TOTP code</label>
-          <CodeInput value={disableCode} onChange={setDisableCode} disabled={loading} />
+          <label id="totp-disable-code-label" style={s.label}>Current TOTP code</label>
+          <CodeInput value={disableCode} onChange={setDisableCode} disabled={loading} labelId="totp-disable-code-label" />
           <button
             onClick={handleDisable}
             disabled={loading || disableCode.length !== 6}

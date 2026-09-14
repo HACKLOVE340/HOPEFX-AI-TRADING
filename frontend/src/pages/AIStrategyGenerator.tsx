@@ -294,8 +294,8 @@ const AIStrategyGenerator: React.FC = () => {
           </div>
         </div>
 
-        <label style={s.label}>Describe your strategy</label>
-        <textarea
+        <label id="aistrategygenerator-describe-your-strategy-label" htmlFor="aistrategygenerator-describe-your-strategy" style={s.label}>Describe your strategy</label>
+        <textarea id="aistrategygenerator-describe-your-strategy" aria-labelledby="aistrategygenerator-describe-your-strategy-label"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="e.g. Buy gold when RSI drops below 30 and DXY is falling..."

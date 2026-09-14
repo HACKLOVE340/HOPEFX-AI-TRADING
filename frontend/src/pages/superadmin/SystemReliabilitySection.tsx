@@ -353,9 +353,11 @@ const HealthEnginePanel: React.FC = () => {
           <div style={{ padding: '14px 16px', borderRadius: 8, background: '#0f172a', border: '1px solid #334155' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 10 }}>Register Custom HTTP Probe</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-              <input type="text" value={customName} onChange={e => setCustomName(e.target.value)} placeholder="probe-name"
+              <input type="text" value={customName} onChange={e => setCustomName(e.target.value)}
+                aria-label="Probe name" placeholder="probe-name"
                 style={{ flex: 1, minWidth: 120, padding: '7px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 12 }} />
-              <input type="text" value={customUrl} onChange={e => setCustomUrl(e.target.value)} placeholder="https://service/health"
+              <input type="text" value={customUrl} onChange={e => setCustomUrl(e.target.value)}
+                aria-label="Probe health-check URL" placeholder="https://service/health"
                 style={{ flex: 2, minWidth: 200, padding: '7px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 12 }} />
               <Button onClick={registerProbe} disabled={!customName.trim() || !customUrl.trim()} size="sm">Register</Button>
             </div>
@@ -787,8 +789,8 @@ const ValidatePanel: React.FC = () => {
         <ActionBanner message={validateErr} ok={false} onDismiss={() => setValidateErr('')} />
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
-            <input type="text" value={key} onChange={e => setKey(e.target.value)} placeholder="e.g. maintenance_mode"
+            <label id="superadmin-systemreliabilitysect-config-key-label" htmlFor="superadmin-systemreliabilitysect-config-key" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
+            <input id="superadmin-systemreliabilitysect-config-key" aria-labelledby="superadmin-systemreliabilitysect-config-key-label" type="text" value={key} onChange={e => setKey(e.target.value)} placeholder="e.g. maintenance_mode"
               style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }} />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>
@@ -829,13 +831,13 @@ const ValidatePanel: React.FC = () => {
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 160 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
-            <input type="text" value={toggleKey} onChange={e => setToggleKey(e.target.value)} placeholder="e.g. maintenance_mode"
+            <label id="superadmin-systemreliabilitysect-config-key-2-label" htmlFor="superadmin-systemreliabilitysect-config-key-2" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
+            <input id="superadmin-systemreliabilitysect-config-key-2" aria-labelledby="superadmin-systemreliabilitysect-config-key-2-label" type="text" value={toggleKey} onChange={e => setToggleKey(e.target.value)} placeholder="e.g. maintenance_mode"
               style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }} />
           </div>
           <div style={{ flex: 1, minWidth: 120 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Expected Value</label>
-            <input type="text" value={toggleExpected} onChange={e => setToggleExpected(e.target.value)} placeholder="true / false / 42"
+            <label id="superadmin-systemreliabilitysect-expected-value-label" htmlFor="superadmin-systemreliabilitysect-expected-value" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Expected Value</label>
+            <input id="superadmin-systemreliabilitysect-expected-value" aria-labelledby="superadmin-systemreliabilitysect-expected-value-label" type="text" value={toggleExpected} onChange={e => setToggleExpected(e.target.value)} placeholder="true / false / 42"
               style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }} />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>

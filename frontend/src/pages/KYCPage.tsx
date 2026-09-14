@@ -376,7 +376,7 @@ const KYCPage: React.FC = () => {
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
-                          <label style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{doc.label}</label>
+                          <label id={`kyc-doc-${doc.id}-label`} style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{doc.label}</label>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{doc.desc}</div>
                         </div>
                         {isUploaded && (
@@ -388,6 +388,10 @@ const KYCPage: React.FC = () => {
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input
                           type="file"
+                          // Every row's picker is otherwise identical: without the
+                          // document's own title there is no way to tell which
+                          // one you are about to upload a passport into.
+                          aria-labelledby={`kyc-doc-${doc.id}-label`}
                           accept=".jpg,.jpeg,.png,.pdf"
                           ref={el => { fileRefs.current[doc.id] = el; }}
                           onChange={e => { if (e.target.files?.[0]) handleFileSelect(doc.id, e.target.files[0]); }}

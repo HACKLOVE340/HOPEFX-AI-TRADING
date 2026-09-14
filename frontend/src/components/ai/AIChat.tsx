@@ -206,6 +206,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             ref={inputRef}
+            aria-label="Message"
             value={input}
             rows={1}
             onChange={e => setInput(e.target.value)}

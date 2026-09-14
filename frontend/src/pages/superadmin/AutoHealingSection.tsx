@@ -438,6 +438,7 @@ const TestIntelligencePanel: React.FC<{
                         <div
                           role="switch"
                           aria-checked={enabled}
+                          aria-label={`Enable ${cat.label} tests`}
                           tabIndex={0}
                           onClick={() => onChange({ test_categories: { ...cfg.test_categories, [cat.key]: !enabled } })}
                           onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onChange({ test_categories: { ...cfg.test_categories, [cat.key]: !enabled } })}
