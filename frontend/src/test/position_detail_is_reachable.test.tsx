@@ -119,8 +119,15 @@ describe('position detail', () => {
 
   it('offers the pages behind this one as real links', () => {
     renderAt('P-8841');
-    const nav = screen.getByRole('navigation', { name: /related pages/i });
+    // The hand-written list became PageShell's derived footer, so the links
+    // now come from navConfig rather than from four literals in this file —
+    // which is the point: a renamed or retired page cannot leave a dead link
+    // behind here. What must remain true is that there ARE links, that each
+    // is a real route, and that none points back at this page.
+    const nav = screen.getByRole('navigation', { name: /where to next/i });
     const hrefs = [...nav.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    expect(hrefs).toEqual(['/portfolio', '/journal', '/tca', '/performance']);
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) expect(href?.startsWith('/')).toBe(true);
+    expect(hrefs).not.toContain('/positions/P-8841');
   });
 });

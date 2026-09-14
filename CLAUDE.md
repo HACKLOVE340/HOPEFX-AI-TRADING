@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 598 commits and 1,335 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 598 commits and 1,469 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
@@ -48,6 +48,8 @@ is always today's. Everything below is the shape; that command is the state.
 | Which model loaders reach no integrity check at all? | `python scripts/model_provenance_report.py --check` · `docs/MODEL_PROVENANCE_DEBT.json` |
 | Does every ORM table have a migration, or only `create_all()`? | `python scripts/schema_migration_check.py --check` |
 | Which controls have no accessible name? | `cd frontend && npm run lint` · `frontend/a11y-debt.json` |
+| What is the standard page, and which pages are not on it yet? | `frontend/src/components/system/PageShell.tsx` — three widths replace twelve, a consistent header, and a footer that is derived rather than forgotten. `python scripts/frontend_page_shell_ratchet.py --check` · `docs/FRONTEND_PAGE_SHELL_DEBT.json` |
+| Why does every page have a "Where to next" footer now? | `PageSurface` renders one for any page that does not claim the slot, so a page cannot be a dead end. Links come from `frontend/src/lib/related.ts`, derived from navConfig. `npx vitest run src/test/no_page_is_a_dead_end.test.tsx` |
 | Why does the sidebar only show 14 things now? | `frontend/src/components/sidebar/navConfig.ts` — items carry a `hub`, and `frontend/src/pages/Hub.tsx` renders what is behind each one. 61 destinations, nothing removed; `npx vitest run src/test/nav_hub_reachability.test.ts` fails if any becomes unreachable |
 | How is a page's density and palette chosen? | `frontend/src/components/system/PageSurface.tsx` — one table, stamped on every route as `data-density` and `data-surface`. Tiers are `comfortable` / `promax` / `ultra`; AI routes get the instrument palette |
 | How do I retire a colour literal? | `python scripts/frontend_token_codemod.py --check` · `--apply`. Only substitutes literals that are byte-identical to a token, and never inside a canvas or chart-option call — `var()` is resolved by the cascade, and a canvas is not the cascade |

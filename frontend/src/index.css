@@ -44,6 +44,14 @@
     /* Navigation row height. Pro-max on a mouse, thumb-sized on touch — the
        media query below raises it rather than the sidebar guessing which it
        has. A touch target is never traded away for density. */
+    /* Page widths. Three replace the twelve that 74 pages had chosen one at a
+       time — 360, 420, 460, 480, 520, 700, 800, 900, 1100, 1200, 1400, 1500 —
+       and they are picked by what a page IS rather than by what happened to
+       fit. Narrow sits near 65 characters of body text, which is where prose
+       stops being a wall. */
+    --page-wide:     1440px;
+    --page-standard: 1120px;
+    --page-narrow:    760px;
     --nav-row:       32px;
     --sidebar-w:     224px;
     --sidebar-w-collapsed: 60px;

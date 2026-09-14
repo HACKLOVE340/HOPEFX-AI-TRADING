@@ -12,6 +12,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useClaimRelatedSlot } from './system/RelatedContext';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowRight } from 'lucide-react';
 
@@ -26,6 +27,10 @@ export interface RelatedLink {
 export const RelatedPages: React.FC<{ links: RelatedLink[]; title?: string }> = ({
   links, title = 'Where to next',
 }) => {
+  // Tell PageSurface this page handles its own footer, so the derived fallback
+  // stands down. A page that renders no links does NOT claim the slot: it is
+  // still a dead end, and the fallback is exactly what it needs.
+  useClaimRelatedSlot(links.length > 0);
   if (links.length === 0) return null;
   return (
     <nav aria-label={title} className="mt-4">

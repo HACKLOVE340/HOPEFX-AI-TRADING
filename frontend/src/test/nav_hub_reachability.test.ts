@@ -29,7 +29,10 @@ import {
 } from '../components/sidebar/navConfig';
 
 const APP = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
-const HUB_PAGE = readFileSync(resolve(__dirname, '../pages/Hub.tsx'), 'utf8');
+const HUB_PAGE = readFileSync(
+  resolve(__dirname, '../components/sidebar/navDescriptions.ts'),
+  'utf8',
+);
 
 const routePaths = new Set(
   [...APP.matchAll(/path="(\/[^"]*)"/g)].map((m) => m[1]!.split('/:')[0]!),

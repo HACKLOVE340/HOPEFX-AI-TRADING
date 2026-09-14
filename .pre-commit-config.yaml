@@ -310,6 +310,19 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # The frame around the colours. 74 pages had chosen twelve different
+      # widths one at a time, 43 rendered no PageHeader at all, and 40 ended
+      # with no outbound link. PageShell is the standard page; this keeps the
+      # count of pages without it falling, and refuses a NEW page that skips
+      # it -- which is where new inconsistency actually arrives.
+      - id: frontend-page-shell-ratchet
+        name: Pages off the standard shell may only decrease
+        language: system
+        entry: python scripts/frontend_page_shell_ratchet.py --check
+        files: '^(frontend/src/pages/.*\.tsx$|frontend/src/components/system/PageShell\.tsx$|docs/FRONTEND_PAGE_SHELL_DEBT\.json$|scripts/frontend_page_shell_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
       # Same shape, different debt. navConfig.ts records why emoji cannot be
       # icons -- no currentColor, so they ignore theme, hover and disabled
       # state, and a screen reader announces them literally (F170) -- and the

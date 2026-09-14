@@ -915,7 +915,7 @@ Numbers measured 2026-09-08. Re-run `scripts/backlog_report.py` for current ones
 | `GROUP4_CONSTITUTION.md` | Architectural invariants | 21 recorded · **11 not yet AVAILABLE** |
 | `invariants/registry.py` | Do the constitution's cited predicates exist? | 12 named · **12 resolve** ✓ |
 | `scripts/group4_preservation.py` | Has any title from either Group 4 source been dropped? | 304 titles · **0 missing** ✓ |
-| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 34 gates · **34 proven · 0 unproven** ✓ |
+| `scripts/gate_evidence.py` | Which gates have been proven able to fail? | 35 gates · **35 proven · 0 unproven** ✓ |
 
 ### B1. Critical — do these first
 
@@ -2805,7 +2805,7 @@ recognised as patterns.
 ### Measured after
 
     adr.py --check        9 records, all well formed
-    gate_evidence.py      34 gates · 34 proven able to fail · 0 unproven
+    gate_evidence.py      35 gates · 35 proven able to fail · 0 unproven
     docs_registry.py      0 blocking (all nine registered T3, owned)
     docs_freshness.py     0 blocking · doc_metrics 0 drifted
 
@@ -3007,7 +3007,7 @@ one hook type over. Both types are installed now.
 
     change_records                                42 tests
     change-record gate injections                 15 tests
-    gate_evidence.py                              34 gates · 34 proven · 0 unproven
+    gate_evidence.py                              35 gates · 35 proven · 0 unproven
     adr.py --check                                11 records, all well formed
     docs_registry / docs_freshness / doc_metrics  0 blocking · 0 drifted
 
@@ -3072,9 +3072,9 @@ item 14 is *tier the six dated audits*, and a seventh would grow the debt.
 ### What the instruments said
 
     backend tests        21,732 pass · 0 fail · 30 skipped
-    frontend tests        2,645 pass · 0 fail  (136 files)
+    frontend tests        2,809 pass · 0 fail  (154 files)
     CI gates                 14 of 14 pass
-    gate evidence            34 gates · 34 proven able to fail · 0 unproven
+    gate evidence            35 gates · 35 proven able to fail · 0 unproven
     security analyzer         0 findings
     invariant predicates    339 across 34 modules
     spec capabilities       233 rows · 233 live · 0 staged
@@ -3205,9 +3205,18 @@ that one fact:
 
 **Closed this session:** `scripts/frontend_colour_ratchet.py` +
 `docs/FRONTEND_COLOUR_DEBT.json`, wired into pre-commit and registered in
-`GATE_EVIDENCE.toml` (34 gates, 34 proven). The count may now only fall. The
-codemod that would actually revive the three features is **owner's call** — see
-§A.
+`GATE_EVIDENCE.toml` (35 gates, 35 proven). The count may now only fall.
+
+**The codemod was the owner's call and the owner made it, 2026-09-14.**
+`scripts/frontend_token_codemod.py` retired 2,628 literals across 169 files —
+every one byte-identical to a token, so nothing moved a shade in dark while the
+light theme and the AI surface became reachable for all of them. 7,992 ->
+5,355. It refuses to touch a canvas or chart-option call site, because `var()`
+is resolved by the cascade and a canvas is not the cascade. Colours merely
+*similar* to a token are still untouched and still owner's call: `#1e293b`
+(569), `#334155` (532), `#475569` (441), `#0f172a` (306), `#3b82f6` (266) are
+each doing more than one job, and picking a role for them is a decision per
+call site rather than a substitution.
 
 ### The tests verify manifests the deployer does not use (DEPLOY-CHART, KS-SELFHEAL)
 
@@ -5429,7 +5438,7 @@ run, not a recollection.
 | Group 2 platform gaps | 19 outstanding (3 struck through) |
 | Group 3 knowledge gaps | 6 outstanding (8 struck through) |
 | Group 4 invariants | 21 recorded · **11 not yet AVAILABLE** |
-| Safety gates | 34 gates · 34 proven able to fail · **0 unproven** |
+| Safety gates | 35 gates · 35 proven able to fail · **0 unproven** |
 | Coverage debt | 365 modules recorded |
 | Owner decisions | §A1 (RPO/RTO), §A4, §A5, plus three opened this session |
 

@@ -24,13 +24,12 @@
 
 import React, { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Coins, LineChart, Receipt, Wallet } from 'lucide-react';
+import { ArrowLeft, Coins } from 'lucide-react';
 
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { EmptyState } from '../components/EmptyState';
 import { Surface, SurfaceBody } from '../components/system/Surface';
 import { KeyValue, MetricStrip, Tag, toneOf } from '../components/system/Data';
-import { SubPageGrid } from '../components/system/SubPageGrid';
 import { useStore, selectPositions } from '../store';
 import { fmtPnl, fmtPrice, fmtRelative, fmtDateTime, positionSide } from '../lib/utils';
 import { bracketProgress, distanceTo, riskReward } from '../lib/position_math';
@@ -89,33 +88,6 @@ const BracketLadder: React.FC<{
   );
 };
 
-const RELATED = [
-  {
-    to: '/portfolio',
-    title: 'Portfolio',
-    description: 'Every open position, exposure and allocation in one book.',
-    icon: Wallet,
-  },
-  {
-    to: '/journal',
-    title: 'Trade journal',
-    description: 'What you intended, what happened, and the gap between them.',
-    icon: BookOpen,
-  },
-  {
-    to: '/tca',
-    title: 'Execution quality',
-    description: 'Slippage, spread and commission against the price you expected.',
-    icon: Receipt,
-  },
-  {
-    to: '/performance',
-    title: 'Performance',
-    description: 'Win rate, drawdown and risk-adjusted return over time.',
-    icon: LineChart,
-  },
-] as const;
-
 const PositionDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -138,8 +110,7 @@ const PositionDetail: React.FC = () => {
 
   if (!position) {
     return (
-      <div className="flex flex-col gap-grid p-card">
-        <PageHeader title="Position" breadcrumbs={crumbs} />
+      <PageShell title="Position" width="standard" breadcrumbs={crumbs}>
         <Surface>
           <EmptyState
             icon={Coins}
@@ -155,7 +126,7 @@ const PositionDetail: React.FC = () => {
             ]}
           />
         </Surface>
-      </div>
+      </PageShell>
     );
   }
 
@@ -165,9 +136,9 @@ const PositionDetail: React.FC = () => {
     });
 
   return (
-    <div className="flex flex-col gap-grid p-card">
-      <PageHeader
-        title={position.symbol}
+    <PageShell
+      width="wide"
+      title={position.symbol}
         subtitle={`${side ? side.toUpperCase() : 'Position'} · opened ${fmtRelative(position.opened_at)}`}
         breadcrumbs={crumbs}
         badge={<Tag tone={side === 'short' ? 'loss' : 'gain'}>{side ?? 'unknown'}</Tag>}
@@ -195,8 +166,7 @@ const PositionDetail: React.FC = () => {
             </button>
           </div>
         }
-      />
-
+      >
       {/* The figure the page is about, and immediately what it cost to get it. */}
       <Surface tone="raised">
         <div className="flex flex-wrap items-start justify-between gap-s4 p-card">
@@ -297,12 +267,7 @@ const PositionDetail: React.FC = () => {
         </Surface>
       </div>
 
-      <Surface title="Where to next" titleId="pd-next" tone="quiet">
-        <SurfaceBody>
-          <SubPageGrid items={RELATED} label="Related pages" />
-        </SurfaceBody>
-      </Surface>
-    </div>
+    </PageShell>
   );
 };
 
