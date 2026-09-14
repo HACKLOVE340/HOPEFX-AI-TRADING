@@ -50,6 +50,22 @@ ON_SHELL = "import { PageShell } from '../components/system/PageShell';\nexport 
 OFF_SHELL = "export default function P() { return null; }\n"
 
 
+#: A router that mounts three of the four files below. `Panel` is deliberately
+#: absent: it stands for the `settings/*Section` and `superadmin/*Section`
+#: files, which render inside another page and must never be measured as pages.
+APP = """
+const Alpha = lazy(() => import('./pages/Alpha'));
+const Beta  = lazy(() => import('./pages/Beta'));
+const Gamma = lazy(() => import('./pages/Gamma'));
+"""
+
+
+def _router(root: Path, source: str = APP) -> None:
+    app = root / "frontend" / "src"
+    app.mkdir(parents=True, exist_ok=True)
+    (app / "App.tsx").write_text(source, encoding="utf-8")
+
+
 @pytest.fixture()
 def tree(tmp_path: Path):
     pages = tmp_path / "pages"
@@ -57,7 +73,46 @@ def tree(tmp_path: Path):
     (pages / "Alpha.tsx").write_text(OFF_SHELL, encoding="utf-8")
     (pages / "Beta.tsx").write_text(OFF_SHELL, encoding="utf-8")
     (pages / "Gamma.tsx").write_text(ON_SHELL, encoding="utf-8")
+    # Off the shell AND not routed — a panel. It must not be counted.
+    (pages / "Panel.tsx").write_text(OFF_SHELL, encoding="utf-8")
+    _router(tmp_path)
     return pages, tmp_path / "record.json"
+
+
+def test_a_file_that_is_not_routed_is_not_a_page(tree):
+    """Half the recorded debt was never a page.
+
+    Measured on the real tree 2026-09-14: of 80 files reported as pages off the
+    shell, 40 were `settings/*Section` or `superadmin/*Section` panels and two
+    were component libraries. NONE is mounted on a `<Route>` — `Settings.tsx`
+    alone renders 40 of them as tab content — so putting one on the shell would
+    give a tab panel its own page header, a second width constraint inside an
+    already-constrained page, and a "Where to next" footer in the middle of it.
+
+    The figure could therefore be improved by making the interface worse, which
+    is the shape this repository calls a dead control. A page is what the router
+    mounts.
+    """
+    pages, record = tree
+    mod = _load(pages, record)
+    measured = mod.measure()
+    assert "pages/Panel.tsx" not in measured, "a file the router never mounts was counted as a page off the shell"
+    assert sorted(measured) == ["pages/Alpha.tsx", "pages/Beta.tsx"], measured
+
+
+def test_it_refuses_to_report_a_figure_when_it_can_find_no_router(tmp_path: Path):
+    """A scan that matches nothing agrees with every assertion.
+
+    With no App.tsx the routed set is empty, and "no page is off the shell" and
+    "the scan broke" would render identically — as success.
+    """
+    pages = tmp_path / "pages"
+    pages.mkdir()
+    (pages / "Alpha.tsx").write_text(OFF_SHELL, encoding="utf-8")
+    mod = _load(pages, tmp_path / "record.json")
+    with pytest.raises(SystemExit) as exc:
+        mod.measure()
+    assert "named no page modules" in str(exc.value)
 
 
 def test_records_only_the_pages_that_are_off_the_shell(tree):
@@ -74,7 +129,16 @@ def test_refuses_a_new_page_that_skips_the_shell(tree):
     mod = _load(pages, record)
     mod.save(mod.measure())
 
+    # A file that exists but is not mounted is not a page yet, so it is not
+    # counted — and nothing is lost by that, because the gate catches it the
+    # moment it becomes one. Both halves are asserted, because "not counted"
+    # would otherwise be indistinguishable from a hole.
     (pages / "Delta.tsx").write_text(OFF_SHELL, encoding="utf-8")
+    assert "pages/Delta.tsx" not in mod.measure(), (
+        "a file the router does not mount is not a page; counting it is what let 40 tab panels into this record"
+    )
+
+    _router(pages.parent, APP + "const Delta = lazy(() => import('./pages/Delta'));\n")
     now, recorded = mod.measure(), mod.load()
     arrived = set(now) - set(recorded)
     assert arrived == {"pages/Delta.tsx"}, "a brand-new page off the shell must be refused, not absorbed"
@@ -119,7 +183,23 @@ def test_the_real_record_describes_a_real_tree():
     record = json.loads((REPO / "docs" / "FRONTEND_PAGE_SHELL_DEBT.json").read_text(encoding="utf-8"))
     files = record["files"]
     assert record["_total"] == len(files)
-    assert len(files) > 40, "too few pages recorded — the scan probably matched nothing"
+
+    # The floor belongs on the POPULATION, not on the debt.
+    #
+    # It read `len(files) > 40` — a floor on how much work is left, which holds
+    # only until the work succeeds. It broke the moment the scan was corrected
+    # to count routed pages instead of every file under `pages/` (80 -> 38), and
+    # it would break again on the day the last page is migrated, reporting a
+    # finished job as a broken scanner. What actually distinguishes "nothing is
+    # wrong" from "nothing was measured" is whether the scan found any pages AT
+    # ALL, so that is what is asserted.
+    spec = importlib.util.spec_from_file_location("page_shell_real", SCRIPT)
+    assert spec and spec.loader
+    live = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(live)
+    routed = live._routed_pages()
+    assert len(routed) > 50, f"the router names only {len(routed)} page modules — the scan is broken, or App.tsx moved"
+    assert len(files) <= len(routed), "more pages recorded than the router mounts"
     for rel in files:
         assert (REPO / rel).exists(), f"{rel} is recorded but does not exist"
         assert "PageShell" not in (REPO / rel).read_text(encoding="utf-8"), (

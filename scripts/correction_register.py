@@ -1035,13 +1035,24 @@ def _p_a8() -> tuple[str, str]:
     import json
 
     d = ROOT / "ml" / "saved_models"
-    manifest = d / "model_checksums.json"
-    if not manifest.exists():
-        return UNVERIFIED, "model_checksums.json not found"
+    # Through the module's own reader, not Path.read_text.
+    #
+    # Reading the file directly made this probe the one thing in the register
+    # that `test_no_probe_reports_fixed_when_it_scanned_nothing` could not
+    # starve: with every reader stubbed out it still opened the real manifest,
+    # found eleven matching artifacts and reported FIXED — a clean answer from
+    # a scan that, by the test's construction, had matched nothing. That is the
+    # shape the test exists to catch, and it was catching it: this assertion has
+    # been red since before 2026-09-14.
+    raw = _read("ml/saved_models/model_checksums.json")
+    if not raw.strip():
+        return UNVERIFIED, "model_checksums.json is absent or unreadable — nothing was measured"
     try:
-        stored = json.loads(manifest.read_text())
+        stored = json.loads(raw)
     except Exception as exc:
         return OPEN, f"manifest unparseable: {exc}"
+    if not stored:
+        return UNVERIFIED, "model_checksums.json lists no artifact — nothing to verify"
 
     mismatch, absent = [], []
     for name, want in sorted(stored.items()):

@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -61,8 +62,35 @@ REPO = Path(__file__).resolve().parent.parent
 PAGES = REPO / "frontend" / "src" / "pages"
 RECORD = REPO / "docs" / "FRONTEND_PAGE_SHELL_DEBT.json"
 
-# Not pages in the sense this measures: they render inside another page's
-# frame, or they are a full-bleed surface with no header by design.
+
+# A page is a file the ROUTER mounts. Everything else under `pages/` renders
+# inside another page's frame, and putting it on the shell would be the wrong
+# change: a section rendered as a tab of Settings would gain a second page
+# header, a second width constraint inside an already-constrained page, and a
+# "Where to next" footer in the middle of a tab panel.
+#
+# This used to be a hand-typed list of eight names, and the list could not keep
+# up. Measured 2026-09-14: of the 80 files it reported as pages off the shell,
+# 40 were `settings/*Section` or `superadmin/*Section` panels and two were
+# component libraries (`settings/ui.tsx`, `superadmin/ui.tsx`). ZERO of them
+# are mounted on a `<Route>`; `Settings.tsx` alone renders 40 of them as tab
+# content. So half the debt was not debt, and — the part that matters — the
+# number could be improved by making the UI worse. A gate whose figure rewards
+# the wrong change is the shape this repository calls a dead control.
+def _routed_pages() -> set[str]:
+    """Page modules reachable from a `<Route>`, read from App.tsx."""
+    # Resolved from REPO at call time, not bound at import: the tests point REPO
+    # at a throwaway tree, and a module-level path would keep reading this one.
+    app = REPO / "frontend" / "src" / "App.tsx"
+    text = app.read_text(encoding="utf-8") if app.exists() else ""
+    # `const X = lazy(() => import('./pages/Foo'))` and plain imports alike.
+    mods = set(re.findall(r"import\(\s*['\"]\./pages/([\w/]+)['\"]\s*\)", text))
+    mods |= set(re.findall(r"from\s+['\"]\./pages/([\w/]+)['\"]", text))
+    return {m.split("/")[-1] for m in mods}
+
+
+# Routed, but deliberately not on the shell: a full-bleed surface, or a page
+# where a breadcrumb and a "where to next" footer would be wrong.
 EXEMPT = {
     "NotFound.tsx",  # a bare message; a breadcrumb to nowhere is worse
     "LandingPage.tsx",  # marketing, full-bleed, its own composition
@@ -84,9 +112,19 @@ def measure() -> dict[str, int]:
     set, kept in the same shape as the other ratchets' records so the same
     tooling reads it."""
     out: dict[str, int] = {}
+    routed = _routed_pages()
+    if not routed:
+        # A scan that matches nothing agrees with every assertion. Refuse rather
+        # than report zero pages off the shell.
+        raise SystemExit(
+            "frontend_page_shell_ratchet: App.tsx named no page modules — the scan is "
+            "wrong, or the router moved. Refusing to report a figure."
+        )
     for path in sorted(PAGES.rglob("*.tsx")):
         if path.name in EXEMPT or path.name.endswith(".test.tsx"):
             continue
+        if path.stem not in routed:
+            continue  # renders inside another page's frame; see _routed_pages
         rel = path.relative_to(REPO).as_posix()
         if not _on_shell(path.read_text(encoding="utf-8")):
             out[rel] = 1
@@ -129,7 +167,17 @@ def main() -> int:
 
     now = measure()
     recorded = load()
-    total_pages = len([p for p in PAGES.rglob("*.tsx") if p.name not in EXEMPT])
+    # The denominator is the same population the numerator measures: routed
+    # pages. Counting every file under `pages/` made the ratio flatter than the
+    # truth by including 40 panels that must never be on the shell.
+    _routed = _routed_pages()
+    total_pages = len(
+        [
+            p
+            for p in PAGES.rglob("*.tsx")
+            if p.name not in EXEMPT and not p.name.endswith(".test.tsx") and p.stem in _routed
+        ]
+    )
 
     if args.adopt or not recorded:
         save(now)

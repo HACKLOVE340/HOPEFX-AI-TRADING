@@ -14,6 +14,15 @@
  * That is what "the pages aren't standard" means, precisely. Tokens fixed the
  * colours; this fixes the frame around them.
  *
+ * Those three counts are real but were taken over every file under `pages/`,
+ * which is 74 files and 66 pages: the difference is `settings/*Section` and
+ * `superadmin/*Section`, which render as tab content inside Settings and
+ * SuperAdminDashboard and must NEVER be on this shell — a panel with its own
+ * page header, its own width and a "Where to next" footer in the middle of a
+ * tab is worse than one without. `scripts/frontend_page_shell_ratchet.py` now
+ * scopes itself to what the router mounts and reports 38 of 66 off the shell;
+ * it read 80 of 108 while counting panels as pages.
+ *
  * Three widths replace twelve, and they are chosen by what the page IS rather
  * than by how much happened to fit:
  *
