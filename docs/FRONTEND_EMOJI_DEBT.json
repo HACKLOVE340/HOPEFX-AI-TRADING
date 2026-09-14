@@ -1,16 +1,14 @@
 {
  "_comment": "Emoji per file in frontend/src. This number may only fall. See scripts/frontend_emoji_ratchet.py for why emoji cannot serve as icons, and for the rule that a file reaching zero must be DELETED from this list rather than left at 0 \u2014 an entry describing nothing is how a ratchet stops being one.",
- "_total": 756,
+ "_total": 754,
  "files": {
   "frontend/src/App.tsx": 1,
   "frontend/src/components/ActionBanner.tsx": 1,
-  "frontend/src/components/AdminGuard.tsx": 1,
   "frontend/src/components/AuthGuard.tsx": 1,
   "frontend/src/components/ConfirmDialog.tsx": 3,
   "frontend/src/components/ErrorBanner.tsx": 3,
   "frontend/src/components/FixApprovalQueue.tsx": 2,
   "frontend/src/components/Modal.tsx": 1,
-  "frontend/src/components/SubscriptionGate.tsx": 1,
   "frontend/src/components/SuperAdminGuard.tsx": 1,
   "frontend/src/components/ThemeToggle.tsx": 2,
   "frontend/src/components/Toast.tsx": 2,

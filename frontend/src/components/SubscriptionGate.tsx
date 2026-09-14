@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, selectUser, selectPlan } from '../store';
 import { hasFeatureAccess, PLAN_LABELS, PLAN_COLORS, requiredPlan } from '../lib/subscription';
@@ -25,7 +26,7 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
   if (!user) {
     return (
       <div style={{
-        minHeight: '60vh', display: 'flex', alignItems: 'center',
+        minHeight: '60vh', flex: '1 0 auto', display: 'flex', alignItems: 'center',
         justifyContent: 'center', background: 'var(--surface)',
       }}>
         <div style={{
@@ -48,7 +49,7 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
 
   return (
     <div style={{
-      minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: '60vh', flex: '1 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'var(--surface)', padding: 40,
     }}>
       <div style={{
@@ -62,7 +63,7 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           margin: '0 auto 20px', fontSize: 24,
         }}>
-          🔒
+          <Lock size={26} strokeWidth={1.75} aria-hidden />
         </div>
 
         <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' }}>

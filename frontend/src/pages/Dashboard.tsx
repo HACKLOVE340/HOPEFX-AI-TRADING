@@ -14,12 +14,13 @@
  *   - ML model accuracy card
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowRight, BarChart3, BookOpen, Brain, Briefcase, Calculator, Calendar, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
-import { PageHeader, EmptyState, CrossLinkBar, Spinner, RelatedPages } from '../components';
+import { EmptyState, CrossLinkBar, Spinner } from '../components';
 import { RiskHeadroomPanel } from '../components/system/RiskHeadroomPanel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { DataAge } from '../components/ui/DataAge';
@@ -795,14 +796,13 @@ const Dashboard: React.FC = () => {
   const acc = account;
 
   return (
-    <div className="page-content fade-in">
-      <PageHeader
-        title="Dashboard"
-        subtitle="Real-time trading overview"
-        icon={BarChart3}
-        breadcrumbs={[{ label: "Dashboard" }]}
-        badge={<WsBadge />}
-        actions={
+    <PageShell
+      title="Dashboard"
+      subtitle="Real-time trading overview"
+      icon={BarChart3}
+      breadcrumbs={[{ label: "Dashboard" }]}
+      badge={<WsBadge />}
+      actions={
           <Link
             to="/trade"
             className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
@@ -817,7 +817,16 @@ const Dashboard: React.FC = () => {
             <Zap size={15} strokeWidth={2} aria-hidden /> New trade
           </Link>
         }
-      />
+      width="standard" related={[
+          { to: '/trade',           label: 'Trading ticket',  hint: 'Place or close an order',            icon: Zap },
+          { to: '/portfolio',       label: 'Portfolio',       hint: 'Every position and its allocation',  icon: Briefcase },
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',          icon: LineChart },
+          { to: '/journal',         label: 'Trade journal',   hint: 'The trades behind these numbers',    icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade',                icon: Shield },
+          { to: '/signals',         label: 'Signal feed',     hint: 'What the model sees right now',      icon: Radar },
+        ]}
+    >
+
 
       <PriceTicker />
 
@@ -964,17 +973,8 @@ const Dashboard: React.FC = () => {
         { label: 'Leaderboard',     href: '/leaderboard',      icon: Trophy, color: '#fbbf24' },
         { label: 'Performance',     href: '/performance',      icon: BarChart3, color: '#22c55e' },
       ]} />
-      <RelatedPages
-        links={[
-          { to: '/trade',           label: 'Trading ticket',  hint: 'Place or close an order',            icon: Zap },
-          { to: '/portfolio',       label: 'Portfolio',       hint: 'Every position and its allocation',  icon: Briefcase },
-          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',          icon: LineChart },
-          { to: '/journal',         label: 'Trade journal',   hint: 'The trades behind these numbers',    icon: BookOpen },
-          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade',                icon: Shield },
-          { to: '/signals',         label: 'Signal feed',     hint: 'What the model sees right now',      icon: Radar },
-        ]}
-      />
-    </div>
+
+    </PageShell>
   );
 };
 

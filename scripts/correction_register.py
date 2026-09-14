@@ -2775,6 +2775,51 @@ S_DOC = "doc-freshness-review"
 # ── Frontend correctness, found by driving the app rather than reading it ───
 
 
+def _p_shell_fills_scroller() -> tuple[str, str]:
+    """PageShell grows to fill `.app-shell-scroller`, as `.page-content` did.
+
+    Probed from the source rather than declared: the class it replaced is
+    `flex: 1 0 auto` in index.css, and a shell without an equivalent rule takes
+    the initial `flex: 0 1 auto` and stops where its content stops.
+    """
+    text = _read("frontend/src/components/system/PageShell.tsx")
+    if not text:
+        return UNVERIFIED, "PageShell.tsx is not readable"
+    css = _read("frontend/src/index.css")
+    if "flex: 1 0 auto" not in css:
+        return UNVERIFIED, "index.css no longer states .page-content's flex rule — re-measure"
+    # Read the className template, not the file. A whole-file substring search
+    # reported FIXED against a tree with the class REMOVED, because the comment
+    # explaining the class names it — the same defect as F255, where the nan_leak
+    # rule scanned docstrings as source. Proven by injection: strip the utility
+    # and this must say OPEN.
+    m = re.search(r"className=\{`([^`]*)`\}", text)
+    if not m:
+        return UNVERIFIED, "PageShell's className is no longer one template literal — re-measure"
+    classes = m.group(1).split()
+    if "flex-[1_0_auto]" not in classes:
+        return OPEN, "PageShell sets no grow rule, so a short page leaves bare scroller under it"
+    if "flex-1" in classes:
+        return OPEN, "PageShell uses flex-1 (1 1 0%), the clamp index.css records as trapping tall content"
+    return FIXED, "PageShell's className carries flex-[1_0_auto], matching the .page-content it replaced"
+
+
+def _p_refusal_not_failure() -> tuple[str, str]:
+    """A 403 from the admin-only capability surface is not reported as an outage."""
+    text = _read("frontend/src/hub/PresenceAnywhereMount.tsx")
+    app = _read("frontend/src/App.tsx")
+    core = _read("api/ai_core.py")
+    if not text or not app or not core:
+        return UNVERIFIED, "one of PresenceAnywhereMount.tsx / App.tsx / api/ai_core.py is not readable"
+    if "<PresenceAnywhereMount />" not in app:
+        return UNVERIFIED, "the mount moved — re-measure who renders it before trusting this row"
+    if '_VIEWER_ROLE = "admin"' not in core:
+        return UNVERIFIED, "ai_core's viewer role changed; the premise of this finding no longer holds"
+    if "response.status === 403" not in text:
+        return OPEN, "every non-admin is told the platform failed, on every page, for a refusal by design"
+    return FIXED, "a 403 renders an empty surface; a timeout or 500 is still reported"
+
+
 def _p_link_dup_key() -> tuple[str, str]:
     """A link list keyed by destination duplicates one of its links.
 
@@ -2874,6 +2919,53 @@ def _p_field_has_no_label() -> tuple[str, str]:
 
 
 FINDINGS: list[Finding] = [
+    Finding(
+        "SHELL-NO-GROW",
+        "The standard page stopped where its content stopped",
+        "P2",
+        "Frontend",
+        "This session, 2026-09-14 — found by measuring migrated pages against legacy ones in Chromium",
+        "`PageShell` replaced `.page-content` without the one layout rule that class carried: "
+        "`flex: 1 0 auto` inside `.app-shell-scroller`, which is a flex column. With no flex "
+        "rule the shell took the initial `flex: 0 1 auto`, so a page shorter than the viewport "
+        "ended at its content and left bare scroller beneath it. Measured at 1440x900 in a "
+        "900px scroller: /observability 540, /support 560, /transparency 701 against /portfolio "
+        "2074, /dashboard 2066 and every other unmigrated page filling. Nothing was clipped — a "
+        "flex item's `min-height: auto` floors it at its content height, and /academy (1459) and "
+        "/chat (2927) were measured rendering at natural height and scrolling — so this was "
+        "invisible to every test and to a screenshot of a long page. The fix is `flex-[1_0_auto]` "
+        "and deliberately NOT `flex-1`: that is `1 1 0%`, which index.css records as having "
+        "clamped every page to the viewport and trapped taller content.",
+        "frontend/src/test/page_shell_fills_the_scroller.test.tsx — red on the pre-fix tree. "
+        "jsdom computes no flex layout, so the test holds the class contract and the browser "
+        "measurement is the execution proof; both are recorded.",
+        "npx vitest run src/test/page_shell_fills_the_scroller.test.tsx",
+        _p_shell_fills_scroller,
+        [S_TDD, S_VBC],
+    ),
+    Finding(
+        "REFUSAL-AS-FAILURE",
+        "Every non-admin was told the platform had failed, on every page",
+        "P1",
+        "Frontend",
+        "This session, 2026-09-14 — found by capturing HTTP status while driving migrated routes",
+        "`PresenceAnywhereMount` is rendered for EVERY authenticated user (`{isAuth && "
+        "<PresenceAnywhereMount />}` in App.tsx) and fetches `/api/ai-core/capabilities/app`, "
+        'which is `Depends(_viewer)` with `_VIEWER_ROLE = "admin"`. So for every non-admin the '
+        "request is refused by design — and the component treated the refusal as a load failure, "
+        'rendering a permanent amber "I could not load what I am allowed to do here (Error: HTTP '
+        '403)." to a user for whom nothing was broken. Ruled out a credential fault by execution '
+        "first: signed in as a trader in Chromium, /api/auth/me returned 200 over the same cookie, "
+        'so the platform answered and the answer was "not you". A 403 now renders an empty '
+        'surface and the honest "Nothing on this page is exposed to me"; 401, timeouts and 5xx '
+        "are still reported, because those really are unloaded.",
+        "frontend/src/test/a_refusal_is_not_a_failure.test.tsx — two tests, held apart so that "
+        '"swallow the error" cannot pass. The first draft asserted on the COLLAPSED overlay and '
+        "found the message in neither case, so the 403 test passed while measuring nothing.",
+        "npx vitest run src/test/a_refusal_is_not_a_failure.test.tsx",
+        _p_refusal_not_failure,
+        [S_TDD, S_VBC, S_DEAD],
+    ),
     # ── Frontend correctness ───────────────────────────────────────────────
     Finding(
         "LINK-DUP-KEY",

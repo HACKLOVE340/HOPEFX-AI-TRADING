@@ -13,7 +13,9 @@
  *
  * - a thrown hook or a failed fetch leaves the overlay out entirely rather than
  *   rendering a confident "standing by" over a page it cannot see;
- * - a surface it could not load is reported as unloaded, not as an empty one.
+ * - a surface it could not load is reported as unloaded, not as an empty one;
+ *   a surface the platform REFUSED (403) is loaded and empty, not unloaded —
+ *   see the fetch below.
  *   "Nothing on this page is exposed to me" and "I could not find out" are
  *   different sentences, and only one of them is true when a request 500s.
  *
@@ -81,6 +83,22 @@ export function PresenceAnywhereMount(): React.ReactElement | null {
     (async () => {
       try {
         const response = await fetch(SURFACE_URL, { credentials: 'include' });
+        // A refusal is an answer. `/api/ai-core/capabilities/app` is
+        // `Depends(_viewer)` and `_VIEWER_ROLE = "admin"`, while this mount is
+        // rendered for EVERY authenticated user (`{isAuth && <PresenceAnywhereMount />}`
+        // in App.tsx). So a 403 here is the ordinary case, not an outage, and
+        // reporting it as one put a permanent amber "I could not load what I am
+        // allowed to do here (Error: HTTP 403)" in front of every non-admin on
+        // every page, for something that was working exactly as designed.
+        // Verified in Chromium signed in as a trader: /api/auth/me returned 200
+        // over the same cookie, so the platform answered, and the answer was
+        // "not you". An empty surface is that answer, stated honestly.
+        if (response.status === 403) {
+          if (!live) return;
+          setSurface([]);
+          setSurfaceReason('');
+          return;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const body = await response.json();
         if (!live) return;
@@ -88,9 +106,9 @@ export function PresenceAnywhereMount(): React.ReactElement | null {
         setSurfaceReason('');
       } catch (error) {
         if (!live) return;
-        // Reported, not swallowed into an empty list: an operator told
-        // "nothing here is exposed to me" would believe the platform, not the
-        // network.
+        // Everything else IS reported, not swallowed into an empty list: an
+        // operator told "nothing here is exposed to me" after a timeout or a
+        // 500 would believe the platform, not the network.
         setSurface(null);
         setSurfaceReason(`I could not load what I am allowed to do here (${String(error)}).`);
       }

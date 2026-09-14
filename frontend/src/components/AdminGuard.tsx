@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, selectUser, selectIsAuth } from '../store';
 import { isAdmin } from '../lib/subscription';
@@ -29,7 +30,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
   if (isAuth && !user) {
     return (
       <div style={{
-        minHeight: '60vh', display: 'flex', alignItems: 'center',
+        minHeight: '60vh', flex: '1 0 auto', display: 'flex', alignItems: 'center',
         justifyContent: 'center', background: 'var(--surface)',
       }}>
         <div style={{
@@ -46,7 +47,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
 
   return (
     <div style={{
-      minHeight: '60vh', display: 'flex', alignItems: 'center',
+      minHeight: '60vh', flex: '1 0 auto', display: 'flex', alignItems: 'center',
       justifyContent: 'center', background: 'var(--surface)', padding: 40,
     }}>
       <div style={{
@@ -60,7 +61,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           margin: '0 auto 20px', fontSize: 26,
         }}>
-          🛡️
+          <ShieldAlert size={26} strokeWidth={1.75} aria-hidden />
         </div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' }}>
           Admin access required

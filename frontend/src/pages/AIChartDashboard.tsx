@@ -14,10 +14,10 @@
  *   - tradingApi.regime() + brainState() for the header strip
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { RelatedPages } from '../components';
 import {
   Sparkles, Brain, Radar, ScanSearch, Cpu,
 
@@ -225,12 +225,18 @@ export default function AIChartDashboard() {
   const [timeframe, setTimeframe] = useState<TF>('1h');
 
   return (
-    <div className="page-content" style={{ flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+    <PageShell title="AI Chart Dashboard" width="standard" related={[
+          { to: '/ai-chart', label: 'AI chart bot', hint: 'Single-symbol deep analysis', icon: Brain },
+          { to: '/pattern-detector', label: 'Pattern detector', hint: 'Named chart patterns', icon: ScanSearch },
+          { to: '/trade', label: 'Trading ticket', hint: 'Act on what you see', icon: Cpu },
+          { to: '/watchlist', label: 'Watchlist', hint: 'Instruments you follow', icon: Radar },
+          { to: '/signals', label: 'Signal feed', hint: 'Model output per symbol', icon: Sparkles },
+        ]}>
 
       {/* ── Top bar ────────────────────────────────────────────────── */}
       <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a0f1a] border-b border-[var(--border)] shrink-0">
         <div>
-          <h1 className="text-[14px] font-bold text-slate-100 leading-tight">AI Chart Dashboard</h1>
+
           <p className="text-[11px] text-slate-500">Multi-symbol AI analysis</p>
         </div>
         <div className="flex-1" />
@@ -282,16 +288,8 @@ export default function AIChartDashboard() {
           ))}
         </div>
       </div>
-      <RelatedPages
-        links={[
-          { to: '/ai-chart', label: 'AI chart bot', hint: 'Single-symbol deep analysis', icon: Brain },
-          { to: '/pattern-detector', label: 'Pattern detector', hint: 'Named chart patterns', icon: ScanSearch },
-          { to: '/trade', label: 'Trading ticket', hint: 'Act on what you see', icon: Cpu },
-          { to: '/watchlist', label: 'Watchlist', hint: 'Instruments you follow', icon: Radar },
-          { to: '/signals', label: 'Signal feed', hint: 'Model output per symbol', icon: Sparkles },
-        ]}
-      />
 
-    </div>
+
+    </PageShell>
   );
 }

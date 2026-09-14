@@ -19,13 +19,13 @@
  *   DELETE /api/trading/positions
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'react-router-dom';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
-import { PageHeader } from '../components';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot, selectFeedLive } from '../store';
 
@@ -531,17 +531,15 @@ const Trade: React.FC = () => {
   }, []);
 
   return (
-    <div className="page-content gap-3 sm:gap-4 fade-in">
-
-      <PageHeader
-        title="Trade"
-        icon={CandlestickChart}
-        subtitle="Real-time execution — market, limit and stop orders"
-        breadcrumbs={[
+    <PageShell
+      title="Trade"
+      icon={CandlestickChart}
+      subtitle="Real-time execution — market, limit and stop orders"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Trade' },
         ]}
-        actions={
+      actions={
           <div className="flex flex-wrap items-center gap-1.5">
             <Link
               to="/watchlist"
@@ -573,7 +571,10 @@ const Trade: React.FC = () => {
             </button>
           </div>
         }
-      />
+      width="standard"
+    >
+
+
 
       {/* Broker readiness banner — shown only when broker is still starting */}
       <BrokerStatusBanner />
@@ -633,7 +634,7 @@ const Trade: React.FC = () => {
       <BottomSection />
 
       <CrossLinkBar links={TRADE_CROSS_LINKS} title="Related" style={{ marginTop: 24 }} />
-    </div>
+    </PageShell>
   );
 };
 

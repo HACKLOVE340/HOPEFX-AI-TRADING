@@ -8,6 +8,7 @@
  *           GET    /api/watchlist/prices
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { watchlistApi } from '../hooks/useApi';
@@ -15,7 +16,7 @@ import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 import { useStore, selectFeedLive } from '../store';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
-import { PageHeader, Section, RelatedPages } from '../components';
+import { Section } from '../components';
 import { DataTable, type Column } from '../components/DataTable';
 import { EmptyState } from '../components/EmptyState';
 import { Eye, Zap, BellPlus, X, Radio, LineChart, BookOpen } from 'lucide-react';
@@ -323,17 +324,24 @@ const WatchlistPage: React.FC = () => {
   ];
 
   return (
-    <div className="page-content flex flex-col gap-4 pb-6">
-      <PageHeader
-        title="Watchlist"
-        icon={Eye}
-        subtitle={
+    <PageShell
+      title="Watchlist"
+      icon={Eye}
+      subtitle={
           freshness.isLive && feedLive
             ? 'Live prices refresh every 5 seconds. Select a row to open the chart, or trade and set alerts inline.'
             : 'Prices are not updating right now. Select a row to open the chart.'
         }
-        badge={<StaleDataNotice failed={freshness.failed} what={freshness.what} />}
-      />
+      badge={<StaleDataNotice failed={freshness.failed} what={freshness.what} />}
+      width="standard" related={[
+            { to: '/trade',    label: 'Trading ticket', hint: 'Place an order on a tracked symbol', icon: Zap },
+            { to: '/signals',  label: 'Signal feed',    hint: 'What the model sees right now',      icon: Radio },
+            { to: '/ai-chart', label: 'Charts',         hint: 'Full chart with indicators',         icon: LineChart },
+            { to: '/alerts',   label: 'Price alerts',   hint: 'Alerts you have already set',        icon: BellPlus },
+            { to: '/journal',  label: 'Trade journal',  hint: 'How these symbols have traded for you', icon: BookOpen },
+          ]}
+    >
+
 
       <div className="px-4 sm:px-6">
         <Section
@@ -401,17 +409,9 @@ const WatchlistPage: React.FC = () => {
           )}
         </Section>
 
-        <RelatedPages
-          links={[
-            { to: '/trade',    label: 'Trading ticket', hint: 'Place an order on a tracked symbol', icon: Zap },
-            { to: '/signals',  label: 'Signal feed',    hint: 'What the model sees right now',      icon: Radio },
-            { to: '/ai-chart', label: 'Charts',         hint: 'Full chart with indicators',         icon: LineChart },
-            { to: '/alerts',   label: 'Price alerts',   hint: 'Alerts you have already set',        icon: BellPlus },
-            { to: '/journal',  label: 'Trade journal',  hint: 'How these symbols have traded for you', icon: BookOpen },
-          ]}
-        />
+
       </div>
-    </div>
+    </PageShell>
   );
 };
 

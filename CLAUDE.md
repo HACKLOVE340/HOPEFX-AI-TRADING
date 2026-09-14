@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 611 commits and 1,498 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 617 commits and 1,500 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |

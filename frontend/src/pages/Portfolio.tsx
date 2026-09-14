@@ -16,9 +16,10 @@
  *   GET /trading/trades
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, CrossLinkBar, RelatedPages } from '../components';
+import { CrossLinkBar } from '../components';
 import { Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
@@ -684,17 +685,15 @@ const Portfolio: React.FC = () => {
   };
 
   return (
-    <div className="page-content gap-3 sm:gap-4 fade-in">
-
-      <PageHeader
-        title="Portfolio"
-        icon={Briefcase}
-        subtitle="Balances, equity curve, allocation, and trade history"
-        breadcrumbs={[
+    <PageShell
+      title="Portfolio"
+      icon={Briefcase}
+      subtitle="Balances, equity curve, allocation, and trade history"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Portfolio' },
         ]}
-        actions={
+      actions={
           // Cross-links move to the related-pages footer; the header keeps
           // only the control that acts on this page.
           <button
@@ -708,7 +707,17 @@ const Portfolio: React.FC = () => {
             Export CSV
           </button>
         }
-      />
+      width="standard" related={[
+          { to: '/trade',           label: 'Trading ticket',  hint: 'Open or close a position',           icon: Zap },
+          { to: '/performance',     label: 'Performance',     hint: 'Sharpe, drawdown, equity curve',      icon: Trophy },
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',           icon: LineChart },
+          { to: '/journal',         label: 'Trade journal',   hint: 'Notes and mistakes per trade',        icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next position',              icon: Shield },
+          { to: '/watchlist',       label: 'Watchlist',       hint: 'Instruments you are following',       icon: Radar },
+        ]}
+    >
+
+
 
       {/* Balances, P&L and allocation below are all last-received values. Say
           so when they have stopped being refreshed (F1-02). */}
@@ -747,17 +756,8 @@ const Portfolio: React.FC = () => {
         { label: 'Trade Journal',   href: '/journal',         icon: NotebookPen, color: '#a78bfa' },
         { label: 'Watchlist',       href: '/watchlist',       icon: Eye, color: '#60a5fa' },
       ]} />
-      <RelatedPages
-        links={[
-          { to: '/trade',           label: 'Trading ticket',  hint: 'Open or close a position',           icon: Zap },
-          { to: '/performance',     label: 'Performance',     hint: 'Sharpe, drawdown, equity curve',      icon: Trophy },
-          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',           icon: LineChart },
-          { to: '/journal',         label: 'Trade journal',   hint: 'Notes and mistakes per trade',        icon: BookOpen },
-          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next position',              icon: Shield },
-          { to: '/watchlist',       label: 'Watchlist',       hint: 'Instruments you are following',       icon: Radar },
-        ]}
-      />
-    </div>
+
+    </PageShell>
   );
 };
 

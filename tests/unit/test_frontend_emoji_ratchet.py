@@ -201,17 +201,51 @@ def test_the_committed_baseline_matches_the_tree():
     assert result.returncode == 0, result.stderr
 
 
-def test_the_baseline_records_the_measured_scale():
-    """A sanity floor: if this number collapses, the counter broke, not the debt.
+def test_every_recorded_file_really_contains_what_the_record_claims():
+    """A sanity check on the counter that does not go stale as the debt is paid.
 
-    The same failure mode the coverage gate had once, where a broken measurement
-    read as 361 clean modules. 1,389 was the measurement on 2026-09-13.
+    This asserted `total > 900` — a floor set when the measurement was 1,389 on
+    2026-09-13 — to catch the failure the coverage gate once had, where a broken
+    measurement read as 361 clean modules. The intent was right and the
+    implementation was backwards: converting emoji to icons is the WORK, so the
+    check failed at 754 for the one reason that is not a defect. A floor under a
+    number whose job is to fall forbids finishing, and the only ways past it are
+    to weaken it or to stop — which is how a gate teaches people to route around
+    gates.
+
+    So assert the property the floor was standing in for: that the record
+    describes the tree. Every recorded file exists and really does contain the
+    number of emoji recorded against it. A counter that broke and returned
+    near-zero, or that drifted from the files it names, fails this at any debt
+    level — including zero, where it passes vacuously and correctly, because
+    there is then nothing left to describe.
+
+    It checks the SCAN and the AGGREGATION, not the definition of an emoji: it
+    reuses the script's own `EMOJI_RE`. The definition is held by the injection
+    tests above and by `test_box_drawing_and_arrows_are_not_emoji`.
     """
     baseline = REPO / "docs" / "FRONTEND_EMOJI_DEBT.json"
     if not baseline.exists():
         pytest.skip("baseline not adopted yet")
-    total = sum(json.loads(baseline.read_text())["files"].values())
-    assert total > 900, f"baseline total {total} is far below the recorded 1,389 — check the counter"
+
+    sys.path.insert(0, str(REPO / "scripts"))
+    try:
+        from frontend_emoji_ratchet import EMOJI_RE
+    finally:
+        sys.path.pop(0)
+
+    files = json.loads(baseline.read_text())["files"]
+    wrong = []
+    for rel, recorded in files.items():
+        path = REPO / rel
+        if not path.exists():
+            wrong.append(f"{rel}: recorded {recorded}, file does not exist")
+            continue
+        found = len(EMOJI_RE.findall(path.read_text(encoding="utf-8")))
+        if found != recorded:
+            wrong.append(f"{rel}: recorded {recorded}, tree has {found}")
+    assert not wrong, "the record does not describe the tree:\n  " + "\n  ".join(wrong[:10])
+    assert all(v > 0 for v in files.values()), "an entry recording zero describes nothing"
 
 
 def test_the_command_palette_left_the_record():

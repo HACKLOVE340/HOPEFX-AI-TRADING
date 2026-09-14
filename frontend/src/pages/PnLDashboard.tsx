@@ -12,9 +12,10 @@
  *   GET /api/pnl/open-positions  — current open positions
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, CrossLinkBar } from '../components';
+import { CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -560,18 +561,16 @@ const PnLDashboard: React.FC = () => {
   };
 
   return (
-    <div className="page-content space-y-4 sm:space-y-6">
-
-      <PageHeader
-        title="P&L breakdown"
-        icon={TrendingUp}
-        subtitle="Real fills from the live engine — no synthetic data"
-        breadcrumbs={[
+    <PageShell
+      title="P&L breakdown"
+      icon={TrendingUp}
+      subtitle="Real fills from the live engine — no synthetic data"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Analytics', href: '/performance' },
           { label: 'P&L Dashboard' },
         ]}
-        actions={
+      actions={
           <div className="flex items-center gap-2 flex-wrap">
             <LiveEquityBadge equity={summary?.equity} />
             {/* /pnl/export is served by the backend and had no caller
@@ -602,7 +601,10 @@ const PnLDashboard: React.FC = () => {
             </button>
           </div>
         }
-      />
+      width="standard"
+    >
+
+
 
       {exportErr && (
         <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300
@@ -923,7 +925,7 @@ const PnLDashboard: React.FC = () => {
           { label: '🛡️ Prop Tracker',  href: '/prop-firm',       color: '#f97316' },
         ]}/>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

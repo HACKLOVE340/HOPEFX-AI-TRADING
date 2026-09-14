@@ -8,12 +8,13 @@
  *   GET /api/performance/weekly-report/latest — WeeklyReport (auth)
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { PageHeader, EmptyState, CrossLinkBar, RelatedPages } from '../components';
+import { EmptyState, CrossLinkBar } from '../components';
 import {
   Trophy, BarChart3, ListOrdered, CalendarDays, RefreshCw, ChevronRight,
   LineChart, Briefcase, BookOpen, Shield,
@@ -380,26 +381,23 @@ const Performance: React.FC = () => {
   }, [publicQ, equityQ]);
 
   return (
-    <div className="page-content gap-4 sm:gap-6">
-      <PageHeader
-        title="Performance"
-        icon={Trophy}
-        subtitle="Live trading results — equity curve, drawdown, trade stats"
-        breadcrumbs={[
+    <PageShell
+      title="Performance"
+      icon={Trophy}
+      subtitle="Live trading results — equity curve, drawdown, trade stats"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Analytics', href: '/pnl' },
           { label: 'Performance' },
         ]}
-        // Tabs move into PageHeader so they carry role="tab", aria-selected
-        // and a 44px target rather than being hand-rolled buttons.
-        activeTab={tab}
-        onTabChange={(k) => setTab(k as Tab)}
-        tabs={[
+      activeTab={tab}
+      onTabChange={(k) => setTab(k as Tab)}
+      tabs={[
           { key: 'overview', label: 'Overview', icon: BarChart3 },
           { key: 'trades',   label: 'Trades',   icon: ListOrdered },
           { key: 'weekly',   label: 'Weekly',   icon: CalendarDays },
         ]}
-        actions={
+      actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {/* Period toggle */}
             <div style={{ display: 'flex', gap: 2, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 2 }}>
@@ -434,7 +432,15 @@ const Performance: React.FC = () => {
             </button>
           </div>
         }
-      />
+      width="standard" related={[
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',              icon: LineChart },
+          { to: '/portfolio',       label: 'Portfolio',       hint: 'Open positions and allocation',          icon: Briefcase },
+          { to: '/tca',             label: 'Execution costs', hint: 'Slippage between signal and fill',       icon: BarChart3 },
+          { to: '/journal',         label: 'Trade journal',   hint: 'The trades behind these numbers',        icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade',                    icon: Shield },
+        ]}
+    >
+
 
       {/* ── Overview ──────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
@@ -663,16 +669,8 @@ const Performance: React.FC = () => {
         { label: '🤖 AI Strategy',     href: '/ai-strategy',   color: '#f97316' },
         { label: '📈 Walk-Forward',    href: '/walk-forward',  color: '#4ade80' },
       ]}/>
-      <RelatedPages
-        links={[
-          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',              icon: LineChart },
-          { to: '/portfolio',       label: 'Portfolio',       hint: 'Open positions and allocation',          icon: Briefcase },
-          { to: '/tca',             label: 'Execution costs', hint: 'Slippage between signal and fill',       icon: BarChart3 },
-          { to: '/journal',         label: 'Trade journal',   hint: 'The trades behind these numbers',        icon: BookOpen },
-          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade',                    icon: Shield },
-        ]}
-      />
-    </div>
+
+    </PageShell>
   );
 };
 

@@ -23,8 +23,11 @@
  * — /privacy, /terms, /pricing — belong here: this footer is the AUTHENTICATED
  * navigation, and offering it to a signed-out reader is worse than offering
  * nothing. `scripts/frontend_page_shell_ratchet.py` scopes itself to what the
- * router mounts behind the app shell and reports 35 of 63 off the shell; it
- * read 80 of 108 while counting panels and public pages as pages.
+ * router mounts behind the app shell; it read 80 of 108 while counting panels
+ * and public pages as pages. Run it for today's figure —
+ * `python scripts/frontend_page_shell_ratchet.py --check` — rather than reading
+ * one here: 14 of 63 were still off the shell on 2026-09-14, and a number typed
+ * into a comment is stale by the next migration.
  *
  * Three widths replace twelve, and they are chosen by what the page IS rather
  * than by how much happened to fit:
@@ -99,7 +102,14 @@ export const PageShell: React.FC<PageShellProps> = ({
 
   return (
     <div
-      className={`mx-auto flex w-full flex-col ${WIDTH[width]} px-s4 pb-s8 pt-s4
+      // `flex-[1_0_auto]` is the rule `.page-content` carried, and this shell
+      // replaced that class without it: grow to fill `.app-shell-scroller`
+      // (a flex column) when the page is short, never shrink below content when
+      // it is tall. NOT `flex-1` — that is `1 1 0%`, which index.css records as
+      // having clamped every page to the viewport and trapped taller content.
+      // Measured before the fix at 1440x900: seven migrated pages stopped at
+      // 540-701px in a 900px scroller while every legacy page filled it.
+      className={`mx-auto flex w-full flex-[1_0_auto] flex-col ${WIDTH[width]} px-s4 pb-s8 pt-s4
                   sm:px-s5 md:px-s6 md:pt-s5 ${className}`}
     >
       <PageHeader
