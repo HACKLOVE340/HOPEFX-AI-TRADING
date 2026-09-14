@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 565 commits and 1,246 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 588 commits and 1,321 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
@@ -50,6 +50,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Which buttons have no accessible name? | `cd frontend && npm run lint` · `frontend/a11y-debt.json` |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
+| A document states a figure — is it still true? | `python scripts/doc_metrics.py --check` · `--refresh` rewrites the drifted ones rather than making you hunt for them |
 | Why is it like this? Who decided, and what was rejected? | `python scripts/adr.py --list` · `docs/decisions/` |
 | How did that decision actually turn out? | `docs/decisions/outcomes/NNNN.md` — the ledger half of Chapter 9 (ADR 0020). `adr.py --check` refuses a missing outcome or an overdue review |
 | What did the platform decide today, and what did it refuse? | `ai/ledger/decisions.py::summary()` · refusals are first-class entries |

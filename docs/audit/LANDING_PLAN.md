@@ -1,7 +1,12 @@
 # Landing the audit branch
 
-`claude/add-new-skills-lys862` is **565 commits and 1,246 files ahead of `main`**
-(measured 2026-09-13; this read 551 and 1,227 when the plan was written).
+`claude/add-new-skills-lys862` is **588 commits and 1,321 files ahead of `main`**
+(measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
+1,246 on 2026-09-13). Both figures are now measured by
+`scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
+until 2026-09-14 nothing measured them, which is exactly why they drifted twice.
+They move with every commit, so fix them with `python scripts/doc_metrics.py
+--refresh` rather than by hand.
 The branch contains all of `main` — `git rev-list --count HEAD..origin/main` is
 **0** — so this is a fast-forward relationship, not a divergence. Nothing on it has been merged, and no CI run has
 ever executed against any of it.

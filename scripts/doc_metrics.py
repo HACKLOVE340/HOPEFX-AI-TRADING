@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess  # nosec B404 - reads git metadata, no user input
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -86,6 +87,10 @@ class Report:
     checked: int = 0
     drift: list[Drift] = field(default_factory=list)
     documents: int = 0
+    #: Claims this run could not verify, because their measurement was
+    #: unavailable here. Never folded into "no drift": a figure nobody could
+    #: check is not a figure that matched.
+    unmeasured: list[Hit] = field(default_factory=list)
 
 
 #: Bound to the scripts that measure them. Each pattern captures exactly one
@@ -148,6 +153,35 @@ CLAIMS: Final[tuple[Claim, ...]] = (
     # §A carried seventeen, so a reader trusting the summary believed the
     # owner's queue was a quarter of its real size. Measured by counting the
     # `### A<n>.` headings in §A, which is the list itself.
+    # How far this branch is from `main`. Both documents that state it drifted —
+    # LANDING_PLAN.md and CLAUDE.md read 565 commits / 1,246 files while the
+    # branch was at 588 / 1,321 — because nothing measured either figure. A
+    # contributor sizing the landing work from either was reading a number that
+    # stopped being true 23 commits earlier.
+    #
+    # Anchored to the whole phrase, not to `(\d+)\s+commits`. LANDING_PLAN.md's
+    # next line deliberately records what the figure *was* when the plan was
+    # written ("this read 551 and 1,227"), and a looser pattern would call that
+    # true historical sentence drift — whereupon the fix a reader reaches for is
+    # to delete the record.
+    Claim(
+        "commits_ahead",
+        re.compile(r"(\d[\d,]*)\s+commits\s+and\s+\d[\d,]*\s+files\s+ahead"),
+        "git rev-list --count origin/main..HEAD",
+    ),
+    Claim(
+        "files_ahead",
+        re.compile(r"\d[\d,]*\s+commits\s+and\s+(\d[\d,]*)\s+files\s+ahead"),
+        "git diff --name-only origin/main...HEAD",
+    ),
+    # The fast-forward claim. If this stops being 0 the branch has diverged, and
+    # the landing plan's whole recipe — cut by path from the branch head onto
+    # main — no longer describes the repository.
+    Claim(
+        "commits_behind",
+        re.compile(r"rev-list\s+--count\s+HEAD\.\.origin/main`?\s+is\s+\*\*(\d[\d,]*)\*\*"),
+        "git rev-list --count HEAD..origin/main",
+    ),
     Claim(
         "owner_decisions",
         re.compile(r"Decisions only the owner can make\.\*\*\s*(\d+)\s+of them"),
@@ -173,6 +207,11 @@ _LIVING: Final[tuple[str, ...]] = (
     "docs/ai/specs/GROUP3_documentation_knowledge_architecture_governance.md",
     "docs/ai/specs/GROUP4_CONSTITUTION.md",
     "docs/runbooks/database-restore.md",
+    # Added 2026-09-14. It sits under docs/audit/, which is otherwise dated
+    # records, so it was never scanned — and it is the one document CLAUDE.md
+    # tells you to read before opening a pull request. `docs/REGISTRY.toml`
+    # settles it rather than an opinion: tier T2, owned, `state = "active"`.
+    "docs/audit/LANDING_PLAN.md",
 )
 
 
@@ -217,6 +256,46 @@ def measure(repo: Path | None = None) -> dict[str, int]:
         "spatial_planned": spatial.planned,
         "coverage_debt": len(coverage_baseline()),
         "owner_decisions": _count_owner_decisions(repo),
+        **_branch_distance(repo),
+    }
+
+
+def _branch_distance(repo: Path) -> dict[str, int]:
+    """How far this branch is from `origin/main`, or nothing at all.
+
+    Returns an EMPTY dict when `origin/main` does not resolve — a shallow or
+    single-branch clone has no such ref. Zero would be the rule-2 defect (an
+    unmeasured value is absent, never zero) and would read as drift against
+    every document stating a real number.
+
+    Deliberately does not raise. `measure()` raising here would take the whole
+    doc-metrics gate down in any checkout without the ref, turning a working
+    check into a blocker — so the absence is carried up and *reported* instead,
+    by name, as `Report.unmeasured`. That is a visible degradation rather than a
+    silent one; `--check` still fails whenever the ref is present and a document
+    disagrees, which is every ordinary working copy.
+    """
+
+    def _git(*args: str) -> str | None:
+        try:
+            done = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+        except Exception:
+            return None
+        return done.stdout if done.returncode == 0 else None
+
+    if _git("rev-parse", "--verify", "--quiet", "origin/main") is None:
+        return {}
+
+    ahead = _git("rev-list", "--count", "origin/main..HEAD")
+    behind = _git("rev-list", "--count", "HEAD..origin/main")
+    files = _git("diff", "--name-only", "origin/main...HEAD")
+    if ahead is None or behind is None or files is None:
+        return {}
+
+    return {
+        "commits_ahead": int(ahead.strip()),
+        "commits_behind": int(behind.strip()),
+        "files_ahead": len([line for line in files.splitlines() if line.strip()]),
     }
 
 
@@ -244,7 +323,10 @@ def scan(repo: Path | None = None, extra_documents: list[Path] | None = None) ->
                 continue
             for claim in CLAIMS:
                 for match in claim.pattern.finditer(line):
-                    hits.append(Hit(path, number, claim.metric, int(match.group(1))))
+                    # `1,246`, as both documents write it. int() rejects the comma, and a
+                    # pattern that stopped at it would read 1 — drift for the wrong
+                    # reason on every run, until someone deleted the check.
+                    hits.append(Hit(path, number, claim.metric, int(match.group(1).replace(",", ""))))
     return hits
 
 
@@ -257,16 +339,72 @@ def check(
     hits = scan(repo, extra_documents)
     report = Report(checked=len(hits), documents=len(_documents(repo, extra_documents)))
     for hit in hits:
+        if hit.metric not in measured:
+            report.unmeasured.append(hit)
+            continue
         expected = measured[hit.metric]
         if hit.stated != expected:
             report.drift.append(Drift(hit.path, hit.line, hit.metric, hit.stated, expected))
     return report
 
 
+def refresh(repo: Path | None = None) -> list[Drift]:
+    """Rewrite every drifted figure to what the code measures. Returns what changed.
+
+    Most claims here move rarely — a gate is added, a document is registered —
+    so hand-editing the number is proportionate. `commits_ahead` and
+    `files_ahead` are different in kind: they change with *every commit*, and a
+    check that demands a hand-edit on every commit is the check this module's
+    own docstring warns about, the one people answer with `--no-verify`.
+
+    So the fix is one command rather than a hunt through two documents. The
+    thousands separator is preserved where the document used one, because
+    rewriting `1,246` as `1321` would quietly restyle prose the author chose.
+    """
+    repo = repo or REPO
+    drifted = check(repo).drift
+    by_path: dict[Path, list[Drift]] = {}
+    for d in drifted:
+        by_path.setdefault(d.path, []).append(d)
+
+    for path, drifts in by_path.items():
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        for d in drifts:
+            line = lines[d.line - 1]
+            claim = next(c for c in CLAIMS if c.metric == d.metric)
+            match = next(
+                (m for m in claim.pattern.finditer(line) if int(m.group(1).replace(",", "")) == d.stated),
+                None,
+            )
+            if match is None:
+                continue
+            replacement = f"{d.measured:,}" if "," in match.group(1) else str(d.measured)
+            start, end = match.span(1)
+            lines[d.line - 1] = line[:start] + replacement + line[end:]
+        path.write_text("".join(lines), encoding="utf-8")
+    return drifted
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Do documents still state the measured figures?")
     parser.add_argument("--check", action="store_true", help="Exit non-zero when a figure has drifted")
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Rewrite drifted figures to the measured values, then report what changed",
+    )
     args = parser.parse_args(argv)
+
+    if args.refresh:
+        try:
+            changed = refresh()
+        except MetricsBroken as exc:
+            print(f"REFUSED — {exc}", file=sys.stderr)
+            return 2
+        for d in changed:
+            print(f"  UPDATED {d.path.relative_to(REPO)}:{d.line} {d.metric}: {d.stated} -> {d.measured}")
+        print(f"doc metrics: {len(changed)} figure(s) rewritten")
+        return 0
 
     try:
         report = check()
@@ -274,10 +412,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"REFUSED — {exc}", file=sys.stderr)
         return 2
 
-    print(
+    line = (
         f"doc metrics: {report.documents} living documents · {report.checked} stated figures "
         f"· {len(report.drift)} drifted"
     )
+    if report.unmeasured:
+        line += f" · {len(report.unmeasured)} unverifiable"
+    print(line)
+    if report.unmeasured:
+        # Said out loud, never folded into "no drift". A figure nobody could
+        # check is not a figure that matched.
+        for metric in sorted({h.metric for h in report.unmeasured}):
+            describes = next((c.describes for c in CLAIMS if c.metric == metric), "?")
+            print(
+                f"  UNVERIFIABLE {metric}: `{describes}` could not be run here "
+                "(origin/main not fetched?) — the figure was NOT checked",
+                file=sys.stderr,
+            )
     for d in report.drift:
         print(
             f"  DRIFT {d.path.relative_to(REPO)}:{d.line} states {d.metric}={d.stated}, measured {d.measured}",

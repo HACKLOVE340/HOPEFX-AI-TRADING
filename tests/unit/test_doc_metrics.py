@@ -299,3 +299,225 @@ class TestTheOwnerDecisionCountIsRatcheted:
         doc.write_text(sentence + "\n", encoding="utf-8")
         drift = [d for d in check(extra_documents=[doc]).drift if d.metric == "owner_decisions"]
         assert not drift, f"{sentence!r} was read as the owner-decision count"
+
+
+class TestTheBranchDistanceIsRatcheted:
+    """`LANDING_PLAN.md` and `CLAUDE.md` both state how far this branch is from
+    `main`. Neither figure was measured by anything, so both drifted: they read
+    565 commits / 1,246 files while the branch was at 588 / 1,321. A contributor
+    sizing the landing work from either document was reading a number that
+    stopped being true 23 commits earlier — the same shape as the "Four of them"
+    owner-decision count, and the reason that one is now measured too."""
+
+    def test_this_checkout_can_actually_measure_the_distance(self) -> None:
+        """The guard on every skip below.
+
+        The other tests in this class skip when `origin/main` is absent, which
+        is right for a shallow clone and useless here: without this, a
+        measurement that was never wired would skip forever and read as green.
+        This checkout has the ref, so this test must run.
+        """
+        import subprocess
+
+        from scripts.doc_metrics import REPO, measure
+
+        resolves = (
+            subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", "origin/main"],
+                cwd=REPO,
+                capture_output=True,
+                check=False,
+            ).returncode
+            == 0
+        )
+        if not resolves:
+            pytest.skip("origin/main is genuinely absent from this checkout")
+
+        missing = {"commits_ahead", "files_ahead", "commits_behind"} - set(measure())
+        assert not missing, f"origin/main resolves but these are not measured: {sorted(missing)}"
+
+    def test_the_distance_is_measured_from_git(self) -> None:
+        import subprocess
+
+        from scripts.doc_metrics import REPO, measure
+
+        measured = measure()
+        if "commits_ahead" not in measured:
+            pytest.skip("origin/main is not available in this checkout")
+
+        ahead = subprocess.run(
+            ["git", "rev-list", "--count", "origin/main..HEAD"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert measured["commits_ahead"] == int(ahead)
+        assert measured["files_ahead"] > 0
+        assert measured["commits_behind"] >= 0
+
+    @pytest.mark.parametrize(
+        ("metric", "sentence"),
+        [
+            ("commits_ahead", "is **{n} commits and 1,246 files ahead of `main`**"),
+            ("files_ahead", "is **565 commits and {n} files ahead of `main`**"),
+            ("commits_behind", "`git rev-list --count HEAD..origin/main` is **{n}**"),
+        ],
+    )
+    def test_a_wrong_distance_is_reported(self, tmp_path: Path, metric: str, sentence: str) -> None:
+        from scripts.doc_metrics import measure
+
+        measured = measure()
+        if metric not in measured:
+            pytest.skip("origin/main is not available in this checkout")
+
+        doc = tmp_path / "PLAN.md"
+        doc.write_text(sentence.format(n=measured[metric] + 7) + "\n", encoding="utf-8")
+        drift = [d for d in check(extra_documents=[doc]).drift if d.path == doc and d.metric == metric]
+        assert drift, f"a wrong {metric} was not reported"
+
+    def test_a_thousands_separator_is_read_as_a_number(self, tmp_path: Path) -> None:
+        """The documents write `1,246`, not `1246`.
+
+        `int("1,246")` raises, and a pattern that captured only the digits
+        before the comma would have read it as 1 — drift against 1,321 for the
+        wrong reason, every run, until someone deleted the check.
+        """
+        from scripts.doc_metrics import measure
+
+        measured = measure()
+        if "files_ahead" not in measured:
+            pytest.skip("origin/main is not available in this checkout")
+
+        doc = tmp_path / "PLAN.md"
+        doc.write_text(
+            f"is **{measured['commits_ahead']} commits and {measured['files_ahead']:,} files ahead of `main`**\n",
+            encoding="utf-8",
+        )
+        drift = [
+            d
+            for d in check(extra_documents=[doc]).drift
+            if d.path == doc and d.metric in {"commits_ahead", "files_ahead"}
+        ]
+        assert not drift, f"a comma-formatted figure was misread: {drift}"
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "(measured 2026-09-13; this read 551 and 1,227 when the plan was written).",
+            "a temporal cut through 551 interleaved commits",
+            "The branch has 551 commits worth reviewing.",
+            "1,246 files were touched in total.",
+        ],
+    )
+    def test_prose_and_historical_records_are_not_read_as_claims(self, tmp_path: Path, sentence: str) -> None:
+        """`LANDING_PLAN.md` line 4 deliberately records what the figure *was*
+        when the plan was written. A pattern loose enough to match it would call
+        a true historical sentence drift, and the fix a reader reaches for is to
+        delete the record."""
+        doc = tmp_path / "OTHER.md"
+        doc.write_text(sentence + "\n", encoding="utf-8")
+        drift = [
+            d
+            for d in check(extra_documents=[doc]).drift
+            if d.path == doc and d.metric in {"commits_ahead", "files_ahead", "commits_behind"}
+        ]
+        assert not drift, f"{sentence!r} was read as a branch-distance claim"
+
+
+class TestAnUnmeasurableFigureIsReportedNotSkipped:
+    """`origin/main` is not always fetched — a shallow or single-branch clone has
+    no such ref. Reporting 0 would be rule 2's defect (an unmeasured value is
+    never zero) and would drift against every document. Raising would take the
+    whole gate down for everyone in that checkout. So the figure is reported as
+    unmeasurable, by name, and the run says so out loud."""
+
+    def test_a_repository_without_origin_main_measures_nothing(self, tmp_path: Path) -> None:
+        import subprocess
+
+        from scripts.doc_metrics import _branch_distance
+
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        assert _branch_distance(tmp_path) == {}, (
+            "a checkout with no origin/main must yield no figure at all — not a zero"
+        )
+
+    def test_the_report_names_what_it_could_not_measure(self, tmp_path: Path) -> None:
+        from scripts.doc_metrics import check as _check
+
+        doc = tmp_path / "PLAN.md"
+        doc.write_text("is **999 commits and 999 files ahead of `main`**\n", encoding="utf-8")
+        report = _check(extra_documents=[doc])
+        # Either it measured (and this is drift) or it could not (and this is
+        # unmeasured) — silence is the one outcome that must not happen.
+        touched = [d for d in report.drift if d.path == doc and d.metric in {"commits_ahead", "files_ahead"}]
+        unmeasured = [h for h in report.unmeasured if h.path == doc and h.metric in {"commits_ahead", "files_ahead"}]
+        assert touched or unmeasured, "a branch-distance claim was neither checked nor reported as unmeasurable"
+
+
+class TestRefreshRewritesRatherThanNags:
+    """`commits_ahead` moves with every commit. A check that demands a hand-edit
+    that often is the check this module's docstring warns about — the one people
+    answer with `--no-verify`. `--refresh` makes the fix one command."""
+
+    def _doc(self, tmp_path: Path, stated: int, separator: bool = False) -> Path:
+        doc = tmp_path / "PLAN.md"
+        shown = f"{stated:,}" if separator else str(stated)
+        doc.write_text(f"is **{shown} commits and 9 files ahead of `main`**\n", encoding="utf-8")
+        return doc
+
+    def test_a_drifted_figure_is_rewritten_to_the_measurement(self, tmp_path: Path, monkeypatch) -> None:
+        from scripts import doc_metrics as dm
+
+        doc = self._doc(tmp_path, 111)
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        monkeypatch.setattr(dm, "measure", lambda repo=None: {"commits_ahead": 588, "files_ahead": 9})
+
+        changed = dm.refresh()
+        assert [(c.metric, c.stated, c.measured) for c in changed] == [("commits_ahead", 111, 588)]
+        assert "588 commits and 9 files ahead" in doc.read_text(encoding="utf-8")
+
+    def test_a_thousands_separator_is_preserved(self, tmp_path: Path, monkeypatch) -> None:
+        """Rewriting `1,246` as `1321` restyles prose the author chose."""
+        from scripts import doc_metrics as dm
+
+        doc = self._doc(tmp_path, 1246, separator=True)
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        monkeypatch.setattr(dm, "measure", lambda repo=None: {"commits_ahead": 1321, "files_ahead": 9})
+
+        dm.refresh()
+        assert "1,321 commits" in doc.read_text(encoding="utf-8")
+
+    def test_refreshing_twice_changes_nothing_the_second_time(self, tmp_path: Path, monkeypatch) -> None:
+        from scripts import doc_metrics as dm
+
+        doc = self._doc(tmp_path, 111)
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        monkeypatch.setattr(dm, "measure", lambda repo=None: {"commits_ahead": 588, "files_ahead": 9})
+
+        dm.refresh()
+        after_first = doc.read_text(encoding="utf-8")
+        assert dm.refresh() == []
+        assert doc.read_text(encoding="utf-8") == after_first
+
+    def test_a_correct_document_is_left_byte_for_byte_alone(self, tmp_path: Path, monkeypatch) -> None:
+        """Refresh must not reformat, reflow or re-end a document it agrees with."""
+        from scripts import doc_metrics as dm
+
+        doc = self._doc(tmp_path, 588)
+        before = doc.read_bytes()
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        monkeypatch.setattr(dm, "measure", lambda repo=None: {"commits_ahead": 588, "files_ahead": 9})
+
+        assert dm.refresh() == []
+        assert doc.read_bytes() == before
+
+    def test_the_committed_documents_need_no_refresh(self) -> None:
+        """The repository's own state: whatever is committed must already agree.
+
+        This is what makes the ratchet real rather than aspirational — if it
+        fails, a figure in a living document is stale right now.
+        """
+        from scripts.doc_metrics import check
+
+        assert check().drift == []
