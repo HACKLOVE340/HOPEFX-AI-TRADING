@@ -109,7 +109,7 @@ describe('Observability page', () => {
 // ─── Transparency ─────────────────────────────────────────────────────────────
 describe('Transparency page', () => {
   it('shows a loading state first', () => {
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(screen.getByText('Loading decisions…')).toBeInTheDocument();
   });
 
@@ -117,7 +117,7 @@ describe('Transparency page', () => {
     mocks.transparencyApi.stats.mockReturnValue(ok({ total_decisions: 42, win_rate: 61.5 }));
     mocks.transparencyApi.decisions.mockReturnValue(ok({ decisions: [{ trade_id: 't1', symbol: 'XAUUSD', direction: 'long', confidence: 0.8, outcome: 'win', reasoning: 'momentum' }] }));
     mocks.transparencyApi.auditLog.mockReturnValue(ok({ entries: [{ action_type: 'kill_switch_armed', timestamp: '2026-01-01' }] }));
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(await screen.findByText('42')).toBeInTheDocument();
     expect(screen.getByText('XAUUSD')).toBeInTheDocument();
     expect(screen.getByText('momentum')).toBeInTheDocument();
@@ -125,7 +125,7 @@ describe('Transparency page', () => {
   });
 
   it('renders empty states', async () => {
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(await screen.findByText('No decisions recorded yet.')).toBeInTheDocument();
     expect(screen.getByText('No audit entries.')).toBeInTheDocument();
   });
@@ -134,7 +134,7 @@ describe('Transparency page', () => {
     mocks.transparencyApi.stats.mockReturnValue(fail());
     mocks.transparencyApi.decisions.mockReturnValue(fail());
     mocks.transparencyApi.auditLog.mockReturnValue(fail());
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(await screen.findByText('Failed to load transparency data.')).toBeInTheDocument();
   });
 });
@@ -142,33 +142,33 @@ describe('Transparency page', () => {
 // ─── News & Sentiment ───────────────────────────────────────────────────────────
 describe('NewsSentiment page', () => {
   it('shows a loading state first', () => {
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(screen.getByText('Loading news…')).toBeInTheDocument();
   });
 
   it('renders sentiment tiles and article feed', async () => {
     mocks.newsApi.sentimentLatest.mockReturnValue(ok({ overall_score: 7.2, bullish_pct: 60, bearish_pct: 25, news_count: 12 }));
     mocks.newsApi.feed.mockReturnValue(ok({ articles: [{ id: 'n1', title: 'Gold rallies on Fed pause', source: 'Reuters', sentiment: 'bullish', impact: 'high' }] }));
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText('Gold rallies on Fed pause')).toBeInTheDocument();
     expect(screen.getByText('7.2')).toBeInTheDocument();
   });
 
   it('surfaces a nuclear sentiment alert when flagged', async () => {
     mocks.newsApi.sentimentLatest.mockReturnValue(ok({ nuclear_alert: true, symbol: 'XAUUSD' }));
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText(/Nuclear sentiment alert active/)).toBeInTheDocument();
   });
 
   it('renders an empty feed message', async () => {
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText('No recent news.')).toBeInTheDocument();
   });
 
   it('shows an error banner when both requests fail', async () => {
     mocks.newsApi.sentimentLatest.mockReturnValue(fail());
     mocks.newsApi.feed.mockReturnValue(fail());
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText('Failed to load news & sentiment.')).toBeInTheDocument();
   });
 });

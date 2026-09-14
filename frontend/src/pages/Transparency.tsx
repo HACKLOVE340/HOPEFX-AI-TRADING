@@ -6,6 +6,8 @@
  *   GET /api/transparency/decisions
  *   GET /api/transparency/audit-log
  */
+import { ScanSearch } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { transparencyApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
@@ -66,11 +68,13 @@ const Transparency: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto', color: 'var(--text)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>🔍 Transparency</h1>
-        <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>
-      </div>
+    <PageShell
+      title="Transparency"
+      subtitle="Decisions the platform made, and the ones it refused."
+      icon={ScanSearch}
+      width="standard"
+      actions={<button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>}
+    >
 
       {loading && <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading decisions…</div>}
       {!loading && err && (
@@ -127,7 +131,7 @@ const Transparency: React.FC = () => {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

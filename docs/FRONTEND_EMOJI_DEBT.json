@@ -1,6 +1,6 @@
 {
  "_comment": "Emoji per file in frontend/src. This number may only fall. See scripts/frontend_emoji_ratchet.py for why emoji cannot serve as icons, and for the rule that a file reaching zero must be DELETED from this list rather than left at 0 \u2014 an entry describing nothing is how a ratchet stops being one.",
- "_total": 772,
+ "_total": 770,
  "files": {
   "frontend/src/App.tsx": 1,
   "frontend/src/components/ActionBanner.tsx": 1,
@@ -66,7 +66,7 @@
   "frontend/src/pages/MLDashboard.tsx": 2,
   "frontend/src/pages/Marketplace.tsx": 9,
   "frontend/src/pages/MobilePage.tsx": 11,
-  "frontend/src/pages/NewsSentiment.tsx": 2,
+  "frontend/src/pages/NewsSentiment.tsx": 1,
   "frontend/src/pages/NotFound.tsx": 5,
   "frontend/src/pages/NotificationsPage.tsx": 14,
   "frontend/src/pages/NuclearDashboardPage.tsx": 6,
@@ -99,7 +99,6 @@
   "frontend/src/pages/TradeJournal.tsx": 14,
   "frontend/src/pages/Trading.tsx": 6,
   "frontend/src/pages/TradingDashboard.tsx": 10,
-  "frontend/src/pages/Transparency.tsx": 1,
   "frontend/src/pages/TwoFactorSetup.tsx": 12,
   "frontend/src/pages/WalkForward.tsx": 3,
   "frontend/src/pages/Wallet.tsx": 16,

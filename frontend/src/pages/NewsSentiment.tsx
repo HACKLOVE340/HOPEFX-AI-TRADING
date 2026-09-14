@@ -5,6 +5,8 @@
  *   GET /api/sentiment/latest
  *   GET /api/news/feed
  */
+import { Newspaper } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { newsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
@@ -57,11 +59,13 @@ const NewsSentiment: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 20, maxWidth: 900, margin: '0 auto', color: 'var(--text)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>📰 News & Sentiment</h1>
-        <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>
-      </div>
+    <PageShell
+      title="News & Sentiment"
+      subtitle="Headlines the model reads, and how it scores them."
+      icon={Newspaper}
+      width="standard"
+      actions={<button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>}
+    >
 
       {sentiment?.nuclear_alert && (
         <div style={{ padding: '10px 14px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16, fontWeight: 600 }}>
@@ -105,7 +109,7 @@ const NewsSentiment: React.FC = () => {
           )}
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 
