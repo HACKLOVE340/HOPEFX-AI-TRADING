@@ -7,6 +7,8 @@
  * deduplication) and usePolling to pause polling when the tab is hidden.
  */
 
+import { Calendar, ChartBar, ClipboardList, Shield, Siren } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -245,38 +247,47 @@ const PropFirmTracker: React.FC = () => {
 
   const errorMsg = error ? extractApiError(error, 'An error occurred') : null;
 
+  const tabs = [
+    { key: 'live',    label: 'Live',    icon: ChartBar },
+    { key: 'history', label: 'History', icon: ClipboardList },
+    {
+      key: 'alerts',
+      label: 'Alerts',
+      icon: Siren,
+      // The count was built inline inside a ternary that also chose the label
+      // and the emoji. It is a badge; the shell has a slot for one.
+      badge: alertsQ.data?.filter((a) => !a.acknowledged).length || undefined,
+    },
+    { key: 'daily',   label: 'Daily',   icon: Calendar },
+  ];
+
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <span style={{ fontSize: 28 }}>🛡️</span>
-        <h1 style={s.title}>Prop Firm Challenge Tracker</h1>
-        {statusIcon && <span style={{ fontSize: 22 }}>{statusIcon}</span>}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          {(['live', 'history', 'alerts', 'daily'] as const).map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} style={{
-              background: activeTab === t ? '#1e3a5f' : '#1e293b',
-              border: `1px solid ${activeTab === t ? '#3b82f6' : '#334155'}`,
-              borderRadius: 8, color: activeTab === t ? 'var(--link)' : 'var(--text-muted)',
-              cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px',
-            }}>
-              {t === 'live' ? '📊 Live' : t === 'history' ? '📋 History' : t === 'alerts' ? `🚨 Alerts${alertsQ.data?.filter(a => !a.acknowledged).length ? ` (${alertsQ.data.filter(a => !a.acknowledged).length})` : ''}` : '📅 Daily'}
-            </button>
-          ))}
-          <div style={{ width: 1, height: 24, background: '#334155' }} />
+    <PageShell
+      title="Prop Firm Challenge Tracker"
+      subtitle="Your challenge limits, and how close today has come to them."
+      icon={Shield}
+      width="wide"
+      badge={statusIcon}
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={(k) => setActiveTab(k as typeof activeTab)}
+      actions={
+        <>
           <button
             onClick={() => navigate('/risk-calculator')}
             style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: 'var(--warn)', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
           >
-            🛡 Risk Calc
+            Risk Calc
           </button>
           <button
             onClick={() => navigate('/trade')}
             style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
           >
-            ⚡ Trade
+            Trade
           </button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {/* ── History Tab ── */}
       {activeTab === 'history' && (
@@ -455,7 +466,7 @@ const PropFirmTracker: React.FC = () => {
       )}
       </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

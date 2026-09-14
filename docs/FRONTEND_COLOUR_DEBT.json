@@ -1,6 +1,6 @@
 {
  "_comment": "Hardcoded colour literals per file in frontend/src. This number may only fall. See scripts/frontend_colour_ratchet.py for why these literals keep three finished features dead, and for the rule that a file reaching zero must be DELETED from this list rather than left at 0 \u2014 an entry describing nothing is how a ratchet stops being one.",
- "_total": 3564,
+ "_total": 3559,
  "files": {
   "frontend/src/App.tsx": 12,
   "frontend/src/components/AdminGuard.tsx": 6,
@@ -118,7 +118,7 @@
   "frontend/src/pages/PricingPage.tsx": 24,
   "frontend/src/pages/PrivacyPolicy.tsx": 3,
   "frontend/src/pages/Profile.tsx": 13,
-  "frontend/src/pages/PropFirmTracker.tsx": 59,
+  "frontend/src/pages/PropFirmTracker.tsx": 54,
   "frontend/src/pages/Register.tsx": 30,
   "frontend/src/pages/ReplayPage.tsx": 35,
   "frontend/src/pages/ResearchPage.tsx": 17,
