@@ -1599,6 +1599,42 @@ def _WALLET_CONSUMER_FILES() -> list[str]:
     return [rel for rel in _production_python() if rel not in plumbing and _WALLET_CONSUMER.search(_code(rel) or "")]
 
 
+def _p_mode_resolver() -> tuple[str, str]:
+    """Do the displayed plan and the dispatch read ONE resolution?"""
+    runner = _code("run.py")
+    if not runner:
+        return UNVERIFIED, "run.py not found"
+    resolver = _code("core/run_mode.py")
+    if not resolver:
+        return _named(
+            OPEN,
+            "run.py derives the engine twice on different conditions — the printed pipeline and "
+            "the dispatch disagree on the DEFAULT invocation (--mode paper --broker oanda)",
+        )
+
+    # Counted, not merely present: a resolver nothing calls resolves nothing.
+    # The ROUTER-OVERRULE probe read FIXED against a neutered call site for
+    # exactly this reason.
+    wired = runner.count("resolve_run_mode") >= 2
+    # The old second derivation must be gone from the dispatch.
+    second_derivation = 'args.broker == "paper"' in runner
+    publishes_broker_type = "BROKER_TYPE" in resolver
+    publishes_venue = "OANDA_ENVIRONMENT" in resolver
+
+    if wired and not second_derivation and publishes_broker_type and publishes_venue:
+        return _named(
+            FIXED,
+            "run.py resolves the mode once (core/run_mode.py) and both the printed plan and the "
+            "dispatch read it; BROKER_TYPE and OANDA_ENVIRONMENT are published from that one "
+            "decision",
+        )
+    return _named(
+        OPEN,
+        f"wired={wired} second_derivation={second_derivation} "
+        f"broker_type={publishes_broker_type} venue={publishes_venue}",
+    )
+
+
 def _p_router_overrule() -> tuple[str, str]:
     """Does the engine's fallback overrule a router policy denial?
 
@@ -3331,6 +3367,42 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id ADR-LEDGER",
         _p_adr_ledger,
         [S_DOC, S_TDD],
+    ),
+    Finding(
+        "MODE-SPLIT",
+        "The startup plan that is printed is not the system that is started",
+        "P1",
+        "Runtime",
+        "Found 2026-09-14 from an external source-inspection review (M01/M02/M05), reproduced here",
+        "`run.py` derived the engine twice, on different conditions: `_get_pipeline` asked "
+        "`mode == 'paper' or PAPER_TRADING`, while `_run_trading` asked `PAPER_TRADING or "
+        "args.broker == 'paper'`. `--mode paper` sets OANDA_PRACTICE, BROKER, DEFAULT_BROKER and "
+        "INGEST_EXCHANGE — never PAPER_TRADING — and the defaults are `--mode paper --broker "
+        "oanda`. So plain `python run.py` printed the paper pipeline and started HopeFXEngine, a "
+        "different subsystem set. Reproduced by execution: displayed-is-paper=True, "
+        "dispatch-takes-paper=False. It did NOT place real orders — `--mode paper` also sets "
+        "TRADING_MODE=paper and `_execute_decision` returns before any broker call — and that "
+        "second, independent control is what bounded it, which is luck rather than design. Two "
+        "name collisions travelled with it: run.py wrote BROKER while `brokers/factory.py` reads "
+        "`BROKER_TYPE or BROKER`, so an ambient .env value silently beat the explicit flag; and "
+        "`--mode paper` forced OANDA_PRACTICE while `brokers/oanda.py` reads OANDA_ENVIRONMENT, "
+        "which nothing set. `core/run_mode.py` now resolves once — a frozen `ResolvedRunMode` "
+        "carrying requested mode, effective mode, engine, broker, venue, trading mode, the "
+        "environment it implies, its reasons and its conflicts — and `run.py` reads it for both "
+        "the printed plan and the dispatch, publishes every name from that one decision, and "
+        "exits 2 on a contradiction rather than picking a side. M05 travelled with it: CLAUDE.md "
+        "and AGENTS.md both documented `--mode api | engine | backtest`, and `engine` has never "
+        "been a mode — `python run.py --mode engine` is an argparse error, so an agent following "
+        "the two files it is told to read first issued a command that cannot run.",
+        "`tests/unit/test_run_mode_resolves_once.py` — all 29 fail on the pre-fix tree. They "
+        "assert the printed plan and the resolved engine agree for every combination that used "
+        "to diverge, that `_setup_env` publishes BROKER_TYPE and both venue names, that a "
+        "contradiction exits 2, and that neither T0 document names a mode the parser rejects. "
+        "The mode list is asserted identical in `core/run_mode.py` and `run.py`, because two "
+        "copies of one list is how the documented set drifted in the first place.",
+        "python scripts/correction_register.py --id MODE-SPLIT",
+        _p_mode_resolver,
+        [S_DEAD, S_TDD, S_DOC],
     ),
     Finding(
         "ROUTER-OVERRULE",

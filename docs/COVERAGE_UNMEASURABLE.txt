@@ -482,3 +482,32 @@ whitelabel/config.py
 # separate job; refusing a one-branch safety fix until it is closed is the
 # outcome ADR 0017 exists to prevent.
 hopefx_engine.py
+
+# run.py - recorded 2026-09-14 under ADR 0017. Note this one is genuinely
+# UNMEASURABLE rather than merely low: the gate resolves 74 test files for it
+# and times out before producing a number. That is a measurement problem, not a
+# coverage problem, and the baseline treats the two the same ("NOT recorded +
+# unmeasurable -> blocks").
+#
+# The four conditions:
+#   1. already unmeasurable BEFORE the change - reproduced on a clean worktree
+#      at HEAD: "coverage could not be measured (74 test files) ... Coverage
+#      check timed out for run.py";
+#   2. the change does not lower it - it cannot be measured either way, and the
+#      change ADDS a test file that exercises _setup_env and _get_pipeline, so
+#      the direction is up;
+#   3. the measurement, such as it is: unmeasurable/timeout, 74 resolved test
+#      files before, 75 after;
+#   4. ADR 0017 cited as the standing agreement.
+#
+# The change recorded is MODE-SPLIT: run.py derived the engine twice on
+# different conditions, so the printed pipeline and the started system disagreed
+# on the DEFAULT invocation.
+#
+# Route for whoever clears this: the timeout comes from the 74-file resolution,
+# not from run.py's size. `_find_test_files` pairs a module to its tests by
+# import as well as by name, and run.py is imported by a great many integration
+# tests. Narrowing that resolution, or giving the gate a per-module budget that
+# reports "not measured" distinctly from "below floor", fixes the whole class -
+# run.py is unlikely to be the only module in it.
+run.py

@@ -75,7 +75,7 @@ successor gets both or neither.
 ```
 app.py                  FastAPI application factory (entry point)
 hopefx_engine.py        Standalone trading engine entry point
-run.py                  CLI runner (--mode api | engine | backtest)
+run.py                  CLI runner (--mode paper | live | api | backtest)
 quickstart.py           One-command paper trading start
 
 api/                    FastAPI routers (REST + WebSocket + GraphQL)
