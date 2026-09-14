@@ -2762,20 +2762,20 @@ FINDINGS: list[Finding] = [
         "P1",
         "CI",
         "docs/audit/REMEDIATION_PLAN.md — Phase 0",
-        "Half done, and the remaining half is blocked on something this session cannot do. "
-        "`appleboy/ssh-action@v1.2.5` is a tag, and a tag is mutable: whoever controls it "
-        "controls a step that receives the private deploy key for the production VPS. It "
-        "is the only `uses:` in the repository that both takes a secret and floats. "
-        "Resolving the tag to its 40-character commit SHA needs a lookup against "
-        "`appleboy/ssh-action`, and this session's GitHub access is scoped to this "
-        "repository — the API and a direct fetch both refuse. A guessed SHA breaks every "
-        "deploy, so it is not guessed. What is in place is the invariant as a **ratchet**, "
-        "the shape `FRESHNESS_BASELINE.toml` and `COVERAGE_UNMEASURABLE.txt` already use "
-        "here: the one known reference is recorded, a second secret-holding action on a "
-        "tag fails immediately, and a companion test fails if the recorded entry is left "
-        "behind after the pin lands. To finish: resolve the SHA, write "
-        "`appleboy/ssh-action@<sha>  # v1.2.5`, delete the line from "
-        "`_UNPINNED_SECRET_ACTIONS`.",
+        "`appleboy/ssh-action@v1.2.5` was a tag, and a tag is mutable: whoever controls it "
+        "controls a step that receives the private deploy key for the production VPS. It was the "
+        "only `uses:` in the repository that both takes a secret and floats. **Closed 2026-09-14.** "
+        "An earlier session recorded it as a ratchet rather than guessing, because the GitHub API "
+        "is scoped to this repository and a guessed SHA breaks every deploy — the right call. The "
+        "lookup that does work is `git ls-remote`, which the API being blocked had masked. "
+        "Resolved to `0ff4204d59e8e51228ff73bce53f80d53301dee2`, and verified twice before "
+        "pinning: `git ls-remote --tags` returns ONE ref for v1.2.5 with no `^{}` peel, so the "
+        "tag is lightweight and that IS the commit rather than a tag object; the object was then "
+        "fetched and confirmed to be a commit carrying `action.yml`. `_UNPINNED_SECRET_ACTIONS` "
+        'is now empty, which cost the ratchet its teeth — with nothing exempted, "no offenders" '
+        "is the whole verdict — so the scan now refuses to report clean when it matched nothing, "
+        "and a positive control asserts the detector still calls a tagged secret-holding step an "
+        "offender. Injection-tested end to end.",
         "tests/unit/test_deploy_workflow_is_gated_and_pinned.py — the ratchet, proven by "
         "injecting a second secret-holding action on a tag and watching it refuse.",
         "pytest tests/unit/test_deploy_workflow_is_gated_and_pinned.py -q",
@@ -4161,8 +4161,15 @@ FINDINGS: list[Finding] = [
         "re-recorded; `_verify_checksum` under APP_ENV=production went False -> True for "
         "both, verified by execution before and after. The evidence the two ever disagreed "
         "now lives here and in the commit, which is what the earlier caution was protecting. "
-        "REMAINING: `lstm_signal.pt` is listed and not committed — inert, since "
-        "_verify_checksum only reads files that exist. "
+        "**Closed 2026-09-14.** `lstm_signal.pt` was listed and never committed. Inert to "
+        "_verify_checksum, which only reads files that exist — but strictly MORE permissive than "
+        "not listing it: in production an unlisted file is refused outright (MODEL NOT IN "
+        "INTEGRITY BASELINE) while a listed one loads if its bytes match the recorded hash, so a "
+        "record for a file nobody has ever shipped is a pre-approved load. It is a training "
+        "target of `scripts/train_lstm_signal.py` and the only other use of the name is a "
+        "training-job label in `api/ml.py`, so the entry went rather than the file arriving. All "
+        "11 remaining entries were then run through `_verify_checksum` under APP_ENV=production "
+        "and all 11 returned True. "
         "(b) **Done 2026-09-13 — this half was never an owner decision.** "
         "`ml/advanced_predictor.py` guarded `if self._meta_scaler is not None`, so a "
         "refused or absent scaler removed the transform and fed RAW probabilities into a "
@@ -4180,9 +4187,12 @@ FINDINGS: list[Finding] = [
         "is wrong. Meanwhile `scripts/model_provenance_report.py --check` ratchets the "
         "surrounding debt — 12 ungated loaders, 7 unlisted artifacts — so it cannot grow "
         "while (a) is open, and deliberately does not block on the mismatches.",
-        "An injection test: corrupt one committed artifact and assert the load is refused "
-        "AND that the caller can tell refusal from absence — the second half is the part "
-        "no current test covers.",
+        "`tests/unit/test_model_artifact_manifest_gate.py::test_the_manifest_describes_exactly_"
+        "what_ships` — fails on the pre-fix tree with `['lstm_signal.pt'] are recorded ... but do "
+        "not ship`. It asserts both directions, because an artefact that ships WITHOUT an entry "
+        "is the 7-unlisted debt and this must not quietly permit a new one. Still uncovered, and "
+        "still worth writing: an injection test that corrupts a committed artefact and asserts "
+        "the caller can tell refusal from absence.",
         "python scripts/correction_register.py --id A8",
         _p_a8,
         [S_DEAD],

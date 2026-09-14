@@ -386,14 +386,19 @@ they are the ones most often skipped under time pressure:
   `ml/saved_models/model_checksums.json`. **The runtime does, though** — this
   bullet previously said nothing read it, which was wrong in the direction that
   matters: `ml/__init__.py::_verify_checksum` reads the manifest on every model
-  load and is fail-closed in production. That 12-entry manifest currently
-  reports 2 mismatches (`feature_scaler.pkl`, `stacking_ensemble.pkl`) and 1
-  listed-but-absent, so **those two artifacts do not load in production today**,
-  while `python -m ml.verify_model` exits 0 because it is not looking at them.
-  Worse, `_try_load` returns `None` for both "absent" and "integrity refused",
-  so a caller cannot tell them apart. The manifest has one commit in its whole
-  history and already carried 3 mismatches at that commit, so it has never been
-  correct. See §A8 — do not regenerate it without reading that first.
+  load and is fail-closed in production. That manifest **was** wrong from its
+  first commit — 2 mismatches and 1 listed-but-absent, so two artifacts did not
+  load in production while `python -m ml.verify_model` exited 0 because it was
+  not looking at them. **Resolved: 11 entries, 11 files, all verifying under
+  `APP_ENV=production`** (§A8 has the evidence and what settled each side).
+  `python scripts/correction_register.py --id A8` re-measures it; do not take
+  this sentence's word for it.
+  Still true and still open: `_try_load` returns `None` for both "absent" and
+  "integrity refused", so a caller cannot tell them apart; 7 artefacts on disk
+  are in no manifest; and 12 of 14 ML modules reach no integrity check at all,
+  `ml/inference_engine.py` among them. `python
+  scripts/model_provenance_report.py --check` holds those at their baseline so
+  they cannot grow.
 - `WORDMAP.json` is gitignored; copy from `WORDMAP.json.example` locally.
   `prop_firm_mode.json` is **not** — `.gitignore` commits it deliberately with
   placeholder credentials so CI has a config to load. This file previously said

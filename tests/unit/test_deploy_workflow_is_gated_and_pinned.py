@@ -46,11 +46,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 #: commit SHA on GitHub, write `appleboy/ssh-action@<sha>  # v1.2.5` in
 #: deploy.yml, and delete the line below. Do not add to this set — a new
 #: secret-holding action pinned to a tag is the finding, not an exception to it.
-_UNPINNED_SECRET_ACTIONS: frozenset[str] = frozenset(
-    {
-        "appleboy/ssh-action@v1.2.5",
-    }
-)
+_UNPINNED_SECRET_ACTIONS: frozenset[str] = frozenset()
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -119,7 +115,21 @@ def test_the_gate_requires_success_not_merely_completion():
 
 
 def test_no_new_secret_holding_action_is_pinned_to_a_moving_tag():
-    """F97, as a ratchet. The recorded set may only shrink."""
+    """F97, as a ratchet. The recorded set may only shrink — and is now empty.
+
+    With nothing exempted, "no offenders" is this test's whole verdict, which
+    makes it worth asking what would happen if the scan found nothing at all: a
+    renamed workflow directory, a parser that stopped recognising `uses:`, or a
+    glob that stopped matching would all render it silently green. Rule 2 — an
+    unmeasured value is absent, never zero — so it asserts it measured
+    something before it asserts what it measured.
+    """
+    scanned = [(wf, ref) for wf in _workflow_files() for ref, _ in _steps_with_secrets(wf)]
+    assert scanned, (
+        "no workflow step taking a secret was found at all — the scan is broken, not the "
+        "workflows, and this test would otherwise pass by measuring nothing"
+    )
+
     offenders: dict[str, str] = {}
     for wf in _workflow_files():
         for ref, step in _steps_with_secrets(wf):
@@ -156,3 +166,35 @@ def test_the_ssh_step_still_receives_the_deploy_key():
     """The premise. If this step stops taking the key, F97 is moot and this file should go."""
     text = (WORKFLOWS / "deploy.yml").read_text(encoding="utf-8")
     assert "secrets.VPS_SSH_KEY" in text
+
+
+def test_the_scan_can_still_see_an_offender():
+    """The positive control for the empty exemption set.
+
+    `_UNPINNED_SECRET_ACTIONS` is empty now, so the ratchet above can only ever
+    report "clean". This proves the detector still fires: the same predicate,
+    given a step that takes a secret and floats on a tag, calls it an offender.
+    Without it, a `_SHA` regex that matched everything would look like success.
+    """
+    assert not _SHA.match("v1.2.5"), "a tag was accepted as a 40-character SHA"
+    assert _SHA.match("0ff4204d59e8e51228ff73bce53f80d53301dee2")  # pragma: allowlist secret
+    assert not _UNPINNED_SECRET_ACTIONS, (
+        "the exemption set is no longer empty — a new entry is the finding, not an exception to it"
+    )
+
+
+def test_the_ssh_action_is_pinned_to_the_commit_the_tag_pointed_at():
+    """The pin itself, named rather than left to the regex.
+
+    A 40-character hex string satisfies the ratchet; this says WHICH one, so a
+    future edit to some other SHA is a visible change rather than an equally
+    valid-looking one. `v1.2.5` is a lightweight tag — `git ls-remote --tags`
+    returns one ref with no `^{}` peel — so the tag resolves directly to this
+    commit, and the object was fetched and confirmed to carry `action.yml`.
+    """
+    text = (WORKFLOWS / "deploy.yml").read_text(encoding="utf-8")
+    assert (
+        "appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2"  # pragma: allowlist secret
+        in text
+    )
+    assert "appleboy/ssh-action@v1.2.5" not in text, "the mutable tag is still referenced"

@@ -200,3 +200,37 @@ def test_a_training_report_beside_the_artefacts_is_not_refused(repo: Path):
 
     r = _run(repo)
     assert r.returncode == 0, r.stdout
+
+
+def test_the_manifest_describes_exactly_what_ships():
+    """Every entry names a committed artefact, and no committed artefact is unnamed.
+
+    `lstm_signal.pt` was listed and never committed. That is inert to
+    `_verify_checksum`, which only reads files that exist — but it is also
+    strictly *more permissive* than not listing it: in production an unlisted
+    file is refused outright ("MODEL NOT IN INTEGRITY BASELINE"), while a listed
+    one is loaded if its bytes happen to match the recorded hash. So a stale
+    entry is a pre-approved hash for a file nobody has ever shipped.
+
+    `lstm_signal.pt` is produced by `scripts/train_lstm_signal.py` into the
+    operator's own directory; it is a training target, not a shipped artefact,
+    and the only other mention of the name is a training-job label in
+    `api/ml.py`. A8's remaining half.
+
+    The second half of the assertion is the one that keeps this honest: an
+    artefact that ships without an entry is the `7 unlisted artifacts` debt,
+    and this test must not quietly permit a new one.
+    """
+    import json
+    from pathlib import Path as _Path
+
+    models = _Path(__file__).resolve().parents[2] / "ml" / "saved_models"
+    manifest_path = models / "model_checksums.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest, "the manifest is empty — this test would otherwise assert nothing"
+
+    listed_but_absent = sorted(name for name in manifest if not (models / name).exists())
+    assert not listed_but_absent, (
+        f"{listed_but_absent} are recorded in {manifest_path.name} but do not ship. "
+        "A recorded hash for a file that was never committed is a pre-approved load."
+    )

@@ -193,12 +193,18 @@ artifacts that the fourth bullet below already described as self-baselining, so
 they are counted rather than assumed. The mismatch count is unchanged, which is
 the number the owner decision turns on.)*
 
-* **Two committed artifacts no longer hash to their recorded digest** —
-  `ml/saved_models/feature_scaler.pkl` and `ml/saved_models/stacking_ensemble.pkl`.
-  `ml._verify_checksum` returns `False` for both under `APP_ENV=production`,
-  which is the gate working correctly. Nobody has decided whether the file or
-  the record is the right one.
-* `model_checksums.json` lists `lstm_signal.pt`, which is not committed.
+* ~~**Two committed artifacts no longer hash to their recorded digest** —
+  `ml/saved_models/feature_scaler.pkl` and `ml/saved_models/stacking_ensemble.pkl`.~~
+  **RESOLVED 2026-09-13 — see §A8.** Git history settled which side was wrong
+  without anyone having to guess: the manifest never described any committed
+  version of either file, and the bytes on disk are a named, deliberate
+  regeneration. Both re-recorded; `_verify_checksum` under `APP_ENV=production`
+  went False → True for each, verified by execution.
+* ~~`model_checksums.json` lists `lstm_signal.pt`, which is not committed.~~
+  **RESOLVED 2026-09-14.** Entry removed — it is a training target of
+  `scripts/train_lstm_signal.py`, not a shipped artefact. The manifest now has
+  11 entries for 11 files, all verifying in production, asserted by
+  `tests/unit/test_model_artifact_manifest_gate.py`.
 * `ml/saved_models/rl/hopefx_ppo.zip` and `ml/rl_models/nuclear_decision_ppo.zip`
   are in no baseline at all.
 * Four of the five model directories **self-baseline in production**:
@@ -4461,7 +4467,36 @@ mean a genuine order being refused as somebody else's replay. `trade_executor`'s
 
 ---
 
-## §A8 — P0: two committed model artifacts fail the baseline that gates their load
+## §A8 — RESOLVED 2026-09-14: the manifest now describes exactly what ships
+
+**Resolution, measured rather than declared.**
+`python scripts/correction_register.py --id A8` reads FIXED:
+*all 11 listed artifacts match their recorded sha256*.
+
+| Was | Now |
+|---|---|
+| 2 mismatches (`feature_scaler.pkl`, `stacking_ensemble.pkl`) — refused at load in production | Both re-recorded 2026-09-13 after git history settled which side was wrong; `_verify_checksum` under `APP_ENV=production` went False → True for both, verified by execution |
+| 1 listed but absent (`lstm_signal.pt`) | Entry removed 2026-09-14. It is a training target of `scripts/train_lstm_signal.py`, not a shipped artefact, and the only other use of the name is a training-job label in `api/ml.py` |
+| 12 entries, 11 files | 11 entries, 11 files — and all 11 verify under `APP_ENV=production`, checked by running `_verify_checksum` on each |
+
+Why the stale entry was worth removing rather than leaving inert: in production
+an **unlisted** file is refused outright (*MODEL NOT IN INTEGRITY BASELINE*),
+while a **listed** one loads if its bytes match the recorded hash. A record for a
+file that was never committed is therefore strictly more permissive than no
+record — a pre-approved hash for something nobody has ever shipped.
+
+**What this did NOT resolve**, and what the ratchet still holds at its baseline:
+7 artefacts on disk are in no manifest, and 12 of 14 ML modules reach no
+integrity check at all — `ml/inference_engine.py` among them.
+`python scripts/model_provenance_report.py --check` blocks either from growing.
+Option 2 below — wiring the manifest into pre-commit or CI — is still the
+durable fix and is still the owner's call.
+
+The analysis below is kept as the record of what was found and why, including
+the correction it had to make to itself. It describes the tree as of
+2026-09-13; the table above is what is true now.
+
+---
 
 **Measured 2026-09-13.** `python scripts/model_provenance_report.py`:
 
