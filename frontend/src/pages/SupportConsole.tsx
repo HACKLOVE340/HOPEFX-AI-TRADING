@@ -422,10 +422,10 @@ export default function SupportConsole(): React.ReactElement {
               </ul>
 
               <div style={{ marginTop: 'auto', borderTop: `1px solid ${C.border}`, padding: 14 }}>
-                <label htmlFor="support-reply" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+                <label id="support-reply-label" htmlFor="support-reply" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
                   Reply to the customer
                 </label>
-                <textarea
+                <textarea aria-labelledby="support-reply-label"
                   id="support-reply" data-testid="reply-box" value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   disabled={!mine || current.status === 'resolved'}

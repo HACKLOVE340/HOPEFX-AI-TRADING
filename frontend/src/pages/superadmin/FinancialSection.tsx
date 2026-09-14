@@ -484,7 +484,7 @@ const ReconciliationPanel: React.FC = () => {
                   <td style={{ padding: '10px 12px', minWidth: 220 }}>
                     {r.status === 'discrepancy' && (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <input
+                        <input aria-label="Resolution notes"
                           placeholder="Resolution notes…"
                           value={notes[r.recon_id] ?? ''}
                           onChange={e => setNotes(n => ({ ...n, [r.recon_id]: e.target.value }))}
@@ -974,7 +974,7 @@ const FinancialSection: React.FC = () => {
                               <>
                                 {refundTarget?.payment_id === p.payment_id ? (
                                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                    <input
+                                    <input aria-label="Reason"
                                       placeholder="Reason…"
                                       value={refundReason}
                                       onChange={e => setRefundReason(e.target.value)}

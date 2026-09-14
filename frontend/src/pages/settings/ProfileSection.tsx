@@ -155,7 +155,7 @@ const ProfileSection: React.FC = () => {
           />
         </Field>
         <Field label="Bio" description="Shown on your public profile (max 500 chars).">
-          <textarea
+          <textarea aria-label="Tell other traders about yourself"
             value={form.bio}
             onChange={(e) => update({ bio: e.target.value })}
             maxLength={500}

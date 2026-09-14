@@ -308,10 +308,10 @@ export const GenerationWorkbench: React.FC = () => {
           </div>
         </div>
 
-        <label htmlFor="wb-prompt" style={{ ...label, color: COLOR.dim }}>
+        <label id="wb-prompt-label" htmlFor="wb-prompt" style={{ ...label, color: COLOR.dim }}>
           What should it work on?
         </label>
-        <textarea
+        <textarea aria-labelledby="wb-prompt-label"
           id="wb-prompt"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}

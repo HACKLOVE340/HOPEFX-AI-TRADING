@@ -360,7 +360,7 @@ const CopyTrading: React.FC = () => {
 
                 {/* Allocation update */}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-                  <input
+                  <input aria-label="New allocation"
                     type="number"
                     placeholder="New allocation…"
                     value={editAlloc[sess.trader_id] ?? ''}

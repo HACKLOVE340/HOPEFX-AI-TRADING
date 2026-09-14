@@ -672,10 +672,10 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           background: 'linear-gradient(0deg, rgba(16,26,44,.62), transparent)',
         }}
       >
-        <label htmlFor="hub-ask" style={{ ...label, flex: '0 0 auto' }}>
+        <label id="hub-ask-label" htmlFor="hub-ask" style={{ ...label, flex: '0 0 auto' }}>
           Ask
         </label>
-        <input
+        <input aria-labelledby="hub-ask-label"
           id="hub-ask"
           ref={inputRef}
           value={typed}

@@ -698,7 +698,7 @@ const RoutesPanel: React.FC = () => {
       </div>
       <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />
       <div style={{ marginBottom: 12 }}>
-        <input
+        <input aria-label="Filter by path or method"
           type="text" value={filter} onChange={e => setFilter(e.target.value)}
           placeholder="Filter by path or method…"
           style={{ width: '100%', padding: '8px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 13, boxSizing: 'border-box' }}

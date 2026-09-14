@@ -67,6 +67,17 @@ function measure(): Record<string, number> {
   return counts;
 }
 
+/** How many files eslint actually examined. Zero means the scan broke. */
+function linted(): number {
+  const run = spawnSync('npx', ['eslint', 'src', '-f', 'json'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (!run.stdout) return 0;
+  return JSON.parse(run.stdout).length;
+}
+
 describe('a11y debt list — F172', () => {
   it('lists files that exist', () => {
     const gone = Object.keys(debt.files).filter((f) => !existsSync(resolve(ROOT, f)));
@@ -78,12 +89,24 @@ describe('a11y debt list — F172', () => {
     expect(summed).toBe(debt._total);
   });
 
-  it('records a debt at the scale the parser measured', () => {
-    // A sanity floor. If this collapses, the measurement broke rather than the
-    // debt — the failure mode the coverage gate had once, where a broken
-    // measurement read as 361 clean modules.
-    expect(Object.keys(debt.files).length).toBeGreaterThan(40);
-    expect(debt._total).toBeGreaterThan(90);
+  it('proves the scan ran, rather than that the debt is still large', { timeout: 180_000 }, () => {
+    // This was a floor on the DEBT — "more than 40 files, more than 90
+    // violations" — written when there were 138 of them to catch the failure
+    // mode where a broken measurement reads as a clean tree, the way the
+    // coverage gate once reported 361 clean modules it had never looked at.
+    //
+    // The intent was right and the expression was wrong: a floor on the debt
+    // fails when the debt genuinely falls, which is the outcome the whole
+    // ratchet exists to produce. It went red at 82 for exactly that reason.
+    //
+    // What it actually needs to assert is that the SCAN reached the tree. So
+    // it counts what eslint looked at, not what it found — that number does
+    // not shrink as the debt is paid, and it collapses to zero precisely when
+    // the measurement breaks.
+    expect(
+      linted(),
+      'eslint returned almost no files — the scan broke, and zero findings from a broken scan is indistinguishable from success',
+    ).toBeGreaterThan(100);
   });
 
   it('matches what eslint finds, entry for entry', { timeout: 180_000 }, () => {

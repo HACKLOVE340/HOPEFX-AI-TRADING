@@ -190,7 +190,7 @@ function SupportTicketForm({ onCreated }: { onCreated: () => void }) {
       <form onSubmit={submit}>
         <div style={s.field}>
           <label style={s.label}>Subject *</label>
-          <input
+          <input aria-label="Describe your issue briefly"
             style={s.input}
             value={form.subject}
             onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
@@ -229,7 +229,7 @@ function SupportTicketForm({ onCreated }: { onCreated: () => void }) {
         </div>
         <div style={s.field}>
           <label style={s.label}>Message * (min 20 characters)</label>
-          <textarea
+          <textarea aria-label="Describe your issue in detail"
             style={s.textarea}
             value={form.message}
             onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
@@ -394,7 +394,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           <div>
             <label style={s.label}>Target Symbols (comma-separated)</label>
-            <input
+            <input aria-label="XAUUSD, EURUSD, BTCUSD"
               style={s.input}
               value={symbolsInput}
               onChange={e => setSymbolsInput(e.target.value)}
@@ -413,7 +413,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
         </div>
         <div style={s.field}>
           <label style={s.label}>Description * (min 50 characters)</label>
-          <textarea
+          <textarea aria-label="Describe your requirements in detail: entry/exit logic, risk parameters, data sources, expected outputs"
             style={{ ...s.textarea, minHeight: 140 }}
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}

@@ -211,10 +211,10 @@ export default function Support(): React.ReactElement {
                 }}>{error}</p>
               ) : null}
 
-              <label htmlFor="ticket-subject" style={{ display: 'block', fontSize: 12, color: C.muted, marginBottom: 4 }}>
+              <label id="ticket-subject-label" htmlFor="ticket-subject" style={{ display: 'block', fontSize: 12, color: C.muted, marginBottom: 4 }}>
                 Subject
               </label>
-              <input
+              <input aria-labelledby="ticket-subject-label"
                 id="ticket-subject" data-testid="subject-input" value={subject} maxLength={MAX_SUBJECT}
                 onChange={(e) => setSubject(e.target.value)}
                 style={{
@@ -223,10 +223,10 @@ export default function Support(): React.ReactElement {
                 }}
               />
 
-              <label htmlFor="ticket-body" style={{ display: 'block', fontSize: 12, color: C.muted, marginBottom: 4 }}>
+              <label id="ticket-body-label" htmlFor="ticket-body" style={{ display: 'block', fontSize: 12, color: C.muted, marginBottom: 4 }}>
                 What happened
               </label>
-              <textarea
+              <textarea aria-labelledby="ticket-body-label"
                 id="ticket-body" data-testid="body-input" value={body} maxLength={MAX_BODY}
                 onChange={(e) => setBody(e.target.value)}
                 style={{
@@ -327,10 +327,10 @@ export default function Support(): React.ReactElement {
                     background: C.urgentBg, border: `1px solid ${C.urgent}`, color: C.urgentText,
                   }}>{error}</p>
                 ) : null}
-                <label htmlFor="my-reply" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+                <label id="my-reply-label" htmlFor="my-reply" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
                   Add to this ticket
                 </label>
-                <textarea
+                <textarea aria-labelledby="my-reply-label"
                   id="my-reply" data-testid="my-reply" value={reply} maxLength={MAX_BODY}
                   onChange={(e) => setReply(e.target.value)}
                   placeholder={resolved ? 'Replying reopens this ticket.' : 'Add anything else…'}

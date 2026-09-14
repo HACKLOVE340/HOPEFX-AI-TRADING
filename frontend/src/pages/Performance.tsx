@@ -559,7 +559,7 @@ const Performance: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <h3 style={s.cardTitle}>Trade History {tradesQ.data ? `(${filteredTrades.length})` : ''}</h3>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input type="text" placeholder="Filter by symbol…" value={tradeSymbol} onChange={(e) => setTradeSymbol(e.target.value)} style={s.filterInput} />
+              <input aria-label="Filter by symbol" type="text" placeholder="Filter by symbol…" value={tradeSymbol} onChange={(e) => setTradeSymbol(e.target.value)} style={s.filterInput} />
               <select value={tradeSide} onChange={(e) => setTradeSide(e.target.value)} style={s.filterInput}>
                 <option value="">All sides</option>
                 <option value="buy">Buy / Long</option>

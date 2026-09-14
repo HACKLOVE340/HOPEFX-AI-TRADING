@@ -140,9 +140,9 @@ const ResetPassword: React.FC = () => {
             <form onSubmit={handleSubmit} style={s.form} noValidate>
               {/* New password */}
               <div style={s.field}>
-                <label style={s.label} htmlFor="password">New password</label>
+                <label id="password-label" style={s.label} htmlFor="password">New password</label>
                 <div style={{ position: 'relative' }}>
-                  <input
+                  <input aria-labelledby="password-label"
                     id="password"
                     type={showPass ? 'text' : 'password'}
                     value={password}
@@ -177,9 +177,9 @@ const ResetPassword: React.FC = () => {
 
               {/* Confirm */}
               <div style={s.field}>
-                <label style={s.label} htmlFor="confirm">Confirm new password</label>
+                <label id="confirm-label" style={s.label} htmlFor="confirm">Confirm new password</label>
                 <div style={{ position: 'relative' }}>
-                  <input
+                  <input aria-labelledby="confirm-label"
                     id="confirm"
                     type={showConf ? 'text' : 'password'}
                     value={confirm}

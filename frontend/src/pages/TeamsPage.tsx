@@ -166,7 +166,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
           {isOwner && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                <input aria-label="Email address" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                   placeholder="Email address"
                   style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
                     padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
@@ -327,10 +327,10 @@ const TeamsPage: React.FC = () => {
           padding: 20, marginBottom: 20 }}>
           <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Create Team</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Team name"
+            <input aria-label="Team name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Team name"
               style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
                 padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
-            <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)"
+            <input aria-label="Description (optional)" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)"
               style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
                 padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
           </div>

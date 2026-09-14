@@ -556,7 +556,7 @@ const RiskCalculator: React.FC = () => {
               </Link>
               {/* Save calculation */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-                <input
+                <input aria-label="Label (optional)"
                   value={calcLabel}
                   onChange={e => setCalcLabel(e.target.value)}
                   placeholder="Label (optional)"

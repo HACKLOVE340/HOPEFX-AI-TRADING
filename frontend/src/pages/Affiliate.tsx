@@ -183,7 +183,7 @@ const Affiliate:React.FC=()=>{
             <h3 style={st.cardTitle}>Request Commission Withdrawal</h3>
             <p style={{color:'var(--text-muted)',fontSize:13,marginBottom:12}}>Minimum withdrawal: <strong style={{color:'var(--text-dim)'}}>{fmtUSD(MIN_WITHDRAWAL)}</strong></p>
             <div style={{display:'flex',gap:10,alignItems:'center'}}>
-              <input type="number" min={MIN_WITHDRAWAL} step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)" style={st.input}/>
+              <input aria-label="Amount (USD)" type="number" min={MIN_WITHDRAWAL} step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)" style={st.input}/>
               <button onClick={handleWithdraw} disabled={withdrawing||!withdrawAmt} style={{...st.primaryBtn,opacity:withdrawing||!withdrawAmt?0.6:1}}>{withdrawing?'Processing…':'Withdraw'}</button>
             </div>
             {withdrawMsg&&<div style={{marginTop:10,fontSize:13,color:withdrawOk?'var(--gain)':'var(--loss)'}}>{withdrawMsg}</div>}

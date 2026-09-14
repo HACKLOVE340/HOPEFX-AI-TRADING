@@ -256,7 +256,7 @@ const AuditLog: React.FC = () => {
 
       {/* Filters */}
       <div style={s.filters}>
-        <input
+        <input aria-label="Filter by user ID"
           type="text"
           placeholder="Filter by user ID…"
           value={filterUser}
@@ -264,7 +264,7 @@ const AuditLog: React.FC = () => {
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           style={s.input}
         />
-        <input
+        <input aria-label="Filter by event type"
           type="text"
           placeholder="Filter by event type…"
           value={filterType}

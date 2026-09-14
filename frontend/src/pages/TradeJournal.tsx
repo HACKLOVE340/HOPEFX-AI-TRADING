@@ -422,7 +422,7 @@ const TradeJournal: React.FC = () => {
                     {' '}Rule deviation
                   </label>
                   {!editForm.followed_rules && (
-                    <input value={editForm.rule_deviation ?? ''} onChange={(e) => setEditForm({ ...editForm, rule_deviation: e.target.value })}
+                    <input aria-label="What rule did you break?" value={editForm.rule_deviation ?? ''} onChange={(e) => setEditForm({ ...editForm, rule_deviation: e.target.value })}
                       placeholder="What rule did you break?" style={{ ...s.input, marginTop: 6 }} />
                   )}
 

@@ -253,7 +253,7 @@ const WalkForward: React.FC = () => {
             🤖 Generate Strategy
           </button>
           <div style={s.searchRow}>
-            <input
+            <input aria-label="Run ID"
               style={s.searchInput}
               placeholder="Run ID…"
               value={inputId}

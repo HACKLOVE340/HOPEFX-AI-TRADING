@@ -317,7 +317,7 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
       borderRadius: 6, padding: '5px 8px',
     }}>
       <Search size={12} strokeWidth={2} aria-hidden style={{ color: '#475569', flexShrink: 0 }} />
-      <input
+      <input aria-label="Search"
         type="text"
         placeholder="Search…"
         value={value}

@@ -216,7 +216,7 @@ const DangerSection: React.FC = () => {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <input
+          <input aria-label="Type &quot;DELETE&quot; to confirm"
             type="text"
             value={deleteConfirm}
             onChange={(e) => { setDeleteConfirm(e.target.value); setDeleteError(''); }}

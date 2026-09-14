@@ -304,7 +304,7 @@ const MobilePage: React.FC = () => {
           Register a device push token to receive trade alerts, signal notifications, and account updates on your mobile device.
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
-          <input
+          <input aria-label="Paste device push token"
             type="text"
             value={pushToken}
             onChange={e => setPushToken(e.target.value)}

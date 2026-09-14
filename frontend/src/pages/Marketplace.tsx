@@ -71,9 +71,9 @@ const ReviewModal: React.FC<{strategyId:string;onClose:()=>void;onSubmitted:()=>
         <label style={st.label}>Rating</label>
         <div style={{display:'flex',gap:6,marginBottom:12}}>{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:24,color:n<=rating?'#f59e0b':'#334155'}}>★</button>)}</div>
         <label style={st.label}>Title</label>
-        <input value={title} onChange={e=>setTitle(e.target.value)} style={st.input} placeholder="Summary of your experience"/>
+        <input aria-label="Summary of your experience" value={title} onChange={e=>setTitle(e.target.value)} style={st.input} placeholder="Summary of your experience"/>
         <label style={{...st.label,marginTop:10}}>Review</label>
-        <textarea value={content} onChange={e=>setContent(e.target.value)} style={st.textarea} rows={4} placeholder="Describe your experience with this strategy…"/>
+        <textarea aria-label="Describe your experience with this strategy" value={content} onChange={e=>setContent(e.target.value)} style={st.textarea} rows={4} placeholder="Describe your experience with this strategy…"/>
         {err&&<div style={st.purchaseError}>{err}</div>}
         <button onClick={submit} disabled={submitting} style={{...st.subscribeBtn,marginTop:12,opacity:submitting?0.6:1}}>{submitting?'Submitting…':'Submit Review'}</button>
       </div>
@@ -244,7 +244,7 @@ const Marketplace: React.FC = () => {
       {mainTab==='browse'&&(
         <>
           <div style={st.filterBar}>
-            <input type="search" placeholder="Search strategies…" value={search} onChange={e=>setSearch(e.target.value)} style={st.searchInput}/>
+            <input aria-label="Search strategies" type="search" placeholder="Search strategies…" value={search} onChange={e=>setSearch(e.target.value)} style={st.searchInput}/>
             <select value={sortBy} onChange={e=>setSortBy(e.target.value as SortOption)} style={st.select}><option value="popular">Most popular</option><option value="rating">Highest rated</option><option value="newest">Newest</option><option value="price_low">Price: low → high</option><option value="price_high">Price: high → low</option></select>
           </div>
           <div style={st.categoryRow}>{CATEGORIES.map(c=><button key={c} onClick={()=>setCategory(c)} style={{...st.categoryPill,background:category===c?'#3b82f6':'#1e293b',color:category===c?'#fff':'var(--text-dim)',border:`1px solid ${category===c?'#3b82f6':'#334155'}`}}>{c==='all'?'All':c.replace('_',' ')}</button>)}</div>

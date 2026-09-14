@@ -197,7 +197,7 @@ const Leaderboard: React.FC = () => {
           {/* Filters row — stacks on mobile */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4">
             <div className="flex gap-2 flex-1">
-              <input
+              <input aria-label="Search trader"
                 type="text"
                 placeholder="Search trader…"
                 value={search}

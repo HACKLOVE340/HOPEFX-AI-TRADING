@@ -228,7 +228,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message shown to users</label>
-          <input
+          <input aria-label="We're performing scheduled maintenance. Back shortly"
             style={inputStyle}
             value={maint.maintenance_message}
             onChange={e => setMaint(m => ({ ...m, maintenance_message: e.target.value }))}
@@ -258,7 +258,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
         </div>
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message</label>
-          <textarea
+          <textarea aria-label="Message to send to all active users"
             style={{ ...inputStyle, resize: 'vertical' as const }}
             rows={3}
             value={broadcast.body}

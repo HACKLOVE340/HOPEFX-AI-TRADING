@@ -264,7 +264,7 @@ const DocsPage: React.FC = () => {
                 transform: 'translateY(-50%)', color: '#475569',
               }}
             />
-            <input
+            <input aria-label="Search documentation"
               type="text"
               placeholder="Search documentation…"
               value={query}

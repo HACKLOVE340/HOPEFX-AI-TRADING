@@ -73,8 +73,8 @@ const ForgotPassword: React.FC = () => {
 
             <form onSubmit={handleSubmit} style={s.form} noValidate>
               <div style={s.field}>
-                <label style={s.label} htmlFor="email">Email address</label>
-                <input
+                <label id="email-label" style={s.label} htmlFor="email">Email address</label>
+                <input aria-labelledby="email-label"
                   id="email" type="email" value={email}
                   onChange={(e) => { setEmail(e.target.value); setError(''); }}
                   onFocus={() => setFocused(true)}

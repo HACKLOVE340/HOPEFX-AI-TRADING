@@ -395,7 +395,7 @@ const Settings: React.FC = () => {
                 borderRadius: 8, padding: '7px 10px',
               }}>
                 <span style={{ fontSize: 12, color: '#475569', flexShrink: 0 }}>🔍</span>
-                <input
+                <input aria-label="Search settings"
                   type="text"
                   placeholder="Search settings…"
                   value={search}

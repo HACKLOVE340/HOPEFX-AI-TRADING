@@ -346,7 +346,7 @@ export const CommandPalette: React.FC = () => {
         {/* Search input */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid #1e293b' }}>
           <SearchIcon size={16} strokeWidth={2} color="#475569" style={{ flexShrink: 0 }} aria-hidden="true" />
-          <input
+          <input aria-label="Search pages, actions, settings"
             ref={inputRef}
             value={query}
             onChange={e => { setQuery(e.target.value); setSelected(0); }}

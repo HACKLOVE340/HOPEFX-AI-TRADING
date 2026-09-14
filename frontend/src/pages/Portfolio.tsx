@@ -299,7 +299,7 @@ const TradeHistory: React.FC = () => {
       )}
       <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
       {/* Search */}
-      <input
+      <input aria-label="Symbol"
         type="text"
         placeholder="Symbol…"
         value={search}
