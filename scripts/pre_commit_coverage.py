@@ -370,6 +370,11 @@ class Verdict:
     #: Recorded debt: does not block, but is a warning and goes to stderr like
     #: one. A non-blocking line on stdout is a line nobody reads.
     debt: bool = False
+    #: The gate produced NO number for this module — it is not "below the
+    #: floor", it is unknown. Kept separate so the summary cannot report a
+    #: measurement it never took. Rule 2: an unmeasured value is absent, never
+    #: zero.
+    unmeasured: bool = False
 
 
 def _coveragerc_omits(module_path: Path, *, config: Path | None = None) -> bool:
@@ -437,6 +442,7 @@ def _judge(
     recorded: bool,
     omitted: bool = False,
     test_count: int | None = None,
+    unmeasured_reason: str | None = None,
 ) -> Verdict:
     """Decide one module. Pure — no I/O, so the decision can be asserted.
 
@@ -467,17 +473,39 @@ def _judge(
     # is how a correct gate earns a reputation for being wrong.
     where = f"test: {test_path}" if not test_count or test_count == 1 else f"{test_count} test files, e.g. {test_path}"
     if pct is None:
-        why = (
-            f"{shown}: EXCLUDED by .coveragerc [run] omit, so it cannot be measured. "
-            "Remove its line from the omit list (and add the tests it then needs) "
-            "rather than looking for a missing import."
-            if omitted
-            else f"{shown}: coverage could not be measured ({where}) — "
-            "the test may not import the module, or may fail to collect"
-        )
+        # `_run_coverage` knows WHICH way the measurement failed and used to
+        # keep it to itself: `main` printed the reason as raw output while the
+        # verdict always said "the test may not import the module". For a
+        # timeout that advice is wrong — run.py is imported by 74 resolved test
+        # files, nothing is missing, the gate simply ran out of budget — and it
+        # sends the reader looking for something that is already there.
+        timed_out = bool(unmeasured_reason) and "timed out" in unmeasured_reason.lower()
+        if omitted:
+            why = (
+                f"{shown}: EXCLUDED by .coveragerc [run] omit, so it cannot be measured. "
+                "Remove its line from the omit list (and add the tests it then needs) "
+                "rather than looking for a missing import."
+            )
+        elif timed_out:
+            why = (
+                f"{shown}: coverage TIMED OUT, so no number was produced ({where}). "
+                "This is not a missing import and not a low figure — the run did not "
+                "finish. The cost is usually the size of the resolved test set, not the "
+                "module: narrow what `_find_test_files` pairs to it, or measure it alone."
+            )
+        else:
+            why = (
+                f"{shown}: coverage could not be measured ({where}) — "
+                "the test may not import the module, or may fail to collect"
+            )
         if recorded:
-            return Verdict(True, f"DEBT {why}. Recorded in {BASELINE_PATH.name}; the list may only shrink.", debt=True)
-        return Verdict(False, why)
+            return Verdict(
+                True,
+                f"DEBT {why.rstrip('.')}. Recorded in {BASELINE_PATH.name}; the list may only shrink.",
+                debt=True,
+                unmeasured=True,
+            )
+        return Verdict(False, why, unmeasured=True)
 
     if pct >= _THRESHOLD:
         if recorded:
@@ -509,6 +537,8 @@ def main(argv: list[str]) -> int:
         return 0
 
     failures: list[str] = []
+
+    unmeasured: list[str] = []
     checked = 0
 
     for arg in argv:
@@ -538,6 +568,7 @@ def main(argv: list[str]) -> int:
             recorded=str(path).replace("\\", "/") in _load_baseline(),
             omitted=_coveragerc_omits(path),
             test_count=len(test_files),
+            unmeasured_reason=output if coverage_pct is None else None,
         )
 
         if verdict.ok:
@@ -545,6 +576,8 @@ def main(argv: list[str]) -> int:
             continue
 
         failures.append(verdict.message)
+        if verdict.unmeasured:
+            unmeasured.append(verdict.message)
         print(f"pre_commit_coverage: FAIL {verdict.message}", file=sys.stderr)
         if coverage_pct is None:
             print(output[:500], file=sys.stderr)
@@ -553,10 +586,15 @@ def main(argv: list[str]) -> int:
         return 0
 
     if failures:
-        print(
-            f"\npre_commit_coverage: {len(failures)} module(s) below {_THRESHOLD}% coverage threshold:",
-            file=sys.stderr,
-        )
+        # Counted apart. Saying "N below 80%" about a module nobody measured is
+        # the gate telling exactly the kind of lie it exists to catch.
+        below = len(failures) - len(unmeasured)
+        parts = []
+        if below:
+            parts.append(f"{below} module(s) below {_THRESHOLD}% coverage threshold")
+        if unmeasured:
+            parts.append(f"{len(unmeasured)} module(s) whose coverage could not be measured")
+        print(f"\npre_commit_coverage: {' · '.join(parts)}:", file=sys.stderr)
         for f in failures:
             print(f"  {f}", file=sys.stderr)
         print(

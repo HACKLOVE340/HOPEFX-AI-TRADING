@@ -85,6 +85,7 @@ import hashlib as _hashlib
 import os as _os
 import json as _json
 import logging as _logging
+from dataclasses import dataclass as _dataclass
 from pathlib import Path as _Path
 from typing import Any as _Any
 from api.error_details import safe_error
@@ -317,50 +318,102 @@ def _record_checksums(directory: _Path | None = None) -> None:
         _ml_logger.warning("Could not record model checksums: %s", exc)
 
 
-def _try_load(path: _Path) -> _Any | None:
-    """Load a model file via joblib with SHA-256 integrity check.
+@_dataclass(frozen=True)
+class ArtifactLoad:
+    """The outcome of loading one model artifact, with the three failures kept apart.
 
-    Uses joblib (not raw pickle) — joblib handles numpy arrays more safely
-    and is the standard for sklearn/XGBoost pipelines.  Raw pickle is kept
-    as a fallback for files that joblib cannot read.
+    `_try_load` returned ``None`` for all of them, and one caller could not
+    afford the ambiguity: `_load_from_registry` checks ``exists()`` itself
+    before loading, so a ``None`` there means refused or unreadable — never
+    absent — and it returned ``(None, "")``, which is also what "no registry
+    configured" returns. `_load_models` then fell through its priority chain and
+    loaded a DIFFERENT model. An integrity refusal on the active model became a
+    silent model substitution.
 
-    On load failure a CRITICAL log is emitted with the exact remediation
-    command so operators can detect silent model degradation in log aggregators.
+    status is one of:
+
+    ``loaded``      the artifact is here, verified, and unpickled
+    ``absent``      no such file
+    ``refused``     `_verify_checksum` rejected it — a mismatch, or, in
+                    production, a file that arrived unlisted. An integrity
+                    event, not a missing file.
+    ``unreadable``  it passed integrity and then failed to unpickle. A
+                    different problem with a different remedy.
+    """
+
+    status: str
+    value: _Any | None = None
+    reason: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "loaded"
+
+
+def load_artifact(path: _Path) -> ArtifactLoad:
+    """Load one model artifact, reporting WHICH way it failed.
+
+    See :class:`ArtifactLoad`. `_try_load` is the older entry point and is kept
+    as a thin wrapper over this, so its five call sites keep working unchanged.
+
+    This function deliberately does NOT decide what a caller should do about a
+    refusal. Whether an integrity refusal on the active model should halt
+    inference or fall through to the next model in the chain is a policy
+    question for the owner — see MASTER_OUTSTANDING §A8, which names making the
+    distinction available as the half engineering may do without one.
     """
     if not path.exists():
-        return None
+        return ArtifactLoad("absent", None, f"{path.name} is not present")
+
     if not _verify_checksum(path):
-        # Checksum mismatch — refuse to load potentially tampered model
-        return None
+        # _verify_checksum has already logged CRITICAL with the specifics.
+        return ArtifactLoad(
+            "refused",
+            None,
+            f"{path.name} failed the integrity check — it exists but was refused, which is not the same as missing",
+        )
+
     try:
         import joblib as _joblib
 
-        return _joblib.load(path)  # nosec B301 - path is always from ml/saved_models (internal)
+        return ArtifactLoad("loaded", _joblib.load(path))  # nosec B301 - integrity-checked above
     except Exception as _jl_exc:
         _ml_logger.debug("joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc)
-        try:
-            import pickle as _pickle  # nosec B403
 
-            with _Path(path).open("rb") as f:
-                return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch
-        except Exception as exc:
-            import sys as _sys
+    try:
+        import pickle as _pickle  # nosec B403
 
-            _ml_logger.critical(
-                "CANNOT LOAD MODEL %s: %s\n"
-                "  Python version: %s\n"
-                "  This is usually a pickle protocol mismatch between the Python\n"
-                "  version used to train the model and the current runtime.\n"
-                "  Remediation (run inside Docker on Python 3.10):\n"
-                "    docker compose run --rm app python scripts/resave_models.py\n"
-                "  Or retrain from scratch:\n"
-                "    docker compose run --rm app python ml/train_advanced.py --years 50 --oos-years 3\n"
-                "  The engine will fall back to a weaker model — live trading is NOT recommended.",
-                path.name,
-                exc,
-                _sys.version,
-            )
-            return None
+        with _Path(path).open("rb") as f:
+            return ArtifactLoad("loaded", _pickle.load(f))  # nosec B301 - joblib failed; legacy fallback
+    except Exception as exc:
+        import sys as _sys
+
+        _ml_logger.critical(
+            "CANNOT LOAD MODEL %s: %s\n"
+            "  Python version: %s\n"
+            "  The artifact passed its integrity check and still could not be\n"
+            "  unpickled — usually a pickle protocol mismatch between the Python\n"
+            "  that trained it and this runtime.\n"
+            "  Production and the retrain workflows both run Python 3.12; an\n"
+            "  artifact pickled under anything else is loaded by nothing.\n"
+            "  Remediation:\n"
+            "    docker compose run --rm app python scripts/resave_models.py\n",
+            path.name,
+            exc,
+            _sys.version.split()[0],
+        )
+        return ArtifactLoad("unreadable", None, f"{path.name} passed integrity and failed to unpickle: {exc}")
+
+
+def _try_load(path: _Path) -> _Any | None:
+    """Load a model artifact, or return None.
+
+    The older entry point, kept because it has five call sites here. It cannot
+    say WHY a load failed — absent, refused and unreadable all arrive as None —
+    and that ambiguity had a consequence: see :class:`ArtifactLoad`. Any caller
+    that needs to tell them apart should use :func:`load_artifact` instead.
+    """
+    return load_artifact(path).value
 
 
 def _load_from_registry() -> "tuple[_Any | None, str]":
@@ -398,9 +451,33 @@ def _load_from_registry() -> "tuple[_Any | None, str]":
             _ml_logger.warning("_load_from_registry: active model file not found: %s", pkl_file)
             return None, ""
 
-        model = _try_load(pkl_file)
-        if model is None:
+        loaded = load_artifact(pkl_file)
+        if not loaded.ok:
+            # This used to be `if model is None: return None, ""` — the same
+            # value `_load_from_registry` returns when there is no registry at
+            # all. `_load_models` then falls through its priority chain and
+            # loads a DIFFERENT model, so an integrity refusal on the ACTIVE
+            # model became a silent substitution. The fall-through is unchanged
+            # (that policy is the owner's — §A8); what changes is that a refusal
+            # now says so, at a level an operator sees.
+            if loaded.status == "refused":
+                _ml_logger.critical(
+                    "ACTIVE MODEL REFUSED: %s (%s) failed its integrity check. The model "
+                    "chain will now fall through to the next candidate, so inference "
+                    "continues on a model that was NOT the one selected in registry.json.",
+                    active,
+                    pkl_file.name,
+                )
+            else:
+                _ml_logger.error(
+                    "Active model %s (%s) could not be loaded: %s — falling through to the "
+                    "next candidate in the chain.",
+                    active,
+                    pkl_file.name,
+                    loaded.reason,
+                )
             return None, ""
+        model = loaded.value
 
         # ── Unwrap stacking_dict format (MTF ensemble) ────────────────────────
         pkl_format = entry.get("pkl_format", "sklearn_estimator")

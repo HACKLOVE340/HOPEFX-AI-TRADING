@@ -1599,6 +1599,54 @@ def _WALLET_CONSUMER_FILES() -> list[str]:
     return [rel for rel in _production_python() if rel not in plumbing and _WALLET_CONSUMER.search(_code(rel) or "")]
 
 
+def _p_load_ambiguity() -> tuple[str, str]:
+    """Can a caller tell a REFUSED model artifact from an absent one?"""
+    body = _code("ml/__init__.py")
+    if not body:
+        return UNVERIFIED, "ml/__init__.py not found"
+    if "_verify_checksum" not in body:
+        return UNVERIFIED, "the integrity check moved — this probe no longer measures it"
+
+    distinguishes = "def load_artifact" in body and '"refused"' in body
+    # A distinction nothing consults is not a distinction. The registry path is
+    # the caller that could not afford the ambiguity.
+    consumed = body.count("load_artifact") >= 3 and 'loaded.status == "refused"' in body
+    if distinguishes and consumed:
+        return _named(
+            FIXED,
+            "load_artifact reports absent / refused / unreadable separately, and the "
+            "registry path reports a refused ACTIVE model at CRITICAL instead of returning "
+            "the same value as an unconfigured registry",
+        )
+    return _named(
+        OPEN,
+        f"distinguishes={distinguishes} consumed={consumed} — a refused artifact is "
+        "indistinguishable from one that was never installed, so an integrity refusal on the "
+        "active model falls through the chain and loads a different model silently",
+    )
+
+
+def _p_gate_unmeasured() -> tuple[str, str]:
+    """Does the coverage gate tell 'no number' apart from 'below the floor'?"""
+    body = _code("scripts/pre_commit_coverage.py")
+    if not body:
+        return UNVERIFIED, "scripts/pre_commit_coverage.py not found"
+    knows = "unmeasured" in body and "unmeasured_reason" in body
+    reports = "could not be measured" in body and "TIMED OUT" in body
+    wired = "unmeasured_reason=output" in body
+    if knows and reports and wired:
+        return _named(
+            FIXED,
+            "a module the gate could not measure is counted and reported apart from one "
+            "below the floor, and a timeout says so rather than blaming a missing import",
+        )
+    return _named(
+        OPEN,
+        f"knows={knows} reports={reports} wired={wired} — an unmeasured module is reported "
+        "as 'below 80% threshold', which is a measurement the gate never took",
+    )
+
+
 def _p_mode_resolver() -> tuple[str, str]:
     """Do the displayed plan and the dispatch read ONE resolution?"""
     runner = _code("run.py")
@@ -3367,6 +3415,67 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id ADR-LEDGER",
         _p_adr_ledger,
         [S_DOC, S_TDD],
+    ),
+    Finding(
+        "LOAD-AMBIGUITY",
+        "A refused model artifact was indistinguishable from one never installed",
+        "P1",
+        "ML",
+        "MASTER_OUTSTANDING §A8 — named there as the half engineering may do without a decision",
+        "`ml.__init__._try_load` returned `None` for three different things: the file is absent, "
+        "`_verify_checksum` REFUSED it (a mismatch, or in production a file that arrived "
+        "unlisted — an integrity event), or it passed integrity and failed to unpickle. One "
+        "caller could not afford the ambiguity. `_load_from_registry` checks `pkl_file.exists()` "
+        "ITSELF before loading, so a `None` there can only mean refused or unreadable — never "
+        'absent — and it returned `(None, "")`, which is exactly what it returns when there is '
+        "no registry configured at all. `_load_models` is a priority chain (registry-active, "
+        "then advanced_oos.pkl, then the macro and baseline pairs), so an integrity refusal on "
+        "the ACTIVE model fell through and loaded a DIFFERENT model, with a warning as the only "
+        "trace at the decision point. The control fired correctly and the caller carried on — "
+        "hopefx-dead-controls, second shape. `load_artifact` now returns absent / refused / "
+        "unreadable with a reason; `_try_load` is a thin wrapper over it so its five call sites "
+        "are untouched; and the registry path logs a refused active model at CRITICAL, naming "
+        "that inference is about to continue on a model that was not the one selected. The "
+        "fall-through POLICY is deliberately unchanged — whether an integrity refusal should "
+        "halt inference or substitute is the owner's call, and §A8 scopes engineering to making "
+        "the distinction available. Also corrected while here: the remediation message told "
+        "operators to re-save models on Python 3.10, which is an interpreter neither CI nor "
+        "production runs.",
+        "`tests/unit/test_artifact_load_distinguishes_refusal_from_absence.py` — six of its "
+        "eight fail on the pre-fix tree. It builds a real manifest, tampers one artifact after "
+        "recording it, and asserts each outcome separately; the control that passes both ways "
+        "is `_try_load` still returning None for every failure, because changing that contract "
+        "would be a refactor rather than this fix.",
+        "python scripts/correction_register.py --id LOAD-AMBIGUITY",
+        _p_load_ambiguity,
+        [S_DEAD, S_TDD],
+    ),
+    Finding(
+        "GATE-UNMEASURED",
+        "The coverage gate reported a module it never measured as below the floor",
+        "P2",
+        "Tests",
+        "Found 2026-09-14 while recording run.py as debt under ADR 0017",
+        "`_run_coverage` returns `(None, reason)` and the reason distinguishes a TIMEOUT from a "
+        "run that produced no row. `main` printed the reason as raw output but never passed it "
+        "to `_judge`, so the verdict always read *the test may not import the module, or may "
+        "fail to collect*. For `run.py` that is simply wrong: it is imported by 74 resolved test "
+        "files, nothing is missing, and the gate ran out of its 600s budget — a reader following "
+        "the message goes looking for an import that is already there. The summary line then "
+        "said `N module(s) below 80% coverage threshold` about a module whose coverage nobody "
+        "knows, which is rule 2 — an unmeasured value is absent, never zero — failing inside the "
+        "gate that enforces it. `Verdict` now carries `unmeasured`, a timeout says so and names "
+        "the resolved test-set size as the likely cost, and the summary counts the two apart. "
+        "The conflation was visible only because run.py's debt entry had to explain in prose "
+        "what the gate should have said itself.",
+        "`tests/unit/test_coverage_gate_says_why_it_could_not_measure.py` — eight of its nine "
+        "fail on the pre-fix tree, including one that drives `main` with a stubbed measurement "
+        "and asserts the summary does not claim a figure it never took. The control that passes "
+        "both ways is the genuine collection failure keeping its original advice, which is right "
+        "for the case it was written for.",
+        "python scripts/correction_register.py --id GATE-UNMEASURED",
+        _p_gate_unmeasured,
+        [S_DEAD, S_TDD],
     ),
     Finding(
         "MODE-SPLIT",
